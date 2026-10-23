@@ -196,6 +196,43 @@
     });
     return rows;
   }
+  // End-to-end vacuum calibration: independently captured polygon sections
+  // versus actual 2D driver strokes. Missing observations are failures.
+  function vacuumCalibration(g, m, snapshot, rendered, thresholdPx) {
+    var threshold = thresholdPx === undefined ? 0.5 : thresholdPx;
+    if (!snapshot || snapshot.geometry !== 'globe') return null;
+    var strokes = compareCanvasStrokes(g, m, snapshot, rendered);
+    var byKey = {};
+    strokes.forEach(function (r) { byKey[r.tower + ':' + r.point] = r; });
+    var rows = [], sumSq = 0, max = 0, passed = 0, failed = 0, skipped = 0;
+    snapshot.vacuum.forEach(function (ray) {
+      [['base','bottom'],['top','top']].forEach(function (part) {
+        var angle = ray[part[1]], key = ray.index + ':' + part[0];
+        if (angle === null || !isFinite(angle)) {
+          rows.push({tower:ray.index,point:part[0],status:'OCCLUDED',result:'SKIP'});
+          skipped++;
+          return;
+        }
+        var r = byKey[key];
+        if (!r || r.status !== 'drawn' || !isFinite(r.errorPx)) {
+          rows.push({tower:ray.index,point:part[0],status:r ? r.status : 'missing polygon or stroke',result:'FAIL'});
+          failed++;
+          return;
+        }
+        var error = Math.hypot(r.canvasX-r.referenceX,r.canvasY-r.referenceY);
+        var ok = error < threshold;
+        rows.push({tower:ray.index,point:part[0],dx:r.dx,dy:r.dy,
+          errorPx:+error.toFixed(3),status:'drawn',result:ok?'PASS':'FAIL'});
+        sumSq += error*error;
+        max = Math.max(max,error);
+        if (ok) passed++; else failed++;
+      });
+    });
+    return {rows:rows,summary:{thresholdPx:threshold,passed:passed,failed:failed,
+      skippedOccluded:skipped,tested:passed+failed,
+      maxErrorPx:+max.toFixed(3),rmsErrorPx:passed+failed?+Math.sqrt(sumSq/(passed+failed)).toFixed(3):null,
+      result:failed===0 && passed>0?'PASS':'FAIL'}};
+  }
   function onDraw(g,m) {
     // Draw every frame, including camera movement and zoom.
     drawActualAxes(g,m);
@@ -211,8 +248,15 @@
     if (!rows.length) return;
     var centers = compareCenters(g,m,snapshot);
     var strokes = compareCanvasStrokes(g,m,snapshot,overlay.getRenderedStrokes && overlay.getRenderedStrokes());
+    var calibration = vacuumCalibration(g,m,snapshot,overlay.getRenderedStrokes && overlay.getRenderedStrokes());
     lastKey = key;
     if (root.console) {
+      if (calibration) {
+        root.console.group('AUTOMATED VACUUM CALIBRATION (actual canvas strokes vs rendered tower sections)');
+        root.console.table(calibration.rows);
+        root.console.log(calibration.summary);
+        root.console.groupEnd();
+      }
       root.console.group('Local object axes vs polygon-section axes (yellow vs cyan)');
       root.console.table(compareAxisMethods(g));
       root.console.groupEnd();
@@ -231,9 +275,9 @@
       root.console.log('Canvas coordinates are intercepted at DriverDrawPoly after the full drawing transform. Missing/clipped strokes are reported separately.');
       root.console.groupEnd();
     }
-    return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes};
+    return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes, calibration:calibration};
   }
   function reset() { vertices = {}; localAxes = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
