@@ -5,6 +5,7 @@ const original = audit.compareCanvasStrokes;
 // Exercise real polygon capture and canvas-stroke comparison, not a mocked result.
 const g = {
   Camera:{Trans:p=>p},WinTrans:{TransX:x=>x,TransY:y=>y},
+  CanvasWidth:200,CanvasHeight:100,
   GetTransPointOnPlane:(x,y)=>[x,y,0],
   PolygonOnPlane(){},
 };
@@ -22,13 +23,26 @@ let result=audit.vacuumCalibration(g,m,snapshot,[
 assert.strictEqual(result.summary.result,'PASS');
 assert.strictEqual(result.summary.passed,2);
 assert.strictEqual(result.summary.failed,0);
+assert.strictEqual(result.summary.geometryMismatch,0);
+assert.strictEqual(result.summary.offscreen,0);
 result=audit.vacuumCalibration(g,m,snapshot,[
   {tower:1,point:'base',atmosphere:'vacuum',strokes:[[[0,1],[2,1]]]},
 ]);
 assert.strictEqual(result.summary.failed,2); // offset + missing marker
 assert.strictEqual(result.summary.result,'FAIL');
+assert.strictEqual(result.summary.geometryMismatch,0);
 result=audit.vacuumCalibration(g,m,{geometry:'globe',vacuum:[{index:1,bottom:null,top:0}]},[]);
 assert.strictEqual(result.summary.skippedOccluded,1);
 assert.strictEqual(result.summary.failed,1);
+// An offscreen marker mismatch must still be reported as FAIL.
+g.CanvasHeight=0.5;
+result=audit.vacuumCalibration(g,m,snapshot,[
+  {tower:1,point:'base',atmosphere:'vacuum',strokes:[[[ -1,0],[1,0]]]},
+  {tower:1,point:'top',atmosphere:'vacuum',strokes:[[[ 2,1],[4,1]]]}
+]);
+assert.strictEqual(result.summary.offscreen,1);
+assert.strictEqual(result.summary.offscreenMismatch,1);
+assert.strictEqual(result.summary.failed,1);
+assert.strictEqual(result.summary.result,'FAIL');
 audit.reset();
 console.log('OpticalVacuumCalibration: PASS (aligned, offset, missing, occluded)');

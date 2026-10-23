@@ -196,42 +196,94 @@
     });
     return rows;
   }
-  // End-to-end vacuum calibration: independently captured polygon sections
-  // versus actual 2D driver strokes. Missing observations are failures.
+  // Independent geometry reference and viewport classification.
+  function viewportStatus(g, pixel) {
+    if (!pixel || !pixel.every(isFinite)) return 'INVALID_REFERENCE';
+    if (!(g.CanvasWidth > 0 && g.CanvasHeight > 0)) return 'UNKNOWN_VIEWPORT';
+    return pixel[0] < 0 || pixel[0] > g.CanvasWidth ||
+      pixel[1] < 0 || pixel[1] > g.CanvasHeight ? 'OFFSCREEN' : 'ONSCREEN';
+  }
+  function independentReference(g, tower, point) {
+    var captured = vertices[tower];
+    if (!captured) return null;
+    var center = sectionCenter(captured.points, point === 'base' ? 0 : 1, 1e-8);
+    if (!center) return null;
+    var axis = localAxes[tower];
+    return {pixel:screen(g,center),
+      localAxisPixel:axis ? screen(g,point === 'base' ? axis.base : axis.top) : null,
+      capturedVertices:captured.points.length,capturedTower:captured.tower};
+  }
+  // Compare actual intercepted canvas strokes with independently captured geometry.
+  // Offscreen discrepancies remain failures; occluded points are explicitly skipped.
   function vacuumCalibration(g, m, snapshot, rendered, thresholdPx) {
     var threshold = thresholdPx === undefined ? 0.5 : thresholdPx;
     if (!snapshot || snapshot.geometry !== 'globe') return null;
-    var strokes = compareCanvasStrokes(g, m, snapshot, rendered);
     var byKey = {};
-    strokes.forEach(function (r) { byKey[r.tower + ':' + r.point] = r; });
-    var rows = [], sumSq = 0, max = 0, passed = 0, failed = 0, skipped = 0;
+    (rendered || []).forEach(function (mark) {
+      if (mark.atmosphere !== 'vacuum') return;
+      var key = mark.tower + ':' + mark.point;
+      if (!byKey[key]) byKey[key] = [];
+      byKey[key].push(mark);
+    });
+    var rows = [], sumSq = 0, max = 0, passed = 0, failed = 0,
+      skipped = 0, offscreen = 0, offscreenMismatch = 0, geometryMismatch = 0;
     snapshot.vacuum.forEach(function (ray) {
       [['base','bottom'],['top','top']].forEach(function (part) {
-        var angle = ray[part[1]], key = ray.index + ':' + part[0];
+        var point = part[0], angle = ray[part[1]], key = ray.index + ':' + point;
         if (angle === null || !isFinite(angle)) {
-          rows.push({tower:ray.index,point:part[0],status:'OCCLUDED',result:'SKIP'});
-          skipped++;
-          return;
+          rows.push({tower:ray.index,point:point,status:'OCCLUDED',result:'SKIP'});
+          skipped++;return;
         }
-        var r = byKey[key];
-        if (!r || r.status !== 'drawn' || !isFinite(r.errorPx)) {
-          rows.push({tower:ray.index,point:part[0],status:r ? r.status : 'missing polygon or stroke',result:'FAIL'});
-          failed++;
-          return;
+        var reference = independentReference(g,ray.index,point);
+        if (!reference) {
+          rows.push({tower:ray.index,point:point,status:'MISSING_GEOMETRY',result:'FAIL'});
+          failed++;return;
         }
-        var error = Math.hypot(r.canvasX-r.referenceX,r.canvasY-r.referenceY);
-        var ok = error < threshold;
-        rows.push({tower:ray.index,point:part[0],dx:r.dx,dy:r.dy,
-          errorPx:+error.toFixed(3),status:'drawn',result:ok?'PASS':'FAIL'});
-        sumSq += error*error;
-        max = Math.max(max,error);
-        if (ok) passed++; else failed++;
+        var vp = viewportStatus(g,reference.pixel), marks = byKey[key] || [];
+        var axisError = reference.localAxisPixel ?
+          Math.hypot(reference.pixel[0]-reference.localAxisPixel[0],
+            reference.pixel[1]-reference.localAxisPixel[1]) : null;
+        var row = {tower:ray.index,point:point,viewport:vp,
+          referenceX:+reference.pixel[0].toFixed(3),referenceY:+reference.pixel[1].toFixed(3),
+          capturedTower:reference.capturedTower,capturedVertices:reference.capturedVertices,
+          localAxisErrorPx:axisError === null ? null : +axisError.toFixed(3),
+          markerRecords:marks.length};
+        if (vp === 'OFFSCREEN') offscreen++;
+        if (marks.length !== 1 || reference.capturedTower !== ray.index) {
+          row.status=marks.length !== 1?'MISSING_OR_DUPLICATE_MARKER':'WRONG_TOWER';
+          row.result='FAIL';failed++;rows.push(row);return;
+        }
+        var centers = (marks[0].strokes || []).filter(function(poly){return poly.length>=2;})
+          .map(function(poly){var a=poly[0],b=poly[poly.length-1];
+            return [(a[0]+b[0])/2,(a[1]+b[1])/2];});
+        row.strokeCount=centers.length;
+        if (!centers.length) {
+          row.status='NO_CANVAS_STROKES';row.result='FAIL';failed++;rows.push(row);return;
+        }
+        var canvas=centers.reduce(function(acc,p){
+          acc[0]+=p[0]/centers.length;acc[1]+=p[1]/centers.length;return acc;
+        },[0,0]);
+        var dx=canvas[0]-reference.pixel[0],dy=canvas[1]-reference.pixel[1];
+        var error=Math.hypot(dx,dy),geometryOK=axisError!==null && axisError<threshold;
+        row.canvasX=+canvas[0].toFixed(3);row.canvasY=+canvas[1].toFixed(3);
+        row.dx=+dx.toFixed(3);row.dy=+dy.toFixed(3);row.errorPx=+error.toFixed(3);
+        if(!geometryOK)geometryMismatch++;
+        var ok=error<threshold && geometryOK;
+        row.status=vp==='OFFSCREEN'?(ok?'OFFSCREEN_ALIGNED':'OFFSCREEN_MISMATCH'):
+          (ok?'ALIGNED':(!geometryOK?'AXIS_MISMATCH':'STROKE_MISMATCH'));
+        row.result=ok?'PASS':'FAIL';
+        if(vp==='OFFSCREEN'&&!ok)offscreenMismatch++;
+        sumSq+=error*error;max=Math.max(max,error);
+        if(ok)passed++;else failed++;
+        rows.push(row);
       });
     });
     return {rows:rows,summary:{thresholdPx:threshold,passed:passed,failed:failed,
-      skippedOccluded:skipped,tested:passed+failed,
-      maxErrorPx:+max.toFixed(3),rmsErrorPx:passed+failed?+Math.sqrt(sumSq/(passed+failed)).toFixed(3):null,
-      result:failed===0 && passed>0?'PASS':'FAIL'}};
+      skippedOccluded:skipped,offscreen:offscreen,offscreenMismatch:offscreenMismatch,
+      geometryMismatch:geometryMismatch,tested:passed+failed,
+      maxErrorPx:+max.toFixed(3),rmsErrorPx:passed+failed?
+        +Math.sqrt(sumSq/(passed+failed)).toFixed(3):null,
+      result:failed===0&&passed>0?'PASS':'FAIL'}};
   }
   function onDraw(g,m) {
     // Draw every frame, including camera movement and zoom.
