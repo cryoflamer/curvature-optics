@@ -1,0 +1,2477 @@
+/* WaBis-Wiki styles */
+/* WaBis-Wiki styles */
+.clearfix {
+  *zoom: 1;
+}
+.clearfix:before,
+.clearfix:after {
+  display: table;
+  content: "";
+}
+.clearfix:after {
+  clear: both;
+}
+.textOverflow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bdBoxSizing {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+.noselect {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+tt,
+var,
+b,
+u,
+i,
+center,
+sub,
+sup,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+}
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+  display: block;
+}
+body {
+  line-height: 1;
+}
+ol,
+ul {
+  list-style: none;
+}
+blockquote,
+q {
+  quotes: none;
+}
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+  content: '';
+  content: none;
+}
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+input,
+textarea {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+img {
+  height: auto;
+  border: 0;
+  -ms-interpolation-mode: bicubic;
+}
+audio,
+canvas,
+video {
+  display: inline-block;
+  *display: inline;
+  *zoom: 1;
+}
+audio:not([controls]) {
+  display: none;
+}
+html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+}
+a {
+  text-decoration: none;
+}
+a:focus {
+  outline: thin dotted #333;
+  outline: 5px auto -webkit-focus-ring-color;
+  outline-offset: -2px;
+}
+a:hover,
+a:active {
+  outline: 0;
+}
+sub,
+sup {
+  font-size: 0.75em;
+}
+sup {
+  vertical-align: super;
+  padding-left: 0.1em;
+}
+sub {
+  vertical-align: -0.25em;
+}
+strong,
+b {
+  font-weight: bold;
+}
+em,
+i {
+  font-style: italic;
+}
+button,
+input,
+select,
+textarea {
+  margin: 0;
+  font-size: 100%;
+  vertical-align: middle;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+button,
+input {
+  *overflow: visible;
+  line-height: normal;
+}
+button::-moz-focus-inner,
+input::-moz-focus-inner {
+  padding: 0;
+  border: 0;
+}
+button,
+input[type="button"],
+input[type="reset"],
+input[type="submit"] {
+  cursor: pointer;
+  -webkit-appearance: button;
+}
+input[type="search"] {
+  -webkit-appearance: textfield;
+  -webkit-box-sizing: content-box;
+  -moz-box-sizing: content-box;
+  box-sizing: content-box;
+}
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+textarea {
+  overflow: auto;
+  vertical-align: top;
+}
+body {
+  background-color: #e2e2e2;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #404040;
+  padding: 10px;
+}
+#body.editBody {
+  padding: 0;
+}
+body,
+html {
+  min-height: 100.25%;
+  /*Scrollbar immer anzeigen*/
+
+}
+body,
+input,
+textarea {
+  font-size: 15px;
+  font-weight: 300;
+}
+.page {
+  margin: 0 auto;
+  background-color: #ffffff;
+  -webkit-box-shadow: 0px 0px 8px #202020;
+  -moz-box-shadow: 0px 0px 8px #202020;
+  box-shadow: 0px 0px 8px #202020;
+}
+.limitWidth {
+  max-width: 1250px;
+  *width: 960px;
+}
+.fullScreenFrame {
+  padding: 0;
+}
+.pageFrame {
+  padding: 0 15px;
+  *zoom: 1;
+}
+.pageFrame:before,
+.pageFrame:after {
+  display: table;
+  content: "";
+}
+.pageFrame:after {
+  clear: both;
+}
+.hide {
+  display: none;
+}
+.left,
+.left100px,
+.left200px,
+.left300px,
+.left400px,
+.left500px,
+.left33,
+.left50,
+.left66 {
+  float: left !important;
+  clear: both;
+  margin: 0 1em 0.5em 0;
+}
+.right,
+.right100px,
+.right200px,
+.right300px,
+.right400px,
+.right500px,
+.right33,
+.right50,
+.right66 {
+  float: right !important;
+  clear: both;
+  margin: 0 0 0.5em 1em;
+}
+.leftFiller,
+.leftFiller100px,
+.leftFiller200px,
+.leftFiller300px,
+.leftFiller400px,
+.leftFiller500px,
+.leftFiller33,
+.leftFiller50,
+.leftFiller66 {
+  float: left !important;
+  clear: both;
+  margin: 0 1em 0.5em 0;
+}
+.rightFiller,
+.rightFiller100px,
+.rightFiller200px,
+.rightFiller300px,
+.rightFiller400px,
+.rightFiller500px,
+.rightFiller33,
+.rightFiller50,
+.rightFiller66 {
+  float: right !important;
+  clear: both;
+  margin: 0 0 0.5em 1em;
+}
+.center {
+  margin: 0 auto;
+}
+.centerText {
+  text-align: center;
+}
+.centerP > p {
+  text-align: center;
+}
+.rightP > p {
+  text-align: right;
+}
+.centerChild {
+  width: 100%;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  max-width: 100%;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+.nofloat {
+  margin: 0.5em 0;
+}
+
+.WikiPage h1 {
+  line-height: 1.2;
+  font-size: 180%;
+  margin: 0;
+  margin-top: 0.5em;
+  border-bottom: 2px solid #ff8033;
+  clear: both;
+  overflow-x: auto;
+}
+.WikiPage h1 span {
+  display: inline-block;
+}
+.WikiPage h1 span.op,
+.WikiPage h1 span.opr {
+  background-color: #ff8033;
+  color: white;
+  padding: 0 0.3em;
+}
+.WikiPage h1 span.disc,
+.WikiPage h1 span.spec {
+  color: #ff8033;
+}
+.WikiPage h1 span.media,
+.WikiPage h1 span.wiki {
+  color: #1982d1;
+}
+.Wiki {
+  line-height: 1.625;
+}
+.Wiki p,
+.Wiki ul,
+.Wiki ol,
+.Wiki dl,
+.Wiki dd,
+.Wiki pre,
+.Wiki table,
+.Wiki dt,
+.Wiki form,
+.Wiki div.Paragraph,
+.Wiki div.JsGraph {
+  margin-bottom: 1em;
+}
+.Wiki td > *:last-child,
+.Wiki th > *:last-child,
+.Wiki div > *:last-child,
+.Wiki form > *:last-child {
+  margin-bottom: 0;
+}
+.Wiki > p,
+.Wiki > ul,
+.Wiki > ol,
+.Wiki > dl,
+.Wiki > dd,
+.Wiki > pre,
+.Wiki > table,
+.Wiki > form,
+.Wiki > div.Paragraph,
+.Wiki > div.JsGraph {
+  margin-top: 1em;
+}
+.Wiki > p {
+  text-align: left;
+}
+.Wiki .VMargin {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+.Wiki .TopMargin {
+  margin-top: 1em;
+}
+.Wiki .BottomMargin {
+  margin-bottom: 1em;
+}
+.Wiki .CancelBottomMargin {
+  margin-bottom: -1em;
+}
+.Wiki .NoMargin {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+.Wiki .NoPadding {
+  padding: 0;
+}
+.Wiki .NoBorder {
+  border: none;
+}
+.Wiki .NextNoMargin div,
+.Wiki .NextNoMargin table,
+.Wiki .NextNoMargin p {
+  margin: 0;
+}
+.Wiki .NextNoPadding div,
+.Wiki .NextNoPadding table,
+.Wiki .NextNoPadding p {
+  padding: 0;
+}
+.Wiki .NextNoBorder div,
+.Wiki .NextNoBorder table,
+.Wiki .NextNoBorder p {
+  border: none;
+}
+.Wiki table {
+  background-color: #ffffff;
+}
+.Wiki table:target {
+  background-color: #ddeeff;
+}
+.Wiki table tr:target {
+  background-color: #ddeeff;
+}
+.Wiki li,
+.Wiki dt,
+.Wiki dd {
+  margin-top: 0em;
+  margin-bottom: 0em;
+}
+.Wiki pre {
+  line-height: 1.2em;
+  background-color: #ffffff;
+  overflow-x: auto;
+}
+.Wiki a {
+  color: #1982d1;
+  text-decoration: none;
+}
+.Wiki a:hover,
+.Wiki a:active,
+.Wiki a:focus {
+  color: #ff8033;
+}
+.Wiki a.new {
+  color: #bb0000;
+}
+.Wiki a.extern {
+  word-wrap: break-word;
+}
+.Wiki .HiliLink a {
+  font-weight: normal;
+}
+.Wiki .HideLink a {
+  color: #404040;
+  font-weight: bold;
+}
+.Wiki .HideLink a:hover,
+.Wiki .HideLink a:active,
+.Wiki .HideLink a:focus {
+  color: #1982d1;
+}
+.Wiki .wikisee a {
+  font-weight: bold;
+}
+.Wiki span.new {
+  color: #bb0000;
+}
+.Wiki h1,
+.Wiki h2,
+.Wiki h3,
+.Wiki h4 {
+  line-height: 1.2;
+  margin: 1.5em 0 0.5em 0;
+}
+.Wiki h1:target,
+.Wiki h2:target,
+.Wiki h3:target,
+.Wiki h4:target {
+  background-color: #ddeeff;
+}
+.Wiki h3,
+.Wiki h4 {
+  font-weight: bold;
+}
+.Wiki h2 {
+  font-size: 150%;
+  border-bottom: 2px solid #cccccc;
+  clear: both;
+}
+.Wiki h3 {
+  font-size: 120%;
+}
+.Wiki h1 {
+  margin-top: 0.5em;
+}
+h1 span.appendix {
+  font-weight: normal;
+  color: #aaa;
+}
+span.syntax {
+  color: red;
+  background-color: #ff8;
+  font-weight: bold;
+}
+.Wiki div.Error {
+  background: #ffe5e5 url("../img/icon_exclam.gif") no-repeat 5px 2px;
+  padding: 0.25em 0.5em 0.25em 34px;
+  font-weight: bold;
+  margin: 1em 0;
+}
+.Wiki div.Error ul li {
+  margin-left: 1em;
+}
+.Wiki div.Warning {
+  background: #ffe0c0 url("../img/icon_warn.gif") no-repeat 5px 2px;
+  padding: 0.25em 0.5em 0.25em 34px;
+  font-weight: bold;
+  margin: 1em 0;
+}
+.Wiki div.Note {
+  background: #e0e0ff url("../img/icon_note.gif") no-repeat 5px 2px;
+  padding: 0.25em 0.5em 0.25em 34px;
+  margin: 1em 0;
+}
+.Wiki div.Confirm {
+  background: #e0e0ff url("../img/icon_confirm.gif") no-repeat 5px 2px;
+  padding: 0.25em 0.5em 0.25em 34px;
+  font-weight: bold;
+  margin: 1em 0;
+}
+.Wiki div.Status {
+  background: #daf0be url("../img/icon_ok.gif") no-repeat 5px 2px;
+  padding: 0.25em 0.5em 0.25em 34px;
+  font-weight: bold;
+  margin: 1em 0;
+}
+.Wiki div.Border {
+  border: 2px solid #cccccc;
+  padding: 0.25em 0.5em 0.25em 0.5em;
+  margin: 1em 0;
+}
+.Wiki p.WikiInfo {
+  font-style: italic;
+  font-weight: bold;
+}
+.Wiki div.vnavi {
+  background-color: #eee;
+  margin: 0 0 1em 0;
+  padding: 0.2em 0.2em;
+  border: 2px solid #ddd;
+}
+.Wiki div.btngrp {
+  display: inline;
+  padding: 0;
+  margin: 0.25em 0;
+  font-weight: bold;
+}
+.Wiki div.btngrp span {
+  padding: 0.2em 0.5em;
+  margin: 0 1px;
+  line-height: 2em;
+  border: 1px solid #bbb;
+  border-bottom-color: #222;
+  border-right-color: #222;
+  background-color: #fff;
+}
+.Wiki div.btngrp span.btn {
+  background-color: #fff;
+}
+.Wiki div.btngrp span.btnx {
+  background-color: #fff;
+  color: #cccccc;
+}
+.Wiki div.btngrp a {
+  text-decoration: none;
+  color: #666;
+}
+.Wiki div.btngrp a:hover {
+  text-decoration: none;
+  color: f80;
+}
+.Wiki div.infobox {
+  margin: 0.25em 0;
+  font-size: smaller;
+}
+.Wiki div.conflicts {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 80%;
+  background-color: #eee;
+  border: 1px dashed #888;
+  padding: 4px 8px;
+  margin: 1em 0;
+}
+.Wiki span.cleft {
+  background-color: #fd8;
+}
+.Wiki span.cright {
+  background-color: #9f9;
+}
+.Wiki del.cleft {
+  background-color: #fd8;
+}
+.Wiki del.cright {
+  background-color: #9f9;
+}
+.Wiki ins.cleft {
+  background-color: #fd8;
+}
+.Wiki ins.cright {
+  background-color: #9f9;
+}
+.WikiToolbar {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: normal;
+  font-size: 13px;
+  margin: 0;
+  padding: 2px 4px 2px 4px;
+  line-height: 27px;
+  color: #fff;
+  background-color: #222;
+}
+.WikiToolbar .WikiToolbarButtons {
+  display: inline;
+}
+.WikiToolbar .WikiToolbarButtons a {
+  color: #fff;
+  background-color: #333;
+  background: url("../img/tbbbg.gif") repeat-x;
+  padding: 4px 6px 4px;
+  margin: 0px 2px 2px 0;
+  border: 1px solid #444;
+  border-top-color: #aaa;
+  border-left-color: #888;
+  text-decoration: none;
+}
+.WikiToolbar input.Button {
+  padding: 2px 4px 2px;
+  font-weight: normal;
+  margin: 0;
+  margin-right: 6px;
+  margin-top: -4px;
+}
+.WikiToolbar form {
+  display: inline;
+}
+.WikiToolbar input,
+.WikiToolbar select {
+  font-size: 10pt;
+  font-weight: bold;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.WikiToolbar input {
+  margin-right: 4px;
+}
+.WikiToolbar input#q {
+  padding: 2px 4px 2px;
+  margin: -2px 2px 2px 0;
+  border: 1px solid #444;
+  border-bottom-color: #aaa;
+  border-right-color: #888;
+}
+.WikiToolbar span.label {
+  margin-right: 4px;
+}
+.WikiToolbar input.WikiSearchField {
+  width: 145px;
+}
+.WikiEditForm {
+  padding: 0;
+  padding-bottom: 4px;
+  margin: 0;
+  overflow: hidden;
+}
+.PageState {
+  font-size: smaller;
+  font-weight: bold;
+  text-align: right;
+}
+#EditField {
+  width: 100%;
+  min-height: 156px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 15px;
+  line-height: 1.1;
+}
+.WikiClone {
+  font-size: 8pt;
+  font-weight: bold;
+}
+.WikiRedir {
+  margin: 0;
+  font-size: 8pt;
+  font-style: italic;
+  border-bottom: 1px solid #ddd;
+  text-align: right;
+  padding-left: 0.2em;
+}
+.Button {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: url("../img/tbbbg.gif") repeat-x #888888;
+  padding: 5px 8px;
+  margin: 0px 2px 2px 0 !important;
+  border: 1px solid #444;
+  border-top-color: #aaa;
+  border-left-color: #888;
+  color: #fff;
+}
+.Wiki pre,
+.Wiki tt,
+.Wiki code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 16px;
+}
+.Wiki pre.code {
+  font-size: 15px;
+  line-height: 1.2;
+  background-color: #eee;
+  border: 1px solid #cccccc;
+  padding: 1em 0.5em 0 0.5em;
+  overflow-x: auto;
+}
+.Wiki pre.code strong {
+  color: #4444bb;
+}
+.Wiki div.Ruler {
+  border-bottom: 2px solid #cccccc;
+  margin: 1em 0;
+  padding: 0;
+}
+.Wiki div.Wliz {
+  font-size: smaller;
+  border-top: 2px dotted #cccccc;
+  margin-top: 2em;
+  padding: 0.5em 0;
+}
+.Wiki input,
+.Wiki select {
+  font-size: 10pt;
+  font-weight: bold;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.Wiki div.hidden,
+.Wiki span.hidden {
+  background-color: #fec;
+  margin: 1em 0;
+}
+.Wiki .small {
+  font-size: smaller;
+}
+.Wiki .uline {
+  text-decoration: underline;
+}
+.Wiki .del {
+  text-decoration: line-through;
+}
+/* standard table layout */
+.Wiki table {
+  border-collapse: collapse;
+  border: 1px solid #ddd;
+}
+.Wiki table th,
+.Wiki table td {
+  border: none;
+  padding: 0.25em 0.5em;
+}
+.Wiki table th {
+  background-color: #eee;
+  color: #404040;
+  font-weight: bold;
+  vertical-align: middle;
+  text-align: left;
+}
+.Wiki table td {
+  vertical-align: top;
+  text-align: left;
+}
+.Wiki table.compressed th,
+.Wiki table.compressed td {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.Wiki table.wide th:first-child,
+.Wiki table.wide td:first-child {
+  padding-left: 0;
+}
+.Wiki table.wide th:last-child,
+.Wiki table.wide td:last-child {
+  padding-right: 0;
+}
+.Wiki table.grid th,
+.Wiki table.grid td {
+  border: 1px solid #ddd;
+}
+.Wiki table.nogrid th,
+.Wiki table.nogrid td {
+  border: none;
+}
+.Wiki table.border {
+  border: 1px solid #ddd;
+}
+.Wiki table.noborder {
+  border: none;
+}
+.Wiki table.padding th,
+.Wiki table.padding td {
+  padding: 0.1em 1em;
+}
+.Wiki table.nopadding th,
+.Wiki table.nopadding td {
+  padding: 0;
+}
+.Wiki table table {
+  margin: 0;
+}
+.Wiki table table.grid th,
+.Wiki table table.grid td {
+  border: 1px solid #ddd;
+}
+.Wiki table table.nogrid th,
+.Wiki table table.nogrid td {
+  border: none;
+}
+.Wiki table table.border {
+  border: 1px solid #ddd;
+}
+.Wiki table table.noborder {
+  border: none;
+}
+.Wiki table table.padding th,
+.Wiki table table.padding td {
+  padding: 0.1em 1em;
+}
+.Wiki table table.nopadding th,
+.Wiki table table.nopadding td {
+  padding: 0;
+}
+.Wiki table.recent {
+  margin-top: 0;
+  border: none;
+  line-height: 1em;
+}
+.Wiki table.recent td {
+  padding: 0.33em 0.33em;
+}
+.Wiki table.pic,
+.Wiki table.bpic,
+.Wiki table.vpic {
+  border: none;
+  clear: both;
+}
+.Wiki table.pic td,
+.Wiki table.bpic td,
+.Wiki table.vpic td {
+  border: none;
+  padding: 0;
+  vertical-align: top;
+}
+/* picture styles */
+.Wiki div.ofrpic,
+.Wiki div.ofrbpic,
+.Wiki div.ofrvpic {
+  margin: 0;
+  padding: 4px;
+}
+.Wiki div.ofrpic {
+  border: 1px solid gray;
+}
+.Wiki div.ofrbpic {
+  border: 1px solid #ddd;
+}
+.Wiki div.ofrvpic {
+  border: 1px solid white;
+}
+.Wiki div.ifrpic,
+.Wiki div.ifrbpic,
+.Wiki div.ifrvpic {
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  display: block;
+}
+.Wiki div.ifrpic {
+  border: 1px solid gray;
+}
+.Wiki div.ifrbpic {
+  border: 1px solid white;
+}
+.Wiki div.ifrvpic {
+  border: 1px solid white;
+}
+.Wiki div.pic,
+.Wiki div.bpic,
+.Wiki div.vpic {
+  background-color: #ffffff;
+  padding: 0;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+.Wiki div.imgd {
+  margin: 0;
+  padding: 2px 1px 0 1px;
+  text-align: left;
+  font-weight: normal;
+  font-size: 0.85em;
+  line-height: 1.3;
+  border: none;
+  overflow: hidden;
+}
+.Wiki img.imgd {
+  vertical-align: middle;
+  float: right;
+  margin: 0 0 0 2px;
+  padding: 0;
+}
+.Wiki .fluid {
+  max-width: 100%;
+}
+.Wiki div.wikiinclude {
+  font-size: smaller;
+  margin: 1em 0;
+}
+.Wiki div.wikiinclude img {
+  vertical-align: middle;
+}
+.Wiki table div.pic,
+.Wiki table div.bpic,
+.Wiki table div.vpic {
+  margin-top: 0px;
+}
+.Wiki img.picn {
+  clear: both;
+}
+.Wiki span.picn {
+  font-size: smaller;
+  clear: both;
+}
+/* list styles */
+.Wiki ol,
+.Wiki ul,
+.Wiki dl {
+  margin-left: 0;
+  padding-left: 0;
+}
+.Wiki ol ul > li,
+.Wiki ul ul > li,
+.Wiki dl ul > li {
+  padding-left: 20px;
+  margin-left: 5px;
+}
+.Wiki ol ol > li,
+.Wiki ul ol > li,
+.Wiki dl ol > li,
+.Wiki ol dl > dd,
+.Wiki ul dl > dd,
+.Wiki dl dl > dd {
+  padding-left: 0px;
+  margin-left: 25px;
+}
+.Wiki ol ol,
+.Wiki ul ol,
+.Wiki dl ol,
+.Wiki ol ul,
+.Wiki ul ul,
+.Wiki dl ul,
+.Wiki ol dl,
+.Wiki ul dl,
+.Wiki dl dl {
+  margin-bottom: 0;
+}
+.Wiki ul {
+  list-style: none;
+}
+.Wiki ul li {
+  background: url("../img/bull.gif") no-repeat 3px 3px;
+  padding-left: 20px;
+  margin-left: 20px;
+}
+.Wiki ol {
+  list-style-type: decimal;
+  list-style-image: none;
+}
+.Wiki ol > li {
+  background: none;
+}
+.Wiki dl {
+  text-align: left;
+}
+.Wiki li,
+.Wiki dd {
+  margin: 0;
+  margin-left: 40px;
+  margin-bottom: 0.2em;
+  text-align: left;
+}
+.Wiki li.selected {
+  font-weight: bold;
+}
+.Wiki li .blindLink {
+  color: #404040;
+}
+.Wiki ol.p {
+  margin-left: 0px;
+  padding-left: 0;
+}
+.Wiki ol.p li {
+  padding-left: 0px;
+  margin-left: 40px;
+}
+.Wiki ol.p li p {
+  margin-left: 0px;
+}
+.Wiki ol.p li pre {
+  margin-left: 0px;
+}
+.Wiki dt {
+  font-weight: bold;
+  font-style: normal;
+}
+.Wiki dt em {
+  font-weight: normal;
+  font-style: italic;
+}
+.Wiki dt strong {
+  font-weight: normal;
+  font-style: normal;
+}
+.Wiki ul.WikiList li,
+.Wiki ol.WikiList li,
+.Wiki dl.WikiList dd {
+  margin-bottom: 0;
+  text-align: left;
+}
+.Wiki ul.WikiDirList li,
+.Wiki ol.WikiDirList li,
+.Wiki dl.WikiDirList dd {
+  margin-bottom: 0;
+  text-align: left;
+}
+.Wiki ul.WikiSearchList li,
+.Wiki ol.WikiSearchList li {
+  margin-bottom: 0;
+  margin-top: 0.5em;
+  text-align: left;
+}
+.Wiki ul.WikiSearchList li li,
+.Wiki ol.WikiSearchList li li {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding-left: 30px;
+}
+.Wiki ul.WikiBigList li,
+.Wiki ol.WikiBigList li,
+.Wiki dl.WikiBigList dd {
+  margin-bottom: 1em;
+  text-align: left;
+}
+.Wiki div.WikiBigList li,
+.Wiki div.WikiBigList dd {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+.Wiki .WikiBigDir {
+  margin: 1em 0;
+  line-height: 1.3;
+}
+.Wiki .WikiBigDir a {
+  font-weight: bold;
+}
+.Wiki .WikiBigDir p {
+  background: url("../img/see.gif") no-repeat 0px 2px;
+  padding-left: 20px;
+  margin-left: 20px;
+}
+.Wiki .WikiBigDir ol ul li,
+.Wiki .WikiBigDir ul ul li {
+  padding-left: 20px;
+  margin-left: 5px;
+  margin-bottom: 0;
+}
+.Wiki .WikiBigDir ol ol li,
+.Wiki .WikiBigDir ul ol li {
+  padding-left: 0px;
+  margin-left: 25px;
+  margin-bottom: 0;
+}
+.Wiki .WikiBigDir ul li {
+  background: url("../img/see.gif") no-repeat 0px 2px;
+  padding-left: 20px;
+  margin-left: 20px;
+  margin-top: 0.3em;
+}
+.Wiki .WikiBigDir ol li {
+  margin-top: 0.3em;
+}
+.Wiki .WikiDir,
+.Wiki div.MediaDirDef {
+  line-height: 1.3;
+  margin: 1em 0 1em 0;
+}
+.Wiki .WikiDir ul,
+.Wiki div.MediaDirDef ul {
+  margin: 0;
+  list-style: none;
+}
+.Wiki .WikiDir ul li,
+.Wiki div.MediaDirDef ul li {
+  background: url("../img/see.gif") no-repeat 0px 2px;
+  padding-left: 20px;
+  margin-left: 0px;
+  margin-top: 0.3em;
+  font-weight: bold;
+  color: #ff8033;
+}
+.Wiki .WikiDir ul li span.lit,
+.Wiki div.MediaDirDef ul li span.lit {
+  color: #404040;
+}
+.Wiki .WikiDir ul li ul,
+.Wiki div.MediaDirDef ul li ul {
+  margin-bottom: 0.5em;
+  margin-top: 0.5em;
+  list-style-type: disc;
+}
+.Wiki .WikiDir ul li ul li,
+.Wiki div.MediaDirDef ul li ul li {
+  background-image: none;
+  font-weight: normal;
+  line-height: 1.3;
+  margin-top: 0;
+  padding-left: 0;
+  margin-left: 20px;
+}
+.Wiki .WikiDir ul li ul li li,
+.Wiki div.MediaDirDef ul li ul li li {
+  font-size: 95%;
+}
+.Wiki .WikiDir li,
+.Wiki div.MediaDirDef li {
+  margin: 0;
+  margin-left: 20px;
+}
+.Wiki div.col50 > div.WikiDir {
+  margin: 0;
+}
+.Wiki table.PgDiff {
+  border: none;
+  width: 100%;
+}
+.Wiki table.PgDiff div.vnavi {
+  margin: 0;
+}
+.Wiki table.PgDiff th {
+  width: 50%;
+  background: none;
+  font-weight: normal;
+  color: #000;
+  border: none;
+  padding: 0;
+  border-bottom: 1px solid gray;
+  text-align: center;
+  vertical-align: top;
+}
+.Wiki table.PgDiff th.l {
+  border-right: 1px solid gray;
+}
+.Wiki table.PgDiff td {
+  word-wrap: break-word;
+  -ms-word-break: break-all;
+  word-break: break-all;
+  word-break: break-word;
+  -webkit-hyphens: auto;
+  -moz-hyphens: auto;
+  hyphens: auto;
+  width: 50%;
+  text-align: left;
+  vertical-align: top;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 8pt;
+  font-weight: bold;
+  padding: 0 4px;
+  border-bottom: 1px solid #ddd;
+}
+.Wiki table.PgDiff td.l {
+  border-right: 1px solid gray;
+}
+.Wiki table.PgDiff td.b {
+  border-top: 2px dotted gray;
+}
+.Wiki table.PgDiff td.e {
+  background-color: #eee;
+}
+.Wiki table.PgDiff td.c {
+  background-color: #ffc;
+}
+.Wiki table.PgDiff td.c ins {
+  color: #080;
+  text-decoration: none;
+  background-color: #cfc;
+}
+.Wiki table.PgDiff td.c del {
+  color: #f00;
+  text-decoration: none;
+  background-color: #fcc;
+}
+.Wiki table.PgDiff td.c em {
+  background-color: #fcc;
+}
+.Wiki table.PgDiff td.d {
+  background-color: #fdd;
+  color: #f00;
+}
+.Wiki table.PgDiff td.i {
+  background-color: #dfd;
+  color: #080;
+}
+.Wiki table.PgDiff td em {
+  font-style: normal;
+  color: red;
+}
+.Wiki table.PgDiff td ins {
+  color: #080;
+  text-decoration: none;
+  background-color: #dfd;
+}
+.Wiki table.PgDiff td del {
+  color: #f66;
+  background-color: #fdd;
+}
+.Wiki table.WikiInfoTable {
+  line-height: 1.2;
+  border: none;
+}
+.Wiki table.WikiInfoTable td.infokey {
+  text-align: right;
+  font-weight: bold;
+  padding-left: 0;
+  padding-right: 0;
+}
+.Wiki a.butlnk {
+  color: #404040;
+  background-color: #dddddd;
+  border: 1px solid #eeeeee;
+  border-bottom: 1px solid #aaaaaa;
+  border-right: 1px solid #aaaaaa;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+  padding: 0;
+  margin: 0;
+}
+.Wiki a.butlnk span {
+  padding: 0 5px 0 4px;
+  font-size: 80%;
+  margin: 0 0 0 0;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.Wiki a.butlnk:hover,
+.Wiki a.butlnk:active,
+.Wiki a.butlnk:focus {
+  color: #000000;
+  background-color: #cccccc;
+  text-decoration: none !important;
+}
+.Wiki a.butlnk:active,
+.Wiki a.butlnk:focus {
+  border: 1px solid #aaaaaa;
+}
+.Wiki span.butdwn {
+  background-color: #ffffff;
+  border: 1px solid #aaa;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+  padding: 0;
+  margin: 0;
+}
+.Wiki span.butdwn span {
+  padding: 0 5px 0 4px;
+  font-size: 80%;
+  margin: 0 0 0 0;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.Wiki div.bildpd {
+  border: 1px solid #ddd;
+  padding: 4px;
+  margin: 1em 0;
+}
+.Wiki .notext {
+  font-size: 0;
+  line-height: 0;
+}
+.Wiki .WikiBox,
+.Wiki .WikiBoxR {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  max-width: 100%;
+  padding: 0;
+}
+.Wiki .WikiBox {
+  display: inline-block;
+}
+.Wiki .WikiBoxR,
+.Wiki .FloatRight {
+  margin: 2px 0 4px 8px;
+  float: right;
+}
+.Wiki .FloatLeft {
+  margin: 2px 8px 4px 0;
+  float: left;
+}
+.Wiki .WikiBoxI {
+  max-width: 100%;
+  margin: 0 6px;
+}
+.Wiki .WikiBoxI p,
+.Wiki .WikiBoxI ul,
+.Wiki .WikiBoxI ol,
+.Wiki .WikiBoxI table,
+.Wiki .WikiBoxI h4 {
+  font-size: smaller;
+  line-height: 1.3;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+.Wiki .WikiBoxI ul li {
+  background: url("../img/bull.gif") no-repeat 3px 0px;
+  padding-left: 20px;
+  margin-left: 20px;
+}
+.Wiki .WikiBoxI .margins {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+.Wiki .WikiBoxI .pic,
+.Wiki .WikiBoxI .bpic,
+.Wiki .WikiBoxI .vpic {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.Wiki span.searchword0 {
+  background-color: #ff8;
+  color: #000;
+}
+.Wiki span.searchword1 {
+  background-color: #faf;
+  color: #000;
+}
+.Wiki span.searchword2 {
+  background-color: #8ff;
+  color: #000;
+}
+.Wiki .WikiMenubar {
+  margin: 0;
+  margin-bottom: 1em;
+  padding: 0.5em 0.2em;
+  border-bottom: 1px solid #cccccc;
+}
+.Wiki .WikiReferences {
+  margin-top: 1em;
+  line-height: 1.3;
+}
+.Wiki .WikiReferences sup {
+  font-style: italic;
+}
+.Wiki .WikiReferences ol li {
+  margin-top: 0.5em;
+}
+.Wiki .WikiReferences div.citeNote {
+  padding: 0.5em 0;
+}
+.Wiki .WikiReferences div.citeNote:target {
+  background-color: #ddeeff;
+}
+.Wiki .WikiReferences div.num {
+  min-width: 35px;
+  padding-right: 5px;
+  float: left;
+}
+.Wiki .WikiReferences div.txt {
+  margin-left: 40px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.Wiki .WikiReferences span.cit {
+  padding-top: 2px;
+  font-style: italic;
+  font-size: smaller;
+}
+.Wiki .WikiReferences span.url {
+  padding-top: 2px;
+  font-size: smaller;
+  font-weight: normal;
+  color: #888;
+  word-wrap: break-word;
+  -ms-word-break: break-all;
+  word-break: break-all;
+  word-break: break-word;
+  -webkit-hyphens: auto;
+  -moz-hyphens: auto;
+  hyphens: auto;
+}
+.Wiki span.reference {
+  font-weight: normal;
+  padding-left: 1px;
+  padding-right: 1px;
+  top: -0.5em;
+}
+.Wiki a.citeRef:target {
+  background-color: #ddeeff;
+}
+.Wiki {
+  /*
+  .math {
+    color: @Color5;
+  }
+  */
+
+}
+.Wiki .mmath,
+.Wiki .mpad {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1.15em;
+  white-space: nowrap;
+}
+.Wiki .tmath {
+  white-space: nowrap;
+}
+.Wiki .tmath > i,
+.Wiki .tmath > b {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1.15em;
+}
+.Wiki .tmath > sub {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.87em;
+}
+.Wiki .mroot {
+  border-top: 1px solid #606060;
+  margin-top: 1px;
+  padding: 1px 2px 0px 2px;
+}
+.Wiki .mroot .mroot {
+  padding-top: 0px;
+}
+.Wiki .mpad {
+  color: #ffffff;
+}
+.Wiki .MathJax_Display {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+.Wiki div.typeset {
+  color: #404040;
+  text-align: left;
+  margin: 0.5em 0;
+}
+/* for MathJax
+
+.Wiki table {
+  &.MathFrame {
+    border: @MathBorder;
+    td {
+      padding: 0.5em 0.5em;
+    }
+  }
+  &.MathTable table.MathFrame {
+    border: @MathBorder;
+    td {
+      padding: 0.5em 0.5em;
+    }
+    p {
+      text-align: left;
+    }
+  }
+  &.MathUnderline {
+    border: none;
+    border-bottom: @MathUnderline;
+    td {
+      padding: 0.2em 0;
+    }
+  }
+  &.MathTable table.MathUnderline {
+    border: none;
+    border-bottom: @MathUnderline;
+    td {
+      padding: 0.2em 0;
+    }
+    p {
+      text-align: left;
+    }
+  }
+}
+*/
+/* for JsMath */
+.Wiki table.MathFrame {
+  border: 2px solid #b3b3ff;
+}
+.Wiki table.MathFrame td {
+  padding: 0.2em 0.5em;
+}
+.Wiki table.MathTable table.MathFrame {
+  border: 2px solid #b3b3ff;
+}
+.Wiki table.MathTable table.MathFrame td {
+  padding: 0.2em 0.5em;
+}
+.Wiki table.MathTable p {
+  text-align: left;
+}
+.Wiki table.MathUnderline {
+  border: none;
+  border-bottom: 2px solid #b3b3ff;
+}
+.Wiki table.MathUnderline td {
+  padding: 0em 0;
+}
+.Wiki table.MathTable table.MathUnderline {
+  border: none;
+  border-bottom: 2px solid #b3b3ff;
+}
+.Wiki table.MathTable table.MathUnderline td {
+  padding: 0em 0;
+}
+.Wiki table.MathTable p {
+  text-align: left;
+}
+.Wiki .hili1 {
+  background-color: rgba(255, 255, 0, 0.3);
+}
+.Wiki .hili2 {
+  background-color: rgba(0, 0, 255, 0.2);
+}
+.Wiki .hili3 {
+  background-color: rgba(0, 255, 0, 0.2);
+}
+.Wiki .hili4 {
+  background-color: rgba(255, 127, 0, 0.3);
+}
+/* some styles for mtab macros */
+.Wiki div.MathContainer {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.Wiki div.MathContainer.MathDescription {
+  margin-top: 0;
+  margin-bottom: 1em;
+}
+.Wiki div.MathContainer.NoScroll {
+  overflow: visible;
+}
+.Wiki table.MathTable {
+  margin: 0;
+  border: none;
+  border-collapse: collapse;
+}
+.Wiki table.MathTable td {
+  vertical-align: top;
+  padding: 0.25em 0.5em 0.25em 0.5em;
+  color: #404040;
+}
+.Wiki table.MathTable td.Id {
+  vertical-align: middle;
+  width: 3.5em;
+  color: #ff8033;
+}
+.Wiki table.MathTable td.Label {
+  vertical-align: middle;
+  width: 3.5em;
+}
+.Wiki table.MathTable td.Where {
+  padding-top: 1px;
+  width: 3.5em;
+}
+.Wiki table.MathTable td.Description {
+  vertical-align: middle;
+}
+.Wiki table.MathTable td.Formula {
+  vertical-align: middle;
+  padding-right: 2.5em;
+}
+.Wiki table.MathTable td.Formula:last-child {
+  padding-right: 0.5em;
+}
+.Wiki table.MathDescription {
+  border: none;
+  margin: 0;
+}
+.Wiki table.MathDescription td {
+  border: none;
+  padding: 0em 0em;
+  line-height: 1.3;
+  vertical-align: base-line;
+}
+.Wiki table.MathDescription td.Symbol {
+  padding-right: 0.2em;
+}
+.Wiki table.MathDescription td.Text {
+  padding-left: 0.5em;
+  text-indent: -4px;
+}
+/* some Form Styles used in Wiki and Plugins for a unique look */
+/* input element formatting */
+.Wiki input,
+.Wiki option,
+.Wiki textarea,
+.Wiki select,
+.Wiki textarea {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background-color: white;
+}
+.Wiki input.Checkbox {
+  margin-right: 0.25em;
+}
+.Wiki input.Radio {
+  margin-right: 0.25em;
+}
+.Wiki input.Text,
+.Wiki input.Name,
+.Wiki input.Date,
+.Wiki input.Email,
+.Wiki input.Url {
+  width: 300px;
+}
+.Wiki input.Button {
+  background: url("../img/tbbbg.gif") repeat-x #888888;
+  border: 1px solid #444;
+  border-top-color: #aaa;
+  border-left-color: #888;
+  color: #FFF;
+  font-weight: normal;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+/* input element widths */
+.Wiki input.ButWidth {
+  width: 130px;
+}
+.Wiki textarea {
+  width: 100%;
+}
+.Wiki input.Integer,
+.Wiki input.Number,
+.Wiki input.Size {
+  width: 100px;
+  text-align: right;
+}
+.Wiki input.ShortWidth,
+.Wiki textarea.ShortWidth,
+.Wiki select.ShortWidth {
+  width: 150px;
+}
+.Wiki input.NormalWidth,
+.Wiki textarea.NormalWidth,
+.Wiki select.NormalWidth {
+  width: 300px;
+}
+.Wiki input.LongWidth,
+.Wiki textarea.LongWidth,
+.Wiki select.LongWidth {
+  width: 100%;
+}
+.Wiki input.LongText,
+.Wiki textarea.LongText {
+  width: 100%;
+}
+.Wiki .Bold {
+  font-weight: bold;
+}
+.Wiki div.ButtonBar {
+  margin: 1em 0;
+  padding: 3px;
+  background-color: #cccccc;
+}
+.Wiki div.ButtonBarI {
+  margin: 1em 0;
+  padding: 3px;
+  background-color: #cccccc;
+  padding-left: 9em;
+}
+.Wiki .InputError {
+  background-color: #ff8;
+}
+/* special text formatting */
+.Wiki div.DataViewBlock {
+  background-color: #FFFFFF;
+  margin-top: 0;
+  padding: 0;
+  clear: both;
+}
+.Wiki div.Description {
+  line-height: 1.2em;
+  font-size: smaller;
+  margin-top: 0.1em;
+  margin-bottom: 0.2em;
+  padding: 0 0.25em;
+}
+.Wiki div.FormRuler {
+  margin: 14px 0 0 0;
+  padding: 0;
+  border-bottom: 2px solid #AAA;
+  height: 0px;
+  font-size: 0;
+  line-height: 0;
+}
+.Wiki div.DataViewHeader {
+  padding: 0.25em 0.5em;
+  margin: 1em 0 0 0;
+  font-weight: bold;
+  background-color: #EEE;
+  border-top: 2px solid #AAA;
+  border-bottom: 4px solid #FFFFFF;
+  clear: both;
+}
+.Wiki div.ListMore {
+  font-size: smaller;
+  font-weight: bold;
+  margin-top: 0;
+  padding-left: 1em;
+  border-top: 1px solid black;
+  text-align: right;
+}
+.Wiki div.LoginState {
+  font-size: smaller;
+  font-weight: bold;
+  margin: 0 0 0.5em 0;
+  padding-left: 1em;
+  text-align: right;
+}
+.Wiki div.ExtendedSearch {
+  margin-top: 3em;
+  margin-bottom: 1em;
+  border: 2px solid #aaa;
+}
+.Wiki div.ExtendedSearch div.DataViewHeader {
+  border-top: none;
+  border-bottom: 1px solid #aaa;
+  margin-top: 0;
+}
+/* table settings */
+.Wiki table.LayoutGrid {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.Wiki table.LayoutGrid td.LayoutCell {
+  padding: 0;
+  margin: 0;
+}
+.Wiki table.DataFieldSet {
+  margin: 0;
+  padding: 0;
+  border: none;
+  width: 100%;
+}
+.Wiki table.DataFieldSet th {
+  padding: 0.2em 0.5em;
+  background-color: #EEE;
+}
+.Wiki table.DataFieldSet td {
+  padding: 0.2em 0.5em;
+}
+.Wiki table.DataFieldSet td.Label {
+  font-weight: bold;
+  width: 8em;
+}
+.Wiki table.DataFieldSet td.Container {
+  padding: 0;
+}
+.Wiki table.DataFieldBox {
+  margin: 1em 0;
+  padding: 0;
+  width: auto;
+  border: 2px solid #AAA;
+  background-color: #FFFFFF;
+  width: auto;
+}
+.Wiki table.DataFieldBox th {
+  padding: 0.2em 0.5em;
+  background: none;
+  color: black;
+  background-color: #EEE;
+  border-bottom: 1px solid #AAA;
+}
+.Wiki table.DataFieldBox td {
+  padding: 0.2em 0.5em;
+}
+.Wiki table.DataFieldBox td.Label {
+  font-weight: bold;
+  width: 8em;
+}
+.Wiki table.DataFieldBox td.First {
+  padding-top: 0.6em;
+}
+.Wiki table.DataFieldBox td.Last {
+  padding-bottom: 0.6em;
+}
+.Wiki table.Login .Button {
+  width: 146px;
+}
+.Wiki table.Login input.Text {
+  width: 300px;
+}
+.Wiki table.FieldGrid {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.Wiki table.FieldGrid td {
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+.Wiki table.ListView {
+  padding: 0;
+  margin: 0;
+  border: none;
+  width: 100%;
+}
+.Wiki table.ListView th,
+.Wiki table.ListView td {
+  padding: 0.25em;
+}
+.Wiki table.ListView th.ListCell {
+  border-top: 1px solid #AAF;
+  border-bottom: 1px solid #AAF;
+  background: none;
+  background-color: #EEF;
+  font-weight: bold;
+  color: black;
+}
+.Wiki table.ListView td.ListCell {
+  border-bottom: 1px solid #AAA;
+}
+.Wiki table.ListView tr.Selected {
+  background-color: #EEE;
+}
+.Wiki table.ListView tr.Selected td {
+  border-top: 2px solid red;
+  border-bottom: 2px solid red;
+}
+.Wiki span.Label {
+  padding: 0.25em 0.5em;
+  font-weight: bold;
+  width: 8em;
+}
+.Wiki table.CheckBox {
+  border: none;
+}
+.Wiki table.CheckBox td {
+  padding: 0;
+  padding-right: 1em;
+}
+/* scalable videos */
+/* http://webdesignerwall.com/tutorials/css-elastic-videos/comment-page-4#comments  */
+.video {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  margin: 1em 0;
+}
+.video iframe,
+.video object,
+.video embed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+/* some styles */
+.Wiki div.PageCol-Row {
+  margin-top: 1em;
+  margin-bottom: 0;
+}
+.Wiki div.PageCol-Row > div.PageCol-Column {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.Wiki div.PageCol-Row > div.PageCol-Column > *:first-child {
+  margin-top: 0;
+}
+.Wiki div.PageCol-Row > div.PageCol-Column > *:last-child {
+  margin-bottom: 1em;
+}
+.Wiki div.PageCol-Row.Stack {
+  margin-bottom: 1em;
+}
+.Wiki div.PageCol-Row.Stack > div.PageCol-Column > *:last-child {
+  margin-bottom: 0;
+}
+.Wiki div.PageCol-Row.Stack + h2,
+.Wiki div.PageCol-Row.Stack + h3,
+.Wiki div.PageCol-Row.Stack + h4 {
+  margin-top: 1.5em;
+}
+.Wiki div.PageCol-Row + p,
+.Wiki div.PageCol-Row + div,
+.Wiki div.PageCol-Row + table {
+  margin-top: 0;
+}
+.Wiki div.PageCol-Row + h2,
+.Wiki div.PageCol-Row + h3,
+.Wiki div.PageCol-Row + h4 {
+  margin-top: 0.5em;
+}
+.Wiki div.LayoutStack4-Container {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+.Wiki div.LayoutStack4-Container > div.LayoutStack4-Group {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.Wiki div.LayoutStack4-Container > div.LayoutStack4-Group > div.LayoutStack4-Cell {
+  margin-top: 0;
+  maring-bottom: 0;
+}
+.Wiki div.LayoutStack4-Container > div.LayoutStack4-Group > div.LayoutStack4-Cell > *:first-child {
+  margin-top: 0;
+}
+.Wiki div.LayoutStack4-Container > div.LayoutStack4-Group > div.LayoutStack4-Cell > *:last-child {
+  margin-bottom: 0;
+}
+.Wiki div.LayoutStack4-Container.Separated {
+  margin-bottom: 0;
+}
+.Wiki div.LayoutStack4-Container.Separated > div.LayoutStack4-Group > div.LayoutStack4-Cell > *:last-child {
+  margin-bottom: 1em;
+}
+.Wiki div.LayoutStack4-Container.Separated + p,
+.Wiki div.LayoutStack4-Container.Separated + div,
+.Wiki div.LayoutStack4-Container.Separated + table {
+  margin-top: 0;
+}
+.Wiki div.LayoutStack4-Container.Separated + h2,
+.Wiki div.LayoutStack4-Container.Separated + h3,
+.Wiki div.LayoutStack4-Container.Separated + h4 {
+  margin-top: 0.5em;
+}
+.Wiki div.Scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.Wiki div.Scroller div.ScrollCanvas {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.Wiki div.Scroller div.ScrollCanvas > *:first-child {
+  margin-top: 0;
+}
+.Wiki div.Scroller div.ScrollCanvas > *:last-child {
+  margin-bottom: 0;
+}
+.Wiki .Panorama {
+  touch-action: none;
+}
+.Wiki div.OnOff {
+  margin-top: 0em;
+}
+.Wiki div.OnOff p {
+  margin-top: 0em;
+}
+.Wiki div.OnOff div.OnOffSign {
+  font-weight: bold;
+  float: left;
+  width: 20px;
+  text-align: left;
+}
+.Wiki div.OnOff div.OnOffHead {
+  font-weight: bold;
+}
+.Wiki div.OnOff div.OnOffText {
+  margin-bottom: 1em;
+  border-left: 4px solid #ddd;
+  padding: 0 0 0 16px;
+}
+.Wiki div.OnOff div.OnOffText.noborder {
+  border-left: none;
+  padding: 0;
+}
+.Wiki span.nl {
+  border-left: 1px solid;
+  border-top: 1px solid;
+  padding: 0 2px;
+  margin-left: 4px;
+}
+div.JsGraph {
+  border-width: 1px;
+  border-style: solid;
+  border-color: #ddd;
+}
+.Wiki .shadow {
+  -webkit-box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+  -moz-box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+.Wiki .shadow-bottom {
+  -webkit-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  -moz-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+.Wiki .shadow-bottom-right {
+  -webkit-box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  -moz-box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+.Wiki .shadow-top {
+  -webkit-box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.3);
+  -moz-box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.3);
+}
+.Wiki .roundedBox5 {
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+}
+.Wiki .roundedBox10 {
+  -webkit-border-radius: 10px;
+  -moz-border-radius: 10px;
+  border-radius: 10px;
+}
+div.SearchAndReplaceForm {
+  margin: 4px 0;
+  padding: 0;
+}
+div.SearchAndReplaceForm .Label {
+  padding-left: 0.25em;
+  padding-right: 0.25em;
+}
+div.SearchAndReplaceForm .Field {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+div.SearchAndReplaceForm .Search,
+div.SearchAndReplaceForm .Replace,
+div.SearchAndReplaceForm .Options {
+  display: inline-block;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+div.SearchAndReplaceForm .Search input.Button,
+div.SearchAndReplaceForm .Replace input.Button,
+div.SearchAndReplaceForm .Options input.Button {
+  margin-bottom: 2px;
+}
+div.SearchAndReplaceForm .Options {
+  vertical-align: middle;
+  margin-left: 0.25em;
+  margin-top: 0;
+}
+div.SearchAndReplaceForm .Options table.Flags {
+  border: none;
+}
+div.SearchAndReplaceForm .Options table.Flags td {
+  white-space: nowrap;
+  padding: 0;
+}
+#EditCommandButtons {
+  margin: 4px 0 1em 0;
+}
+#EditInfo {
+  padding: 4px;
+  margin: 4px 0 0 0;
+  line-height: 1;
+}
+#ProgressBarBox {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  border-top: 2px solid #ddd;
+  border-bottom: 2px solid #ddd;
+  padding: 0.5em;
+  background-color: #eee;
+}
+/* end wiki.css */
+.lbtn {
+  margin-bottom: 5px !important;
+  margin-left: 2px;
+  margin-right: 2px;
+  display: inline-block;
+  *display: inline;
+  /* IE7 inline-block hack */
+
+  *zoom: 1;
+  padding: 6px 12px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  line-height: 1;
+  color: #ffffff;
+  background-color: #007deb;
+  background-image: -moz-linear-gradient(top, #0088ff, #006dcc);
+  background-image: -ms-linear-gradient(top, #0088ff, #006dcc);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#0088ff), to(#006dcc));
+  background-image: -webkit-linear-gradient(top, #0088ff, #006dcc);
+  background-image: -o-linear-gradient(top, #0088ff, #006dcc);
+  background-image: linear-gradient(top, #0088ff, #006dcc);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#0088ff', endColorstr='#006dcc', GradientType=0);
+  border: 1px solid #66b8ff;
+  *border: 0;
+  border-bottom-color: #004480;
+  border-right-color: #004480;
+}
+.lbtn span.lbtnSubtxt {
+  display: inline-block;
+  line-height: 1.3;
+  font-size: small;
+  padding-top: 0.5em;
+}
+.lbtn a:active,
+.lbtn a:hover,
+.lbtn a:focus,
+.lbtn a {
+  color: black;
+}
+.lbtn.lbtnHidden {
+  display: none;
+}
+.lbtn.lbtnDisabled,
+.lbtn.lbtnDisabled:hover,
+.lbtn.lbtnDisabled:active,
+.lbtn.lbtnDisabled:focus {
+  color: #dddddd;
+  background-color: #b9b9b9;
+  background-image: -moz-linear-gradient(top, #c3c3c3, #aaaaaa);
+  background-image: -ms-linear-gradient(top, #c3c3c3, #aaaaaa);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#c3c3c3), to(#aaaaaa));
+  background-image: -webkit-linear-gradient(top, #c3c3c3, #aaaaaa);
+  background-image: -o-linear-gradient(top, #c3c3c3, #aaaaaa);
+  background-image: linear-gradient(top, #c3c3c3, #aaaaaa);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#c3c3c3', endColorstr='#aaaaaa', GradientType=0);
+  border: 1px solid #f6f6f6;
+  *border: 0;
+  border-bottom-color: #848484;
+  border-right-color: #848484;
+  margin-bottom: 5px !important;
+  cursor: default;
+}
+.lbtn:hover,
+.lbtn:focus {
+  background-color: #1f96ff;
+  background-image: -moz-linear-gradient(top, #33a0ff, #0088ff);
+  background-image: -ms-linear-gradient(top, #33a0ff, #0088ff);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#33a0ff), to(#0088ff));
+  background-image: -webkit-linear-gradient(top, #33a0ff, #0088ff);
+  background-image: -o-linear-gradient(top, #33a0ff, #0088ff);
+  background-image: linear-gradient(top, #33a0ff, #0088ff);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#33a0ff', endColorstr='#0088ff', GradientType=0);
+}
+.lbtnActive:hover {
+  background-color: #0057a3;
+  background-image: -moz-linear-gradient(top, #003666, #0088ff);
+  background-image: -ms-linear-gradient(top, #003666, #0088ff);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#003666), to(#0088ff));
+  background-image: -webkit-linear-gradient(top, #003666, #0088ff);
+  background-image: -o-linear-gradient(top, #003666, #0088ff);
+  background-image: linear-gradient(top, #003666, #0088ff);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#003666', endColorstr='#0088ff', GradientType=0);
+}
+.lbtn.active,
+.lbtn:active,
+.lbtnActive {
+  background-color: #003c70;
+  background-image: -moz-linear-gradient(top, #001b33, #006dcc);
+  background-image: -ms-linear-gradient(top, #001b33, #006dcc);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#001b33), to(#006dcc));
+  background-image: -webkit-linear-gradient(top, #001b33, #006dcc);
+  background-image: -o-linear-gradient(top, #001b33, #006dcc);
+  background-image: linear-gradient(top, #001b33, #006dcc);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#001b33', endColorstr='#006dcc', GradientType=0);
+  outline: 0;
+  border: 1px solid #001b33;
+  *border: 0;
+  border-bottom-color: #1a94ff;
+  border-right-color: #1a94ff;
+}
+.lbtnRed {
+  background-color: #c90000;
+  background-image: -moz-linear-gradient(top, #dd0000, #aa0000);
+  background-image: -ms-linear-gradient(top, #dd0000, #aa0000);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#dd0000), to(#aa0000));
+  background-image: -webkit-linear-gradient(top, #dd0000, #aa0000);
+  background-image: -o-linear-gradient(top, #dd0000, #aa0000);
+  background-image: linear-gradient(top, #dd0000, #aa0000);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#dd0000', endColorstr='#aa0000', GradientType=0);
+  border: 1px solid #ff4444;
+  *border: 0;
+  border-bottom-color: #5e0000;
+  border-right-color: #5e0000;
+}
+.lbtnRed:hover,
+.lbtnRed:focus {
+  background-color: #f10a0a;
+  background-image: -moz-linear-gradient(top, #ff1111, #dd0000);
+  background-image: -ms-linear-gradient(top, #ff1111, #dd0000);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#ff1111), to(#dd0000));
+  background-image: -webkit-linear-gradient(top, #ff1111, #dd0000);
+  background-image: -o-linear-gradient(top, #ff1111, #dd0000);
+  background-image: linear-gradient(top, #ff1111, #dd0000);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#ff1111', endColorstr='#dd0000', GradientType=0);
+}
+.lbtnRed.active,
+.lbtnRed:active,
+.lbtnRed.lbtnActive {
+  background-color: #4e0000;
+  background-image: -moz-linear-gradient(top, #110000, #aa0000);
+  background-image: -ms-linear-gradient(top, #110000, #aa0000);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#110000), to(#aa0000));
+  background-image: -webkit-linear-gradient(top, #110000, #aa0000);
+  background-image: -o-linear-gradient(top, #110000, #aa0000);
+  background-image: linear-gradient(top, #110000, #aa0000);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#110000', endColorstr='#aa0000', GradientType=0);
+  outline: 0;
+  border: 1px solid #110000;
+  *border: 0;
+  border-bottom-color: #f60000;
+  border-right-color: #f60000;
+}
+.lbtnRed.lbtnActive:hover {
+  background-color: #810000;
+  background-image: -moz-linear-gradient(top, #440000, #dd0000);
+  background-image: -ms-linear-gradient(top, #440000, #dd0000);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#440000), to(#dd0000));
+  background-image: -webkit-linear-gradient(top, #440000, #dd0000);
+  background-image: -o-linear-gradient(top, #440000, #dd0000);
+  background-image: linear-gradient(top, #440000, #dd0000);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#440000', endColorstr='#dd0000', GradientType=0);
+}
+.lbtnGreen {
+  background-color: #00a100;
+  background-image: -moz-linear-gradient(top, #00b500, #008200);
+  background-image: -ms-linear-gradient(top, #00b500, #008200);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#00b500), to(#008200));
+  background-image: -webkit-linear-gradient(top, #00b500, #008200);
+  background-image: -o-linear-gradient(top, #00b500, #008200);
+  background-image: linear-gradient(top, #00b500, #008200);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#00b500', endColorstr='#008200', GradientType=0);
+  border: 1px solid #1cff1c;
+  *border: 0;
+  border-bottom-color: #003500;
+  border-right-color: #003500;
+}
+.lbtnGreen:hover,
+.lbtnGreen:focus {
+  background-color: #00d400;
+  background-image: -moz-linear-gradient(top, #00e800, #00b500);
+  background-image: -ms-linear-gradient(top, #00e800, #00b500);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#00e800), to(#00b500));
+  background-image: -webkit-linear-gradient(top, #00e800, #00b500);
+  background-image: -o-linear-gradient(top, #00e800, #00b500);
+  background-image: linear-gradient(top, #00e800, #00b500);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#00e800', endColorstr='#00b500', GradientType=0);
+}
+.lbtnGreen.active,
+.lbtnGreen:active,
+.lbtnGreen.lbtnActive {
+  background-color: #003400;
+  background-image: -moz-linear-gradient(top, #000000, #008200);
+  background-image: -ms-linear-gradient(top, #000000, #008200);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#000000), to(#008200));
+  background-image: -webkit-linear-gradient(top, #000000, #008200);
+  background-image: -o-linear-gradient(top, #000000, #008200);
+  background-image: linear-gradient(top, #000000, #008200);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#000000', endColorstr='#008200', GradientType=0);
+  outline: 0;
+  border: 1px solid #000000;
+  *border: 0;
+  border-bottom-color: #00cf00;
+  border-right-color: #00cf00;
+}
+.lbtnGreen.lbtnActive:hover {
+  background-color: #005900;
+  background-image: -moz-linear-gradient(top, #001c00, #00b500);
+  background-image: -ms-linear-gradient(top, #001c00, #00b500);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#001c00), to(#00b500));
+  background-image: -webkit-linear-gradient(top, #001c00, #00b500);
+  background-image: -o-linear-gradient(top, #001c00, #00b500);
+  background-image: linear-gradient(top, #001c00, #00b500);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#001c00', endColorstr='#00b500', GradientType=0);
+}
+.lbtnBlack {
+  background-color: #0f0f0f;
+  background-image: -moz-linear-gradient(top, #1a1a1a, #000000);
+  background-image: -ms-linear-gradient(top, #1a1a1a, #000000);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#1a1a1a), to(#000000));
+  background-image: -webkit-linear-gradient(top, #1a1a1a, #000000);
+  background-image: -o-linear-gradient(top, #1a1a1a, #000000);
+  background-image: linear-gradient(top, #1a1a1a, #000000);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#1a1a1a', endColorstr='#000000', GradientType=0);
+  border: 1px solid #4d4d4d;
+  *border: 0;
+  border-bottom-color: #000000;
+  border-right-color: #000000;
+}
+.lbtnBlack:hover,
+.lbtnBlack:focus {
+  background-color: #292929;
+  background-image: -moz-linear-gradient(top, #333333, #1a1a1a);
+  background-image: -ms-linear-gradient(top, #333333, #1a1a1a);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#333333), to(#1a1a1a));
+  background-image: -webkit-linear-gradient(top, #333333, #1a1a1a);
+  background-image: -o-linear-gradient(top, #333333, #1a1a1a);
+  background-image: linear-gradient(top, #333333, #1a1a1a);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#333333', endColorstr='#1a1a1a', GradientType=0);
+}
+.lbtnBlack.active,
+.lbtnBlack:active,
+.lbtnBlack.lbtnActive {
+  background-color: #000000;
+  background-image: -moz-linear-gradient(top, #000000, #000000);
+  background-image: -ms-linear-gradient(top, #000000, #000000);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#000000), to(#000000));
+  background-image: -webkit-linear-gradient(top, #000000, #000000);
+  background-image: -o-linear-gradient(top, #000000, #000000);
+  background-image: linear-gradient(top, #000000, #000000);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#000000', endColorstr='#000000', GradientType=0);
+  outline: 0;
+  border: 1px solid #000000;
+  *border: 0;
+  border-bottom-color: #262626;
+  border-right-color: #262626;
+}
+.lbtnBlack.lbtnActive:hover {
+  background-color: #0a0a0a;
+  background-image: -moz-linear-gradient(top, #000000, #1a1a1a);
+  background-image: -ms-linear-gradient(top, #000000, #1a1a1a);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#000000), to(#1a1a1a));
+  background-image: -webkit-linear-gradient(top, #000000, #1a1a1a);
+  background-image: -o-linear-gradient(top, #000000, #1a1a1a);
+  background-image: linear-gradient(top, #000000, #1a1a1a);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#000000', endColorstr='#1a1a1a', GradientType=0);
+}
+.lbtn p {
+  margin: 0;
+}
+.lbtn a {
+  color: #ffffff;
+}
+.lbtn a:hover {
+  color: #ffffff;
+}
+.lbtn a:active {
+  color: #ffffff;
+}
+.lbtn a:focus {
+  color: #ffffff;
+}
+.lbtn a.new {
+  color: #ff8033;
+}
+.lbtn .small {
+  font-size: 0.5em;
+  line-height: 1;
+}
+.Wiki a:hover .lbtn {
+  text-decoration: none;
+}
+.lbtnBig {
+  border-width: 2px;
+  padding: 12px 24px;
+  font-size: 1.5em;
+}
+.lbtnBig:hover,
+.lbtnBig:active,
+.lbtnBig:focus {
+  border-width: 2px;
+}
+.lbtnSmall {
+  padding: 3px 6px;
+  font-size: 0.75em;
+}
+.lbtnNoMargin {
+  margin: 0 !important;
+}
+.lbtnBlock {
+  display: block;
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
