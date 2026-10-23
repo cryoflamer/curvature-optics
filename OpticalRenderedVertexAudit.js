@@ -106,6 +106,28 @@
   }
   // Compare the actual 2D driver stroke centers (not pre-projection 3D
   // coordinates) with independent centers from captured tower polygons.
+  // Visual reference independent of the optical angle solver: actual
+  // polygon section midpoints captured while Bislin draws each tower.
+  function drawActualAxes(g, m) {
+    var enabled = typeof document !== 'undefined' && document.getElementById('TowerAuditAxesEnabled');
+    if (!enabled || !enabled.checked || m.opticsMode !== 'ray-tracing' ||
+        m.showModel !== 1 || m.ObjType[0] !== 3) return 0;
+    var count = 0;
+    g.ResetTrans3D();
+    g.SetAlpha(1);
+    g.SetClipping('canvas');
+    g.SetLineAttr('#00b9ff', 3);
+    Object.keys(vertices).forEach(function (index) {
+      var pts = vertices[index].points;
+      var base = sectionCenter(pts, 0, 1e-8);
+      var top = sectionCenter(pts, 1, 1e-8);
+      if (!base || !top) return;
+      g.Line3D(base, top);
+      count++;
+    });
+    g.ResetTrans3D();
+    return count;
+  }
   function compareCanvasStrokes(g, m, snapshot, rendered) {
     if (!snapshot || snapshot.geometry !== 'globe') return [];
     var rows = [];
@@ -140,6 +162,8 @@
     return rows;
   }
   function onDraw(g,m) {
+    // Draw every frame, including camera movement and zoom.
+    drawActualAxes(g,m);
     var overlay = root.CurvatureTowerOverlay;
     var snapshot = overlay && overlay.getData && overlay.getData();
     if (!snapshot || !Object.keys(vertices).length) return;
@@ -171,6 +195,6 @@
     return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes};
   }
   function reset() { vertices = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,sectionCenter:sectionCenter,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
