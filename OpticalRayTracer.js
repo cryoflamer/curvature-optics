@@ -82,7 +82,7 @@
       var delta = Math.min(ds, length - travelled);
       var next = step(state, delta, geometry, radius, profile);
       travelled += delta;
-      if (height(next[0], next[1], geometry, radius) < 0) {
+      if (options.stopAtGround !== false && height(next[0], next[1], geometry, radius) < 0) {
         // First-order interpolation of the ground crossing for diagnostics.
         var h0 = height(state[0], state[1], geometry, radius);
         var h1 = height(next[0], next[1], geometry, radius);
