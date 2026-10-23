@@ -62,5 +62,5 @@
     });
     g.ResetTrans3D();
   }
-  root.CurvatureTowerOverlay = { setData: setData, clear: clear, draw: draw, towerAnchor: towerAnchor };
+  root.CurvatureTowerOverlay = { setData: setData, clear: clear, getData: function () { return snapshot; }, draw: draw, towerAnchor: towerAnchor };
 }(typeof globalThis !== 'undefined' ? globalThis : this));
