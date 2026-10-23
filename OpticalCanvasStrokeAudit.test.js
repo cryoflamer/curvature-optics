@@ -22,11 +22,11 @@ try {
   const original=g.DriverDrawPoly;
   overlay.draw(g,m);
   assert.strictEqual(g.DriverDrawPoly,original,'2D driver must be restored');
-  assert.strictEqual(calls,2);
+  assert.strictEqual(calls,4);
   const entries=overlay.getRenderedStrokes();
-  assert.strictEqual(entries.length,1);
+  assert.strictEqual(entries.length,2);
   assert.strictEqual(entries[0].strokes.length,2);
-  const midpoint=entries[0].strokes[0].reduce((v,p)=>v+p[0],0)/2;
+  const midpoint=entries[1].strokes[0].reduce((v,p)=>v+p[0],0)/2;
   const world=overlay.markerWorld('globe',3000,23,angle,m.rEarth,10,15);
   assert(Math.abs(midpoint-(world[0]*2+10))<1e-8);
   console.log('OpticalCanvasStrokeAudit: 5 checks passed');

@@ -5,21 +5,24 @@
   'use strict';
   var samples = {1:true,11:true,21:true,31:true,41:true,51:true,61:true,71:true,81:true,85:true};
   var vertices = {}, localAxes = {}, lastKey = null;
+  var secondaryVertices = {}, secondaryAxes = {};
   function screen(g, world) {
     var camera = g.Camera.Trans(world);
     return [g.WinTrans.TransX(camera[0]), g.WinTrans.TransY(camera[1])];
   }
   function beginTower(g, m, objIx) {
-    if (objIx !== 0 || m.ObjType[0] !== 3 || m.showModel !== 1 || m.opticsMode !== 'ray-tracing') return null;
-    var distance = m.aObjCurr[0] * m.geometryRadius;
-    var index = Math.round((distance - m.ObjDist[0]) / m.ObjDeltaDist[0]) + 1;
+    if (m.ObjType[objIx] !== 3 || m.showModel !== 1 || m.opticsMode !== 'ray-tracing') return null;
+    var distance = m.aObjCurr[objIx] * m.geometryRadius;
+    var index = Math.round((distance - m.ObjDist[objIx]) / m.ObjDeltaDist[objIx]) + 1;
     // Capture every rendered tower, not only the ten diagnostic samples.
     // The vacuum overlay needs the original local axis for each marker.
     // Capture the object-local axis while Bislin's plane and transforms are
     // active. This is independent of both polygon section averaging and RK4.
     var localBase = g.GetTransPointOnPlane(0, 0, [0,0,0]).slice();
     var localTop = g.GetTransPointOnPlane(0, 1, [0,0,0]).slice();
-    localAxes[index] = {tower:index, base:localBase, top:localTop};
+    var axesTarget = objIx === 0 ? localAxes : secondaryAxes;
+    var vertexTarget = objIx === 0 ? vertices : secondaryVertices;
+    axesTarget[index] = {tower:index, group:objIx, base:localBase, top:localTop};
     var original = g.PolygonOnPlane, captured = [];
     g.PolygonOnPlane = function (xs, ys, mode, size) {
       if (Array.isArray(xs) && Array.isArray(ys)) {
@@ -33,7 +36,7 @@
     };
     return function () {
       g.PolygonOnPlane = original;
-      if (captured.length) vertices[index] = {tower:index, distance:distance, points:captured};
+      if (captured.length) vertexTarget[index] = {tower:index, group:objIx, distance:distance, points:captured};
     };
   }
   function nearest(points, pixel) {
@@ -231,10 +234,8 @@
     snapshot.vacuum.forEach(function (ray) {
       [['base','bottom'],['top','top']].forEach(function (part) {
         var point = part[0], angle = ray[part[1]], key = ray.index + ':' + point;
-        if (angle === null || !isFinite(angle)) {
-          rows.push({tower:ray.index,point:point,status:'OCCLUDED',result:'SKIP'});
-          skipped++;return;
-        }
+        // A ray-solver 'occluded' result must not suppress geometry calibration.
+        // The actual renderer and its horizon mask determine visibility.
         var reference = independentReference(g,ray.index,point);
         if (!reference) {
           rows.push({tower:ray.index,point:point,status:'MISSING_GEOMETRY',result:'FAIL'});
@@ -249,7 +250,10 @@
           capturedTower:reference.capturedTower,capturedVertices:reference.capturedVertices,
           localAxisErrorPx:axisError === null ? null : +axisError.toFixed(3),
           markerRecords:marks.length};
-        if (vp === 'OFFSCREEN') offscreen++;
+        if (vp === 'OFFSCREEN') {
+          offscreen++;
+          row.status = 'OFFSCREEN'; row.result = 'SKIP'; skipped++; rows.push(row); return;
+        }
         if (marks.length !== 1 || reference.capturedTower !== ray.index) {
           row.status=marks.length !== 1?'MISSING_OR_DUPLICATE_MARKER':'WRONG_TOWER';
           row.result='FAIL';failed++;rows.push(row);return;
@@ -330,8 +334,9 @@
     }
     return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes, calibration:calibration};
   }
-  function getLocalAxis(tower) { return localAxes[tower] || null; }
-  function reset() { vertices = {}; localAxes = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
+  function getLocalAxis(tower, group) { return (group === 1 ? secondaryAxes : localAxes)[tower] || null; }
+  function getCapturedGroups() { return {primary:vertices, secondary:secondaryVertices}; }
+  function reset() { vertices = {}; localAxes = {}; secondaryVertices = {}; secondaryAxes = {}; lastKey = null; }
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));

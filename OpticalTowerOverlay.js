@@ -59,7 +59,9 @@
         if (!(y > 0)) return;
         var size = Math.max(0.2, y * 0.00028);
         [row.bottom, row.top].forEach(function (angle, index) {
-          if (angle === null || !isFinite(angle)) return;
+          // Vacuum markers are geometric references, not ray-solver results.
+          if (!(dataset.color === '#d62728' && snapshot.geometry === 'globe') &&
+              (angle === null || !isFinite(angle))) return;
           var targetHeight = index === 0 ? 0 : snapshot.towerHeight;
           var marker;
           if (dataset.color === '#d62728' && snapshot.geometry === 'globe') {
@@ -71,8 +73,8 @@
             marker = axis && (index === 0 ? axis.base : axis.top).slice();
             // In the browser, missing captured geometry must not be guessed.
             // Standalone unit tests without the audit retain the old stub path.
-            if (!audit) marker = markerWorld(snapshot.geometry, distance, targetHeight,
-              angle, m.rEarth, side, m.Height);
+            if (!audit) marker = towerAnchor(snapshot.geometry, distance, targetHeight,
+              m.rEarth, side, m.Height);
           } else {
             marker = markerWorld(snapshot.geometry, distance, targetHeight,
               angle, m.rEarth, side, m.Height);

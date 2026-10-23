@@ -26,8 +26,8 @@ try {
     overlay.setData(data);
     lines = [];
     overlay.draw(g,m);
-    assert.strictEqual(lines.length,2,geometry+' must draw one cross');
-    const midpoint = lines[0][0].map((v,i)=>(v+lines[0][1][i])/2);
+    assert.strictEqual(lines.length,geometry==='globe'?4:2,geometry+' vacuum marker count');
+    const midpoint = lines[geometry==='globe'?2:0][0].map((v,i)=>(v+lines[geometry==='globe'?2:0][1][i])/2);
     const expected = overlay.markerWorld(geometry,3000,23,topAngle,m.rEarth,10,15);
     expected.forEach((v,i)=>assert(Math.abs(v-midpoint[i])<1e-9,geometry+' component '+i));
     assert(Math.abs(expected[2]-anchor[2])<1e-9,'vacuum ray must reproduce anchor');

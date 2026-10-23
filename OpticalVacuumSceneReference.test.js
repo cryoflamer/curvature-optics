@@ -20,7 +20,7 @@ const m = {opticsMode:'ray-tracing',showModel:1,ObjType:[3],NObjects:[2],
 try {
   overlay.setData({geometry:'globe',height:15,radius:6371000,
     firstDistance:3000,spacing:3000,count:2,towerHeight:23,side:32,
-    vacuum:[{index:1,distance:3000,bottom:-0.1,top:0.1},
+    vacuum:[{index:1,distance:3000,bottom:null,top:null},
       {index:2,distance:6000,bottom:-0.1,top:0.1}],standard:[]});
   overlay.draw(g,m);
   assert.strictEqual(lines.length,8);
