@@ -66,6 +66,44 @@
     });
     return rows;
   }
+  // Independent axis reference: use the midpoint of the leftmost and
+  // rightmost *actually rendered* vertices at the exact local base/top level.
+  // This does not reuse towerAnchor() to construct the reference.
+  function sectionCenter(points, level, tolerance) {
+    var section = points.filter(function (p) { return Math.abs(p.y-level) <= tolerance; });
+    if (section.length < 2) return null;
+    var left = section.reduce(function (a,b) { return a.x < b.x ? a : b; });
+    var right = section.reduce(function (a,b) { return a.x > b.x ? a : b; });
+    if (right.x-left.x < 1e-10) return null;
+    // Average the *world-space* endpoints, then project the actual center.
+    return left.world.map(function (v,i) { return (v+right.world[i])/2; });
+  }
+  function compareCenters(g,m,snapshot) {
+    if (!snapshot || snapshot.geometry !== 'globe' || !root.CurvatureTowerOverlay) return [];
+    var rows = [], anchor = root.CurvatureTowerOverlay.towerAnchor;
+    snapshot.vacuum.forEach(function (ray) {
+      var drawn = vertices[ray.index];
+      if (!drawn) return;
+      [['base','bottom',0],['top','top',1]].forEach(function (spec) {
+        var level = spec[2], angle = ray[spec[1]];
+        if (angle === null || !isFinite(angle)) return;
+        var centerWorld = sectionCenter(drawn.points,level,1e-8);
+        if (!centerWorld) return;
+        var actual = screen(g,centerWorld);
+        var height = level * snapshot.towerHeight;
+        var physical = anchor('globe',ray.distance,height,m.rEarth,snapshot.side,m.Height);
+        var horizontal = Math.hypot(physical[0],physical[1]);
+        var marker = screen(g,[physical[0],physical[1],horizontal*Math.tan(angle)]);
+        var dx = marker[0]-actual[0], dy = marker[1]-actual[1];
+        rows.push({tower:ray.index,point:spec[0],
+          actualCenterX:+actual[0].toFixed(3),actualCenterY:+actual[1].toFixed(3),
+          markerX:+marker[0].toFixed(3),markerY:+marker[1].toFixed(3),
+          dx:+dx.toFixed(3),dy:+dy.toFixed(3),errorPx:+Math.hypot(dx,dy).toFixed(3),
+          capturedVertices:drawn.points.length});
+      });
+    });
+    return rows;
+  }
   function onDraw(g,m) {
     var overlay = root.CurvatureTowerOverlay;
     var snapshot = overlay && overlay.getData && overlay.getData();
@@ -76,6 +114,7 @@
     if (key === lastKey) return;
     var rows = compare(g,m,snapshot);
     if (!rows.length) return;
+    var centers = compareCenters(g,m,snapshot);
     lastKey = key;
     if (root.console) {
       root.console.group('Actual rendered tower vertices vs vacuum markers (nearest vertex, NOT zero-error test)');
@@ -83,10 +122,14 @@
       root.console.log('The reference vertices were captured from actual DrawShape PolygonOnPlane calls.');
       root.console.log('Nearest-vertex distance can be nonzero even with correct axis alignment.');
       root.console.groupEnd();
+      root.console.group('Actual tower section centers vs vacuum markers (independent geometry)');
+      root.console.table(centers);
+      root.console.log('Centers come from captured left/right polygon vertices at local y=0 and y=1; missing sections are omitted.');
+      root.console.groupEnd();
     }
-    return rows;
+    return {nearestVertices:rows, sectionCenters:centers};
   }
   function reset() { vertices = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,sectionCenter:sectionCenter,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
