@@ -1,4 +1,4 @@
-/* Backend selection scaffold. Patch 01 does not change optical calculations. */
+/* Optical backend controls. Patch 02 isolates physical scene geometry. */
 (function (root) {
   'use strict';
   var modes = { 'legacy-k': true, 'ray-tracing': true };
@@ -17,7 +17,7 @@
     profile.disabled = CurveApp.opticsMode === 'legacy-k';
     status.textContent = CurveApp.opticsMode === 'legacy-k'
       ? 'Active: original Bislin k-based renderer. Profile selection is saved but not used.'
-      : 'Preview only: n(h) tracing is not implemented yet. The scene still uses the original k-based renderer.';
+      : 'Geometry preview: physical Earth radius (no k deformation). Rays are straight; selected n(h) profile is not applied yet.';
   }
 
   function bind() {
@@ -26,10 +26,12 @@
     if (!mode || !profile) return;
     mode.addEventListener('change', function () {
       CurveApp.opticsMode = mode.value;
+      if (typeof UpdateAll === 'function') UpdateAll(false);
       sync();
     });
     profile.addEventListener('change', function () {
       CurveApp.opticsProfile = profile.value;
+      if (typeof UpdateAll === 'function') UpdateAll(false);
       sync();
     });
     sync();

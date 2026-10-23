@@ -206,6 +206,8 @@ function CurveAppClass() {
   // Optical backend selection (scaffold only; legacy rendering is unchanged).
   this.opticsMode = 'legacy-k';
   this.opticsProfile = 'standard';
+  // Geometry radius is independent of the legacy effective refraction radius.
+  this.geometryRadius = this.rEarth;
 
   // refraction
   this.BaroModel = null;
@@ -516,18 +518,24 @@ CurveAppClass.prototype.Update = function() {
   this.UpdateObjectInput(0);
   this.UpdateObjectInput(1);
 
+  // In ray-tracing mode only the *geometry* is switched to the physical
+  // radius. Optical rays are not yet implemented (vacuum preview).
+  // The legacy k controls and their computed values remain untouched.
+  this.geometryRadius = this.opticsMode === 'ray-tracing'
+    ? this.rEarth : this.refractionRadius;
+
   // compute diverse values
-  this.aDip = Math.acos( this.refractionRadius / (this.refractionRadius + this.Height) );
+  this.aDip = Math.acos( this.geometryRadius / (this.geometryRadius + this.Height) );
   this.aEarth = Math.PI - 2 * this.aDip;
-  this.rDisk = this.refractionRadius * Math.sin( this.aDip );
-  this.dHorizon = this.refractionRadius * this.aDip;
-  this.hDisk = this.refractionRadius * Math.cos( this.aDip );
-  this.hDip = this.refractionRadius - this.hDisk;
-  this.dView = ( this.Height + this.refractionRadius ) * Math.sin( this.aDip );
+  this.rDisk = this.geometryRadius * Math.sin( this.aDip );
+  this.dHorizon = this.geometryRadius * this.aDip;
+  this.hDisk = this.geometryRadius * Math.cos( this.aDip );
+  this.hDip = this.geometryRadius - this.hDisk;
+  this.dView = ( this.Height + this.geometryRadius ) * Math.sin( this.aDip );
   this.aDelta = this.aDip / this.nLines;
-  this.dDelta = this.showModel & 1 ? this.aDelta * this.refractionRadius : 0;
-  this.posEarth = [ 0, 0, -(this.refractionRadius + this.Height) ];
-  this.zDisk = (this.refractionRadius + this.Height) - ( this.refractionRadius * Math.cos( this.aDip ) );
+  this.dDelta = this.showModel & 1 ? this.aDelta * this.geometryRadius : 0;
+  this.posEarth = [ 0, 0, -(this.geometryRadius + this.Height) ];
+  this.zDisk = (this.geometryRadius + this.Height) - ( this.geometryRadius * Math.cos( this.aDip ) );
 
   // Nick and Pan slider synchronization
   if (this.Nick != this.LastNick) {
@@ -642,7 +650,7 @@ CurveAppClass.prototype.Update = function() {
   var aDip = Math.acos( this.rEarth / (this.rEarth + this.Height) );
   var dHorizon = this.rEarth * aDip;
   var v_norm = compObjVect( dHorizon, 0, 0, this.rEarth, this.Height );
-  var v_refr = compObjVect( this.dHorizon, 0, 0, this.refractionRadius, this.Height );
+  var v_refr = compObjVect( this.dHorizon, 0, 0, this.geometryRadius, this.Height );
   this.HorizonRefrAng = compVectAng( v_norm, v_refr );
   if (this.HorizonRefrAng < 0.00001) this.HorizonRefrAng = 0;
 
@@ -654,7 +662,7 @@ CurveAppClass.prototype.Update = function() {
 
     var v_base = compObjVect( this.ObjDist[objIx], this.ObjSidePos[objIx], 0, this.rEarth, this.Height );
     var v_norm = compObjVect( this.ObjDist[objIx], this.ObjSidePos[objIx], this.ObjSize[objIx], this.rEarth, this.Height );
-    var v_refr = compObjVect( this.ObjDist[objIx], this.ObjSidePos[objIx], this.ObjSize[objIx], this.refractionRadius, this.Height );
+    var v_refr = compObjVect( this.ObjDist[objIx], this.ObjSidePos[objIx], this.ObjSize[objIx], this.geometryRadius, this.Height );
 
     this.ObjAngSize = compVectAng( v_base, v_norm );
     this.ObjRefrAng = compVectAng( v_norm, v_refr );
@@ -669,7 +677,7 @@ CurveAppClass.prototype.Update = function() {
       this.ObjLiftRel = this.ObjLiftAbs - horizonLift;
     }
 
-    var v_refr = compObjVect( this.ObjDist[objIx], this.ObjSidePos[objIx], this.ObjSize[objIx]/2, this.refractionRadius, this.Height );
+    var v_refr = compObjVect( this.ObjDist[objIx], this.ObjSidePos[objIx], this.ObjSize[objIx]/2, this.geometryRadius, this.Height );
     this.ObjViewDist = compViewDist( v_refr );
 
   } else {
@@ -701,7 +709,7 @@ CurveAppClass.prototype.UpdateObjectInput = function( objIx ) {
     }
     this.ObjDist[objIx] *= distSign;
   }
-  var distLimit = this.refractionRadius * Math.PI / 4;
+  var distLimit = this.geometryRadius * Math.PI / 4;
   if (this.ObjDist[objIx] < -distLimit) this.ObjDist[objIx] = -distLimit;
   if (this.ObjDist[objIx] >  distLimit) this.ObjDist[objIx] =  distLimit;
   var distSign = this.ObjDist[objIx] < 0 ? -1 : 1;
@@ -724,7 +732,7 @@ CurveAppClass.prototype.UpdateObjectInput = function( objIx ) {
     }
     this.ObjSidePos[objIx] *= sidePosSign;
   }
-  var sidePosLimit = this.refractionRadius * Math.PI / 4;
+  var sidePosLimit = this.geometryRadius * Math.PI / 4;
   if (this.ObjSidePos[objIx] < -sidePosLimit) this.ObjSidePos[objIx] = -sidePosLimit;
   if (this.ObjSidePos[objIx] > sidePosLimit) this.ObjSidePos[objIx] = sidePosLimit;
   var sidePosSign = this.ObjSidePos[objIx] < 0 ? -1 : 1;
@@ -747,7 +755,7 @@ CurveAppClass.prototype.UpdateObjectInput = function( objIx ) {
     }
     this.ObjSideVar[objIx] *= sideVarSign;
   }
-  var sideVarLimit = this.refractionRadius * Math.PI / 4;
+  var sideVarLimit = this.geometryRadius * Math.PI / 4;
   if (this.ObjSideVar[objIx] < -sideVarLimit) this.ObjSideVar[objIx] = -sideVarLimit;
   if (this.ObjSideVar[objIx] > sideVarLimit) this.ObjSideVar[objIx] = sideVarLimit;
   var sideVarSign = this.ObjSideVar[objIx] < 0 ? -1 : 1;
@@ -771,7 +779,7 @@ CurveAppClass.prototype.UpdateObjectInput = function( objIx ) {
   if (this.Slider_ObjDeltaDist_Log[objIx] != this.Slider_ObjDeltaDist_Log_Last[objIx]) {
     this.ObjDeltaDist[objIx] = 10 * Math.pow( 10, this.Slider_ObjDeltaDist_Log[objIx] );
   }
-  var deltaDistLimit = this.refractionRadius * Math.PI / 2;
+  var deltaDistLimit = this.geometryRadius * Math.PI / 2;
   if (this.ObjDeltaDist[objIx] < 0.001) this.ObjDeltaDist[objIx] = 0.001;
   if (this.ObjDeltaDist[objIx] > deltaDistLimit) this.ObjDeltaDist[objIx] = deltaDistLimit;
   this.Slider_ObjDeltaDist_Log[objIx] = Math.log10( this.ObjDeltaDist[objIx] / 10 );
@@ -983,7 +991,7 @@ function DrawModel( g ) {
       var latStart = -( Math.floor( latMax / m.aDelta ) * m.aDelta );
       for ( var lat = latStart; lat < latMax; lat += m.aDelta ) {
         var dLatPlaneDisk = m.hDisk / Math.cos( lat );
-        var longMax = Math.acos( dLatPlaneDisk / m.refractionRadius );
+        var longMax = Math.acos( dLatPlaneDisk / m.geometryRadius );
         var longStart = -( Math.floor( longMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
         for ( var long = longStart; long < longMax; long += m.aDelta ) {
@@ -997,7 +1005,7 @@ function DrawModel( g ) {
       var longMax = m.aDip;
       var longStart = -( Math.floor( longMax / m.aDelta ) * m.aDelta );
       for ( var long = longStart; long < longMax; long += m.aDelta ) {
-        var rLong = m.refractionRadius * Math.cos( long );
+        var rLong = m.geometryRadius * Math.cos( long );
         var latMax = Math.acos( m.hDisk / rLong );
         var latStart = -( Math.floor( latMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
@@ -1021,7 +1029,7 @@ function DrawModel( g ) {
       var latStart = -( Math.floor( latMax / m.aDelta ) * m.aDelta );
       for ( var lat = latStart; lat < latMax; lat += m.aDelta ) {
         var dLatPlaneDisk = m.hDisk / Math.cos( lat );
-        var longMax = Math.acos( dLatPlaneDisk / m.refractionRadius );
+        var longMax = Math.acos( dLatPlaneDisk / m.geometryRadius );
         var longStart = -( Math.floor( longMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
         for ( var long = longStart; long < longMax; long += m.aDelta ) {
@@ -1035,7 +1043,7 @@ function DrawModel( g ) {
       var longMax = m.aDip;
       var longStart = -( Math.floor( longMax / m.aDelta ) * m.aDelta );
       for ( var long = longStart; long < longMax; long += m.aDelta ) {
-        var rLong = m.refractionRadius * Math.cos( long );
+        var rLong = m.geometryRadius * Math.cos( long );
         var latMax = Math.acos( m.hDisk / rLong );
         var latStart = -( Math.floor( latMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
@@ -1330,8 +1338,8 @@ function DrawObjectsBehindHorizon( objIx, g ) {
 
   // init some loop variables used in DrawObjectsBeforeHorizon too
   if (m.NObjects[objIx] == 0) return;
-  m.aObjDelta[objIx] = m.ObjDeltaDist[objIx] / m.refractionRadius;
-  m.aObjFirst[objIx] = m.ObjDist[objIx] / m.refractionRadius;
+  m.aObjDelta[objIx] = m.ObjDeltaDist[objIx] / m.geometryRadius;
+  m.aObjFirst[objIx] = m.ObjDist[objIx] / m.geometryRadius;
   m.aObjLast[objIx] = (m.NObjects[objIx]-1) * m.aObjDelta[objIx] + m.aObjFirst[objIx];
   m.MaxNObjectsToDraw[objIx] = m.NObjects[objIx];
   m.NObjectsDrawn[objIx] = 0;
@@ -1343,13 +1351,13 @@ function DrawObjectsBehindHorizon( objIx, g ) {
   m.aObjCurr[objIx] = m.aObjLast[objIx];
 
   // if only objects before horizon exist skip this function
-  var aSide = m.ObjSidePos[objIx] / m.refractionRadius;
-  var sideOnDisk = (m.refractionRadius - m.hDip) * Math.tan( aSide );
+  var aSide = m.ObjSidePos[objIx] / m.geometryRadius;
+  var sideOnDisk = (m.geometryRadius - m.hDip) * Math.tan( aSide );
   var aClip = 0;
   if (m.rDisk > Math.abs(sideOnDisk)) {
     // not all objects are behind the horizon, so find the first object that is behind
     var distOnDisk = Math.sqrt( m.rDisk * m.rDisk - sideOnDisk * sideOnDisk );
-    aClip = Math.asin( distOnDisk / m.refractionRadius );
+    aClip = Math.asin( distOnDisk / m.geometryRadius );
   }
   if (m.aObjCurr[objIx] <= aClip) return;
   m.isHiddenObj[objIx] = true;
@@ -1380,8 +1388,8 @@ function DrawObjectsBeforeHorizon( objIx, g, bOnGlobe ) {
 
   // Init parameters for flat earth here, because DrawObjectsBehindHorizon is not caller in that case
   if (!bOnGlobe) {
-    m.aObjDelta[objIx] = m.ObjDeltaDist[objIx] / m.refractionRadius;
-    m.aObjFirst[objIx] = m.ObjDist[objIx] / m.refractionRadius;
+    m.aObjDelta[objIx] = m.ObjDeltaDist[objIx] / m.geometryRadius;
+    m.aObjFirst[objIx] = m.ObjDist[objIx] / m.geometryRadius;
     m.aObjLast[objIx] = (m.NObjects[objIx]-1) * m.aObjDelta[objIx] + m.aObjFirst[objIx];
     m.MaxNObjectsToDraw[objIx] = m.NObjects[objIx];
     m.aObjCurr[objIx] = m.aObjLast[objIx];
@@ -1409,15 +1417,15 @@ function SetTrans( objIx, g, m, lng, lat, size, alt, bOnGlobe ) {
   var xs = bOnGlobe ? m.ObjSize[objIx] : -m.ObjSize[objIx];
   g.ResetTrans3D();
   g.TransScale3D( xs, m.ObjSize[objIx], m.ObjSize[objIx] );
-  g.TransMove3D( 0, 0, m.refractionRadius+alt );
+  g.TransMove3D( 0, 0, m.geometryRadius+alt );
   if (bOnGlobe) {
     g.TransRotateY3D( lat );
     g.TransRotateX3D( -lng );
   } else {
-    d = lng * m.refractionRadius;
-    s = -lat * m.refractionRadius;
+    d = lng * m.geometryRadius;
+    s = -lat * m.geometryRadius;
   }
-  g.TransMove3D( s, d, -(m.refractionRadius+m.Height) );
+  g.TransMove3D( s, d, -(m.geometryRadius+m.Height) );
 }
 
 function DrawShapeVariants( objIx, g, m, bOnGlobe ) {
@@ -1494,8 +1502,8 @@ function DrawShapeVariants( objIx, g, m, bOnGlobe ) {
     sizeHor = -1;
   }
 
-  var sideVar = m.ObjSideVar[objIx] / m.refractionRadius / 2;
-  var side = m.ObjSidePos[objIx] / m.refractionRadius;
+  var sideVar = m.ObjSideVar[objIx] / m.geometryRadius / 2;
+  var side = m.ObjSidePos[objIx] / m.geometryRadius;
   var sideType = m.ObjSideType[objIx];
   if (sideType == 0) {
     // lin
@@ -2404,16 +2412,16 @@ function DrawShape( objIx, g, m ) {
 }
 
 function PointOnEarth( lat, long ) {
-  var x = CurveApp.refractionRadius * Math.sin( long );
-  var rr = CurveApp.refractionRadius * Math.cos( long );
+  var x = CurveApp.geometryRadius * Math.sin( long );
+  var rr = CurveApp.geometryRadius * Math.cos( long );
   var y = rr * Math.sin( lat );
   var z = rr * Math.cos( lat );
-  return [ x, y, z - (CurveApp.refractionRadius + CurveApp.Height) ];
+  return [ x, y, z - (CurveApp.geometryRadius + CurveApp.Height) ];
 }
 
 function PointOnPlane( lat, long ) {
-  var x = CurveApp.refractionRadius * Math.sin( long );
-  var rr = CurveApp.refractionRadius * Math.cos( long );
+  var x = CurveApp.geometryRadius * Math.sin( long );
+  var rr = CurveApp.geometryRadius * Math.cos( long );
   var y = rr * Math.sin( lat );
   return [ x, y, -CurveApp.Height ];
 }
