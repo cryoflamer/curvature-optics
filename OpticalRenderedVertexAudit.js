@@ -40,16 +40,16 @@
   }
   function compare(g, m, snapshot) {
     if (!snapshot || snapshot.geometry !== 'globe' || !root.CurvatureTowerOverlay) return [];
-    var rows = [], anchor = root.CurvatureTowerOverlay.towerAnchor;
+    var rows = [], markerWorld = root.CurvatureTowerOverlay.markerWorld;
     snapshot.vacuum.forEach(function (ray) {
       var drawn = vertices[ray.index];
       if (!drawn) return;
       [['base','bottom',0],['top','top',snapshot.towerHeight]].forEach(function (spec) {
         var angle = ray[spec[1]];
         if (angle === null || !isFinite(angle)) return;
-        var world = anchor('globe',ray.distance,spec[2],m.rEarth,snapshot.side,m.Height);
-        var range = Math.hypot(world[0],world[1]);
-        var marker = screen(g,[world[0],world[1],range*Math.tan(angle)]);
+        var world = markerWorld('globe',ray.distance,spec[2],angle,m.rEarth,snapshot.side,m.Height);
+        if (!world) return;
+        var marker = screen(g,world);
         // These are genuine rendered polygon vertices, not axis points. Their
         // nearest distance need NOT be zero: the axis may lie between vertices.
         var candidates = drawn.points.filter(function (p) {
@@ -80,7 +80,7 @@
   }
   function compareCenters(g,m,snapshot) {
     if (!snapshot || snapshot.geometry !== 'globe' || !root.CurvatureTowerOverlay) return [];
-    var rows = [], anchor = root.CurvatureTowerOverlay.towerAnchor;
+    var rows = [], markerWorld = root.CurvatureTowerOverlay.markerWorld;
     snapshot.vacuum.forEach(function (ray) {
       var drawn = vertices[ray.index];
       if (!drawn) return;
@@ -91,9 +91,9 @@
         if (!centerWorld) return;
         var actual = screen(g,centerWorld);
         var height = level * snapshot.towerHeight;
-        var physical = anchor('globe',ray.distance,height,m.rEarth,snapshot.side,m.Height);
-        var horizontal = Math.hypot(physical[0],physical[1]);
-        var marker = screen(g,[physical[0],physical[1],horizontal*Math.tan(angle)]);
+        var world = markerWorld('globe',ray.distance,height,angle,m.rEarth,snapshot.side,m.Height);
+        if (!world) return;
+        var marker = screen(g,world);
         var dx = marker[0]-actual[0], dy = marker[1]-actual[1];
         rows.push({tower:ray.index,point:spec[0],
           actualCenterX:+actual[0].toFixed(3),actualCenterY:+actual[1].toFixed(3),
@@ -125,6 +125,7 @@
       root.console.group('Actual tower section centers vs vacuum markers (independent geometry)');
       root.console.table(centers);
       root.console.log('Centers come from captured left/right polygon vertices at local y=0 and y=1; missing sections are omitted.');
+      root.console.log('Marker positions are now computed by the exact same markerWorld() used by the live overlay. This tests marker-to-rendered-center agreement, not RK4 accuracy.');
       root.console.groupEnd();
     }
     return {nearestVertices:rows, sectionCenters:centers};

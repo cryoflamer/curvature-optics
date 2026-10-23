@@ -15,6 +15,17 @@
     return [r * Math.sin(lat), r * Math.cos(lat) * Math.sin(lng),
       r * Math.cos(lat) * Math.cos(lng) - radius - observerHeight];
   }
+  // Single source of truth for the world-space position used by the
+  // diagnostic marker and by the rendered-vertex audit.  The returned point
+  // is on the observer's straight viewing ray at the target's horizontal
+  // range; it is not the curved ray path itself.
+  function markerWorld(geometry, distance, height, angle, radius, side, observerHeight) {
+    if (angle === null || !isFinite(angle)) return null;
+    var physical = towerAnchor(geometry, distance, height, radius, side, observerHeight);
+    var horizontal = Math.hypot(physical[0], physical[1]);
+    if (!(horizontal > 0)) return null;
+    return [physical[0], physical[1], horizontal * Math.tan(angle)];
+  }
   function draw(g, m) {
     var checkbox = typeof document !== 'undefined' && document.getElementById('TowerOverlayEnabled');
     if (!checkbox || !checkbox.checked || !snapshot || m.opticsMode !== 'ray-tracing') return;
@@ -48,19 +59,17 @@
         [row.bottom, row.top].forEach(function (angle, index) {
           if (angle === null || !isFinite(angle)) return;
           var targetHeight = index === 0 ? 0 : snapshot.towerHeight;
-          var physical = towerAnchor(snapshot.geometry, distance, targetHeight,
-            m.rEarth, side, m.Height);
-          // Apparent elevation is relative to the observer's local horizontal.
-          // Preserve the physical target's horizontal bearing and range.
-          var horizontalRange = Math.hypot(physical[0], physical[1]);
-          var z = horizontalRange * Math.tan(angle);
-          var x = physical[0], forward = physical[1];
-          g.Line3D([x - size, forward, z], [x + size, forward, z]);
-          g.Line3D([x, forward, z - size], [x, forward, z + size]);
+          var marker = markerWorld(snapshot.geometry, distance, targetHeight,
+            angle, m.rEarth, side, m.Height);
+          if (!marker) return;
+          g.Line3D([marker[0] - size, marker[1], marker[2]],
+            [marker[0] + size, marker[1], marker[2]]);
+          g.Line3D([marker[0], marker[1], marker[2] - size],
+            [marker[0], marker[1], marker[2] + size]);
         });
       });
     });
     g.ResetTrans3D();
   }
-  root.CurvatureTowerOverlay = { setData: setData, clear: clear, getData: function () { return snapshot; }, draw: draw, towerAnchor: towerAnchor };
+  root.CurvatureTowerOverlay = { setData: setData, clear: clear, getData: function () { return snapshot; }, draw: draw, towerAnchor: towerAnchor, markerWorld: markerWorld };
 }(typeof globalThis !== 'undefined' ? globalThis : this));
