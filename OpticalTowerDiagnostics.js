@@ -151,6 +151,10 @@
     if (overlay) overlay.addEventListener('change', function () {
       if (typeof graph !== 'undefined') graph.Redraw();
     });
+    var vacuumOnly = document.getElementById('TowerOverlayVacuumOnly');
+    if (vacuumOnly) vacuumOnly.addEventListener('change', function () {
+      if (typeof graph !== 'undefined') graph.Redraw();
+    });
   }
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

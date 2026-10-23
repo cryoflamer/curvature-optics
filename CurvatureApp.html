@@ -109,7 +109,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:1em;">Atmosphere <select id="TowerDiagnosticAtmosphere"><option value="vacuum">Vacuum</option><option value="standard">Standard n(h)</option></select></label>
   <button type="button" id="TowerDiagnosticRun">Calculate tower angles</button>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
-  <div style="font-size:0.85em;margin-top:0.35em;">Markers: <span style="color:#d62728">red = Vacuum</span>, <span style="color:#008f55">green = Standard n(h)</span>. Single-model view, Ray tracing mode only; click Calculate to refresh.</div>
+  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
+  <div style="font-size:0.85em;margin-top:0.35em;">Markers: <span style="color:#d62728">red = Vacuum</span>, <span style="color:#008f55">green = Standard n(h)</span>. Vacuum only hides green markers for perspective calibration. Single-model view, Ray tracing mode only; click Calculate to refresh.</div>
   <div id="TowerDiagnosticOutput" style="margin-top:0.4em;overflow-x:auto;">Select TrnsmLine, then click Calculate tower angles. This diagnostic does not alter the scene.</div>
 </section>
 
