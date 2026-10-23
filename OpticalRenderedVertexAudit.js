@@ -137,6 +137,38 @@
     g.ResetTrans3D();
     return count;
   }
+  // Independent labels for the BLACK tower geometry. Unlike optical-marker
+  // labels, these use the polygon vertices captured during DrawShape().
+  function drawGeometryNumbers(g, m) {
+    var checkbox = typeof document !== 'undefined' && document.getElementById('TowerOverlayTowerNumbers');
+    var overlayEnabled = typeof document !== 'undefined' && document.getElementById('TowerOverlayEnabled');
+    if (!checkbox || !checkbox.checked || !overlayEnabled || !overlayEnabled.checked ||
+        m.opticsMode !== 'ray-tracing' || m.showModel !== 1 || m.ObjType[0] !== 3 ||
+        !g.Context2D) return 0;
+    var ctx = g.Context2D, labels = [];
+    Object.keys(vertices).forEach(function (index) {
+      var drawn = vertices[index];
+      var top = sectionCenter(drawn.points, 1, 1e-8);
+      if (!top) return;
+      var pixel = screen(g, top);
+      if (!isFinite(pixel[0]) || !isFinite(pixel[1])) return;
+      labels.push({tower:index, x:pixel[0] - 16, y:pixel[1] - 29});
+    });
+    ctx.save();
+    ctx.setTransform(g.ContextScale || 1, 0, 0, g.ContextScale || 1, 0, 0);
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#ffffff';
+    ctx.fillStyle = '#111111';
+    labels.forEach(function (label) {
+      ctx.strokeText(String(label.tower), label.x, label.y);
+      ctx.fillText(String(label.tower), label.x, label.y);
+    });
+    ctx.restore();
+    return labels.length;
+  }
   function drawLocalAxes(g, m) {
     var enabled = typeof document !== 'undefined' && document.getElementById('TowerAuditLocalAxesEnabled');
     if (!enabled || !enabled.checked || m.opticsMode !== 'ray-tracing' ||
@@ -294,6 +326,7 @@
     // Draw every frame, including camera movement and zoom.
     drawActualAxes(g,m);
     drawLocalAxes(g,m);
+    drawGeometryNumbers(g,m);
     var overlay = root.CurvatureTowerOverlay;
     var snapshot = overlay && overlay.getData && overlay.getData();
     if (!snapshot || !Object.keys(vertices).length) return;
