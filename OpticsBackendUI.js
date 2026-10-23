@@ -17,7 +17,7 @@
     profile.disabled = CurveApp.opticsMode === 'legacy-k';
     status.textContent = CurveApp.opticsMode === 'legacy-k'
       ? 'Active: original Bislin k-based renderer. Profile selection is saved but not used.'
-      : 'Geometry preview: physical Earth radius (no k deformation). Rays are straight; selected n(h) profile is not applied yet.';
+      : 'Geometry preview: physical Earth radius (no k deformation). Numerical ray tracer is available as CurvatureRayTracer, but is not connected to rendering yet.';
   }
 
   function bind() {
