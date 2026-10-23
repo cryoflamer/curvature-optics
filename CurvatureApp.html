@@ -82,6 +82,25 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 
 <a id="App"></a>
 
+<section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
+  <strong>Optical backend (experimental)</strong>
+  <label style="margin-left:1em;">Method
+    <select id="OpticsModeSelect">
+      <option value="legacy-k">Effective radius (legacy k)</option>
+      <option value="ray-tracing">Ray tracing n(h) (planned)</option>
+    </select>
+  </label>
+  <label style="margin-left:1em;">Profile
+    <select id="OpticsProfileSelect">
+      <option value="vacuum">Vacuum (n = 1)</option>
+      <option value="standard">Standard atmosphere</option>
+      <option value="custom">Custom n(h) (planned)</option>
+    </select>
+  </label>
+  <div id="OpticsBackendStatus" role="status" aria-live="polite" style="margin-top:0.45em; font-size:0.9em;"></div>
+</section>
+<script src="OpticsBackendUI.js"></script>
+
 <ul id="CurveDemosTabs" class="TabSelectors Top TopMargin">
 <li class="TabButton TabEnabled " id="CurveButton">Curve</li>
 <li class="TabButton TabEnabled " id="CausewayButton">Causeway</li>
@@ -145,6 +164,8 @@ var CurveAppMetaData = {
     { Name: 'ObjSize',           Type: 'arr', Size: 2, ArrayType: 'num', Default: [ 65, 100 ] },
     { Name: 'ObjSizeVar',        Type: 'arr', Size: 2, ArrayType: 'num', Default: [ 0, 0 ] },
 
+    { Name: 'opticsMode',        Type: 'str',  Default: 'legacy-k' },
+    { Name: 'opticsProfile',     Type: 'str',  Default: 'standard' },
     { Name: 'refractionCoeff',   Type: 'num',  Default: 0 },
     { Name: 'tempGradient',      Type: 'num',  Default: -0.0065 },
     { Name: 'refractionSync',    Type: 'int',  Default: 1 },
@@ -181,6 +202,10 @@ function CurveAppClass() {
   this.sceneWidth = 0;
   this.sceneHeight = 0;
   this.viewcenterHorizon = 0;  // 0 -> globe, 1 -> flat earth, 2 -> between, 3 -> eye level
+
+  // Optical backend selection (scaffold only; legacy rendering is unchanged).
+  this.opticsMode = 'legacy-k';
+  this.opticsProfile = 'standard';
 
   // refraction
   this.BaroModel = null;
@@ -769,6 +794,7 @@ function UpdateAll( stopAnimation ) {
       ShowMoreInfos();
     }
     CurveApp.Update();
+    if (window.CurvatureOpticsUI) CurvatureOpticsUI.sync();
     ControlPanels.Update();
     graph.Redraw();
   }
