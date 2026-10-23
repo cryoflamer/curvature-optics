@@ -3,10 +3,10 @@
  * observer's local horizontal, NOT screen pixel positions.
  */
 (function (root, factory) {
-  var api = factory(root.CurvatureRayTracer);
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./OpticalRayTracer'));
+  var api = factory(root.CurvatureRayTracer, root);
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./OpticalRayTracer'), root);
   root.CurvatureTowerDiagnostics = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function (rt) {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (rt, root) {
   'use strict';
   var R = 6371000;
   function target(geometry, distance, height, radius) {
