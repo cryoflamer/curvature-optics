@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   var samples = {1:true,11:true,21:true,31:true,41:true,51:true,61:true,71:true,81:true,85:true};
-  var vertices = {}, lastKey = null;
+  var vertices = {}, localAxes = {}, lastKey = null;
   function screen(g, world) {
     var camera = g.Camera.Trans(world);
     return [g.WinTrans.TransX(camera[0]), g.WinTrans.TransY(camera[1])];
@@ -14,6 +14,11 @@
     var distance = m.aObjCurr[0] * m.geometryRadius;
     var index = Math.round((distance - m.ObjDist[0]) / m.ObjDeltaDist[0]) + 1;
     if (!samples[index]) return null;
+    // Capture the object-local axis while Bislin's plane and transforms are
+    // active. This is independent of both polygon section averaging and RK4.
+    var localBase = g.GetTransPointOnPlane(0, 0, [0,0,0]).slice();
+    var localTop = g.GetTransPointOnPlane(0, 1, [0,0,0]).slice();
+    localAxes[index] = {tower:index, base:localBase, top:localTop};
     var original = g.PolygonOnPlane, captured = [];
     g.PolygonOnPlane = function (xs, ys, mode, size) {
       if (Array.isArray(xs) && Array.isArray(ys)) {
@@ -128,6 +133,36 @@
     g.ResetTrans3D();
     return count;
   }
+  function drawLocalAxes(g, m) {
+    var enabled = typeof document !== 'undefined' && document.getElementById('TowerAuditLocalAxesEnabled');
+    if (!enabled || !enabled.checked || m.opticsMode !== 'ray-tracing' ||
+        m.showModel !== 1 || m.ObjType[0] !== 3) return 0;
+    var count = 0;
+    g.ResetTrans3D();
+    g.SetAlpha(1);
+    g.SetClipping('canvas');
+    g.SetLineAttr('#ffbf00', 3);
+    Object.keys(localAxes).forEach(function (index) {
+      var axis = localAxes[index];
+      g.Line3D(axis.base, axis.top);
+      count++;
+    });
+    g.ResetTrans3D();
+    return count;
+  }
+  function compareAxisMethods(g) {
+    return Object.keys(localAxes).map(function (index) {
+      var axis = localAxes[index], drawn = vertices[index];
+      if (!drawn) return null;
+      var base = sectionCenter(drawn.points, 0, 1e-8);
+      var top = sectionCenter(drawn.points, 1, 1e-8);
+      if (!base || !top) return null;
+      var a = screen(g, axis.base), b = screen(g, axis.top);
+      var c = screen(g, base), d = screen(g, top);
+      return {tower:+index, baseDeltaPx:+Math.hypot(a[0]-c[0],a[1]-c[1]).toFixed(3),
+        topDeltaPx:+Math.hypot(b[0]-d[0],b[1]-d[1]).toFixed(3)};
+    }).filter(Boolean);
+  }
   function compareCanvasStrokes(g, m, snapshot, rendered) {
     if (!snapshot || snapshot.geometry !== 'globe') return [];
     var rows = [];
@@ -164,6 +199,7 @@
   function onDraw(g,m) {
     // Draw every frame, including camera movement and zoom.
     drawActualAxes(g,m);
+    drawLocalAxes(g,m);
     var overlay = root.CurvatureTowerOverlay;
     var snapshot = overlay && overlay.getData && overlay.getData();
     if (!snapshot || !Object.keys(vertices).length) return;
@@ -177,6 +213,9 @@
     var strokes = compareCanvasStrokes(g,m,snapshot,overlay.getRenderedStrokes && overlay.getRenderedStrokes());
     lastKey = key;
     if (root.console) {
+      root.console.group('Local object axes vs polygon-section axes (yellow vs cyan)');
+      root.console.table(compareAxisMethods(g));
+      root.console.groupEnd();
       root.console.group('Actual rendered tower vertices vs vacuum markers (nearest vertex, NOT zero-error test)');
       root.console.table(rows);
       root.console.log('The reference vertices were captured from actual DrawShape PolygonOnPlane calls.');
@@ -194,7 +233,7 @@
     }
     return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes};
   }
-  function reset() { vertices = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,reset:reset};
+  function reset() { vertices = {}; localAxes = {}; lastKey = null; }
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
