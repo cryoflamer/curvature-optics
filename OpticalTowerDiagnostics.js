@@ -128,6 +128,18 @@
         rows.forEach(function (r) {
           html += '<tr><td>' + r.index + '</td><td>' + (r.distance/1000).toFixed(2) + ' km</td><td>' + format(r.bottom, r.bottomStatus) + '</td><td>' + format(r.top, r.topStatus) + '</td></tr>';
         });
+        if (root.CurvatureTowerOverlay) {
+          var overlayOptions = { geometry: geometry, observerHeight: m.Height,
+            radius: m.rEarth, firstDistance: m.ObjDist[0], spacing: m.ObjDeltaDist[0],
+            count: m.NObjects[0], towerHeight: m.ObjSize[0] };
+          var vacuumRows = atmosphere === 'vacuum' ? rows : towerRows(Object.assign({}, overlayOptions, { atmosphere: 'vacuum' }));
+          var standardRows = atmosphere === 'standard' ? rows : towerRows(Object.assign({}, overlayOptions, { atmosphere: 'standard' }));
+          root.CurvatureTowerOverlay.setData({ geometry: geometry, height: m.Height,
+            radius: m.rEarth, firstDistance: m.ObjDist[0], spacing: m.ObjDeltaDist[0],
+            count: m.NObjects[0], towerHeight: m.ObjSize[0], side: m.ObjSidePos[0],
+            vacuum: vacuumRows, standard: standardRows });
+          if (typeof graph !== 'undefined') graph.Redraw();
+        }
         output.innerHTML = html + '</tbody></table><small>Angles relative to local horizontal. "occluded" means the connecting ray intersects the ground; "no solution" means the angle solver did not converge. Independent diagnostic, not the scene renderer.</small>';
       } catch (e) { output.textContent = 'Diagnostic error: ' + e.message; }
     }, 0);
@@ -135,6 +147,10 @@
   function bind() {
     var button = document.getElementById('TowerDiagnosticRun');
     if (button) button.addEventListener('click', render);
+    var overlay = document.getElementById('TowerOverlayEnabled');
+    if (overlay) overlay.addEventListener('change', function () {
+      if (typeof graph !== 'undefined') graph.Redraw();
+    });
   }
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

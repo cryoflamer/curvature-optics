@@ -102,11 +102,14 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="OpticalRayTracer.js"></script>
 <script src="OpticsBackendUI.js"></script>
 <script src="OpticalTowerDiagnostics.js"></script>
+<script src="OpticalTowerOverlay.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <label style="margin-left:1em;">Geometry <select id="TowerDiagnosticGeometry"><option value="globe">Globe</option><option value="flat">Flat</option></select></label>
   <label style="margin-left:1em;">Atmosphere <select id="TowerDiagnosticAtmosphere"><option value="vacuum">Vacuum</option><option value="standard">Standard n(h)</option></select></label>
   <button type="button" id="TowerDiagnosticRun">Calculate tower angles</button>
+  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
+  <div style="font-size:0.85em;margin-top:0.35em;">Markers: <span style="color:#d62728">red = Vacuum</span>, <span style="color:#008f55">green = Standard n(h)</span>. Single-model view, Ray tracing mode only; click Calculate to refresh.</div>
   <div id="TowerDiagnosticOutput" style="margin-top:0.4em;overflow-x:auto;">Select TrnsmLine, then click Calculate tower angles. This diagnostic does not alter the scene.</div>
 </section>
 
@@ -1125,6 +1128,9 @@ function DrawModel( g ) {
     g.Text( txt, g.VpInnerWidth, 0 );
     g.SelectTrans( oldTrans );
   }
+
+  // Experimental optical markers are an independent diagnostic overlay.
+  if (window.CurvatureTowerOverlay) CurvatureTowerOverlay.draw(g, m);
 
   // draw frame
   if (m.FrameCol != '') {
