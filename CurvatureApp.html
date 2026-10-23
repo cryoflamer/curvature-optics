@@ -1135,10 +1135,11 @@ function DrawModel( g ) {
   // Vacuum calibration (read-only; results in browser console).
   if (window.CurvatureProjectionCalibration) CurvatureProjectionCalibration.onDraw(g, m, SetTrans);
 
-  if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.onDraw(g, m);
-
   // Experimental optical markers are an independent diagnostic overlay.
   if (window.CurvatureTowerOverlay) CurvatureTowerOverlay.draw(g, m);
+
+  // Audit the actual canvas marker strokes after rendering.
+  if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.onDraw(g, m);
 
   // draw frame
   if (m.FrameCol != '') {

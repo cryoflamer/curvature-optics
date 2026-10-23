@@ -104,6 +104,41 @@
     });
     return rows;
   }
+  // Compare the actual 2D driver stroke centers (not pre-projection 3D
+  // coordinates) with independent centers from captured tower polygons.
+  function compareCanvasStrokes(g, m, snapshot, rendered) {
+    if (!snapshot || snapshot.geometry !== 'globe') return [];
+    var rows = [];
+    (rendered || []).forEach(function (mark) {
+      if (mark.atmosphere !== 'vacuum') return;
+      var drawn = vertices[mark.tower];
+      if (!drawn) return;
+      var center = sectionCenter(drawn.points, mark.point === 'base' ? 0 : 1, 1e-8);
+      if (!center) return;
+      var reference = screen(g, center);
+      var strokes = mark.strokes || [];
+      var centers = strokes.filter(function (poly) { return poly.length >= 2; })
+        .map(function (poly) {
+          var first = poly[0], last = poly[poly.length - 1];
+          return [(first[0] + last[0])/2, (first[1] + last[1])/2];
+        });
+      if (!centers.length) {
+        rows.push({tower: mark.tower, point: mark.point, status: 'not drawn / clipped'});
+        return;
+      }
+      var canvas = centers.reduce(function (acc, p) {
+        return [acc[0] + p[0]/centers.length, acc[1] + p[1]/centers.length];
+      }, [0, 0]);
+      rows.push({tower: mark.tower, point: mark.point,
+        referenceX: +reference[0].toFixed(3), referenceY: +reference[1].toFixed(3),
+        canvasX: +canvas[0].toFixed(3), canvasY: +canvas[1].toFixed(3),
+        dx: +(canvas[0]-reference[0]).toFixed(3),
+        dy: +(canvas[1]-reference[1]).toFixed(3),
+        errorPx: +Math.hypot(canvas[0]-reference[0],canvas[1]-reference[1]).toFixed(3),
+        strokeCount: centers.length, status: 'drawn'});
+    });
+    return rows;
+  }
   function onDraw(g,m) {
     var overlay = root.CurvatureTowerOverlay;
     var snapshot = overlay && overlay.getData && overlay.getData();
@@ -115,6 +150,7 @@
     var rows = compare(g,m,snapshot);
     if (!rows.length) return;
     var centers = compareCenters(g,m,snapshot);
+    var strokes = compareCanvasStrokes(g,m,snapshot,overlay.getRenderedStrokes && overlay.getRenderedStrokes());
     lastKey = key;
     if (root.console) {
       root.console.group('Actual rendered tower vertices vs vacuum markers (nearest vertex, NOT zero-error test)');
@@ -127,10 +163,14 @@
       root.console.log('Centers come from captured left/right polygon vertices at local y=0 and y=1; missing sections are omitted.');
       root.console.log('Marker positions are now computed by the exact same markerWorld() used by the live overlay. This tests marker-to-rendered-center agreement, not RK4 accuracy.');
       root.console.groupEnd();
+      root.console.group('Actual canvas marker strokes vs rendered tower centers (post projection)');
+      root.console.table(strokes);
+      root.console.log('Canvas coordinates are intercepted at DriverDrawPoly after the full drawing transform. Missing/clipped strokes are reported separately.');
+      root.console.groupEnd();
     }
-    return {nearestVertices:rows, sectionCenters:centers};
+    return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes};
   }
   function reset() { vertices = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,sectionCenter:sectionCenter,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,sectionCenter:sectionCenter,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));

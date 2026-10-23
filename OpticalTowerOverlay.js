@@ -4,8 +4,9 @@
 (function (root) {
   'use strict';
   var snapshot = null;
+  var renderedStrokes = [];
   function setData(data) { snapshot = data; }
-  function clear() { snapshot = null; }
+  function clear() { snapshot = null; renderedStrokes = []; }
   // Reconstruct the tower-axis anchor using the same rotations/translations
   // as SetTrans() in CurvatureApp.html (for the default linear tower layout).
   function towerAnchor(geometry, distance, height, radius, side, observerHeight) {
@@ -36,6 +37,7 @@
         snapshot.firstDistance !== m.ObjDist[0] || snapshot.spacing !== m.ObjDeltaDist[0] ||
         snapshot.count !== m.NObjects[0] || snapshot.towerHeight !== m.ObjSize[0] ||
         snapshot.side !== m.ObjSidePos[0]) return;
+    renderedStrokes = [];
     g.ResetTrans3D();
     g.SetAlpha(1);
     g.SetClipping('canvas');
@@ -62,14 +64,39 @@
           var marker = markerWorld(snapshot.geometry, distance, targetHeight,
             angle, m.rEarth, side, m.Height);
           if (!marker) return;
-          g.Line3D([marker[0] - size, marker[1], marker[2]],
-            [marker[0] + size, marker[1], marker[2]]);
-          g.Line3D([marker[0], marker[1], marker[2] - size],
-            [marker[0], marker[1], marker[2] + size]);
+          // Capture the actual canvas coordinates passed to the 2D driver,
+          // AFTER 3D transforms, camera projection, clipping and 2D transforms.
+          // This wrapper is active only for the two strokes of this marker.
+          var originalDriver = g.DriverDrawPoly;
+          var strokes = [];
+          if (typeof originalDriver === 'function') {
+            g.DriverDrawPoly = function (xs, ys, count, fill, close, poly) {
+              if (!fill && count >= 2 && this.CurrTrans && this.GetObjTrans) {
+                var coords = [], ctr = this.CurrTrans, obj = this.GetObjTrans();
+                for (var k = 0; k < count; k++) {
+                  ctr.ObjTransXY(obj, xs[k], ys[k]);
+                  coords.push([ctr.x, ctr.y]);
+                }
+                strokes.push(coords);
+              }
+              return originalDriver.apply(this, arguments);
+            };
+          }
+          try {
+            g.Line3D([marker[0] - size, marker[1], marker[2]],
+              [marker[0] + size, marker[1], marker[2]]);
+            g.Line3D([marker[0], marker[1], marker[2] - size],
+              [marker[0], marker[1], marker[2] + size]);
+          } finally {
+            if (typeof originalDriver === 'function') g.DriverDrawPoly = originalDriver;
+          }
+          renderedStrokes.push({tower: row.index, point: index === 0 ? 'base' : 'top',
+            atmosphere: dataset.color === '#d62728' ? 'vacuum' : 'standard',
+            strokes: strokes});
         });
       });
     });
     g.ResetTrans3D();
   }
-  root.CurvatureTowerOverlay = { setData: setData, clear: clear, getData: function () { return snapshot; }, draw: draw, towerAnchor: towerAnchor, markerWorld: markerWorld };
+  root.CurvatureTowerOverlay = { setData: setData, clear: clear, getData: function () { return snapshot; }, getRenderedStrokes: function () { return renderedStrokes; }, draw: draw, towerAnchor: towerAnchor, markerWorld: markerWorld };
 }(typeof globalThis !== 'undefined' ? globalThis : this));
