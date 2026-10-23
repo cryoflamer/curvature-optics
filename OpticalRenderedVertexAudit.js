@@ -13,7 +13,8 @@
     if (objIx !== 0 || m.ObjType[0] !== 3 || m.showModel !== 1 || m.opticsMode !== 'ray-tracing') return null;
     var distance = m.aObjCurr[0] * m.geometryRadius;
     var index = Math.round((distance - m.ObjDist[0]) / m.ObjDeltaDist[0]) + 1;
-    if (!samples[index]) return null;
+    // Capture every rendered tower, not only the ten diagnostic samples.
+    // The vacuum overlay needs the original local axis for each marker.
     // Capture the object-local axis while Bislin's plane and transforms are
     // active. This is independent of both polygon section averaging and RK4.
     var localBase = g.GetTransPointOnPlane(0, 0, [0,0,0]).slice();
@@ -329,7 +330,8 @@
     }
     return {nearestVertices:rows, sectionCenters:centers, canvasStrokes:strokes, calibration:calibration};
   }
+  function getLocalAxis(tower) { return localAxes[tower] || null; }
   function reset() { vertices = {}; localAxes = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));

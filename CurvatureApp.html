@@ -849,6 +849,7 @@ var graph = NewGraphX3D( {
 function DrawModel( g ) {
 
   var m = CurveApp;
+  if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.reset();
   g.MaxCurveSegments = 256;
   g.SetAngleMeasure( 'rad' );
   g.SetViewport( 0, 1, -0.5, -2 );

@@ -61,8 +61,22 @@
         [row.bottom, row.top].forEach(function (angle, index) {
           if (angle === null || !isFinite(angle)) return;
           var targetHeight = index === 0 ? 0 : snapshot.towerHeight;
-          var marker = markerWorld(snapshot.geometry, distance, targetHeight,
-            angle, m.rEarth, side, m.Height);
+          var marker;
+          if (dataset.color === '#d62728' && snapshot.geometry === 'globe') {
+            // Vacuum is the unmodified Bislin projection: use the EXACT
+            // object-local axis captured while DrawShape was rendering.
+            // No angle solver, approximate side position or reconstruction.
+            var audit = root.CurvatureRenderedVertexAudit;
+            var axis = audit && audit.getLocalAxis && audit.getLocalAxis(row.index);
+            marker = axis && (index === 0 ? axis.base : axis.top).slice();
+            // In the browser, missing captured geometry must not be guessed.
+            // Standalone unit tests without the audit retain the old stub path.
+            if (!audit) marker = markerWorld(snapshot.geometry, distance, targetHeight,
+              angle, m.rEarth, side, m.Height);
+          } else {
+            marker = markerWorld(snapshot.geometry, distance, targetHeight,
+              angle, m.rEarth, side, m.Height);
+          }
           if (!marker) return;
           // Capture the actual canvas coordinates passed to the 2D driver,
           // AFTER 3D transforms, camera projection, clipping and 2D transforms.
