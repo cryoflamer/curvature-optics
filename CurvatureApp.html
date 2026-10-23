@@ -103,6 +103,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="OpticsBackendUI.js"></script>
 <script src="OpticalTowerDiagnostics.js"></script>
 <script src="OpticalTowerOverlay.js"></script>
+<script src="OpticalProjectionCalibration.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <label style="margin-left:1em;">Geometry <select id="TowerDiagnosticGeometry"><option value="globe">Globe</option><option value="flat">Flat</option></select></label>
@@ -1129,6 +1130,9 @@ function DrawModel( g ) {
     g.Text( txt, g.VpInnerWidth, 0 );
     g.SelectTrans( oldTrans );
   }
+
+  // Vacuum calibration (read-only; results in browser console).
+  if (window.CurvatureProjectionCalibration) CurvatureProjectionCalibration.onDraw(g, m, SetTrans);
 
   // Experimental optical markers are an independent diagnostic overlay.
   if (window.CurvatureTowerOverlay) CurvatureTowerOverlay.draw(g, m);
