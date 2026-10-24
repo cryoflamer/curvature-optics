@@ -113,6 +113,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayTowerNumbers"> Show tower numbers</label>
+  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerGeometryEndpointsOnly"> Replace tower polygons with blue endpoints</label>
+  <script>document.getElementById("TowerGeometryEndpointsOnly").addEventListener("change", function () { graph.Redraw(); });</script>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerAuditAxesEnabled"> Show actual tower axes (cyan)</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerAuditLocalAxesEnabled"> Show local object axes (yellow)</label>
   <div style="font-size:0.85em;margin-top:0.35em;">Markers: <span style="color:#d62728">red = Vacuum</span>, <span style="color:#008f55">green = Standard n(h)</span>. Vacuum only hides green markers for perspective calibration. Single-model view, Ray tracing mode only; click Calculate to refresh.</div>
@@ -1139,6 +1141,9 @@ function DrawModel( g ) {
   // Vacuum calibration (read-only; results in browser console).
   if (window.CurvatureProjectionCalibration) CurvatureProjectionCalibration.onDraw(g, m, SetTrans);
 
+  // Geometry endpoints are drawn before optical crosses, from captured polygons.
+  if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.drawGeometryEndpoints(g, m);
+
   // Experimental optical markers are an independent diagnostic overlay.
   if (window.CurvatureTowerOverlay) CurvatureTowerOverlay.draw(g, m);
 
@@ -1597,6 +1602,15 @@ function DrawShape( objIx, g, m ) {
   // plane and transformations are set
   var endVertexAudit = window.CurvatureRenderedVertexAudit &&
     CurvatureRenderedVertexAudit.beginTower(g, m, objIx);
+  // Suppress only tower primitives in this diagnostic mode. The audit's
+  // PolygonOnPlane wrapper still captures the original polygon vertices.
+  var endpointsOnly = m.ObjType[objIx] === 3 && m.showModel === 1 &&
+    m.opticsMode === 'ray-tracing' &&
+    !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked;
+  var originalTowerLine = g.LineOnPlane;
+  if (endpointsOnly) {
+    g.LineOnPlane = function () {};
+  }
 
   function setBgColor( normalColor, hiddenColor ) {
     if (m.isHiddenObj[objIx]) {
@@ -2438,6 +2452,9 @@ function DrawShape( objIx, g, m ) {
       g.RectOnPlane( c+0.7, 0, c+1.5, b-1, 3 );
 
     }
+  }
+  if (endpointsOnly) {
+    g.LineOnPlane = originalTowerLine;
   }
   if (endVertexAudit) endVertexAudit();
 }

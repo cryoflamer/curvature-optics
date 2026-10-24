@@ -32,12 +32,44 @@
           captured.push({x:xs[i], y:ys[i], world:world, pixel:screen(g,world)});
         }
       }
+      var endpointsOnly = typeof document !== 'undefined' &&
+        !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked;
+      if (endpointsOnly && objIx === 0) return;
       return original.apply(this, arguments);
     };
     return function () {
       g.PolygonOnPlane = original;
       if (captured.length) vertexTarget[index] = {tower:index, group:objIx, distance:distance, points:captured};
     };
+  }
+  // Independent endpoints of the polygons actually submitted by DrawShape.
+  // Never use getLocalAxis() or optical marker coordinates here.
+  function drawGeometryEndpoints(g, m) {
+    var checkbox = typeof document !== 'undefined' && document.getElementById('TowerGeometryEndpointsOnly');
+    if (!checkbox || !checkbox.checked || m.opticsMode !== 'ray-tracing' ||
+        m.showModel !== 1 || m.ObjType[0] !== 3 || !g.Context2D) return 0;
+    var ctx = g.Context2D, count = 0;
+    ctx.save();
+    ctx.setTransform(g.ContextScale || 1, 0, 0, g.ContextScale || 1, 0, 0);
+    ctx.fillStyle = '#1678ff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    Object.keys(vertices).forEach(function (index) {
+      var pts = vertices[index].points;
+      [0, 1].forEach(function (level) {
+        var world = sectionCenter(pts, level, 1e-8);
+        if (!world) return;
+        var pixel = screen(g, world);
+        if (!isFinite(pixel[0]) || !isFinite(pixel[1])) return;
+        ctx.beginPath();
+        ctx.arc(pixel[0], pixel[1], 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        count++;
+      });
+    });
+    ctx.restore();
+    return count;
   }
   function nearest(points, pixel) {
     var best = null;
@@ -370,6 +402,6 @@
   function getLocalAxis(tower, group) { return (group === 1 ? secondaryAxes : localAxes)[tower] || null; }
   function getCapturedGroups() { return {primary:vertices, secondary:secondaryVertices}; }
   function reset() { vertices = {}; localAxes = {}; secondaryVertices = {}; secondaryAxes = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,compareAxisMethods:compareAxisMethods,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,drawGeometryEndpoints:drawGeometryEndpoints,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
