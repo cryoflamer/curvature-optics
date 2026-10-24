@@ -49,7 +49,7 @@
   function draw(g, m) {
     var checkbox = typeof document !== 'undefined' && document.getElementById('InverseVacuumTower21');
     if (!checkbox || !checkbox.checked || m.opticsMode !== 'ray-tracing' || m.showModel !== 1) return null;
-    var audit = root.CurvatureRenderedVertexAudit;
+    var audit = typeof globalThis !== 'undefined' && globalThis.CurvatureRenderedVertexAudit;
     var capture = audit && audit.getCapturedGroups().primary[21];
     var paths = audit && audit.getTowerPaths(21);
     if (!capture || !paths) return null;
