@@ -103,6 +103,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="OpticsBackendUI.js"></script>
 <script src="OpticalTowerDiagnostics.js"></script>
 <script src="OpticalTowerOverlay.js"></script>
+<script src="CurvatureInverseOpticsBridge.js"></script>
 <script src="OpticalProjectionCalibration.js"></script>
 <script src="OpticalRenderedVertexAudit.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
@@ -112,6 +113,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <button type="button" id="TowerDiagnosticRun">Calculate tower angles</button>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
+  <label style="margin-left:0.8em;"><input type="checkbox" id="InverseVacuumTower21"> Independent vacuum tower #21 (purple)</label>
+  <script>document.getElementById("InverseVacuumTower21").addEventListener("change", function () { graph.Redraw(); });</script>
   <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
   <label style="margin-left:0.8em;">Tower comparison <select id="TowerComparisonMode"><option value="original">Original only</option><option value="optical">Optical only</option><option value="both" selected>Both</option></select></label>
   <script>
@@ -1149,6 +1152,9 @@ function DrawModel( g ) {
 
   // Experimental optical markers are an independent diagnostic overlay.
   if (window.CurvatureTowerOverlay) CurvatureTowerOverlay.draw(g, m);
+
+  // Independent analytic vacuum reconstruction of captured tower #21 vertices.
+  if (window.CurvatureInverseOpticsBridge) CurvatureInverseOpticsBridge.draw(g, m);
 
   // Audit the actual canvas marker strokes after rendering.
   if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.onDraw(g, m);
