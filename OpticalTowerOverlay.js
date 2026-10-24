@@ -43,6 +43,9 @@
     g.SetClipping('canvas');
     var vacuumOnly = !!(document.getElementById('TowerOverlayVacuumOnly') || {}).checked;
     var showNumbers = !!(document.getElementById('TowerOverlayTowerNumbers') || {}).checked;
+    var display = (document.getElementById('TowerOverlayDisplay') || {}).value || 'crosses';
+    var showCrosses = display !== 'towers';
+    var showTowers = display !== 'crosses';
     var labels = [];
     var datasets = [
       { rows: snapshot.vacuum, color: '#d62728' },
@@ -53,6 +56,33 @@
       g.SetLineAttr(dataset.color, 2);
       dataset.rows.forEach(function (row) {
         var distance = row.distance;
+        // Re-render the captured polygon outlines with optical displacement.
+        // Vacuum uses the exact rendered geometry; standard atmosphere moves
+        // each vertex by the difference between optical and vacuum anchors.
+        if (showTowers && snapshot.geometry === 'globe') {
+          var auditForTower = root.CurvatureRenderedVertexAudit;
+          var paths = auditForTower && auditForTower.getTowerPaths && auditForTower.getTowerPaths(row.index);
+          if (paths) {
+            var shift = [0, 0, 0];
+            if (dataset.color !== '#d62728') {
+              var opticalTop = markerWorld(snapshot.geometry, distance, snapshot.towerHeight,
+                row.top, m.rEarth, snapshot.side, m.Height);
+              var vacuumTop = towerAnchor(snapshot.geometry, distance, snapshot.towerHeight,
+                m.rEarth, snapshot.side, m.Height);
+              if (!opticalTop) return;
+              shift = opticalTop.map(function(v, i){return v - vacuumTop[i];});
+            }
+            g.SetLineAttr(dataset.color, 1.5);
+            paths.forEach(function(path) {
+              for (var pi = 1; pi < path.length; pi++) {
+                var a = path[pi-1], b = path[pi];
+                g.Line3D([a[0]+shift[0],a[1]+shift[1],a[2]+shift[2]],
+                  [b[0]+shift[0],b[1]+shift[1],b[2]+shift[2]]);
+              }
+            });
+            g.SetLineAttr(dataset.color, 2);
+          }
+        }
         // The marker is placed on the camera ray at the target's horizontal
         // range. This preserves the camera's own perspective, pan and zoom.
         var side = snapshot.side;
@@ -60,6 +90,7 @@
         var y = anchor[1];
         if (!(y > 0)) return;
         var size = Math.max(0.2, y * 0.00028);
+        if (!showCrosses) return;
         [row.bottom, row.top].forEach(function (angle, index) {
           // Vacuum markers are geometric references, not ray-solver results.
           if (!(dataset.color === '#d62728' && snapshot.geometry === 'globe') &&

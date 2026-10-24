@@ -5,6 +5,7 @@
   'use strict';
   var samples = {1:true,11:true,21:true,31:true,41:true,51:true,61:true,71:true,81:true,85:true};
   var vertices = {}, localAxes = {}, lastKey = null;
+  var towerPaths = {};
   var secondaryVertices = {}, secondaryAxes = {};
   function screen(g, world) {
     var camera = g.Camera.Trans(world);
@@ -23,23 +24,29 @@
     var axesTarget = objIx === 0 ? localAxes : secondaryAxes;
     var vertexTarget = objIx === 0 ? vertices : secondaryVertices;
     axesTarget[index] = {tower:index, group:objIx, base:localBase, top:localTop};
-    var original = g.PolygonOnPlane, captured = [];
+    var original = g.PolygonOnPlane, captured = [], paths = [];
     g.PolygonOnPlane = function (xs, ys, mode, size) {
       if (Array.isArray(xs) && Array.isArray(ys)) {
         var n = Math.min(xs.length, ys.length, typeof size === 'number' ? size : xs.length);
+        var path = [];
         for (var i = 0; i < n; i++) {
           var world = g.GetTransPointOnPlane(xs[i], ys[i], [0,0,0]).slice();
           captured.push({x:xs[i], y:ys[i], world:world, pixel:screen(g,world)});
+          path.push(world);
         }
+        if (objIx === 0 && path.length > 1) paths.push(path);
       }
       var endpointsOnly = typeof document !== 'undefined' &&
         !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked;
-      if (endpointsOnly && objIx === 0) return;
+      var hideOriginal = typeof document !== 'undefined' &&
+        !!(document.getElementById('TowerOverlayHideOriginal') || {}).checked;
+      if ((endpointsOnly || hideOriginal) && objIx === 0) return;
       return original.apply(this, arguments);
     };
     return function () {
       g.PolygonOnPlane = original;
       if (captured.length) vertexTarget[index] = {tower:index, group:objIx, distance:distance, points:captured};
+      if (objIx === 0) towerPaths[index] = paths;
     };
   }
   // Independent endpoints of the polygons actually submitted by DrawShape.
@@ -402,6 +409,6 @@
   function getLocalAxis(tower, group) { return (group === 1 ? secondaryAxes : localAxes)[tower] || null; }
   function getCapturedGroups() { return {primary:vertices, secondary:secondaryVertices}; }
   function reset() { vertices = {}; localAxes = {}; secondaryVertices = {}; secondaryAxes = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,drawGeometryEndpoints:drawGeometryEndpoints,compareAxisMethods:compareAxisMethods,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,getTowerPaths:function(index){return towerPaths[index] || null;},onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,drawGeometryEndpoints:drawGeometryEndpoints,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));

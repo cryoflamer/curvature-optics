@@ -113,6 +113,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayTowerNumbers"> Show tower numbers</label>
+  <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
+  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayHideOriginal"> Hide original towers</label>
+  <script>['TowerOverlayDisplay','TowerOverlayHideOriginal'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){graph.Redraw();});});</script>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerGeometryEndpointsOnly"> Replace tower polygons with blue endpoints</label>
   <script>document.getElementById("TowerGeometryEndpointsOnly").addEventListener("change", function () { graph.Redraw(); });</script>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerAuditAxesEnabled"> Show actual tower axes (cyan)</label>
@@ -1606,7 +1609,8 @@ function DrawShape( objIx, g, m ) {
   // PolygonOnPlane wrapper still captures the original polygon vertices.
   var endpointsOnly = m.ObjType[objIx] === 3 && m.showModel === 1 &&
     m.opticsMode === 'ray-tracing' &&
-    !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked;
+    !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked ||
+    !!(document.getElementById('TowerOverlayHideOriginal') || {}).checked;
   var originalTowerLine = g.LineOnPlane;
   if (endpointsOnly) {
     g.LineOnPlane = function () {};
