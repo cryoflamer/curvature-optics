@@ -114,6 +114,29 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="InverseVacuumTower21"> Independent vacuum tower #21 (purple)</label>
+  <button type="button" id="InverseAtmosphereTower21">Calculate atmosphere #21 (orange)</button>
+  <span id="InverseAtmosphereTower21Status" role="status" style="font:12px monospace"></span>
+  <script>
+    document.getElementById('InverseAtmosphereTower21').addEventListener('click', function () {
+      var status = document.getElementById('InverseAtmosphereTower21Status');
+      var bridge = window.CurvatureInverseOpticsBridge;
+      var audit = window.CurvatureRenderedVertexAudit;
+      var solver = window.CurvatureTowerDiagnostics;
+      if (!bridge || !audit || !solver || typeof CurveApp === 'undefined') {
+        status.textContent = 'Missing optics modules'; return;
+      }
+      if (CurveApp.opticsMode !== 'ray-tracing' || CurveApp.showModel !== 1) {
+        status.textContent = 'Select Globe / ray tracing and TrnsmLine'; return;
+      }
+      status.textContent = 'Computing...';
+      bridge.calculateAtmosphere21(CurveApp, audit, solver,
+        function (message) { status.textContent = message; },
+        function (result) {
+          status.textContent = result.message;
+          if (result.state === 'ready') graph.Redraw();
+        });
+    });
+  </script>
   <script>document.getElementById("InverseVacuumTower21").addEventListener("change", function () { graph.Redraw(); });</script>
   <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
   <label style="margin-left:0.8em;">Tower comparison <select id="TowerComparisonMode"><option value="original">Original only</option><option value="optical">Optical only</option><option value="both" selected>Both</option></select></label>
