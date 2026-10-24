@@ -19,3 +19,14 @@ assert.strictEqual(report.count,3);
 assert.ok(report.maxPx<1e-9,report.maxPx);
 assert.ok(report.rmsPx<1e-9,report.rmsPx);
 console.log('Independent vacuum bridge: 3 vertex checks and input guards passed');
+// Adaptive sampling: a curved apparent edge must gain intermediate points.
+const bent = bridge.adaptiveEdge([0,0,0],[10,0,0],t=>[10*t,0,Math.sin(Math.PI*t)],5,0.1);
+assert.ok(bent.points.filter(Boolean).length>2);
+// A hidden middle section must not be bridged by a drawn segment.
+const hidden = bridge.adaptiveEdge([0,0,0],[10,0,0],t=>
+  t>0.4 && t<0.6 ? null : [10*t,0,0],5,0.1);
+assert.ok(hidden.points.includes(null));
+for(let i=1;i<hidden.points.length;i++) {
+  const a=hidden.points[i-1], b=hidden.points[i];
+  if(a && b) assert.ok(!(a[0]<4 && b[0]>6));
+}

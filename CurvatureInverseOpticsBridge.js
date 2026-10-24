@@ -66,6 +66,41 @@
     if (result.status !== 'visible') return null;
     return [world[0], world[1], horizontal * Math.tan(result.angle)];
   }
+  // Sample an original straight structural member in physical world space.
+  // Refraction acts on every sampled point, not on its endpoints alone.
+  function interpolateWorld(a, b, t) {
+    return a.map(function (v, k) { return v + (b[k] - v) * t; });
+  }
+  function adaptiveEdge(a, b, sample, maxDepth, tolerance) {
+    var out = [], solved = 0;
+    function emit(point) {
+      // A null separates visible pieces; never connect across occlusion.
+      if (point === null && (!out.length || out[out.length - 1] === null)) return;
+      out.push(point);
+    }
+    function subdivide(t0, p0, t1, p1, depth) {
+      var mid = (t0 + t1) / 2;
+      var pm = sample(mid); solved++;
+      var transition = (p0 === null || pm === null || p1 === null);
+      var curved = !transition && Math.hypot(
+        pm[0] - (p0[0] + p1[0]) / 2,
+        pm[1] - (p0[1] + p1[1]) / 2,
+        pm[2] - (p0[2] + p1[2]) / 2) > tolerance;
+      if (depth < maxDepth && (transition || curved)) {
+        subdivide(t0, p0, mid, pm, depth + 1);
+        subdivide(mid, pm, t1, p1, depth + 1);
+      } else {
+        // If visibility changes inside this terminal interval, keep the
+        // visible samples separated instead of drawing through the ground.
+        emit(p0);
+        if (transition) { emit(null); emit(pm); emit(null); }
+        emit(p1);
+      }
+    }
+    var first = sample(0), last = sample(1);
+    subdivide(0, first, 1, last, 0);
+    return {points:out, evaluations:solved + 2};
+  }
   function calculateAtmosphere21(m, audit, solver, onProgress, onDone) {
     var paths = audit && audit.getTowerPaths(21);
     if (!paths || !paths.length || !solver) {
@@ -73,29 +108,41 @@
         message:'Tower #21 geometry or ray solver is unavailable'};
       onDone(atmosphere21); return;
     }
-    var key = modelKey(m);
-    var items = [], cache = Object.create(null), output = paths.map(function () { return []; });
-    paths.forEach(function (path, pi) { path.forEach(function (world) {
-      items.push({path:pi, world:world});
-    }); });
-    atmosphere21 = {state:'working', paths:null, key:key, message:'0 / ' + items.length};
+    var key = modelKey(m), output = paths.map(function () { return []; });
+    var edges = [], cache = Object.create(null), evaluations = 0;
+    paths.forEach(function (path, pi) {
+      for (var j = 1; j < path.length; j++)
+        edges.push({path:pi, a:path[j-1], b:path[j]});
+    });
+    var generation = {};
+    atmosphere21 = {state:'working', paths:null, key:key, message:'0 / ' + edges.length,
+      generation:generation};
     var i = 0;
-    function batch() {
-      // Yield to the browser between vertices; keep the renderer responsive.
-      var stop = Math.min(items.length, i + 2);
-      for (; i < stop; i++) {
-        var item = items[i];
-        var cacheKey = item.world.map(function (v) { return v.toFixed(5); }).join(',');
-        if (!Object.prototype.hasOwnProperty.call(cache, cacheKey))
-          cache[cacheKey] = opticalVertex(item.world, m, solver);
-        output[item.path].push(cache[cacheKey]);
+    function sample(world) {
+      var cacheKey = world.map(function (v) { return v.toFixed(7); }).join(',');
+      if (!Object.prototype.hasOwnProperty.call(cache, cacheKey)) {
+        cache[cacheKey] = opticalVertex(world, m, solver);
+        evaluations++;
       }
-      atmosphere21.message = i + ' / ' + items.length;
-      onProgress(atmosphere21.message);
-      if (i < items.length) setTimeout(batch, 0);
-      else {
+      return cache[cacheKey];
+    }
+    function batch() {
+      // A newer request supersedes this one; stale results must not redraw.
+      if (atmosphere21.generation !== generation) return;
+      if (i < edges.length) {
+        var edge = edges[i++];
+        var result = adaptiveEdge(edge.a, edge.b, function (t) {
+          return sample(interpolateWorld(edge.a, edge.b, t));
+        }, 5, 0.10);
+        // Keep each original member separate, even if the source paths join.
+        if (output[edge.path].length) output[edge.path].push(null);
+        Array.prototype.push.apply(output[edge.path], result.points);
+        atmosphere21.message = i + ' / ' + edges.length + ' edges';
+        onProgress(atmosphere21.message);
+        setTimeout(batch, 0);
+      } else {
         atmosphere21 = {state:'ready', paths:output, key:key,
-          message:'Calculated ' + items.length + ' vertices'};
+          message:'Calculated ' + edges.length + ' edges, ' + evaluations + ' ray samples'};
         onDone(atmosphere21);
       }
     }
@@ -135,5 +182,6 @@
   }
   return {vacuumDirection:vacuumDirection, directionAtRange:directionAtRange,
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
-    getAtmosphere21:function () { return atmosphere21; }};
+    getAtmosphere21:function () { return atmosphere21; },
+    adaptiveEdge:adaptiveEdge};
 }));
