@@ -36,13 +36,10 @@
         }
         if (objIx === 0 && path.length > 1) paths.push(path);
       }
-      var endpointsOnly = typeof document !== 'undefined' &&
-        !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked;
       var comparison = typeof document !== 'undefined' &&
         document.getElementById('TowerComparisonMode');
       var mode = comparison ? comparison.value : 'both';
-      if (objIx === 0 && (mode === 'optical' ||
-          (mode !== 'both' && endpointsOnly))) return;
+      if (objIx === 0 && mode === 'optical') return;
       return original.apply(this, arguments);
     };
     return function () {
@@ -365,9 +362,6 @@
   }
   function onDraw(g,m) {
     // Draw every frame, including camera movement and zoom.
-    drawActualAxes(g,m);
-    drawLocalAxes(g,m);
-    drawGeometryNumbers(g,m);
     var overlay = root.CurvatureTowerOverlay;
     var snapshot = overlay && overlay.getData && overlay.getData();
     if (!snapshot || !Object.keys(vertices).length) return;
@@ -381,7 +375,7 @@
     var strokes = compareCanvasStrokes(g,m,snapshot,overlay.getRenderedStrokes && overlay.getRenderedStrokes());
     var calibration = vacuumCalibration(g,m,snapshot,overlay.getRenderedStrokes && overlay.getRenderedStrokes());
     lastKey = key;
-    if (root.console) {
+    if (root.console && root.CURVATURE_VERBOSE_TOWER_AUDIT) {
       if (calibration) {
         root.console.group('AUTOMATED VACUUM CALIBRATION (actual canvas strokes vs rendered tower sections)');
         root.console.table(calibration.rows);

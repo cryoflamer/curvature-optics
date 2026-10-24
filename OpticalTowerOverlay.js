@@ -42,14 +42,12 @@
     g.SetAlpha(1);
     g.SetClipping('canvas');
     var vacuumOnly = !!(document.getElementById('TowerOverlayVacuumOnly') || {}).checked;
-    var showNumbers = !!(document.getElementById('TowerOverlayTowerNumbers') || {}).checked;
     var display = (document.getElementById('TowerOverlayDisplay') || {}).value || 'crosses';
     var comparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
     var showCrosses = comparison !== 'original' && display !== 'towers';
     // Tower comparison controls the actual optical tower geometry, not the
     // crosshair presentation. "Both" must include optical tower outlines.
     var showTowers = comparison !== 'original';
-    var labels = [];
     var datasets = [
       { rows: snapshot.vacuum, color: '#d62728' },
       { rows: snapshot.standard, color: '#008f55' }
@@ -142,40 +140,12 @@
           } finally {
             if (typeof originalDriver === 'function') g.DriverDrawPoly = originalDriver;
           }
-          // Derive the label position from the ACTUAL rendered cross strokes,
-          // never from an independently projected tower position.
-          if (showNumbers && index === 1 && strokes.length) {
-            var ends = strokes.reduce(function (all, stroke) { return all.concat(stroke); }, []);
-            if (ends.length) {
-              var centerX = ends.reduce(function (sum, p) { return sum + p[0]; }, 0) / ends.length;
-              var topY = Math.min.apply(null, ends.map(function (p) { return p[1]; }));
-              labels.push({tower: row.index, x: centerX, y: topY - 5, color: dataset.color});
-            }
-          }
           renderedStrokes.push({tower: row.index, point: index === 0 ? 'base' : 'top',
             atmosphere: dataset.color === '#d62728' ? 'vacuum' : 'standard',
             strokes: strokes});
         });
       });
     });
-    // Draw in canvas pixel space after the 3D strokes; this also works when
-    // the camera, viewport or device pixel ratio changes.
-    if (showNumbers && g.Context2D) {
-      var ctx = g.Context2D;
-      ctx.save();
-      ctx.setTransform(g.ContextScale || 1, 0, 0, g.ContextScale || 1, 0, 0);
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#171717';
-      labels.forEach(function (label) {
-        ctx.strokeText(String(label.tower), label.x, label.y);
-        ctx.fillStyle = label.color;
-        ctx.fillText(String(label.tower), label.x, label.y);
-      });
-      ctx.restore();
-    }
     g.ResetTrans3D();
   }
   root.CurvatureTowerOverlay = { setData: setData, clear: clear, getData: function () { return snapshot; }, getRenderedStrokes: function () { return renderedStrokes; }, draw: draw, towerAnchor: towerAnchor, markerWorld: markerWorld };

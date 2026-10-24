@@ -112,26 +112,17 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <button type="button" id="TowerDiagnosticRun">Calculate tower angles</button>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayEnabled"> Show optical markers on scene</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
-  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayTowerNumbers"> Show tower numbers</label>
   <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
   <label style="margin-left:0.8em;">Tower comparison <select id="TowerComparisonMode"><option value="original">Original only</option><option value="optical">Optical only</option><option value="both" selected>Both</option></select></label>
   <script>
     ['TowerOverlayDisplay', 'TowerComparisonMode'].forEach(function(id) {
       document.getElementById(id).addEventListener('change', function() {
-        // Both must always display original polygons, regardless of the older
-        // endpoint-only diagnostic state.
-        if (document.getElementById('TowerComparisonMode').value !== 'optical')
-          document.getElementById('TowerGeometryEndpointsOnly').checked = false;
         if (document.getElementById('TowerComparisonMode').value !== 'original')
           document.getElementById('TowerOverlayEnabled').checked = true;
         graph.Redraw();
       });
     });
   </script>
-  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerGeometryEndpointsOnly"> Replace tower polygons with blue endpoints</label>
-  <script>document.getElementById("TowerGeometryEndpointsOnly").addEventListener("change", function () { graph.Redraw(); });</script>
-  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerAuditAxesEnabled"> Show actual tower axes (cyan)</label>
-  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerAuditLocalAxesEnabled"> Show local object axes (yellow)</label>
   <div style="font-size:0.85em;margin-top:0.35em;">Markers: <span style="color:#d62728">red = Vacuum</span>, <span style="color:#008f55">green = Standard n(h)</span>. Vacuum only hides green markers for perspective calibration. Single-model view, Ray tracing mode only; click Calculate to refresh.</div>
   <div id="TowerDiagnosticOutput" style="margin-top:0.4em;overflow-x:auto;">Select TrnsmLine, then click Calculate tower angles. This diagnostic does not alter the scene.</div>
 </section>
@@ -1156,9 +1147,6 @@ function DrawModel( g ) {
   // Vacuum calibration (read-only; results in browser console).
   if (window.CurvatureProjectionCalibration) CurvatureProjectionCalibration.onDraw(g, m, SetTrans);
 
-  // Geometry endpoints are drawn before optical crosses, from captured polygons.
-  if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.drawGeometryEndpoints(g, m);
-
   // Experimental optical markers are an independent diagnostic overlay.
   if (window.CurvatureTowerOverlay) CurvatureTowerOverlay.draw(g, m);
 
@@ -1622,12 +1610,9 @@ function DrawShape( objIx, g, m ) {
   var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
   var suppressOriginalTower = m.ObjType[objIx] === 3 && objIx === 0 &&
     m.showModel === 1 && m.opticsMode === 'ray-tracing' &&
-    (towerComparison === 'optical' ||
-      (towerComparison !== 'both' &&
-       !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked));
-  var endpointsOnly = suppressOriginalTower;
+    towerComparison === 'optical';
   var originalTowerLine = g.LineOnPlane;
-  if (endpointsOnly) {
+  if (suppressOriginalTower) {
     g.LineOnPlane = function () {};
   }
 
@@ -2472,7 +2457,7 @@ function DrawShape( objIx, g, m ) {
 
     }
   }
-  if (endpointsOnly) {
+  if (suppressOriginalTower) {
     g.LineOnPlane = originalTowerLine;
   }
   if (endVertexAudit) endVertexAudit();
