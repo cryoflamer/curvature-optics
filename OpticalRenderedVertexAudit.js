@@ -38,9 +38,11 @@
       }
       var endpointsOnly = typeof document !== 'undefined' &&
         !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked;
-      var hideOriginal = typeof document !== 'undefined' &&
-        !!(document.getElementById('TowerOverlayHideOriginal') || {}).checked;
-      if ((endpointsOnly || hideOriginal) && objIx === 0) return;
+      var comparison = typeof document !== 'undefined' &&
+        document.getElementById('TowerComparisonMode');
+      var mode = comparison ? comparison.value : 'both';
+      if (objIx === 0 && (mode === 'optical' ||
+          (mode !== 'both' && endpointsOnly))) return;
       return original.apply(this, arguments);
     };
     return function () {

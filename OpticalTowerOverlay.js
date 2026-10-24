@@ -44,8 +44,11 @@
     var vacuumOnly = !!(document.getElementById('TowerOverlayVacuumOnly') || {}).checked;
     var showNumbers = !!(document.getElementById('TowerOverlayTowerNumbers') || {}).checked;
     var display = (document.getElementById('TowerOverlayDisplay') || {}).value || 'crosses';
-    var showCrosses = display !== 'towers';
-    var showTowers = display !== 'crosses';
+    var comparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
+    var showCrosses = comparison !== 'original' && display !== 'towers';
+    // Tower comparison controls the actual optical tower geometry, not the
+    // crosshair presentation. "Both" must include optical tower outlines.
+    var showTowers = comparison !== 'original';
     var labels = [];
     var datasets = [
       { rows: snapshot.vacuum, color: '#d62728' },

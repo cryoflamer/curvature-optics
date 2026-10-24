@@ -114,8 +114,20 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayVacuumOnly"> Vacuum only (calibration)</label>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayTowerNumbers"> Show tower numbers</label>
   <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
-  <label style="margin-left:0.8em;"><input type="checkbox" id="TowerOverlayHideOriginal"> Hide original towers</label>
-  <script>['TowerOverlayDisplay','TowerOverlayHideOriginal'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){graph.Redraw();});});</script>
+  <label style="margin-left:0.8em;">Tower comparison <select id="TowerComparisonMode"><option value="original">Original only</option><option value="optical">Optical only</option><option value="both" selected>Both</option></select></label>
+  <script>
+    ['TowerOverlayDisplay', 'TowerComparisonMode'].forEach(function(id) {
+      document.getElementById(id).addEventListener('change', function() {
+        // Both must always display original polygons, regardless of the older
+        // endpoint-only diagnostic state.
+        if (document.getElementById('TowerComparisonMode').value !== 'optical')
+          document.getElementById('TowerGeometryEndpointsOnly').checked = false;
+        if (document.getElementById('TowerComparisonMode').value !== 'original')
+          document.getElementById('TowerOverlayEnabled').checked = true;
+        graph.Redraw();
+      });
+    });
+  </script>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerGeometryEndpointsOnly"> Replace tower polygons with blue endpoints</label>
   <script>document.getElementById("TowerGeometryEndpointsOnly").addEventListener("change", function () { graph.Redraw(); });</script>
   <label style="margin-left:0.8em;"><input type="checkbox" id="TowerAuditAxesEnabled"> Show actual tower axes (cyan)</label>
@@ -1607,10 +1619,13 @@ function DrawShape( objIx, g, m ) {
     CurvatureRenderedVertexAudit.beginTower(g, m, objIx);
   // Suppress only tower primitives in this diagnostic mode. The audit's
   // PolygonOnPlane wrapper still captures the original polygon vertices.
-  var endpointsOnly = m.ObjType[objIx] === 3 && m.showModel === 1 &&
-    m.opticsMode === 'ray-tracing' &&
-    !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked ||
-    !!(document.getElementById('TowerOverlayHideOriginal') || {}).checked;
+  var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
+  var suppressOriginalTower = m.ObjType[objIx] === 3 && objIx === 0 &&
+    m.showModel === 1 && m.opticsMode === 'ray-tracing' &&
+    (towerComparison === 'optical' ||
+      (towerComparison !== 'both' &&
+       !!(document.getElementById('TowerGeometryEndpointsOnly') || {}).checked));
+  var endpointsOnly = suppressOriginalTower;
   var originalTowerLine = g.LineOnPlane;
   if (endpointsOnly) {
     g.LineOnPlane = function () {};
