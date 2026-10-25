@@ -827,7 +827,15 @@
         // Only the projection and visibility clipping differ here.
         var footingCandidates = analyticP4 ? footingPolygons.map(function(poly) {
           var clipped = clipVisibleFooting(poly.world, sample);
-          return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial};
+          // Preserve original perimeter separately from the visibility-clipped fill.
+          var perimeter=[], n=poly.world.length;
+          if(n>1 && poly.world[0].every(function(v,k){return Math.abs(v-poly.world[n-1][k])<1e-7;})) n--;
+          for(var j=0;j<n;j++) {
+            var a=poly.world[j], b=poly.world[(j+1)%n];
+            var edge=adaptiveEdge(a,b,function(t){return sample(interpolateWorld(a,b,t));},4,0.10);
+            if(edge.points.some(Boolean)) perimeter.push(edge.points);
+          }
+          return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial,perimeter:perimeter};
         }) : [];
         var footings = footingCandidates.filter(Boolean);
         // Match DrawObjectsBeforeHorizon: render far towers first, then let
@@ -1096,7 +1104,14 @@
         lineAtmosphere.footings.forEach(function(footing) {
           g.NewPoly3D();
           footing.points.forEach(function(point) { g.AddPointToPoly3D(point); });
-          g.DrawPoly3D(3);
+          // Area and line clipping are independent in the original renderer.
+          // The clipping closure is not an original edge and must not be stroked.
+          g.DrawPoly3D(2);
+          g.SetLineAttr('#695737', 1);
+          (footing.perimeter || []).forEach(function(edge) {
+            for(var j=1;j<edge.length;j++)
+              if(edge[j-1] && edge[j]) g.Line3D(edge[j-1],edge[j]);
+          });
         });
       }
       g.SetLineAttr('#ff8800', 1.25);
