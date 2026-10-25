@@ -85,6 +85,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <!-- Renderer stays visible; experimental controls are collapsed by default. -->
 <div id="OpticsRendererToolbar" style="padding:0.45em 0.7em; margin:0.5em 0; border:1px solid #bbb; background:#f7f7f7;">
   <label>Renderer <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both (diagnostic)</option></select></label>
+  <button type="button" id="FlatP4TestPreset" style="margin-left:0.7em;font-weight:bold;">Flat Earth P4 Test</button>
   <span id="OpticsComparisonStatus" role="status" aria-live="polite" style="margin-left:0.6em;font-size:0.85em;"></span>
 </div>
 <details id="OpticsAdvancedDiagnostics" style="margin:0.4em 0;">
@@ -378,8 +379,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   </script>
   <script>
     // One-click reproducible visual setup; no external browser automation.
-    document.getElementById('OpticsTestPreset').addEventListener('click', function () {
-      var status = document.getElementById('OpticsTestPresetStatus');
+    function RunOpticsTestPreset(flat) {
+      var status = document.getElementById(flat ? 'OpticsComparisonStatus' : 'OpticsTestPresetStatus');
       try {
         if (typeof Demos === 'undefined' || typeof CurveApp === 'undefined' ||
             typeof UpdateAll !== 'function' || !window.CurvatureInverseOpticsBridge)
@@ -388,7 +389,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         // Override the demo's introductory camera with a stable test viewpoint.
         CurveApp.opticsMode = 'ray-tracing';
         CurveApp.opticsProfile = 'standard';
-        CurveApp.showModel = 1;
+        CurveApp.showModel = flat ? 2 : 1;
         CurveApp.Height = 15;
         // Start with a safe lens; the tower is fitted from captured vertices below.
         CurveApp.FocalLengthField = 1600;
@@ -397,7 +398,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         CurveApp.Roll = 0;
         CurveApp.ObjSidePos[0] = 35;
         CurveApp.ObjSidePos[1] = 25.4;
-        document.getElementById('TowerDiagnosticGeometry').value = 'globe';
+        document.getElementById('TowerDiagnosticGeometry').value = flat ? 'flat' : 'globe';
         document.getElementById('TowerDiagnosticAtmosphere').value = 'vacuum';
         document.getElementById('TowerOverlayEnabled').checked = false;
         document.getElementById('TowerOverlayVacuumOnly').checked = true;
@@ -411,14 +412,14 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         document.getElementById('InverseAtmosphereLineCountLabel').style.display = 'none';
         document.getElementById('InverseAtmosphereLineShow').checked = false;
         document.getElementById('ShowLegacyTransmissionTowers').checked = false;
-        document.getElementById('ShowP4OpticalHorizon').checked = true;
+        document.getElementById('ShowP4OpticalHorizon').checked = !flat;
         document.getElementById('ShowP4VacuumHorizon').checked = false;
         // Do not turn on the optical scene until the new all-tower P4 result
         // is ready: the normal change handler rejects incomplete data.
         document.getElementById('OpticalSceneTowers').checked = false;
         UpdateAll(false);
         var framing = FrameOpticsTestTower21(Number(document.getElementById('OpticsFocusTower').value)||21);
-        status.textContent = framing + '; calculating all 85 towers (P4)...';
+        status.textContent = (flat ? 'Flat Earth: ' : '') + framing + '; calculating all 85 towers (P4)...';
         document.getElementById('InverseAtmosphereLine').click();
         // The asynchronous calculation's completion callback is responsible
         // for enabling the scene, not the click handler itself.
@@ -431,7 +432,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             scene.dispatchEvent(new Event('change'));
             document.getElementById('InverseAtmosphereLineShow').checked = false;
             SetOpticsSceneComparison(document.getElementById('OpticsSceneComparison').value);
-            status.textContent = framing + '; optical scene ready (' + result.towers + ' towers)';
+            status.textContent = (flat ? 'Flat Earth: ' : '') + framing + '; optical scene ready (' + result.towers + ' towers)';
           } else if (result.state === 'error') {
             status.textContent = 'Optics Test failed: ' + result.message;
           } else if (result.state === 'working') {
@@ -445,7 +446,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         status.textContent = 'Optics Test failed: ' + err.message;
         console.error('Optics Test preset:', err);
       }
-    });
+    }
+    document.getElementById('OpticsTestPreset').addEventListener('click', function () { RunOpticsTestPreset(false); });
+    document.getElementById('FlatP4TestPreset').addEventListener('click', function () { RunOpticsTestPreset(true); });
   </script>
 
   <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
