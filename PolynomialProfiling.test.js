@@ -4,8 +4,10 @@ const bridge=require('./CurvatureInverseOpticsBridge');
 const solver=require('./OpticalTowerDiagnostics');
 const stats={polyExact:0,polyCalibration:0,polyDirect:0,polyInterpolated:0,polyRejected:0};
 const poly=bridge.createPolynomialApproximation({rEarth:6371000,Height:15},solver,stats);
-// Out-of-range fallback must be accounted separately from the horizon guard.
+// Short-range preview is distinct from out-of-range exact fallback.
 assert.strictEqual(poly.get(200,20).status,'visible');
+assert.strictEqual(stats.polyShortVacuum,1);
+assert.strictEqual(poly.get(200,56).status,'visible');
 assert.strictEqual(stats.polyOutside,1);
 assert.strictEqual(stats.polyDirect,1);
 assert(stats.polyExactMs>=0 && Number.isFinite(stats.polyExactMs));

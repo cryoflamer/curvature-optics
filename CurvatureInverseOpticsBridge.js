@@ -187,13 +187,17 @@
   function createPolynomialApproximation(m, solver, stats, options) {
     options=options||{};
     if(stats) {
-      ['polyExactMs','polyCalibrationMs','polyOutside','polyHorizon','polyInvalid'].forEach(function(k){
+      ['polyExactMs','polyCalibrationMs','polyOutside','polyHorizon','polyInvalid','polyShortVacuum'].forEach(function(k){
         if(!Number.isFinite(stats[k])) stats[k]=0;
       });
     }
     var R=m.rEarth, observer=m.Height;
     var effective=R/(1-R*0.000293/7350);
     var distances=options.distances||[500,3000,10000,18000,26000];
+    // Screen-space preview only: below the first calibration anchor the
+    // atmosphere-vacuum angular difference was measured at <0.017 px
+    // (1600 px focal length) for the standard profile and 0..55 m heights.
+    var shortLimit=options.shortLimit===undefined?500:options.shortLimit;
     var heights=[10,25,45];
     var rows=[], boundaries=[];
     var exactMemo=new Map();
@@ -275,6 +279,14 @@
       if(stats) { stats.polyCalibration=stats.polyExact; stats.polyCalibrationMs+=clock()-calibrationStart; }
     }
     function get(d,h) {
+      if(d>0 && d<Math.min(shortLimit,distances[0]) && h>=0 && h<=55) {
+        // Exact vacuum spherical geometry, not an atmospheric ray.
+        // This is deliberately restricted to the experimental preview.
+        var a=d/R;
+        if(stats) stats.polyShortVacuum++;
+        return {status:'visible',angle:Math.atan2((R+h)*Math.cos(a)-(R+observer),
+          (R+h)*Math.sin(a))};
+      }
       if(!(d>=distances[0] && d<=distances[distances.length-1]) || h>55 || h<0) {
         if(stats) {
           stats.polyDirect++;stats.polyOutside++;
@@ -467,7 +479,7 @@
   // unsolved interval; the visible endpoint approaches the boundary from its
   // visible side. This is a geometric approximation, not a proof of occlusion.
   function adaptiveEdge(a, b, sample, maxDepth, tolerance) {
-    var out = [], solved = 0, transitions = 0, unresolved = 0;
+    var out = [], solved = 0, transitions = 0, unresolved = 0, boundaryProbes = 0;
     var boundaryTolerance = 1 / 65536;
     function probe(t) { solved++; return sample(t); }
     function emit(p) {
@@ -477,6 +489,7 @@
     function boundary(tVisible, pVisible, tHidden) {
       for (var k = 0; k < 20 && Math.abs(tVisible - tHidden) > boundaryTolerance; k++) {
         var mid = (tVisible + tHidden) / 2, pm = probe(mid);
+        boundaryProbes++;
         if (pm) { tVisible = mid; pVisible = pm; }
         else tHidden = mid;
       }
@@ -512,7 +525,7 @@
     var first = probe(0), last = probe(1);
     subdivide(0, first, 1, last, 0);
     return {points:out, evaluations:solved, transitions:transitions,
-      terminalTransitions:unresolved};
+      terminalTransitions:unresolved, boundaryProbes:boundaryProbes};
   }
   function calculateAtmosphere21(m, audit, solver, onProgress, onDone) {
     var paths = audit && audit.getTowerPaths(21);
@@ -622,6 +635,7 @@
     stats.polyExactMs=0;stats.polyCalibrationMs=0;stats.polyOutside=0;stats.polyHorizon=0;stats.polyInvalid=0;
     stats.polyExactHits=0;stats.polyCalibrationHits=0;stats.polyOutsideDistance=0;stats.polyOutsideHeight=0;
     stats.polyOutsideMin=Infinity;stats.polyOutsideMax=-Infinity;
+    stats.polyShortVacuum=0;stats.boundaryProbes=0;
     var polynomial=poly?createPolynomialApproximation(m,solver,stats):null;
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
@@ -666,6 +680,7 @@
           return sample(interpolateWorld(e.a,e.b,t));
         },5,0.10);
         transitions+=result.transitions;
+        stats.boundaryProbes+=result.boundaryProbes;
         paths.push({tower:e.tower,points:result.points});
         if(poly)profileGeometryMs+=profileClock()-geometryStart;
       }
@@ -685,7 +700,8 @@
             outside:stats.polyOutside,outsideDistance:stats.polyOutsideDistance,outsideHeight:stats.polyOutsideHeight,
             outsideMin:Number.isFinite(stats.polyOutsideMin)?stats.polyOutsideMin:null,
             outsideMax:Number.isFinite(stats.polyOutsideMax)?stats.polyOutsideMax:null,
-            exactHits:stats.polyExactHits,calibrationHits:stats.polyCalibrationHits,horizon:stats.polyHorizon,invalid:stats.polyInvalid},
+            exactHits:stats.polyExactHits,calibrationHits:stats.polyCalibrationHits,horizon:stats.polyHorizon,invalid:stats.polyInvalid,
+            shortVacuum:stats.polyShortVacuum,boundaryProbes:stats.boundaryProbes},
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
@@ -697,6 +713,7 @@
             (poly?', calibration='+stats.polyCalibration+', exact='+stats.polyExact+', interpolated='+stats.polyInterpolated+', rejected='+stats.polyRejected+', direct='+stats.polyDirect+
               ', profile(ms): calibration='+stats.polyCalibrationMs.toFixed(1)+', exact='+stats.polyExactMs.toFixed(1)+
               ', edge='+profileGeometryMs.toFixed(1)+', sample='+profileSampleMs.toFixed(1)+
+              ', short vacuum='+stats.polyShortVacuum+', boundary probes='+stats.boundaryProbes+
               ', direct reasons: horizon='+stats.polyHorizon+', outside='+stats.polyOutside+
               ' (distance='+stats.polyOutsideDistance+', height='+stats.polyOutsideHeight+
               ', range='+ (Number.isFinite(stats.polyOutsideMin)?stats.polyOutsideMin.toFixed(0)+'..'+stats.polyOutsideMax.toFixed(0)+'m':'none')+'), invalid='+stats.polyInvalid+
