@@ -1307,7 +1307,9 @@ function DrawModelWithOptionalAudit(g) {
     var result = window.LegacySceneAudit.captureFrame(g, DrawModel);
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
-      schema: 'legacy-frame-audit-v1',
+      schema: 'legacy-frame-audit-v2',
+      unsupported: result.trace.unsupported,
+      captureComplete: result.trace.complete,
       replayVerified: false,
       summary: result.summary,
       notes: [
@@ -1319,7 +1321,8 @@ function DrawModelWithOptionalAudit(g) {
     };
     window.LastLegacyFrameAudit = report;
     if (status) status.textContent = 'Captured ' + result.summary.count +
-      ' commands (' + result.summary.methods.length + ' methods). Downloading report.';
+      ' commands; unsupported arguments: ' + result.trace.unsupported.length +
+      '. Downloading diagnostic report.';
     var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');

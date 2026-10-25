@@ -39,7 +39,7 @@
   function captureFrame(graph, draw) {
     // Diagnostic only. Pass-through drawing occurs normally; trace completeness
     // must be established before calling replay on a production frame.
-    var trace = adapter.record(graph, draw);
+    var trace = adapter.record(graph, draw, {diagnostic:true});
     return {trace:trace, summary:summarize(trace), replayVerified:false};
   }
   return {inspectSource:inspectSource, summarize:summarize, captureFrame:captureFrame};

@@ -22,24 +22,32 @@
     'Line','DrawLine','DrawPolygon','DrawText','Text',
     'SetPlane','SetPlaneTrans','ResetPlaneTrans'
   ];
-  function clone(value) {
-    if (Array.isArray(value)) return value.map(clone);
+  function describe(value) {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'Array';
+    if (typeof value !== 'object') return typeof value;
+    var proto = Object.getPrototypeOf(value);
+    return proto && proto.constructor && proto.constructor.name || 'object (null prototype)';
+  }
+  function clone(value, path) {
+    path = path || 'argument';
+    if (Array.isArray(value)) return value.map(function (item, i) { return clone(item, path + '[' + i + ']'); });
     if (value && typeof value === 'object') {
       if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
-        throw new TypeError('Unsupported non-plain graph argument');
+        throw new TypeError('Unsupported non-plain graph argument at ' + path + ' (' + describe(value) + ')');
       var out = {};
-      Object.keys(value).forEach(function (k) { out[k] = clone(value[k]); });
+      Object.keys(value).forEach(function (k) { out[k] = clone(value[k], path + '.' + k); });
       return out;
     }
     if (typeof value === 'function' || typeof value === 'symbol')
-      throw new TypeError('Unsupported graph argument');
+      throw new TypeError('Unsupported graph argument at ' + path + ' (' + describe(value) + ')');
     return value;
   }
   function record(graph, draw, options) {
     if (!graph || typeof graph !== 'object' || typeof draw !== 'function')
       throw new TypeError('A graph and drawing callback are required');
     options = options || {};
-    var commands = [], saved = [], depth = 0;
+    var commands = [], saved = [], depth = 0, unsupported = [];
     var methods = options.methods || METHODS;
     if (!Array.isArray(methods)) throw new TypeError('methods must be an array');
     try {
@@ -51,7 +59,14 @@
         graph[name] = function () {
           // Avoid duplicate recording when a graph method invokes another
           // wrapped graph method internally. The outer call is replayable.
-          if (depth === 0) commands.push({method:name,args:clone(Array.prototype.slice.call(arguments))});
+          if (depth === 0) {
+            try {
+              commands.push({method:name,args:clone(Array.prototype.slice.call(arguments), 'args')});
+            } catch (error) {
+              if (!options.diagnostic) throw new TypeError(name + ': ' + error.message);
+              unsupported.push({method:name, message:error.message});
+            }
+          }
           depth++;
           try { return original.apply(this, arguments); }
           finally { depth--; }
@@ -65,7 +80,7 @@
         else delete graph[item.name];
       }
     }
-    return {version:VERSION, kind:'legacy-graph-commands', commands:commands};
+    return {version:VERSION, kind:'legacy-graph-commands', commands:commands, unsupported:unsupported, complete:unsupported.length===0};
   }
   function replay(graph, trace) {
     if (!graph || !trace || trace.version !== VERSION || trace.kind !== 'legacy-graph-commands' || !Array.isArray(trace.commands))

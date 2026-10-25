@@ -33,3 +33,13 @@ assert.throws(()=>adapter.record(failure,g=>{g.LineOnPlane(0,0,1,1);throw Error(
 assert.equal(Object.hasOwn(failure,'LineOnPlane'),false);
 assert.throws(()=>adapter.replay(graph(),{version:1,kind:'legacy-graph-commands',commands:[{method:'evil',args:[]}]}),/Unsupported/);
 console.log('LegacySceneAdapter: passed');
+
+// Diagnostic capture preserves rendering when arguments cannot be serialized.
+const nonPlain = new Date();
+const diagnosticGraph = {LineOnPlane(arg){this.last = arg;}};
+const diagnostic = adapter.record(diagnosticGraph, g=>g.LineOnPlane(nonPlain), {diagnostic:true});
+assert.equal(diagnostic.complete,false);
+assert.equal(diagnostic.unsupported[0].method,'LineOnPlane');
+assert.match(diagnostic.unsupported[0].message,/args\[0\].*Date/);
+assert.equal(diagnosticGraph.last,nonPlain);
+assert.throws(()=>adapter.record(diagnosticGraph,g=>g.LineOnPlane(nonPlain)),/LineOnPlane.*args\[0\].*Date/);
