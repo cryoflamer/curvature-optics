@@ -555,6 +555,44 @@
   }
   // Sample an original straight structural member in physical world space.
   // Refraction acts on every sampled point, not on its endpoints alone.
+  // Clip a foundation against the P4 visibility boundary.  A single
+  // contiguous visible arc can be closed along that boundary; multiple arcs
+  // are intentionally rejected rather than bridged through hidden terrain.
+  function clipVisibleFooting(world, sample) {
+    var n = world.length;
+    if (n < 3) return null;
+    // Captured filled polygons repeat their first vertex at the end.
+    if (world[0].every(function(v, k) {return Math.abs(v-world[n-1][k]) < 1e-7;})) n--;
+    var projected = world.slice(0,n).map(sample);
+    var visibleCount = projected.filter(Boolean).length;
+    if (!visibleCount) return null;
+    if (visibleCount === n) return {points:projected,partial:false};
+    var transitions = 0, points = [];
+    function boundary(a, b, aVisible) {
+      var lo = aVisible ? 0 : 1, hi = aVisible ? 1 : 0;
+      var last = sample(aVisible ? a : b);
+      for (var j=0;j<20;j++) {
+        var mid=(lo+hi)/2;
+        var p=sample(interpolateWorld(a,b,mid));
+        if (p) {lo=mid;last=p;} else hi=mid;
+      }
+      return last;
+    }
+    // Start after a hidden vertex so the visible portion is contiguous.
+    var start=projected.findIndex(function(p){return !p;});
+    for (var step=1;step<=n;step++) {
+      var i=(start+step-1)%n, next=(i+1)%n;
+      var a=projected[i], b=projected[next];
+      if (a) points.push(a);
+      if (!!a !== !!b) {
+        transitions++;
+        points.push(boundary(world[i],world[next],!!a));
+      }
+    }
+    // A polygon with multiple disconnected visible regions cannot be safely
+    // represented as one filled polygon.
+    return transitions === 2 && points.length >= 3 ? {points:points,partial:true} : null;
+  }
   function interpolateWorld(a, b, t) {
     return a.map(function (v, k) { return v + (b[k] - v) * t; });
   }
@@ -778,15 +816,16 @@
       onProgress(lineAtmosphere.message);
       if (i<edges.length) setTimeout(batch,0);
       else {
-        // Use the same P4 sample/cache as the steel members. A footing is
-        // filled only if every polygon vertex is visible; partial occlusion
-        // is deliberately left to stage 06 rather than filling across ground.
+        // Clip each filled foundation at the P4 visibility boundary instead
+        // of discarding the entire polygon for one hidden vertex.
         var footingCandidates = analyticP4 ? footingPolygons.map(function(poly) {
-          return {tower:poly.tower, points:poly.world.map(sample)};
+          var clipped=clipVisibleFooting(poly.world,sample);
+          return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial};
         }) : [];
-        var footings = footingCandidates.filter(function(poly) {return poly.points.every(Boolean);});
+        var footings = footingCandidates.filter(Boolean);
+        var footingsPartial=footings.filter(function(poly){return poly.partial;}).length;
         var footingsRejected = footingCandidates.length - footings.length;
-        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingsCaptured:footingPolygons.length,footingsProjected:footings.length,footingsRejected:footingsRejected,key:key,towers:indices.length,
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingsCaptured:footingPolygons.length,footingsProjected:footings.length,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
@@ -804,7 +843,7 @@
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
-            ', transitions='+transitions+', footings='+footings.length+'/'+footingPolygons.length+' (rejected '+footingsRejected+'), elapsed='+ (Date.now()-started)+'ms'+
+            ', transitions='+transitions+', footings='+footings.length+'/'+footingPolygons.length+' (partial '+footingsPartial+', rejected '+footingsRejected+'), elapsed='+ (Date.now()-started)+'ms'+
             (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
             (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')+
             (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')+
@@ -1037,11 +1076,12 @@
     if (((allCheckbox && allCheckbox.checked) || isOpticalSceneReady(m)) && lineAtmosphere.state==='ready' &&
         lineAtmosphere.key===modelKey(m)) {
       if (isOpticalSceneReady(m) && Array.isArray(lineAtmosphere.footings)) {
-        g.SetAreaAttr('#a38d60', '#a38d60', 1);
+        g.SetAreaAttr('#a38d60', '#695737', 1);
         lineAtmosphere.footings.forEach(function(footing) {
           g.NewPoly3D();
           footing.points.forEach(function(point) { g.AddPointToPoly3D(point); });
-          g.DrawPoly3D(3);
+          // 4 explicitly closes the contour; 2 fills and 1 strokes it.
+          g.DrawPoly3D(7);
         });
       }
       g.SetLineAttr('#ff8800', 1.25);
@@ -1058,7 +1098,7 @@
     compareTower:compareTower, draw:draw, hasCompleteP4Line:hasCompleteP4Line, isOpticalSceneReady:isOpticalSceneReady, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, createAnalyticP4:createAnalyticP4, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, clipVisibleFooting:clipVisibleFooting, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, createAnalyticP4:createAnalyticP4, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
