@@ -32,7 +32,7 @@
     var radius = options.radius || R;
     if (!(distance > 0) || !(observerHeight > 0) || !(height >= 0)) throw Error('Invalid diagnostic geometry');
     var p = target(geometry, distance, height, radius);
-    var profile = rt.atmosphere(options.atmosphere || 'vacuum');
+    var profile = rt.atmosphere(options.atmosphere || 'vacuum', options.atmosphereOptions);
     var lineAngle = Math.atan2(p.z - observerHeight, p.x);
     var step = options.step || 25;
     // Vacuum is exact: avoid a numerical root search at the ground boundary.

@@ -7,7 +7,7 @@ const diag = require('../OpticalTowerDiagnostics');
 const arcsec = 180 * 3600 / Math.PI;
 const args = process.argv.slice(2);
 const externalAt = args.indexOf('--reference');
-const referencePath = externalAt >= 0 ? args[externalAt + 1] : null;
+const referencePath = externalAt >= 0 ? args[externalAt + 1] : path.join(__dirname, 'reference/adapter.js');
 if (externalAt >= 0 && (!referencePath || referencePath.startsWith('--'))) {
   console.error('Usage: node tools/compare-raytracers.js [--reference /absolute/path/to/adapter.js]');
   process.exit(2);
@@ -24,8 +24,8 @@ const cases = [];
 for (const distance of [3000, 6000, 12000])
   for (const targetHeight of [10, 20, 40])
     cases.push({ geometry:'globe', atmosphere:'standard', observerHeight:15,
-      radius:6371000, distance, targetHeight });
-const threshold = 0.1; // arcsec; configurable after independent validation
+      radius:6371000, distance, targetHeight, atmosphereOptions:{refractivity:0.000293,scaleHeight:8500} });
+const threshold = 0.1; // arcsec; compare matching n(h), n0=1.000293, H=8500m
 let failures = 0, maxConvergence = 0, maxReference = 0;
 console.log('distance(m) height(m) step25 step10 step5 conv(arcsec)' + (reference ? ' reference(arcsec)' : ''));
 function evaluate(fn, options) {
@@ -59,6 +59,6 @@ for (const c of cases) {
 }
 console.log(`Max convergence difference: ${maxConvergence.toFixed(6)} arcsec`);
 if (reference) console.log(`Max reference difference: ${maxReference.toFixed(6)} arcsec`);
-else console.log('INDEPENDENT COMPARISON NOT RUN: supply --reference adapter; convergence alone is not independent validation.');
+else console.log('INDEPENDENT COMPARISON NOT RUN.');
 console.log(`${failures} failures (threshold ${threshold} arcsec)`);
 process.exitCode = failures ? 1 : 0;
