@@ -106,3 +106,15 @@ test('clipping snapshots locate the first divergent call and restore instrumenta
  assert.equal(graph.TransClipPolygon3D,original);
  assert.equal(probe.firstClippingDifference(first,first),null);
 });
+
+test('clipping snapshots ignore unused polygon array capacity but detect active coordinate differences',()=>{
+ const graph={TransClipPolygon3D(poly){return {Size:poly.Size,X:poly.X,Y:poly.Y,Z:poly.Z};}};
+ const first=[],second=[],changed=[];
+ probe.observePipeline(graph,()=>graph.TransClipPolygon3D({Size:1,X:[10,20,30],Y:[40,50,60],Z:[70,80,90]},1),first);
+ probe.observePipeline(graph,()=>graph.TransClipPolygon3D({Size:1,X:[10],Y:[40],Z:[70]},1),second);
+ probe.observePipeline(graph,()=>graph.TransClipPolygon3D({Size:1,X:[11,20,30],Y:[40,50,60],Z:[70,80,90]},1),changed);
+ assert.deepEqual(first[0].input.X,[10]);
+ assert.deepEqual(first[0].output.Y,[40]);
+ assert.equal(probe.firstClippingDifference(first,second),null);
+ assert.equal(probe.firstClippingDifference(first,changed).callIndex,1);
+});

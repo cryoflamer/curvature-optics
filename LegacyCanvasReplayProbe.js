@@ -110,7 +110,7 @@
       if(!p||typeof p.Size!=='number')return null;
       var sample={size:p.Size};
       if(p.PolyList)sample.firstPolygon=polygonSample(p.PolyList[0]);
-      else ['X','Y','Z'].forEach(function(k){if(p[k])sample[k]=Array.prototype.slice.call(p[k],0,3);});
+      else ['X','Y','Z'].forEach(function(k){if(p[k])sample[k]=Array.prototype.slice.call(p[k],0,Math.max(0,p.Size));});
       return sample;
     }
     var state={};
