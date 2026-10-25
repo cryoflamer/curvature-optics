@@ -179,7 +179,70 @@
     if(stats)stats.fastApproximated++;
     return {status:'visible',angle:Math.atan2(z,x)};
   }
-  function opticalVertex(world, m, solver, rayCache, stats, fast) {
+  // Experimental lazy optical map. Interpolate the *correction* to the
+  // effective-radius preview rather than the absolute angle. A cell is used
+  // only after exact corners and its centre agree within an angular budget.
+  // Cells crossing the horizon are never interpolated.
+  function createOpticalMap(m, solver, stats, options) {
+    options=options||{};
+    var dStep=options.distanceStep||250, hStep=options.heightStep||2;
+    var maxErrorArcsec=options.maxErrorArcsec||0.15;
+    var cells=Object.create(null), nodes=Object.create(null);
+    var radians=maxErrorArcsec*Math.PI/(180*3600);
+    function exact(d,h) {
+      var key=d.toFixed(5)+'|'+h.toFixed(5);
+      if (!Object.prototype.hasOwnProperty.call(nodes,key)) {
+        nodes[key]=solver.solveAngle({geometry:'globe',atmosphere:'standard',
+          observerHeight:m.Height,radius:m.rEarth,distance:d,targetHeight:h,step:25});
+        if(stats)stats.mapExact++;
+      }
+      return nodes[key];
+    }
+    function approx(d,h) {
+      return fastRay({distance:d,altitude:h},m,solver,null);
+    }
+    function correction(d,h) {
+      var r=exact(d,h), a=approx(d,h);
+      return r && a && r.status==='visible' && a.status==='visible' ? r.angle-a.angle : null;
+    }
+    function get(d,h) {
+      // The near-tangent region is ill-conditioned: always shoot exactly.
+      var R=m.rEarth, eff=R/(1-R*0.000293/7350);
+      var horizon=Math.sqrt(2*eff*m.Height+m.Height*m.Height);
+      var rest=Math.max(0,d-horizon);
+      var boundary=Math.hypot(eff,rest)-eff;
+      if (Math.abs(h-boundary)<0.35 || d<1000) {
+        if(stats)stats.mapDirect++;
+        return exact(d,h);
+      }
+      if (h<boundary-3) return {status:'occluded'};
+      if (h<boundary+0.35) { if(stats)stats.mapDirect++;return exact(d,h); }
+      var di=Math.floor(d/dStep), hi=Math.floor(h/hStep);
+      var key=di+'|'+hi, cell=cells[key];
+      var d0=di*dStep,d1=d0+dStep,h0=hi*hStep,h1=h0+hStep;
+      if (!cell) {
+        var corners=[[d0,h0],[d1,h0],[d0,h1],[d1,h1]];
+        var values=corners.map(function(q){return correction(q[0],q[1]);});
+        if(values.some(function(v){return v===null;})) cell={valid:false};
+        else {
+          var center=correction((d0+d1)/2,(h0+h1)/2);
+          var predicted=(values[0]+values[1]+values[2]+values[3])/4;
+          cell={valid:center!==null && Math.abs(center-predicted)<=radians, values:values};
+        }
+        cells[key]=cell;
+        if(stats)stats.mapCells++;
+      }
+      if (!cell.valid) {if(stats)stats.mapDirect++;return exact(d,h);}
+      var u=(d-d0)/dStep,v=(h-h0)/hStep, q=cell.values;
+      var delta=(1-u)*(1-v)*q[0]+u*(1-v)*q[1]+(1-u)*v*q[2]+u*v*q[3];
+      var a=approx(d,h);
+      if(a.status!=='visible') {if(stats)stats.mapDirect++;return exact(d,h);}
+      if(stats)stats.mapInterpolated++;
+      return {status:'visible',angle:a.angle+delta};
+    }
+    return {get:get, stats:stats};
+  }
+  function opticalVertex(world, m, solver, rayCache, stats, fast, opticalMap) {
     var p = rayParameters(world, m);
     if (!p) return null;
     var result;
@@ -191,7 +254,7 @@
         result = rayCache[key];
         if (stats) stats.rayHits++;
       } else {
-        result = fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
+        result = opticalMap ? opticalMap.get(p.distance,p.altitude) : fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
           observerHeight:m.Height, radius:m.rEarth, distance:p.distance,
           targetHeight:p.altitude, step:25});
         rayCache[key] = result;
@@ -362,6 +425,9 @@
     var generation = {}, key=modelKey(m), paths=[], cache=Object.create(null);
     var rayCache=Object.create(null), stats={raySolves:0,rayHits:0,fastFallbacks:0,fastRejected:0,fastApproximated:0};
     var fast=options.quality==='fast';
+    var mapped=options.quality==='map';
+    stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
+    var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
     var started=Date.now();
     var i=0, evaluations=0, visible=0, hidden=0, transitions=0;
     lineAtmosphere = {state:'working',paths:null,key:key,generation:generation,
@@ -369,7 +435,7 @@
     function sample(world) {
       var k=world.map(function(v){return v.toFixed(7);}).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache,k)) {
-        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast);
+        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap);
         evaluations++;
         if (cache[k]) visible++; else hidden++;
       }
@@ -394,14 +460,16 @@
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
-          selection:mode, quality:fast?'fast':'exact', elapsedMs:Date.now()-started,
+          selection:mode, quality:mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
           fastFallbacks:stats.fastFallbacks,fastRejected:stats.fastRejected,fastApproximated:stats.fastApproximated,
+          mapExact:stats.mapExact,mapDirect:stats.mapDirect,mapCells:stats.mapCells,mapInterpolated:stats.mapInterpolated,
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
             ', transitions='+transitions+', elapsed='+ (Date.now()-started)+'ms'+
-            (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')};
+            (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
+            (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')};
         onDone(lineAtmosphere);
       }
     }
@@ -624,7 +692,7 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, fastRay:fastRay, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
