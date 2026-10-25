@@ -83,3 +83,28 @@ add missing state/commands before replacing any live drawing path.
 This command stream is intentionally distinct from the physical 3D primitives
 in `CurvatureSceneContract`: the former captures graph API operations, while
 the latter describes the desired engine-independent scene.
+
+## Phase 3: actual API surface inventory and diagnostic frame capture
+
+`LegacySceneAudit.js` is a **passive** source/trace auditor. It inventories
+explicit `g.Method(...)` call sites in the original HTML and compares them
+against `LegacySceneAdapter.METHODS`. It can also capture a diagnostic drawing
+callback with `captureFrame(graph, draw)`, which performs the normal draw and
+returns a trace and per-method counts. The audit helper is loaded in the page but is not wired into `DrawModel` automatically. For an explicit diagnostic capture in the browser console, use `LegacySceneAudit.captureFrame(graph, DrawModel)` (this draws a frame as a side effect).
+
+The inventory exposes important gaps in the phase-2 recorder, including
+`SetAlpha`, `CircleOnPlane`, `RectOnPlane`, `SetCamera`, `SetClipRect`,
+`SaveTrans3D` / `RestoreTrans3D`, and graph reads/transforms. In addition,
+`DrawModel` assigns `g.MaxCurveSegments` directly. Neither this assignment nor
+other internal canvas/driver state is captured by the current recorder.
+
+**Do not use these traces as complete frames.** A replay verification gate
+requires capturing the full stateful API (including non-method state), then
+comparing original and replay images for globe/flat, atmosphere/vacuum and
+multiple camera positions. The static inventory cannot prove full coverage,
+and `replayVerified:false` is deliberately returned by the diagnostic helper.
+
+Next: instrument a *real* `DrawModel` invocation in an opt-in browser harness,
+compare actual invoked operations to this inventory, and define a deterministic
+frame boundary including graph initialization and clipping. Keep the legacy
+production draw path unchanged until replay is demonstrably equivalent.
