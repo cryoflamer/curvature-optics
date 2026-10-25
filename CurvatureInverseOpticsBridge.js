@@ -183,6 +183,7 @@
   // small correction to the effective-radius analytic angle. Visibility is
   // independently calibrated against the exact solver, never inferred from
   // the polynomial angle. Designed for the standard n(h) profile only.
+  var polynomialCalibrationCache = new WeakMap();
   function createPolynomialApproximation(m, solver, stats, options) {
     options=options||{};
     if(stats) {
@@ -192,9 +193,10 @@
     }
     var R=m.rEarth, observer=m.Height;
     var effective=R/(1-R*0.000293/7350);
-    var distances=options.distances||[3000,6000,10000,14000,18000,22000,26000];
+    var distances=options.distances||[3000,10000,18000,26000];
     var heights=[10,25,45];
     var rows=[], boundaries=[];
+    var cacheKey=[R,observer,distances.join(','),heights.join(',')].join('|');
     function clock() { return typeof performance!=='undefined' && performance.now ? performance.now() : Date.now(); }
     function exact(d,h) {
       if(stats) stats.polyExact++;
@@ -234,6 +236,9 @@
     // Lazily calibrate once, rather than blocking the UI on mode selection.
     function calibrate() {
       if(rows.length) return;
+      var byModel=polynomialCalibrationCache.get(solver);
+      var saved=byModel && byModel.get(cacheKey);
+      if(saved) { rows=saved.rows; boundaries=saved.boundaries; return; }
       var calibrationStart=clock();
       distances.forEach(function(d) {
         var values=heights.map(function(h) {
@@ -255,6 +260,8 @@
         }
         boundaries.push(high-boundaryEstimate(d));
       });
+      if(!byModel) { byModel=new Map(); polynomialCalibrationCache.set(solver,byModel); }
+      byModel.set(cacheKey,{rows:rows,boundaries:boundaries});
       if(stats) { stats.polyCalibration=stats.polyExact; stats.polyCalibrationMs+=clock()-calibrationStart; }
     }
     function get(d,h) {
@@ -266,11 +273,11 @@
       var boundary=Math.max(0,estimated+interpolate(d,boundaries));
       // Conservative guard against boundary interpolation and bisection error.
       // Never declare visibility based on an unverified polynomial near contact.
-      if(Math.abs(h-boundary)<0.15) {
+      if(Math.abs(h-boundary)<0.005) {
         if(stats){stats.polyDirect++;stats.polyHorizon++;}
         return exact(d,h);
       }
-      if(h<boundary-0.15) {if(stats)stats.polyRejected++;return {status:'occluded'};}
+      if(h<boundary-0.005) {if(stats)stats.polyRejected++;return {status:'occluded'};}
       var corrections=rows.map(function(row){return row.every(Number.isFinite)?correctionAt(h,row):null;});
       if(corrections.some(function(v){return v===null;})) {
         if(stats){stats.polyDirect++;stats.polyInvalid++;}
