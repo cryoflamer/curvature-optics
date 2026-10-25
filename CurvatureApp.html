@@ -1322,6 +1322,8 @@ function DrawModelWithOptionalAudit(g) {
         }, originalClippingTrace);
       });
     });
+    var snapshotProbe = compareCanvas && window.LegacyCanvasReplayProbe;
+    var captureEndPixels = snapshotProbe ? snapshotProbe.snapshotCanvas(g.Canvas) : null;
     // Convert the completed graph-command trace to a standalone frame.
     // The legacy trace remains available for opt-in export.
     var sceneFrame = window.SceneFrame && result.trace.complete ?
@@ -1331,6 +1333,7 @@ function DrawModelWithOptionalAudit(g) {
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       sceneFrame || result.trace, window.JsgPolygon);
     var exportCanvasPng = document.getElementById('LegacyFrameExportCanvasPng').checked;
+    var beforeReplayPixels = snapshotProbe ? snapshotProbe.snapshotCanvas(g.Canvas) : null;
     var canvasProbe = compareCanvas &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
         g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
@@ -1374,6 +1377,9 @@ function DrawModelWithOptionalAudit(g) {
           pixelEvidence:restored.pixelEvidence || null,
           reason:restored.ok ? null : restored.reason}};
     }
+    var afterReplayPixels = snapshotProbe ? snapshotProbe.snapshotCanvas(g.Canvas) : null;
+    var canvasTimeline = snapshotProbe ? snapshotProbe.snapshotTimeline(
+      captureEndPixels,beforeReplayPixels,afterReplayPixels) : null;
     var firstClippingDifference = canvasProbe && canvasProbe.clippingTrace &&
       window.LegacyCanvasReplayProbe.firstClippingDifference(
         originalClippingTrace, canvasProbe.clippingTrace);
@@ -1390,6 +1396,7 @@ function DrawModelWithOptionalAudit(g) {
       replayVerified: false,
       isolatedReplayPreflight: preflight || null,
       detachedCanvasReplay: canvasProbe || null,
+      originalCanvasTimeline: canvasTimeline,
       bootstrapSensitivity: bootstrapSensitivity,
       originalCanvasPipeline: compareCanvas ? {pipeline:originalPipeline,paintOperations:originalPaint} : null,
       firstClippingDifference: firstClippingDifference || null,

@@ -56,6 +56,46 @@
     return {hashAlgorithm:'fnv1a32-rgba',originalHash:hash(left),replayHash:hash(right),
       mismatchedPixels:count,bounds:bounds,firstDifferences:samples};
   }
+  // Immutable pixel copies for phase-boundary checks; never draw on the live canvas.
+  function snapshotCanvas(source){
+    if(!source)return null;
+    var copy=document.createElement('canvas');
+    copy.width=source.width;copy.height=source.height;
+    copy.getContext('2d').putImageData(
+      source.getContext('2d').getImageData(0,0,source.width,source.height),0,0);
+    return copy;
+  }
+  function snapshotTimeline(captureEnd,beforeReplay,afterReplay){
+    function pair(a,b){
+      return {comparison:comparePixels(a,b),pixelEvidence:pixelEvidence(a,b)};
+    }
+    return {
+      captureEndToBeforeReplay:pair(captureEnd,beforeReplay),
+      beforeReplayToAfterReplay:pair(beforeReplay,afterReplay),
+      captureEndToAfterReplay:pair(captureEnd,afterReplay),
+      note:'Snapshots are immutable RGBA copies taken at synchronous phase boundaries; asynchronous repaints outside these boundaries are not observed'
+    };
+  }
+  // Immutable pixel copies for phase-boundary checks; never draw on the live canvas.
+  function snapshotCanvas(source){
+    if(!source)return null;
+    var copy=document.createElement('canvas');
+    copy.width=source.width;copy.height=source.height;
+    copy.getContext('2d').putImageData(
+      source.getContext('2d').getImageData(0,0,source.width,source.height),0,0);
+    return copy;
+  }
+  function snapshotTimeline(captureEnd,beforeReplay,afterReplay){
+    function pair(a,b){
+      return {comparison:comparePixels(a,b),pixelEvidence:pixelEvidence(a,b)};
+    }
+    return {
+      captureEndToBeforeReplay:pair(captureEnd,beforeReplay),
+      beforeReplayToAfterReplay:pair(beforeReplay,afterReplay),
+      captureEndToAfterReplay:pair(captureEnd,afterReplay),
+      note:'Snapshots are immutable RGBA copies taken at synchronous phase boundaries; asynchronous repaints outside these boundaries are not observed'
+    };
+  }
   // Diagnostic-only: preserve the source pixels and paint differences onto a
   // separate canvas. Never modify the production or detached replay canvas.
   function analyzePixels(a,b,thresholds){
@@ -304,5 +344,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,pixelEvidence:pixelEvidence,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
+  return {comparePixels:comparePixels,pixelEvidence:pixelEvidence,snapshotCanvas:snapshotCanvas,snapshotTimeline:snapshotTimeline,snapshotCanvas:snapshotCanvas,snapshotTimeline:snapshotTimeline,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
 }));
