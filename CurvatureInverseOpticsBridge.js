@@ -290,7 +290,8 @@
   // Experimental whole-line overlay. It never replaces the original renderer.
   var lineAtmosphere = {state:'idle', paths:null, key:null, message:''};
   function getLineAtmosphere() { return lineAtmosphere; }
-  function calculateAtmosphereLine(m, audit, solver, onProgress, onDone) {
+  function calculateAtmosphereLine(m, audit, solver, onProgress, onDone, options) {
+    options = options || {};
     onProgress = onProgress || function(){};
     onDone = onDone || function(){};
     var groups = audit && audit.getCapturedGroups();
@@ -302,6 +303,25 @@
     var indices = Object.keys(primary).filter(function(k) {
       return /^\d+$/.test(k) && audit.getTowerPaths(Number(k));
     }).map(Number).sort(function(a,b){return a-b;});
+    // Select towers before constructing edges or starting expensive ray solves.
+    // Selection uses actual captured tower IDs, not assumed contiguous numbering.
+    var mode=options.mode || 'sample';
+    if (mode === 'single') {
+      indices=indices.filter(function(i){return i===21;});
+    } else if (mode === 'sample') {
+      var count=Math.max(1,Math.min(15,Math.floor(Number(options.count)||5)));
+      if (indices.length>count) {
+        var chosen=[];
+        for(var n=0;n<count;n++) {
+          var position=count===1?Math.floor((indices.length-1)/2):Math.round(n*(indices.length-1)/(count-1));
+          chosen.push(indices[position]);
+        }
+        indices=chosen;
+      }
+    } else if (mode !== 'all') {
+      lineAtmosphere={state:'error',paths:null,key:null,message:'Unknown tower selection mode'};
+      onDone(lineAtmosphere); return;
+    }
     var edges = [];
     indices.forEach(function(index) {
       audit.getTowerPaths(index).forEach(function(path) {
@@ -345,7 +365,8 @@
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
-          message:'Calculated '+indices.length+' towers, '+
+          selection:mode, selectedTowerIds:indices.slice(),
+          message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
             ', transitions='+transitions};

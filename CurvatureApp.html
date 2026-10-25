@@ -118,7 +118,17 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:0.8em;"><input type="checkbox" id="InverseVacuumTower21"> Independent vacuum tower #21 (purple)</label>
   <button type="button" id="InverseAtmosphereTower21">Calculate atmosphere #21 (orange)</button>
   <span id="InverseAtmosphereTower21Status" role="status" style="font:12px monospace"></span>
-  <button type="button" id="InverseAtmosphereLine">Calculate atmosphere - all towers (experimental)</button>
+  <label>Optical line scope:
+    <select id="InverseAtmosphereLineMode">
+      <option value="sample" selected>Distributed sample</option>
+      <option value="single">Tower #21 only</option>
+      <option value="all">All towers (slow)</option>
+    </select>
+  </label>
+  <label id="InverseAtmosphereLineCountLabel">Towers in sample:
+    <input type="number" id="InverseAtmosphereLineCount" min="3" max="15" step="1" value="5" style="width:3.5em">
+  </label>
+  <button type="button" id="InverseAtmosphereLine">Calculate atmosphere - selected towers</button>
   <label><input type="checkbox" id="InverseAtmosphereLineShow"> Show orange line overlay</label>
   <span id="InverseAtmosphereLineStatus" role="status" style="font:12px monospace"></span>
   <button type="button" id="AuditOpticsTower21">Audit angles / pixels #21</button>
@@ -213,6 +223,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
     });
   </script>
   <script>
+    document.getElementById('InverseAtmosphereLineMode').addEventListener('change',function(){
+      document.getElementById('InverseAtmosphereLineCountLabel').style.display=this.value==='sample'?'':'none';
+    });
     document.getElementById('InverseAtmosphereLine').addEventListener('click',function(){
       var status=document.getElementById('InverseAtmosphereLineStatus');
       var bridge=window.CurvatureInverseOpticsBridge;
@@ -222,6 +235,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         status.textContent='Select TrnsmLine / ray tracing first';return;
       }
       status.textContent='Computing...';
+      var mode=document.getElementById('InverseAtmosphereLineMode').value;
+      var count=Number(document.getElementById('InverseAtmosphereLineCount').value);
       bridge.calculateAtmosphereLine(CurveApp,CurvatureRenderedVertexAudit,
         CurvatureTowerDiagnostics,function(message){status.textContent=message;},
         function(result){
@@ -230,7 +245,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             document.getElementById('InverseAtmosphereLineShow').checked=true;
             graph.Redraw();
           }
-        });
+        },{mode:mode,count:count});
     });
     document.getElementById('InverseAtmosphereLineShow').addEventListener('change',function(){graph.Redraw();});
   </script>
