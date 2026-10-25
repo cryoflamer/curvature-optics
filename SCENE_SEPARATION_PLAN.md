@@ -108,3 +108,20 @@ Next: instrument a *real* `DrawModel` invocation in an opt-in browser harness,
 compare actual invoked operations to this inventory, and define a deterministic
 frame boundary including graph initialization and clipping. Keep the legacy
 production draw path unchanged until replay is demonstrably equivalent.
+
+## Phase 4: one-shot browser frame audit
+
+Open `CurvatureApp.html`, expand **Advanced diagnostics**, and click **Capture
+legacy frame audit**. This requests exactly one pass-through capture at the
+actual `DrawFunc` boundary; the normal `DrawModel(g)` still paints the frame.
+The browser downloads `legacy-frame-audit.json` with method counts, not the
+full command arguments (which may contain scene data). The same report is
+available as `window.LastLegacyFrameAudit` for inspection. Send the downloaded
+JSON when comparing actual executed graph methods with the phase-3 inventory.
+
+**Limitations:** capture counts only the adapter's allowlisted outermost graph
+calls. Unrecorded methods, direct graph property assignments (including
+`MaxCurveSegments`), internal graph mutations and canvas calls remain outside
+this report. `replayVerified` is always `false`; this step does not enable
+replay or replace the legacy rendering path. If capture throws, a normal
+`DrawModel` call is attempted and the error is displayed in the diagnostic UI.

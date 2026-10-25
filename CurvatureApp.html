@@ -92,6 +92,10 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 </div>
 <details id="OpticsAdvancedDiagnostics" style="margin:0.4em 0;">
   <summary style="cursor:pointer;user-select:none;">Advanced diagnostics (optics tests)</summary>
+  <div style="padding:0.5em 1em;">
+    <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
+    <span id="LegacyFrameCaptureStatus" role="status" aria-live="polite"></span>
+  </div>
 <section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Optical backend (experimental)</strong>
   <label style="margin-left:1em;">Method
@@ -1275,12 +1279,66 @@ var graph = NewGraphX3D( {
   Id: 'JsGraph1',
   Width: '100%',
   Height: '66.67%',
-  DrawFunc: DrawModel,
+  DrawFunc: DrawModelWithOptionalAudit,
   OnClick: function(e){ Demos.PlayStop(); },
   AutoReset: true,
   AutoClear: true,
   AutoScalePix: true
 } );
+
+document.getElementById('LegacyFrameCaptureButton').addEventListener('click', function () {
+  var status = document.getElementById('LegacyFrameCaptureStatus');
+  legacyFrameAuditRequested = true;
+  status.textContent = 'Capturing next DrawModel frame...';
+  graph.Redraw();
+});
+
+// Phase 4: an explicitly requested ONE-SHOT pass-through capture of a real
+// graph DrawFunc invocation. The normal DrawModel remains the only renderer.
+var legacyFrameAuditRequested = false;
+var legacyFrameAuditInProgress = false;
+function DrawModelWithOptionalAudit(g) {
+  if (!legacyFrameAuditRequested || legacyFrameAuditInProgress ||
+      !window.LegacySceneAudit) return DrawModel(g);
+  legacyFrameAuditRequested = false;
+  legacyFrameAuditInProgress = true;
+  var status = document.getElementById('LegacyFrameCaptureStatus');
+  try {
+    var result = window.LegacySceneAudit.captureFrame(g, DrawModel);
+    // Counts are diagnostic; a trace is not a validated replayable scene.
+    var report = {
+      schema: 'legacy-frame-audit-v1',
+      replayVerified: false,
+      summary: result.summary,
+      notes: [
+        'Capture is a pass-through of the active DrawModel invocation',
+        'Only allowlisted top-level graph methods are counted',
+        'Direct graph property writes, internal graph calls and canvas calls are not captured',
+        'No replay or pixel equivalence has been verified'
+      ]
+    };
+    window.LastLegacyFrameAudit = report;
+    if (status) status.textContent = 'Captured ' + result.summary.count +
+      ' commands (' + result.summary.methods.length + ' methods). Downloading report.';
+    var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'legacy-frame-audit.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  } catch (error) {
+    if (status) status.textContent = 'Capture failed: ' + error.message +
+      '. Redrawing normally.';
+    console.error('Legacy frame audit failed:', error);
+    // A capture error must not leave the production scene blank.
+    DrawModel(g);
+  } finally {
+    legacyFrameAuditInProgress = false;
+  }
+}
 
 function DrawModel( g ) {
 
