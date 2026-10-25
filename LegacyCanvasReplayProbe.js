@@ -188,8 +188,11 @@
     return stages;
   }
   function run(original,trace,GraphCtor,polygonCtor,exportImages){
-    if(trace && trace.kind==='scene-command-frame')
+    var frame=null;
+    if(trace && trace.kind==='scene-command-frame'){
+      frame=trace;
       trace=(typeof globalThis!=='undefined'&&globalThis.SceneFrame?globalThis.SceneFrame:require('./SceneFrame')).toTrace(trace);
+    }
     if(!trace||!trace.complete)return {ok:false,reason:'Incomplete trace'};
     if(!original||!original.Canvas||typeof GraphCtor!=='function')
       return {ok:false,reason:'Graph or constructor missing'};
@@ -233,7 +236,11 @@
       var pipeline,clippingTrace=[];
       var paintOperations=observePaint(shadow.Context2D,function(){
         pipeline=observePipeline(shadow,function(){
-          adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
+          if(frame){
+            var renderer=typeof globalThis!=='undefined'&&globalThis.SceneFrameRenderer?
+              globalThis.SceneFrameRenderer:require('./SceneFrameRenderer');
+            renderer.render(shadow,frame,{JsgPolygon:polygonCtor});
+          }else adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
         },clippingTrace);
       });
       var analysis=exportImages?analyzePixels(original.Canvas,canvas):null;
