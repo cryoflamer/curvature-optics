@@ -10,6 +10,8 @@
   'use strict';
   if(!adapter) throw new Error('LegacySceneAdapter required');
   function preflight(trace, polygonCtor){
+    if(trace && trace.kind==='scene-command-frame')
+      trace=(typeof globalThis!=='undefined' && globalThis.SceneFrame ? globalThis.SceneFrame : require('./SceneFrame')).toTrace(trace);
     if(!trace || !trace.complete || !Array.isArray(trace.commands))
       return {ok:false,reason:'Trace is incomplete or missing',commands:0};
     var seen=[], shadow={};

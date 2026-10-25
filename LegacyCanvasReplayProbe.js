@@ -188,6 +188,8 @@
     return stages;
   }
   function run(original,trace,GraphCtor,polygonCtor,exportImages){
+    if(trace && trace.kind==='scene-command-frame')
+      trace=(typeof globalThis!=='undefined'&&globalThis.SceneFrame?globalThis.SceneFrame:require('./SceneFrame')).toTrace(trace);
     if(!trace||!trace.complete)return {ok:false,reason:'Incomplete trace'};
     if(!original||!original.Canvas||typeof GraphCtor!=='function')
       return {ok:false,reason:'Graph or constructor missing'};

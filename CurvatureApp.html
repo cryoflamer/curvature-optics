@@ -75,6 +75,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 
 <script src="GraphX3DX.js"></script>
 <script src="LegacySceneAdapter.js"></script>
+<script src="SceneFrame.js"></script>
 <script src="LegacySceneAudit.js"></script>
 <script src="LegacyReplayProbe.js"></script>
 <script src="LegacyCanvasReplayProbe.js"></script>
@@ -1319,13 +1320,17 @@ function DrawModelWithOptionalAudit(g) {
         }, originalClippingTrace);
       });
     });
+    // Convert the completed graph-command trace to a standalone frame.
+    // The legacy trace remains available for opt-in export.
+    var sceneFrame = window.SceneFrame && result.trace.complete ?
+      window.SceneFrame.fromTrace(result.trace) : null;
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
-      result.trace, window.JsgPolygon);
+      sceneFrame || result.trace, window.JsgPolygon);
     var exportCanvasPng = document.getElementById('LegacyFrameExportCanvasPng').checked;
     var canvasProbe = compareCanvas &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
-        g, result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
+        g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
     var firstClippingDifference = canvasProbe && canvasProbe.clippingTrace &&
       window.LegacyCanvasReplayProbe.firstClippingDifference(
         originalClippingTrace, canvasProbe.clippingTrace);
@@ -1357,6 +1362,7 @@ function DrawModelWithOptionalAudit(g) {
     window.LastLegacyFrameAudit = report;
     // Retain the trace for debugging, but only download it with explicit opt-in.
     window.LastLegacyFrameTrace = result.trace;
+    window.LastSceneFrame = sceneFrame;
     if (status) status.textContent = 'Captured ' + result.summary.count +
       ' commands; unsupported arguments: ' + result.trace.unsupported.length +
       '. Downloading diagnostic report.';
