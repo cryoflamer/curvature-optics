@@ -152,7 +152,11 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             '; invalid projections=' + rendered.invalidProjections +
             '; max angle error=' + num(rendered.maxAngleArcsec,6) + ' arcsec' +
             '; max pixel error=' + num(rendered.maxPixelError,6) + ' px' +
-            '; max horizontal screen shift=' + num(rendered.maxHorizontalPixelShift,3) + ' px';
+            '; max horizontal screen shift=' + num(rendered.maxHorizontalPixelShift,3) + ' px' +
+            '; independent camera error=' + num(rendered.maxIndependentPixelError,6) + ' px' +
+            '; ray range sensitivity=' + num(rendered.maxRangeDependentPixelShift,3) + ' px' +
+            (rendered.cameraNotAtObserver ?
+              ' [WARNING: graphics camera is not at the physical observer; image depends on ray range]' : '');
           console.table(rendered.rows);
         } else {
           out.textContent += '\n\nORANGE OVERLAY: calculate atmosphere #21 first (or refresh after model changes)';

@@ -94,3 +94,20 @@ for (const visible of [t => t < 0.37, t => t > 0.63,
   }
 }
 console.log('Horizon transitions: visible-side bisection and hidden-gap checks passed');
+
+// Independent camera-basis projection: a central camera is range invariant.
+const perspective = {Camera:{CamPos:[0,0,0],CamTrans:[[0,-1,0],[1,0,0],[0,0,1]],
+  ScreenDist:1000,Zoom:1,Trans:p=>[1000*p[0]/p[1],1000*p[2]/p[1],p[1]]},
+  WinTrans:{TransX:x=>x,TransY:y=>y}};
+const direction=[30,6000,20];
+const theta=Math.atan2(direction[2],Math.hypot(direction[0],direction[1]));
+const p1=bridge.projectArrivalDirection(perspective,direction,theta);
+const p2=bridge.projectArrivalDirection(perspective,direction,theta,2);
+assert.ok(p1 && p2);
+assert.ok(Math.hypot(p1[0]-p2[0],p1[1]-p2[1])<1e-9);
+const direct=perspective.Camera.Trans(direction);
+assert.ok(Math.hypot(p1[0]-direct[0],p1[1]-direct[1])<1e-9);
+perspective.Camera.CamPos=[0,100,0];
+const shifted=bridge.projectArrivalDirection(perspective,direction,theta,2);
+assert.ok(Math.hypot(p1[0]-shifted[0],p1[1]-shifted[1])>0.001);
+console.log('Independent camera-basis projection and ray-range parallax passed');

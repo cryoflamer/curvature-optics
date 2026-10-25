@@ -28,6 +28,27 @@
     var c = g.Camera.Trans(world);
     return [g.WinTrans.TransX(c[0]), g.WinTrans.TransY(c[1])];
   }
+  // Project a physical arrival direction directly through the camera basis,
+  // independently of Camera.Trans() and the cached apparent vertex.  The ray
+  // originates at the observer (world origin), not at the graphics camera.
+  function projectArrivalDirection(g, physical, angle, rangeScale) {
+    var camera = g && g.Camera, mat = camera && camera.CamTrans;
+    if (!camera || !Array.isArray(camera.CamPos) || !mat ||
+        !Number.isFinite(camera.ScreenDist) || !Number.isFinite(camera.Zoom)) return null;
+    var horizontal = Math.hypot(physical[0], physical[1]);
+    if (!(horizontal > 0) || !Number.isFinite(angle)) return null;
+    var scale = rangeScale === undefined ? 1 : rangeScale;
+    var ray = [physical[0]*scale, physical[1]*scale,
+      horizontal*scale*Math.tan(angle)];
+    var relative = ray.map(function (v,i) { return v-camera.CamPos[i]; });
+    var c = mat.map(function (row) {
+      return row[0]*relative[0]+row[1]*relative[1]+row[2]*relative[2];
+    });
+    var depth = -c[0];
+    if (!(depth > 0)) return null;
+    var factor = camera.ScreenDist*camera.Zoom/depth;
+    return [g.WinTrans.TransX(c[1]*factor),g.WinTrans.TransY(c[2]*factor)];
+  }
   function compareTower(g, capture) {
     if (!capture || !Array.isArray(capture.points)) return null;
     var rows = [], sumSquares = 0, maxPx = 0;
@@ -225,7 +246,9 @@
         !Array.isArray(atmosphere21.samples) || !solver) return null;
     var result = {count:0, visible:0, hidden:0, mismatches:0,
       maxAngleArcsec:0, maxPixelError:0, maxHorizontalPixelShift:0,
-      invalidProjections:0, rows:[]};
+      invalidProjections:0, independentProjectionCount:0,
+      maxIndependentPixelError:0, maxRangeDependentPixelShift:0,
+      cameraNotAtObserver:false, rows:[]};
     atmosphere21.samples.forEach(function (sample) {
       var physical = sample.physical, apparent = sample.apparent;
       var horizontal = Math.hypot(physical[0], physical[1]);
@@ -251,6 +274,21 @@
       if (![angleError,pixelError,horizontalShift].every(Number.isFinite)) {
         result.invalidProjections++; return;
       }
+      // Camera-space projection derived from the arrival ray and the camera
+      // basis, without calling Camera.Trans.  Scaling a ray must not change
+      // its image for a camera at the physical observer; a displaced graphics
+      // camera can violate that assumption even with a correct solver.
+      var independentPx = projectArrivalDirection(g,physical,solved.angle);
+      var scaledPx = projectArrivalDirection(g,physical,solved.angle,2);
+      if (independentPx) {
+        var independentError = Math.hypot(independentPx[0]-actualPx[0],
+          independentPx[1]-actualPx[1]);
+        result.independentProjectionCount++;
+        result.maxIndependentPixelError = Math.max(result.maxIndependentPixelError,independentError);
+        if (scaledPx) result.maxRangeDependentPixelShift = Math.max(
+          result.maxRangeDependentPixelShift,
+          Math.hypot(scaledPx[0]-independentPx[0],scaledPx[1]-independentPx[1]));
+      }
       result.maxAngleArcsec = Math.max(result.maxAngleArcsec,angleError);
       result.maxPixelError = Math.max(result.maxPixelError,pixelError);
       result.maxHorizontalPixelShift = Math.max(result.maxHorizontalPixelShift,horizontalShift);
@@ -274,7 +312,9 @@
           result.hiddenBridges++;
       }
     });
-    result.passed = result.hiddenBridges===0 && result.mismatches===0 && result.invalidProjections===0 &&
+    result.cameraNotAtObserver = result.maxRangeDependentPixelShift > 0.01;
+    result.passed = result.maxIndependentPixelError < 0.01 &&
+      result.hiddenBridges===0 && result.mismatches===0 && result.invalidProjections===0 &&
       result.maxAngleArcsec<0.001 && result.maxPixelError<0.01;
     return result;
   }
@@ -314,5 +354,6 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
-    auditAtmosphere21:auditAtmosphere21};
+    auditAtmosphere21:auditAtmosphere21,
+    projectArrivalDirection:projectArrivalDirection};
 }));
