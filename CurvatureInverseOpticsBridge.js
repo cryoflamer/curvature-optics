@@ -573,6 +573,31 @@
     if(n<3) return null;
     return {points:world.slice(0,n).map(function(w){return sample(w)||w.slice();}),partial:false};
   }
+  // Find the tangent ground ray with the SAME P4 approximation used to
+  // project the towers. This is independent of the legacy geometric disk.
+  // The result is an axisymmetric optical-horizon diagnostic (not a general
+  // refractive surface renderer for arbitrary atmospheric profiles).
+  function p4Horizon(m, p4) {
+    if (!m || !(m.Height > 0) || !(m.rEarth > 0) || !p4) return null;
+    var lo=0.01, hi=Math.max(1000, Math.sqrt(2*m.rEarth*m.Height)*2);
+    function ground(d) {return p4.get(d,0);}
+    while(hi<200000 && ground(hi).status==='visible') hi*=1.5;
+    if(ground(hi).status==='visible')return null;
+    for(var i=0;i<42;i++) {
+      var mid=(lo+hi)/2;
+      if(ground(mid).status==='visible')lo=mid;else hi=mid;
+    }
+    var tangent=ground(lo);
+    if(tangent.status!=='visible' || !(tangent.angle<0))return null;
+    var dip=-tangent.angle;
+    // Build an equivalent disk whose angular silhouette has the P4 tangent
+    // dip. This disk is a diagnostic mask, not the physical Earth surface.
+    var radius=m.Height/(1/Math.cos(dip)-1);
+    if(!Number.isFinite(radius) || !(radius>0))return null;
+    var aDip=Math.acos(radius/(radius+m.Height));
+    return {distance:lo,angle:tangent.angle,rDisk:radius*Math.sin(aDip),
+      zDisk:radius+m.Height-radius*Math.cos(aDip),radius:radius};
+  }
   function footingMaskMode() {
     var el=typeof document!=='undefined' && document.getElementById('OpticalFootingHorizonMask');
     return el ? el.value : 'legacy';
@@ -853,6 +878,7 @@
           return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial,perimeter:perimeter};
         }) : [];
         var footings = footingCandidates.filter(Boolean);
+        var opticalHorizon=analyticP4?p4Horizon(m,polynomial):null;
         // Match DrawObjectsBeforeHorizon: render far towers first, then let
         // nearer filled footings cover their distant neighbours. Tower indices
         // increase with distance from the observer (ObjDist + (index-1)*delta).
@@ -861,7 +887,7 @@
         var footingsProjected=footings.length;
         var footingsPartial=footings.filter(function(poly){return poly.partial;}).length;
         var footingsRejected=footingCandidates.length-footingsProjected;
-        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingFacesProjected:footings.length,footingsCaptured:footingPolygons.length,footingsProjected:footingsProjected,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,opticalHorizon:opticalHorizon,footingFacesProjected:footings.length,footingsCaptured:footingPolygons.length,footingsProjected:footingsProjected,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
@@ -1116,7 +1142,9 @@
         // Do not triangulate or draw independent outlines: both change the
         // silhouette and can introduce seams or incorrect closing segments.
         var maskMode=footingMaskMode();
-        var horizonRange=Math.sqrt(Math.max(0,2*m.rEarth*m.Height+m.Height*m.Height));
+        var opticalHorizon=lineAtmosphere.opticalHorizon;
+        var horizonRange=maskMode==='p4' && opticalHorizon ? opticalHorizon.distance :
+          Math.sqrt(Math.max(0,2*m.rEarth*m.Height+m.Height*m.Height));
         var far=[],near=[];
         lineAtmosphere.footings.forEach(function(footing){
           var range=m.ObjDist[0]+(footing.tower-1)*m.ObjDeltaDist[0];
@@ -1136,12 +1164,13 @@
           });
         }
         paintFootings(far);
-        if(maskMode==='legacy' && far.length) {
+        if((maskMode==='legacy' || maskMode==='p4') && far.length) {
+          var disk=maskMode==='p4' && opticalHorizon ? opticalHorizon : m;
           // Same opaque horizon disk and plane as DrawObjectsBehindHorizon.
           // Drawn between distant and near foundations, never over near ones.
-          g.SetPlane([0,0,-m.zDisk],[1,0,0],[0,1,0]);
+          g.SetPlane([0,0,-disk.zDisk],[1,0,0],[0,1,0]);
           g.SetBgColor('white');
-          g.CircleOnPlane(0,0,m.rDisk,2);
+          g.CircleOnPlane(0,0,disk.rDisk,2);
         }
         paintFootings(near);
       }
@@ -1160,7 +1189,7 @@
     compareTower:compareTower, draw:draw, hasCompleteP4Line:hasCompleteP4Line, isOpticalSceneReady:isOpticalSceneReady, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, clipVisibleFooting:clipVisibleFooting, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, createAnalyticP4:createAnalyticP4, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, clipVisibleFooting:clipVisibleFooting, p4Horizon:p4Horizon, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, createAnalyticP4:createAnalyticP4, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};

@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('assert');
+const bridge=require('./CurvatureInverseOpticsBridge.js');
+const m={Height:15,rEarth:6371000};
+const vacuum=bridge.p4Horizon(m,bridge.createAnalyticP4(m,null,{refractivity:0}));
+const atmospheric=bridge.p4Horizon(m,bridge.createAnalyticP4(m,null));
+assert(vacuum && atmospheric);
+const expected=Math.sqrt(2*m.rEarth*m.Height+m.Height*m.Height);
+assert(Math.abs(vacuum.rDisk-expected)<5,'P4 vacuum disk must match geometric horizon within P4 truncation tolerance');
+assert(atmospheric.distance>vacuum.distance,'standard refraction extends ground horizon');
+assert(atmospheric.angle>vacuum.angle,'standard refraction reduces horizon dip');
+assert(atmospheric.rDisk>vacuum.rDisk);
+console.log('P4 horizon tangent: vacuum convergence and atmospheric shift passed');
