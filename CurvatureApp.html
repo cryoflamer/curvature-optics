@@ -109,6 +109,10 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test</button>
+  <label>Renderer <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both</option></select></label>
+  <label>Focus tower <input id="OpticsFocusTower" type="number" min="1" max="85" value="21" style="width:4em"></label>
+  <button id="OpticsFocusTowerButton" type="button">Frame tower</button>
+  <span id="OpticsComparisonStatus" role="status"></span>
   <span id="OpticsTestPresetStatus" role="status" aria-live="polite" style="font:12px monospace"></span>
   <label style="margin-left:1em;">Geometry <select id="TowerDiagnosticGeometry"><option value="globe">Globe</option><option value="flat">Flat</option></select></label>
   <label style="margin-left:1em;">Atmosphere <select id="TowerDiagnosticAtmosphere"><option value="vacuum">Vacuum</option><option value="standard">Standard n(h)</option></select></label>
@@ -258,7 +262,10 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         },{mode:mode,count:count,quality:document.getElementById("InverseAtmosphereLineQuality").value});
     });
     document.getElementById('InverseAtmosphereLineShow').addEventListener('change',function(){graph.Redraw();});
-    document.getElementById('ShowLegacyTransmissionTowers').addEventListener('change',function(){graph.Redraw();});
+    document.getElementById('ShowLegacyTransmissionTowers').addEventListener('change',function(){
+      document.getElementById('OpticsSceneComparison').value=document.getElementById('OpticalSceneTowers').checked?(this.checked?'both':'optical'):'original';
+      graph.Redraw();
+    });
     document.getElementById('OpticalFootingHorizonMask').addEventListener('change',function(){graph.Redraw();});
     document.getElementById('ShowP4OpticalHorizon').addEventListener('change',function(){graph.Redraw();});
     document.getElementById('ShowP4VacuumHorizon').addEventListener('change',function(){graph.Redraw();});
@@ -274,6 +281,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         // back into both layers with the independent legacy checkbox.
         if (this.checked) document.getElementById('ShowLegacyTransmissionTowers').checked=false;
       }
+      document.getElementById('OpticsSceneComparison').value=this.checked?(document.getElementById('ShowLegacyTransmissionTowers').checked?'both':'optical'):'original';
       graph.Redraw();
     });
   </script>
@@ -281,9 +289,10 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <script>
     // Frame the *captured physical vertices*, rather than guessing a focal length.
     // No ray-tracing calculations or tower geometry are modified here.
-    function FrameOpticsTestTower21() {
+    function FrameOpticsTestTower21(index) {
+      index=index||21;
       var audit = window.CurvatureRenderedVertexAudit;
-      var capture = audit && audit.getCapturedGroups().primary[21];
+      var capture = audit && audit.getCapturedGroups().primary[index];
       if (!capture || !capture.points || !capture.points.length)
         throw Error('Tower #21 vertices were not captured');
       var points = capture.points.map(function (p) { return p.world; });
@@ -330,8 +339,37 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
           CurveApp.FocalLengthField*Math.max(0.25,Math.min(4,ratio))));
         UpdateAll(false);
       }
-      return 'Tower #21 framed (' + Math.round(100*screenBox().height/viewportHeight) + '% height)';
+      return 'Tower #' + index + ' framed (' + Math.round(100*screenBox().height/viewportHeight) + '% height)';
     }
+  </script>
+  <script>
+    // Switch visibility only; keep camera, atmosphere and P4 cache unchanged.
+    function SetOpticsSceneComparison(mode) {
+      var bridge=window.CurvatureInverseOpticsBridge;
+      var status=document.getElementById('OpticsComparisonStatus');
+      if(mode!=='original' && (!bridge||!bridge.hasCompleteP4Line(CurveApp))) {
+        status.textContent='Calculate all 85 towers with Analytic P4 first';
+        mode='original';
+      } else status.textContent='';
+      document.getElementById('OpticsSceneComparison').value=mode;
+      document.getElementById('OpticalSceneTowers').checked=mode!=='original';
+      document.getElementById('ShowLegacyTransmissionTowers').checked=mode!=='optical';
+      document.getElementById('InverseAtmosphereLineShow').checked=false;
+      document.getElementById('TowerComparisonMode').value=mode;
+      graph.Redraw();
+    }
+    document.getElementById('OpticsSceneComparison').addEventListener('change',function(){
+      SetOpticsSceneComparison(this.value);
+    });
+    document.getElementById('OpticsFocusTowerButton').addEventListener('click',function(){
+      var index=Number(document.getElementById('OpticsFocusTower').value);
+      var status=document.getElementById('OpticsComparisonStatus');
+      if(!Number.isInteger(index)||index<1||index>CurveApp.NObjects[0]) {
+        status.textContent='Choose tower 1..'+CurveApp.NObjects[0];return;
+      }
+      try {status.textContent=FrameOpticsTestTower21(index);}
+      catch(err){status.textContent=err.message;}
+    });
   </script>
   <script>
     // One-click reproducible visual setup; no external browser automation.
@@ -361,6 +399,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         document.getElementById('TowerOverlayDisplay').value = 'crosses';
         // The preset owns the initial state, not subsequent user changes.
         document.getElementById('TowerComparisonMode').value = 'optical';
+        document.getElementById('OpticsSceneComparison').value = 'optical';
         document.getElementById('InverseVacuumTower21').checked = false;
         document.getElementById('InverseAtmosphereLineMode').value = 'all';
         document.getElementById('InverseAtmosphereLineQuality').value = 'p4';
@@ -373,7 +412,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         // is ready: the normal change handler rejects incomplete data.
         document.getElementById('OpticalSceneTowers').checked = false;
         UpdateAll(false);
-        var framing = FrameOpticsTestTower21();
+        var framing = FrameOpticsTestTower21(Number(document.getElementById('OpticsFocusTower').value)||21);
         status.textContent = framing + '; calculating all 85 towers (P4)...';
         document.getElementById('InverseAtmosphereLine').click();
         // The asynchronous calculation's completion callback is responsible
@@ -386,7 +425,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             scene.checked = true;
             scene.dispatchEvent(new Event('change'));
             document.getElementById('InverseAtmosphereLineShow').checked = false;
-            graph.Redraw();
+            SetOpticsSceneComparison(document.getElementById('OpticsSceneComparison').value);
             status.textContent = framing + '; optical scene ready (' + result.towers + ' towers)';
           } else if (result.state === 'error') {
             status.textContent = 'Optics Test failed: ' + result.message;
