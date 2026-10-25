@@ -242,7 +242,68 @@
     }
     return {get:get, stats:stats};
   }
-  function opticalVertex(world, m, solver, rayCache, stats, fast, opticalMap) {
+  // Forward ray bundle: trace each launch angle ONCE across all distances.
+  // A ray stopped by ground is never extrapolated behind the horizon.
+  // Ambiguous cases use the exact shooting solver, preserving visibility.
+  function createForwardBundle(m, tracer, solver, stats, options) {
+    options=options||{};
+    if (!tracer || typeof tracer.trace!=='function') throw Error('Forward ray tracer missing');
+    var maxDistance=options.maxDistance||30000;
+    var spacing=options.angleSpacing||0.00010;
+    var step=options.step||25;
+    var minAngle=options.minAngle===undefined?-0.015:options.minAngle;
+    var maxAngle=options.maxAngle===undefined?0.015:options.maxAngle;
+    var rays=[], exactCache=Object.create(null);
+    function addRay(angle) {
+      var result=tracer.trace({geometry:'globe',atmosphere:'standard',
+        observerHeight:m.Height,radius:m.rEarth,angle:angle,
+        length:maxDistance+100,step:step,collect:true});
+      if(stats)stats.bundleTraces++;
+      return {angle:angle,points:result.points};
+    }
+    for(var i=0,n=Math.ceil((maxAngle-minAngle)/spacing);i<=n;i++)
+      rays.push(addRay(minAngle+(maxAngle-minAngle)*i/n));
+    function heightAt(ray,d) {
+      var x=m.rEarth*Math.sin(d/m.rEarth), pts=ray.points;
+      if(!pts || pts.length<2 || pts[pts.length-1][0]<x) return null;
+      var lo=0,hi=pts.length-1;
+      while(hi-lo>1) {var mid=(lo+hi)>>1;if(pts[mid][0]<x)lo=mid;else hi=mid;}
+      var a=pts[lo],b=pts[hi],t=(x-a[0])/(b[0]-a[0]);
+      var z=a[1]+(b[1]-a[1])*t;
+      return Math.hypot(x,z+m.rEarth)-m.rEarth;
+    }
+    function exact(d,h) {
+      var key=d.toPrecision(14)+'|'+h.toPrecision(14);
+      if(!Object.prototype.hasOwnProperty.call(exactCache,key)) {
+        exactCache[key]=solver.solveAngle({geometry:'globe',atmosphere:'standard',
+          observerHeight:m.Height,radius:m.rEarth,distance:d,targetHeight:h,step:25});
+        if(stats)stats.bundleExact++;
+      }
+      return exactCache[key];
+    }
+    function get(d,h) {
+      if(!(d>0) || d>maxDistance || h<0) return exact(d,h);
+      // Each ray gives a height at the target's central distance. Find
+      // adjacent rays bracketing the target; do not interpolate across a
+      // ground hit, an unbracketed target, or a near-ground tangent.
+      var previous=null;
+      for(var j=0;j<rays.length;j++) {
+        var value=heightAt(rays[j],d);
+        if(value===null) {previous=null;continue;}
+        if(previous && previous.value<=h && h<=value) {
+          if(previous.value<0.75 || value<0.75 ||
+              value-previous.value>Math.max(3,0.002*d)) return exact(d,h);
+          var u=(h-previous.value)/(value-previous.value);
+          if(stats)stats.bundleInterpolated++;
+          return {status:'visible',angle:previous.angle+u*(rays[j].angle-previous.angle)};
+        }
+        previous={angle:rays[j].angle,value:value};
+      }
+      return exact(d,h);
+    }
+    return {get:get,rays:rays.length,heightAt:heightAt};
+  }
+  function opticalVertex(world, m, solver, rayCache, stats, fast, opticalMap, forwardBundle) {
     var p = rayParameters(world, m);
     if (!p) return null;
     var result;
@@ -254,7 +315,7 @@
         result = rayCache[key];
         if (stats) stats.rayHits++;
       } else {
-        result = opticalMap ? opticalMap.get(p.distance,p.altitude) : fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
+        result = forwardBundle ? forwardBundle.get(p.distance,p.altitude) : opticalMap ? opticalMap.get(p.distance,p.altitude) : fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
           observerHeight:m.Height, radius:m.rEarth, distance:p.distance,
           targetHeight:p.altitude, step:25});
         rayCache[key] = result;
@@ -426,8 +487,22 @@
     var rayCache=Object.create(null), stats={raySolves:0,rayHits:0,fastFallbacks:0,fastRejected:0,fastApproximated:0};
     var fast=options.quality==='fast';
     var mapped=options.quality==='map';
+    var bundled=options.quality==='bundle';
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
+    stats.bundleTraces=0;stats.bundleExact=0;stats.bundleInterpolated=0;
+    var forwardBundle=null;
+    if(bundled) {
+      var maxDistance=0;
+      edges.forEach(function(e){[e.a,e.b].forEach(function(w){var p=rayParameters(w,m);if(p)maxDistance=Math.max(maxDistance,p.distance);});});
+      var tracer=typeof globalThis!=='undefined' && globalThis.CurvatureRayTracer;
+      tracer=options.tracer||tracer;
+      if(!tracer || typeof tracer.trace!=='function') {
+        lineAtmosphere={state:'error',paths:null,key:key,message:'Forward ray tracer missing'};
+        onDone(lineAtmosphere);return;
+      }
+      forwardBundle=createForwardBundle(m,tracer,solver,stats,{maxDistance:maxDistance+100});
+    }
     var started=Date.now();
     var i=0, evaluations=0, visible=0, hidden=0, transitions=0;
     lineAtmosphere = {state:'working',paths:null,key:key,generation:generation,
@@ -435,7 +510,7 @@
     function sample(world) {
       var k=world.map(function(v){return v.toFixed(7);}).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache,k)) {
-        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap);
+        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap,forwardBundle);
         evaluations++;
         if (cache[k]) visible++; else hidden++;
       }
@@ -460,16 +535,18 @@
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
-          selection:mode, quality:mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
+          selection:mode, quality:bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
           fastFallbacks:stats.fastFallbacks,fastRejected:stats.fastRejected,fastApproximated:stats.fastApproximated,
           mapExact:stats.mapExact,mapDirect:stats.mapDirect,mapCells:stats.mapCells,mapInterpolated:stats.mapInterpolated,
+          bundleTraces:stats.bundleTraces,bundleExact:stats.bundleExact,bundleInterpolated:stats.bundleInterpolated,
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
             ', transitions='+transitions+', elapsed='+ (Date.now()-started)+'ms'+
             (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
-            (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')};
+            (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')+
+            (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')};
         onDone(lineAtmosphere);
       }
     }
@@ -692,7 +769,7 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
