@@ -1137,42 +1137,55 @@
     var allCheckbox = typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow');
     if (((allCheckbox && allCheckbox.checked) || isOpticalSceneReady(m)) && lineAtmosphere.state==='ready' &&
         lineAtmosphere.key===modelKey(m)) {
-      if (isOpticalSceneReady(m) && Array.isArray(lineAtmosphere.footings)) {
-        // Match DrawShape's original filled-and-outlined PolygonOnPlane(...,3).
-        // Do not triangulate or draw independent outlines: both change the
-        // silhouette and can introduce seams or incorrect closing segments.
+      var opticalScene=isOpticalSceneReady(m);
+      if (opticalScene && Array.isArray(lineAtmosphere.footings)) {
+        // The legacy DrawShape renders steel first, then its filled footing,
+        // for EACH tower, from farthest to nearest. Rendering all steel last
+        // incorrectly draws distant braces through nearer foundations.
         var maskMode=footingMaskMode();
         var opticalHorizon=lineAtmosphere.opticalHorizon;
         var horizonRange=maskMode==='p4' && opticalHorizon ? opticalHorizon.distance :
           Math.sqrt(Math.max(0,2*m.rEarth*m.Height+m.Height*m.Height));
-        var far=[],near=[];
-        lineAtmosphere.footings.forEach(function(footing){
-          var range=m.ObjDist[0]+(footing.tower-1)*m.ObjDeltaDist[0];
-          (range>horizonRange?far:near).push(footing);
+        var steelByTower=Object.create(null);
+        lineAtmosphere.paths.forEach(function(member){
+          (steelByTower[member.tower]||(steelByTower[member.tower]=[])).push(member.points);
         });
-        function paintFootings(items) {
+        var footingByTower=Object.create(null);
+        lineAtmosphere.footings.forEach(function(footing){footingByTower[footing.tower]=footing;});
+        var towerIds=Object.keys(steelByTower).concat(Object.keys(footingByTower))
+          .filter(function(id,i,all){return all.indexOf(id)===i;})
+          .map(Number).sort(function(a,b){return b-a;});
+        function paintTower(tower) {
+          g.SetLineAttr('#ff8800',1.25);
+          (steelByTower[tower]||[]).forEach(function(points){
+            for(var j=1;j<points.length;j++)
+              if(points[j-1]&&points[j])g.Line3D(points[j-1],points[j]);
+          });
+          var footing=footingByTower[tower];
+          if(!footing)return;
           g.SetAreaAttr('#a38d60','#695737',1);
-          items.forEach(function(footing) {
-            g.NewPoly3D();
-            footing.points.forEach(function(point){g.AddPointToPoly3D(point);});
-            g.DrawPoly3D(2);
-            g.SetLineAttr('#695737',1);
-            (footing.perimeter||[]).forEach(function(edge){
-              for(var j=1;j<edge.length;j++)
-                if(edge[j-1]&&edge[j])g.Line3D(edge[j-1],edge[j]);
-            });
+          g.NewPoly3D();
+          footing.points.forEach(function(point){g.AddPointToPoly3D(point);});
+          g.DrawPoly3D(2);
+          g.SetLineAttr('#695737',1);
+          (footing.perimeter||[]).forEach(function(edge){
+            for(var j=1;j<edge.length;j++)
+              if(edge[j-1]&&edge[j])g.Line3D(edge[j-1],edge[j]);
           });
         }
-        paintFootings(far);
-        if((maskMode==='legacy' || maskMode==='p4') && far.length) {
-          var disk=maskMode==='p4' && opticalHorizon ? opticalHorizon : m;
-          // Same opaque horizon disk and plane as DrawObjectsBehindHorizon.
-          // Drawn between distant and near foundations, never over near ones.
+        var far=[],near=[];
+        towerIds.forEach(function(tower){
+          var range=m.ObjDist[0]+(tower-1)*m.ObjDeltaDist[0];
+          (range>horizonRange?far:near).push(tower);
+        });
+        far.forEach(paintTower);
+        if((maskMode==='legacy'||maskMode==='p4') && far.length){
+          var disk=maskMode==='p4'&&opticalHorizon?opticalHorizon:m;
           g.SetPlane([0,0,-disk.zDisk],[1,0,0],[0,1,0]);
           g.SetBgColor('white');
           g.CircleOnPlane(0,0,disk.rDisk,2);
         }
-        paintFootings(near);
+        near.forEach(paintTower);
       }
       // Stroke the P4 tangent silhouette independently of the opaque mask.
       // The original disk mask is fill-only and therefore has no visible rim.
@@ -1199,12 +1212,16 @@
             'P4 horizon unavailable';
         }
       }
-      g.SetLineAttr('#ff8800', 1.25);
-      lineAtmosphere.paths.forEach(function(member) {
-        var points=member.points;
-        for (var j=1;j<points.length;j++)
-          if (points[j-1] && points[j]) g.Line3D(points[j-1],points[j]);
-      });
+      // Diagnostic orange overlay keeps its original all-at-once behavior.
+      // The optical scene has already painted steel and footings per tower.
+      if (!opticalScene) {
+        g.SetLineAttr('#ff8800', 1.25);
+        lineAtmosphere.paths.forEach(function(member) {
+          var points=member.points;
+          for (var j=1;j<points.length;j++)
+            if (points[j-1] && points[j]) g.Line3D(points[j-1],points[j]);
+        });
+      }
     }
     g.ResetTrans3D();
     return report;
