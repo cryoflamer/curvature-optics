@@ -323,6 +323,86 @@
   // Experimental lazy optical map. Interpolate the *correction* to the
   // effective-radius preview rather than the absolute angle. A cell is used
   // only after exact corners and its centre agree within an angular budget.
+  // Direct fourth-order Taylor solution of the spherical ray equation for
+  // n(h)=1+N0*exp(-h/H). No ray shooting, calibration or exact fallback.
+  // 5 mm is an accepted rendering tolerance, NOT a certified error bound.
+  function createAnalyticP4(m, stats, options) {
+    options=options||{};
+    var R=m.rEarth, h0=m.Height;
+    var N=options.refractivity===undefined?0.000293:options.refractivity;
+    var H=options.scaleHeight===undefined?7350:options.scaleHeight;
+    if(!(R>0 && h0>=0 && H>0 && N>=0)) throw Error('Invalid P4 parameters');
+    function coefficients(angle) {
+      var v=Math.tan(angle)*(R+h0)/R, r=R+h0;
+      var u=N*Math.exp(-h0/H), q=-u/(H*(1+u));
+      var qp=u/(H*H*(1+u)*(1+u));
+      var qpp=u*(u-1)/(H*H*H*Math.pow(1+u,3));
+      var w=r*r/(R*R)+v*v;
+      var F=r/(R*R)+2*v*v/r+q*w;
+      var Fh=1/(R*R)-2*v*v/(r*r)+qp*w+2*q*r/(R*R);
+      var Fv=4*v/r+2*q*v;
+      var Fhh=4*v*v/(r*r*r)+qpp*w+4*qp*r/(R*R)+2*q/(R*R);
+      var Fhv=-4*v/(r*r)+2*qp*v, Fvv=4/r+2*q;
+      var third=Fh*v+Fv*F;
+      var fourth=Fhh*v*v+2*Fhv*v*F+Fvv*F*F+Fh*F+Fv*third;
+      return [h0,v,F/2,third/6,fourth/24];
+    }
+    function height(c,x) {return c[0]+x*(c[1]+x*(c[2]+x*(c[3]+x*c[4])));}
+    function slope(c,x) {return c[1]+x*(2*c[2]+x*(3*c[3]+4*x*c[4]));}
+    function minHeight(c,d) {
+      var minimum=Math.min(height(c,0),height(c,d));
+      // Find all stationary points of the quartic. A cubic slope has at
+      // most three roots; splitting at its quadratic extrema isolates them.
+      var stops=[0,d], a=12*c[4], b=6*c[3], cc=2*c[2];
+      if(Math.abs(a)>1e-30) {
+        var disc=b*b-4*a*cc;
+        if(disc>=0) {
+          var sq=Math.sqrt(disc), x1=(-b-sq)/(2*a),x2=(-b+sq)/(2*a);
+          if(x1>0 && x1<d)stops.push(x1);
+          if(x2>0 && x2<d)stops.push(x2);
+        }
+      } else if(Math.abs(b)>1e-30) {
+        var x=-cc/b;if(x>0 && x<d)stops.push(x);
+      }
+      stops.sort(function(x,y){return x-y;});
+      stops.forEach(function(x){if(Math.abs(slope(c,x))<1e-12)minimum=Math.min(minimum,height(c,x));});
+      for(var i=1;i<stops.length;i++) {
+        var lo=stops[i-1],hi=stops[i],fl=slope(c,lo),fh=slope(c,hi);
+        if(fl*fh>=0)continue;
+        for(var j=0;j<45;j++) {
+          var mid=(lo+hi)/2,fm=slope(c,mid);
+          if(fl*fm<=0){hi=mid;fh=fm;}else{lo=mid;fl=fm;}
+        }
+        minimum=Math.min(minimum,height(c,(lo+hi)/2));
+      }
+      return minimum;
+    }
+    function get(d,h) {
+      if(!(d>0) || !Number.isFinite(d) || !Number.isFinite(h))return {status:'invalid'};
+      if(h<0)return {status:'occluded'};
+      // Solve the *endpoint* equation analytically evaluated at each bisection.
+      // No calls to CurvatureRayTracer / solveAngle occur in this mode.
+      var a=d/R, guess=Math.atan2((R+h)*Math.cos(a)-(R+h0),(R+h)*Math.sin(a));
+      var span=0.03, low, high, cl, ch;
+      for(var expand=0;expand<9;expand++) {
+        low=Math.max(-1.45,guess-span);high=Math.min(1.45,guess+span);
+        cl=coefficients(low);ch=coefficients(high);
+        if(height(cl,d)<=h && height(ch,d)>=h)break;
+        span*=2;
+      }
+      if(height(cl,d)>h || height(ch,d)<h)return {status:'invalid'};
+      for(var i=0;i<48;i++) {
+        var mid=(low+high)/2,cm=coefficients(mid);
+        if(height(cm,d)<h)low=mid;else high=mid;
+      }
+      var angle=(low+high)/2,c=coefficients(angle);
+      if(stats)stats.p4Evaluations=(stats.p4Evaluations||0)+1;
+      // Ground crossing anywhere before the target blocks the ray.
+      if(minHeight(c,d)<-0.005)return {status:'occluded'};
+      return {status:'visible',angle:angle};
+    }
+    return {get:get,coefficients:coefficients,height:height,minHeight:minHeight};
+  }
   // Cells crossing the horizon are never interpolated.
   function createOpticalMap(m, solver, stats, options) {
     options=options||{};
@@ -631,12 +711,13 @@
     var mapped=options.quality==='map';
     var bundled=options.quality==='bundle';
     var poly=options.quality==='poly';
+    var analyticP4=options.quality==='p4';
     stats.polyExact=0;stats.polyCalibration=0;stats.polyDirect=0;stats.polyInterpolated=0;stats.polyRejected=0;
     stats.polyExactMs=0;stats.polyCalibrationMs=0;stats.polyOutside=0;stats.polyHorizon=0;stats.polyInvalid=0;
     stats.polyExactHits=0;stats.polyCalibrationHits=0;stats.polyOutsideDistance=0;stats.polyOutsideHeight=0;
     stats.polyOutsideMin=Infinity;stats.polyOutsideMax=-Infinity;
     stats.polyShortVacuum=0;stats.boundaryProbes=0;
-    var polynomial=poly?createPolynomialApproximation(m,solver,stats):null;
+    var polynomial=poly?createPolynomialApproximation(m,solver,stats):analyticP4?createAnalyticP4(m,stats):null;
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
     stats.bundleTraces=0;stats.bundleExact=0;stats.bundleInterpolated=0;
@@ -940,7 +1021,7 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, createAnalyticP4:createAnalyticP4, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
