@@ -141,6 +141,61 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   </script>
   <script>document.getElementById("InverseVacuumTower21").addEventListener("change", function () { graph.Redraw(); });</script>
   <script>
+    // Frame the *captured physical vertices*, rather than guessing a focal length.
+    // No ray-tracing calculations or tower geometry are modified here.
+    function FrameOpticsTestTower21() {
+      var audit = window.CurvatureRenderedVertexAudit;
+      var capture = audit && audit.getCapturedGroups().primary[21];
+      if (!capture || !capture.points || !capture.points.length)
+        throw Error('Tower #21 vertices were not captured');
+      var points = capture.points.map(function (p) { return p.world; });
+      var bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      points.forEach(function (p) {
+        for (var k = 0; k < 3; k++) {
+          bounds[k] = Math.min(bounds[k], p[k]);
+          bounds[k+3] = Math.max(bounds[k+3], p[k]);
+        }
+      });
+      var target = [0,1,2].map(function (k) { return (bounds[k]+bounds[k+3])/2; });
+      var horizontal = Math.hypot(target[0], target[1]);
+      if (!(horizontal > 0)) throw Error('Invalid tower #21 position');
+      // Update() defines camera elevation as -aDip + Nick (horizon-centered).
+      CurveApp.Pan = Math.atan2(target[0], target[1]) * 180 / Math.PI;
+      CurveApp.Nick = CurveApp.aDip * 180 / Math.PI +
+        Math.atan2(target[2], horizontal) * 180 / Math.PI;
+      UpdateAll(false);
+      var g = graph, canvas = g.Context2D && g.Context2D.canvas;
+      if (!canvas) throw Error('Scene canvas is unavailable');
+      // The actual camera transform includes the app's device-ratio scaling.
+      // Measure in that same coordinate system, then adjust the focal length.
+      function screenBox() {
+        var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+        points.forEach(function (p) {
+          var q=g.Camera.Trans(p);
+          var x=g.WinTrans.TransX(q[0]), y=g.WinTrans.TransY(q[1]);
+          if (!isFinite(x) || !isFinite(y)) return;
+          minX=Math.min(minX,x); maxX=Math.max(maxX,x);
+          minY=Math.min(minY,y); maxY=Math.max(maxY,y);
+        });
+        return {width:maxX-minX,height:maxY-minY};
+      }
+      var viewportHeight = canvas.height / (g.ContextScale || 1);
+      if (!(viewportHeight > 0)) throw Error('Invalid viewport size');
+      // Iterate because the camera's perspective scale is not exactly linear
+      // in focal length, especially when the tower has appreciable depth.
+      for (var iteration=0; iteration<3; iteration++) {
+        var size=screenBox();
+        if (!(size.height > 0)) throw Error('Tower #21 cannot be projected');
+        var ratio=0.65*viewportHeight/size.height;
+        if (Math.abs(ratio-1)<0.02) break;
+        CurveApp.FocalLengthField=Math.max(50,Math.min(12000,
+          CurveApp.FocalLengthField*Math.max(0.25,Math.min(4,ratio))));
+        UpdateAll(false);
+      }
+      return 'Tower #21 framed (' + Math.round(100*screenBox().height/viewportHeight) + '% height)';
+    }
+  </script>
+  <script>
     // One-click reproducible visual setup; no external browser automation.
     document.getElementById('OpticsTestPreset').addEventListener('click', function () {
       var status = document.getElementById('OpticsTestPresetStatus');
@@ -154,7 +209,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         CurveApp.opticsProfile = 'standard';
         CurveApp.showModel = 1;
         CurveApp.Height = 15;
-        // Closer view of tower #21 for comparing the optical outlines.
+        // Start with a safe lens; the tower is fitted from captured vertices below.
         CurveApp.FocalLengthField = 1600;
         CurveApp.Pan = 0;
         CurveApp.Nick = 0;
@@ -169,12 +224,13 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         document.getElementById('TowerComparisonMode').value = 'both';
         document.getElementById('InverseVacuumTower21').checked = true;
         UpdateAll(false);
-        status.textContent = 'Calculating atmosphere #21...';
+        var framing = FrameOpticsTestTower21();
+        status.textContent = framing + '; calculating atmosphere #21...';
         // Reuse the actual UI handler and its progress / error reporting.
         document.getElementById('InverseAtmosphereTower21').click();
         var result = window.CurvatureInverseOpticsBridge.getAtmosphere21();
         if (result.state === 'error') status.textContent = result.message;
-        else status.textContent = 'Preset ready; see orange calculation status';
+        else status.textContent = framing + '; see orange calculation status';
       } catch (err) {
         status.textContent = 'Optics Test failed: ' + err.message;
         console.error('Optics Test preset:', err);
