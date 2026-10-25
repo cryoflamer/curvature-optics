@@ -65,3 +65,21 @@ implements it.
 
 Do not equate the legacy `k` refraction approximation with Optical P4's
 index-of-refraction model; only the external scene contract is shared.
+
+## Phase 2: opt-in legacy graph command recording
+
+`LegacySceneAdapter.record(graph, drawCallback)` wraps selected graph methods
+for the duration of a *normal* drawing callback. It forwards every call to
+the original graph, records argument snapshots, and restores the graph even
+if drawing throws. `replay(freshGraph, trace)` reissues the recorded commands.
+The recorder is loaded in the page but is **not activated** by default.
+It does not yet capture direct canvas/driver calls, graph property writes,
+transforms not exposed through recorded methods, or nested calls with
+non-plain arguments. Therefore a trace is **not yet guaranteed** to reproduce
+a complete DrawModel frame: this is a tested adapter foundation, not a claim
+of pixel-identical browser replay. Next phase must audit actual traces and
+add missing state/commands before replacing any live drawing path.
+
+This command stream is intentionally distinct from the physical 3D primitives
+in `CurvatureSceneContract`: the former captures graph API operations, while
+the latter describes the desired engine-independent scene.
