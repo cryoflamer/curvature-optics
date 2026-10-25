@@ -141,19 +141,42 @@
     return [m.rEarth, m.Height, m.ObjDist[0], m.ObjDeltaDist[0],
       m.ObjSize[0], m.ObjSidePos[0], m.NObjects[0]].join('|');
   }
-  function opticalVertex(world, m, solver) {
-    // The physical vertex is already in the observer's tangent coordinate frame.
-    // Use its actual radial altitude and central angle, not a tower-axis height.
+  // In a radially symmetric atmosphere the shooting problem depends only on
+  // central distance and radial altitude, not the vertex's azimuth. Keep the
+  // projected point's original x/y, but reuse the expensive elevation solve.
+  function rayParameters(world, m) {
     var horizontal = Math.hypot(world[0], world[1]);
-    var radial = Math.hypot(horizontal, world[2] + m.rEarth + m.Height);
-    var altitude = radial - m.rEarth;
-    var distance = m.rEarth * Math.atan2(horizontal, world[2] + m.rEarth + m.Height);
+    var radialZ = world[2] + m.rEarth + m.Height;
+    var altitude = Math.hypot(horizontal, radialZ) - m.rEarth;
+    var distance = m.rEarth * Math.atan2(horizontal, radialZ);
     if (!(distance > 0) || !(altitude >= 0)) return null;
-    var result = solver.solveAngle({ geometry:'globe', atmosphere:'standard',
-      observerHeight:m.Height, radius:m.rEarth, distance:distance,
-      targetHeight:altitude, step:25 });
-    if (result.status !== 'visible') return null;
-    return [world[0], world[1], horizontal * Math.tan(result.angle)];
+    return {horizontal:horizontal, altitude:altitude, distance:distance};
+  }
+  function opticalVertex(world, m, solver, rayCache, stats) {
+    var p = rayParameters(world, m);
+    if (!p) return null;
+    var result;
+    if (rayCache) {
+      // 14 significant digits keep sub-nanometre precision at these ranges.
+      // Quantization is only for identifying equivalent physical rays.
+      var key = p.distance.toPrecision(14) + '|' + p.altitude.toPrecision(14);
+      if (Object.prototype.hasOwnProperty.call(rayCache, key)) {
+        result = rayCache[key];
+        if (stats) stats.rayHits++;
+      } else {
+        result = solver.solveAngle({geometry:'globe', atmosphere:'standard',
+          observerHeight:m.Height, radius:m.rEarth, distance:p.distance,
+          targetHeight:p.altitude, step:25});
+        rayCache[key] = result;
+        if (stats) stats.raySolves++;
+      }
+    } else {
+      result = solver.solveAngle({geometry:'globe', atmosphere:'standard',
+        observerHeight:m.Height, radius:m.rEarth, distance:p.distance,
+        targetHeight:p.altitude, step:25});
+    }
+    if (!result || result.status !== 'visible') return null;
+    return [world[0], world[1], p.horizontal * Math.tan(result.angle)];
   }
   // Sample an original straight structural member in physical world space.
   // Refraction acts on every sampled point, not on its endpoints alone.
@@ -290,13 +313,14 @@
       onDone(lineAtmosphere); return;
     }
     var generation = {}, key=modelKey(m), paths=[], cache=Object.create(null);
+    var rayCache=Object.create(null), stats={raySolves:0,rayHits:0};
     var i=0, evaluations=0, visible=0, hidden=0, transitions=0;
     lineAtmosphere = {state:'working',paths:null,key:key,generation:generation,
       message:'0 / '+edges.length+' edges'};
     function sample(world) {
       var k=world.map(function(v){return v.toFixed(7);}).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache,k)) {
-        cache[k]=opticalVertex(world,m,solver);
+        cache[k]=opticalVertex(world,m,solver,rayCache,stats);
         evaluations++;
         if (cache[k]) visible++; else hidden++;
       }
@@ -320,8 +344,10 @@
       else {
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
-          transitions:transitions,message:'Calculated '+indices.length+' towers, '+
-            edges.length+' edges, '+evaluations+' ray samples; hidden='+hidden+
+          transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
+          message:'Calculated '+indices.length+' towers, '+
+            edges.length+' edges, '+evaluations+' ray samples, '+
+            stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
             ', transitions='+transitions};
         onDone(lineAtmosphere);
       }
