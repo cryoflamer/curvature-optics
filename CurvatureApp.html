@@ -108,6 +108,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="OpticalRenderedVertexAudit.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
+  <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test #21</button>
+  <span id="OpticsTestPresetStatus" role="status" aria-live="polite" style="font:12px monospace"></span>
   <label style="margin-left:1em;">Geometry <select id="TowerDiagnosticGeometry"><option value="globe">Globe</option><option value="flat">Flat</option></select></label>
   <label style="margin-left:1em;">Atmosphere <select id="TowerDiagnosticAtmosphere"><option value="vacuum">Vacuum</option><option value="standard">Standard n(h)</option></select></label>
   <button type="button" id="TowerDiagnosticRun">Calculate tower angles</button>
@@ -138,6 +140,48 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
     });
   </script>
   <script>document.getElementById("InverseVacuumTower21").addEventListener("change", function () { graph.Redraw(); });</script>
+  <script>
+    // One-click reproducible visual setup; no external browser automation.
+    document.getElementById('OpticsTestPreset').addEventListener('click', function () {
+      var status = document.getElementById('OpticsTestPresetStatus');
+      try {
+        if (typeof Demos === 'undefined' || typeof CurveApp === 'undefined' ||
+            typeof UpdateAll !== 'function' || !window.CurvatureInverseOpticsBridge)
+          throw Error('Application or optics bridge is not initialized');
+        Demos.SetDemo('TransLine', false, 0);
+        // Override the demo's introductory camera with a stable test viewpoint.
+        CurveApp.opticsMode = 'ray-tracing';
+        CurveApp.opticsProfile = 'standard';
+        CurveApp.showModel = 1;
+        CurveApp.Height = 15;
+        // Closer view of tower #21 for comparing the optical outlines.
+        CurveApp.FocalLengthField = 1600;
+        CurveApp.Pan = 0;
+        CurveApp.Nick = 0;
+        CurveApp.Roll = 0;
+        CurveApp.ObjSidePos[0] = 35;
+        CurveApp.ObjSidePos[1] = 25.4;
+        document.getElementById('TowerDiagnosticGeometry').value = 'globe';
+        document.getElementById('TowerDiagnosticAtmosphere').value = 'vacuum';
+        document.getElementById('TowerOverlayEnabled').checked = false;
+        document.getElementById('TowerOverlayVacuumOnly').checked = true;
+        document.getElementById('TowerOverlayDisplay').value = 'crosses';
+        document.getElementById('TowerComparisonMode').value = 'both';
+        document.getElementById('InverseVacuumTower21').checked = true;
+        UpdateAll(false);
+        status.textContent = 'Calculating atmosphere #21...';
+        // Reuse the actual UI handler and its progress / error reporting.
+        document.getElementById('InverseAtmosphereTower21').click();
+        var result = window.CurvatureInverseOpticsBridge.getAtmosphere21();
+        if (result.state === 'error') status.textContent = result.message;
+        else status.textContent = 'Preset ready; see orange calculation status';
+      } catch (err) {
+        status.textContent = 'Optics Test failed: ' + err.message;
+        console.error('Optics Test preset:', err);
+      }
+    });
+  </script>
+
   <label style="margin-left:0.8em;">Marker display <select id="TowerOverlayDisplay"><option value="crosses">Crosses</option><option value="towers">Towers</option><option value="both">Both</option></select></label>
   <label style="margin-left:0.8em;">Tower comparison <select id="TowerComparisonMode"><option value="original">Original only</option><option value="optical">Optical only</option><option value="both" selected>Both</option></select></label>
   <script>
