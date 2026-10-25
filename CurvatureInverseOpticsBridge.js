@@ -46,6 +46,47 @@
     return {tower:capture.tower, count:rows.length, maxPx:maxPx,
       rmsPx:rows.length ? Math.sqrt(sumSquares / rows.length) : null, rows:rows};
   }
+  // Independent numerical audit: compare the solver arrival direction with the
+  // actual camera projection of physical and apparent vertices. This does not
+  // modify the cached orange overlay or the scene.
+  function auditVertices21(g, m, capture, solver) {
+    if (!capture || !Array.isArray(capture.points) || !solver ||
+        typeof solver.solveAngle !== 'function') return null;
+    var unique = [], seen = Object.create(null);
+    capture.points.forEach(function (p) {
+      var key = p.world.map(function (x) { return x.toFixed(7); }).join(',');
+      if (!seen[key]) { seen[key] = true; unique.push(p); }
+    });
+    if (!unique.length) return null;
+    unique.sort(function (a,b) { return a.y-b.y; });
+    var picks = [unique[0], unique[Math.floor((unique.length-1)/2)], unique[unique.length-1]];
+    var rows = picks.map(function (vertex, i) {
+      var world = vertex.world, horizontal = Math.hypot(world[0],world[1]);
+      var radialZ = world[2]+m.rEarth+m.Height;
+      var altitude = Math.hypot(horizontal,radialZ)-m.rEarth;
+      var distance = m.rEarth*Math.atan2(horizontal,radialZ);
+      var vacuum = Math.atan2(world[2],horizontal);
+      var physicalPx = project(g,world);
+      var result = solver.solveAngle({geometry:'globe',atmosphere:'standard',
+        observerHeight:m.Height,radius:m.rEarth,distance:distance,
+        targetHeight:altitude,step:25});
+      var row = {level:['base','middle','top'][i],height:altitude,
+        distance:distance,vacuumDeg:vacuum*180/Math.PI,
+        status:result.status,physicalPx:physicalPx};
+      if (result.status === 'visible' && Number.isFinite(result.angle)) {
+        var apparent = [world[0],world[1],horizontal*Math.tan(result.angle)];
+        var opticalPx = project(g,apparent);
+        var recovered = Math.atan2(apparent[2],horizontal);
+        row.opticalDeg=result.angle*180/Math.PI;
+        row.deltaArcsec=(result.angle-vacuum)*180/Math.PI*3600;
+        row.reconstructionArcsec=(recovered-result.angle)*180/Math.PI*3600;
+        row.opticalPx=opticalPx;
+        row.deltaPx=[opticalPx[0]-physicalPx[0],opticalPx[1]-physicalPx[1]];
+      }
+      return row;
+    });
+    return {tower:21,rows:rows};
+  }
   // A separately computed, explicit diagnostic; never solve RK4 in Redraw().
   var atmosphere21 = { state: 'idle', paths: null, key: null, message: '' };
   function modelKey(m) {
@@ -183,5 +224,5 @@
   return {vacuumDirection:vacuumDirection, directionAtRange:directionAtRange,
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
-    adaptiveEdge:adaptiveEdge};
+    adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21};
 }));

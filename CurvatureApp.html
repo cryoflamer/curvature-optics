@@ -118,6 +118,33 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label style="margin-left:0.8em;"><input type="checkbox" id="InverseVacuumTower21"> Independent vacuum tower #21 (purple)</label>
   <button type="button" id="InverseAtmosphereTower21">Calculate atmosphere #21 (orange)</button>
   <span id="InverseAtmosphereTower21Status" role="status" style="font:12px monospace"></span>
+  <button type="button" id="AuditOpticsTower21">Audit angles / pixels #21</button>
+  <pre id="AuditOpticsTower21Result" role="status" style="white-space:pre-wrap;font:12px monospace;"></pre>
+  <script>
+    document.getElementById('AuditOpticsTower21').addEventListener('click', function () {
+      var out = document.getElementById('AuditOpticsTower21Result');
+      try {
+        var audit = window.CurvatureRenderedVertexAudit;
+        var capture = audit && audit.getCapturedGroups().primary[21];
+        var bridge = window.CurvatureInverseOpticsBridge;
+        if (!capture || !bridge || typeof CurveApp === 'undefined')
+          throw Error('Run Optics Test #21 first');
+        var report = bridge.auditVertices21(graph, CurveApp, capture,
+          window.CurvatureTowerDiagnostics);
+        if (!report) throw Error('No vertices or ray solver');
+        function num(v, n) { return Number.isFinite(v) ? v.toFixed(n) : '--'; }
+        out.textContent = report.rows.map(function (r) {
+          return r.level + ': h=' + num(r.height,2) + ' m, d=' + num(r.distance,2) +
+            ' m; vacuum=' + num(r.vacuumDeg,6) + 'deg, ray=' +
+            (r.status === 'visible' ? num(r.opticalDeg,6)+'deg' : r.status) +
+            '; delta ray=' + num(r.deltaArcsec,3) + 'arcsec; delta screen=(' +
+            (r.deltaPx ? num(r.deltaPx[0],3)+', '+num(r.deltaPx[1],3) : '--') +
+            ') px; angle reconstruction error=' + num(r.reconstructionArcsec,6) + 'arcsec';
+        }).join('\n');
+        console.table(report.rows);
+      } catch (err) { out.textContent = 'Audit failed: ' + err.message; console.error(err); }
+    });
+  </script>
   <script>
     document.getElementById('InverseAtmosphereTower21').addEventListener('click', function () {
       var status = document.getElementById('InverseAtmosphereTower21Status');

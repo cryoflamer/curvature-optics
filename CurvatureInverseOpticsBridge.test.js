@@ -30,3 +30,22 @@ for(let i=1;i<hidden.points.length;i++) {
   const a=hidden.points[i-1], b=hidden.points[i];
   if(a && b) assert.ok(!(a[0]<4 && b[0]>6));
 }
+
+// Audit checks both angular reconstruction and actual projected pixel displacement.
+const mockSolver = {solveAngle: o => ({status:'visible',angle:Math.atan2(o.targetHeight-15,o.distance)+0.0001})};
+const model = {rEarth:6371000,Height:15};
+const mockCapture = {points:[
+  {y:0,world:[0,6000,-2.8]},
+  {y:0.5,world:[0,6000,10]},
+  {y:1,world:[0,6000,25]}
+]};
+const numeric = bridge.auditVertices21(project,model,mockCapture,mockSolver);
+assert.strictEqual(numeric.rows.length,3);
+for (const row of numeric.rows) {
+  assert.strictEqual(row.status,'visible');
+  assert.ok(Math.abs(row.reconstructionArcsec)<1e-7);
+  assert.ok(Number.isFinite(row.deltaPx[1]));
+  assert.ok(Math.abs(row.deltaPx[0])<1e-10);
+}
+assert.strictEqual(bridge.auditVertices21(project,model,null,mockSolver),null);
+console.log('Tower #21 numerical angle/pixel audit passed');
