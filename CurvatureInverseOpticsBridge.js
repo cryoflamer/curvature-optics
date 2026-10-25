@@ -152,7 +152,34 @@
     if (!(distance > 0) || !(altitude >= 0)) return null;
     return {horizontal:horizontal, altitude:altitude, distance:distance};
   }
-  function opticalVertex(world, m, solver, rayCache, stats) {
+  // Fast preview: effective-radius approximation, with exact shooting near
+  // the estimated horizon. This is deliberately NOT the validated exact mode.
+  function fastRay(p, m, solver, stats) {
+    var R=m.rEarth, observer=m.Height, d=p.distance, h=p.altitude;
+    var n0=0.000293, scale=7350;
+    var effective=R/(1-R*n0/scale);
+    var horizon=Math.sqrt(Math.max(0,2*effective*observer+observer*observer));
+    var remaining=Math.max(0,d-horizon);
+    var boundary=Math.sqrt(effective*effective+remaining*remaining)-effective;
+    // Exact solver is mandatory near the horizon. The guard is deliberately
+    // wider than the millimetre-scale error measured for this atmosphere.
+    if (Math.abs(h-boundary)<3 || d<1000) {
+      if(stats)stats.fastFallbacks++;
+      return solver.solveAngle({geometry:'globe',atmosphere:'standard',
+        observerHeight:observer,radius:R,distance:d,targetHeight:h,step:25});
+    }
+    if(h<boundary-3) {
+      if(stats)stats.fastRejected++;
+      return {status:'occluded'};
+    }
+    // Local tangent-frame chord angle on a sphere with effective radius.
+    var central=d/effective;
+    var x=(effective+h)*Math.sin(central);
+    var z=(effective+h)*Math.cos(central)-(effective+observer);
+    if(stats)stats.fastApproximated++;
+    return {status:'visible',angle:Math.atan2(z,x)};
+  }
+  function opticalVertex(world, m, solver, rayCache, stats, fast) {
     var p = rayParameters(world, m);
     if (!p) return null;
     var result;
@@ -164,7 +191,7 @@
         result = rayCache[key];
         if (stats) stats.rayHits++;
       } else {
-        result = solver.solveAngle({geometry:'globe', atmosphere:'standard',
+        result = fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
           observerHeight:m.Height, radius:m.rEarth, distance:p.distance,
           targetHeight:p.altitude, step:25});
         rayCache[key] = result;
@@ -333,14 +360,16 @@
       onDone(lineAtmosphere); return;
     }
     var generation = {}, key=modelKey(m), paths=[], cache=Object.create(null);
-    var rayCache=Object.create(null), stats={raySolves:0,rayHits:0};
+    var rayCache=Object.create(null), stats={raySolves:0,rayHits:0,fastFallbacks:0,fastRejected:0,fastApproximated:0};
+    var fast=options.quality==='fast';
+    var started=Date.now();
     var i=0, evaluations=0, visible=0, hidden=0, transitions=0;
     lineAtmosphere = {state:'working',paths:null,key:key,generation:generation,
       message:'0 / '+edges.length+' edges'};
     function sample(world) {
       var k=world.map(function(v){return v.toFixed(7);}).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache,k)) {
-        cache[k]=opticalVertex(world,m,solver,rayCache,stats);
+        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast);
         evaluations++;
         if (cache[k]) visible++; else hidden++;
       }
@@ -365,11 +394,14 @@
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
-          selection:mode, selectedTowerIds:indices.slice(),
+          selection:mode, quality:fast?'fast':'exact', elapsedMs:Date.now()-started,
+          fastFallbacks:stats.fastFallbacks,fastRejected:stats.fastRejected,fastApproximated:stats.fastApproximated,
+          selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
-            ', transitions='+transitions};
+            ', transitions='+transitions+', elapsed='+ (Date.now()-started)+'ms'+
+            (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')};
         onDone(lineAtmosphere);
       }
     }
@@ -592,7 +624,7 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, fastRay:fastRay, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};

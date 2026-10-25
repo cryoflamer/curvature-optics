@@ -128,6 +128,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label id="InverseAtmosphereLineCountLabel">Towers in sample:
     <input type="number" id="InverseAtmosphereLineCount" min="3" max="15" step="1" value="5" style="width:3.5em">
   </label>
+  <label>Ray quality: <select id="InverseAtmosphereLineQuality"><option value="exact">Exact shooting</option><option value="fast">Fast preview (approximate)</option></select></label>
   <button type="button" id="InverseAtmosphereLine">Calculate atmosphere - selected towers</button>
   <label><input type="checkbox" id="InverseAtmosphereLineShow"> Show orange line overlay</label>
   <span id="InverseAtmosphereLineStatus" role="status" style="font:12px monospace"></span>
@@ -245,7 +246,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             document.getElementById('InverseAtmosphereLineShow').checked=true;
             graph.Redraw();
           }
-        },{mode:mode,count:count});
+        },{mode:mode,count:count,quality:document.getElementById("InverseAtmosphereLineQuality").value});
     });
     document.getElementById('InverseAtmosphereLineShow').addEventListener('change',function(){graph.Redraw();});
   </script>
