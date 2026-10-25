@@ -150,7 +150,7 @@
       onDone(atmosphere21); return;
     }
     var key = modelKey(m), output = paths.map(function () { return []; });
-    var edges = [], cache = Object.create(null), evaluations = 0;
+    var edges = [], cache = Object.create(null), samples = [], evaluations = 0;
     paths.forEach(function (path, pi) {
       for (var j = 1; j < path.length; j++)
         edges.push({path:pi, a:path[j-1], b:path[j]});
@@ -163,6 +163,7 @@
       var cacheKey = world.map(function (v) { return v.toFixed(7); }).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache, cacheKey)) {
         cache[cacheKey] = opticalVertex(world, m, solver);
+        samples.push({physical:world.slice(), apparent:cache[cacheKey] && cache[cacheKey].slice()});
         evaluations++;
       }
       return cache[cacheKey];
@@ -182,12 +183,58 @@
         onProgress(atmosphere21.message);
         setTimeout(batch, 0);
       } else {
-        atmosphere21 = {state:'ready', paths:output, key:key,
+        atmosphere21 = {state:'ready', paths:output, samples:samples, key:key,
           message:'Calculated ' + edges.length + ' edges, ' + evaluations + ' ray samples'};
         onDone(atmosphere21);
       }
     }
     setTimeout(batch, 0);
+  }
+  // Audit the ACTUAL cached orange overlay, not a newly reconstructed tower.
+  // Re-solve each physical sample and check that the stored 3D point projects
+  // to the same camera pixel as the independently reconstructed arrival ray.
+  // This is a consistency check, not an independent validation of the solver.
+  function auditAtmosphere21(g, m, solver) {
+    if (atmosphere21.state !== 'ready' || atmosphere21.key !== modelKey(m) ||
+        !Array.isArray(atmosphere21.samples) || !solver) return null;
+    var result = {count:0, visible:0, hidden:0, mismatches:0,
+      maxAngleArcsec:0, maxPixelError:0, maxHorizontalPixelShift:0,
+      invalidProjections:0, rows:[]};
+    atmosphere21.samples.forEach(function (sample) {
+      var physical = sample.physical, apparent = sample.apparent;
+      var horizontal = Math.hypot(physical[0], physical[1]);
+      var radialZ = physical[2] + m.rEarth + m.Height;
+      var altitude = Math.hypot(horizontal, radialZ) - m.rEarth;
+      var distance = m.rEarth * Math.atan2(horizontal, radialZ);
+      var solved = solver.solveAngle({geometry:'globe', atmosphere:'standard',
+        observerHeight:m.Height, radius:m.rEarth, distance:distance,
+        targetHeight:altitude, step:25});
+      var expectedVisible = solved.status === 'visible' && Number.isFinite(solved.angle);
+      var actualVisible = !!apparent;
+      result.count++;
+      if (expectedVisible !== actualVisible) { result.mismatches++; return; }
+      if (!actualVisible) { result.hidden++; return; }
+      result.visible++;
+      var actualAngle = Math.atan2(apparent[2], Math.hypot(apparent[0],apparent[1]));
+      var angleError = Math.abs(actualAngle-solved.angle)*180/Math.PI*3600;
+      var expected = [physical[0],physical[1],horizontal*Math.tan(solved.angle)];
+      var actualPx = project(g,apparent), expectedPx = project(g,expected);
+      var physicalPx = project(g,physical);
+      var pixelError = Math.hypot(actualPx[0]-expectedPx[0],actualPx[1]-expectedPx[1]);
+      var horizontalShift = Math.abs(actualPx[0]-physicalPx[0]);
+      if (![angleError,pixelError,horizontalShift].every(Number.isFinite)) {
+        result.invalidProjections++; return;
+      }
+      result.maxAngleArcsec = Math.max(result.maxAngleArcsec,angleError);
+      result.maxPixelError = Math.max(result.maxPixelError,pixelError);
+      result.maxHorizontalPixelShift = Math.max(result.maxHorizontalPixelShift,horizontalShift);
+      result.rows.push({physical:physical,apparent:apparent,
+        physicalPx:physicalPx,apparentPx:actualPx,expectedPx:expectedPx,
+        angleErrorArcsec:angleError,pixelError:pixelError});
+    });
+    result.passed = result.mismatches===0 && result.invalidProjections===0 &&
+      result.maxAngleArcsec<0.001 && result.maxPixelError<0.01;
+    return result;
   }
   function draw(g, m) {
     var checkbox = typeof document !== 'undefined' && document.getElementById('InverseVacuumTower21');
@@ -224,5 +271,6 @@
   return {vacuumDirection:vacuumDirection, directionAtRange:directionAtRange,
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
-    adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21};
+    adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
+    auditAtmosphere21:auditAtmosphere21};
 }));

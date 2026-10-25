@@ -49,3 +49,32 @@ for (const row of numeric.rows) {
 }
 assert.strictEqual(bridge.auditVertices21(project,model,null,mockSolver),null);
 console.log('Tower #21 numerical angle/pixel audit passed');
+
+// Check the actual cached orange points, including their camera projections.
+const previousTimer = global.setTimeout;
+const queue = [];
+global.setTimeout = callback => { queue.push(callback); return queue.length; };
+try {
+  const scene = {rEarth:6371000,Height:15,ObjDist:[6000],ObjDeltaDist:[0],
+    ObjSize:[40],ObjSidePos:[0],NObjects:[22]};
+  const vertices = [[0,6000,1],[0,6000,10],[0,6000,20]];
+  const geometry = {getTowerPaths:()=>[vertices]};
+  const solver = {solveAngle:o=>({status:'visible',
+    angle:Math.atan2(o.targetHeight-o.observerHeight,o.distance)+0.00005})};
+  let done;
+  bridge.calculateAtmosphere21(scene,geometry,solver,()=>{},r=>{done=r;});
+  while(queue.length) queue.shift()();
+  assert.strictEqual(done.state,'ready');
+  const audit = bridge.auditAtmosphere21(project,scene,solver);
+  assert.strictEqual(audit.count,done.samples.length);
+  assert.ok(audit.count>=3);
+  assert.ok(audit.passed,JSON.stringify(audit));
+  assert.ok(audit.maxPixelError<1e-8);
+  assert.ok(audit.maxAngleArcsec<1e-7);
+  const changed = {...scene,Height:16};
+  assert.strictEqual(bridge.auditAtmosphere21(project,changed,solver),null);
+  // A stale cached point must be detected rather than silently accepted.
+  done.samples[0].apparent[2]+=1;
+  assert.strictEqual(bridge.auditAtmosphere21(project,scene,solver).passed,false);
+} finally { global.setTimeout=previousTimer; }
+console.log('Cached atmospheric tower projection audit passed');

@@ -142,6 +142,21 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             ') px; angle reconstruction error=' + num(r.reconstructionArcsec,6) + 'arcsec';
         }).join('\n');
         console.table(report.rows);
+        var rendered = bridge.auditAtmosphere21(graph, CurveApp,
+          window.CurvatureTowerDiagnostics);
+        if (rendered) {
+          out.textContent += '\n\nORANGE OVERLAY (cached samples): ' +
+            (rendered.passed ? 'PASS' : 'FAIL') +
+            '; samples=' + rendered.count + '; visible=' + rendered.visible +
+            '; hidden=' + rendered.hidden + '; visibility mismatches=' + rendered.mismatches +
+            '; invalid projections=' + rendered.invalidProjections +
+            '; max angle error=' + num(rendered.maxAngleArcsec,6) + ' arcsec' +
+            '; max pixel error=' + num(rendered.maxPixelError,6) + ' px' +
+            '; max horizontal screen shift=' + num(rendered.maxHorizontalPixelShift,3) + ' px';
+          console.table(rendered.rows);
+        } else {
+          out.textContent += '\n\nORANGE OVERLAY: calculate atmosphere #21 first (or refresh after model changes)';
+        }
       } catch (err) { out.textContent = 'Audit failed: ' + err.message; console.error(err); }
     });
   </script>
