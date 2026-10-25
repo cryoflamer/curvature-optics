@@ -41,7 +41,7 @@
     return faces;
   }
   function beginTower(g, m, objIx) {
-    if (m.ObjType[objIx] !== 3 || m.showModel !== 1 || m.opticsMode !== 'ray-tracing') return null;
+    if (m.ObjType[objIx] !== 3 || (m.showModel !== 1 && m.showModel !== 2) || m.opticsMode !== 'ray-tracing') return null;
     var distance = m.aObjCurr[objIx] * m.geometryRadius;
     var index = Math.round((distance - m.ObjDist[objIx]) / m.ObjDeltaDist[objIx]) + 1;
     // Capture every rendered tower, not only the ten diagnostic samples.

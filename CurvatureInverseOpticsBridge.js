@@ -143,17 +143,20 @@
   // A separately computed, explicit diagnostic; never solve RK4 in Redraw().
   var atmosphere21 = { state: 'idle', paths: null, key: null, message: '' };
   function modelKey(m) {
-    return [m.rEarth, m.Height, m.ObjDist[0], m.ObjDeltaDist[0],
+    return [m.showModel, m.rEarth, m.Height, m.ObjDist[0], m.ObjDeltaDist[0],
       m.ObjSize[0], m.ObjSidePos[0], m.NObjects[0]].join('|');
   }
+  // On the globe, radial distance/altitude parameterize the ray. On the flat
+  // plane, use Cartesian horizontal distance and height above the plane.
   // In a radially symmetric atmosphere the shooting problem depends only on
   // central distance and radial altitude, not the vertex's azimuth. Keep the
   // projected point's original x/y, but reuse the expensive elevation solve.
   function rayParameters(world, m) {
     var horizontal = Math.hypot(world[0], world[1]);
+    var flat = m.showModel === 2;
     var radialZ = world[2] + m.rEarth + m.Height;
-    var altitude = Math.hypot(horizontal, radialZ) - m.rEarth;
-    var distance = m.rEarth * Math.atan2(horizontal, radialZ);
+    var altitude = flat ? world[2] + m.Height : Math.hypot(horizontal, radialZ) - m.rEarth;
+    var distance = flat ? horizontal : m.rEarth * Math.atan2(horizontal, radialZ);
     // At the ground, subtraction of two Earth-sized radii can yield a
     // sub-micrometre negative value. Do not classify that roundoff as occlusion.
     if (altitude < 0 && altitude > -0.000001) altitude = 0;
@@ -331,26 +334,26 @@
   // Experimental lazy optical map. Interpolate the *correction* to the
   // effective-radius preview rather than the absolute angle. A cell is used
   // only after exact corners and its centre agree within an angular budget.
-  // Direct fourth-order Taylor solution of the spherical ray equation for
+  // Direct fourth-order Taylor solution of the spherical or planar ray equation for
   // n(h)=1+N0*exp(-h/H). No ray shooting, calibration or exact fallback.
   // 5 mm is an accepted rendering tolerance, NOT a certified error bound.
   function createAnalyticP4(m, stats, options) {
     options=options||{};
-    var R=m.rEarth, h0=m.Height;
+    var R=m.rEarth, h0=m.Height, flat=m.showModel===2;
     var N=options.refractivity===undefined?0.000293:options.refractivity;
     var H=options.scaleHeight===undefined?7350:options.scaleHeight;
     if(!(R>0 && h0>=0 && H>0 && N>=0)) throw Error('Invalid P4 parameters');
     function coefficients(angle) {
-      var v=Math.tan(angle)*(R+h0)/R, r=R+h0;
+      var v=Math.tan(angle)*(flat?1:(R+h0)/R), r=R+h0;
       var u=N*Math.exp(-h0/H), q=-u/(H*(1+u));
       var qp=u/(H*H*(1+u)*(1+u));
       var qpp=u*(u-1)/(H*H*H*Math.pow(1+u,3));
-      var w=r*r/(R*R)+v*v;
-      var F=r/(R*R)+2*v*v/r+q*w;
-      var Fh=1/(R*R)-2*v*v/(r*r)+qp*w+2*q*r/(R*R);
-      var Fv=4*v/r+2*q*v;
-      var Fhh=4*v*v/(r*r*r)+qpp*w+4*qp*r/(R*R)+2*q/(R*R);
-      var Fhv=-4*v/(r*r)+2*qp*v, Fvv=4/r+2*q;
+      var w=(flat?1:r*r/(R*R))+v*v;
+      var F=flat?q*w:r/(R*R)+2*v*v/r+q*w;
+      var Fh=flat?qp*w:1/(R*R)-2*v*v/(r*r)+qp*w+2*q*r/(R*R);
+      var Fv=flat?2*q*v:4*v/r+2*q*v;
+      var Fhh=flat?qpp*w:4*v*v/(r*r*r)+qpp*w+4*qp*r/(R*R)+2*q/(R*R);
+      var Fhv=flat?2*qp*v:-4*v/(r*r)+2*qp*v, Fvv=flat?2*q:4/r+2*q;
       var third=Fh*v+Fv*F;
       var fourth=Fhh*v*v+2*Fhv*v*F+Fvv*F*F+Fh*F+Fv*third;
       return [h0,v,F/2,third/6,fourth/24];
@@ -390,7 +393,7 @@
       if(h<0)return {status:'occluded'};
       // Solve the *endpoint* equation analytically evaluated at each bisection.
       // No calls to CurvatureRayTracer / solveAngle occur in this mode.
-      var a=d/R, guess=Math.atan2((R+h)*Math.cos(a)-(R+h0),(R+h)*Math.sin(a));
+      var a=d/R, guess=flat?Math.atan2(h-h0,d):Math.atan2((R+h)*Math.cos(a)-(R+h0),(R+h)*Math.sin(a));
       var span=0.03, low, high, cl, ch;
       for(var expand=0;expand<9;expand++) {
         low=Math.max(-1.45,guess-span);high=Math.min(1.45,guess+span);
@@ -803,6 +806,10 @@
     var bundled=options.quality==='bundle';
     var poly=options.quality==='poly';
     var analyticP4=options.quality==='p4';
+    if (m.showModel===2 && !analyticP4) {
+      lineAtmosphere={state:'error',paths:null,key:null,message:'Flat optical scene currently supports Analytic P4 only'};
+      onDone(lineAtmosphere); return;
+    }
     stats.polyExact=0;stats.polyCalibration=0;stats.polyDirect=0;stats.polyInterpolated=0;stats.polyRejected=0;
     stats.polyExactMs=0;stats.polyCalibrationMs=0;stats.polyOutside=0;stats.polyHorizon=0;stats.polyInvalid=0;
     stats.polyExactHits=0;stats.polyCalibrationHits=0;stats.polyOutsideDistance=0;stats.polyOutsideHeight=0;
@@ -878,7 +885,7 @@
           return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial,perimeter:perimeter};
         }) : [];
         var footings = footingCandidates.filter(Boolean);
-        var opticalHorizon=analyticP4?p4Horizon(m,polynomial):null;
+        var opticalHorizon=analyticP4 && m.showModel===1?p4Horizon(m,polynomial):null;
         // Match DrawObjectsBeforeHorizon: render far towers first, then let
         // nearer filled footings cover their distant neighbours. Tower indices
         // increase with distance from the observer (ObjDist + (index-1)*delta).
@@ -1095,7 +1102,7 @@
   }
   // Only a complete, current P4 calculation can replace the legacy towers.
   function hasCompleteP4Line(m) {
-    return m && m.opticsMode === 'ray-tracing' && m.showModel === 1 &&
+    return m && m.opticsMode === 'ray-tracing' && (m.showModel === 1 || m.showModel === 2) &&
       lineAtmosphere.state === 'ready' && lineAtmosphere.key === modelKey(m) &&
       lineAtmosphere.quality === 'p4' && lineAtmosphere.selection === 'all' &&
       lineAtmosphere.towers === m.NObjects[0];
@@ -1107,7 +1114,7 @@
   }
   function draw(g, m) {
     var checkbox = typeof document !== 'undefined' && document.getElementById('InverseVacuumTower21');
-    if (m.opticsMode !== 'ray-tracing' || m.showModel !== 1) return null;
+    if (m.opticsMode !== 'ray-tracing' || (m.showModel !== 1 && m.showModel !== 2)) return null;
     var audit = typeof globalThis !== 'undefined' && globalThis.CurvatureRenderedVertexAudit;
     var capture = audit && audit.getCapturedGroups().primary[21];
     var paths = audit && audit.getTowerPaths(21);
@@ -1144,7 +1151,7 @@
         // incorrectly draws distant braces through nearer foundations.
         var maskMode=footingMaskMode();
         var opticalHorizon=lineAtmosphere.opticalHorizon;
-        var horizonRange=maskMode==='p4' && opticalHorizon ? opticalHorizon.distance :
+        var horizonRange=m.showModel===2 ? Infinity : maskMode==='p4' && opticalHorizon ? opticalHorizon.distance :
           Math.sqrt(Math.max(0,2*m.rEarth*m.Height+m.Height*m.Height));
         var steelByTower=Object.create(null);
         lineAtmosphere.paths.forEach(function(member){
@@ -1179,7 +1186,7 @@
           (range>horizonRange?far:near).push(tower);
         });
         far.forEach(paintTower);
-        if((maskMode==='legacy'||maskMode==='p4') && far.length){
+        if(m.showModel===1 && (maskMode==='legacy'||maskMode==='p4') && far.length){
           var disk=maskMode==='p4'&&opticalHorizon?opticalHorizon:m;
           g.SetPlane([0,0,-disk.zDisk],[1,0,0],[0,1,0]);
           g.SetBgColor('white');
@@ -1189,7 +1196,7 @@
       }
       // Stroke the P4 tangent silhouette independently of the opaque mask.
       // The original disk mask is fill-only and therefore has no visible rim.
-      if (isOpticalSceneReady(m)) {
+      if (isOpticalSceneReady(m) && m.showModel===1) {
         var optical=lineAtmosphere.opticalHorizon;
         var showOptical=document.getElementById('ShowP4OpticalHorizon');
         var showVacuum=document.getElementById('ShowP4VacuumHorizon');

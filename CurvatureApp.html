@@ -248,8 +248,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
       var bridge=window.CurvatureInverseOpticsBridge;
       if (!bridge || !window.CurvatureRenderedVertexAudit || !window.CurvatureTowerDiagnostics ||
           typeof CurveApp==='undefined') { status.textContent='Missing optics modules';return; }
-      if (CurveApp.opticsMode!=='ray-tracing' || CurveApp.showModel!==1) {
-        status.textContent='Select TrnsmLine / ray tracing first';return;
+      if (CurveApp.opticsMode!=='ray-tracing' || (CurveApp.showModel!==1 && CurveApp.showModel!==2)) {
+        status.textContent='Select Globe or Flat / ray tracing first';return;
       }
       status.textContent='Computing...';
       var mode=document.getElementById('InverseAtmosphereLineMode').value;
