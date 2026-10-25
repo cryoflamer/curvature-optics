@@ -28,6 +28,34 @@
       totalPixels:a.width*a.height,maxChannelDifference:maxDifference,
       identical:mismatched===0};
   }
+  // Bounded, deterministic fingerprints and exact RGBA mismatch samples.
+  // Hashes are diagnostics, not cryptographic proof of equality.
+  function pixelEvidence(a,b,limit){
+    if(!a||!b||a.width!==b.width||a.height!==b.height)return null;
+    var w=a.width,h=a.height;
+    var left=a.getContext('2d').getImageData(0,0,w,h).data;
+    var right=b.getContext('2d').getImageData(0,0,w,h).data;
+    function hash(bytes){
+      var value=2166136261;
+      for(var i=0;i<bytes.length;i++)value=Math.imul(value^bytes[i],16777619)>>>0;
+      return ('00000000'+value.toString(16)).slice(-8);
+    }
+    var samples=[],bounds=null,count=0;
+    for(var i=0;i<left.length;i+=4){
+      if(left[i]===right[i]&&left[i+1]===right[i+1]&&
+         left[i+2]===right[i+2]&&left[i+3]===right[i+3])continue;
+      var index=i/4,x=index%w,y=Math.floor(index/w);
+      count++;
+      if(!bounds)bounds={minX:x,minY:y,maxX:x,maxY:y};
+      else {bounds.minX=Math.min(bounds.minX,x);bounds.maxX=Math.max(bounds.maxX,x);
+        bounds.minY=Math.min(bounds.minY,y);bounds.maxY=Math.max(bounds.maxY,y);}
+      if(samples.length<(limit||16))samples.push({x:x,y:y,
+        original:Array.prototype.slice.call(left,i,i+4),
+        replay:Array.prototype.slice.call(right,i,i+4)});
+    }
+    return {hashAlgorithm:'fnv1a32-rgba',originalHash:hash(left),replayHash:hash(right),
+      mismatchedPixels:count,bounds:bounds,firstDifferences:samples};
+  }
   // Diagnostic-only: preserve the source pixels and paint differences onto a
   // separate canvas. Never modify the production or detached replay canvas.
   function analyzePixels(a,b,thresholds){
@@ -265,6 +293,7 @@
         diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
         paintOperations:paintOperations,pipeline:pipeline,clippingTrace:clippingTrace,
         bootstrap:bootstrap,
+        pixelEvidence:pixelEvidence(original.Canvas,canvas),
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -275,5 +304,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
+  return {comparePixels:comparePixels,pixelEvidence:pixelEvidence,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
 }));

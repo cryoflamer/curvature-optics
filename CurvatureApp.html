@@ -1351,6 +1351,7 @@ function DrawModelWithOptionalAudit(g) {
           false, {bootstrapOverrides:cases[key]});
         probes[key] = {override:cases[key],ok:variant.ok,
           comparisonToOriginal:variant.comparison || null,
+          pixelEvidence:variant.pixelEvidence || null,
           reason:variant.ok ? null : variant.reason,
           detected:!!(canvasProbe.comparison && canvasProbe.comparison.identical === true &&
             variant.comparison && variant.comparison.identical === false)};
@@ -1363,8 +1364,14 @@ function DrawModelWithOptionalAudit(g) {
         g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon,
         false, {bootstrapOverrides:perturbed,restoreFrameBootstrap:true});
       bootstrapSensitivity = {baseline:baseline,probes:probes,
+        replayFingerprintComparison:{baseline:canvasProbe.pixelEvidence && canvasProbe.pixelEvidence.replayHash,
+          restored:restored.pixelEvidence && restored.pixelEvidence.replayHash,
+          hashesEqual:!!(canvasProbe.pixelEvidence && restored.pixelEvidence &&
+            canvasProbe.pixelEvidence.replayHash===restored.pixelEvidence.replayHash),
+          note:"Matching 32-bit hashes are diagnostic, not proof of pixel identity"},
         restoredFrameBootstrap:{ok:restored.ok,bootstrap:restored.bootstrap || null,
           comparisonToOriginal:restored.comparison || null,
+          pixelEvidence:restored.pixelEvidence || null,
           reason:restored.ok ? null : restored.reason}};
     }
     var firstClippingDifference = canvasProbe && canvasProbe.clippingTrace &&
