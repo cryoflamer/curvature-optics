@@ -49,6 +49,33 @@
     var factor = camera.ScreenDist*camera.Zoom/depth;
     return [g.WinTrans.TransX(c[1]*factor),g.WinTrans.TransY(c[2]*factor)];
   }
+  // The ray solver uses the observer at world origin. Verify that the
+  // graphics camera has the same center, and that a ray's image does not
+  // depend on the arbitrary distance used to represent its direction.
+  function auditCameraOrigin(g, m) {
+    var camera = g && g.Camera;
+    if (!camera || !Array.isArray(camera.CamPos) ||
+        !camera.CamPos.every(Number.isFinite)) return null;
+    var originDistance = Math.hypot.apply(Math, camera.CamPos);
+    var modelDistance = m && Array.isArray(m.camPos) && m.camPos.every(Number.isFinite) ?
+      Math.hypot.apply(Math, m.camPos) : NaN;
+    var directions = [[0,1,0],[0.02,1,0.01],[-0.03,1,-0.015]];
+    var maxRangeShift = 0, checked = 0;
+    directions.forEach(function (v) {
+      var angle = Math.atan2(v[2], Math.hypot(v[0],v[1]));
+      var near = projectArrivalDirection(g,v,angle,100);
+      var far = projectArrivalDirection(g,v,angle,10000);
+      if (!near || !far) return;
+      checked++;
+      maxRangeShift = Math.max(maxRangeShift,
+        Math.hypot(near[0]-far[0],near[1]-far[1]));
+    });
+    return {cameraPos:camera.CamPos.slice(),modelCamPos:m && m.camPos && m.camPos.slice(),
+      originDistance:originDistance,modelDistance:modelDistance,
+      directionsChecked:checked,maxRangeShift:maxRangeShift,
+      passed:originDistance<1e-9 && modelDistance<1e-9 &&
+        checked===directions.length && maxRangeShift<0.001};
+  }
   function compareTower(g, capture) {
     if (!capture || !Array.isArray(capture.points)) return null;
     var rows = [], sumSquares = 0, maxPx = 0;
@@ -355,5 +382,6 @@
     getAtmosphere21:function () { return atmosphere21; },
     adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21,
-    projectArrivalDirection:projectArrivalDirection};
+    projectArrivalDirection:projectArrivalDirection,
+    auditCameraOrigin:auditCameraOrigin};
 }));
