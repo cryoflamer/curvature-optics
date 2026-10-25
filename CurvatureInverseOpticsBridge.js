@@ -10,6 +10,11 @@
   root.CurvatureInverseOpticsBridge = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
+  // The original DrawObjectsBeforeHorizon traverses aObjLast down to aObjFirst.
+  // Tower index grows with range, so reproduce that painter order for fills.
+  function orderFootingsFarToNear(footings) {
+    return footings.sort(function(a, b) { return b.tower - a.tower; });
+  }
   function vacuumDirection(world) {
     if (!Array.isArray(world) || world.length !== 3 || !world.every(Number.isFinite)) return null;
     var horizontal = Math.hypot(world[0], world[1]);
@@ -825,6 +830,11 @@
           return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial};
         }) : [];
         var footings = footingCandidates.filter(Boolean);
+        // Match DrawObjectsBeforeHorizon: render far towers first, then let
+        // nearer filled footings cover their distant neighbours. Tower indices
+        // increase with distance from the observer (ObjDist + (index-1)*delta).
+        // Keep the original vertex order and P4 clipping untouched.
+        orderFootingsFarToNear(footings);
         var footingsProjected=footings.length;
         var footingsPartial=footings.filter(function(poly){return poly.partial;}).length;
         var footingsRejected=footingCandidates.length-footingsProjected;
@@ -1100,6 +1110,7 @@
     return report;
   }
   return {vacuumDirection:vacuumDirection, directionAtRange:directionAtRange,
+    orderFootingsFarToNear:orderFootingsFarToNear,
     compareTower:compareTower, draw:draw, hasCompleteP4Line:hasCompleteP4Line, isOpticalSceneReady:isOpticalSceneReady, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
