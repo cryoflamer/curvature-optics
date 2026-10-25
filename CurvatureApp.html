@@ -108,7 +108,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="OpticalRenderedVertexAudit.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
-  <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test #21</button>
+  <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test</button>
   <span id="OpticsTestPresetStatus" role="status" aria-live="polite" style="font:12px monospace"></span>
   <label style="margin-left:1em;">Geometry <select id="TowerDiagnosticGeometry"><option value="globe">Globe</option><option value="flat">Flat</option></select></label>
   <label style="margin-left:1em;">Atmosphere <select id="TowerDiagnosticAtmosphere"><option value="vacuum">Vacuum</option><option value="standard">Standard n(h)</option></select></label>
@@ -246,7 +246,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         function(result){
           status.textContent=result.message;
           if(result.state==='ready') {
-            document.getElementById('InverseAtmosphereLineShow').checked=true;
+            // Optical-scene preset deliberately avoids a duplicate orange overlay.
+            document.getElementById('InverseAtmosphereLineShow').checked=
+              !document.getElementById('OpticalSceneTowers').checked;
             graph.Redraw();
           }
         },{mode:mode,count:count,quality:document.getElementById("InverseAtmosphereLineQuality").value});
@@ -350,16 +352,42 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         document.getElementById('TowerOverlayEnabled').checked = false;
         document.getElementById('TowerOverlayVacuumOnly').checked = true;
         document.getElementById('TowerOverlayDisplay').value = 'crosses';
-        document.getElementById('TowerComparisonMode').value = 'both';
-        document.getElementById('InverseVacuumTower21').checked = true;
+        // The preset owns the initial state, not subsequent user changes.
+        document.getElementById('TowerComparisonMode').value = 'optical';
+        document.getElementById('InverseVacuumTower21').checked = false;
+        document.getElementById('InverseAtmosphereLineMode').value = 'all';
+        document.getElementById('InverseAtmosphereLineQuality').value = 'p4';
+        document.getElementById('InverseAtmosphereLineCountLabel').style.display = 'none';
+        document.getElementById('InverseAtmosphereLineShow').checked = false;
+        document.getElementById('ShowLegacyTransmissionTowers').checked = false;
+        // Do not turn on the optical scene until the new all-tower P4 result
+        // is ready: the normal change handler rejects incomplete data.
+        document.getElementById('OpticalSceneTowers').checked = false;
         UpdateAll(false);
         var framing = FrameOpticsTestTower21();
-        status.textContent = framing + '; calculating atmosphere #21...';
-        // Reuse the actual UI handler and its progress / error reporting.
-        document.getElementById('InverseAtmosphereTower21').click();
-        var result = window.CurvatureInverseOpticsBridge.getAtmosphere21();
-        if (result.state === 'error') status.textContent = result.message;
-        else status.textContent = framing + '; see orange calculation status';
+        status.textContent = framing + '; calculating all 85 towers (P4)...';
+        document.getElementById('InverseAtmosphereLine').click();
+        // The asynchronous calculation's completion callback is responsible
+        // for enabling the scene, not the click handler itself.
+        var bridge = window.CurvatureInverseOpticsBridge;
+        var pollResult = function () {
+          var result = bridge.getLineAtmosphere();
+          if (result.state === 'ready' && bridge.hasCompleteP4Line(CurveApp)) {
+            var scene = document.getElementById('OpticalSceneTowers');
+            scene.checked = true;
+            scene.dispatchEvent(new Event('change'));
+            document.getElementById('InverseAtmosphereLineShow').checked = false;
+            graph.Redraw();
+            status.textContent = framing + '; optical scene ready (' + result.towers + ' towers)';
+          } else if (result.state === 'error') {
+            status.textContent = 'Optics Test failed: ' + result.message;
+          } else if (result.state === 'working') {
+            setTimeout(pollResult, 25);
+          } else {
+            status.textContent = 'Optics Test: P4 result not available';
+          }
+        };
+        pollResult();
       } catch (err) {
         status.textContent = 'Optics Test failed: ' + err.message;
         console.error('Optics Test preset:', err);

@@ -149,6 +149,9 @@
     var radialZ = world[2] + m.rEarth + m.Height;
     var altitude = Math.hypot(horizontal, radialZ) - m.rEarth;
     var distance = m.rEarth * Math.atan2(horizontal, radialZ);
+    // At the ground, subtraction of two Earth-sized radii can yield a
+    // sub-micrometre negative value. Do not classify that roundoff as occlusion.
+    if (altitude < 0 && altitude > -0.000001) altitude = 0;
     if (!(distance > 0) || !(altitude >= 0)) return null;
     return {horizontal:horizontal, altitude:altitude, distance:distance};
   }
@@ -781,7 +784,7 @@
         var footings = analyticP4 ? footingPolygons.map(function(poly) {
           return {tower:poly.tower, points:poly.world.map(sample)};
         }).filter(function(poly) {return poly.points.every(Boolean);}) : [];
-        lineAtmosphere={state:'ready',paths:paths,footings:footings,key:key,towers:indices.length,
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingsCaptured:footingPolygons.length,footingsProjected:footings.length,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
