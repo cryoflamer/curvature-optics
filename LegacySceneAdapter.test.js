@@ -154,3 +154,46 @@ const textReplay=textGraph();
 adapter.replay(textReplay,JSON.parse(JSON.stringify(textTrace)));
 assert.equal(textReplay.Trans,'world');
 assert.deepEqual(textLog,textOriginalLog);
+
+// Missing public drawing operations must be captured at the API boundary,
+// with the same state and call order as the original drawing pass.
+function styledGraph() {
+  return {log:[],color:'black',width:1,clip:null,
+    SetColor(color){this.color=color;this.log.push(['color',color]);},
+    SetLineWidth(width){this.width=width;this.log.push(['width',width]);},
+    SetClipRect(...args){this.clip=args.slice();this.log.push(['clip',...args]);},
+    TextBox(text,x,y,mode){this.log.push(['box',text,x,y,mode,this.color]);},
+    Text(text,x,y){this.log.push(['text',text,x,y,this.color]);},
+    CircleOnPlane(x,y,r,mode){this.log.push(['circle',x,y,r,mode,this.width]);},
+    Text3D(text,point){this.log.push(['text3d',text,point.slice(),this.color]);},
+    Line3D(a,b){this.log.push(['line3d',a.slice(),b.slice(),this.width]);}
+  };
+}
+const styledOriginal=styledGraph();
+const styledTrace=adapter.record(styledOriginal,g=>{
+  g.SetColor('yellow');g.TextBox('Refraction',5,6,2);
+  g.SetColor('blue');g.Text('Refraction',5,6);
+  g.SetLineWidth(2);g.SetClipRect(0,0,100,80,'canvas');
+  g.CircleOnPlane(0,0,3,1);g.Text3D('Eye-Level',[1,2,3]);
+  g.Line3D([0,0,0],[1,1,1]);
+});
+assert.deepEqual(styledTrace.commands.map(c=>c.method),[
+  'SetColor','TextBox','SetColor','Text','SetLineWidth','SetClipRect',
+  'CircleOnPlane','Text3D','Line3D'
+]);
+assert.equal(styledTrace.complete,true);
+const styledReplay=styledGraph();
+adapter.replay(styledReplay,JSON.parse(JSON.stringify(styledTrace)));
+assert.deepEqual(styledReplay.log,styledOriginal.log);
+assert.equal(styledReplay.color,styledOriginal.color);
+assert.equal(styledReplay.width,styledOriginal.width);
+assert.deepEqual(styledReplay.clip,styledOriginal.clip);
+
+// Nested public calls are already represented by their outer operation.
+const nestedGraph={log:[],Text(value){this.log.push(['text',value]);},
+  TextBox(value){this.Text(value);this.log.push(['box',value]);}};
+const nestedTrace=adapter.record(nestedGraph,g=>g.TextBox('label'));
+assert.deepEqual(nestedTrace.commands.map(c=>c.method),['TextBox']);
+const nestedReplay={log:[],Text:nestedGraph.Text,TextBox:nestedGraph.TextBox};
+adapter.replay(nestedReplay,nestedTrace);
+assert.deepEqual(nestedReplay.log,nestedGraph.log);

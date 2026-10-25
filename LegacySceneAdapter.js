@@ -17,13 +17,13 @@
     'SetTrans3D','ResetTrans3D','SaveTrans3D','RestoreTrans3D',
     'TransMove3D','TransScale3D','TransRotateX3D','TransRotateY3D','TransRotateZ3D',
     'AddTrans3D','SetTrans','ResetTrans','SelectTrans',
-    'SetClipping','SetGraphClipping','SetWindow','SetViewport','SetViewport3D',
+    'SetClipping','SetGraphClipping','SetClipRect','SetWindow','SetViewport','SetViewport3D',
     'SetCameraClipping','SetWindowToCameraScreen','SetCamera','SetCameraZoom',
     'SetLineAttr','SetAreaAttr','SetBgColor','SetColor','SetLineWidth','SetAlpha',
     'SetTextAttr','SetTextColor','SetTextRotation','SetMarkerAttr','SetMarkerSymbol','SetMarkerSize',
-    'LineOnPlane','PolygonOnPlane','Line3D','NewPoly3D',
+    'LineOnPlane','PolygonOnPlane','Line3D','CircleOnPlane','Text3D','NewPoly3D',
     'AddPointToPoly3D','DrawPoly3D','VectList3D',
-    'Line','DrawLine','DrawPolygon','DrawText','Text',
+    'Line','DrawLine','DrawPolygon','DrawText','Text','TextBox',
     'SetPlane','SetPlaneTrans','ResetPlaneTrans'
   ];
   function describe(value) {
