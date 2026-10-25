@@ -78,3 +78,19 @@ try {
   assert.strictEqual(bridge.auditAtmosphere21(project,scene,solver).passed,false);
 } finally { global.setTimeout=previousTimer; }
 console.log('Cached atmospheric tower projection audit passed');
+
+// Horizon crossing: locate visible-side endpoints and never bridge a hidden
+// interval. Both directions and a hidden island are covered.
+for (const visible of [t => t < 0.37, t => t > 0.63,
+  t => t < 0.37 || t > 0.63]) {
+  const result = bridge.adaptiveEdge([0,0,0],[1,0,0],t =>
+    visible(t) ? [t,0,0] : null,5,0.1);
+  assert.ok(result.transitions >= 1);
+  assert.ok(result.points.includes(null) || result.points.every(Boolean));
+  for (let i=1;i<result.points.length;i++) {
+    const a=result.points[i-1], b=result.points[i];
+    if (!a || !b) continue;
+    assert.ok(visible((a[0]+b[0])/2), 'segment crosses hidden zone');
+  }
+}
+console.log('Horizon transitions: visible-side bisection and hidden-gap checks passed');

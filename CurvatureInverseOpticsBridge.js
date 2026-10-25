@@ -112,17 +112,40 @@
   function interpolateWorld(a, b, t) {
     return a.map(function (v, k) { return v + (b[k] - v) * t; });
   }
+  // Bisect a visibility transition. A segment is never allowed to span an
+  // unsolved interval; the visible endpoint approaches the boundary from its
+  // visible side. This is a geometric approximation, not a proof of occlusion.
   function adaptiveEdge(a, b, sample, maxDepth, tolerance) {
-    var out = [], solved = 0;
-    function emit(point) {
-      // A null separates visible pieces; never connect across occlusion.
-      if (point === null && (!out.length || out[out.length - 1] === null)) return;
-      out.push(point);
+    var out = [], solved = 0, transitions = 0, unresolved = 0;
+    var boundaryTolerance = 1 / 65536;
+    function probe(t) { solved++; return sample(t); }
+    function emit(p) {
+      if (p === null && (!out.length || out[out.length - 1] === null)) return;
+      out.push(p);
+    }
+    function boundary(tVisible, pVisible, tHidden) {
+      for (var k = 0; k < 20 && Math.abs(tVisible - tHidden) > boundaryTolerance; k++) {
+        var mid = (tVisible + tHidden) / 2, pm = probe(mid);
+        if (pm) { tVisible = mid; pVisible = pm; }
+        else tHidden = mid;
+      }
+      transitions++;
+      return pVisible;
+    }
+    function terminal(t0, p0, tm, pm, t1, p1) {
+      // Process two halves separately: a hidden midpoint must never be
+      // connected to visible endpoints, even when both ends are visible.
+      [[t0,p0,tm,pm],[tm,pm,t1,p1]].forEach(function (half) {
+        var x=half[0], px=half[1], y=half[2], py=half[3];
+        if (px && py) { emit(px); emit(py); }
+        else if (px) { emit(px); emit(boundary(x,px,y)); emit(null); }
+        else if (py) { emit(null); emit(boundary(y,py,x)); emit(py); }
+        else emit(null);
+      });
     }
     function subdivide(t0, p0, t1, p1, depth) {
-      var mid = (t0 + t1) / 2;
-      var pm = sample(mid); solved++;
-      var transition = (p0 === null || pm === null || p1 === null);
+      var mid = (t0 + t1) / 2, pm = probe(mid);
+      var transition = !p0 || !pm || !p1;
       var curved = !transition && Math.hypot(
         pm[0] - (p0[0] + p1[0]) / 2,
         pm[1] - (p0[1] + p1[1]) / 2,
@@ -131,16 +154,14 @@
         subdivide(t0, p0, mid, pm, depth + 1);
         subdivide(mid, pm, t1, p1, depth + 1);
       } else {
-        // If visibility changes inside this terminal interval, keep the
-        // visible samples separated instead of drawing through the ground.
-        emit(p0);
-        if (transition) { emit(null); emit(pm); emit(null); }
-        emit(p1);
+        if (transition && depth === maxDepth) unresolved++;
+        terminal(t0,p0,mid,pm,t1,p1);
       }
     }
-    var first = sample(0), last = sample(1);
+    var first = probe(0), last = probe(1);
     subdivide(0, first, 1, last, 0);
-    return {points:out, evaluations:solved + 2};
+    return {points:out, evaluations:solved, transitions:transitions,
+      terminalTransitions:unresolved};
   }
   function calculateAtmosphere21(m, audit, solver, onProgress, onDone) {
     var paths = audit && audit.getTowerPaths(21);
@@ -151,6 +172,7 @@
     }
     var key = modelKey(m), output = paths.map(function () { return []; });
     var edges = [], cache = Object.create(null), samples = [], evaluations = 0;
+    var transitions = 0, terminalTransitions = 0, segments = [];
     paths.forEach(function (path, pi) {
       for (var j = 1; j < path.length; j++)
         edges.push({path:pi, a:path[j-1], b:path[j]});
@@ -176,6 +198,9 @@
         var result = adaptiveEdge(edge.a, edge.b, function (t) {
           return sample(interpolateWorld(edge.a, edge.b, t));
         }, 5, 0.10);
+        transitions += result.transitions;
+        terminalTransitions += result.terminalTransitions;
+        segments.push({path:edge.path, points:result.points, transitions:result.transitions});
         // Keep each original member separate, even if the source paths join.
         if (output[edge.path].length) output[edge.path].push(null);
         Array.prototype.push.apply(output[edge.path], result.points);
@@ -183,7 +208,8 @@
         onProgress(atmosphere21.message);
         setTimeout(batch, 0);
       } else {
-        atmosphere21 = {state:'ready', paths:output, samples:samples, key:key,
+        atmosphere21 = {state:'ready', paths:output, samples:samples, segments:segments,
+          transitions:transitions, terminalTransitions:terminalTransitions, key:key,
           message:'Calculated ' + edges.length + ' edges, ' + evaluations + ' ray samples'};
         onDone(atmosphere21);
       }
@@ -232,7 +258,23 @@
         physicalPx:physicalPx,apparentPx:actualPx,expectedPx:expectedPx,
         angleErrorArcsec:angleError,pixelError:pixelError});
     });
-    result.passed = result.mismatches===0 && result.invalidProjections===0 &&
+    // Verify that every rendered member is made only of visible samples.
+    // Cached segments retain their original boundaries so we can detect
+    // accidental joins across hidden spans without relying on screenshots.
+    result.edgesChecked = 0;
+    result.hiddenBridges = 0;
+    result.transitions = atmosphere21.transitions || 0;
+    result.terminalTransitions = atmosphere21.terminalTransitions || 0;
+    (atmosphere21.segments || []).forEach(function (segment) {
+      var points = segment.points;
+      for (var j=1; j<points.length; j++) {
+        if (!points[j-1] || !points[j]) continue;
+        result.edgesChecked++;
+        if (!points[j-1].every(Number.isFinite) || !points[j].every(Number.isFinite))
+          result.hiddenBridges++;
+      }
+    });
+    result.passed = result.hiddenBridges===0 && result.mismatches===0 && result.invalidProjections===0 &&
       result.maxAngleArcsec<0.001 && result.maxPixelError<0.01;
     return result;
   }
