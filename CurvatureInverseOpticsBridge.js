@@ -185,15 +185,26 @@
   // the polynomial angle. Designed for the standard n(h) profile only.
   function createPolynomialApproximation(m, solver, stats, options) {
     options=options||{};
+    if(stats) {
+      ['polyExactMs','polyCalibrationMs','polyOutside','polyHorizon','polyInvalid'].forEach(function(k){
+        if(!Number.isFinite(stats[k])) stats[k]=0;
+      });
+    }
     var R=m.rEarth, observer=m.Height;
     var effective=R/(1-R*0.000293/7350);
     var distances=options.distances||[3000,6000,10000,14000,18000,22000,26000];
     var heights=[10,25,45];
     var rows=[], boundaries=[];
+    function clock() { return typeof performance!=='undefined' && performance.now ? performance.now() : Date.now(); }
     function exact(d,h) {
       if(stats) stats.polyExact++;
-      return solver.solveAngle({geometry:'globe',atmosphere:'standard',
-        observerHeight:observer,radius:R,distance:d,targetHeight:h,step:25});
+      var t=clock();
+      try {
+        return solver.solveAngle({geometry:'globe',atmosphere:'standard',
+          observerHeight:observer,radius:R,distance:d,targetHeight:h,step:25});
+      } finally {
+        if(stats) stats.polyExactMs+=clock()-t;
+      }
     }
     function analytic(d,h) {
       var a=d/effective;
@@ -223,6 +234,7 @@
     // Lazily calibrate once, rather than blocking the UI on mode selection.
     function calibrate() {
       if(rows.length) return;
+      var calibrationStart=clock();
       distances.forEach(function(d) {
         var values=heights.map(function(h) {
           var result=exact(d,h);
@@ -243,11 +255,11 @@
         }
         boundaries.push(high-boundaryEstimate(d));
       });
-      if(stats) stats.polyCalibration=stats.polyExact;
+      if(stats) { stats.polyCalibration=stats.polyExact; stats.polyCalibrationMs+=clock()-calibrationStart; }
     }
     function get(d,h) {
       if(!(d>=distances[0] && d<=distances[distances.length-1]) || h>55 || h<0)
-        {if(stats)stats.polyDirect++;return exact(d,h);}
+        {if(stats){stats.polyDirect++;stats.polyOutside++;}return exact(d,h);}
       calibrate();
       var estimated=boundaryEstimate(d);
       // Boundaries store a correction except for ground-visible anchors.
@@ -255,13 +267,13 @@
       // Conservative guard against boundary interpolation and bisection error.
       // Never declare visibility based on an unverified polynomial near contact.
       if(Math.abs(h-boundary)<0.15) {
-        if(stats)stats.polyDirect++;
+        if(stats){stats.polyDirect++;stats.polyHorizon++;}
         return exact(d,h);
       }
       if(h<boundary-0.15) {if(stats)stats.polyRejected++;return {status:'occluded'};}
       var corrections=rows.map(function(row){return row.every(Number.isFinite)?correctionAt(h,row):null;});
       if(corrections.some(function(v){return v===null;})) {
-        if(stats)stats.polyDirect++;
+        if(stats){stats.polyDirect++;stats.polyInvalid++;}
         return exact(d,h);
       }
       if(stats)stats.polyInterpolated++;
@@ -580,6 +592,7 @@
     var bundled=options.quality==='bundle';
     var poly=options.quality==='poly';
     stats.polyExact=0;stats.polyCalibration=0;stats.polyDirect=0;stats.polyInterpolated=0;stats.polyRejected=0;
+    stats.polyExactMs=0;stats.polyCalibrationMs=0;stats.polyOutside=0;stats.polyHorizon=0;stats.polyInvalid=0;
     var polynomial=poly?createPolynomialApproximation(m,solver,stats):null;
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
@@ -597,13 +610,17 @@
       forwardBundle=createForwardBundle(m,tracer,solver,stats,{maxDistance:maxDistance+100});
     }
     var started=Date.now();
+    var profileClock=function(){return typeof performance!=='undefined' && performance.now?performance.now():Date.now();};
+    var profileSampleMs=0, profileGeometryMs=0;
     var i=0, evaluations=0, visible=0, hidden=0, transitions=0;
     lineAtmosphere = {state:'working',paths:null,key:key,generation:generation,
       message:'0 / '+edges.length+' edges'};
     function sample(world) {
       var k=world.map(function(v){return v.toFixed(7);}).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache,k)) {
-        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap,forwardBundle,polynomial);
+        var sampleStart=profileClock();
+        try {cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap,forwardBundle,polynomial);}
+        finally {if(poly)profileSampleMs+=profileClock()-sampleStart;}
         evaluations++;
         if (cache[k]) visible++; else hidden++;
       }
@@ -615,11 +632,13 @@
       var end=Math.min(i+8,edges.length);
       for (;i<end;i++) {
         var e=edges[i];
+        var geometryStart=profileClock();
         var result=adaptiveEdge(e.a,e.b,function(t){
           return sample(interpolateWorld(e.a,e.b,t));
         },5,0.10);
         transitions+=result.transitions;
         paths.push({tower:e.tower,points:result.points});
+        if(poly)profileGeometryMs+=profileClock()-geometryStart;
       }
       lineAtmosphere.message=i+' / '+edges.length+' edges';
       onProgress(lineAtmosphere.message);
@@ -633,6 +652,8 @@
           mapExact:stats.mapExact,mapDirect:stats.mapDirect,mapCells:stats.mapCells,mapInterpolated:stats.mapInterpolated,
           bundleTraces:stats.bundleTraces,bundleExact:stats.bundleExact,bundleInterpolated:stats.bundleInterpolated,
           polyExact:stats.polyExact,polyCalibration:stats.polyCalibration,polyDirect:stats.polyDirect,polyInterpolated:stats.polyInterpolated,polyRejected:stats.polyRejected,
+          polyProfile:{calibrationMs:stats.polyCalibrationMs,exactMs:stats.polyExactMs,sampleMs:profileSampleMs,edgeMs:profileGeometryMs,
+            outside:stats.polyOutside,horizon:stats.polyHorizon,invalid:stats.polyInvalid},
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
@@ -641,7 +662,10 @@
             (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
             (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')+
             (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')+
-            (poly?', calibration='+stats.polyCalibration+', exact='+stats.polyExact+', interpolated='+stats.polyInterpolated+', rejected='+stats.polyRejected+', direct='+stats.polyDirect:'')};
+            (poly?', calibration='+stats.polyCalibration+', exact='+stats.polyExact+', interpolated='+stats.polyInterpolated+', rejected='+stats.polyRejected+', direct='+stats.polyDirect+
+              ', profile(ms): calibration='+stats.polyCalibrationMs.toFixed(1)+', exact='+stats.polyExactMs.toFixed(1)+
+              ', edge='+profileGeometryMs.toFixed(1)+', sample='+profileSampleMs.toFixed(1)+
+              ', direct reasons: horizon='+stats.polyHorizon+', outside='+stats.polyOutside+', invalid='+stats.polyInvalid:'')};
         onDone(lineAtmosphere);
       }
     }
