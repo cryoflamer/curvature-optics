@@ -10,7 +10,9 @@
   'use strict';
   function comparePixels(a,b){
     if(!a||!b||a.width!==b.width||a.height!==b.height)
-      return {ok:false,reason:'Canvas dimensions differ'};
+      return {ok:false,reason:'Canvas dimensions differ',
+        originalSize:{width:a&&a.width,height:a&&a.height},
+        replaySize:{width:b&&b.width,height:b&&b.height}};
     var left=a.getContext('2d').getImageData(0,0,a.width,a.height).data;
     var right=b.getContext('2d').getImageData(0,0,b.width,b.height).data;
     var mismatched=0,maxDifference=0;
@@ -47,12 +49,18 @@
       prototype.CreateDomObjects=function(){
         this.ContainerDiv=host;this.ClippingDiv=clip;this.Canvas=canvas;
         this.LastContWidth=original.CanvasWidth+2*(original.BorderWidth||0);
-        this.CanvasRatioHW=canvas.height/canvas.width;
+        // Use logical graph dimensions, not device-pixel canvas dimensions.
+        this.CanvasRatioHW=original.CanvasHeight/original.CanvasWidth;
       };
       try{
         shadow=new GraphCtor({Width:original.CanvasWidth,Height:original.CanvasHeight,
           AutoReset:true,AutoClear:true,AutoScalePix:original.AutoScalePix});
       }finally{prototype.CreateDomObjects=create;}
+      // The graph constructor initializes a logical viewport but may resize
+      // the backing store during its own setup (especially on HiDPI screens).
+      // Match the live graph's logical size through the normal sizing path
+      // so its pixel ratio, transforms and backing dimensions stay coherent.
+      shadow.UpdateCanvasSize(original.CanvasWidth+2*shadow.BorderWidth);
       // Reset like the normal graph Draw() entry point; never draw live model.
       shadow.Reset(true);
       if(shadow.ClientResetFunc)shadow.ClientResetFunc(shadow);
