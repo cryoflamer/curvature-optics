@@ -563,6 +563,20 @@
   // Clip a foundation against the P4 visibility boundary.  A single
   // contiguous visible arc can be closed along that boundary; multiple arcs
   // are intentionally rejected rather than bridged through hidden terrain.
+  // Stage 1 diagnostic: retain the complete original polygon and let the
+  // legacy horizon disk, not per-vertex P4 visibility, occlude distant bases.
+  // A vertex without a P4 solution is temporarily drawn at its physical
+  // geometric position; this is NOT an optical reconstruction.
+  function diagnosticFullFooting(world, sample) {
+    var n=world.length;
+    if(n>1 && world[0].every(function(v,k){return Math.abs(v-world[n-1][k])<1e-7;})) n--;
+    if(n<3) return null;
+    return {points:world.slice(0,n).map(function(w){return sample(w)||w.slice();}),partial:false};
+  }
+  function footingMaskMode() {
+    var el=typeof document!=='undefined' && document.getElementById('OpticalFootingHorizonMask');
+    return el ? el.value : 'legacy';
+  }
   function clipVisibleFooting(world, sample) {
     var n = world.length;
     if (n < 3) return null;
@@ -826,14 +840,15 @@
         // in the original vertex order, including the concave silhouette.
         // Only the projection and visibility clipping differ here.
         var footingCandidates = analyticP4 ? footingPolygons.map(function(poly) {
-          var clipped = clipVisibleFooting(poly.world, sample);
+          var clipped = diagnosticFullFooting(poly.world, sample);
           // Preserve original perimeter separately from the visibility-clipped fill.
           var perimeter=[], n=poly.world.length;
           if(n>1 && poly.world[0].every(function(v,k){return Math.abs(v-poly.world[n-1][k])<1e-7;})) n--;
           for(var j=0;j<n;j++) {
             var a=poly.world[j], b=poly.world[(j+1)%n];
-            var edge=adaptiveEdge(a,b,function(t){return sample(interpolateWorld(a,b,t));},4,0.10);
-            if(edge.points.some(Boolean)) perimeter.push(edge.points);
+            // Stage 1: preserve the complete source perimeter, including edges
+            // whose P4 solution is hidden. The geometric disk handles masking.
+            perimeter.push([sample(a)||a.slice(),sample(b)||b.slice()]);
           }
           return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial,perimeter:perimeter};
         }) : [];
@@ -1100,19 +1115,35 @@
         // Match DrawShape's original filled-and-outlined PolygonOnPlane(...,3).
         // Do not triangulate or draw independent outlines: both change the
         // silhouette and can introduce seams or incorrect closing segments.
-        g.SetAreaAttr('#a38d60', '#695737', 1);
-        lineAtmosphere.footings.forEach(function(footing) {
-          g.NewPoly3D();
-          footing.points.forEach(function(point) { g.AddPointToPoly3D(point); });
-          // Area and line clipping are independent in the original renderer.
-          // The clipping closure is not an original edge and must not be stroked.
-          g.DrawPoly3D(2);
-          g.SetLineAttr('#695737', 1);
-          (footing.perimeter || []).forEach(function(edge) {
-            for(var j=1;j<edge.length;j++)
-              if(edge[j-1] && edge[j]) g.Line3D(edge[j-1],edge[j]);
-          });
+        var maskMode=footingMaskMode();
+        var horizonRange=Math.sqrt(Math.max(0,2*m.rEarth*m.Height+m.Height*m.Height));
+        var far=[],near=[];
+        lineAtmosphere.footings.forEach(function(footing){
+          var range=m.ObjDist[0]+(footing.tower-1)*m.ObjDeltaDist[0];
+          (range>horizonRange?far:near).push(footing);
         });
+        function paintFootings(items) {
+          g.SetAreaAttr('#a38d60','#695737',1);
+          items.forEach(function(footing) {
+            g.NewPoly3D();
+            footing.points.forEach(function(point){g.AddPointToPoly3D(point);});
+            g.DrawPoly3D(2);
+            g.SetLineAttr('#695737',1);
+            (footing.perimeter||[]).forEach(function(edge){
+              for(var j=1;j<edge.length;j++)
+                if(edge[j-1]&&edge[j])g.Line3D(edge[j-1],edge[j]);
+            });
+          });
+        }
+        paintFootings(far);
+        if(maskMode==='legacy' && far.length) {
+          // Same opaque horizon disk and plane as DrawObjectsBehindHorizon.
+          // Drawn between distant and near foundations, never over near ones.
+          g.SetPlane([0,0,-m.zDisk],[1,0,0],[0,1,0]);
+          g.SetBgColor('white');
+          g.CircleOnPlane(0,0,m.rDisk,2);
+        }
+        paintFootings(near);
       }
       g.SetLineAttr('#ff8800', 1.25);
       lineAtmosphere.paths.forEach(function(member) {
