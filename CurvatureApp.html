@@ -168,6 +168,19 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             '; ray range sensitivity=' + num(rendered.maxRangeDependentPixelShift,3) + ' px' +
             (rendered.cameraNotAtObserver ?
               ' [WARNING: graphics camera is not at the physical observer; image depends on ray range]' : '');
+          var shape = bridge.auditShape21(graph, CurveApp,
+            window.CurvatureRenderedVertexAudit);
+          if (shape) {
+            out.textContent += '\nSHAPE #21 (orange vs purple): matched=' + shape.points +
+              '; mean shift=(' + num(shape.meanDx,3) + ', ' + num(shape.meanDy,3) + ') px' +
+              '; non-rigid RMS=' + num(shape.rmsNonRigidPx,3) + ' px' +
+              '; max residual=' + num(shape.maxNonRigidPx,3) + ' px' +
+              '; vertical shift range=' + num(shape.verticalShiftRangePx,3) + ' px' +
+              '; original edges=' + shape.edges +
+              '; max edge length change=' + num(shape.maxLengthChangePercent,3) + '%' +
+              '; max edge tilt change=' + num(shape.maxTiltChangeDeg,3) + ' deg';
+            console.table(shape.edgeRows);
+          }
           console.table(rendered.rows);
         } else {
           out.textContent += '\n\nORANGE OVERLAY: calculate atmosphere #21 first (or refresh after model changes)';

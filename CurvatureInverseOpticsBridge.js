@@ -291,6 +291,62 @@
       azimuthErrorArcsec:Math.abs(azimuthError)*180/Math.PI*3600,
       expectedDirection:expected,actualDirection:actual};
   }
+  // Compare matched physical/apparent vertices in screen space. A translation
+  // removes only the mean displacement; residuals quantify real image warping.
+  // Original members are evaluated by their endpoints, not by an arbitrary
+  // nearest-neighbour match among subdivided apparent samples.
+  function compareShape(g, samples, edges) {
+    if (!g || !Array.isArray(samples)) return null;
+    var points=[], lookup=Object.create(null);
+    function key(v) { return v.map(function(x){return x.toFixed(7);}).join(','); }
+    samples.forEach(function(s) {
+      if (!s || !s.apparent || !s.physical) return;
+      var p=project(g,s.physical), a=project(g,s.apparent);
+      if (!p.concat(a).every(Number.isFinite)) return;
+      var entry={physical:s.physical,apparent:s.apparent,physicalPx:p,apparentPx:a,
+        dx:a[0]-p[0],dy:a[1]-p[1]};
+      points.push(entry);
+      lookup[key(s.physical)]=entry;
+    });
+    if (!points.length) return null;
+    var meanDx=0,meanDy=0;
+    points.forEach(function(p){meanDx+=p.dx;meanDy+=p.dy;});
+    meanDx/=points.length;meanDy/=points.length;
+    var rms=0,maxResidual=0,minDy=Infinity,maxDy=-Infinity;
+    points.forEach(function(p){
+      var residual=Math.hypot(p.dx-meanDx,p.dy-meanDy);
+      rms+=residual*residual;maxResidual=Math.max(maxResidual,residual);
+      minDy=Math.min(minDy,p.dy);maxDy=Math.max(maxDy,p.dy);
+    });
+    var edgeRows=[], maxLengthChangePercent=0,maxTiltChangeDeg=0;
+    (edges||[]).forEach(function(e){
+      var u=lookup[key(e.a)],v=lookup[key(e.b)];
+      if (!u || !v) return;
+      var px=v.physicalPx[0]-u.physicalPx[0],py=v.physicalPx[1]-u.physicalPx[1];
+      var ax=v.apparentPx[0]-u.apparentPx[0],ay=v.apparentPx[1]-u.apparentPx[1];
+      var lp=Math.hypot(px,py),la=Math.hypot(ax,ay);
+      if (lp<1e-9 || la<1e-9) return;
+      var lengthChangePercent=100*(la/lp-1);
+      var tiltChangeDeg=Math.atan2(px*ay-py*ax,px*ax+py*ay)*180/Math.PI;
+      maxLengthChangePercent=Math.max(maxLengthChangePercent,Math.abs(lengthChangePercent));
+      maxTiltChangeDeg=Math.max(maxTiltChangeDeg,Math.abs(tiltChangeDeg));
+      edgeRows.push({lengthChangePercent:lengthChangePercent,tiltChangeDeg:tiltChangeDeg});
+    });
+    return {points:points.length,meanDx:meanDx,meanDy:meanDy,
+      rmsNonRigidPx:Math.sqrt(rms/points.length),maxNonRigidPx:maxResidual,
+      verticalShiftRangePx:maxDy-minDy,edges:edgeRows.length,
+      maxLengthChangePercent:maxLengthChangePercent,maxTiltChangeDeg:maxTiltChangeDeg,
+      edgeRows:edgeRows};
+  }
+  function auditShape21(g,m,audit) {
+    if (atmosphere21.state!=='ready' || atmosphere21.key!==modelKey(m)) return null;
+    var paths=audit && audit.getTowerPaths(21);
+    if (!paths) return null;
+    var edges=[];
+    paths.forEach(function(path){for(var i=1;i<path.length;i++)
+      edges.push({a:path[i-1],b:path[i]});});
+    return compareShape(g,atmosphere21.samples,edges);
+  }
   // Audit the ACTUAL cached orange overlay, not a newly reconstructed tower.
   // Re-solve each physical sample and check that the stored 3D point projects
   // to the same camera pixel as the independently reconstructed arrival ray.
@@ -415,7 +471,7 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
-    auditAtmosphere21:auditAtmosphere21,
+    auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
 }));
