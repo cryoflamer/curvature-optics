@@ -1305,6 +1305,7 @@ document.getElementById('LegacyFrameCaptureButton').addEventListener('click', fu
 // graph DrawFunc invocation. The normal DrawModel remains the only renderer.
 var legacyFrameAuditRequested = false;
 var legacyFrameAuditInProgress = false;
+var previousLegacyFrameCapture = null;
 function DrawModelWithOptionalAudit(g) {
   if (!legacyFrameAuditRequested || legacyFrameAuditInProgress ||
       !window.LegacySceneAudit) return DrawModel(g);
@@ -1388,6 +1389,19 @@ function DrawModelWithOptionalAudit(g) {
     // Large PNG data URLs must never be embedded in the audit JSON.
     var canvasImages = canvasProbe && canvasProbe.images;
     if (canvasProbe && canvasImages) delete canvasProbe.images;
+    var currentCapture = snapshotProbe ? {
+      originalCanvas:snapshotProbe.captureFingerprint(captureEndPixels),
+      sceneFrame:snapshotProbe.frameFingerprint(sceneFrame)
+    } : null;
+    var interCapture = currentCapture ? {
+      previous:previousLegacyFrameCapture,current:currentCapture,
+      originalHashChanged:previousLegacyFrameCapture ?
+        previousLegacyFrameCapture.originalCanvas.hash!==currentCapture.originalCanvas.hash : null,
+      frameHashChanged:previousLegacyFrameCapture && previousLegacyFrameCapture.sceneFrame && currentCapture.sceneFrame ?
+        previousLegacyFrameCapture.sceneFrame.hash!==currentCapture.sceneFrame.hash : null,
+      note:'Compares consecutive captures in this page session; does not infer repaint causes'
+    } : null;
+    if(currentCapture)previousLegacyFrameCapture=currentCapture;
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
       schema: 'legacy-frame-audit-v2',
@@ -1397,6 +1411,7 @@ function DrawModelWithOptionalAudit(g) {
       isolatedReplayPreflight: preflight || null,
       detachedCanvasReplay: canvasProbe || null,
       originalCanvasTimeline: canvasTimeline,
+      interCapture: interCapture,
       bootstrapSensitivity: bootstrapSensitivity,
       originalCanvasPipeline: compareCanvas ? {pipeline:originalPipeline,paintOperations:originalPaint} : null,
       firstClippingDifference: firstClippingDifference || null,

@@ -126,3 +126,18 @@ test('bootstrap overrides are explicit and do not mutate the original graph',()=
    {MaxCurveSegments:1,AngleMeasure:'deg'});
  assert.deepEqual(original,{MaxCurveSegments:256,AngleMeasure:'rad'});
 });
+
+test('paired comparison and evidence share the same readings',()=>{
+ let reads=0;
+ function changing(){return {width:1,height:1,getContext(){return {getImageData(){reads++;return {data:new Uint8ClampedArray([reads,0,0,255])};}}}};}
+ const result=probe.comparePair(changing(),changing());
+ assert.equal(reads,2);
+ assert.equal(result.comparison.mismatchedPixels,result.pixelEvidence.mismatchedPixels);
+ assert.equal(result.comparison.mismatchedPixels,1);
+});
+test('frame fingerprint is stable and detects changed commands',()=>{
+ const a={commands:[{method:'Draw',args:['тест']}]};
+ const b={commands:[{method:'Draw',args:['інше']}]};
+ assert.equal(probe.frameFingerprint(a).hash,probe.frameFingerprint(a).hash);
+ assert.notEqual(probe.frameFingerprint(a).hash,probe.frameFingerprint(b).hash);
+});

@@ -8,55 +8,45 @@
   root.LegacyCanvasReplayProbe=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(adapter){
   'use strict';
-  function comparePixels(a,b){
-    if(!a||!b||a.width!==b.width||a.height!==b.height)
-      return {ok:false,reason:'Canvas dimensions differ',
-        originalSize:{width:a&&a.width,height:a&&a.height},
-        replaySize:{width:b&&b.width,height:b&&b.height}};
-    var left=a.getContext('2d').getImageData(0,0,a.width,a.height).data;
-    var right=b.getContext('2d').getImageData(0,0,b.width,b.height).data;
-    var mismatched=0,maxDifference=0;
-    for(var i=0;i<left.length;i+=4){
-      var different=false;
-      for(var k=0;k<4;k++){
-        var delta=Math.abs(left[i+k]-right[i+k]);
-        if(delta){different=true;maxDifference=Math.max(maxDifference,delta);}
-      }
-      if(different)mismatched++;
-    }
-    return {ok:true,width:a.width,height:a.height,mismatchedPixels:mismatched,
-      totalPixels:a.width*a.height,maxChannelDifference:maxDifference,
-      identical:mismatched===0};
+  // One immutable RGBA read per source, shared by comparison and evidence.
+  function readPixels(canvas){
+    if(!canvas)return null;
+    var data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+    return {width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(data)};
   }
-  // Bounded, deterministic fingerprints and exact RGBA mismatch samples.
-  // Hashes are diagnostics, not cryptographic proof of equality.
-  function pixelEvidence(a,b,limit){
-    if(!a||!b||a.width!==b.width||a.height!==b.height)return null;
-    var w=a.width,h=a.height;
-    var left=a.getContext('2d').getImageData(0,0,w,h).data;
-    var right=b.getContext('2d').getImageData(0,0,w,h).data;
-    function hash(bytes){
-      var value=2166136261;
-      for(var i=0;i<bytes.length;i++)value=Math.imul(value^bytes[i],16777619)>>>0;
-      return ('00000000'+value.toString(16)).slice(-8);
+  function fingerprint(bytes){
+    var value=2166136261;
+    for(var i=0;i<bytes.length;i++)value=Math.imul(value^bytes[i],16777619)>>>0;
+    return ('00000000'+value.toString(16)).slice(-8);
+  }
+  function compareReadings(a,b,limit){
+    if(!a||!b||a.width!==b.width||a.height!==b.height){
+      return {comparison:{ok:false,reason:'Canvas dimensions differ',
+        originalSize:{width:a&&a.width,height:a&&a.height},
+        replaySize:{width:b&&b.width,height:b&&b.height}},pixelEvidence:null};
     }
-    var samples=[],bounds=null,count=0;
-    for(var i=0;i<left.length;i+=4){
-      if(left[i]===right[i]&&left[i+1]===right[i+1]&&
-         left[i+2]===right[i+2]&&left[i+3]===right[i+3])continue;
+    var mismatched=0,maxDifference=0,bounds=null,samples=[],w=a.width;
+    for(var i=0;i<a.data.length;i+=4){
+      var maximum=0;
+      for(var k=0;k<4;k++)maximum=Math.max(maximum,Math.abs(a.data[i+k]-b.data[i+k]));
+      if(!maximum)continue;
+      mismatched++;maxDifference=Math.max(maxDifference,maximum);
       var index=i/4,x=index%w,y=Math.floor(index/w);
-      count++;
       if(!bounds)bounds={minX:x,minY:y,maxX:x,maxY:y};
       else {bounds.minX=Math.min(bounds.minX,x);bounds.maxX=Math.max(bounds.maxX,x);
         bounds.minY=Math.min(bounds.minY,y);bounds.maxY=Math.max(bounds.maxY,y);}
-      if(samples.length<(limit||16))samples.push({x:x,y:y,
-        original:Array.prototype.slice.call(left,i,i+4),
-        replay:Array.prototype.slice.call(right,i,i+4)});
+      if(samples.length<(limit===undefined?16:limit))samples.push({x:x,y:y,
+        original:Array.prototype.slice.call(a.data,i,i+4),
+        replay:Array.prototype.slice.call(b.data,i,i+4)});
     }
-    return {hashAlgorithm:'fnv1a32-rgba',originalHash:hash(left),replayHash:hash(right),
-      mismatchedPixels:count,bounds:bounds,firstDifferences:samples};
+    return {comparison:{ok:true,width:a.width,height:a.height,mismatchedPixels:mismatched,
+      totalPixels:a.width*a.height,maxChannelDifference:maxDifference,identical:mismatched===0},
+      pixelEvidence:{hashAlgorithm:'fnv1a32-rgba',originalHash:fingerprint(a.data),
+        replayHash:fingerprint(b.data),mismatchedPixels:mismatched,bounds:bounds,firstDifferences:samples}};
   }
-  // Immutable pixel copies for phase-boundary checks; never draw on the live canvas.
+  function comparePair(a,b,limit){return compareReadings(readPixels(a),readPixels(b),limit);}
+  function comparePixels(a,b){return comparePair(a,b).comparison;}
+  function pixelEvidence(a,b,limit){return comparePair(a,b,limit).pixelEvidence;}
   function snapshotCanvas(source){
     if(!source)return null;
     var copy=document.createElement('canvas');
@@ -66,35 +56,24 @@
     return copy;
   }
   function snapshotTimeline(captureEnd,beforeReplay,afterReplay){
-    function pair(a,b){
-      return {comparison:comparePixels(a,b),pixelEvidence:pixelEvidence(a,b)};
-    }
-    return {
-      captureEndToBeforeReplay:pair(captureEnd,beforeReplay),
-      beforeReplayToAfterReplay:pair(beforeReplay,afterReplay),
-      captureEndToAfterReplay:pair(captureEnd,afterReplay),
-      note:'Snapshots are immutable RGBA copies taken at synchronous phase boundaries; asynchronous repaints outside these boundaries are not observed'
-    };
+    return {captureEndToBeforeReplay:comparePair(captureEnd,beforeReplay),
+      beforeReplayToAfterReplay:comparePair(beforeReplay,afterReplay),
+      captureEndToAfterReplay:comparePair(captureEnd,afterReplay),
+      note:'Each comparison and its evidence derive from the same immutable RGBA readings'};
   }
-  // Immutable pixel copies for phase-boundary checks; never draw on the live canvas.
-  function snapshotCanvas(source){
-    if(!source)return null;
-    var copy=document.createElement('canvas');
-    copy.width=source.width;copy.height=source.height;
-    copy.getContext('2d').putImageData(
-      source.getContext('2d').getImageData(0,0,source.width,source.height),0,0);
-    return copy;
+  function captureFingerprint(canvas){
+    var reading=readPixels(canvas);
+    return reading?{width:reading.width,height:reading.height,
+      hashAlgorithm:'fnv1a32-rgba',hash:fingerprint(reading.data)}:null;
   }
-  function snapshotTimeline(captureEnd,beforeReplay,afterReplay){
-    function pair(a,b){
-      return {comparison:comparePixels(a,b),pixelEvidence:pixelEvidence(a,b)};
-    }
-    return {
-      captureEndToBeforeReplay:pair(captureEnd,beforeReplay),
-      beforeReplayToAfterReplay:pair(beforeReplay,afterReplay),
-      captureEndToAfterReplay:pair(captureEnd,afterReplay),
-      note:'Snapshots are immutable RGBA copies taken at synchronous phase boundaries; asynchronous repaints outside these boundaries are not observed'
-    };
+  function frameFingerprint(frame){
+    if(!frame)return null;
+    var encoded=JSON.stringify(frame),bytes=[];
+    // Hash UTF-8 bytes, including non-ASCII command arguments.
+    if(typeof TextEncoder!=='undefined')bytes=new TextEncoder().encode(encoded);
+    else bytes=Buffer.from(encoded,'utf8');
+    return {hashAlgorithm:'fnv1a32-utf8-json',hash:fingerprint(bytes),
+      commandCount:frame.commands&&frame.commands.length||0};
   }
   // Diagnostic-only: preserve the source pixels and paint differences onto a
   // separate canvas. Never modify the production or detached replay canvas.
@@ -329,11 +308,12 @@
         },clippingTrace);
       });
       var analysis=exportImages?analyzePixels(original.Canvas,canvas):null;
-      return {ok:true,comparison:analysis?analysis.comparison:comparePixels(original.Canvas,canvas),
+      var paired=comparePair(original.Canvas,canvas);
+      return {ok:true,comparison:paired.comparison,
         diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
         paintOperations:paintOperations,pipeline:pipeline,clippingTrace:clippingTrace,
         bootstrap:bootstrap,
-        pixelEvidence:pixelEvidence(original.Canvas,canvas),
+        pixelEvidence:paired.pixelEvidence,
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -344,5 +324,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,pixelEvidence:pixelEvidence,snapshotCanvas:snapshotCanvas,snapshotTimeline:snapshotTimeline,snapshotCanvas:snapshotCanvas,snapshotTimeline:snapshotTimeline,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
+  return {comparePixels:comparePixels,pixelEvidence:pixelEvidence,snapshotCanvas:snapshotCanvas,snapshotTimeline:snapshotTimeline,comparePair:comparePair,captureFingerprint:captureFingerprint,frameFingerprint:frameFingerprint,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
 }));
