@@ -82,6 +82,13 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 
 <a id="App"></a>
 
+<!-- Renderer stays visible; experimental controls are collapsed by default. -->
+<div id="OpticsRendererToolbar" style="padding:0.45em 0.7em; margin:0.5em 0; border:1px solid #bbb; background:#f7f7f7;">
+  <label>Renderer <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both (diagnostic)</option></select></label>
+  <span id="OpticsComparisonStatus" role="status" aria-live="polite" style="margin-left:0.6em;font-size:0.85em;"></span>
+</div>
+<details id="OpticsAdvancedDiagnostics" style="margin:0.4em 0;">
+  <summary style="cursor:pointer;user-select:none;">Advanced diagnostics (optics tests)</summary>
 <section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Optical backend (experimental)</strong>
   <label style="margin-left:1em;">Method
@@ -109,10 +116,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test</button>
-  <label>Renderer <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both</option></select></label>
   <label>Focus tower <input id="OpticsFocusTower" type="number" min="1" max="85" value="21" style="width:4em"></label>
   <button id="OpticsFocusTowerButton" type="button">Frame tower</button>
-  <span id="OpticsComparisonStatus" role="status"></span>
   <span id="OpticsTestPresetStatus" role="status" aria-live="polite" style="font:12px monospace"></span>
   <label style="margin-left:1em;">Geometry <select id="TowerDiagnosticGeometry"><option value="globe">Globe</option><option value="flat">Flat</option></select></label>
   <label style="margin-left:1em;">Atmosphere <select id="TowerDiagnosticAtmosphere"><option value="vacuum">Vacuum</option><option value="standard">Standard n(h)</option></select></label>
@@ -457,6 +462,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <div style="font-size:0.85em;margin-top:0.35em;">Markers: <span style="color:#d62728">red = Vacuum</span>, <span style="color:#008f55">green = Standard n(h)</span>. Vacuum only hides green markers for perspective calibration. Single-model view, Ray tracing mode only; click Calculate to refresh.</div>
   <div id="TowerDiagnosticOutput" style="margin-top:0.4em;overflow-x:auto;">Select TrnsmLine, then click Calculate tower angles. This diagnostic does not alter the scene.</div>
 </section>
+</details>
 
 <ul id="CurveDemosTabs" class="TabSelectors Top TopMargin">
 <li class="TabButton TabEnabled " id="CurveButton">Curve</li>
