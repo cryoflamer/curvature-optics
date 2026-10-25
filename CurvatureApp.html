@@ -1309,12 +1309,21 @@ function DrawModelWithOptionalAudit(g) {
   legacyFrameAuditInProgress = true;
   var status = document.getElementById('LegacyFrameCaptureStatus');
   try {
-    var result = window.LegacySceneAudit.captureFrame(g, DrawModel);
+    var compareCanvas = document.getElementById('LegacyFrameCompareCanvas').checked;
+    var originalPipeline = null, originalPaint = null;
+    var result = window.LegacySceneAudit.captureFrame(g, function(graph) {
+      if (!compareCanvas || !window.LegacyCanvasReplayProbe) return DrawModel(graph);
+      originalPaint = window.LegacyCanvasReplayProbe.observePaint(graph.Context2D, function() {
+        originalPipeline = window.LegacyCanvasReplayProbe.observePipeline(graph, function() {
+          DrawModel(graph);
+        });
+      });
+    });
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       result.trace, window.JsgPolygon);
     var exportCanvasPng = document.getElementById('LegacyFrameExportCanvasPng').checked;
-    var canvasProbe = document.getElementById('LegacyFrameCompareCanvas').checked &&
+    var canvasProbe = compareCanvas &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
         g, result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
     // Large PNG data URLs must never be embedded in the audit JSON.
@@ -1328,6 +1337,7 @@ function DrawModelWithOptionalAudit(g) {
       replayVerified: false,
       isolatedReplayPreflight: preflight || null,
       detachedCanvasReplay: canvasProbe || null,
+      originalCanvasPipeline: compareCanvas ? {pipeline:originalPipeline,paintOperations:originalPaint} : null,
       summary: result.summary,
       notes: [
         'Capture is a pass-through of the active DrawModel invocation',

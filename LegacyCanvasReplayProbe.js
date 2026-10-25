@@ -88,6 +88,57 @@
     }
     return counts;
   }
+  // Observe the same internal pipeline on the live graph and on replay.
+  // Instrument instance methods only, restoring every override even on error.
+  // Counts describe method entry/output, not visibility or pixel equivalence.
+  function observePipeline(graph,draw){
+    var names=['DrawPoly3D','Polygon3D','TransClipPolygon3D','TransPolys3D',
+      'ClipPolygon3D','CameraTrans3D','DrawPolygonList3D','Polygon','DriverDrawPoly'];
+    var stages={},saved=[];
+    function sizeOf(value){
+      if(!value||typeof value!=='object')return null;
+      if(typeof value.Size==='number')return value.Size;
+      return null;
+    }
+    try{
+      names.forEach(function(name){
+        if(typeof graph[name]!=='function')return;
+        var own=Object.prototype.hasOwnProperty.call(graph,name),original=graph[name];
+        stages[name]={calls:0,inputItems:0,outputItems:0,emptyOutputs:0,
+          modes:{},fillCalls:0,outlineCalls:0};
+        var stat=stages[name];
+        graph[name]=function(){
+          stat.calls++;
+          var input=sizeOf(arguments[0]);
+          if(input!==null)stat.inputItems+=input;
+          var modeIndex=name==='DrawPoly3D'?0:name==='Polygon3D'?1:
+            name==='TransClipPolygon3D'?1:name==='DrawPolygonList3D'?1:
+            name==='Polygon'?2:null;
+          if(modeIndex!==null){
+            var mode=arguments[modeIndex];
+            var key=mode===undefined?'default':String(mode);
+            stat.modes[key]=(stat.modes[key]||0)+1;
+          }
+          if(name==='DriverDrawPoly'){
+            if(arguments[3])stat.fillCalls++;else stat.outlineCalls++;
+          }
+          var output=original.apply(this,arguments);
+          var count=sizeOf(output);
+          if(count!==null){stat.outputItems+=count;if(count===0)stat.emptyOutputs++;}
+          return output;
+        };
+        saved.push({name:name,own:own,original:original});
+      });
+      draw();
+    }finally{
+      for(var i=saved.length-1;i>=0;i--){
+        var item=saved[i];
+        if(item.own)graph[item.name]=item.original;
+        else delete graph[item.name];
+      }
+    }
+    return stages;
+  }
   function run(original,trace,GraphCtor,polygonCtor,exportImages){
     if(!trace||!trace.complete)return {ok:false,reason:'Incomplete trace'};
     if(!original||!original.Canvas||typeof GraphCtor!=='function')
@@ -129,13 +180,16 @@
       shadow.SetAngleMeasure(original.AngleMeasure);
       // Camera and viewport changes are replayed in trace order, not inferred
       // from the final state of the live graph.
+      var pipeline;
       var paintOperations=observePaint(shadow.Context2D,function(){
-        adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
+        pipeline=observePipeline(shadow,function(){
+          adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
+        });
       });
       var analysis=exportImages?analyzePixels(original.Canvas,canvas):null;
       return {ok:true,comparison:analysis?analysis.comparison:comparePixels(original.Canvas,canvas),
         diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
-        paintOperations:paintOperations,
+        paintOperations:paintOperations,pipeline:pipeline,
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -146,5 +200,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,run:run};
+  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,run:run};
 }));

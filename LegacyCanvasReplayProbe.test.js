@@ -59,3 +59,29 @@ test('paint observer restores methods after a replay failure',()=>{
  assert.throws(()=>probe.observePaint(ctx,()=>{ctx.fill();throw Error('failed');}),/failed/);
  assert.equal(ctx.fill,original);
 });
+
+test('pipeline observer counts stages, modes and fill requests and restores methods',()=>{
+ const graph={
+   DrawPoly3D(mode){this.Polygon3D({Size:4},mode);},
+   Polygon3D(poly,mode){this.TransClipPolygon3D(poly,mode);},
+   TransClipPolygon3D(poly,mode){this.ClipPolygon3D(poly,true);this.DrawPolygonList3D(poly,mode);return poly;},
+   ClipPolygon3D(poly){return {Size:0};},
+   DrawPolygonList3D(poly,mode){this.Polygon(poly,mode);},
+   Polygon(poly,mode){this.DriverDrawPoly([],[],poly.Size,!!(mode&2));},
+   DriverDrawPoly(){}
+ };
+ const original=graph.DrawPoly3D;
+ const result=probe.observePipeline(graph,()=>{graph.DrawPoly3D(3);graph.DrawPoly3D(1);});
+ assert.equal(result.DrawPoly3D.calls,2);
+ assert.deepEqual(result.DrawPoly3D.modes,{'1':1,'3':1});
+ assert.equal(result.ClipPolygon3D.emptyOutputs,2);
+ assert.equal(result.DriverDrawPoly.fillCalls,1);
+ assert.equal(result.DriverDrawPoly.outlineCalls,1);
+ assert.equal(graph.DrawPoly3D,original);
+});
+test('pipeline observer restores original methods after failure',()=>{
+ const graph={Polygon(){throw Error('pipeline failed');}};
+ const original=graph.Polygon;
+ assert.throws(()=>probe.observePipeline(graph,()=>graph.Polygon()),/pipeline failed/);
+ assert.equal(graph.Polygon,original);
+});
