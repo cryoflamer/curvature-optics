@@ -264,6 +264,33 @@
     }
     setTimeout(batch, 0);
   }
+  // In a spherically symmetric n(h), a ray stays in the plane through the
+  // observer, Earth's centre, and the target. Its horizontal azimuth is
+  // therefore conserved. Audit full 3D unit vectors, not just elevation.
+  function auditArrival3D(physical, apparent, elevation) {
+    if (!Array.isArray(physical) || !Array.isArray(apparent) ||
+        physical.length !== 3 || apparent.length !== 3 ||
+        !physical.every(Number.isFinite) || !apparent.every(Number.isFinite) ||
+        !Number.isFinite(elevation)) return null;
+    var h = Math.hypot(physical[0],physical[1]);
+    var ha = Math.hypot(apparent[0],apparent[1]);
+    if (!(h > 0) || !(ha > 0)) return null;
+    var ux=physical[0]/h, uy=physical[1]/h;
+    var norm=Math.hypot.apply(Math,apparent);
+    if (!(norm > 0)) return null;
+    var actual=apparent.map(function(v){return v/norm;});
+    var expected=[ux*Math.cos(elevation),uy*Math.cos(elevation),Math.sin(elevation)];
+    var dot=Math.max(-1,Math.min(1,actual.reduce(function(sum,v,i){return sum+v*expected[i];},0)));
+    var cross=[actual[1]*expected[2]-actual[2]*expected[1],
+      actual[2]*expected[0]-actual[0]*expected[2],
+      actual[0]*expected[1]-actual[1]*expected[0]];
+    var directionError=Math.atan2(Math.hypot.apply(Math,cross),dot);
+    var azimuthError=Math.atan2(physical[0]*apparent[1]-physical[1]*apparent[0],
+      physical[0]*apparent[0]+physical[1]*apparent[1]);
+    return {directionErrorArcsec:directionError*180/Math.PI*3600,
+      azimuthErrorArcsec:Math.abs(azimuthError)*180/Math.PI*3600,
+      expectedDirection:expected,actualDirection:actual};
+  }
   // Audit the ACTUAL cached orange overlay, not a newly reconstructed tower.
   // Re-solve each physical sample and check that the stored 3D point projects
   // to the same camera pixel as the independently reconstructed arrival ray.
@@ -275,6 +302,7 @@
       maxAngleArcsec:0, maxPixelError:0, maxHorizontalPixelShift:0,
       invalidProjections:0, independentProjectionCount:0,
       maxIndependentPixelError:0, maxRangeDependentPixelShift:0,
+      maxDirectionErrorArcsec:0, maxAzimuthErrorArcsec:0, invalidDirections:0,
       cameraNotAtObserver:false, rows:[]};
     atmosphere21.samples.forEach(function (sample) {
       var physical = sample.physical, apparent = sample.apparent;
@@ -291,6 +319,10 @@
       if (expectedVisible !== actualVisible) { result.mismatches++; return; }
       if (!actualVisible) { result.hidden++; return; }
       result.visible++;
+      var vectorAudit=auditArrival3D(physical,apparent,solved.angle);
+      if (!vectorAudit) { result.invalidDirections++; return; }
+      result.maxDirectionErrorArcsec=Math.max(result.maxDirectionErrorArcsec,vectorAudit.directionErrorArcsec);
+      result.maxAzimuthErrorArcsec=Math.max(result.maxAzimuthErrorArcsec,vectorAudit.azimuthErrorArcsec);
       var actualAngle = Math.atan2(apparent[2], Math.hypot(apparent[0],apparent[1]));
       var angleError = Math.abs(actualAngle-solved.angle)*180/Math.PI*3600;
       var expected = [physical[0],physical[1],horizontal*Math.tan(solved.angle)];
@@ -342,6 +374,8 @@
     result.cameraNotAtObserver = result.maxRangeDependentPixelShift > 0.01;
     result.passed = result.maxIndependentPixelError < 0.01 &&
       result.hiddenBridges===0 && result.mismatches===0 && result.invalidProjections===0 &&
+      result.invalidDirections===0 && result.maxDirectionErrorArcsec<0.001 &&
+      result.maxAzimuthErrorArcsec<0.001 &&
       result.maxAngleArcsec<0.001 && result.maxPixelError<0.01;
     return result;
   }
@@ -383,5 +417,5 @@
     adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21,
     projectArrivalDirection:projectArrivalDirection,
-    auditCameraOrigin:auditCameraOrigin};
+    auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
 }));

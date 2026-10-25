@@ -162,6 +162,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
             '; max pixel error=' + num(rendered.maxPixelError,6) + ' px' +
             '; max horizontal screen shift=' + num(rendered.maxHorizontalPixelShift,3) + ' px' +
             '; independent camera error=' + num(rendered.maxIndependentPixelError,6) + ' px' +
+            '; 3D direction error=' + num(rendered.maxDirectionErrorArcsec,6) + ' arcsec' +
+            '; azimuth error=' + num(rendered.maxAzimuthErrorArcsec,6) + ' arcsec' +
+            '; invalid directions=' + rendered.invalidDirections +
             '; ray range sensitivity=' + num(rendered.maxRangeDependentPixelShift,3) + ' px' +
             (rendered.cameraNotAtObserver ?
               ' [WARNING: graphics camera is not at the physical observer; image depends on ray range]' : '');

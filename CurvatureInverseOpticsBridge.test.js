@@ -111,3 +111,17 @@ perspective.Camera.CamPos=[0,100,0];
 const shifted=bridge.projectArrivalDirection(perspective,direction,theta,2);
 assert.ok(Math.hypot(p1[0]-shifted[0],p1[1]-shifted[1])>0.001);
 console.log('Independent camera-basis projection and ray-range parallax passed');
+
+// Full 3D arrival-direction audit: spherical symmetry conserves azimuth.
+const physical3D=[32,6000,15];
+const angle3D=0.012;
+const h3D=Math.hypot(physical3D[0],physical3D[1]);
+const correct3D=[physical3D[0],physical3D[1],h3D*Math.tan(angle3D)];
+const direction3D=bridge.auditArrival3D(physical3D,correct3D,angle3D);
+assert.ok(direction3D.directionErrorArcsec<1e-5,JSON.stringify(direction3D));
+assert.ok(direction3D.azimuthErrorArcsec<1e-8);
+const shifted3D=bridge.auditArrival3D(physical3D,[correct3D[0]+1,correct3D[1],correct3D[2]],angle3D);
+assert.ok(shifted3D.azimuthErrorArcsec>10,JSON.stringify(shifted3D));
+assert.ok(shifted3D.directionErrorArcsec>10);
+assert.strictEqual(bridge.auditArrival3D(physical3D,[NaN,1,2],angle3D),null);
+console.log('3D ray direction and azimuth checks passed');
