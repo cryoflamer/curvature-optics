@@ -772,7 +772,7 @@
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
-          selection:mode, quality:poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
+          selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
           fastFallbacks:stats.fastFallbacks,fastRejected:stats.fastRejected,fastApproximated:stats.fastApproximated,
           mapExact:stats.mapExact,mapDirect:stats.mapDirect,mapCells:stats.mapCells,mapInterpolated:stats.mapInterpolated,
           bundleTraces:stats.bundleTraces,bundleExact:stats.bundleExact,bundleInterpolated:stats.bundleInterpolated,
@@ -975,6 +975,18 @@
       result.maxAngleArcsec<0.001 && result.maxPixelError<0.01;
     return result;
   }
+  // Only a complete, current P4 calculation can replace the legacy towers.
+  function hasCompleteP4Line(m) {
+    return m && m.opticsMode === 'ray-tracing' && m.showModel === 1 &&
+      lineAtmosphere.state === 'ready' && lineAtmosphere.key === modelKey(m) &&
+      lineAtmosphere.quality === 'p4' && lineAtmosphere.selection === 'all' &&
+      lineAtmosphere.towers === m.NObjects[0];
+  }
+  function isOpticalSceneReady(m) {
+    return typeof document !== 'undefined' &&
+      !!(document.getElementById('OpticalSceneTowers') || {}).checked &&
+      hasCompleteP4Line(m);
+  }
   function draw(g, m) {
     var checkbox = typeof document !== 'undefined' && document.getElementById('InverseVacuumTower21');
     if (m.opticsMode !== 'ray-tracing' || m.showModel !== 1) return null;
@@ -983,7 +995,7 @@
     var paths = audit && audit.getTowerPaths(21);
     if (!capture || !paths) return null;
     var report = compareTower(g, capture);
-    if ((!checkbox || !checkbox.checked) && !(atmosphere21.state === 'ready' && atmosphere21.key === modelKey(m)) && !(typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow') && document.getElementById('InverseAtmosphereLineShow').checked && lineAtmosphere.state === 'ready' && lineAtmosphere.key === modelKey(m))) return report;
+    if ((!checkbox || !checkbox.checked) && !(atmosphere21.state === 'ready' && atmosphere21.key === modelKey(m)) && !isOpticalSceneReady(m) && !(typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow') && document.getElementById('InverseAtmosphereLineShow').checked && lineAtmosphere.state === 'ready' && lineAtmosphere.key === modelKey(m))) return report;
     g.ResetTrans3D();
     g.SetAlpha(1);
     g.SetClipping('canvas');
@@ -1005,7 +1017,7 @@
       });
     }
     var allCheckbox = typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow');
-    if (allCheckbox && allCheckbox.checked && lineAtmosphere.state==='ready' &&
+    if (((allCheckbox && allCheckbox.checked) || isOpticalSceneReady(m)) && lineAtmosphere.state==='ready' &&
         lineAtmosphere.key===modelKey(m)) {
       g.SetLineAttr('#ff8800', 1.25);
       lineAtmosphere.paths.forEach(function(member) {
@@ -1018,7 +1030,7 @@
     return report;
   }
   return {vacuumDirection:vacuumDirection, directionAtRange:directionAtRange,
-    compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
+    compareTower:compareTower, draw:draw, hasCompleteP4Line:hasCompleteP4Line, isOpticalSceneReady:isOpticalSceneReady, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
     adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, createAnalyticP4:createAnalyticP4, auditVertices21:auditVertices21,

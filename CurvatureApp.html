@@ -131,6 +131,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <label>Ray quality: <select id="InverseAtmosphereLineQuality"><option value="exact">Exact shooting</option><option value="fast">Fast preview (approximate)</option><option value="map">Adaptive optical map (experimental)</option><option value="bundle">Forward ray bundle (experimental)</option><option value="poly">Polynomial approximation (experimental)</option><option value="p4">Analytic P4 (no ray tracer)</option></select></label>
   <button type="button" id="InverseAtmosphereLine">Calculate atmosphere - selected towers</button>
   <label><input type="checkbox" id="InverseAtmosphereLineShow"> Show orange line overlay</label>
+  <label><input type="checkbox" id="OpticalSceneTowers"> Optical scene: replace legacy transmission towers (P4, all towers only)</label>
+  <span id="OpticalSceneTowersStatus" role="status" style="font:12px monospace"></span>
   <span id="InverseAtmosphereLineStatus" role="status" style="font:12px monospace"></span>
   <button type="button" id="AuditOpticsTower21">Audit angles / pixels #21</button>
   <pre id="AuditOpticsTower21Result" role="status" style="white-space:pre-wrap;font:12px monospace;"></pre>
@@ -249,6 +251,17 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         },{mode:mode,count:count,quality:document.getElementById("InverseAtmosphereLineQuality").value});
     });
     document.getElementById('InverseAtmosphereLineShow').addEventListener('change',function(){graph.Redraw();});
+    document.getElementById('OpticalSceneTowers').addEventListener('change',function(){
+      var bridge=window.CurvatureInverseOpticsBridge;
+      if(this.checked && (!bridge || !bridge.hasCompleteP4Line(CurveApp))) {
+        this.checked=false;
+        document.getElementById('OpticalSceneTowersStatus').textContent=
+          'Calculate all towers using Analytic P4 first';
+      } else {
+        document.getElementById('OpticalSceneTowersStatus').textContent='';
+      }
+      graph.Redraw();
+    });
   </script>
   <script>document.getElementById("InverseVacuumTower21").addEventListener("change", function () { graph.Redraw(); });</script>
   <script>
@@ -1848,7 +1861,10 @@ function DrawShape( objIx, g, m ) {
   // Suppress only tower primitives in this diagnostic mode. The audit's
   // PolygonOnPlane wrapper still captures the original polygon vertices.
   var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
-  var suppressOriginalTower = m.ObjType[objIx] === 3 && objIx === 0 &&
+  var opticalScene = window.CurvatureInverseOpticsBridge &&
+    CurvatureInverseOpticsBridge.isOpticalSceneReady(m);
+  var suppressOriginalTower = (opticalScene && m.ObjType[objIx] === 3 && objIx === 0) ||
+    m.ObjType[objIx] === 3 && objIx === 0 &&
     m.showModel === 1 && m.opticsMode === 'ray-tracing' &&
     towerComparison === 'optical';
   var originalTowerLine = g.LineOnPlane;
