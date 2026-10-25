@@ -1868,9 +1868,9 @@ function DrawShape( objIx, g, m ) {
   var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
   var showLegacyControl = document.getElementById('ShowLegacyTransmissionTowers');
   var showLegacy = !showLegacyControl || showLegacyControl.checked;
-  var suppressOriginalTower = m.ObjType[objIx] === 3 && objIx === 0 &&
+  var suppressOriginalTower = m.ObjType[objIx] === 3 &&
     (!showLegacy ||
-     (m.showModel === 1 && m.opticsMode === 'ray-tracing' && towerComparison === 'optical'));
+     (objIx === 0 && m.showModel === 1 && m.opticsMode === 'ray-tracing' && towerComparison === 'optical'));
   // Keep the vertex-audit wrappers active: they capture the real geometry
   // even when the legacy layer is hidden. Only drawing is suppressed.
   var originalTowerLine = g.LineOnPlane;

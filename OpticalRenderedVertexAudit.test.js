@@ -64,6 +64,15 @@ g.PolygonOnPlane([-0.145,-0.095,-0.095,0.095,0.095,0.145,0.145,-0.145,-0.145],
   [0,0,0.105,0.105,0,0,0.137,0.137,0],3);
 endHidden();
 assert.equal(calls,beforeHidden,'hidden legacy geometry must not be painted');
+// The secondary transmission-tower group must also obey the checkbox.
+const beforeSecondaryHidden = calls;
+const endSecondaryHidden = audit.beginTower(g,m,1);
+g.PolygonOnPlane([-1,1],[0,1],1);
+g.PolygonOnPlane([-0.14,-0.1,-0.1,0.1,0.1,0.14,0.14,-0.14,-0.14],
+  [0,0,0.06,0.06,0,0,0.08,0.08,0],3);
+endSecondaryHidden();
+assert.equal(calls,beforeSecondaryHidden,'hidden secondary tower and foundation must not be painted');
+
 assert.equal(audit.getFoundationPaths(1).length,1);
 assert.equal(audit.getTowerPaths(1).length,1);
 legacyVisible=true;
@@ -73,6 +82,13 @@ g.PolygonOnPlane([-0.145,-0.095,-0.095,0.095,0.095,0.145,0.145,-0.145,-0.145],
   [0,0,0.105,0.105,0,0,0.137,0.137,0],3);
 endVisible();
 assert.equal(calls,beforeHidden+2,'legacy checkbox must restore both primitives');
+const endSecondaryVisible = audit.beginTower(g,m,1);
+g.PolygonOnPlane([-1,1],[0,1],1);
+g.PolygonOnPlane([-0.14,-0.1,-0.1,0.1,0.1,0.14,0.14,-0.14,-0.14],
+  [0,0,0.06,0.06,0,0,0.08,0.08,0],3);
+endSecondaryVisible();
+assert.equal(calls,beforeHidden+4,'legacy checkbox must restore both secondary primitives');
+
 global.document=previousDoc;
 audit.reset();
 assert.equal(audit.getLocalAxis(1,1),null);

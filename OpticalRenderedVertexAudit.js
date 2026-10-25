@@ -50,8 +50,8 @@
         document.getElementById('ShowLegacyTransmissionTowers');
       // Tower type 1 has exactly one filled primitive: its brown footing.
       // Suppress the drawing, never its geometry capture.
-      if (objIx === 0 && (comparisonMode === 'optical' ||
-          (legacyControl && !legacyControl.checked))) return;
+      if ((legacyControl && !legacyControl.checked) ||
+          (objIx === 0 && comparisonMode === 'optical')) return;
       return original.apply(this, arguments);
     };
     return function () {
