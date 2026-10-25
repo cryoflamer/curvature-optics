@@ -77,6 +77,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="LegacySceneAdapter.js"></script>
 <script src="LegacySceneAudit.js"></script>
 <script src="LegacyReplayProbe.js"></script>
+<script src="LegacyCanvasReplayProbe.js"></script>
 <script src="ControlPanelX.js"></script>
 <script src="ModelAnimationX.js"></script>
 
@@ -96,6 +97,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <div style="padding:0.5em 1em;">
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
+    <label><input type="checkbox" id="LegacyFrameCompareCanvas"> Compare detached replay canvas (experimental)</label>
     <span id="LegacyFrameCaptureStatus" role="status" aria-live="polite"></span>
   </div>
 <section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
@@ -1310,6 +1312,9 @@ function DrawModelWithOptionalAudit(g) {
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       result.trace, window.JsgPolygon);
+    var canvasProbe = document.getElementById('LegacyFrameCompareCanvas').checked &&
+      window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
+        g, result.trace, window.JsGraphX3D, window.JsgPolygon);
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
       schema: 'legacy-frame-audit-v2',
@@ -1317,13 +1322,15 @@ function DrawModelWithOptionalAudit(g) {
       captureComplete: result.trace.complete,
       replayVerified: false,
       isolatedReplayPreflight: preflight || null,
+      detachedCanvasReplay: canvasProbe || null,
       summary: result.summary,
       notes: [
         'Capture is a pass-through of the active DrawModel invocation',
         'Only allowlisted top-level graph methods are counted',
         'Direct graph property writes, internal graph calls and canvas calls are not captured',
         'Isolated replay preflight checks command dispatch only, not pixels',
-        'No canvas replay or pixel equivalence has been verified'
+        'Detached canvas comparison is experimental and omits uncaptured graph state',
+        'No full-state pixel equivalence has been verified'
       ]
     };
     window.LastLegacyFrameAudit = report;
