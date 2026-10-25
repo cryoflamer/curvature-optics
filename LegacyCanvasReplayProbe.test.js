@@ -118,3 +118,11 @@ test('clipping snapshots ignore unused polygon array capacity but detect active 
  assert.equal(probe.firstClippingDifference(first,second),null);
  assert.equal(probe.firstClippingDifference(first,changed).callIndex,1);
 });
+
+test('bootstrap overrides are explicit and do not mutate the original graph',()=>{
+ const original={MaxCurveSegments:256,AngleMeasure:'rad'};
+ assert.deepEqual(probe.bootstrapValues(original),original);
+ assert.deepEqual(probe.bootstrapValues(original,{MaxCurveSegments:1,AngleMeasure:'deg'}),
+   {MaxCurveSegments:1,AngleMeasure:'deg'});
+ assert.deepEqual(original,{MaxCurveSegments:256,AngleMeasure:'rad'});
+});

@@ -100,6 +100,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
     <label><input type="checkbox" id="LegacyFrameCompareCanvas"> Compare detached replay canvas (experimental)</label>
+    <label><input type="checkbox" id="LegacyFrameBootstrapSensitivity"> Probe hidden bootstrap state (extra detached replay)</label>
     <label><input type="checkbox" id="LegacyFrameExportCanvasPng"> Export canvas PNG diagnostics (3 files; requires comparison)</label>
     <span id="LegacyFrameCaptureStatus" role="status" aria-live="polite"></span>
   </div>
@@ -1332,6 +1333,30 @@ function DrawModelWithOptionalAudit(g) {
     var canvasProbe = compareCanvas &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
         g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
+    // A second detached replay deliberately changes two bootstrap properties.
+    // If pixels change, the command frame depends on uncaptured initial state.
+    // An unchanged result is NOT proof that every hidden dependency is absent.
+    var bootstrapSensitivity = null;
+    if (compareCanvas && canvasProbe && canvasProbe.ok &&
+        document.getElementById('LegacyFrameBootstrapSensitivity').checked) {
+      var baseline = canvasProbe.bootstrap;
+      var overrides = {
+        MaxCurveSegments: baseline.MaxCurveSegments === 1 ? 2 : 1,
+        AngleMeasure: baseline.AngleMeasure === 'deg' ? 'rad' : 'deg'
+      };
+      var variant = window.LegacyCanvasReplayProbe.run(
+        g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon,
+        false, {bootstrapOverrides:overrides});
+      bootstrapSensitivity = {
+        baseline:baseline,variant:overrides,ok:variant.ok,
+        comparisonToOriginal:variant.comparison || null,
+        reason:variant.ok ? null : variant.reason,
+        // The baseline is already compared to the same original canvas.
+        // When baseline is identical, any variant mismatch establishes sensitivity.
+        detected:canvasProbe.comparison && canvasProbe.comparison.identical === true &&
+          variant.comparison && variant.comparison.identical === false
+      };
+    }
     var firstClippingDifference = canvasProbe && canvasProbe.clippingTrace &&
       window.LegacyCanvasReplayProbe.firstClippingDifference(
         originalClippingTrace, canvasProbe.clippingTrace);
@@ -1348,6 +1373,7 @@ function DrawModelWithOptionalAudit(g) {
       replayVerified: false,
       isolatedReplayPreflight: preflight || null,
       detachedCanvasReplay: canvasProbe || null,
+      bootstrapSensitivity: bootstrapSensitivity,
       originalCanvasPipeline: compareCanvas ? {pipeline:originalPipeline,paintOperations:originalPaint} : null,
       firstClippingDifference: firstClippingDifference || null,
       summary: result.summary,

@@ -187,7 +187,15 @@
     }
     return stages;
   }
-  function run(original,trace,GraphCtor,polygonCtor,exportImages){
+  function bootstrapValues(original,overrides){
+    overrides=overrides||{};
+    return {MaxCurveSegments:Object.prototype.hasOwnProperty.call(overrides,'MaxCurveSegments')?
+      overrides.MaxCurveSegments:original.MaxCurveSegments,
+      AngleMeasure:Object.prototype.hasOwnProperty.call(overrides,'AngleMeasure')?
+      overrides.AngleMeasure:original.AngleMeasure};
+  }
+  function run(original,trace,GraphCtor,polygonCtor,exportImages,options){
+    options=options||{};
     var frame=null;
     if(trace && trace.kind==='scene-command-frame'){
       frame=trace;
@@ -229,8 +237,9 @@
       shadow.Reset(true);
       if(shadow.ClientResetFunc)shadow.ClientResetFunc(shadow);
       // Known direct assignments still omitted from the command stream.
-      shadow.MaxCurveSegments=original.MaxCurveSegments;
-      shadow.SetAngleMeasure(original.AngleMeasure);
+      var bootstrap=bootstrapValues(original,options.bootstrapOverrides);
+      shadow.MaxCurveSegments=bootstrap.MaxCurveSegments;
+      shadow.SetAngleMeasure(bootstrap.AngleMeasure);
       // Camera and viewport changes are replayed in trace order, not inferred
       // from the final state of the live graph.
       var pipeline,clippingTrace=[];
@@ -247,6 +256,7 @@
       return {ok:true,comparison:analysis?analysis.comparison:comparePixels(original.Canvas,canvas),
         diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
         paintOperations:paintOperations,pipeline:pipeline,clippingTrace:clippingTrace,
+        bootstrap:bootstrap,
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -257,5 +267,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,run:run};
+  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,bootstrapValues:bootstrapValues,run:run};
 }));
