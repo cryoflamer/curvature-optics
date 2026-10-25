@@ -569,12 +569,12 @@
     if (visibleCount === n) return {points:projected,partial:false};
     var transitions = 0, points = [];
     function boundary(a, b, aVisible) {
-      var lo = aVisible ? 0 : 1, hi = aVisible ? 1 : 0;
-      var last = sample(aVisible ? a : b);
-      for (var j=0;j<20;j++) {
-        var mid=(lo+hi)/2;
+      var visibleT=aVisible?0:1, hiddenT=aVisible?1:0;
+      var last=sample(aVisible?a:b);
+      for(var j=0;j<20;j++) {
+        var mid=(visibleT+hiddenT)/2;
         var p=sample(interpolateWorld(a,b,mid));
-        if (p) {lo=mid;last=p;} else hi=mid;
+        if(p){visibleT=mid;last=p;}else hiddenT=mid;
       }
       return last;
     }
@@ -736,7 +736,7 @@
       lineAtmosphere={state:'error',paths:null,key:null,message:'Unknown tower selection mode'};
       onDone(lineAtmosphere); return;
     }
-    var edges = [], footingPolygons = [];
+    var edges = [], footingPolygons = [], footingFaces = [];
     indices.forEach(function(index) {
       audit.getTowerPaths(index).forEach(function(path) {
         for (var j=1;j<path.length;j++) edges.push({tower:index,a:path[j-1],b:path[j]});
@@ -746,6 +746,12 @@
       if (typeof audit.getFoundationPaths === 'function')
         audit.getFoundationPaths(index).forEach(function(path) {
           footingPolygons.push({tower:index,world:path});
+        });
+    });
+    indices.forEach(function(index) {
+      if (typeof audit.getFoundationFaces === 'function')
+        audit.getFoundationFaces(index).forEach(function(face) {
+          footingFaces.push({tower:index,world:face});
         });
     });
     if (!edges.length) {
@@ -816,16 +822,29 @@
       onProgress(lineAtmosphere.message);
       if (i<edges.length) setTimeout(batch,0);
       else {
-        // Clip each filled foundation at the P4 visibility boundary instead
-        // of discarding the entire polygon for one hidden vertex.
+        // Fill concave foundations as independently clipped convex triangles.
+        // Keep the original boundary separate: internal triangulation seams
+        // must not appear as dark strokes.
         var footingCandidates = analyticP4 ? footingPolygons.map(function(poly) {
-          var clipped=clipVisibleFooting(poly.world,sample);
-          return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial};
+          return clipVisibleFooting(poly.world,sample);
         }) : [];
-        var footings = footingCandidates.filter(Boolean);
-        var footingsPartial=footings.filter(function(poly){return poly.partial;}).length;
-        var footingsRejected = footingCandidates.length - footings.length;
-        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingsCaptured:footingPolygons.length,footingsProjected:footings.length,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
+        var footingsProjected=footingCandidates.filter(Boolean).length;
+        var footingsPartial=footingCandidates.filter(function(poly){return poly && poly.partial;}).length;
+        var footingsRejected=footingCandidates.length-footingsProjected;
+        var footings=analyticP4?footingFaces.map(function(face){
+          var clipped=clipVisibleFooting(face.world,sample);
+          return clipped && {tower:face.tower,points:clipped.points};
+        }).filter(Boolean):[];
+        var footingOutlines=analyticP4?footingPolygons.map(function(poly){
+          var outline=[];
+          for(var j=1;j<poly.world.length;j++) {
+            var a=poly.world[j-1],b=poly.world[j];
+            var edge=adaptiveEdge(a,b,function(t){return sample(interpolateWorld(a,b,t));},5,0.10);
+            outline.push(edge.points);
+          }
+          return outline;
+        }):[];
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingOutlines:footingOutlines,footingFacesProjected:footings.length,footingsCaptured:footingPolygons.length,footingsProjected:footingsProjected,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
@@ -843,7 +862,7 @@
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
-            ', transitions='+transitions+', footings='+footings.length+'/'+footingPolygons.length+' (partial '+footingsPartial+', rejected '+footingsRejected+'), elapsed='+ (Date.now()-started)+'ms'+
+            ', transitions='+transitions+', footings='+footingsProjected+'/'+footingPolygons.length+' (partial '+footingsPartial+', rejected '+footingsRejected+'), elapsed='+ (Date.now()-started)+'ms'+
             (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
             (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')+
             (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')+
@@ -1076,12 +1095,18 @@
     if (((allCheckbox && allCheckbox.checked) || isOpticalSceneReady(m)) && lineAtmosphere.state==='ready' &&
         lineAtmosphere.key===modelKey(m)) {
       if (isOpticalSceneReady(m) && Array.isArray(lineAtmosphere.footings)) {
-        g.SetAreaAttr('#a38d60', '#695737', 1);
-        lineAtmosphere.footings.forEach(function(footing) {
+        g.SetAreaAttr('#a38d60', '#a38d60', 1);
+        lineAtmosphere.footings.forEach(function(face) {
           g.NewPoly3D();
-          footing.points.forEach(function(point) { g.AddPointToPoly3D(point); });
-          // 4 explicitly closes the contour; 2 fills and 1 strokes it.
-          g.DrawPoly3D(7);
+          face.points.forEach(function(point) { g.AddPointToPoly3D(point); });
+          g.DrawPoly3D(6); // Fill + close; no internal triangle strokes.
+        });
+        g.SetLineAttr('#695737', 1);
+        (lineAtmosphere.footingOutlines||[]).forEach(function(outline) {
+          outline.forEach(function(edge) {
+            for(var j=1;j<edge.length;j++)
+              if(edge[j-1]&&edge[j])g.Line3D(edge[j-1],edge[j]);
+          });
         });
       }
       g.SetLineAttr('#ff8800', 1.25);

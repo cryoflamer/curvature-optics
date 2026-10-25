@@ -5,11 +5,40 @@
   'use strict';
   var samples = {1:true,11:true,21:true,31:true,41:true,51:true,61:true,71:true,81:true,85:true};
   var vertices = {}, localAxes = {}, lastKey = null;
-  var towerPaths = {}, foundationPaths = {};
+  var towerPaths = {}, foundationPaths = {}, foundationFaces = {};
   var secondaryVertices = {}, secondaryAxes = {};
   function screen(g, world) {
     var camera = g.Camera.Trans(world);
     return [g.WinTrans.TransX(camera[0]), g.WinTrans.TransY(camera[1])];
+  }
+  // Ear-clip the original concave footing silhouette in its own 2D plane.
+  // A single non-convex polygon is not safe to feed to the 3D area renderer.
+  function triangulateFooting(xs, ys, world) {
+    var n = world.length;
+    if (n > 3 && Math.abs(xs[0]-xs[n-1]) < 1e-9 && Math.abs(ys[0]-ys[n-1]) < 1e-9) n--;
+    var ids = Array.from({length:n}, function(_,i){return i;});
+    function cross(a,b,c) {return (xs[b]-xs[a])*(ys[c]-ys[a])-(ys[b]-ys[a])*(xs[c]-xs[a]);}
+    var area=0;
+    for(var i=0;i<n;i++) area+=xs[i]*ys[(i+1)%n]-xs[(i+1)%n]*ys[i];
+    var sign=area>=0?1:-1, faces=[], guard=0;
+    while(ids.length>3 && guard++<n*n) {
+      var clipped=false;
+      for(var k=0;k<ids.length;k++) {
+        var a=ids[(k+ids.length-1)%ids.length],b=ids[k],c=ids[(k+1)%ids.length];
+        var d=sign*cross(a,b,c);
+        if(d<=1e-12) continue;
+        var contains=ids.some(function(v){
+          if(v===a||v===b||v===c)return false;
+          return sign*cross(a,b,v)>=-1e-12 && sign*cross(b,c,v)>=-1e-12 && sign*cross(c,a,v)>=-1e-12;
+        });
+        if(contains)continue;
+        faces.push([world[a],world[b],world[c]]);
+        ids.splice(k,1);clipped=true;break;
+      }
+      if(!clipped)break;
+    }
+    if(ids.length===3)faces.push(ids.map(function(i){return world[i];}));
+    return faces;
   }
   function beginTower(g, m, objIx) {
     if (m.ObjType[objIx] !== 3 || m.showModel !== 1 || m.opticsMode !== 'ray-tracing') return null;
@@ -24,7 +53,7 @@
     var axesTarget = objIx === 0 ? localAxes : secondaryAxes;
     var vertexTarget = objIx === 0 ? vertices : secondaryVertices;
     axesTarget[index] = {tower:index, group:objIx, base:localBase, top:localTop};
-    var original = g.PolygonOnPlane, captured = [], paths = [], foundations = [];
+    var original = g.PolygonOnPlane, captured = [], paths = [], foundations = [], faces = [];
     g.PolygonOnPlane = function (xs, ys, mode, size) {
       if (Array.isArray(xs) && Array.isArray(ys)) {
         var n = Math.min(xs.length, ys.length, typeof size === 'number' ? size : xs.length);
@@ -38,8 +67,10 @@
           // The brown footing is the final filled polygon of tower type 1.
           // Keep it separate from the steel-member paths so it can be drawn
           // as a filled optical polygon, not as an orange wireframe.
-          if (mode === 3)
+          if (mode === 3) {
             foundations.push(path);
+            faces.push.apply(faces, triangulateFooting(xs,ys,path));
+          }
           else paths.push(path);
         }
       }
@@ -53,7 +84,7 @@
     return function () {
       g.PolygonOnPlane = original;
       if (captured.length) vertexTarget[index] = {tower:index, group:objIx, distance:distance, points:captured};
-      if (objIx === 0) { towerPaths[index] = paths; foundationPaths[index] = foundations; }
+      if (objIx === 0) { towerPaths[index] = paths; foundationPaths[index] = foundations; foundationFaces[index] = faces; }
     };
   }
   // Independent endpoints of the polygons actually submitted by DrawShape.
@@ -413,6 +444,6 @@
   function getLocalAxis(tower, group) { return (group === 1 ? secondaryAxes : localAxes)[tower] || null; }
   function getCapturedGroups() { return {primary:vertices, secondary:secondaryVertices}; }
   function reset() { vertices = {}; localAxes = {}; secondaryVertices = {}; secondaryAxes = {}; lastKey = null; }
-  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,getTowerPaths:function(index){return towerPaths[index] || null;},getFoundationPaths:function(index){return foundationPaths[index] || [];},onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,drawGeometryEndpoints:drawGeometryEndpoints,compareAxisMethods:compareAxisMethods,reset:reset};
+  root.CurvatureRenderedVertexAudit = {beginTower:beginTower,getLocalAxis:getLocalAxis,getCapturedGroups:getCapturedGroups,getTowerPaths:function(index){return towerPaths[index] || null;},getFoundationPaths:function(index){return foundationPaths[index] || [];},getFoundationFaces:function(index){return foundationFaces[index] || [];},triangulateFooting:triangulateFooting,onDraw:onDraw,compare:compare,compareCenters:compareCenters,compareCanvasStrokes:compareCanvasStrokes,vacuumCalibration:vacuumCalibration,sectionCenter:sectionCenter,drawActualAxes:drawActualAxes,drawLocalAxes:drawLocalAxes,drawGeometryEndpoints:drawGeometryEndpoints,compareAxisMethods:compareAxisMethods,reset:reset};
   if (typeof module === 'object' && module.exports) module.exports = root.CurvatureRenderedVertexAudit;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
