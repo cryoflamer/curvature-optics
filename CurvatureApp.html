@@ -132,6 +132,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <button type="button" id="InverseAtmosphereLine">Calculate atmosphere - selected towers</button>
   <label><input type="checkbox" id="InverseAtmosphereLineShow"> Show orange line overlay</label>
   <label><input type="checkbox" id="OpticalSceneTowers"> Optical scene: replace legacy transmission towers (P4, all towers only)</label>
+  <label><input type="checkbox" id="ShowLegacyTransmissionTowers" checked> Show legacy towers and foundations</label>
   <span id="OpticalSceneTowersStatus" role="status" style="font:12px monospace"></span>
   <span id="InverseAtmosphereLineStatus" role="status" style="font:12px monospace"></span>
   <button type="button" id="AuditOpticsTower21">Audit angles / pixels #21</button>
@@ -251,6 +252,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
         },{mode:mode,count:count,quality:document.getElementById("InverseAtmosphereLineQuality").value});
     });
     document.getElementById('InverseAtmosphereLineShow').addEventListener('change',function(){graph.Redraw();});
+    document.getElementById('ShowLegacyTransmissionTowers').addEventListener('change',function(){graph.Redraw();});
     document.getElementById('OpticalSceneTowers').addEventListener('change',function(){
       var bridge=window.CurvatureInverseOpticsBridge;
       if(this.checked && (!bridge || !bridge.hasCompleteP4Line(CurveApp))) {
@@ -259,6 +261,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
           'Calculate all towers using Analytic P4 first';
       } else {
         document.getElementById('OpticalSceneTowersStatus').textContent='';
+        // Preserve the old replace behavior on activation; users can opt
+        // back into both layers with the independent legacy checkbox.
+        if (this.checked) document.getElementById('ShowLegacyTransmissionTowers').checked=false;
       }
       graph.Redraw();
     });
@@ -1861,16 +1866,15 @@ function DrawShape( objIx, g, m ) {
   // Suppress only tower primitives in this diagnostic mode. The audit's
   // PolygonOnPlane wrapper still captures the original polygon vertices.
   var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
-  var opticalScene = window.CurvatureInverseOpticsBridge &&
-    CurvatureInverseOpticsBridge.isOpticalSceneReady(m);
-  var suppressOriginalTower = (opticalScene && m.ObjType[objIx] === 3 && objIx === 0) ||
-    m.ObjType[objIx] === 3 && objIx === 0 &&
-    m.showModel === 1 && m.opticsMode === 'ray-tracing' &&
-    towerComparison === 'optical';
+  var showLegacyControl = document.getElementById('ShowLegacyTransmissionTowers');
+  var showLegacy = !showLegacyControl || showLegacyControl.checked;
+  var suppressOriginalTower = m.ObjType[objIx] === 3 && objIx === 0 &&
+    (!showLegacy ||
+     (m.showModel === 1 && m.opticsMode === 'ray-tracing' && towerComparison === 'optical'));
+  // Keep the vertex-audit wrappers active: they capture the real geometry
+  // even when the legacy layer is hidden. Only drawing is suppressed.
   var originalTowerLine = g.LineOnPlane;
-  if (suppressOriginalTower) {
-    g.LineOnPlane = function () {};
-  }
+  if (suppressOriginalTower) g.LineOnPlane = function () {};
 
   function setBgColor( normalColor, hiddenColor ) {
     if (m.isHiddenObj[objIx]) {

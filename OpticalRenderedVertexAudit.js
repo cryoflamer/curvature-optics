@@ -38,21 +38,20 @@
           // The brown footing is the final filled polygon of tower type 1.
           // Keep it separate from the steel-member paths so it can be drawn
           // as a filled optical polygon, not as an orange wireframe.
-          if (mode === 3 && xs.length === 9 && ys[0] === 0 && ys[6] === 0.137)
+          if (mode === 3)
             foundations.push(path);
           else paths.push(path);
         }
       }
       var comparison = typeof document !== 'undefined' &&
         document.getElementById('TowerComparisonMode');
-      var mode = comparison ? comparison.value : 'both';
-      if (objIx === 0 && mode === 'optical') return;
-      // Suppress the old filled footing only when its P4 replacement is ready.
-      if (objIx === 0 && mode !== 'optical' && mode !== undefined &&
-          typeof root.CurvatureInverseOpticsBridge !== 'undefined' &&
-          root.CurvatureInverseOpticsBridge.isOpticalSceneReady(m) &&
-          arguments[2] === 3 && xs.length === 9 && ys[0] === 0 && ys[6] === 0.137)
-        return;
+      var comparisonMode = comparison ? comparison.value : 'both';
+      var legacyControl = typeof document !== 'undefined' &&
+        document.getElementById('ShowLegacyTransmissionTowers');
+      // Tower type 1 has exactly one filled primitive: its brown footing.
+      // Suppress the drawing, never its geometry capture.
+      if (objIx === 0 && (comparisonMode === 'optical' ||
+          (legacyControl && !legacyControl.checked))) return;
       return original.apply(this, arguments);
     };
     return function () {

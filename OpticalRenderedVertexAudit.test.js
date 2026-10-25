@@ -48,6 +48,32 @@ assert(audit.getLocalAxis(1,0));
 assert(audit.getLocalAxis(1,1));
 assert.equal(audit.getCapturedGroups().secondary[1].group,1);
 assert.equal(audit.getCapturedGroups().primary[1].group,0);
+// The actual nine-vertex filled footing is captured independently of the
+// steel members, even when legacy rendering is disabled.
+let legacyVisible = false;
+const previousDoc = global.document;
+global.document = {getElementById(id) {
+  if (id === 'ShowLegacyTransmissionTowers') return {checked:legacyVisible};
+  if (id === 'TowerComparisonMode') return {value:'both'};
+  return null;
+}};
+const beforeHidden = calls;
+const endHidden = audit.beginTower(g,m,0);
+g.PolygonOnPlane([-1,1],[0,1],1);
+g.PolygonOnPlane([-0.145,-0.095,-0.095,0.095,0.095,0.145,0.145,-0.145,-0.145],
+  [0,0,0.105,0.105,0,0,0.137,0.137,0],3);
+endHidden();
+assert.equal(calls,beforeHidden,'hidden legacy geometry must not be painted');
+assert.equal(audit.getFoundationPaths(1).length,1);
+assert.equal(audit.getTowerPaths(1).length,1);
+legacyVisible=true;
+const endVisible=audit.beginTower(g,m,0);
+g.PolygonOnPlane([-1,1],[0,1],1);
+g.PolygonOnPlane([-0.145,-0.095,-0.095,0.095,0.095,0.145,0.145,-0.145,-0.145],
+  [0,0,0.105,0.105,0,0,0.137,0.137,0],3);
+endVisible();
+assert.equal(calls,beforeHidden+2,'legacy checkbox must restore both primitives');
+global.document=previousDoc;
 audit.reset();
 assert.equal(audit.getLocalAxis(1,1),null);
 console.log('OpticalRenderedVertexAudit: vertex capture and local-axis checks passed');
