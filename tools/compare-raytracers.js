@@ -57,6 +57,93 @@ for (const c of cases) {
     console.log(`${c.distance} ${c.targetHeight} ${a.status} ${b.status} ${d.status} ${Number.isFinite(convergence) ? convergence.toFixed(6) : 'STATUS_MISMATCH'}${comparison}`);
   } catch (err) { failures++; console.error(`FAIL ${c.distance}m ${c.targetHeight}m: ${err.message}`); }
 }
+// Horizon-focused regression: first find the current solver's visibility transition
+// and then compare both solvers on either side of it. The reference solver does
+// not distinguish occlusion from failure to converge, so only contradictory
+// visibility is a reference status failure.
+const horizonDistances = [18000, 20000, 25000, 30000];
+const observerHeight = 15;
+const base = { geometry: 'globe', atmosphere: 'standard', observerHeight,
+  radius: 6371000, atmosphereOptions: { refractivity: 0.000293, scaleHeight: 8500 } };
+console.log('\nHORIZON TEST (observer 15m; matched standard atmosphere)');
+console.log('distance(m) boundary-height(m) offset(m) current reference diff(arcsec)');
+let horizonFailures = 0, horizonCases = 0, horizonMaxDiff = 0;
+for (const distance of horizonDistances) {
+  try {
+    const solve = (height, step) => evaluate(diag.solveAngle,
+      { ...base, distance, targetHeight: height, step });
+    // A ground-level target can be numerically ambiguous at the endpoint.
+    // Search only above 0.1m and bracket an actual occluded/visible transition.
+    let lo = 0.1, hi = 100;
+    if (solve(lo, 10).status === 'visible' || solve(hi, 10).status !== 'visible')
+      throw Error('Unable to bracket horizon transition');
+    for (let k = 0; k < 18; k++) {
+      const mid = (lo + hi) / 2;
+      if (solve(mid, 10).status === 'visible') hi = mid;
+      else lo = mid;
+    }
+    const boundary = (lo + hi) / 2;
+    for (const offset of [-1, -0.25, 0.25, 1]) {
+      const height = boundary + offset;
+      if (height <= 0) continue;
+      horizonCases++;
+      const current = solve(height, 5);
+      const coarse = solve(height, 10);
+      if (current.status !== coarse.status) {
+        horizonFailures++;
+        console.error(`FAIL horizon step-status mismatch at ${distance}m, h=${height.toFixed(3)}m`);
+      }
+      let refStatus = 'not-run', diff = null;
+      if (reference) {
+        const ref = evaluate(reference.solveAngle, { ...base, distance, targetHeight: height, step: 5 });
+        refStatus = ref.status;
+        if ((current.status === 'visible') !== (ref.status === 'visible')) {
+          horizonFailures++;
+          console.error(`FAIL horizon visibility mismatch at ${distance}m, h=${height.toFixed(3)}m`);
+        }
+        if (current.status === 'visible' && ref.status === 'visible') {
+          diff = Math.abs(current.angle - ref.angle) * arcsec;
+          horizonMaxDiff = Math.max(horizonMaxDiff, diff);
+          if (diff > threshold) {
+            horizonFailures++;
+            console.error(`FAIL horizon angle mismatch at ${distance}m, h=${height.toFixed(3)}m`);
+          }
+        }
+      }
+      console.log(`${distance} ${boundary.toFixed(3)} ${offset.toFixed(2)} ${current.status} ${refStatus} ${diff === null ? '-' : diff.toFixed(6)}`);
+    }
+  } catch (err) {
+    horizonFailures++;
+    console.error(`FAIL horizon ${distance}m: ${err.message}`);
+  }
+}
+// Exact spherical vacuum geometry gives a separate, non-RK4 visibility oracle.
+// For two points on a sphere, the limiting surface arc is the sum of their
+// tangent-to-surface horizon arcs.
+console.log('\nVACUUM SPHERICAL TANGENCY (analytic visibility oracle)');
+const radius = 6371000;
+const observerArc = Math.acos(radius / (radius + observerHeight));
+for (const distance of [16000, 20000, 25000]) {
+  const targetArc = distance / radius - observerArc;
+  const tangentHeight = targetArc <= 0 ? 0 : radius * (1 / Math.cos(targetArc) - 1);
+  for (const offset of [-1, 1]) {
+    const height = tangentHeight + offset;
+    if (height <= 0) continue;
+    const expected = offset > 0 ? 'visible' : 'occluded';
+    const actual = evaluate(diag.solveAngle, { ...base, atmosphere: 'vacuum', distance,
+      targetHeight: height, step: 5 }).status;
+    horizonCases++;
+    // The vacuum implementation uses sampled clearance, so near-tangent
+    // classification is checked with a 1m safety margin.
+    if (actual !== expected) {
+      horizonFailures++;
+      console.error(`FAIL vacuum analytic at ${distance}m, h=${height.toFixed(3)}m: expected ${expected}, got ${actual}`);
+    }
+    console.log(`${distance} tangent=${tangentHeight.toFixed(3)}m offset=${offset}m expected=${expected} actual=${actual}`);
+  }
+}
+failures += horizonFailures;
+console.log(`Horizon cases: ${horizonCases}; horizon failures: ${horizonFailures}; max horizon reference difference: ${horizonMaxDiff.toFixed(6)} arcsec`);
 console.log(`Max convergence difference: ${maxConvergence.toFixed(6)} arcsec`);
 if (reference) console.log(`Max reference difference: ${maxReference.toFixed(6)} arcsec`);
 else console.log('INDEPENDENT COMPARISON NOT RUN.');

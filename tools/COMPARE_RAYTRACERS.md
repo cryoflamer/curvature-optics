@@ -39,3 +39,27 @@ node tools/compare-raytracers.js --reference /absolute/path/to/adapter.js
 
 The adapter must export `solveAngle(options)` returning
 `{status:'visible'|'occluded'|'no solution',angle:radians|null}`.
+
+## Horizon regression (included in the same command)
+
+The test now locates the **current solver's** standard-atmosphere visibility
+transition at 18, 20, 25 and 30 km (observer 15m), using bisection on target
+height. It samples 0.25m and 1m to either side of that boundary (when height
+remains positive), checks 5m-vs-10m integration-step visibility agreement,
+and compares the reference solver's visible/not-visible decision and angles.
+
+The original reference adapter reports `no solution` for both a blocked ray
+and numerical failure; the test therefore compares **binary visibility**, not
+`occluded` versus `no solution`. The boundary is located with the current
+solver, not independently: this checks nearby behavior but is **not** an
+independent prediction of the refractive horizon location. Offsets of 0.25m
+avoid the ambiguous exact tangency point.
+
+A separate vacuum test uses the analytic spherical tangent condition:
+`distance/R = acos(R/(R+observerHeight)) + acos(R/(R+targetHeight))`.
+It checks visibility 1m on either side of tangency, where positive heights
+permit. This is independent of the numerical refraction integrators.
+
+These tests use a 0.1 arcsecond angle-difference threshold; they do not certify
+physical atmospheric accuracy, near-exact-tangent behavior, or multiple-ray
+solutions (e.g. ducting).
