@@ -349,13 +349,66 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
     }
   </script>
   <script>
+    // The original ControlPanels sliders call UpdateAll().  Keep the existing
+    // camera redraw path, but recompute the expensive P4 cache only when its
+    // physical geometry changes.  This also covers text fields and model tabs.
+    var opticalRefreshTimer = null;
+    var opticalRefreshToken = 0;
+    var opticalRefreshKey = null;
+    function OpticalP4InputKey(m) {
+      return [m.showModel,m.rEarth,m.Height,m.ObjDist[0],m.ObjDeltaDist[0],
+        m.ObjSize[0],m.ObjSidePos[0],m.NObjects[0]].join('|');
+    }
+    function ScheduleOpticalP4Refresh() {
+      var bridge=window.CurvatureInverseOpticsBridge;
+      var selector=document.getElementById('OpticsSceneComparison');
+      if(!bridge || !selector || selector.value==='original' ||
+         CurveApp.opticsMode!=='ray-tracing' ||
+         (CurveApp.showModel!==1 && CurveApp.showModel!==2)) return;
+      var key=OpticalP4InputKey(CurveApp);
+      if(bridge.hasCompleteP4Line(CurveApp)) {
+        opticalRefreshKey=key;
+        if(opticalRefreshTimer!==null) clearTimeout(opticalRefreshTimer);
+        opticalRefreshTimer=null;
+        return;
+      }
+      if(key===opticalRefreshKey && bridge.getLineAtmosphere().state==='working') return;
+      opticalRefreshKey=key;
+      var token=++opticalRefreshToken;
+      if(opticalRefreshTimer!==null) clearTimeout(opticalRefreshTimer);
+      document.getElementById('OpticsComparisonStatus').textContent='Updating Optical P4...';
+      opticalRefreshTimer=setTimeout(function(){
+        opticalRefreshTimer=null;
+        if(token!==opticalRefreshToken || selector.value==='original') return;
+        if(bridge.hasCompleteP4Line(CurveApp)) return;
+        // Capture tower polygons at the *current* geometry before tracing.
+        graph.Redraw();
+        var status=document.getElementById('InverseAtmosphereLineStatus');
+        bridge.calculateAtmosphereLine(CurveApp,window.CurvatureRenderedVertexAudit,
+          window.CurvatureTowerDiagnostics,
+          function(message){ status.textContent=message; },
+          function(result){
+            if(token!==opticalRefreshToken) return;
+            status.textContent=result.message;
+            if(result.state==='ready' && bridge.hasCompleteP4Line(CurveApp)) {
+              document.getElementById('OpticalSceneTowers').checked=true;
+              document.getElementById('ShowLegacyTransmissionTowers').checked=selector.value==='both';
+              document.getElementById('InverseAtmosphereLineShow').checked=false;
+              document.getElementById('OpticsComparisonStatus').textContent='Optical P4 updated';
+              graph.Redraw();
+            } else {
+              document.getElementById('OpticsComparisonStatus').textContent='Optical P4: '+result.message;
+            }
+          },{mode:'all',quality:'p4'});
+      },180);
+    }
     // Switch visibility only; keep camera, atmosphere and P4 cache unchanged.
     function SetOpticsSceneComparison(mode) {
       var bridge=window.CurvatureInverseOpticsBridge;
       var status=document.getElementById('OpticsComparisonStatus');
       if(mode!=='original' && (!bridge||!bridge.hasCompleteP4Line(CurveApp))) {
-        status.textContent='Calculate all 85 towers with Analytic P4 first';
-        mode='original';
+        status.textContent='Updating Optical P4...';
+        ScheduleOpticalP4Refresh();
       } else status.textContent='';
       document.getElementById('OpticsSceneComparison').value=mode;
       document.getElementById('OpticalSceneTowers').checked=mode!=='original';
@@ -1171,6 +1224,7 @@ function UpdateAll( stopAnimation ) {
     if (window.CurvatureOpticsUI) CurvatureOpticsUI.sync();
     ControlPanels.Update();
     graph.Redraw();
+    if (typeof ScheduleOpticalP4Refresh === 'function') ScheduleOpticalP4Refresh();
   }
   finally {
     UpdateAllRunning = false;
