@@ -193,7 +193,7 @@
     }
     var R=m.rEarth, observer=m.Height;
     var effective=R/(1-R*0.000293/7350);
-    var distances=options.distances||[3000,10000,18000,26000];
+    var distances=options.distances||[500,3000,10000,18000,26000];
     var heights=[10,25,45];
     var rows=[], boundaries=[];
     var exactMemo=new Map();
@@ -278,7 +278,11 @@
       if(!(d>=distances[0] && d<=distances[distances.length-1]) || h>55 || h<0) {
         if(stats) {
           stats.polyDirect++;stats.polyOutside++;
-          if(!(d>=distances[0] && d<=distances[distances.length-1])) stats.polyOutsideDistance++;
+          if(!(d>=distances[0] && d<=distances[distances.length-1])) {
+            stats.polyOutsideDistance++;
+            stats.polyOutsideMin=Math.min(stats.polyOutsideMin,d);
+            stats.polyOutsideMax=Math.max(stats.polyOutsideMax,d);
+          }
           if(h>55 || h<0) stats.polyOutsideHeight++;
         }
         return exact(d,h);
@@ -617,6 +621,7 @@
     stats.polyExact=0;stats.polyCalibration=0;stats.polyDirect=0;stats.polyInterpolated=0;stats.polyRejected=0;
     stats.polyExactMs=0;stats.polyCalibrationMs=0;stats.polyOutside=0;stats.polyHorizon=0;stats.polyInvalid=0;
     stats.polyExactHits=0;stats.polyCalibrationHits=0;stats.polyOutsideDistance=0;stats.polyOutsideHeight=0;
+    stats.polyOutsideMin=Infinity;stats.polyOutsideMax=-Infinity;
     var polynomial=poly?createPolynomialApproximation(m,solver,stats):null;
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
@@ -678,6 +683,8 @@
           polyExact:stats.polyExact,polyCalibration:stats.polyCalibration,polyDirect:stats.polyDirect,polyInterpolated:stats.polyInterpolated,polyRejected:stats.polyRejected,
           polyProfile:{calibrationMs:stats.polyCalibrationMs,exactMs:stats.polyExactMs,sampleMs:profileSampleMs,edgeMs:profileGeometryMs,
             outside:stats.polyOutside,outsideDistance:stats.polyOutsideDistance,outsideHeight:stats.polyOutsideHeight,
+            outsideMin:Number.isFinite(stats.polyOutsideMin)?stats.polyOutsideMin:null,
+            outsideMax:Number.isFinite(stats.polyOutsideMax)?stats.polyOutsideMax:null,
             exactHits:stats.polyExactHits,calibrationHits:stats.polyCalibrationHits,horizon:stats.polyHorizon,invalid:stats.polyInvalid},
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
@@ -691,7 +698,8 @@
               ', profile(ms): calibration='+stats.polyCalibrationMs.toFixed(1)+', exact='+stats.polyExactMs.toFixed(1)+
               ', edge='+profileGeometryMs.toFixed(1)+', sample='+profileSampleMs.toFixed(1)+
               ', direct reasons: horizon='+stats.polyHorizon+', outside='+stats.polyOutside+
-              ' (distance='+stats.polyOutsideDistance+', height='+stats.polyOutsideHeight+'), invalid='+stats.polyInvalid+
+              ' (distance='+stats.polyOutsideDistance+', height='+stats.polyOutsideHeight+
+              ', range='+ (Number.isFinite(stats.polyOutsideMin)?stats.polyOutsideMin.toFixed(0)+'..'+stats.polyOutsideMax.toFixed(0)+'m':'none')+'), invalid='+stats.polyInvalid+
               ', exact cache hits='+stats.polyExactHits+', calibration cache hits='+stats.polyCalibrationHits:'')};
         onDone(lineAtmosphere);
       }
