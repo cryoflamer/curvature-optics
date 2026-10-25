@@ -85,3 +85,24 @@ test('pipeline observer restores original methods after failure',()=>{
  assert.throws(()=>probe.observePipeline(graph,()=>graph.Polygon()),/pipeline failed/);
  assert.equal(graph.Polygon,original);
 });
+
+test('clipping snapshots locate the first divergent call and restore instrumentation',()=>{
+ const graph={Trans3D:[[1,0],[0,1]],Camera:{Zoom:2},
+   TransClipPolygon3D(poly){return {Size:poly.Size,X:poly.X,Y:poly.Y,Z:poly.Z};}};
+ const original=graph.TransClipPolygon3D,first=[],second=[];
+ probe.observePipeline(graph,()=>{
+   graph.TransClipPolygon3D({Size:1,X:[1],Y:[2],Z:[3]},1);
+   graph.TransClipPolygon3D({Size:1,X:[4],Y:[5],Z:[6]},1);
+ },first);
+ graph.Camera.Zoom=3;
+ probe.observePipeline(graph,()=>{
+   graph.TransClipPolygon3D({Size:1,X:[1],Y:[2],Z:[3]},1);
+   graph.TransClipPolygon3D({Size:1,X:[4],Y:[5],Z:[6]},1);
+ },second);
+ assert.equal(first.length,2);
+ assert.equal(probe.firstClippingDifference(first,second).callIndex,1);
+ assert.equal(first[0].input.X[0],1);
+ assert.equal(first[0].state.Camera.Zoom,2);
+ assert.equal(graph.TransClipPolygon3D,original);
+ assert.equal(probe.firstClippingDifference(first,first),null);
+});

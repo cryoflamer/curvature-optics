@@ -1310,13 +1310,13 @@ function DrawModelWithOptionalAudit(g) {
   var status = document.getElementById('LegacyFrameCaptureStatus');
   try {
     var compareCanvas = document.getElementById('LegacyFrameCompareCanvas').checked;
-    var originalPipeline = null, originalPaint = null;
+    var originalPipeline = null, originalPaint = null, originalClippingTrace = [];
     var result = window.LegacySceneAudit.captureFrame(g, function(graph) {
       if (!compareCanvas || !window.LegacyCanvasReplayProbe) return DrawModel(graph);
       originalPaint = window.LegacyCanvasReplayProbe.observePaint(graph.Context2D, function() {
         originalPipeline = window.LegacyCanvasReplayProbe.observePipeline(graph, function() {
           DrawModel(graph);
-        });
+        }, originalClippingTrace);
       });
     });
     // Isolated dispatch preflight does not assert visual equivalence.
@@ -1326,6 +1326,11 @@ function DrawModelWithOptionalAudit(g) {
     var canvasProbe = compareCanvas &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
         g, result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
+    var firstClippingDifference = canvasProbe && canvasProbe.clippingTrace &&
+      window.LegacyCanvasReplayProbe.firstClippingDifference(
+        originalClippingTrace, canvasProbe.clippingTrace);
+    // Keep the first divergent call, not hundreds of repeated state snapshots.
+    if (canvasProbe) delete canvasProbe.clippingTrace;
     // Large PNG data URLs must never be embedded in the audit JSON.
     var canvasImages = canvasProbe && canvasProbe.images;
     if (canvasProbe && canvasImages) delete canvasProbe.images;
@@ -1338,6 +1343,7 @@ function DrawModelWithOptionalAudit(g) {
       isolatedReplayPreflight: preflight || null,
       detachedCanvasReplay: canvasProbe || null,
       originalCanvasPipeline: compareCanvas ? {pipeline:originalPipeline,paintOperations:originalPaint} : null,
+      firstClippingDifference: firstClippingDifference || null,
       summary: result.summary,
       notes: [
         'Capture is a pass-through of the active DrawModel invocation',

@@ -91,7 +91,53 @@
   // Observe the same internal pipeline on the live graph and on replay.
   // Instrument instance methods only, restoring every override even on error.
   // Counts describe method entry/output, not visibility or pixel equivalence.
-  function observePipeline(graph,draw){
+  // Bounded, JSON-safe snapshots at the clipping boundary. Record all calls
+  // so the first differing call can be located without guessing its index.
+  function diagnosticValue(value,depth){
+    if(value===null||typeof value==='boolean'||typeof value==='string')return value;
+    if(typeof value==='number')return Number.isFinite(value)?value:String(value);
+    if(depth<=0)return '[depth limit]';
+    if(Array.isArray(value))return value.slice(0,16).map(function(v){return diagnosticValue(v,depth-1);});
+    if(!value||typeof value!=='object')return null;
+    var result={};
+    Object.keys(value).slice(0,20).forEach(function(key){
+      if(typeof value[key]!=='function')result[key]=diagnosticValue(value[key],depth-1);
+    });
+    return result;
+  }
+  function clippingSnapshot(graph,poly,mode,output){
+    function polygonSample(p){
+      if(!p||typeof p.Size!=='number')return null;
+      var sample={size:p.Size};
+      if(p.PolyList)sample.firstPolygon=polygonSample(p.PolyList[0]);
+      else ['X','Y','Z'].forEach(function(k){if(p[k])sample[k]=Array.prototype.slice.call(p[k],0,3);});
+      return sample;
+    }
+    var state={};
+    ['Trans3D','CameraClipNear','CameraClipFar','GraphClipEnabled',
+      'IsPath3DOpen','ApplyTransToPath3D','VpXmin','VpYmin','VpWidth','VpHeight',
+      'WinXmin','WinXmax','WinYmin','WinYmax'].forEach(function(k){
+      state[k]=diagnosticValue(graph[k],3);
+    });
+    if(graph.Camera){
+      state.Camera={};
+      Object.keys(graph.Camera).forEach(function(k){
+        if(typeof graph.Camera[k]!=='function' && !/graph|canvas|context/i.test(k))
+          state.Camera[k]=diagnosticValue(graph.Camera[k],2);
+      });
+    }
+    return {mode:mode,input:polygonSample(poly),output:polygonSample(output),state:state};
+  }
+  function firstClippingDifference(original,replay){
+    if(!original||!replay)return null;
+    var length=Math.max(original.length,replay.length);
+    for(var i=0;i<length;i++){
+      var a=original[i],b=replay[i];
+      if(JSON.stringify(a)!==JSON.stringify(b))return {callIndex:i+1,original:a||null,replay:b||null};
+    }
+    return null;
+  }
+  function observePipeline(graph,draw,clippingTrace){
     var names=['DrawPoly3D','Polygon3D','TransClipPolygon3D','TransPolys3D',
       'ClipPolygon3D','CameraTrans3D','DrawPolygonList3D','Polygon','DriverDrawPoly'];
     var stages={},saved=[];
@@ -123,6 +169,8 @@
             if(arguments[3])stat.fillCalls++;else stat.outlineCalls++;
           }
           var output=original.apply(this,arguments);
+          if(name==='TransClipPolygon3D'&&clippingTrace)
+            clippingTrace.push(clippingSnapshot(this,arguments[0],arguments[1],output));
           var count=sizeOf(output);
           if(count!==null){stat.outputItems+=count;if(count===0)stat.emptyOutputs++;}
           return output;
@@ -180,16 +228,16 @@
       shadow.SetAngleMeasure(original.AngleMeasure);
       // Camera and viewport changes are replayed in trace order, not inferred
       // from the final state of the live graph.
-      var pipeline;
+      var pipeline,clippingTrace=[];
       var paintOperations=observePaint(shadow.Context2D,function(){
         pipeline=observePipeline(shadow,function(){
           adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
-        });
+        },clippingTrace);
       });
       var analysis=exportImages?analyzePixels(original.Canvas,canvas):null;
       return {ok:true,comparison:analysis?analysis.comparison:comparePixels(original.Canvas,canvas),
         diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
-        paintOperations:paintOperations,pipeline:pipeline,
+        paintOperations:paintOperations,pipeline:pipeline,clippingTrace:clippingTrace,
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -200,5 +248,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,run:run};
+  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,observePipeline:observePipeline,firstClippingDifference:firstClippingDifference,run:run};
 }));
