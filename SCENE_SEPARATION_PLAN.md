@@ -125,3 +125,17 @@ calls. Unrecorded methods, direct graph property assignments (including
 this report. `replayVerified` is always `false`; this step does not enable
 replay or replace the legacy rendering path. If capture throws, a normal
 `DrawModel` call is attempted and the error is displayed in the diagnostic UI.
+
+## Phase 5: JsgPolygon argument snapshots
+
+The 1631 browser audit found four `PolygonOnPlane` calls with a `JsgPolygon`
+argument. The recorder now snapshots the active `Size` vertices (X/Y and
+optional Z) with a tagged JSON representation. Replay reconstructs an actual
+`JsgPolygon` instance using the browser global constructor or the explicit
+`{JsgPolygon: Constructor}` option. This is deliberately restricted to this
+known graph type; arbitrary class instances remain unsupported.
+
+The audit's `captureComplete` can now be true for this scene, but it is **not**
+a guarantee of replay completeness: graph property writes, non-allowlisted
+methods, and internal canvas state remain outside the capture boundary.
+`replayVerified` must remain false until visual equivalence is tested.

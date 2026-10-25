@@ -43,3 +43,31 @@ assert.equal(diagnostic.unsupported[0].method,'LineOnPlane');
 assert.match(diagnostic.unsupported[0].message,/args\[0\].*Date/);
 assert.equal(diagnosticGraph.last,nonPlain);
 assert.throws(()=>adapter.record(diagnosticGraph,g=>g.LineOnPlane(nonPlain)),/LineOnPlane.*args\[0\].*Date/);
+
+// Snapshot a real-shaped JsgPolygon, including its prototype and active Size.
+class JsgPolygon {
+  constructor(is3d) { this.X=[];this.Y=[];this.Z=is3d?[]:null;this.Size=0; }
+}
+const poly = new JsgPolygon(false);
+poly.X=[1,2,999];poly.Y=[3,4,999];poly.Size=2;
+const polyGraph = {PolygonOnPlane(p,mode){this.seen=[p,mode];}};
+const polyTrace = adapter.record(polyGraph,g=>g.PolygonOnPlane(poly,3));
+assert.equal(polyTrace.complete,true);
+assert.deepEqual(polyTrace.commands[0].args[0],{
+  __legacyGraphType:'JsgPolygon',Size:2,X:[1,2],Y:[3,4],Z:null
+});
+poly.X[0]=100;
+const replayGraph={PolygonOnPlane(p,mode){this.seen=[p,mode];}};
+const jsonTrace=JSON.parse(JSON.stringify(polyTrace));
+adapter.replay(replayGraph,jsonTrace,{JsgPolygon});
+assert.ok(replayGraph.seen[0] instanceof JsgPolygon);
+assert.deepEqual(replayGraph.seen[0].X,[1,2]);
+assert.equal(replayGraph.seen[0].Size,2);
+assert.equal(replayGraph.seen[1],3);
+assert.throws(()=>adapter.replay(replayGraph,jsonTrace),/constructor required/);
+const poly3 = new JsgPolygon(true);
+poly3.X=[1];poly3.Y=[2];poly3.Z=[3];poly3.Size=1;
+const t3=adapter.record(polyGraph,g=>g.PolygonOnPlane(poly3,4));
+adapter.replay(replayGraph,t3,{JsgPolygon});
+assert.deepEqual(replayGraph.seen[0].Z,[3]);
+assert.equal(replayGraph.seen[0].Z.length,1);
