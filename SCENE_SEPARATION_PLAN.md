@@ -139,3 +139,19 @@ The audit's `captureComplete` can now be true for this scene, but it is **not**
 a guarantee of replay completeness: graph property writes, non-allowlisted
 methods, and internal canvas state remain outside the capture boundary.
 `replayVerified` must remain false until visual equivalence is tested.
+
+## Phase 7: isolated replay dispatch preflight (NOT visual replay)
+
+The browser audit now includes `isolatedReplayPreflight`. It round-trips the
+complete JSON command stream and dispatches every command onto an isolated
+shadow graph. This validates serialization, supported methods and dispatch
+order without touching the active canvas. It does **not** establish image
+identity, graph-state equivalence or completeness of the capture boundary.
+`replayVerified` remains `false` regardless of the preflight result.
+
+For deeper investigation, check **Export full command trace (large JSON)**
+before clicking the audit button. This downloads `legacy-frame-commands.json`
+in addition to the summary. It can be large and may contain scene parameters;
+share it only when needed. The active renderer is unchanged. A subsequent
+phase must create a properly initialized independent graph/canvas and compare
+its output against the original before enabling real replay.

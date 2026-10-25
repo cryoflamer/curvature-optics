@@ -76,6 +76,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="GraphX3DX.js"></script>
 <script src="LegacySceneAdapter.js"></script>
 <script src="LegacySceneAudit.js"></script>
+<script src="LegacyReplayProbe.js"></script>
 <script src="ControlPanelX.js"></script>
 <script src="ModelAnimationX.js"></script>
 
@@ -94,6 +95,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <summary style="cursor:pointer;user-select:none;">Advanced diagnostics (optics tests)</summary>
   <div style="padding:0.5em 1em;">
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
+    <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
     <span id="LegacyFrameCaptureStatus" role="status" aria-live="polite"></span>
   </div>
 <section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
@@ -1305,21 +1307,28 @@ function DrawModelWithOptionalAudit(g) {
   var status = document.getElementById('LegacyFrameCaptureStatus');
   try {
     var result = window.LegacySceneAudit.captureFrame(g, DrawModel);
+    // Isolated dispatch preflight does not assert visual equivalence.
+    var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
+      result.trace, window.JsgPolygon);
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
       schema: 'legacy-frame-audit-v2',
       unsupported: result.trace.unsupported,
       captureComplete: result.trace.complete,
       replayVerified: false,
+      isolatedReplayPreflight: preflight || null,
       summary: result.summary,
       notes: [
         'Capture is a pass-through of the active DrawModel invocation',
         'Only allowlisted top-level graph methods are counted',
         'Direct graph property writes, internal graph calls and canvas calls are not captured',
-        'No replay or pixel equivalence has been verified'
+        'Isolated replay preflight checks command dispatch only, not pixels',
+        'No canvas replay or pixel equivalence has been verified'
       ]
     };
     window.LastLegacyFrameAudit = report;
+    // Retain the trace for debugging, but only download it with explicit opt-in.
+    window.LastLegacyFrameTrace = result.trace;
     if (status) status.textContent = 'Captured ' + result.summary.count +
       ' commands; unsupported arguments: ' + result.trace.unsupported.length +
       '. Downloading diagnostic report.';
@@ -1332,6 +1341,17 @@ function DrawModelWithOptionalAudit(g) {
     link.click();
     document.body.removeChild(link);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    if (document.getElementById('LegacyFrameExportTrace').checked) {
+      var traceBlob = new Blob([JSON.stringify(result.trace)], {type:'application/json'});
+      var traceUrl = URL.createObjectURL(traceBlob);
+      var traceLink = document.createElement('a');
+      traceLink.href = traceUrl;
+      traceLink.download = 'legacy-frame-commands.json';
+      document.body.appendChild(traceLink);
+      traceLink.click();
+      document.body.removeChild(traceLink);
+      setTimeout(function () { URL.revokeObjectURL(traceUrl); }, 1000);
+    }
   } catch (error) {
     if (status) status.textContent = 'Capture failed: ' + error.message +
       '. Redrawing normally.';
