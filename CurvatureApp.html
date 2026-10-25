@@ -1860,21 +1860,23 @@ function DrawShapeVariants( objIx, g, m, bOnGlobe ) {
 }
 
 function DrawShape( objIx, g, m ) {
-  // plane and transformations are set
-  var endVertexAudit = window.CurvatureRenderedVertexAudit &&
-    CurvatureRenderedVertexAudit.beginTower(g, m, objIx);
-  // Suppress only tower primitives in this diagnostic mode. The audit's
-  // PolygonOnPlane wrapper still captures the original polygon vertices.
+  // Hide the actual renderer primitives, not just LineOnPlane. Install the
+  // suppression before the audit wrapper so the audit can still capture every
+  // PolygonOnPlane vertex while its underlying draw operation is a no-op.
   var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
   var showLegacyControl = document.getElementById('ShowLegacyTransmissionTowers');
   var showLegacy = !showLegacyControl || showLegacyControl.checked;
   var suppressOriginalTower = m.ObjType[objIx] === 3 &&
     (!showLegacy ||
      (objIx === 0 && m.showModel === 1 && m.opticsMode === 'ray-tracing' && towerComparison === 'optical'));
-  // Keep the vertex-audit wrappers active: they capture the real geometry
-  // even when the legacy layer is hidden. Only drawing is suppressed.
   var originalTowerLine = g.LineOnPlane;
-  if (suppressOriginalTower) g.LineOnPlane = function () {};
+  var originalTowerPolygon = g.PolygonOnPlane;
+  if (suppressOriginalTower) {
+    g.LineOnPlane = function () {};
+    g.PolygonOnPlane = function () {};
+  }
+  var endVertexAudit = window.CurvatureRenderedVertexAudit &&
+    CurvatureRenderedVertexAudit.beginTower(g, m, objIx);
 
   function setBgColor( normalColor, hiddenColor ) {
     if (m.isHiddenObj[objIx]) {
@@ -2717,10 +2719,12 @@ function DrawShape( objIx, g, m ) {
 
     }
   }
+  // Undo wrappers in reverse order: audit -> primitive suppression.
+  if (endVertexAudit) endVertexAudit();
   if (suppressOriginalTower) {
     g.LineOnPlane = originalTowerLine;
+    g.PolygonOnPlane = originalTowerPolygon;
   }
-  if (endVertexAudit) endVertexAudit();
 }
 
 function PointOnEarth( lat, long ) {
