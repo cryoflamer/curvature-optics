@@ -196,14 +196,24 @@
     var distances=options.distances||[3000,10000,18000,26000];
     var heights=[10,25,45];
     var rows=[], boundaries=[];
+    var exactMemo=new Map();
     var cacheKey=[R,observer,distances.join(','),heights.join(',')].join('|');
     function clock() { return typeof performance!=='undefined' && performance.now ? performance.now() : Date.now(); }
     function exact(d,h) {
+      // Repeated adaptive subdivisions often revisit identical ray endpoints.
+      // Memoize only within this physical model and solver instance.
+      var key=d+'|'+h;
+      if(exactMemo.has(key)) {
+        if(stats) stats.polyExactHits++;
+        return exactMemo.get(key);
+      }
       if(stats) stats.polyExact++;
       var t=clock();
       try {
-        return solver.solveAngle({geometry:'globe',atmosphere:'standard',
+        var result=solver.solveAngle({geometry:'globe',atmosphere:'standard',
           observerHeight:observer,radius:R,distance:d,targetHeight:h,step:25});
+        exactMemo.set(key,result);
+        return result;
       } finally {
         if(stats) stats.polyExactMs+=clock()-t;
       }
@@ -238,7 +248,7 @@
       if(rows.length) return;
       var byModel=polynomialCalibrationCache.get(solver);
       var saved=byModel && byModel.get(cacheKey);
-      if(saved) { rows=saved.rows; boundaries=saved.boundaries; return; }
+      if(saved) { rows=saved.rows; boundaries=saved.boundaries; if(stats)stats.polyCalibrationHits++; return; }
       var calibrationStart=clock();
       distances.forEach(function(d) {
         var values=heights.map(function(h) {
@@ -265,8 +275,14 @@
       if(stats) { stats.polyCalibration=stats.polyExact; stats.polyCalibrationMs+=clock()-calibrationStart; }
     }
     function get(d,h) {
-      if(!(d>=distances[0] && d<=distances[distances.length-1]) || h>55 || h<0)
-        {if(stats){stats.polyDirect++;stats.polyOutside++;}return exact(d,h);}
+      if(!(d>=distances[0] && d<=distances[distances.length-1]) || h>55 || h<0) {
+        if(stats) {
+          stats.polyDirect++;stats.polyOutside++;
+          if(!(d>=distances[0] && d<=distances[distances.length-1])) stats.polyOutsideDistance++;
+          if(h>55 || h<0) stats.polyOutsideHeight++;
+        }
+        return exact(d,h);
+      }
       calibrate();
       var estimated=boundaryEstimate(d);
       // Boundaries store a correction except for ground-visible anchors.
@@ -600,6 +616,7 @@
     var poly=options.quality==='poly';
     stats.polyExact=0;stats.polyCalibration=0;stats.polyDirect=0;stats.polyInterpolated=0;stats.polyRejected=0;
     stats.polyExactMs=0;stats.polyCalibrationMs=0;stats.polyOutside=0;stats.polyHorizon=0;stats.polyInvalid=0;
+    stats.polyExactHits=0;stats.polyCalibrationHits=0;stats.polyOutsideDistance=0;stats.polyOutsideHeight=0;
     var polynomial=poly?createPolynomialApproximation(m,solver,stats):null;
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
@@ -660,7 +677,8 @@
           bundleTraces:stats.bundleTraces,bundleExact:stats.bundleExact,bundleInterpolated:stats.bundleInterpolated,
           polyExact:stats.polyExact,polyCalibration:stats.polyCalibration,polyDirect:stats.polyDirect,polyInterpolated:stats.polyInterpolated,polyRejected:stats.polyRejected,
           polyProfile:{calibrationMs:stats.polyCalibrationMs,exactMs:stats.polyExactMs,sampleMs:profileSampleMs,edgeMs:profileGeometryMs,
-            outside:stats.polyOutside,horizon:stats.polyHorizon,invalid:stats.polyInvalid},
+            outside:stats.polyOutside,outsideDistance:stats.polyOutsideDistance,outsideHeight:stats.polyOutsideHeight,
+            exactHits:stats.polyExactHits,calibrationHits:stats.polyCalibrationHits,horizon:stats.polyHorizon,invalid:stats.polyInvalid},
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
@@ -672,7 +690,9 @@
             (poly?', calibration='+stats.polyCalibration+', exact='+stats.polyExact+', interpolated='+stats.polyInterpolated+', rejected='+stats.polyRejected+', direct='+stats.polyDirect+
               ', profile(ms): calibration='+stats.polyCalibrationMs.toFixed(1)+', exact='+stats.polyExactMs.toFixed(1)+
               ', edge='+profileGeometryMs.toFixed(1)+', sample='+profileSampleMs.toFixed(1)+
-              ', direct reasons: horizon='+stats.polyHorizon+', outside='+stats.polyOutside+', invalid='+stats.polyInvalid:'')};
+              ', direct reasons: horizon='+stats.polyHorizon+', outside='+stats.polyOutside+
+              ' (distance='+stats.polyOutsideDistance+', height='+stats.polyOutsideHeight+'), invalid='+stats.polyInvalid+
+              ', exact cache hits='+stats.polyExactHits+', calibration cache hits='+stats.polyCalibrationHits:'')};
         onDone(lineAtmosphere);
       }
     }
