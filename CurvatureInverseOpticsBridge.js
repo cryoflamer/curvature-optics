@@ -736,7 +736,7 @@
       lineAtmosphere={state:'error',paths:null,key:null,message:'Unknown tower selection mode'};
       onDone(lineAtmosphere); return;
     }
-    var edges = [], footingPolygons = [], footingFaces = [];
+    var edges = [], footingPolygons = [];
     indices.forEach(function(index) {
       audit.getTowerPaths(index).forEach(function(path) {
         for (var j=1;j<path.length;j++) edges.push({tower:index,a:path[j-1],b:path[j]});
@@ -746,12 +746,6 @@
       if (typeof audit.getFoundationPaths === 'function')
         audit.getFoundationPaths(index).forEach(function(path) {
           footingPolygons.push({tower:index,world:path});
-        });
-    });
-    indices.forEach(function(index) {
-      if (typeof audit.getFoundationFaces === 'function')
-        audit.getFoundationFaces(index).forEach(function(face) {
-          footingFaces.push({tower:index,world:face});
         });
     });
     if (!edges.length) {
@@ -822,29 +816,19 @@
       onProgress(lineAtmosphere.message);
       if (i<edges.length) setTimeout(batch,0);
       else {
-        // Fill concave foundations as independently clipped convex triangles.
-        // Keep the original boundary separate: internal triangulation seams
-        // must not appear as dark strokes.
+        // Keep the original DrawShape foundation polygon as one primitive.
+        // The legacy renderer uses PolygonOnPlane(..., 3): fill AND stroke
+        // in the original vertex order, including the concave silhouette.
+        // Only the projection and visibility clipping differ here.
         var footingCandidates = analyticP4 ? footingPolygons.map(function(poly) {
-          return clipVisibleFooting(poly.world,sample);
+          var clipped = clipVisibleFooting(poly.world, sample);
+          return clipped && {tower:poly.tower,points:clipped.points,partial:clipped.partial};
         }) : [];
-        var footingsProjected=footingCandidates.filter(Boolean).length;
-        var footingsPartial=footingCandidates.filter(function(poly){return poly && poly.partial;}).length;
+        var footings = footingCandidates.filter(Boolean);
+        var footingsProjected=footings.length;
+        var footingsPartial=footings.filter(function(poly){return poly.partial;}).length;
         var footingsRejected=footingCandidates.length-footingsProjected;
-        var footings=analyticP4?footingFaces.map(function(face){
-          var clipped=clipVisibleFooting(face.world,sample);
-          return clipped && {tower:face.tower,points:clipped.points};
-        }).filter(Boolean):[];
-        var footingOutlines=analyticP4?footingPolygons.map(function(poly){
-          var outline=[];
-          for(var j=1;j<poly.world.length;j++) {
-            var a=poly.world[j-1],b=poly.world[j];
-            var edge=adaptiveEdge(a,b,function(t){return sample(interpolateWorld(a,b,t));},5,0.10);
-            outline.push(edge.points);
-          }
-          return outline;
-        }):[];
-        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingOutlines:footingOutlines,footingFacesProjected:footings.length,footingsCaptured:footingPolygons.length,footingsProjected:footingsProjected,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingFacesProjected:footings.length,footingsCaptured:footingPolygons.length,footingsProjected:footingsProjected,footingsPartial:footingsPartial,footingsRejected:footingsRejected,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
@@ -1095,18 +1079,14 @@
     if (((allCheckbox && allCheckbox.checked) || isOpticalSceneReady(m)) && lineAtmosphere.state==='ready' &&
         lineAtmosphere.key===modelKey(m)) {
       if (isOpticalSceneReady(m) && Array.isArray(lineAtmosphere.footings)) {
-        g.SetAreaAttr('#a38d60', '#a38d60', 1);
-        lineAtmosphere.footings.forEach(function(face) {
+        // Match DrawShape's original filled-and-outlined PolygonOnPlane(...,3).
+        // Do not triangulate or draw independent outlines: both change the
+        // silhouette and can introduce seams or incorrect closing segments.
+        g.SetAreaAttr('#a38d60', '#695737', 1);
+        lineAtmosphere.footings.forEach(function(footing) {
           g.NewPoly3D();
-          face.points.forEach(function(point) { g.AddPointToPoly3D(point); });
-          g.DrawPoly3D(6); // Fill + close; no internal triangle strokes.
-        });
-        g.SetLineAttr('#695737', 1);
-        (lineAtmosphere.footingOutlines||[]).forEach(function(outline) {
-          outline.forEach(function(edge) {
-            for(var j=1;j<edge.length;j++)
-              if(edge[j-1]&&edge[j])g.Line3D(edge[j-1],edge[j]);
-          });
+          footing.points.forEach(function(point) { g.AddPointToPoly3D(point); });
+          g.DrawPoly3D(3);
         });
       }
       g.SetLineAttr('#ff8800', 1.25);
