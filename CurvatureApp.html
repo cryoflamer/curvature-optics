@@ -98,6 +98,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
     <label><input type="checkbox" id="LegacyFrameCompareCanvas"> Compare detached replay canvas (experimental)</label>
+    <label><input type="checkbox" id="LegacyFrameExportCanvasPng"> Export canvas PNG diagnostics (3 files; requires comparison)</label>
     <span id="LegacyFrameCaptureStatus" role="status" aria-live="polite"></span>
   </div>
 <section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
@@ -1312,9 +1313,13 @@ function DrawModelWithOptionalAudit(g) {
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       result.trace, window.JsgPolygon);
+    var exportCanvasPng = document.getElementById('LegacyFrameExportCanvasPng').checked;
     var canvasProbe = document.getElementById('LegacyFrameCompareCanvas').checked &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
-        g, result.trace, window.JsGraphX3D, window.JsgPolygon);
+        g, result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
+    // Large PNG data URLs must never be embedded in the audit JSON.
+    var canvasImages = canvasProbe && canvasProbe.images;
+    if (canvasProbe && canvasImages) delete canvasProbe.images;
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
       schema: 'legacy-frame-audit-v2',
@@ -1348,6 +1353,16 @@ function DrawModelWithOptionalAudit(g) {
     link.click();
     document.body.removeChild(link);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    if (canvasImages) {
+      Object.keys(canvasImages).forEach(function (name) {
+        var pngLink = document.createElement('a');
+        pngLink.href = canvasImages[name];
+        pngLink.download = 'legacy-frame-' + name + '.png';
+        document.body.appendChild(pngLink);
+        pngLink.click();
+        document.body.removeChild(pngLink);
+      });
+    }
     if (document.getElementById('LegacyFrameExportTrace').checked) {
       var traceBlob = new Blob([JSON.stringify(result.trace)], {type:'application/json'});
       var traceUrl = URL.createObjectURL(traceBlob);

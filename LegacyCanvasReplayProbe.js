@@ -28,7 +28,46 @@
       totalPixels:a.width*a.height,maxChannelDifference:maxDifference,
       identical:mismatched===0};
   }
-  function run(original,trace,GraphCtor,polygonCtor){
+  // Diagnostic-only: preserve the source pixels and paint differences onto a
+  // separate canvas. Never modify the production or detached replay canvas.
+  function analyzePixels(a,b,thresholds){
+    var basic=comparePixels(a,b);
+    if(!basic.ok)return {comparison:basic,images:null};
+    thresholds=thresholds||[0,2,8,32];
+    var w=a.width,h=a.height;
+    var left=a.getContext('2d').getImageData(0,0,w,h);
+    var right=b.getContext('2d').getImageData(0,0,w,h);
+    var diff=document.createElement('canvas');diff.width=w;diff.height=h;
+    var ctx=diff.getContext('2d');
+    var pixels=ctx.createImageData(w,h),boxes=[null,null,null,null];
+    var counts=thresholds.map(function(t){return {threshold:t,count:0};});
+    var bounds=null;
+    for(var y=0;y<h;y++)for(var x=0;x<w;x++){
+      var i=(y*w+x)*4,maximum=0;
+      for(var k=0;k<4;k++)maximum=Math.max(maximum,Math.abs(left.data[i+k]-right.data[i+k]));
+      for(var t=0;t<counts.length;t++)if(maximum>counts[t].threshold)counts[t].count++;
+      var region=(y>=h/2?2:0)+(x>=w/2?1:0);
+      if(maximum){
+        if(!bounds)bounds={minX:x,minY:y,maxX:x,maxY:y};
+        else {bounds.minX=Math.min(bounds.minX,x);bounds.minY=Math.min(bounds.minY,y);
+          bounds.maxX=Math.max(bounds.maxX,x);bounds.maxY=Math.max(bounds.maxY,y);}
+        if(!boxes[region])boxes[region]=0;
+        boxes[region]++;
+        // Magenta mismatch, grayscale original elsewhere.
+        pixels.data[i]=255;pixels.data[i+1]=0;pixels.data[i+2]=255;pixels.data[i+3]=255;
+      }else{
+        var gray=Math.round(.2126*left.data[i]+.7152*left.data[i+1]+.0722*left.data[i+2]);
+        pixels.data[i]=gray;pixels.data[i+1]=gray;pixels.data[i+2]=gray;pixels.data[i+3]=255;
+      }
+    }
+    ctx.putImageData(pixels,0,0);
+    return {comparison:basic,diagnostics:{bounds:bounds,
+      quadrants:{topLeft:boxes[0]||0,topRight:boxes[1]||0,
+        bottomLeft:boxes[2]||0,bottomRight:boxes[3]||0},thresholds:counts},
+      images:{original:a.toDataURL('image/png'),replay:b.toDataURL('image/png'),
+        diff:diff.toDataURL('image/png')}};
+  }
+  function run(original,trace,GraphCtor,polygonCtor,exportImages){
     if(!trace||!trace.complete)return {ok:false,reason:'Incomplete trace'};
     if(!original||!original.Canvas||typeof GraphCtor!=='function')
       return {ok:false,reason:'Graph or constructor missing'};
@@ -70,7 +109,9 @@
       // Camera and viewport changes are replayed in trace order, not inferred
       // from the final state of the live graph.
       adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
-      return {ok:true,comparison:comparePixels(original.Canvas,canvas),
+      var analysis=exportImages?analyzePixels(original.Canvas,canvas):null;
+      return {ok:true,comparison:analysis?analysis.comparison:comparePixels(original.Canvas,canvas),
+        diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -81,5 +122,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,run:run};
+  return {comparePixels:comparePixels,analyzePixels:analyzePixels,run:run};
 }));
