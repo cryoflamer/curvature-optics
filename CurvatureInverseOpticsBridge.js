@@ -1174,6 +1174,31 @@
         }
         paintFootings(near);
       }
+      // Stroke the P4 tangent silhouette independently of the opaque mask.
+      // The original disk mask is fill-only and therefore has no visible rim.
+      if (isOpticalSceneReady(m)) {
+        var optical=lineAtmosphere.opticalHorizon;
+        var showOptical=document.getElementById('ShowP4OpticalHorizon');
+        var showVacuum=document.getElementById('ShowP4VacuumHorizon');
+        function strokeHorizon(disk, color) {
+          if (!disk || !(disk.rDisk>0) || !Number.isFinite(disk.zDisk)) return;
+          g.SetPlane([0,0,-disk.zDisk],[1,0,0],[0,1,0]);
+          g.SetLineAttr(color,2);
+          g.CircleOnPlane(0,0,disk.rDisk,1);
+        }
+        if (showVacuum && showVacuum.checked) strokeHorizon(m,'#1555dd');
+        if (optical && showOptical && showOptical.checked) strokeHorizon(optical,'#009c39');
+        var diag=document.getElementById('P4HorizonDiagnostics');
+        if (diag) {
+          var geometricDip=Math.acos(m.rEarth/(m.rEarth+m.Height));
+          var opticalDip=optical ? -optical.angle : NaN;
+          diag.textContent=optical && Number.isFinite(opticalDip) ?
+            'Horizon dip: vacuum '+(geometricDip*180/Math.PI).toFixed(5)+'°, P4 '+
+            (opticalDip*180/Math.PI).toFixed(5)+'°, difference '+
+            ((geometricDip-opticalDip)*180/Math.PI*60).toFixed(3)+' arcmin' :
+            'P4 horizon unavailable';
+        }
+      }
       g.SetLineAttr('#ff8800', 1.25);
       lineAtmosphere.paths.forEach(function(member) {
         var points=member.points;
