@@ -64,11 +64,11 @@
       // Reset like the normal graph Draw() entry point; never draw live model.
       shadow.Reset(true);
       if(shadow.ClientResetFunc)shadow.ClientResetFunc(shadow);
-      // Explicit known direct assignments omitted from the command stream.
+      // Known direct assignments still omitted from the command stream.
       shadow.MaxCurveSegments=original.MaxCurveSegments;
       shadow.SetAngleMeasure(original.AngleMeasure);
-      shadow.SetCameraClipping(original.CameraClipNear || 0.001);
-      shadow.SetWindowToCameraScreen();
+      // Camera and viewport changes are replayed in trace order, not inferred
+      // from the final state of the live graph.
       adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
       return {ok:true,comparison:comparePixels(original.Canvas,canvas),
         replayVerified:false,

@@ -155,3 +155,17 @@ in addition to the summary. It can be large and may contain scene parameters;
 share it only when needed. The active renderer is unchanged. A subsequent
 phase must create a properly initialized independent graph/canvas and compare
 its output against the original before enabling real replay.
+
+## Phase 10: camera and drawing-state trace coverage
+
+The detached canvas replay previously omitted `SetCamera`, `SetCameraZoom`,
+`SetCameraClipping`, `SetWindowToCameraScreen`, `SetAlpha`, and
+`SetTextRotation` despite calls in `DrawModel`. The recorder now captures
+these top-level calls in their original order. The detached replay no longer
+sets camera clipping or window-to-camera-screen separately before replay,
+which would have reordered these operations. Direct assignments such as
+`MaxCurveSegments` and `SetAngleMeasure` are still synchronized separately.
+The replay is **not** yet guaranteed pixel-equivalent: nested calls, direct
+property changes and drawing-cycle differences remain outside the trace.
+Run a new browser capture and compare mismatch counts before attributing
+remaining differences to geometry.

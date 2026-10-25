@@ -16,8 +16,9 @@
   var METHODS = [
     'SetTrans3D','ResetTrans3D','SetTrans','ResetTrans',
     'SetClipping','SetGraphClipping','SetWindow','SetViewport','SetViewport3D',
-    'SetLineAttr','SetAreaAttr','SetBgColor','SetColor','SetLineWidth',
-    'SetTextAttr','SetTextColor','SetMarkerAttr','SetMarkerSymbol','SetMarkerSize',
+    'SetCameraClipping','SetWindowToCameraScreen','SetCamera','SetCameraZoom',
+    'SetLineAttr','SetAreaAttr','SetBgColor','SetColor','SetLineWidth','SetAlpha',
+    'SetTextAttr','SetTextColor','SetTextRotation','SetMarkerAttr','SetMarkerSymbol','SetMarkerSize',
     'LineOnPlane','PolygonOnPlane','Line3D','NewPoly3D',
     'AddPointToPoly3D','DrawPoly3D','VectList3D',
     'Line','DrawLine','DrawPolygon','DrawText','Text',

@@ -71,3 +71,29 @@ const t3=adapter.record(polyGraph,g=>g.PolygonOnPlane(poly3,4));
 adapter.replay(replayGraph,t3,{JsgPolygon});
 assert.deepEqual(replayGraph.seen[0].Z,[3]);
 assert.equal(replayGraph.seen[0].Z.length,1);
+
+// The camera, alpha and text rotation are stateful operations, not cosmetic
+// calls: the trace must preserve their exact order and argument snapshots.
+const cameraLog=[];
+function cameraGraph(){return {
+  SetCamera(params){cameraLog.push(['camera',JSON.parse(JSON.stringify(params))]);},
+  SetCameraZoom(value){cameraLog.push(['zoom',value]);},
+  SetCameraClipping(value){cameraLog.push(['clip',value]);},
+  SetWindowToCameraScreen(){cameraLog.push(['window']);},
+  SetAlpha(value){cameraLog.push(['alpha',value]);},
+  SetTextRotation(value){cameraLog.push(['rotation',value]);}
+};}
+const params={CamPos:[1,2,3],CamUp:[0,0,1],SceneSize:12};
+const stateTrace=adapter.record(cameraGraph(),g=>{
+  g.SetCameraClipping(0.001);g.SetWindowToCameraScreen();
+  g.SetCamera(params);g.SetCameraZoom(1);g.SetAlpha(0.3);g.SetTextRotation(0.5);
+});
+const originalCameraLog=cameraLog.splice(0);
+params.CamPos[0]=99;
+assert.deepEqual(stateTrace.commands.map(c=>c.method),[
+  'SetCameraClipping','SetWindowToCameraScreen','SetCamera',
+  'SetCameraZoom','SetAlpha','SetTextRotation'
+]);
+assert.equal(stateTrace.commands[2].args[0].CamPos[0],1);
+adapter.replay(cameraGraph(),JSON.parse(JSON.stringify(stateTrace)));
+assert.deepEqual(cameraLog,originalCameraLog);
