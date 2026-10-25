@@ -264,6 +264,70 @@
     }
     setTimeout(batch, 0);
   }
+  // Experimental whole-line overlay. It never replaces the original renderer.
+  var lineAtmosphere = {state:'idle', paths:null, key:null, message:''};
+  function getLineAtmosphere() { return lineAtmosphere; }
+  function calculateAtmosphereLine(m, audit, solver, onProgress, onDone) {
+    onProgress = onProgress || function(){};
+    onDone = onDone || function(){};
+    var groups = audit && audit.getCapturedGroups();
+    var primary = groups && groups.primary;
+    if (!primary || !solver || typeof solver.solveAngle !== 'function') {
+      lineAtmosphere = {state:'error',paths:null,key:null,message:'Missing captured towers or solver'};
+      onDone(lineAtmosphere); return;
+    }
+    var indices = Object.keys(primary).filter(function(k) {
+      return /^\d+$/.test(k) && audit.getTowerPaths(Number(k));
+    }).map(Number).sort(function(a,b){return a-b;});
+    var edges = [];
+    indices.forEach(function(index) {
+      audit.getTowerPaths(index).forEach(function(path) {
+        for (var j=1;j<path.length;j++) edges.push({tower:index,a:path[j-1],b:path[j]});
+      });
+    });
+    if (!edges.length) {
+      lineAtmosphere = {state:'error',paths:null,key:null,message:'No tower edges captured'};
+      onDone(lineAtmosphere); return;
+    }
+    var generation = {}, key=modelKey(m), paths=[], cache=Object.create(null);
+    var i=0, evaluations=0, visible=0, hidden=0, transitions=0;
+    lineAtmosphere = {state:'working',paths:null,key:key,generation:generation,
+      message:'0 / '+edges.length+' edges'};
+    function sample(world) {
+      var k=world.map(function(v){return v.toFixed(7);}).join(',');
+      if (!Object.prototype.hasOwnProperty.call(cache,k)) {
+        cache[k]=opticalVertex(world,m,solver);
+        evaluations++;
+        if (cache[k]) visible++; else hidden++;
+      }
+      return cache[k];
+    }
+    function batch() {
+      if (lineAtmosphere.generation!==generation) return;
+      // Limit each turn so the browser remains responsive.
+      var end=Math.min(i+8,edges.length);
+      for (;i<end;i++) {
+        var e=edges[i];
+        var result=adaptiveEdge(e.a,e.b,function(t){
+          return sample(interpolateWorld(e.a,e.b,t));
+        },5,0.10);
+        transitions+=result.transitions;
+        paths.push({tower:e.tower,points:result.points});
+      }
+      lineAtmosphere.message=i+' / '+edges.length+' edges';
+      onProgress(lineAtmosphere.message);
+      if (i<edges.length) setTimeout(batch,0);
+      else {
+        lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
+          edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
+          transitions:transitions,message:'Calculated '+indices.length+' towers, '+
+            edges.length+' edges, '+evaluations+' ray samples; hidden='+hidden+
+            ', transitions='+transitions};
+        onDone(lineAtmosphere);
+      }
+    }
+    setTimeout(batch,0);
+  }
   // In a spherically symmetric n(h), a ray stays in the plane through the
   // observer, Earth's centre, and the target. Its horizontal azimuth is
   // therefore conserved. Audit full 3D unit vectors, not just elevation.
@@ -443,7 +507,7 @@
     var paths = audit && audit.getTowerPaths(21);
     if (!capture || !paths) return null;
     var report = compareTower(g, capture);
-    if ((!checkbox || !checkbox.checked) && !(atmosphere21.state === 'ready' && atmosphere21.key === modelKey(m))) return report;
+    if ((!checkbox || !checkbox.checked) && !(atmosphere21.state === 'ready' && atmosphere21.key === modelKey(m)) && !(typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow') && document.getElementById('InverseAtmosphereLineShow').checked && lineAtmosphere.state === 'ready' && lineAtmosphere.key === modelKey(m))) return report;
     g.ResetTrans3D();
     g.SetAlpha(1);
     g.SetClipping('canvas');
@@ -464,12 +528,23 @@
         }
       });
     }
+    var allCheckbox = typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow');
+    if (allCheckbox && allCheckbox.checked && lineAtmosphere.state==='ready' &&
+        lineAtmosphere.key===modelKey(m)) {
+      g.SetLineAttr('#ff8800', 1.25);
+      lineAtmosphere.paths.forEach(function(member) {
+        var points=member.points;
+        for (var j=1;j<points.length;j++)
+          if (points[j-1] && points[j]) g.Line3D(points[j-1],points[j]);
+      });
+    }
     g.ResetTrans3D();
     return report;
   }
   return {vacuumDirection:vacuumDirection, directionAtRange:directionAtRange,
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
+    calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
     adaptiveEdge:adaptiveEdge, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
