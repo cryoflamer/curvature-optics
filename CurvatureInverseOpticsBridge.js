@@ -179,6 +179,96 @@
     if(stats)stats.fastApproximated++;
     return {status:'visible',angle:Math.atan2(z,x)};
   }
+  // Calibrated polynomial: quadratic in altitude, linear in distance for the
+  // small correction to the effective-radius analytic angle. Visibility is
+  // independently calibrated against the exact solver, never inferred from
+  // the polynomial angle. Designed for the standard n(h) profile only.
+  function createPolynomialApproximation(m, solver, stats, options) {
+    options=options||{};
+    var R=m.rEarth, observer=m.Height;
+    var effective=R/(1-R*0.000293/7350);
+    var distances=options.distances||[3000,6000,10000,14000,18000,22000,26000];
+    var heights=[10,25,45];
+    var rows=[], boundaries=[];
+    function exact(d,h) {
+      if(stats) stats.polyExact++;
+      return solver.solveAngle({geometry:'globe',atmosphere:'standard',
+        observerHeight:observer,radius:R,distance:d,targetHeight:h,step:25});
+    }
+    function analytic(d,h) {
+      var a=d/effective;
+      return Math.atan2((effective+h)*Math.cos(a)-(effective+observer),
+        (effective+h)*Math.sin(a));
+    }
+    function boundaryEstimate(d) {
+      var horizon=Math.sqrt(2*effective*observer+observer*observer);
+      var remaining=Math.max(0,d-horizon);
+      return Math.hypot(effective,remaining)-effective;
+    }
+    function interpolate(d, values) {
+      var j=1;
+      while(j<distances.length-1 && distances[j]<d) j++;
+      var t=(d-distances[j-1])/(distances[j]-distances[j-1]);
+      return values[j-1]+t*(values[j]-values[j-1]);
+    }
+    function correctionAt(h, values) {
+      var sum=0;
+      for(var i=0;i<3;i++) {
+        var factor=1;
+        for(var j=0;j<3;j++) if(j!==i) factor*=(h-heights[j])/(heights[i]-heights[j]);
+        sum+=factor*values[i];
+      }
+      return sum;
+    }
+    // Lazily calibrate once, rather than blocking the UI on mode selection.
+    function calibrate() {
+      if(rows.length) return;
+      distances.forEach(function(d) {
+        var values=heights.map(function(h) {
+          var result=exact(d,h);
+          return result.status==='visible'?result.angle-analytic(d,h):null;
+        });
+        rows.push(values);
+        var guess=boundaryEstimate(d);
+        // When ground level is visible, the visibility boundary is exactly 0.
+        if(exact(d,0).status==='visible') {boundaries.push(-guess);return;}
+        var low=Math.max(0,guess-1), high=guess+1;
+        // Expand if the effective-radius estimate is unexpectedly inaccurate.
+        while(low>0 && exact(d,low).status==='visible') low=Math.max(0,low-1);
+        while(exact(d,high).status!=='visible' && high<100) high+=1;
+        for(var k=0;k<11;k++) {
+          var mid=(low+high)/2;
+          if(exact(d,mid).status==='visible') high=mid;
+          else low=mid;
+        }
+        boundaries.push(high-boundaryEstimate(d));
+      });
+      if(stats) stats.polyCalibration=stats.polyExact;
+    }
+    function get(d,h) {
+      if(!(d>=distances[0] && d<=distances[distances.length-1]) || h>55 || h<0)
+        {if(stats)stats.polyDirect++;return exact(d,h);}
+      calibrate();
+      var estimated=boundaryEstimate(d);
+      // Boundaries store a correction except for ground-visible anchors.
+      var boundary=Math.max(0,estimated+interpolate(d,boundaries));
+      // Conservative guard against boundary interpolation and bisection error.
+      // Never declare visibility based on an unverified polynomial near contact.
+      if(Math.abs(h-boundary)<0.15) {
+        if(stats)stats.polyDirect++;
+        return exact(d,h);
+      }
+      if(h<boundary-0.15) {if(stats)stats.polyRejected++;return {status:'occluded'};}
+      var corrections=rows.map(function(row){return row.every(Number.isFinite)?correctionAt(h,row):null;});
+      if(corrections.some(function(v){return v===null;})) {
+        if(stats)stats.polyDirect++;
+        return exact(d,h);
+      }
+      if(stats)stats.polyInterpolated++;
+      return {status:'visible',angle:analytic(d,h)+interpolate(d,corrections)};
+    }
+    return {get:get,calibrate:calibrate};
+  }
   // Experimental lazy optical map. Interpolate the *correction* to the
   // effective-radius preview rather than the absolute angle. A cell is used
   // only after exact corners and its centre agree within an angular budget.
@@ -303,7 +393,7 @@
     }
     return {get:get,rays:rays.length,heightAt:heightAt};
   }
-  function opticalVertex(world, m, solver, rayCache, stats, fast, opticalMap, forwardBundle) {
+  function opticalVertex(world, m, solver, rayCache, stats, fast, opticalMap, forwardBundle, polynomial) {
     var p = rayParameters(world, m);
     if (!p) return null;
     var result;
@@ -315,7 +405,7 @@
         result = rayCache[key];
         if (stats) stats.rayHits++;
       } else {
-        result = forwardBundle ? forwardBundle.get(p.distance,p.altitude) : opticalMap ? opticalMap.get(p.distance,p.altitude) : fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
+        result = polynomial ? polynomial.get(p.distance,p.altitude) : forwardBundle ? forwardBundle.get(p.distance,p.altitude) : opticalMap ? opticalMap.get(p.distance,p.altitude) : fast ? fastRay(p,m,solver,stats) : solver.solveAngle({geometry:'globe', atmosphere:'standard',
           observerHeight:m.Height, radius:m.rEarth, distance:p.distance,
           targetHeight:p.altitude, step:25});
         rayCache[key] = result;
@@ -488,6 +578,9 @@
     var fast=options.quality==='fast';
     var mapped=options.quality==='map';
     var bundled=options.quality==='bundle';
+    var poly=options.quality==='poly';
+    stats.polyExact=0;stats.polyCalibration=0;stats.polyDirect=0;stats.polyInterpolated=0;stats.polyRejected=0;
+    var polynomial=poly?createPolynomialApproximation(m,solver,stats):null;
     stats.mapExact=0;stats.mapDirect=0;stats.mapCells=0;stats.mapInterpolated=0;
     var opticalMap=mapped?createOpticalMap(m,solver,stats,options.mapOptions):null;
     stats.bundleTraces=0;stats.bundleExact=0;stats.bundleInterpolated=0;
@@ -510,7 +603,7 @@
     function sample(world) {
       var k=world.map(function(v){return v.toFixed(7);}).join(',');
       if (!Object.prototype.hasOwnProperty.call(cache,k)) {
-        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap,forwardBundle);
+        cache[k]=opticalVertex(world,m,solver,rayCache,stats,fast,opticalMap,forwardBundle,polynomial);
         evaluations++;
         if (cache[k]) visible++; else hidden++;
       }
@@ -535,10 +628,11 @@
         lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
-          selection:mode, quality:bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
+          selection:mode, quality:poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
           fastFallbacks:stats.fastFallbacks,fastRejected:stats.fastRejected,fastApproximated:stats.fastApproximated,
           mapExact:stats.mapExact,mapDirect:stats.mapDirect,mapCells:stats.mapCells,mapInterpolated:stats.mapInterpolated,
           bundleTraces:stats.bundleTraces,bundleExact:stats.bundleExact,bundleInterpolated:stats.bundleInterpolated,
+          polyExact:stats.polyExact,polyCalibration:stats.polyCalibration,polyDirect:stats.polyDirect,polyInterpolated:stats.polyInterpolated,polyRejected:stats.polyRejected,
           selectedTowerIds:indices.slice(),
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
@@ -546,7 +640,8 @@
             ', transitions='+transitions+', elapsed='+ (Date.now()-started)+'ms'+
             (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
             (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')+
-            (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')};
+            (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')+
+            (poly?', calibration='+stats.polyCalibration+', exact='+stats.polyExact+', interpolated='+stats.polyInterpolated+', rejected='+stats.polyRejected+', direct='+stats.polyDirect:'')};
         onDone(lineAtmosphere);
       }
     }
@@ -769,7 +864,7 @@
     compareTower:compareTower, draw:draw, calculateAtmosphere21:calculateAtmosphere21,
     getAtmosphere21:function () { return atmosphere21; },
     calculateAtmosphereLine:calculateAtmosphereLine,getLineAtmosphere:getLineAtmosphere,
-    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, auditVertices21:auditVertices21,
+    adaptiveEdge:adaptiveEdge, fastRay:fastRay, createOpticalMap:createOpticalMap, createForwardBundle:createForwardBundle, createPolynomialApproximation:createPolynomialApproximation, auditVertices21:auditVertices21,
     auditAtmosphere21:auditAtmosphere21, compareShape:compareShape, auditShape21:auditShape21,
     projectArrivalDirection:projectArrivalDirection,
     auditCameraOrigin:auditCameraOrigin, auditArrival3D:auditArrival3D};
