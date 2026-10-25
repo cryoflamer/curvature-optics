@@ -97,3 +97,38 @@ assert.deepEqual(stateTrace.commands.map(c=>c.method),[
 assert.equal(stateTrace.commands[2].args[0].CamPos[0],1);
 adapter.replay(cameraGraph(),JSON.parse(JSON.stringify(stateTrace)));
 assert.deepEqual(cameraLog,originalCameraLog);
+
+// Transformation stack mutations must be captured in order, including those
+// that surround drawing operations. Internal calls must not be duplicated.
+function transformGraph(){
+  return {Trans3D:null,Trans3DStack:[],painted:[],
+    ResetTrans3D(){this.Trans3D=null;},
+    SaveTrans3D(reset){this.Trans3DStack.push(this.Trans3D);if(reset)this.Trans3D=null;},
+    RestoreTrans3D(){this.Trans3D=this.Trans3DStack.pop();},
+    TransScale3D(x,y,z){this.Trans3D=(this.Trans3D||'')+`S(${x},${y},${z})`;},
+    TransMove3D(x,y,z){this.Trans3D=(this.Trans3D||'')+`M(${x},${y},${z})`;},
+    TransRotateX3D(a){this.Trans3D=(this.Trans3D||'')+`X(${a})`;},
+    TransRotateY3D(a){this.Trans3D=(this.Trans3D||'')+`Y(${a})`;},
+    TransRotateZ3D(a){this.Trans3D=(this.Trans3D||'')+`Z(${a})`;},
+    AddTrans3D(m){this.Trans3D=(this.Trans3D||'')+`A(${m[0]})`;},
+    DrawPoly3D(){this.painted.push(this.Trans3D);}
+  };
+}
+const transformed=transformGraph();
+const transformTrace=adapter.record(transformed,g=>{
+  g.ResetTrans3D();g.TransScale3D(64,64,64);g.TransMove3D(0,25923,0);
+  g.TransRotateY3D(0.5);g.SaveTrans3D(true);g.TransRotateX3D(1);
+  g.DrawPoly3D(1);g.RestoreTrans3D();g.TransRotateZ3D(2);
+  g.AddTrans3D([3]);g.DrawPoly3D(1);
+});
+assert.equal(transformTrace.complete,true);
+assert.deepEqual(transformTrace.commands.map(c=>c.method),[
+  'ResetTrans3D','TransScale3D','TransMove3D','TransRotateY3D',
+  'SaveTrans3D','TransRotateX3D','DrawPoly3D','RestoreTrans3D',
+  'TransRotateZ3D','AddTrans3D','DrawPoly3D'
+]);
+const transformedReplay=transformGraph();
+adapter.replay(transformedReplay,JSON.parse(JSON.stringify(transformTrace)));
+assert.deepEqual(transformedReplay.painted,transformed.painted);
+assert.equal(transformedReplay.Trans3D,transformed.Trans3D);
+assert.deepEqual(transformedReplay.Trans3DStack,transformed.Trans3DStack);

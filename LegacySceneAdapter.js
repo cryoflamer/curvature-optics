@@ -14,7 +14,9 @@
   // Explicit allowlist: state-changing graph calls and drawing calls used by
   // DrawModel/DrawShape. More calls can be added after validating real traces.
   var METHODS = [
-    'SetTrans3D','ResetTrans3D','SetTrans','ResetTrans',
+    'SetTrans3D','ResetTrans3D','SaveTrans3D','RestoreTrans3D',
+    'TransMove3D','TransScale3D','TransRotateX3D','TransRotateY3D','TransRotateZ3D',
+    'AddTrans3D','SetTrans','ResetTrans',
     'SetClipping','SetGraphClipping','SetWindow','SetViewport','SetViewport3D',
     'SetCameraClipping','SetWindowToCameraScreen','SetCamera','SetCameraZoom',
     'SetLineAttr','SetAreaAttr','SetBgColor','SetColor','SetLineWidth','SetAlpha',
