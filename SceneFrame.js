@@ -31,22 +31,31 @@
         throw new TypeError('Unsupported frame command');
     });
   }
-  function fromTrace(trace){
+  function validateBootstrap(bootstrap){
+    if(!bootstrap||!Number.isInteger(bootstrap.MaxCurveSegments)||bootstrap.MaxCurveSegments<1||
+       (bootstrap.AngleMeasure!=='rad'&&bootstrap.AngleMeasure!=='deg'))
+      throw new TypeError('Invalid frame bootstrap');
+    return snapshot(bootstrap);
+  }
+  function fromTrace(trace,bootstrap){
     if(!trace||trace.version!==adapter.VERSION||trace.kind!=='legacy-graph-commands'||
        trace.complete!==true||!Array.isArray(trace.commands)||
        !Array.isArray(trace.unsupported)||trace.unsupported.length)
       throw new TypeError('Complete legacy trace required');
     validate(trace.commands);
     var commands=snapshot(trace.commands);
-    return {version:VERSION,kind:KIND,source:'legacy-graph-api',commands:commands};
+    var frame={version:VERSION,kind:KIND,source:'legacy-graph-api',commands:commands};
+    if(bootstrap!==undefined)frame.bootstrap=validateBootstrap(bootstrap);
+    return frame;
   }
   function toTrace(frame){
     if(!frame||frame.version!==VERSION||frame.kind!==KIND||frame.source!=='legacy-graph-api')
       throw new TypeError('Invalid scene frame');
     validate(frame.commands);
+    if(frame.bootstrap!==undefined)validateBootstrap(frame.bootstrap);
     return {version:adapter.VERSION,kind:'legacy-graph-commands',
       commands:snapshot(frame.commands),unsupported:[],complete:true};
   }
   function replay(graph,frame,options){return adapter.replay(graph,toTrace(frame),options);}
-  return {VERSION:VERSION,fromTrace:fromTrace,toTrace:toTrace,replay:replay};
+  return {VERSION:VERSION,fromTrace:fromTrace,toTrace:toTrace,replay:replay,validateBootstrap:validateBootstrap};
 }));

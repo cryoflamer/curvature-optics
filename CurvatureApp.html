@@ -1325,7 +1325,8 @@ function DrawModelWithOptionalAudit(g) {
     // Convert the completed graph-command trace to a standalone frame.
     // The legacy trace remains available for opt-in export.
     var sceneFrame = window.SceneFrame && result.trace.complete ?
-      window.SceneFrame.fromTrace(result.trace) : null;
+      window.SceneFrame.fromTrace(result.trace, {
+        MaxCurveSegments:g.MaxCurveSegments,AngleMeasure:g.AngleMeasure}) : null;
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       sceneFrame || result.trace, window.JsgPolygon);
@@ -1333,29 +1334,38 @@ function DrawModelWithOptionalAudit(g) {
     var canvasProbe = compareCanvas &&
       window.LegacyCanvasReplayProbe && window.LegacyCanvasReplayProbe.run(
         g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon, exportCanvasPng);
-    // A second detached replay deliberately changes two bootstrap properties.
-    // If pixels change, the command frame depends on uncaptured initial state.
-    // An unchanged result is NOT proof that every hidden dependency is absent.
+    // Independent one-factor probes, followed by a replay which restores the
+    // explicit frame bootstrap despite deliberately perturbed external state.
     var bootstrapSensitivity = null;
     if (compareCanvas && canvasProbe && canvasProbe.ok &&
         document.getElementById('LegacyFrameBootstrapSensitivity').checked) {
       var baseline = canvasProbe.bootstrap;
-      var overrides = {
-        MaxCurveSegments: baseline.MaxCurveSegments === 1 ? 2 : 1,
-        AngleMeasure: baseline.AngleMeasure === 'deg' ? 'rad' : 'deg'
+      var cases = {
+        MaxCurveSegments:{MaxCurveSegments:baseline.MaxCurveSegments === 1 ? 2 : 1},
+        AngleMeasure:{AngleMeasure:baseline.AngleMeasure === 'deg' ? 'rad' : 'deg'}
       };
-      var variant = window.LegacyCanvasReplayProbe.run(
+      var probes = {};
+      Object.keys(cases).forEach(function(key){
+        var variant = window.LegacyCanvasReplayProbe.run(
+          g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon,
+          false, {bootstrapOverrides:cases[key]});
+        probes[key] = {override:cases[key],ok:variant.ok,
+          comparisonToOriginal:variant.comparison || null,
+          reason:variant.ok ? null : variant.reason,
+          detected:!!(canvasProbe.comparison && canvasProbe.comparison.identical === true &&
+            variant.comparison && variant.comparison.identical === false)};
+      });
+      var perturbed = {
+        MaxCurveSegments:cases.MaxCurveSegments.MaxCurveSegments,
+        AngleMeasure:cases.AngleMeasure.AngleMeasure
+      };
+      var restored = window.LegacyCanvasReplayProbe.run(
         g, sceneFrame || result.trace, window.JsGraphX3D, window.JsgPolygon,
-        false, {bootstrapOverrides:overrides});
-      bootstrapSensitivity = {
-        baseline:baseline,variant:overrides,ok:variant.ok,
-        comparisonToOriginal:variant.comparison || null,
-        reason:variant.ok ? null : variant.reason,
-        // The baseline is already compared to the same original canvas.
-        // When baseline is identical, any variant mismatch establishes sensitivity.
-        detected:canvasProbe.comparison && canvasProbe.comparison.identical === true &&
-          variant.comparison && variant.comparison.identical === false
-      };
+        false, {bootstrapOverrides:perturbed,restoreFrameBootstrap:true});
+      bootstrapSensitivity = {baseline:baseline,probes:probes,
+        restoredFrameBootstrap:{ok:restored.ok,bootstrap:restored.bootstrap || null,
+          comparisonToOriginal:restored.comparison || null,
+          reason:restored.ok ? null : restored.reason}};
     }
     var firstClippingDifference = canvasProbe && canvasProbe.clippingTrace &&
       window.LegacyCanvasReplayProbe.firstClippingDifference(

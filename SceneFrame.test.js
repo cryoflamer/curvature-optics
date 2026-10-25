@@ -32,3 +32,12 @@ assert.throws(()=>frameApi.fromTrace({...trace,unsupported:[{method:'Text'}]}),/
 assert.throws(()=>frameApi.toTrace({...restored,commands:[{method:'evil',args:[]}]}),/Unsupported/);
 assert.throws(()=>frameApi.toTrace({...restored,commands:[{method:'Text',args:[()=>0]}]}),/Non-serializable/);
 console.log('SceneFrame: passed');
+
+const boot={MaxCurveSegments:256,AngleMeasure:'rad'};
+const withBoot=frameApi.fromTrace(trace,boot);
+boot.MaxCurveSegments=1;
+assert.deepEqual(withBoot.bootstrap,{MaxCurveSegments:256,AngleMeasure:'rad'});
+assert.deepEqual(JSON.parse(JSON.stringify(withBoot)).bootstrap,withBoot.bootstrap);
+assert.equal(frameApi.toTrace(withBoot).complete,true);
+assert.throws(()=>frameApi.fromTrace(trace,{MaxCurveSegments:0,AngleMeasure:'rad'}),/bootstrap/);
+assert.throws(()=>frameApi.toTrace({...withBoot,bootstrap:{MaxCurveSegments:2,AngleMeasure:'xyz'}}),/bootstrap/);

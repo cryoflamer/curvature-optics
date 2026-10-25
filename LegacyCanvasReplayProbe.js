@@ -238,6 +238,14 @@
       if(shadow.ClientResetFunc)shadow.ClientResetFunc(shadow);
       // Known direct assignments still omitted from the command stream.
       var bootstrap=bootstrapValues(original,options.bootstrapOverrides);
+      if(options.restoreFrameBootstrap && frame && frame.bootstrap){
+        bootstrap=(typeof globalThis!=='undefined'&&globalThis.SceneFrame?
+          globalThis.SceneFrame:require('./SceneFrame')).validateBootstrap(frame.bootstrap);
+      }
+      if(options.restoreFrameBootstrap && frame && frame.bootstrap){
+        bootstrap=(typeof globalThis!=='undefined'&&globalThis.SceneFrame?
+          globalThis.SceneFrame:require('./SceneFrame')).validateBootstrap(frame.bootstrap);
+      }
       shadow.MaxCurveSegments=bootstrap.MaxCurveSegments;
       shadow.SetAngleMeasure(bootstrap.AngleMeasure);
       // Camera and viewport changes are replayed in trace order, not inferred
