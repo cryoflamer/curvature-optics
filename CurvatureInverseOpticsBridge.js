@@ -695,11 +695,17 @@
       lineAtmosphere={state:'error',paths:null,key:null,message:'Unknown tower selection mode'};
       onDone(lineAtmosphere); return;
     }
-    var edges = [];
+    var edges = [], footingPolygons = [];
     indices.forEach(function(index) {
       audit.getTowerPaths(index).forEach(function(path) {
         for (var j=1;j<path.length;j++) edges.push({tower:index,a:path[j-1],b:path[j]});
       });
+    });
+    indices.forEach(function(index) {
+      if (typeof audit.getFoundationPaths === 'function')
+        audit.getFoundationPaths(index).forEach(function(path) {
+          footingPolygons.push({tower:index,world:path});
+        });
     });
     if (!edges.length) {
       lineAtmosphere = {state:'error',paths:null,key:null,message:'No tower edges captured'};
@@ -769,7 +775,13 @@
       onProgress(lineAtmosphere.message);
       if (i<edges.length) setTimeout(batch,0);
       else {
-        lineAtmosphere={state:'ready',paths:paths,key:key,towers:indices.length,
+        // Use the same P4 sample/cache as the steel members. A footing is
+        // filled only if every polygon vertex is visible; partial occlusion
+        // is deliberately left to stage 06 rather than filling across ground.
+        var footings = analyticP4 ? footingPolygons.map(function(poly) {
+          return {tower:poly.tower, points:poly.world.map(sample)};
+        }).filter(function(poly) {return poly.points.every(Boolean);}) : [];
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
@@ -1019,6 +1031,14 @@
     var allCheckbox = typeof document !== 'undefined' && document.getElementById('InverseAtmosphereLineShow');
     if (((allCheckbox && allCheckbox.checked) || isOpticalSceneReady(m)) && lineAtmosphere.state==='ready' &&
         lineAtmosphere.key===modelKey(m)) {
+      if (isOpticalSceneReady(m) && Array.isArray(lineAtmosphere.footings)) {
+        g.SetAreaAttr('#a38d60', '#a38d60', 1);
+        lineAtmosphere.footings.forEach(function(footing) {
+          g.NewPoly3D();
+          footing.points.forEach(function(point) { g.AddPointToPoly3D(point); });
+          g.DrawPoly3D(3);
+        });
+      }
       g.SetLineAttr('#ff8800', 1.25);
       lineAtmosphere.paths.forEach(function(member) {
         var points=member.points;
