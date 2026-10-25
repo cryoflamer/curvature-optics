@@ -67,6 +67,27 @@
       images:{original:a.toDataURL('image/png'),replay:b.toDataURL('image/png'),
         diff:diff.toDataURL('image/png')}};
   }
+  // Count actual Canvas2D painting operations during replay. A polygon command
+  // reaching the graph API does not necessarily reach fill()/stroke().
+  function observePaint(context,draw){
+    var counts={fill:0,stroke:0,fillRect:0,strokeRect:0,clearRect:0};
+    var saved=[];
+    Object.keys(counts).forEach(function(name){
+      if(typeof context[name]!=='function')return;
+      var own=Object.prototype.hasOwnProperty.call(context,name),original=context[name];
+      try{
+        context[name]=function(){counts[name]++;return original.apply(this,arguments);};
+        saved.push({name:name,own:own,original:original});
+      }catch(error){ /* Some Canvas2D implementations disallow overrides. */ }
+    });
+    try{draw();}finally{
+      saved.forEach(function(item){
+        if(item.own)context[item.name]=item.original;
+        else delete context[item.name];
+      });
+    }
+    return counts;
+  }
   function run(original,trace,GraphCtor,polygonCtor,exportImages){
     if(!trace||!trace.complete)return {ok:false,reason:'Incomplete trace'};
     if(!original||!original.Canvas||typeof GraphCtor!=='function')
@@ -108,10 +129,13 @@
       shadow.SetAngleMeasure(original.AngleMeasure);
       // Camera and viewport changes are replayed in trace order, not inferred
       // from the final state of the live graph.
-      adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
+      var paintOperations=observePaint(shadow.Context2D,function(){
+        adapter.replay(shadow,trace,{JsgPolygon:polygonCtor});
+      });
       var analysis=exportImages?analyzePixels(original.Canvas,canvas):null;
       return {ok:true,comparison:analysis?analysis.comparison:comparePixels(original.Canvas,canvas),
         diagnostics:analysis?analysis.diagnostics:null,images:analysis?analysis.images:null,
+        paintOperations:paintOperations,
         replayVerified:false,
         reason:'Detached canvas compared; uncaptured graph state prevents a parity guarantee'};
     }catch(error){
@@ -122,5 +146,5 @@
       if(shadow&&shadow.ResizeTimer)clearTimeout(shadow.ResizeTimer);
     }
   }
-  return {comparePixels:comparePixels,analyzePixels:analyzePixels,run:run};
+  return {comparePixels:comparePixels,analyzePixels:analyzePixels,observePaint:observePaint,run:run};
 }));

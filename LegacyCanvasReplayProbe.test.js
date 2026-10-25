@@ -44,3 +44,18 @@ test('diagnostic PNGs and quadrants are derived from actual pixel differences',(
    assert.equal(result.images.diff,'data:image/png;base64,TEST');
  }finally{global.document=previous;}
 });
+
+test('paint observer counts real canvas operations and restores methods',()=>{
+ const calls=[];
+ const ctx={fill(){calls.push('fill');},stroke(){calls.push('stroke');},clearRect(){calls.push('clear');}};
+ const originalFill=ctx.fill;
+ const counts=probe.observePaint(ctx,()=>{ctx.fill();ctx.fill();ctx.stroke();ctx.clearRect();});
+ assert.deepEqual(counts,{fill:2,stroke:1,fillRect:0,strokeRect:0,clearRect:1});
+ assert.equal(ctx.fill,originalFill);
+ assert.deepEqual(calls,['fill','fill','stroke','clear']);
+});
+test('paint observer restores methods after a replay failure',()=>{
+ const ctx={fill(){}};const original=ctx.fill;
+ assert.throws(()=>probe.observePaint(ctx,()=>{ctx.fill();throw Error('failed');}),/failed/);
+ assert.equal(ctx.fill,original);
+});
