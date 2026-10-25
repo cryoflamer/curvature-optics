@@ -63,3 +63,22 @@ permit. This is independent of the numerical refraction integrators.
 These tests use a 0.1 arcsecond angle-difference threshold; they do not certify
 physical atmospheric accuracy, near-exact-tangent behavior, or multiple-ray
 solutions (e.g. ducting).
+
+## Effective-radius physics sanity check
+
+Run `node tools/check-effective-radius.js` to compare the numerical limiting
+visible height at 20/25 km with the **approximate**, locally constant-gradient
+Earth-radius model. The effective radius is `1 / (1/R + (dn/dh)/n)` evaluated
+at the observer's altitude (15 m). The analytic tangent construction is then
+applied to that radius. Refractivity N0 is swept through 0, 0.00015,
+0.000293 and 0.00045 with H=8500 m. The script checks that stronger negative
+refractivity gradients lower the visible-height threshold and that the
+approximation is within 1 m over this limited range.
+
+**Caveat:** This is a paraxial approximation, not an exact solution to the
+exponential atmosphere. The current numerical solver allows 0.03 m negative
+clearance along sampled rays; the inferred visibility boundary is consequently
+slightly lower than exact geometric tangency even for N0=0 (roughly 0.04–0.06 m
+in these tests). The vacuum comparison therefore allows 0.1 m; it must not be
+interpreted as a precision measurement of atmospheric refraction. This test
+does not validate actual meteorological conditions or ducting.
