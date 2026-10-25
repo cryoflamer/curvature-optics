@@ -132,3 +132,25 @@ adapter.replay(transformedReplay,JSON.parse(JSON.stringify(transformTrace)));
 assert.deepEqual(transformedReplay.painted,transformed.painted);
 assert.equal(transformedReplay.Trans3D,transformed.Trans3D);
 assert.deepEqual(transformedReplay.Trans3DStack,transformed.Trans3DStack);
+
+// Viewport text must preserve coordinate-system selection around drawing.
+const textLog=[];
+function textGraph(){return {Trans:'world',
+  SelectTrans(name){const old=this.Trans;this.Trans=name;textLog.push(['select',name]);return old;},
+  SetTextAttr(...args){textLog.push(['attr',...args]);},
+  Text(value,x,y){textLog.push(['text',value,x,y,this.Trans]);}
+};}
+const originalText=textGraph();
+const textTrace=adapter.record(originalText,g=>{
+  const previous=g.SelectTrans('viewport');
+  g.SetTextAttr('Arial',20,'magenta');
+  g.Text('Lake Pontchartrain Transmission Line',200,0);
+  g.SelectTrans(previous);
+});
+assert.deepEqual(textTrace.commands.map(c=>c.method),['SelectTrans','SetTextAttr','Text','SelectTrans']);
+assert.equal(originalText.Trans,'world');
+const textOriginalLog=textLog.splice(0);
+const textReplay=textGraph();
+adapter.replay(textReplay,JSON.parse(JSON.stringify(textTrace)));
+assert.equal(textReplay.Trans,'world');
+assert.deepEqual(textLog,textOriginalLog);

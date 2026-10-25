@@ -16,7 +16,7 @@
   var METHODS = [
     'SetTrans3D','ResetTrans3D','SaveTrans3D','RestoreTrans3D',
     'TransMove3D','TransScale3D','TransRotateX3D','TransRotateY3D','TransRotateZ3D',
-    'AddTrans3D','SetTrans','ResetTrans',
+    'AddTrans3D','SetTrans','ResetTrans','SelectTrans',
     'SetClipping','SetGraphClipping','SetWindow','SetViewport','SetViewport3D',
     'SetCameraClipping','SetWindowToCameraScreen','SetCamera','SetCameraZoom',
     'SetLineAttr','SetAreaAttr','SetBgColor','SetColor','SetLineWidth','SetAlpha',
