@@ -43,15 +43,11 @@
           else paths.push(path);
         }
       }
-      var comparison = typeof document !== 'undefined' &&
-        document.getElementById('TowerComparisonMode');
-      var comparisonMode = comparison ? comparison.value : 'both';
       var legacyControl = typeof document !== 'undefined' &&
         document.getElementById('ShowLegacyTransmissionTowers');
       // Tower type 1 has exactly one filled primitive: its brown footing.
       // Suppress the drawing, never its geometry capture.
-      if ((legacyControl && !legacyControl.checked) ||
-          (objIx === 0 && comparisonMode === 'optical')) return;
+      if (legacyControl && !legacyControl.checked) return;
       return original.apply(this, arguments);
     };
     return function () {

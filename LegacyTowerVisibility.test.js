@@ -6,11 +6,11 @@ const html = fs.readFileSync(__dirname + '/CurvatureApp.html', 'latin1');
 const start = html.indexOf('function DrawShape( objIx, g, m ) {');
 const end = html.indexOf('\nfunction PointOnEarth(', start);
 assert(start >= 0 && end > start);
-let visible = false, captured = 0, lines = 0, polygons = 0;
+let visible = false, comparisonMode = 'both', captured = 0, lines = 0, polygons = 0;
 const context = {
   document: {getElementById(id) {
     if (id === 'ShowLegacyTransmissionTowers') return {checked:visible};
-    if (id === 'TowerComparisonMode') return {value:'both'};
+    if (id === 'TowerComparisonMode') return {value:comparisonMode};
     return null;
   }},
   window: {CurvatureRenderedVertexAudit: {beginTower(g) {
@@ -39,8 +39,9 @@ for (const objIx of [0,1]) {
   assert.equal(polygons,0);
   assert(captured>0,'audit must still capture hidden tower polygons');
   visible = true;
+  comparisonMode = 'optical';
   context.DrawShape(objIx,g,m);
-  assert(polygons>0,'visible towers must reach original polygon renderer');
+  assert(polygons>0,'checked legacy towers must render even in optical comparison mode');
   assert.strictEqual(g.PolygonOnPlane,originalPolygon);
 }
-console.log('LegacyTowerVisibility: both groups hidden, audit captures, methods restored');
+console.log('LegacyTowerVisibility: both groups hidden, visible in optical comparison mode, audit captures, methods restored');

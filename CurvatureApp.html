@@ -1891,12 +1891,10 @@ function DrawShape( objIx, g, m ) {
   // Hide the actual renderer primitives, not just LineOnPlane. Install the
   // suppression before the audit wrapper so the audit can still capture every
   // PolygonOnPlane vertex while its underlying draw operation is a no-op.
-  var towerComparison = (document.getElementById('TowerComparisonMode') || {}).value || 'both';
   var showLegacyControl = document.getElementById('ShowLegacyTransmissionTowers');
   var showLegacy = !showLegacyControl || showLegacyControl.checked;
-  var suppressOriginalTower = m.ObjType[objIx] === 3 &&
-    (!showLegacy ||
-     (objIx === 0 && m.showModel === 1 && m.opticsMode === 'ray-tracing' && towerComparison === 'optical'));
+  // The visibility checkbox is authoritative, regardless of comparison mode.
+  var suppressOriginalTower = m.ObjType[objIx] === 3 && !showLegacy;
   var originalTowerLine = g.LineOnPlane;
   var originalTowerPolygon = g.PolygonOnPlane;
   if (suppressOriginalTower) {

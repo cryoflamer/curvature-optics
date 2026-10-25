@@ -781,10 +781,12 @@
         // Use the same P4 sample/cache as the steel members. A footing is
         // filled only if every polygon vertex is visible; partial occlusion
         // is deliberately left to stage 06 rather than filling across ground.
-        var footings = analyticP4 ? footingPolygons.map(function(poly) {
+        var footingCandidates = analyticP4 ? footingPolygons.map(function(poly) {
           return {tower:poly.tower, points:poly.world.map(sample)};
-        }).filter(function(poly) {return poly.points.every(Boolean);}) : [];
-        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingsCaptured:footingPolygons.length,footingsProjected:footings.length,key:key,towers:indices.length,
+        }) : [];
+        var footings = footingCandidates.filter(function(poly) {return poly.points.every(Boolean);});
+        var footingsRejected = footingCandidates.length - footings.length;
+        lineAtmosphere={state:'ready',paths:paths,footings:footings,footingsCaptured:footingPolygons.length,footingsProjected:footings.length,footingsRejected:footingsRejected,key:key,towers:indices.length,
           edges:edges.length,evaluations:evaluations,visible:visible,hidden:hidden,
           transitions:transitions,raySolves:stats.raySolves,rayHits:stats.rayHits,
           selection:mode, quality:analyticP4?'p4':poly?'poly':bundled?'bundle':mapped?'map':fast?'fast':'exact', elapsedMs:Date.now()-started,
@@ -802,7 +804,7 @@
           message:'Calculated '+indices.length+' towers ('+mode+'), '+
             edges.length+' edges, '+evaluations+' ray samples, '+
             stats.raySolves+' unique rays ('+stats.rayHits+' reused); hidden='+hidden+
-            ', transitions='+transitions+', elapsed='+ (Date.now()-started)+'ms'+
+            ', transitions='+transitions+', footings='+footings.length+'/'+footingPolygons.length+' (rejected '+footingsRejected+'), elapsed='+ (Date.now()-started)+'ms'+
             (fast?', approximate='+stats.fastApproximated+', horizon exact='+stats.fastFallbacks+', rejected='+stats.fastRejected:'')+
             (mapped?', map cells='+stats.mapCells+', map exact='+stats.mapExact+', interpolated='+stats.mapInterpolated+', direct='+stats.mapDirect:'')+
             (bundled?', forward traces='+stats.bundleTraces+', bundle exact='+stats.bundleExact+', interpolated='+stats.bundleInterpolated:'')+
