@@ -65,7 +65,7 @@
     // Inspect the complete path, excluding the endpoint: ground-level targets
     // legitimately terminate on the surface. Sampling must not flag that contact.
     var ray = shoot(angle).ray, points = ray.points;
-    var clearanceTolerance = options.clearanceTolerance === undefined ? 0.03 : options.clearanceTolerance; // metres; default RK4/interpolation allowance
+    var clearanceTolerance = options.clearanceTolerance === undefined ? 0 : options.clearanceTolerance; // metres; exact ground-intersection criterion by default
     if (!(isFinite(clearanceTolerance) && clearanceTolerance >= 0)) throw Error('Invalid clearance tolerance');
     for (var j = 1; j < points.length; j++) {
       var a = points[j - 1], b = points[j];

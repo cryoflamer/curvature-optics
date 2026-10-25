@@ -12,3 +12,8 @@ The Node runner executes every `*.test.js` in the repository root and checks syn
 Inspect the generated images before accepting a geometry change. Browser mode is intentionally forced to ray tracing for a repeatable smoke test, rather than relying on saved UI settings.
 
 Ground-clearance tolerance diagnostic: `node tools/check-clearance-tolerance.js` (see `tools/CLEARANCE_TOLERANCE.md`).
+
+Zero-clearance horizon regression: `node tools/check-zero-clearance.js`
+(see `tools/ZERO_CLEARANCE.md`). The optical diagnostic now uses exact
+zero ground-clearance allowance by default; override explicitly only for
+controlled diagnostics.
