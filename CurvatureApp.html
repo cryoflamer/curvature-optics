@@ -97,6 +97,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureContourDiagnostics.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
+<script src="CurvatureVisibilityVerification.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
 <script src="LegacySceneAudit.js"></script>
@@ -1690,9 +1691,11 @@ function DrawModelWithOptionalAudit(g) {
       }
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var cameraCanvasVerification=window.CurvatureCameraVerification.verifyPixels(scene,g,cameraSnapshot,perspective,cameraWidth,cameraHeight);
+      var visibilityVerification=window.CurvatureVisibilityVerification.run(scene,cameraSnapshot,cameraWidth,cameraHeight);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
         cameraCanvasVerification:cameraCanvasVerification,
+        visibilityVerification:visibilityVerification,
         cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
         cameraFilled:filledResult.statistics,
         cameraZBuffer:zResult.statistics,
