@@ -345,3 +345,33 @@ model binding and Canvas are restored in a `finally` block; controls are never
 updated. Reference frames contain auxiliary graphics absent from the partial
 independent scene; whole-frame metrics must not be interpreted as geometry parity.
 The browser export remains the end-to-end validation step.
+
+### Controlled diagnostic parity — compatch 77
+
+- The previous four presets incorrectly selected `Objects 1` (Tower Type 1).
+  Legacy `DrawShape(0)` and independent `localTowerType2()` are **not** the same
+  physical geometry. Presets now exclusively use `Objects 2` (`objIx = 1`).
+- The isolated legacy model also forces Type-2 tower visibility without
+  mutating the optical-mode checkbox or the live model.
+- Every controlled model is `Update()`-ed before either renderer sees it, and
+  actual post-update distance, spacing, scale and geometry radius are exported.
+- The GraphX3DX reference camera is captured independently for full and
+  towers-only draws; model position/orientation/scene size and viewport are
+  checked before rendering the independent candidate. The candidate receives
+  the updated model's camera vectors and the explicitly captured legacy lens /
+  pixel transform. Shared lens metadata still does NOT prove renderer parity.
+- Flat-only outline rings are `rFEarth` and `2*rFEarth` (not `rDisk`). The
+  towers-only branch omits the rings while preserving the globe's white mask.
+- Each preset retains the existing full-frame comparison and adds a second
+  **towers-only** pair with separate PNGs/IoU/edge/RGBA metrics; the legacy
+  reference is produced by the real `DrawModel` graph path, without auxiliary
+  lines or labels. This is diagnostic opt-in, not a production drawing change.
+- For each towers-only reference, legacy graph commands are pass-through traced
+  and transformed to world coordinates. Numerically matched tower vertices
+  are compared in meters; separate per-scenario pixel projection parity checks
+  use the real `g.Camera.Trans()` and `g.WinTrans` against independent projection.
+  Circle tessellation is deliberately excluded from the world vertex audit.
+- Known limitations: legacy and independent painters still differ in default
+  fill/stroke styles and antialiasing; projected circle masks are approximations.
+  Matching world coordinates and camera inputs does not by itself demonstrate
+  pixel-identical rasterization or visibility near a curved silhouette.

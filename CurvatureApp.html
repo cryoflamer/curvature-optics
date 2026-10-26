@@ -100,6 +100,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureCompositionCapture.js"></script>
 <script src="CurvatureDiagnosticPresets.js"></script>
 <script src="CurvatureControlledLegacyCapture.js"></script>
+<script src="CurvatureControlledCamera.js"></script>
+<script src="CurvatureControlledGeometryParity.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureContourDiagnostics.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
@@ -1743,21 +1745,43 @@ function DrawModelWithOptionalAudit(g) {
           referenceScope:'complete legacy DrawModel frame; includes grids, text and other graphics',
           candidateScope:'only one type-2 tower series and polygonal horizon; comparison metrics do NOT establish full-scene parity'};
       } catch(compositionError){independentCompositionComparison.reason=compositionError.message;}
-      // Four controlled comparisons. The real legacy DrawModel is rendered
-      // synchronously against a cloned model, then the live model and Canvas
-      // are restored before export finishes. No UI controls are updated.
+      // The controlled scene uses legacy Objects 2 (Tower Type 2), not Objects 1.
+      // Update the isolated model BEFORE constructing either geometry pipeline.
+      // Each preset exports both the historical full-frame comparison and a
+      // dedicated tower-only comparison with auxiliary grids/labels omitted.
       var controlledPresets=[];
       if(window.CurvatureDiagnosticPresets&&window.CurvatureControlledLegacyCapture&&
-         window.CurvatureCompositionComparison&&window.CurvatureZBufferPreview&&
-         window.CurvatureLegacyOrderPreview&&window.CurvatureEarClip&&captureProbe){
+         window.CurvatureControlledCamera&&window.CurvatureCompositionComparison&&
+         window.CurvatureZBufferPreview&&window.CurvatureLegacyOrderPreview&&
+         window.CurvatureEarClip&&captureProbe){
         window.CurvatureDiagnosticPresets.scenarios(CurveApp).forEach(function(preset){
-          var entry={id:preset.id,parameters:preset.parameters,referenceAvailable:false};
+          var entry={id:preset.id,parameters:preset.parameters,objectIndex:preset.objectIndex,
+            referenceAvailable:false,towerOnlyReferenceAvailable:false};
           try {
-            var prepared=window.CurvatureCompositionComparison.prepare(preset.model,0,preset.globe);
-            var presetCanvas=document.createElement('canvas');presetCanvas.width=cameraWidth;presetCanvas.height=cameraHeight;
-            var triangles=window.CurvatureZBufferPreview.build(prepared.scene,cameraSnapshot,cameraWidth,cameraHeight,window.CurvatureEarClip.triangulate).triangles;
-            window.CurvatureLegacyOrderPreview.draw(presetCanvas,prepared.scene,cameraSnapshot,triangles);
-            var candidatePixels=presetCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+            var liveModel=CurveApp,controlledModel=preset.model;
+            Object.setPrototypeOf(controlledModel,Object.getPrototypeOf(liveModel));
+            // BaroModel.Update closes over the live model, not its `this` receiver.
+            controlledModel.BaroModel=null;
+            controlledModel.Update();
+            // These are the values the legacy renderer actually receives,
+            // after slider synchronization and derived-geometry recomputation.
+            entry.parameters=Object.assign({},entry.parameters,{
+              ObjDist:controlledModel.ObjDist[preset.objectIndex],
+              ObjDeltaDist:controlledModel.ObjDeltaDist[preset.objectIndex],
+              ObjSize:controlledModel.ObjSize[preset.objectIndex],
+              geometryRadius:controlledModel.geometryRadius,
+              Height:controlledModel.Height});
+            var isolatedPrepared=window.CurvatureCompositionComparison.prepare(
+              controlledModel,preset.objectIndex,preset.globe,{towersOnly:true});
+            function cameraFromGraph(){
+              var cam=perspective.snapshot(g.Camera);
+              cam.near=g.CameraClipPlaneDist>0?g.CameraClipPlaneDist:1e-6;
+              cam.pixelTransform=window.CurvatureCanvasProjection.capture(g,cameraWidth,cameraHeight);
+              return cam;
+            }
+            function snapshotPixels(canvas){
+              return canvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+            }
             function addPresetPng(name,canvas){
               var png=atob(canvas.toDataURL('image/png').split(',')[1]),bytes=new Uint8Array(png.length);
               for(var bi=0;bi<png.length;bi++)bytes[bi]=png.charCodeAt(bi);
@@ -1768,44 +1792,103 @@ function DrawModelWithOptionalAudit(g) {
               var ctx=c.getContext('2d'),im=ctx.createImageData(cameraWidth,cameraHeight);
               im.data.set(rgba);ctx.putImageData(im,0,0);addPresetPng(name,c);
             }
-            entry.image='controlled-'+preset.id+'.png';entry.primitiveCount=prepared.scene.primitives.length;
-            addPresetPng(entry.image,presetCanvas);
-            // The cloned model has its own mutable arrays and derived fields.
-            // Disable BaroModel because its Update() closes over the live model.
-            var liveModel=CurveApp;
-            var controlledModel=preset.model;
-            Object.setPrototypeOf(controlledModel,Object.getPrototypeOf(liveModel));
-            controlledModel.BaroModel=null;
-            controlledModel.Update();
-            var referenceCanvas=window.CurvatureControlledLegacyCapture.capture({
+            var legacyFullCanvas,legacyTowerCanvas,legacyFullCamera,legacyTowerCamera;
+            var legacyTowerGeometry=null,legacyTowerGeometryError=null,projectionVerification=null;
+            var referenceFrames=window.CurvatureControlledLegacyCapture.capture({
               model:controlledModel,
               install:function(model){CurveApp=model;},
               draw:function(){
                 g.Context2D.clearRect(0,0,g.Canvas.width,g.Canvas.height);
                 DrawModel(g);
+                legacyFullCanvas=captureProbe.snapshotCanvas(g.Canvas);
+                legacyFullCamera=cameraFromGraph();
+                g.Context2D.clearRect(0,0,g.Canvas.width,g.Canvas.height);
+                if(window.LegacySceneAdapter&&window.LegacyGeometryExtractor&&window.SceneFrame){
+                  var towerTrace=window.LegacySceneAdapter.record(g,function(graph){
+                    DrawModel(graph,{towerOnlyIndex:preset.objectIndex});
+                  },{diagnostic:true});
+                  if(towerTrace.complete){
+                    try {
+                      var towerFrame=window.SceneFrame.fromTrace(towerTrace,{
+                        MaxCurveSegments:g.MaxCurveSegments,AngleMeasure:g.AngleMeasure});
+                      legacyTowerGeometry=window.LegacyGeometryExtractor.extract(towerFrame);
+                    }catch(traceError){legacyTowerGeometryError=String(traceError);}
+                  }else{
+                    legacyTowerGeometryError='Legacy graph trace incomplete: '+JSON.stringify(towerTrace.unsupported);
+                  }
+                }else{
+                  DrawModel(g,{towerOnlyIndex:preset.objectIndex});
+                }
+                legacyTowerCanvas=captureProbe.snapshotCanvas(g.Canvas);
+                legacyTowerCamera=cameraFromGraph();
+                if(window.CurvatureCameraVerification){
+                  projectionVerification=window.CurvatureCameraVerification.verifyPixels(
+                    isolatedPrepared.scene,g,legacyTowerCamera,perspective,cameraWidth,cameraHeight);
+                }
               },
-              snapshot:function(){return captureProbe.snapshotCanvas(g.Canvas);},
+              snapshot:function(){return {full:legacyFullCanvas,towers:legacyTowerCanvas,
+                fullCamera:legacyFullCamera,towerCamera:legacyTowerCamera};},
               restore:function(){
                 CurveApp=liveModel;
                 g.Context2D.clearRect(0,0,g.Canvas.width,g.Canvas.height);
                 DrawModel(g);
               }
             });
+            entry.cameraValidation={
+              full:window.CurvatureControlledCamera.verify(referenceFrames.fullCamera,controlledModel,cameraWidth,cameraHeight),
+              towers:window.CurvatureControlledCamera.verify(referenceFrames.towerCamera,controlledModel,cameraWidth,cameraHeight)};
+            var fullCamera=window.CurvatureControlledCamera.candidate(referenceFrames.fullCamera,controlledModel,cameraWidth,cameraHeight);
+            var towerCamera=window.CurvatureControlledCamera.candidate(referenceFrames.towerCamera,controlledModel,cameraWidth,cameraHeight);
+            function renderCandidate(options,camera){
+              var prepared=window.CurvatureCompositionComparison.prepare(controlledModel,preset.objectIndex,preset.globe,options);
+              var canvas=document.createElement('canvas');canvas.width=cameraWidth;canvas.height=cameraHeight;
+              var triangles=window.CurvatureZBufferPreview.build(prepared.scene,camera,cameraWidth,cameraHeight,window.CurvatureEarClip.triangulate).triangles;
+              var stats=window.CurvatureLegacyOrderPreview.draw(canvas,prepared.scene,camera,triangles);
+              return {canvas:canvas,prepared:prepared,stats:stats.statistics};
+            }
+            function reportPair(referenceCanvas,candidateCanvas,referenceCamera,candidateCamera,basename){
+              var comparison=window.CurvatureCompositionComparison.compare(
+                {width:cameraWidth,height:cameraHeight,camera:referenceCamera,rgba:snapshotPixels(referenceCanvas)},
+                {width:cameraWidth,height:cameraHeight,camera:candidateCamera,rgba:snapshotPixels(candidateCanvas)});
+              var foregroundDifferenceImage=basename+'-foreground-diff.png';
+              var edgesDifferenceImage=basename+'-edges-diff.png';
+              addPresetRgba(foregroundDifferenceImage,comparison.differenceImages.foreground);
+              addPresetRgba(edgesDifferenceImage,comparison.differenceImages.edges);
+              return {foreground:comparison.foreground,edges:comparison.edges,rgba:comparison.rgba,
+                foregroundDifferenceImage:foregroundDifferenceImage,
+                edgesDifferenceImage:edgesDifferenceImage,caveats:comparison.caveats};
+            }
+            var full=renderCandidate({},fullCamera);
+            entry.image='controlled-'+preset.id+'.png';
             entry.referenceImage='controlled-'+preset.id+'-legacy.png';
-            addPresetPng(entry.referenceImage,referenceCanvas);
-            var referencePixels=referenceCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
-            var comparison=window.CurvatureCompositionComparison.compare(
-              {width:cameraWidth,height:cameraHeight,camera:cameraSnapshot,rgba:referencePixels},
-              {width:cameraWidth,height:cameraHeight,camera:cameraSnapshot,rgba:candidatePixels});
+            entry.primitiveCount=full.prepared.scene.primitives.length;
+            addPresetPng(entry.image,full.canvas);
+            addPresetPng(entry.referenceImage,referenceFrames.full);
+            var fullReport=reportPair(referenceFrames.full,full.canvas,referenceFrames.fullCamera,fullCamera,'controlled-'+preset.id);
+            Object.assign(entry,fullReport);
             entry.referenceAvailable=true;
-            entry.foreground=comparison.foreground;entry.edges=comparison.edges;entry.rgba=comparison.rgba;
-            entry.foregroundDifferenceImage='controlled-'+preset.id+'-foreground-diff.png';
-            entry.edgesDifferenceImage='controlled-'+preset.id+'-edges-diff.png';
-            addPresetRgba(entry.foregroundDifferenceImage,comparison.differenceImages.foreground);
-            addPresetRgba(entry.edgesDifferenceImage,comparison.differenceImages.edges);
-            entry.referenceScope='complete legacy DrawModel scene, with auxiliary geometry';
-            entry.candidateScope='partial independent tower/horizon scene';
-            entry.caveats=comparison.caveats;
+            entry.referenceScope='complete legacy DrawModel scene including auxiliary geometry';
+            entry.candidateScope='independent type-2 towers and horizon outlines';
+            var isolated=renderCandidate({towersOnly:true},towerCamera);
+            var towerBase='controlled-'+preset.id+'-towers';
+            var towerReferenceImage=towerBase+'-legacy.png';
+            var towerCandidateImage=towerBase+'-independent.png';
+            addPresetPng(towerReferenceImage,referenceFrames.towers);
+            addPresetPng(towerCandidateImage,isolated.canvas);
+            var isolatedReport=reportPair(referenceFrames.towers,isolated.canvas,referenceFrames.towerCamera,towerCamera,towerBase);
+            entry.towerOnly=Object.assign({referenceImage:towerReferenceImage,candidateImage:towerCandidateImage,
+              primitiveCount:isolated.prepared.scene.primitives.length,
+              referenceScope:'legacy Objects 2 / Type 2 + globe mask, no grids, labels or horizon outlines',
+              candidateScope:'independent Objects 2 / Type 2 + globe mask, no grids, labels or horizon outlines',
+              renderStatistics:isolated.stats},isolatedReport);
+            entry.towerOnly.projectionVerification=projectionVerification;
+            if(legacyTowerGeometryError)entry.towerOnly.worldGeometryUnavailableReason=legacyTowerGeometryError;
+            if(legacyTowerGeometry&&window.CurvatureControlledGeometryParity){
+              entry.towerOnly.worldGeometryVerification=window.CurvatureControlledGeometryParity.compare(
+                legacyTowerGeometry.scene,isolatedPrepared.scene,isolatedPrepared.ranges);
+              entry.towerOnly.legacyExtractionCoverage=legacyTowerGeometry.coverage;
+            }
+            entry.towerOnlyReferenceAvailable=true;
           }catch(presetError){entry.error=String(presetError);}
           controlledPresets.push(entry);
         });
@@ -1880,6 +1963,7 @@ function DrawModelWithOptionalAudit(g) {
 
 function DrawModel( g ) {
 
+  var diagnosticOptions = arguments[1];
   var m = CurveApp;
   if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.reset();
   g.MaxCurveSegments = 256;
@@ -1896,6 +1980,21 @@ function DrawModel( g ) {
     CamViewCenter: m.camViewCenter,
   } );
   g.SetCameraZoom( 1 );
+
+  // Opt-in controlled reference: retain the actual legacy camera, transforms,
+  // tower graphics and globe occlusion while omitting auxiliary grids/labels.
+  // Objects 1 draws Type 1, even for ObjType 3; only Objects 2 is Type 2.
+  if (diagnosticOptions && diagnosticOptions.towerOnlyIndex !== undefined) {
+    if (diagnosticOptions.towerOnlyIndex !== 1 || (m.showModel !== 1 && m.showModel !== 2))
+      throw new RangeError('Controlled tower-only render requires Objects 2 and one Earth mode');
+    if (m.showModel === 1) {
+      DrawObjectsBehindHorizon( 1, g );
+      DrawObjectsBeforeHorizon( 1, g, true );
+    } else {
+      DrawObjectsBeforeHorizon( 1, g, false );
+    }
+    return;
+  }
 
   var specialLineWidth = 1.5;
 
@@ -2632,7 +2731,8 @@ function DrawShape( objIx, g, m ) {
   // suppression before the audit wrapper so the audit can still capture every
   // PolygonOnPlane vertex while its underlying draw operation is a no-op.
   var showLegacyControl = document.getElementById('ShowLegacyTransmissionTowers');
-  var showLegacy = !showLegacyControl || showLegacyControl.checked;
+  var showLegacy = m.diagnosticAlwaysShowLegacyTowers === true ||
+    !showLegacyControl || showLegacyControl.checked;
   // The visibility checkbox is authoritative, regardless of comparison mode.
   var suppressOriginalTower = m.ObjType[objIx] === 3 && !showLegacy;
   var originalTowerLine = g.LineOnPlane;

@@ -26,7 +26,7 @@
     var scene=contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
       composition:'tower-horizon',objectIndex:objIx,globe:!!globe,
       layerRanges:ranges,approximation:'fixed-world-polygon',
-      limitations:['Only type-2 towers and horizon are included',
+      limitations:['Only type-2 towers from Objects 2 and horizon are included',
         'World-polygon horizon is not pixel-identical to legacy CircleOnPlane',
         'Legacy camera and additional scene objects are not independently generated']});
     return {scene:scene,ranges:ranges,cutoffAngle:composition.cutoffAngle,

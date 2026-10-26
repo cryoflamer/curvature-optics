@@ -5,7 +5,8 @@
  root.CurvatureCompositionComparison=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(composition,pixels){
  'use strict';
- function cameraKey(camera){if(!camera||typeof camera!=='object')throw new TypeError('Camera required');return JSON.stringify(camera,Object.keys(camera).sort());}
+ function ordered(value){if(Array.isArray(value))return value.map(ordered);if(value&&typeof value==='object'){var obj={};Object.keys(value).sort().forEach(function(k){obj[k]=ordered(value[k]);});return obj;}return value;}
+ function cameraKey(camera){if(!camera||typeof camera!=='object')throw new TypeError('Camera required');return JSON.stringify(ordered(camera));}
  function prepare(model,objIx,globe,options){var result=composition.compose(model,objIx,globe,options),audit=composition.audit(result);if(!audit.rendererReady)throw new Error('Composition is not renderer-ready');return {scene:result.scene,audit:audit,ranges:result.ranges,limitations:result.scene.metadata.limitations};}
  function compare(reference,candidate,options){options=options||{};
   if(!reference||!candidate||!Number.isInteger(reference.width)||!Number.isInteger(reference.height)||reference.width<1||reference.height<1)throw new TypeError('Valid reference viewport required');

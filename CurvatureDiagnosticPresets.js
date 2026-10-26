@@ -7,7 +7,8 @@
  'use strict';
  function eligible(model){
   if(!model||!Array.isArray(model.NObjects)||!Array.isArray(model.ObjType))return [];
-  return [0,1].filter(function(i){return model.NObjects[i]>0&&model.ObjType[i]===3;});
+  // Only Objects 2 draws Tower Type 2 in the original DrawShape.
+  return [1].filter(function(i){return model.NObjects[i]>0&&model.ObjType[i]===3;});
  }
  function copy(model){
   var result=Object.assign({},model);
@@ -25,13 +26,15 @@
   ].map(function(s){
    var m=copy(model);
    // Controlled geometry values; camera remains an explicit input to capture.
-   m.NObjects=[3,0];m.ObjType=[3,3];m.ObjDist=[s.first,0];m.ObjDeltaDist=[s.step,0];
+   m.NObjects=[0,3];m.ObjType=[3,3];m.ObjDist=[0,s.first];m.ObjDeltaDist=[0,s.step];
    m.ObjSidePos=[0,0];m.ObjSideVar=[0,0];m.ObjSideType=[0,0];
    m.ObjSizeVar=[0,0];m.ObjSizeType=[0,0];
-   m.ObjSize=[Math.max(1,model.ObjSize&&model.ObjSize[0]||64),0];
+   m.ObjSize=[0,Math.max(1,model.ObjSize&&model.ObjSize[1]||64)];
    m.showModel=s.globe?1:2;
-   return {id:s.id,globe:s.globe,model:m,objectIndex:0,
-    parameters:{NObjects:3,ObjType:3,ObjDist:s.first,ObjDeltaDist:s.step,ObjSize:m.ObjSize[0],showModel:m.showModel}};
+   // Isolated reference must not inherit the optical-mode visibility checkbox.
+   m.diagnosticAlwaysShowLegacyTowers=true;
+   return {id:s.id,globe:s.globe,model:m,objectIndex:1,
+    parameters:{NObjects:3,ObjType:3,ObjDist:s.first,ObjDeltaDist:s.step,ObjSize:m.ObjSize[1],showModel:m.showModel}};
   });
  }
  return {eligible:eligible,scenarios:scenarios};

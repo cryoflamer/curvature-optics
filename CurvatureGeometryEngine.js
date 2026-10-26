@@ -174,21 +174,23 @@
   // explicit geometry resolution, not GraphX3DX's camera-dependent ellipse
   // sampling. The analytic circle is retained in metadata for exact tests.
   function horizonCircle(model,options){
-    if(!model||!['rDisk','zDisk','Height'].every(function(k){return Number.isFinite(model[k]);}))
-      throw new TypeError('Finite horizon radius, dip and height required');
-    if(model.rDisk<0)throw new RangeError('Nonnegative horizon radius required');
     options=options||{};
+    var globe=options.globe!==false;
+    if(!model||!Number.isFinite(model.Height)||!Number.isFinite(globe?model.zDisk:model.rFEarth)||
+        !Number.isFinite(globe?model.rDisk:model.Height))
+      throw new TypeError('Finite horizon/flat-equator parameters required');
+    var radius=globe?model.rDisk:model.rFEarth;
+    if(radius<0)throw new RangeError('Nonnegative horizon radius required');
     var segments=options.segments===undefined?128:options.segments;
     if(!Number.isInteger(segments)||segments<3||segments>8192)
       throw new RangeError('Horizon segments must be an integer from 3 to 8192');
-    var globe=options.globe!==false;
     var z=globe?-model.zDisk:-model.Height;
     var points=[];
     for(var i=0;i<segments;i++){
       var angle=2*Math.PI*i/segments;
-      points.push([model.rDisk*Math.cos(angle),model.rDisk*Math.sin(angle),z]);
+      points.push([radius*Math.cos(angle),radius*Math.sin(angle),z]);
     }
-    return {center:[0,0,z],radius:model.rDisk,points:points,segments:segments,globe:globe};
+    return {center:[0,0,z],radius:radius,points:points,segments:segments,globe:globe};
   }
   function createHorizonScenes(model,options){
     options=options||{};
@@ -196,9 +198,13 @@
     var metadata={generator:'CurvatureGeometryEngine',horizon:true,
       center:circle.center,radius:circle.radius,segments:circle.segments,
       globe:circle.globe,approximation:'fixed-world-polygon'};
-    // A circle outline and the opaque white painter-order mask are distinct
-    // operations. The mask must be composed BETWEEN behind and before towers.
-    var outline=contract.createScene('legacy',[{type:'polygon',points:circle.points,mode:1}],
+    // DrawModel uses rFEarth and 2*rFEarth on the flat plane, not rDisk.
+    // The globe mask is the sole filled diagnostic horizon primitive.
+    var outlines=[{type:'polygon',points:circle.points,mode:1}];
+    if(!circle.globe)outlines.push({type:'polygon',points:circle.points.map(function(p){
+      return [p[0]*2,p[1]*2,p[2]];
+    }),mode:1});
+    var outline=contract.createScene('legacy',outlines,
       Object.assign({},metadata,{layer:'horizon-outline'}));
     var mask=contract.createScene('legacy',circle.globe?[{type:'polygon',
       points:circle.points,mode:2,style:{fill:'white',alpha:1}}]:[],
@@ -209,6 +215,11 @@
   function createTowerHorizonComposition(model,objIx,globe,options){
     var towers=createHorizonPartitionedTowerScenes(model,objIx,globe);
     var horizon=createHorizonScenes(model,Object.assign({},options,{globe:!!globe}));
+    if(options&&options.towersOnly){
+      // Legacy DrawObjectsBehindHorizon already paints the white occlusion disk;
+      // the auxiliary visible horizon and flat-equator outlines are omitted.
+      horizon.outline=contract.createScene('legacy',[],{layer:'horizon-outline',towersOnly:true});
+    }
     // Explicit painter order; consumer must not infer order from scene names.
     return {layers:[towers.behind,horizon.mask,horizon.outline,towers.before],
       behind:towers.behind,mask:horizon.mask,outline:horizon.outline,
