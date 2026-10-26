@@ -86,6 +86,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvaturePerspectiveDiagnostics.js"></script>
 <script src="CurvatureFilledPreview.js"></script>
 <script src="CurvatureZBufferPreview.js"></script>
+<script src="CurvatureEarClip.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
@@ -1549,12 +1550,19 @@ function DrawModelWithOptionalAudit(g) {
       var zBytes=new Uint8Array(zBinary.length);
       for(var z=0;z<zBinary.length;z++)zBytes[z]=zBinary.charCodeAt(z);
       images.push({name:'camera-zbuffer.png',data:zBytes});
+      var earCanvas=document.createElement('canvas');earCanvas.width=900;earCanvas.height=500;
+      var earResult=window.CurvatureZBufferPreview.draw(earCanvas,scene,cameraSnapshot,window.CurvatureEarClip.triangulate);
+      var earBinary=atob(earCanvas.toDataURL('image/png').split(',')[1]);
+      var earBytes=new Uint8Array(earBinary.length);
+      for(var e=0;e<earBinary.length;e++)earBytes[e]=earBinary.charCodeAt(e);
+      images.push({name:'camera-earclip.png',data:earBytes});
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
         cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
         cameraFilled:filledResult.statistics,
         cameraZBuffer:zResult.statistics,
+        cameraEarClip:earResult.statistics,
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
