@@ -1,0 +1,5 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');
+const {compare}=require('./CurvaturePixelComparison');
+test('classifies foreground overlap and disagreement',()=>{const a=Uint8ClampedArray.from([0,0,0,255,255,255,255,255,0,0,0,255]);const b=Uint8ClampedArray.from([0,0,0,255,0,0,0,255,255,255,255,255]);const r=compare(a,b,3,1);assert.equal(r.statistics.both,1);assert.equal(r.statistics.referenceOnly,1);assert.equal(r.statistics.candidateOnly,1);assert.equal(r.statistics.intersectionOverUnion,1/3);});
+test('rejects mismatched buffers',()=>assert.throws(()=>compare(new Uint8Array(4),new Uint8Array(8),1,1)));
+test('diagnostics preserve native viewport and export explicit unavailability',()=>{const h=fs.readFileSync(__dirname+'/CurvatureApp.html','latin1');for(const x of ['CurvaturePixelComparison.js','camera-foreground-diff.png','cameraPixelComparison:pixelComparison','Viewport dimensions differ; no resampling performed'])assert.ok(h.includes(x));});

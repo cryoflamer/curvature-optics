@@ -87,6 +87,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureFilledPreview.js"></script>
 <script src="CurvatureZBufferPreview.js"></script>
 <script src="CurvatureStrokePreview.js"></script>
+<script src="CurvaturePixelComparison.js"></script>
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureContourDiagnostics.js"></script>
@@ -1596,6 +1597,28 @@ function DrawModelWithOptionalAudit(g) {
         for(var si=0;si<binary.length;si++)bytes[si]=binary.charCodeAt(si);
         images.push({name:item[1],data:bytes});
       });
+      // Compare only equal-size native pixels: resizing would invalidate pixel-level geometry evidence.
+      var pixelComparison={available:false,reason:'Original Canvas capture unavailable'};
+      if(captureEndPixels&&window.CurvaturePixelComparison){
+        if(captureEndPixels.width!==combinedCanvas.width||captureEndPixels.height!==combinedCanvas.height){
+          pixelComparison={available:false,reason:'Viewport dimensions differ; no resampling performed',
+            originalSize:[captureEndPixels.width,captureEndPixels.height],
+            independentSize:[combinedCanvas.width,combinedCanvas.height]};
+        }else{
+          try{
+            var legacyPixels=captureEndPixels.getContext('2d').getImageData(0,0,combinedCanvas.width,combinedCanvas.height).data;
+            var independentPixels=combinedCanvas.getContext('2d').getImageData(0,0,combinedCanvas.width,combinedCanvas.height).data;
+            var comparison=window.CurvaturePixelComparison.compare(legacyPixels,independentPixels,combinedCanvas.width,combinedCanvas.height);
+            var diffCanvas=document.createElement('canvas');diffCanvas.width=combinedCanvas.width;diffCanvas.height=combinedCanvas.height;
+            var diffContext=diffCanvas.getContext('2d'),diffImage=diffContext.createImageData(diffCanvas.width,diffCanvas.height);
+            diffImage.data.set(comparison.rgba);diffContext.putImageData(diffImage,0,0);
+            var diffBinary=atob(diffCanvas.toDataURL('image/png').split(',')[1]),diffBytes=new Uint8Array(diffBinary.length);
+            for(var di=0;di<diffBinary.length;di++)diffBytes[di]=diffBinary.charCodeAt(di);
+            images.push({name:'camera-foreground-diff.png',data:diffBytes});
+            pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png'},comparison.statistics);
+          }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
+        }
+      }
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
@@ -1605,6 +1628,7 @@ function DrawModelWithOptionalAudit(g) {
         cameraEarClip:earResult.statistics,
         cameraStrokes:strokeResult.statistics,
         cameraCombined:combinedResult.statistics,
+        cameraPixelComparison:pixelComparison,
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
