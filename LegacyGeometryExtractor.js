@@ -40,10 +40,30 @@
     else return null;
     return r;
   }
+  function planePoint(plane,x,y){return [0,1,2].map(function(i){return plane.pos[i]+x*plane.x[i]+y*plane.y[i];});}
+  function normalizePlane(args){
+    if(args.length<3||args.length>4||!vec(args[0])||!vec(args[1])||!vec(args[2]))return null;
+    var pos=args[0].slice(),x=args[1].slice(),y=args[2].slice();
+    if(args[3]===true){
+      var len=Math.hypot.apply(null,x);if(!len)return null;x=x.map(function(v){return v/len;});
+      var cross=function(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];};
+      var z=cross(x,y),zl=Math.hypot.apply(null,z);if(!zl)return null;
+      y=cross(z.map(function(v){return v/zl;}),x);
+    }else if(args.length===4&&args[3]!==false&&args[3]!=null)return null;
+    return {pos:pos,x:x,y:y};
+  }
+  function planePolygon(args){
+    var xs=args[0],ys=args[1];
+    if(!Array.isArray(xs)||!Array.isArray(ys)||!xs.every(Number.isFinite)||!ys.every(Number.isFinite))return null;
+    var mode=args.length>2&&args[2]!=null?args[2]:1;
+    var size=args.length>3&&args[3]!=null?args[3]:xs.length;
+    if(!Number.isInteger(mode)||!Number.isInteger(size)||size<3||size>xs.length||size>ys.length)return null;
+    return {xs:xs.slice(0,size),ys:ys.slice(0,size),mode:mode};
+  }
   function extract(frame){
     if(!frame||!Array.isArray(frame.commands))throw new TypeError('SceneFrame commands required');
     var primitives=[],unsupported={},supported=0,polygons=0,vertices=0,discarded=0;
-    var active=null, matrix=null, stack=[],angleMeasure=frame.bootstrap&&frame.bootstrap.AngleMeasure||'rad';
+    var active=null, plane=null, matrix=null, stack=[],angleMeasure=frame.bootstrap&&frame.bootstrap.AngleMeasure||'rad';
     var transformOps={TransMove3D:1,TransScale3D:1,TransRotateX3D:1,TransRotateY3D:1,TransRotateZ3D:1};
     function reject(method){unsupported[method]=(unsupported[method]||0)+1;}
     frame.commands.forEach(function(command,index){
@@ -64,6 +84,23 @@
         if(args.length===0){if(stack.length)matrix=stack.pop();supported++;}else reject(method);
       }else if(method==='SetAngleMeasure'){
         if(args.length===1&&(args[0]==='rad'||args[0]==='deg')){angleMeasure=args[0];supported++;}else reject(method);
+      }else if(method==='SetPlane'){
+        var nextPlane=normalizePlane(args);
+        if(nextPlane){plane=nextPlane;supported++;}else{plane=null;reject(method);}
+      }else if(method==='PolygonOnPlane'){
+        var poly=planePolygon(args);
+        if(plane&&poly){
+          primitives.push({type:'polygon',points:poly.xs.map(function(x,i){return transform(matrix,planePoint(plane,x,poly.ys[i]));}),
+            mode:poly.mode,commandIndex:index,sourceCommandIndices:[index]});
+          supported++;polygons++;vertices+=poly.xs.length;
+        }else reject(method);
+      }else if(method==='LineOnPlane'){
+        var coords=args.length>=2&&Array.isArray(args[0])&&Array.isArray(args[1])&&args[0].length===2&&args[1].length===2?
+          [args[0][0],args[0][1],args[1][0],args[1][1]]:args.slice(0,4);
+        if(plane&&coords.length===4&&coords.every(Number.isFinite)){
+          primitives.push({type:'line',points:[planePoint(plane,coords[0],coords[1]),planePoint(plane,coords[2],coords[3])].map(function(p){return transform(matrix,p);}),commandIndex:index});
+          supported++;
+        }else reject(method);
       }else if(method==='Line3D'){
         var ends=endpoints(args);
         if(ends){primitives.push({type:'line',points:ends.map(function(p){return transform(matrix,p);}),commandIndex:index});supported++;}
@@ -92,7 +129,7 @@
     });
     return {
       scene:contract.createScene('legacy',primitives,{partial:true,coordinateSpace:'world',
-        warning:'Supported 3D affine transforms resolved; camera, clipping, paths and on-plane primitives remain unresolved'}),
+        warning:'Supported 3D affine transforms resolved; camera, clipping and viewport-dependent curves remain unresolved'}),
       coverage:{total:frame.commands.length,supported:supported,unsupported:frame.commands.length-supported,
         unsupportedByMethod:unsupported,complete:supported===frame.commands.length,
         completedPolygons:polygons,polygonVertices:vertices,discardedPolygonSequences:discarded,

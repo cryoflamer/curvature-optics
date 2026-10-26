@@ -88,3 +88,35 @@ test('polygon transformed on draw, and saved reset stack semantics',()=>{
  assert.deepEqual(result.scene.primitives[0].points,[[2,3,4],[3,3,4],[2,4,4]]);
  assert.deepEqual(result.scene.primitives[1].points,result.scene.primitives[0].points);
 });
+
+test('plane polygons and lines resolve independent world coordinates',()=>{
+ const commands=[
+  {method:'SetPlane',args:[[1,2,3],[2,0,0],[0,0,3]]},
+  {method:'PolygonOnPlane',args:[[0,1,0],[0,0,1],2]},
+  {method:'LineOnPlane',args:[0,0,1,1]}
+ ];
+ const result=extractor.extract({commands});
+ assert.equal(result.coverage.supported,3);
+ assert.deepEqual(result.scene.primitives[0].points,[[1,2,3],[3,2,3],[1,2,6]]);
+ assert.deepEqual(result.scene.primitives[1].points,[[1,2,3],[3,2,6]]);
+});
+test('plane normalization and affine transforms compose without modifying input',()=>{
+ const frame={commands:[
+  {method:'SetPlane',args:[[0,0,0],[2,0,0],[0,0,3],true]},
+  {method:'TransMove3D',args:[5,0,0]},
+  {method:'PolygonOnPlane',args:[[0,1,0],[0,0,1],1]}
+ ]};
+ const original=JSON.stringify(frame),r=extractor.extract(frame);
+ assert.equal(JSON.stringify(frame),original);
+ assert.deepEqual(r.scene.primitives[0].points,[[5,0,0],[6,0,0],[5,0,1]]);
+});
+test('invalid plane and malformed on-plane polygon are rejected',()=>{
+ const r=extractor.extract({commands:[
+  {method:'SetPlane',args:[[0,0,0],[0,0,0],[0,1,0],true]},
+  {method:'PolygonOnPlane',args:[[0,1,0],[0,0,1],1]},
+  {method:'SetPlane',args:[[0,0,0],[1,0,0],[0,1,0]]},
+  {method:'PolygonOnPlane',args:[[0,1,0],[0,1],1]}
+ ]});
+ assert.equal(r.coverage.supported,1);
+ assert.equal(r.coverage.unsupportedByMethod.PolygonOnPlane,2);
+});
