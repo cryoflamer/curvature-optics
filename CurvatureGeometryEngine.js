@@ -170,5 +170,50 @@
       cutoffAngle:partition.cutoffAngle,requiresHorizonMask:partition.requiresHorizonMask,
       total:partition.total};
   }
-  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes};
+  // World-space horizon circle and white occlusion disk. Tessellation is an
+  // explicit geometry resolution, not GraphX3DX's camera-dependent ellipse
+  // sampling. The analytic circle is retained in metadata for exact tests.
+  function horizonCircle(model,options){
+    if(!model||!['rDisk','zDisk','Height'].every(function(k){return Number.isFinite(model[k]);}))
+      throw new TypeError('Finite horizon radius, dip and height required');
+    if(model.rDisk<0)throw new RangeError('Nonnegative horizon radius required');
+    options=options||{};
+    var segments=options.segments===undefined?128:options.segments;
+    if(!Number.isInteger(segments)||segments<3||segments>8192)
+      throw new RangeError('Horizon segments must be an integer from 3 to 8192');
+    var globe=options.globe!==false;
+    var z=globe?-model.zDisk:-model.Height;
+    var points=[];
+    for(var i=0;i<segments;i++){
+      var angle=2*Math.PI*i/segments;
+      points.push([model.rDisk*Math.cos(angle),model.rDisk*Math.sin(angle),z]);
+    }
+    return {center:[0,0,z],radius:model.rDisk,points:points,segments:segments,globe:globe};
+  }
+  function createHorizonScenes(model,options){
+    options=options||{};
+    var circle=horizonCircle(model,options);
+    var metadata={generator:'CurvatureGeometryEngine',horizon:true,
+      center:circle.center,radius:circle.radius,segments:circle.segments,
+      globe:circle.globe,approximation:'fixed-world-polygon'};
+    // A circle outline and the opaque white painter-order mask are distinct
+    // operations. The mask must be composed BETWEEN behind and before towers.
+    var outline=contract.createScene('legacy',[{type:'polygon',points:circle.points,mode:1}],
+      Object.assign({},metadata,{layer:'horizon-outline'}));
+    var mask=contract.createScene('legacy',circle.globe?[{type:'polygon',
+      points:circle.points,mode:2,style:{fill:'white',alpha:1}}]:[],
+      Object.assign({},metadata,{layer:'horizon-mask',maskColor:'white',
+        maskRequired:circle.globe}));
+    return {outline:outline,mask:mask,circle:circle};
+  }
+  function createTowerHorizonComposition(model,objIx,globe,options){
+    var towers=createHorizonPartitionedTowerScenes(model,objIx,globe);
+    var horizon=createHorizonScenes(model,Object.assign({},options,{globe:!!globe}));
+    // Explicit painter order; consumer must not infer order from scene names.
+    return {layers:[towers.behind,horizon.mask,horizon.outline,towers.before],
+      behind:towers.behind,mask:horizon.mask,outline:horizon.outline,
+      before:towers.before,cutoffAngle:towers.cutoffAngle,
+      requiresHorizonMask:towers.requiresHorizonMask};
+  }
+  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));

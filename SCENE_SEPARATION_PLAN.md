@@ -250,3 +250,18 @@ occlusion result; individual towers may straddle the horizon. This is an
 opt-in API and does not alter the production draw path. The Node regression
 runs the original horizon functions with a stub graph and compares emitted
 tower order over flat/globe, lateral offset, and disk radius combinations.
+
+## Phase 9: independent horizon geometry (compatch 69)
+
+`CurvatureGeometryEngine.horizonCircle()` constructs a world-space horizon
+circle without GraphX3DX, Canvas, or DOM. `createHorizonScenes()` exposes
+separate outline and opaque white mask scenes, and
+`createTowerHorizonComposition()` explicitly orders behind-tower, mask,
+outline, and before-tower layers. The flat-model circle is an outline only.
+
+The circle is represented by a configurable fixed-resolution polygon (128
+segments by default). This is **not pixel-equivalent** to GraphX3DX's
+camera-dependent `CircleOnPlane` tessellation; the analytic radius, center and
+plane are preserved, but the rasterization and edge sampling may differ.
+This is still an opt-in geometry API. The production draw path is unchanged,
+and clipping, camera and the other scene objects remain legacy-owned.
