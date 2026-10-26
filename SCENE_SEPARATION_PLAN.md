@@ -204,3 +204,19 @@ is loaded in the browser for opt-in experiments, but no UI draw path calls it.
 Next steps: independently derive placement from model snapshots (globe and
 flat cases), verify transformed vertices against reference scenes, then
 port remaining shapes and ordering before enabling the renderer switch.
+
+## Phase 6: independent flat/globe tower placement (compatch 66)
+
+`CurvatureGeometryEngine.towerPlacement()` now constructs the world-space plane
+basis directly from a radius, camera height, object size, longitude, latitude,
+flat/globe flag and horizontal/vertical scaling. The implementation has no
+GraphX3DX, Canvas or DOM dependency. The sign reversal on flat Earth and the
+rotation order on the globe are intentionally retained from legacy `SetTrans`.
+`createPlacedTowerType2Scene()` emits the already supported tower through this
+basis. The placement is **opt-in**: production `DrawModel` still uses the
+original path, and object traversal/spacing/size variation are not yet ported.
+
+`CurvatureTowerPlacement.test.js` compares 1,800 resulting world vertices to
+GraphX3DX's actual matrix operators across globe/flat, positive/negative
+longitude and latitude, and plane offsets. This establishes the placement
+primitive, not equivalence of a complete scene or the renderer.

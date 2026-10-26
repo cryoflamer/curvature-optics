@@ -38,8 +38,35 @@
       return q;
     });
   }
+  // World placement corresponding to the legacy SetTrans transformation chain.
+  // Angles are radians (DrawModel sets the graph angle measure to rad).
+  // The returned basis is a value object; no mutable graph transform is needed.
+  function towerPlacement(params){
+    if(!params||!['geometryRadius','height','objectSize','longitude','latitude','verticalScale','horizontalScale'].every(function(k){return Number.isFinite(params[k]);}))
+      throw new TypeError('Finite tower placement parameters required');
+    if(params.geometryRadius<=0)throw new RangeError('Positive geometry radius required');
+    var r=params.geometryRadius,h=params.height,os=params.objectSize;
+    var xs=(params.globe?os:-os);
+    var lat=params.latitude,lng=params.longitude;
+    var cY=Math.cos(lat),sY=Math.sin(lat),cX=Math.cos(-lng),sX=Math.sin(-lng);
+    var side=params.planeOffset||0,alt=params.altitude||0;
+    if(!Number.isFinite(side)||!Number.isFinite(alt))throw new TypeError('Finite offset and altitude required');
+    function point(u,v){
+      var x=xs*(side+u*params.horizontalScale),y=0,z=os*v*params.verticalScale+r+alt;
+      if(params.globe){
+        var x1=cY*x+sY*z,z1=-sY*x+cY*z;
+        x=x1;y=-sX*z1;z=cX*z1;
+      }
+      return [x+(params.globe?0:-lat*r),y+(params.globe?0:lng*r),z-r-h];
+    }
+    var origin=point(0,0),a=point(1,0),b=point(0,1);
+    return {origin:origin,xAxis:a.map(function(n,i){return n-origin[i];}),yAxis:b.map(function(n,i){return n-origin[i];})};
+  }
+  function createPlacedTowerType2Scene(params,metadata){
+    return createTowerType2Scene(towerPlacement(params),metadata);
+  }
   function createTowerType2Scene(plane,metadata){
     return contract.createScene('legacy',placeOnPlane(localTowerType2(),plane),Object.assign({generator:'CurvatureGeometryEngine',objectType:3,towerVariant:2},metadata||{}));
   }
-  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene};
+  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene};
 }));
