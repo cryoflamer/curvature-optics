@@ -13,6 +13,7 @@
     if(!(tolerance>=0&&Number.isFinite(tolerance)))throw new TypeError('Invalid tolerance');
     var mat=math.mat, matrix=null,stack=[],plane=null,active=null,angle=frame.bootstrap&&frame.bootstrap.AngleMeasure||'rad';
     var expected=new Map(), skipped={}, firstMismatch=null, maxError=0, compared=0, coordinates=0;
+    var seen=new Set(), missingExtracted=0, duplicateIndices=0, invalidCoordinates=0;
     function skip(name){skipped[name]=(skipped[name]||0)+1;}
     function apply(p){return matrix?Array.from(mat.Trans(matrix,p.slice())):p.slice();}
     function valid(p){return Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);}
@@ -57,17 +58,40 @@
       }
     });
     scene.primitives.forEach(function(p){
+      if(!p || !Number.isInteger(p.commandIndex)){
+        skip('invalidCommandIndex');
+        if(!firstMismatch)firstMismatch={reason:'invalidCommandIndex'};
+        return;
+      }
+      if(seen.has(p.commandIndex)){
+        duplicateIndices++;skip('duplicateCommandIndex');
+        if(!firstMismatch)firstMismatch={commandIndex:p.commandIndex,reason:'duplicateCommandIndex'};
+        return;
+      }
+      seen.add(p.commandIndex);
       var ref=expected.get(p.commandIndex);
-      if(!ref){skip('noReference');return;}
-      if(ref.length!==p.points.length){skip('vertexCountMismatch');if(!firstMismatch)firstMismatch={commandIndex:p.commandIndex,reason:'vertexCount'};return;}
+      if(!ref){skip('noReference');if(!firstMismatch)firstMismatch={commandIndex:p.commandIndex,reason:'noReference'};return;}
+      if(!Array.isArray(p.points)||ref.length!==p.points.length){skip('vertexCountMismatch');if(!firstMismatch)firstMismatch={commandIndex:p.commandIndex,reason:'vertexCount'};return;}
       compared++;
       ref.forEach(function(v,i){for(var j=0;j<3;j++){
-        var err=Math.abs(v[j]-p.points[i][j]);coordinates++;
-        if(!Number.isFinite(err)||err>tolerance){if(!firstMismatch)firstMismatch={commandIndex:p.commandIndex,vertex:i,axis:j,expected:v[j],actual:p.points[i][j],error:err};}
+        var actual=Array.isArray(p.points[i])?p.points[i][j]:undefined;
+        coordinates++;
+        if(!Number.isFinite(actual)||!Number.isFinite(v[j])){
+          invalidCoordinates++;
+          if(!firstMismatch)firstMismatch={commandIndex:p.commandIndex,vertex:i,axis:j,reason:'nonFiniteCoordinate'};
+          continue;
+        }
+        var err=Math.abs(v[j]-actual);
+        if(err>tolerance&&!firstMismatch)firstMismatch={commandIndex:p.commandIndex,vertex:i,axis:j,expected:v[j],actual:actual,error:err};
         if(err>maxError)maxError=err;
       }});
     });
-    return {reference:'GraphX3DX JsgMat3/JsgPlane',tolerance:tolerance,extractedPrimitives:scene.primitives.length,comparedPrimitives:compared,comparedCoordinates:coordinates,maxAbsoluteError:maxError,firstMismatch:firstMismatch,skipped:skipped,passed:!firstMismatch&&compared===scene.primitives.length};
+    expected.forEach(function(_,index){if(!seen.has(index)){missingExtracted++;skip('missingExtractedPrimitive');if(!firstMismatch)firstMismatch={commandIndex:index,reason:'missingExtractedPrimitive'};}});
+    return {reference:'GraphX3DX JsgMat3/JsgPlane',tolerance:tolerance,extractedPrimitives:scene.primitives.length,
+      referencePrimitives:expected.size,comparedPrimitives:compared,comparedCoordinates:coordinates,
+      missingExtractedPrimitives:missingExtracted,duplicateCommandIndices:duplicateIndices,invalidCoordinates:invalidCoordinates,
+      maxAbsoluteError:maxError,firstMismatch:firstMismatch,skipped:skipped,
+      passed:!firstMismatch&&compared===scene.primitives.length&&compared===expected.size};
   }
   return {verify:verify};
 }));

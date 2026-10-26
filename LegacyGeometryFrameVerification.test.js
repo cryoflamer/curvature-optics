@@ -27,3 +27,26 @@ test('real-frame verifier cross-checks transform and plane geometry',()=>{
   const changed=JSON.parse(JSON.stringify(scene));changed.primitives[0].points[0][0]+=0.01;
   assert.equal(verify.verify(frame,changed,math).passed,false);
 });
+
+test('verification rejects missing, duplicate, and non-finite extracted coordinates',()=>{
+  const frame={commands:[
+    {method:'Line3D',args:[[0,0,0],[1,0,0]]},
+    {method:'Line3D',args:[[0,1,0],[1,1,0]]}
+  ]};
+  const scene=extract.extract(frame).scene;
+  const baseline=verify.verify(frame,scene,math);
+  assert.equal(baseline.passed,true,JSON.stringify(baseline));
+  const missing={primitives:scene.primitives.slice(0,1)};
+  const missingResult=verify.verify(frame,missing,math);
+  assert.equal(missingResult.passed,false);
+  assert.equal(missingResult.missingExtractedPrimitives,1);
+  const duplicate={primitives:[scene.primitives[0],scene.primitives[0]]};
+  const duplicateResult=verify.verify(frame,duplicate,math);
+  assert.equal(duplicateResult.passed,false);
+  assert.equal(duplicateResult.duplicateCommandIndices,1);
+  const corrupted=JSON.parse(JSON.stringify(scene));
+  corrupted.primitives[0].points[0][0]=null;
+  const bad=verify.verify(frame,corrupted,math);
+  assert.equal(bad.passed,false);
+  assert.equal(bad.invalidCoordinates,1);
+});
