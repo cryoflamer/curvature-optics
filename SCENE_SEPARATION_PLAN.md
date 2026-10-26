@@ -281,3 +281,15 @@ This is a **structural renderer-compatibility check**, not a pixel comparison
 against the legacy Canvas output. No independent camera or production switch
 is included; the horizon is still a fixed-resolution world polygon, and only
 type-2 towers are present. Full visual equivalence remains unverified.
+
+### Step 71 — opt-in frame comparison boundary
+
+`CurvatureCompositionComparison.prepare()` audits the independently generated
+scene before rendering. `compare(reference,candidate,options)` accepts genuine
+RGBA captures with matching camera metadata and viewport dimensions and returns
+foreground IoU, edge correspondence, RGBA differences, and difference images.
+It rejects camera and viewport mismatches rather than inventing parity.
+
+An end-to-end parity claim still requires capturing both render pipelines with
+the same camera/projection and comparing their actual frames. Independent
+geometry still omits scene objects beyond type-2 towers and polygonal horizon.
