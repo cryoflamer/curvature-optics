@@ -1529,6 +1529,10 @@ function DrawModelWithOptionalAudit(g) {
       var perspective=window.CurvaturePerspectivePreview;
       if(!perspective)throw new Error('Perspective preview unavailable');
       var cameraSnapshot=perspective.snapshot(g.Camera);
+      // Camera diagnostics must use the captured Canvas backing-store viewport,
+      // not the fixed-size orthographic diagnostic preview. No image resampling.
+      var cameraWidth=captureEndPixels?captureEndPixels.width:900;
+      var cameraHeight=captureEndPixels?captureEndPixels.height:500;
       var scales={};
       views.forEach(function(name){
         var view=name.split('-')[0],factor=name.indexOf('exaggerated')>=0?preview.autoVerticalFactor(scene,view):1;
@@ -1539,25 +1543,25 @@ function DrawModelWithOptionalAudit(g) {
         for(var i=0;i<binary.length;i++)data[i]=binary.charCodeAt(i);
         images.push({name:name+'.png',data:data});scales[name]=factor;
       });
-      var perspectiveCanvas=document.createElement('canvas');perspectiveCanvas.width=900;perspectiveCanvas.height=500;
+      var perspectiveCanvas=document.createElement('canvas');perspectiveCanvas.width=cameraWidth;perspectiveCanvas.height=cameraHeight;
       var perspectiveResult=perspective.draw(perspectiveCanvas,scene,cameraSnapshot);
       var perspectiveBinary=atob(perspectiveCanvas.toDataURL('image/png').split(',')[1]);
       var perspectiveBytes=new Uint8Array(perspectiveBinary.length);
       for(var j=0;j<perspectiveBinary.length;j++)perspectiveBytes[j]=perspectiveBinary.charCodeAt(j);
       images.push({name:'camera-perspective.png',data:perspectiveBytes});
-      var filledCanvas=document.createElement('canvas');filledCanvas.width=900;filledCanvas.height=500;
+      var filledCanvas=document.createElement('canvas');filledCanvas.width=cameraWidth;filledCanvas.height=cameraHeight;
       var filledResult=window.CurvatureFilledPreview.draw(filledCanvas,scene,cameraSnapshot);
       var filledBinary=atob(filledCanvas.toDataURL('image/png').split(',')[1]);
       var filledBytes=new Uint8Array(filledBinary.length);
       for(var k=0;k<filledBinary.length;k++)filledBytes[k]=filledBinary.charCodeAt(k);
       images.push({name:'camera-filled.png',data:filledBytes});
-      var zCanvas=document.createElement('canvas');zCanvas.width=900;zCanvas.height=500;
+      var zCanvas=document.createElement('canvas');zCanvas.width=cameraWidth;zCanvas.height=cameraHeight;
       var zResult=window.CurvatureZBufferPreview.draw(zCanvas,scene,cameraSnapshot);
       var zBinary=atob(zCanvas.toDataURL('image/png').split(',')[1]);
       var zBytes=new Uint8Array(zBinary.length);
       for(var z=0;z<zBinary.length;z++)zBytes[z]=zBinary.charCodeAt(z);
       images.push({name:'camera-zbuffer.png',data:zBytes});
-      var earCanvas=document.createElement('canvas');earCanvas.width=900;earCanvas.height=500;
+      var earCanvas=document.createElement('canvas');earCanvas.width=cameraWidth;earCanvas.height=cameraHeight;
       var topologyEntries=new Map();
       function inspectTopology(entry){
         var id=entry.commandIndex,record=topologyEntries.get(id)||{commandIndex:id};
@@ -1591,9 +1595,9 @@ function DrawModelWithOptionalAudit(g) {
       var earBytes=new Uint8Array(earBinary.length);
       for(var e=0;e<earBinary.length;e++)earBytes[e]=earBinary.charCodeAt(e);
       images.push({name:'camera-earclip.png',data:earBytes});
-      var strokeCanvas=document.createElement('canvas');strokeCanvas.width=900;strokeCanvas.height=500;
+      var strokeCanvas=document.createElement('canvas');strokeCanvas.width=cameraWidth;strokeCanvas.height=cameraHeight;
       var strokeResult=window.CurvatureStrokePreview.draw(strokeCanvas,scene,cameraSnapshot);
-      var combinedCanvas=document.createElement('canvas');combinedCanvas.width=900;combinedCanvas.height=500;
+      var combinedCanvas=document.createElement('canvas');combinedCanvas.width=cameraWidth;combinedCanvas.height=cameraHeight;
       var combinedResult=window.CurvatureStrokePreview.draw(combinedCanvas,scene,cameraSnapshot,earResult.triangles);
       [[strokeCanvas,'camera-strokes.png'],[combinedCanvas,'camera-combined.png']].forEach(function(item){
         var binary=atob(item[0].toDataURL('image/png').split(',')[1]),bytes=new Uint8Array(binary.length);
