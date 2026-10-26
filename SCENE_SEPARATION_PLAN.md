@@ -265,3 +265,19 @@ camera-dependent `CircleOnPlane` tessellation; the analytic radius, center and
 plane are preserved, but the rasterization and edge sampling may differ.
 This is still an opt-in geometry API. The production draw path is unchanged,
 and clipping, camera and the other scene objects remain legacy-owned.
+
+## Phase 10: renderer-ready independent composition (compatch 70)
+
+`CurvatureIndependentComposition.compose()` merges the four independent
+world-space layers into one validated `SceneFrame`-compatible scene. It assigns
+unique, consecutive `commandIndex` values in painter order, required by the
+existing painter-order renderer to associate rasterized triangles and strokes
+with their source commands. `audit()` checks layer ranges, command identity
+and ordering. The regression test sends the merged scene through the existing
+`CurvatureLegacyOrderPreview.build()` and checks command ordering and mode
+semantics for globe/flat cases and different horizon resolutions.
+
+This is a **structural renderer-compatibility check**, not a pixel comparison
+against the legacy Canvas output. No independent camera or production switch
+is included; the horizon is still a fixed-resolution world polygon, and only
+type-2 towers are present. Full visual equivalence remains unverified.
