@@ -4,11 +4,11 @@ const fs=require('node:fs');
 const strokes=require('./CurvatureStrokePreview');
 const camera={pos:[0,0,0],center:[0,10,0],up:[0,0,1],sceneSize:10,screenSize:2,objectZExtend:0,zoom:1};
 const poly=(mode,points)=>({type:'polygon',mode,points});
-test('stroke renderer respects legacy mode flags and closes outlines',()=>{
+test('stroke renderer respects open and explicitly closed legacy outlines',()=>{
  const p=[[-1,10,-1],[1,10,-1],[1,10,1],[-1,10,1]];
  const r=strokes.build({primitives:[poly(1,p),poly(2,p),poly(3,p)]},camera,100,100);
  assert.equal(r.statistics.strokePolygons,2);assert.equal(r.statistics.skippedNonStrokePolygons,1);
- assert.equal(r.statistics.inputSegments,8);assert.equal(r.segments.length,8);
+ assert.equal(r.statistics.inputSegments,6);assert.equal(r.segments.length,6);
 });
 test('near plane rejects hidden segments and clips crossing segments',()=>{
  assert.equal(strokes.clipNear([0,0,-1],[1,0,-2],1e-6),null);
@@ -28,4 +28,10 @@ test('stroke rasterizer depth-tests against existing fill',()=>{
 test('diagnostics export includes separate strokes and combined previews',()=>{
  const html=fs.readFileSync(__dirname+'/CurvatureApp.html','utf8');
  for(const token of ['CurvatureStrokePreview.js','camera-strokes.png','camera-combined.png','cameraStrokes:strokeResult.statistics','cameraCombined:combinedResult.statistics'])assert.ok(html.includes(token));
+});
+
+test('mode 4 explicitly closes the stroke, unlike modes 1 and 3',()=>{
+ const p=[[-1,10,-1],[1,10,-1],[1,10,1]];
+ const r=strokes.build({primitives:[poly(1,p),poly(3,p),poly(7,p)]},camera,100,100);
+ assert.equal(r.statistics.inputSegments,7);
 });

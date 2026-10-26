@@ -120,3 +120,17 @@ test('invalid plane and malformed on-plane polygon are rejected',()=>{
  assert.equal(r.coverage.supported,1);
  assert.equal(r.coverage.unsupportedByMethod.PolygonOnPlane,2);
 });
+
+test('filled CircleOnPlane is extracted in source order as a diagnostic occluder',()=>{
+ const result=extractor.extract({commands:[
+  {method:'SetPlane',args:[[0,0,2],[1,0,0],[0,1,0]]},
+  {method:'CircleOnPlane',args:[0,0,10,2]},
+  {method:'PolygonOnPlane',args:[[0,1,0],[0,0,1],1]}
+ ]});
+ assert.equal(result.coverage.unsupported,0);
+ assert.equal(result.scene.primitives[0].mode,2);
+ assert.equal(result.scene.primitives[0].commandIndex,1);
+ assert.equal(result.scene.primitives[0].points.length,256);
+ assert.ok(Math.abs(result.scene.primitives[0].points[0][0]-10)<1e-10);
+ assert.equal(result.scene.primitives[1].commandIndex,2);
+});

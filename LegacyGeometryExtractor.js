@@ -94,6 +94,19 @@
             mode:poly.mode,commandIndex:index,sourceCommandIndices:[index]});
           supported++;polygons++;vertices+=poly.xs.length;
         }else reject(method);
+      }else if(method==='CircleOnPlane'){
+        // A filled horizon disk is an occluder in the legacy painter-order pass.
+        // Tessellation is diagnostic, not pixel-identical to GraphX3DX's adaptive ellipse.
+        var cx=args[0],cy=args[1],radius=args[2],mode=args.length>3&&args[3]!=null?args[3]:1;
+        if(plane&&args.length>=3&&args.length<=5&&[cx,cy,radius].every(Number.isFinite)&&Number.isInteger(mode)&&radius>0){
+          var steps=256,points=[];
+          for(var k=0;k<steps;k++){
+            var theta=2*Math.PI*k/steps;
+            points.push(transform(matrix,planePoint(plane,cx+radius*Math.cos(theta),cy+radius*Math.sin(theta))));
+          }
+          primitives.push({type:'polygon',points:points,mode:mode,commandIndex:index,sourceCommandIndices:[index],sourceMethod:'CircleOnPlane',approximation:'256-segment circle'});
+          supported++;polygons++;vertices+=steps;
+        }else reject(method);
       }else if(method==='LineOnPlane'){
         var coords=args.length>=2&&Array.isArray(args[0])&&Array.isArray(args[1])&&args[0].length===2&&args[1].length===2?
           [args[0][0],args[0][1],args[1][0],args[1][1]]:args.slice(0,4);
