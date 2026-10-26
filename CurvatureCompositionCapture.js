@@ -28,6 +28,8 @@
   var canvas=args.createCanvas(width,height);
   if(!canvas||canvas.width!==width||canvas.height!==height||canvas===legacy.canvas)throw new TypeError('Distinct candidate canvas with matching dimensions required');
   var camera=args.camera;
+  // Fail explicitly instead of silently using fan triangulation.
+  if(!earClip||typeof earClip.triangulate!=='function')throw new Error('CurvatureEarClip.triangulate is required before composition capture');
   var triangles=zbuffer.build(prepared.scene,camera,width,height,earClip.triangulate).triangles;
   var render=painter.draw(canvas,prepared.scene,camera,triangles);
   var candidate={width:width,height:height,camera:camera,rgba:pixels(canvas,width,height)};
