@@ -79,6 +79,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureSceneContract.js"></script>
 <script src="LegacyGeometryExtractor.js"></script>
 <script src="LegacyGeometryFrameVerification.js"></script>
+<script src="CurvatureScenePreview.js"></script>
 <script src="SceneFrameRenderer.js"></script>
 <script src="LegacySceneAudit.js"></script>
 <script src="LegacyReplayProbe.js"></script>
@@ -102,11 +103,18 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <div style="padding:0.5em 1em;">
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
     <button type="button" id="LegacyGeometryAnalyzeButton">Analyze geometry extraction</button>
+    <button type="button" id="LegacyGeometryPreviewButton">Preview extracted scene (orthographic)</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
     <label><input type="checkbox" id="LegacyFrameCompareCanvas"> Compare detached replay canvas (experimental)</label>
     <label><input type="checkbox" id="LegacyFrameBootstrapSensitivity"> Probe hidden bootstrap state (extra detached replay)</label>
     <label><input type="checkbox" id="LegacyFrameExportCanvasPng"> Export canvas PNG diagnostics (3 files; requires comparison)</label>
     <span id="LegacyFrameCaptureStatus" role="status" aria-live="polite"></span>
+    <div id="LegacyGeometryPreviewPanel" hidden style="margin-top:0.7em;">
+      <label>Orthographic axes <select id="LegacyGeometryPreviewAxes"><option value="xy">XY</option><option value="xz">XZ</option><option value="yz">YZ</option></select></label>
+      <span id="LegacyGeometryPreviewStatus"></span>
+      <canvas id="LegacyGeometryPreviewCanvas" width="900" height="500" style="display:block;max-width:100%;border:1px solid #bbb;background:white;"></canvas>
+      <small>Diagnostic wireframe only. No legacy camera, clipping, styles or refraction rendering; not a pixel comparison.</small>
+    </div>
   </div>
 <section id="OpticsBackendPanel" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Optical backend (experimental)</strong>
@@ -1298,6 +1306,24 @@ var graph = NewGraphX3D( {
   AutoScalePix: true
 } );
 
+var legacyGeometryPreviewRequested = false;
+var lastGeometryPreviewScene = null;
+function updateLegacyGeometryPreview() {
+  if (!lastGeometryPreviewScene || !window.CurvatureScenePreview) return;
+  var view = document.getElementById('LegacyGeometryPreviewAxes').value;
+  var result = window.CurvatureScenePreview.draw(
+    document.getElementById('LegacyGeometryPreviewCanvas'), lastGeometryPreviewScene, view);
+  document.getElementById('LegacyGeometryPreviewStatus').textContent =
+    result.primitives.length + ' world-space primitives (' + view.toUpperCase() + ' wireframe)';
+}
+document.getElementById('LegacyGeometryPreviewAxes').addEventListener('change', updateLegacyGeometryPreview);
+document.getElementById('LegacyGeometryPreviewButton').addEventListener('click', function () {
+  legacyGeometryPreviewRequested = true;
+  legacyGeometryAnalyzeRequested = true;
+  legacyFrameAuditRequested = true;
+  document.getElementById('LegacyFrameCaptureStatus').textContent = 'Capturing orthographic scene preview...';
+  graph.Redraw();
+});
 document.getElementById('LegacyGeometryAnalyzeButton').addEventListener('click', function () {
   legacyGeometryAnalyzeRequested = true;
   legacyFrameAuditRequested = true;
@@ -1346,6 +1372,14 @@ function DrawModelWithOptionalAudit(g) {
     legacyGeometryAnalyzeRequested = false;
     var geometryExtraction = analyzeGeometry && sceneFrame && window.LegacyGeometryExtractor ?
       window.LegacyGeometryExtractor.extract(sceneFrame) : null;
+    if (legacyGeometryPreviewRequested) {
+      legacyGeometryPreviewRequested = false;
+      if (geometryExtraction) {
+        lastGeometryPreviewScene = geometryExtraction.scene;
+        document.getElementById('LegacyGeometryPreviewPanel').hidden = false;
+        updateLegacyGeometryPreview();
+      }
+    }
     var geometryVerification = geometryExtraction && window.LegacyGeometryFrameVerification &&
       window.JsgMat3 && window.JsgPlane ?
       window.LegacyGeometryFrameVerification.verify(sceneFrame,geometryExtraction.scene,
