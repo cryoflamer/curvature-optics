@@ -1,0 +1,26 @@
+/* Independent diagnostic rasterization of legacy polygon outlines. */
+(function(root,factory){var api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.CurvatureStrokePreview=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
+'use strict';
+function sub(a,b){return a.map((v,i)=>v-b[i]);}
+function dot(a,b){return a.reduce((s,v,i)=>s+v*b[i],0);}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function unit(v){var n=Math.hypot(...v);if(!(n>0))throw Error('Degenerate camera');return v.map(x=>x/n);}
+function lerp(a,b,t){return a.map((v,i)=>v+(b[i]-v)*t);}
+function clipNear(a,b,near){var ai=a[2]>=near,bi=b[2]>=near;if(!ai&&!bi)return null;if(ai!==bi){var t=(near-a[2])/(b[2]-a[2]);if(!ai)a=lerp(a,b,t);else b=lerp(a,b,t);}return [a,b];}
+function clipViewport(a,b,width,height){var dx=b[0]-a[0],dy=b[1]-a[1],lo=0,hi=1;
+ for(var p of [[-dx,a[0]], [dx,width-a[0]],[-dy,a[1]],[dy,height-a[1]]]){var v=p[0],q=p[1];if(v===0){if(q<0)return null;}else{var t=q/v;if(v<0)lo=Math.max(lo,t);else hi=Math.min(hi,t);if(lo>hi)return null;}}
+ function at(t){var p=lerp(a,b,t);p[2]=1/((1-t)/a[2]+t/b[2]);return p;}return [at(lo),at(hi)];}
+function build(scene,camera,width,height){if(!scene||!Array.isArray(scene.primitives))throw TypeError('Invalid scene');var c=camera.pos?camera:globalThis.CurvaturePerspectivePreview.snapshot(camera),back=unit(sub(c.pos,c.center)),right=unit(cross(unit(c.up),back)),up=unit(cross(back,right)),distance=Math.hypot(...sub(c.center,c.pos)),focal=c.sceneSize!==0?c.screenSize/c.sceneSize*(distance-c.objectZExtend):1,scale=height/c.screenSize;
+ if(!(c.screenSize>0)||!Number.isFinite(focal))throw Error('Invalid camera scale');var segments=[],stats={inputPolygons:0,strokePolygons:0,skippedNonStrokePolygons:0,inputSegments:0,rejectedNearPlane:0,clippedNearPlane:0,rejectedViewport:0,clippedViewport:0,visibleSegments:0,depthMode:'perspective-correct inverse camera depth',limitations:['Single-pixel diagnostic outlines; legacy stroke widths, joins, caps and colors are not reproduced','No parity check against GraphX3DX stroke visibility']};
+ function project(v){return [width/2+v[0]*focal*c.zoom/v[2]*scale,height/2-v[1]*focal*c.zoom/v[2]*scale,v[2]];}
+ scene.primitives.forEach(function(p){if(p.type!=='polygon')return;stats.inputPolygons++;var mode=p.mode==null?1:p.mode;if(!(mode&1)){stats.skippedNonStrokePolygons++;return;}stats.strokePolygons++;var pts=p.points.map(v=>{var d=sub(v,c.pos);return [dot(d,right),dot(d,up),-dot(d,back)];});if(pts.some(v=>!v.every(Number.isFinite)))return;
+ for(var i=0;i<pts.length;i++){stats.inputSegments++;var a=pts[i],b=pts[(i+1)%pts.length],near=clipNear(a,b,1e-6);if(!near){stats.rejectedNearPlane++;continue;}if(near[0]!==a||near[1]!==b)stats.clippedNearPlane++;var pa=project(near[0]),pb=project(near[1]);if(!pa.every(Number.isFinite)||!pb.every(Number.isFinite))continue;var clipped=clipViewport(pa,pb,width,height);if(!clipped){stats.rejectedViewport++;continue;}if(clipped[0][0]!==pa[0]||clipped[0][1]!==pa[1]||clipped[1][0]!==pb[0]||clipped[1][1]!==pb[1])stats.clippedViewport++;segments.push({points:clipped,commandIndex:p.commandIndex});}
+ });stats.visibleSegments=segments.length;return {segments,statistics:stats,camera:c};}
+function rasterize(segments,width,height,baseDepth){var depth=baseDepth?Float64Array.from(baseDepth):new Float64Array(width*height),mask=new Uint8Array(width*height),tested=0,written=0;
+ for(var s of segments){var a=s.points[0],b=s.points[1],dx=b[0]-a[0],dy=b[1]-a[1],steps=Math.ceil(Math.max(Math.abs(dx),Math.abs(dy)));if(steps===0)steps=1;for(var i=0;i<=steps;i++){var t=i/steps,x=Math.floor(a[0]+dx*t),y=Math.floor(a[1]+dy*t);if(x<0||x>=width||y<0||y>=height)continue;tested++;var inv=(1-t)/a[2]+t/b[2],off=y*width+x;if(inv>=depth[off]-1e-10){depth[off]=Math.max(inv,depth[off]);mask[off]=1;written++;}}}
+ return {depth,mask,testedSamples:tested,depthWrites:written,visiblePixels:mask.reduce((a,v)=>a+v,0)};}
+function draw(canvas,scene,camera,fillTriangles){var width=canvas.width,height=canvas.height,result=build(scene,camera,width,height),base=null,fill=null;
+ if(fillTriangles){if(!globalThis.CurvatureZBufferPreview)throw Error('Z-buffer dependency unavailable');fill=globalThis.CurvatureZBufferPreview.rasterize(fillTriangles,width,height);base=fill.depth;}
+ var r=rasterize(result.segments,width,height,base),ctx=canvas.getContext('2d'),img=ctx.createImageData(width,height);for(var i=0;i<width*height;i++){var off=i*4,isLine=r.mask[i],isFill=fill&&fill.owner[i]>=0;img.data[off]=isLine?48:isFill?168:255;img.data[off+1]=isLine?67:isFill?184:255;img.data[off+2]=isLine?90:isFill?199:255;img.data[off+3]=255;}ctx.putImageData(img,0,0);Object.assign(result.statistics,{testedSamples:r.testedSamples,depthWrites:r.depthWrites,visiblePixels:r.visiblePixels,fillVisiblePixels:fill?fill.owner.reduce((n,v)=>n+(v>=0),0):0});return result;}
+return {build,rasterize,draw,clipNear,clipViewport};
+});
