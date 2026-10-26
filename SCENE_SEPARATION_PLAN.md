@@ -184,3 +184,23 @@ helper calls and global dependencies in a browser trace. Only after a complete
 scene producer can be validated against the legacy reference should renderers
 be switched to the shared scene. `readyForIndependentEngine` is deliberately
 false until that gate is passed.
+
+## Phase 5: first pure geometry producer (compatch 65)
+
+`CurvatureGeometryEngine.js` is an **opt-in**, DOM/Canvas/GraphX3DX-free
+producer of the **type-2 transmission tower only** (`ObjType === 3`,
+`objIx !== 0`). Its local 2D shape definitions are transformed into world
+3D coordinates by an explicit plane basis (`origin`, `xAxis`, `yAxis`) and
+returned as a validated `CurvatureSceneContract` scene. The source shapes
+are checked against the real `DrawShape` branch by executing that branch with
+a fake graph in the Node test. This catches shape drift without using
+GraphX3DX in production.
+
+This is deliberately **not yet** a replacement for `DrawModel`, `SetTrans`,
+or the original camera/occlusion pipeline. The caller supplies an explicit
+world-space plane, and the initial producer does not generate the other
+object types, background disk, camera, clipping or overlays. The producer
+is loaded in the browser for opt-in experiments, but no UI draw path calls it.
+Next steps: independently derive placement from model snapshots (globe and
+flat cases), verify transformed vertices against reference scenes, then
+port remaining shapes and ordering before enabling the renderer switch.
