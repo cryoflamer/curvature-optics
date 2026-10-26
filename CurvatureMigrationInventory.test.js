@@ -1,0 +1,17 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const inventory = require('./CurvatureMigrationInventory');
+const html = fs.readFileSync(__dirname + '/CurvatureApp.html', 'latin1');
+const result = inventory.inspect(html);
+assert.equal(result.complete, true, JSON.stringify(result.missingAnchors));
+assert.equal(result.schemaVersion, 1);
+assert(result.components.length >= 14);
+assert.equal(new Set(result.components.map(x => x.id)).size, result.components.length);
+assert(result.components.every(x => Number.isInteger(x.sourceLine) && x.sourceLine > 0));
+assert(result.drawModelGraphCalls.includes('SetCamera'));
+assert(result.drawModelGraphCalls.includes('SetClipRect'));
+assert(result.externalDrawDependencies.includes('CurvatureInverseOpticsBridge'));
+assert.equal(inventory.inspect(html.replace('// Globe Horizon', '// removed')).complete, false);
+assert.throws(() => inventory.inspect(null), /source required/);
+console.log('CurvatureMigrationInventory: passed; audited components:', result.components.length);
