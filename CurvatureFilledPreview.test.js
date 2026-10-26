@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const fs=require('node:fs');
 const preview=require('./CurvatureFilledPreview');
 const camera={pos:[0,0,0],center:[0,10,0],up:[0,0,1],sceneSize:10,screenSize:2,objectZExtend:0,zoom:1};
-function polygon(index,points){return {type:'polygon',commandIndex:index,points};}
+function polygon(index,points){return {type:'polygon',mode:2,commandIndex:index,points};}
 test('front polygon is projected into viewport and filled',()=>{
  const r=preview.build({primitives:[polygon(1,[[-1,10,-1],[1,10,-1],[0,10,1]])]},camera,100,100);
  assert.equal(r.statistics.filledPolygons,1);

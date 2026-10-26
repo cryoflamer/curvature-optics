@@ -13,8 +13,8 @@ function build(scene,camera,width,height){
  var back=unit(sub(c.pos,c.center)),right=unit(cross(unit(c.up),back)),up=unit(cross(back,right));
  var distance=Math.hypot(...sub(c.center,c.pos)),focal=c.sceneSize!==0?c.screenSize/c.sceneSize*(distance-c.objectZExtend):1;
  if(!(c.screenSize>0)||!Number.isFinite(focal))throw Error('Invalid camera scale');
- var polygons=[],stats={inputPolygons:0,filledPolygons:0,clippedNearPlane:0,clippedViewport:0,rejectedNearPlane:0,rejectedViewport:0,skippedDegenerate:0,depthOrder:'average-camera-depth (approximate)',limitations:['No legacy polygon styles or lighting','Average-depth painter sorting cannot resolve intersecting polygons','No parity check against GraphX3DX polygon clipping']};
- scene.primitives.forEach(function(p){if(p.type!=='polygon')return;stats.inputPolygons++;
+ var polygons=[],stats={inputPolygons:0,skippedNonFillPolygons:0,filledPolygons:0,clippedNearPlane:0,clippedViewport:0,rejectedNearPlane:0,rejectedViewport:0,skippedDegenerate:0,depthOrder:'average-camera-depth (approximate)',limitations:['No legacy polygon styles or lighting','Average-depth painter sorting cannot resolve intersecting polygons','No parity check against GraphX3DX polygon clipping']};
+ scene.primitives.forEach(function(p){if(p.type!=='polygon')return;stats.inputPolygons++;if(!((p.mode==null?1:p.mode)&2)){stats.skippedNonFillPolygons++;return;}
  var points=p.points.map(function(v){var d=sub(v,c.pos);return [dot(d,right),dot(d,up),-dot(d,back)];});
  if(points.length<3||points.some(v=>!v.every(Number.isFinite))){stats.skippedDegenerate++;return;}
  var near=1e-6,changed=points.some(v=>v[2]<near);

@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const fs=require('node:fs');
 const z=require('./CurvatureZBufferPreview');
 const camera={pos:[0,0,0],center:[0,10,0],up:[0,0,1],sceneSize:10,screenSize:2,objectZExtend:0,zoom:1};
-function polygon(commandIndex,points){return {type:'polygon',commandIndex,points};}
+function polygon(commandIndex,points){return {type:'polygon',mode:2,commandIndex,points};}
 test('z-buffer picks nearer surface regardless of submission order',()=>{
  const far={commandIndex:1,points:[[1,1,10],[9,1,10],[1,9,10]]},near={commandIndex:2,points:[[1,1,5],[9,1,5],[1,9,5]]};
  for(const ts of [[far,near],[near,far]]){const r=z.rasterize(ts,12,12);assert.equal(ts[r.owner[3*12+3]].commandIndex,2);}
