@@ -93,6 +93,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureStyledCombinedPreview.js"></script>
 <script src="CurvatureLegacyOrderPreview.js"></script>
 <script src="CurvaturePixelComparison.js"></script>
+<script src="CurvatureIndependentComposition.js"></script>
+<script src="CurvatureCompositionComparison.js"></script>
+<script src="CurvatureCompositionCapture.js"></script>
 <script src="CurvatureGrayOccluderAudit.js"></script>
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
@@ -1694,10 +1697,55 @@ function DrawModelWithOptionalAudit(g) {
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var cameraCanvasVerification=window.CurvatureCameraVerification.verifyPixels(scene,g,cameraSnapshot,perspective,cameraWidth,cameraHeight);
       var visibilityVerification=window.CurvatureVisibilityVerification.run(scene,cameraSnapshot,cameraWidth,cameraHeight);
+      // Phase 73: compare an actual completed DrawModel Canvas with a separately
+      // generated tower/horizon frame. This is a PARTIAL-scene comparison: the
+      // reference includes grids, text and other objects that the candidate omits.
+      var independentCompositionComparison={available:false,
+        reason:'Independent comparison not attempted',scope:'type-2 towers and polygonal horizon only',
+        referenceScope:'complete legacy DrawModel frame; includes unrelated graphics'};
+      try {
+        if(!captureEndPixels)throw new Error('Completed legacy Canvas capture unavailable');
+        if(!window.CurvatureCompositionCapture)throw new Error('Composition capture module unavailable');
+        if(CurveApp.showModel!==1&&CurveApp.showModel!==2)
+          throw new Error('Select only Globe or only Flat (split view cannot share one viewport)');
+        var supportedIndices=[0,1].filter(function(i){return CurveApp.NObjects[i]>0;});
+        if(supportedIndices.length!==1||CurveApp.ObjType[supportedIndices[0]]!==3)
+          throw new Error('Comparison currently supports exactly one nonempty type-2 tower series (ObjType 3)');
+        var independentGlobe=CurveApp.showModel===1;
+        var compositionResult=window.CurvatureCompositionCapture.capture({
+          model:CurveApp,objectIndex:supportedIndices[0],globe:independentGlobe,
+          width:cameraWidth,height:cameraHeight,camera:cameraSnapshot,
+          captureLegacy:function(){return {canvas:captureEndPixels,camera:cameraSnapshot};},
+          createCanvas:function(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+        });
+        function addComparisonImage(name,rgba){
+          var c=document.createElement('canvas');c.width=cameraWidth;c.height=cameraHeight;
+          var ctx=c.getContext('2d'),img=ctx.createImageData(cameraWidth,cameraHeight);
+          img.data.set(rgba);ctx.putImageData(img,0,0);
+          var binary=atob(c.toDataURL('image/png').split(',')[1]),bytes=new Uint8Array(binary.length);
+          for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+          images.push({name:name,data:bytes});
+        }
+        addComparisonImage('independent-composition.png',compositionResult.candidate.rgba);
+        addComparisonImage('independent-foreground-diff.png',compositionResult.comparison.differenceImages.foreground);
+        addComparisonImage('independent-edges-diff.png',compositionResult.comparison.differenceImages.edges);
+        independentCompositionComparison={available:true,mode:independentGlobe?'globe':'flat',
+          objectIndex:supportedIndices[0],compositionAudit:compositionResult.compositionAudit,
+          renderStatistics:compositionResult.renderStatistics,
+          foreground:compositionResult.comparison.foreground,
+          edges:compositionResult.comparison.edges,rgba:compositionResult.comparison.rgba,
+          caveats:compositionResult.comparison.caveats.concat(compositionResult.limitations),
+          referenceImage:'camera-original.png',candidateImage:'independent-composition.png',
+          foregroundDifferenceImage:'independent-foreground-diff.png',
+          edgesDifferenceImage:'independent-edges-diff.png',
+          referenceScope:'complete legacy DrawModel frame; includes grids, text and other graphics',
+          candidateScope:'only one type-2 tower series and polygonal horizon; comparison metrics do NOT establish full-scene parity'};
+      } catch(compositionError){independentCompositionComparison.reason=compositionError.message;}
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
         cameraCanvasVerification:cameraCanvasVerification,
         visibilityVerification:visibilityVerification,
+        independentCompositionComparison:independentCompositionComparison,
         cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
         cameraFilled:filledResult.statistics,
         cameraZBuffer:zResult.statistics,

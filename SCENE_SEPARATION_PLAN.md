@@ -307,3 +307,20 @@ button: the application must supply a trustworthy capture of `DrawModel()` at
 exactly the candidate viewport and camera. Synthetic or unrelated images must
 not be reported as old-vs-new evidence. This phase does not establish pixel
 parity or replace the legacy rendering path.
+
+### Phase 73: opt-in real-frame comparison in diagnostics ZIP
+
+The existing **Export geometry diagnostics (ZIP)** action now includes a
+`independentCompositionComparison` section in `geometry-audit.json`. When the
+view contains exactly one nonempty type-2 tower series and only one Earth
+model, the app captures the **actual completed** legacy Canvas and separately
+renders `CurvatureGeometryEngine` geometry through the independent painter
+renderer. The ZIP includes `independent-composition.png`,
+`independent-foreground-diff.png`, and `independent-edges-diff.png`, along with
+`camera-original.png`. Unsupported scenes are reported as `available:false`
+with a reason; the diagnostic export itself still succeeds. The independent
+scene intentionally omits grids, labels, the other tower series, and other
+legacy drawing operations. Metrics are exploratory **partial-scene** metrics,
+not evidence of full-frame pixel parity; the legacy reference is not cropped
+or normalized to isolate the supported primitives. No production rendering
+path is switched.
