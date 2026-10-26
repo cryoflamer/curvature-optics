@@ -324,3 +324,15 @@ legacy drawing operations. Metrics are exploratory **partial-scene** metrics,
 not evidence of full-frame pixel parity; the legacy reference is not cropped
 or normalized to isolate the supported primitives. No production rendering
 path is switched.
+
+### Phase 75 — isolated geometry presets
+
+The existing geometry diagnostics ZIP now also exports four **candidate-only**
+controlled geometry snapshots (globe/flat, near/far). Each preset clones the
+current model before replacing tower parameters, so the UI state is untouched.
+The existing live-scene comparison is retained when exactly one supported tower
+series is active. These preset PNGs deliberately have **no matching legacy
+reference**; `controlledPresets[].referenceAvailable` is false and no IoU/F1 is
+reported for them. Capturing a truly matched legacy frame for each isolated
+preset remains necessary before numerical cross-pipeline parity can be claimed.
+The preset camera is currently inherited from the live viewport, not fixed.

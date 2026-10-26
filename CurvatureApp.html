@@ -98,6 +98,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureGrayOccluderAudit.js"></script>
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureCompositionCapture.js"></script>
+<script src="CurvatureDiagnosticPresets.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureContourDiagnostics.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
@@ -1708,9 +1709,9 @@ function DrawModelWithOptionalAudit(g) {
         if(!window.CurvatureCompositionCapture)throw new Error('Composition capture module unavailable');
         if(CurveApp.showModel!==1&&CurveApp.showModel!==2)
           throw new Error('Select only Globe or only Flat (split view cannot share one viewport)');
-        var supportedIndices=[0,1].filter(function(i){return CurveApp.NObjects[i]>0;});
-        if(supportedIndices.length!==1||CurveApp.ObjType[supportedIndices[0]]!==3)
-          throw new Error('Comparison currently supports exactly one nonempty type-2 tower series (ObjType 3)');
+        var supportedIndices=window.CurvatureDiagnosticPresets.eligible(CurveApp);
+        if(supportedIndices.length!==1 || [0,1].some(function(i){return CurveApp.NObjects[i]>0 && i!==supportedIndices[0];}))
+          throw new Error('Current-frame comparison requires one active type-2 tower series; controlled independent presets are exported separately');
         var independentGlobe=CurveApp.showModel===1;
         var compositionResult=window.CurvatureCompositionCapture.capture({
           model:CurveApp,objectIndex:supportedIndices[0],globe:independentGlobe,
@@ -1741,11 +1742,34 @@ function DrawModelWithOptionalAudit(g) {
           referenceScope:'complete legacy DrawModel frame; includes grids, text and other graphics',
           candidateScope:'only one type-2 tower series and polygonal horizon; comparison metrics do NOT establish full-scene parity'};
       } catch(compositionError){independentCompositionComparison.reason=compositionError.message;}
+      // Controlled geometry-only snapshots; no changes to CurveApp or the UI.
+      // These are NOT matched legacy comparisons: the legacy frame belongs to
+      // the user's current configuration, not to the isolated presets.
+      var controlledPresets=[];
+      if(window.CurvatureDiagnosticPresets&&window.CurvatureCompositionComparison&&window.CurvatureZBufferPreview&&window.CurvatureLegacyOrderPreview&&window.CurvatureEarClip){
+        window.CurvatureDiagnosticPresets.scenarios(CurveApp).forEach(function(preset){
+          var entry={id:preset.id,parameters:preset.parameters,referenceAvailable:false,
+            reason:'No independent legacy DrawModel capture exists for this isolated preset'};
+          try {
+            var prepared=window.CurvatureCompositionComparison.prepare(preset.model,0,preset.globe);
+            var presetCanvas=document.createElement('canvas');presetCanvas.width=cameraWidth;presetCanvas.height=cameraHeight;
+            var triangles=window.CurvatureZBufferPreview.build(prepared.scene,cameraSnapshot,cameraWidth,cameraHeight,window.CurvatureEarClip.triangulate).triangles;
+            window.CurvatureLegacyOrderPreview.draw(presetCanvas,prepared.scene,cameraSnapshot,triangles);
+            var png=atob(presetCanvas.toDataURL('image/png').split(',')[1]);var bytes=new Uint8Array(png.length);
+            for(var bi=0;bi<png.length;bi++)bytes[bi]=png.charCodeAt(bi);
+            entry.image='controlled-'+preset.id+'.png';entry.primitiveCount=prepared.scene.primitives.length;
+            entry.cameraScope='current viewport/camera (not a controlled legacy reference)';
+            images.push({name:entry.image,data:bytes});
+          }catch(presetError){entry.error=String(presetError);}
+          controlledPresets.push(entry);
+        });
+      }
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
         cameraCanvasVerification:cameraCanvasVerification,
         visibilityVerification:visibilityVerification,
         independentCompositionComparison:independentCompositionComparison,
+        controlledPresets:controlledPresets,
         cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
         cameraFilled:filledResult.statistics,
         cameraZBuffer:zResult.statistics,

@@ -1,0 +1,38 @@
+/* Controlled independent geometry scenarios. No mutation of the live model. */
+(function(root,factory){
+ var api=factory();
+ if(typeof module==='object'&&module.exports)module.exports=api;
+ root.CurvatureDiagnosticPresets=api;
+}(typeof globalThis!=='undefined'?globalThis:this,function(){
+ 'use strict';
+ function eligible(model){
+  if(!model||!Array.isArray(model.NObjects)||!Array.isArray(model.ObjType))return [];
+  return [0,1].filter(function(i){return model.NObjects[i]>0&&model.ObjType[i]===3;});
+ }
+ function copy(model){
+  var result=Object.assign({},model);
+  Object.keys(result).forEach(function(key){if(Array.isArray(result[key]))result[key]=result[key].slice();});
+  return result;
+ }
+ function scenarios(model){
+  if(!model||!Number.isFinite(model.geometryRadius)||model.geometryRadius<=0)throw new TypeError('Valid geometry radius required');
+  var r=model.geometryRadius;
+  return [
+   {id:'globe-near',globe:true,first:0.002*r,step:0.002*r},
+   {id:'globe-far',globe:true,first:0.012*r,step:0.008*r},
+   {id:'flat-near',globe:false,first:0.002*r,step:0.002*r},
+   {id:'flat-far',globe:false,first:0.012*r,step:0.008*r}
+  ].map(function(s){
+   var m=copy(model);
+   // Controlled geometry values; camera remains an explicit input to capture.
+   m.NObjects=[3,0];m.ObjType=[3,3];m.ObjDist=[s.first,0];m.ObjDeltaDist=[s.step,0];
+   m.ObjSidePos=[0,0];m.ObjSideVar=[0,0];m.ObjSideType=[0,0];
+   m.ObjSizeVar=[0,0];m.ObjSizeType=[0,0];
+   m.ObjSize=[Math.max(1,model.ObjSize&&model.ObjSize[0]||64),0];
+   m.showModel=s.globe?1:2;
+   return {id:s.id,globe:s.globe,model:m,objectIndex:0,
+    parameters:{NObjects:3,ObjType:3,ObjDist:s.first,ObjDeltaDist:s.step,ObjSize:m.ObjSize[0],showModel:m.showModel}};
+  });
+ }
+ return {eligible:eligible,scenarios:scenarios};
+}));
