@@ -8,7 +8,8 @@ function summarize(result,camera){
  keys.forEach(function(key){if(!Number.isSafeInteger(result[key])||result[key]<0)throw new TypeError('Invalid perspective counter: '+key);out[key]=result[key];});
  if(result.clippingMode!=='independent-near-and-viewport')throw new TypeError('Unexpected perspective clipping mode');
  out.clippingMode=result.clippingMode;
- out.limitations=['Independent near-plane and diagnostic viewport line clipping; not verified against legacy clipping','No polygon fill, depth ordering or legacy styling'];
+ if(result.viewportVerification){out.viewportVerification=Object.assign({},result.viewportVerification,{passed:result.viewportVerification.mismatches===0&&result.viewportVerification.comparedSegments>0});}
+ out.limitations=['Independent near-plane and diagnostic viewport line clipping; viewport cross-checked against Cohen-Sutherland, not legacy clipping','No polygon fill, depth ordering or legacy styling'];
  return out;
 }
 return {summarize:summarize};
