@@ -31,3 +31,20 @@ test('edge diagnostics are exported alongside legacy mask comparison',()=>{
  assert.ok(h.includes('camera-edge-diff.png'));
  assert.ok(h.includes('edgeComparison:edgeComparison.statistics'));
 });
+
+test('unmatched edge localization attributes raster colors and regions',()=>{
+ const {localizeUnmatchedEdges}=require('./CurvaturePixelComparison');const w=8,h=6,edge=new Uint8ClampedArray(w*h*4),candidate=new Uint8ClampedArray(w*h*4);
+ function mark(x,y,color){edge.set([45,95,230,255],(y*w+x)*4);candidate.set([...color,255],(y*w+x)*4);}
+ mark(1,1,[48,67,90]);mark(6,4,[168,184,199]);
+ const r=localizeUnmatchedEdges(edge,candidate,w,h,2,2);
+ assert.equal(r.totalUnmatchedCandidateEdges,2);assert.equal(r.strokeNearby,1);assert.equal(r.fillNearby,1);assert.equal(r.tiles[0].strokeNearby,1);assert.equal(r.tiles[3].fillNearby,1);
+ assert.equal(r.tiles.reduce((n,t)=>n+t.unmatchedCandidateEdges,0),2);
+});
+test('localization excludes matched pixels and validates buffers',()=>{
+ const {localizeUnmatchedEdges}=require('./CurvaturePixelComparison');const e=new Uint8ClampedArray(16),c=new Uint8ClampedArray(16);
+ e.set([90,175,110,255],0);assert.equal(localizeUnmatchedEdges(e,c,2,2).totalUnmatchedCandidateEdges,0);
+ assert.throws(()=>localizeUnmatchedEdges(e,c,3,2));
+});
+test('regional edge statistics are included in diagnostic JSON',()=>{
+ const h=fs.readFileSync(__dirname+'/CurvatureApp.html','latin1');assert.ok(h.includes('edgeRegions:window.CurvaturePixelComparison.localizeUnmatchedEdges'));
+});

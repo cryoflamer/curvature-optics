@@ -1640,7 +1640,7 @@ function DrawModelWithOptionalAudit(g) {
             images.push({name:'camera-edge-diff.png',data:edgeBytes});
             pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png',
               originalImage:'camera-original.png',originalSize:[captureEndPixels.width,captureEndPixels.height],
-              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics},comparison.statistics);
+              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics,edgeRegions:window.CurvaturePixelComparison.localizeUnmatchedEdges(edgeComparison.rgba,independentPixels,combinedCanvas.width,combinedCanvas.height)},comparison.statistics);
           }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
         }
       }

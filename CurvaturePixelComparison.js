@@ -23,5 +23,22 @@ function compareEdges(a,b,w,h,options){
  stats.referenceRecall=stats.referenceMatched/(stats.referenceEdges||1);stats.candidatePrecision=stats.candidateMatched/(stats.candidateEdges||1);stats.f1=stats.referenceRecall+stats.candidatePrecision?2*stats.referenceRecall*stats.candidatePrecision/(stats.referenceRecall+stats.candidatePrecision):0;
  stats.caveats=['Local edges only; not a proof of geometry or depth equivalence','ROI suppresses some annotations, not all','Tolerance matches nearby edges regardless of color'];return {rgba,statistics:stats};
 }
-return {compare,compareEdges};
+function localizeUnmatchedEdges(edgeRgba,candidate,width,height,columns,rows){
+ if(!edgeRgba||!candidate||edgeRgba.length!==width*height*4||candidate.length!==edgeRgba.length)throw Error('RGBA dimensions mismatch');
+ columns=columns||4;rows=rows||3;
+ if(!Number.isInteger(columns)||!Number.isInteger(rows)||columns<1||rows<1)throw Error('Invalid tile grid');
+ var tiles=[];for(var ty=0;ty<rows;ty++)for(var tx=0;tx<columns;tx++)tiles.push({column:tx,row:ty,x0:Math.floor(tx*width/columns),y0:Math.floor(ty*height/rows),x1:Math.floor((tx+1)*width/columns),y1:Math.floor((ty+1)*height/rows),unmatchedCandidateEdges:0,strokeNearby:0,fillNearby:0,unclassified:0});
+ var total=0,stroke=0,fill=0,other=0;
+ function kind(x,y){var off=(y*width+x)*4;var r=candidate[off],g=candidate[off+1],b=candidate[off+2];if(r===48&&g===67&&b===90)return 1;if(r===168&&g===184&&b===199)return 2;return 0;}
+ for(var y=0;y<height;y++)for(var x=0;x<width;x++){
+  var i=(y*width+x)*4;
+  if(edgeRgba[i]!==45||edgeRgba[i+1]!==95||edgeRgba[i+2]!==230)continue;
+  var tile=tiles[Math.min(rows-1,Math.floor(y*rows/height))*columns+Math.min(columns-1,Math.floor(x*columns/width))];tile.unmatchedCandidateEdges++;total++;
+  var classification=kind(x,y);
+  if(!classification)for(var dy=-1;dy<=1&&!classification;dy++)for(var dx=-1;dx<=1&&!classification;dx++)if(x+dx>=0&&x+dx<width&&y+dy>=0&&y+dy<height)classification=kind(x+dx,y+dy);
+  if(classification===1){tile.strokeNearby++;stroke++;}else if(classification===2){tile.fillNearby++;fill++;}else{tile.unclassified++;other++;}
+ }
+ return {columns,rows,totalUnmatchedCandidateEdges:total,strokeNearby:stroke,fillNearby:fill,unclassified:other,tiles:tiles,classification:'Unmatched candidate edge pixels are identified by blue edge-diff color; candidate raster colors are inspected within one pixel',caveats:['Approximate pixel-color attribution, not primitive-level provenance','Stroke takes precedence when nearby fill and stroke pixels coexist','Edge pixels outside the diagnostic ROI are excluded','No inference about depth ordering or correctness']};
+}
+return {compare,compareEdges,localizeUnmatchedEdges};
 });
