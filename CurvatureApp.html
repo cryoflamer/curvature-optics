@@ -89,6 +89,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureStrokePreview.js"></script>
 <script src="CurvatureLegacyOrderPreview.js"></script>
 <script src="CurvaturePixelComparison.js"></script>
+<script src="CurvatureGrayOccluderAudit.js"></script>
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureContourDiagnostics.js"></script>
@@ -1658,6 +1659,21 @@ function DrawModelWithOptionalAudit(g) {
           }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
         }
       }
+      var grayOccluderAudit={available:false,reason:'Original Canvas capture unavailable'};
+      if(captureEndPixels&&window.CurvatureGrayOccluderAudit&&window.CurvatureZBufferPreview){
+        try{
+          var grayReference=captureEndPixels.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+          var grayDepth=window.CurvatureZBufferPreview.rasterize(earResult.triangles,cameraWidth,cameraHeight);
+          var grayResult=window.CurvatureGrayOccluderAudit.analyze(grayReference,grayDepth.owner,earResult.triangles,cameraWidth,cameraHeight);
+          grayOccluderAudit=Object.assign({available:true},grayResult.statistics);
+          var grayCanvas=document.createElement('canvas');grayCanvas.width=cameraWidth;grayCanvas.height=cameraHeight;
+          var grayCtx=grayCanvas.getContext('2d'),grayImage=grayCtx.createImageData(cameraWidth,cameraHeight);
+          grayImage.data.set(grayResult.rgba);grayCtx.putImageData(grayImage,0,0);
+          var grayBinary=atob(grayCanvas.toDataURL('image/png').split(',')[1]),grayBytes=new Uint8Array(grayBinary.length);
+          for(var gi=0;gi<grayBinary.length;gi++)grayBytes[gi]=grayBinary.charCodeAt(gi);
+          images.push({name:'camera-gray-fill-coverage.png',data:grayBytes});
+        }catch(grayError){grayOccluderAudit={available:false,reason:String(grayError)};}
+      }
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
@@ -1669,6 +1685,7 @@ function DrawModelWithOptionalAudit(g) {
         cameraCombined:combinedResult.statistics,
         cameraLegacyOrder:legacyOrderResult.statistics,
         cameraPixelComparison:pixelComparison,
+        cameraGrayOccluderAudit:grayOccluderAudit,
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
