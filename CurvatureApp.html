@@ -81,6 +81,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="LegacyGeometryFrameVerification.js"></script>
 <script src="CurvatureScenePreview.js"></script>
 <script src="CurvaturePerspectivePreview.js"></script>
+<script src="CurvaturePerspectiveDiagnostics.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
@@ -1535,8 +1536,7 @@ function DrawModelWithOptionalAudit(g) {
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
-        cameraPerspective:{camera:cameraSnapshot,segments:perspectiveResult.segments.length,skippedBehindCamera:perspectiveResult.skippedBehindCamera,
-          limitations:['Near-plane line clipping only','No viewport clipping, polygon fill, depth ordering or legacy styling']},
+        cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
