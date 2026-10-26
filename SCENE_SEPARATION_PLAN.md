@@ -169,3 +169,18 @@ The replay is **not** yet guaranteed pixel-equivalent: nested calls, direct
 property changes and drawing-cycle differences remain outside the trace.
 Run a new browser capture and compare mismatch counts before attributing
 remaining differences to geometry.
+
+## Phase 4a: explicit engine/renderer boundary inventory (compatch 64)
+
+`CurvatureSeparationAudit.inspect(htmlSource)` inventories the primary
+`DrawModel(g)` body, comparing direct `m.field` reads against the exported
+`CurvatureSceneContract.STATE_FIELDS` snapshot allowlist and `g.Method()`
+invocations against `LegacySceneAdapter.METHODS`. It also reports direct
+`g.property = ...` writes. This is a **static gap report**, not a completed
+separation or proof of coverage. The original drawing path remains unchanged.
+
+The next migration must first close missing state fields and capture actual
+helper calls and global dependencies in a browser trace. Only after a complete
+scene producer can be validated against the legacy reference should renderers
+be switched to the shared scene. `readyForIndependentEngine` is deliberately
+false until that gate is passed.

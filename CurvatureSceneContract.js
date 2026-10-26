@@ -20,16 +20,16 @@
     }
     return value;
   }
+  var STATE_FIELDS = ['showModel','geometryRadius','Height','Pan','Nick','Roll',
+    'camPos','camUp','camViewCenter','camSceneSize','ObjDist','ObjDeltaDist',
+    'ObjSidePos','ObjSize','ObjSizeType','ObjSizeVar','NObjects',
+    'showEyeLevel','rDisk','hDip','Refraction','TempGradient'];
   function state(model) {
     if (!model || typeof model !== 'object') throw new TypeError('Scene model is required');
     // Preserve original model field names and values: do not derive refraction
     // or effective curvature here, and do not mutate the live CurveApp model.
-    var fields = ['showModel','geometryRadius','Height','Pan','Nick','Roll',
-      'camPos','camUp','camViewCenter','camSceneSize','ObjDist','ObjDeltaDist',
-      'ObjSidePos','ObjSize','ObjSizeType','ObjSizeVar','NObjects',
-      'showEyeLevel','rDisk','hDip','Refraction','TempGradient'];
     var values = {};
-    fields.forEach(function (name) {
+    STATE_FIELDS.forEach(function (name) {
       if (Object.prototype.hasOwnProperty.call(model, name)) values[name] = copy(model[name]);
     });
     return {version: VERSION, values: values};
@@ -49,5 +49,5 @@
     });
     return {version: VERSION, source: source, primitives: result, metadata: copy(metadata || {})};
   }
-  return {VERSION: VERSION, captureState: state, createScene: scene};
+  return {VERSION: VERSION, STATE_FIELDS: STATE_FIELDS.slice(), captureState: state, createScene: scene};
 }));
