@@ -1,6 +1,6 @@
 /* Diagnostic painter-order experiment: respects captured fill/stroke style and
  * alpha where available; still uses independent tessellation and projection. */
-(function(root,factory){var api=factory(root.CurvatureStrokePreview||(typeof require==='function'?require('./CurvatureStrokePreview'):null));if(typeof module==='object'&&module.exports)module.exports=api;root.CurvatureLegacyOrderPreview=api;})(typeof globalThis!=='undefined'?globalThis:this,function(strokes){
+(function(root,factory){var api=factory(root.CurvatureStrokePreview||(typeof require==='function'?require('./CurvatureStrokePreview'):null),root.CurvatureCanvasProjection||(typeof require==='function'?require('./CurvatureCanvasProjection'):null));if(typeof module==='object'&&module.exports)module.exports=api;root.CurvatureLegacyOrderPreview=api;})(typeof globalThis!=='undefined'?globalThis:this,function(strokes,canvasProjection){
 'use strict';
 function group(items){var map=new Map();for(var item of items){var key=item.commandIndex;if(!map.has(key))map.set(key,[]);map.get(key).push(item);}return map;}
 function build(scene,camera,width,height,triangles){var outline=strokes.build(scene,camera,width,height),fills=group(triangles||[]),lines=group(outline.segments),commands=[];
@@ -17,7 +17,7 @@ function strokePaths(ctx,segments){
  ctx.stroke();return paths;
 }
 function draw(canvas,scene,camera,triangles){var result=build(scene,camera,canvas.width,canvas.height,triangles),ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);ctx.lineJoin='round';ctx.lineCap='butt';
- for(var cmd of result.commands){var style=cmd.style||{};ctx.globalAlpha=style.alpha==null?1:style.alpha;ctx.fillStyle=style.fill||'#a8b8c7';ctx.strokeStyle=style.stroke||'#30435a';ctx.lineWidth=style.lineWidth==null?1:(style.lineWidth===0?1:Math.max(0.01,style.lineWidth));
+ for(var cmd of result.commands){var style=cmd.style||{};ctx.globalAlpha=style.alpha==null?1:style.alpha;ctx.fillStyle=style.fill||'#a8b8c7';ctx.strokeStyle=style.stroke||'#30435a';ctx.lineWidth=canvasProjection.lineWidth(style.lineWidth,camera);
   // Use a single fill path to avoid antialiased cracks between adjacent triangles.
   if(cmd.triangles.length){ctx.beginPath();for(var t of cmd.triangles){var p=t.points;ctx.moveTo(p[0][0],p[0][1]);ctx.lineTo(p[1][0],p[1][1]);ctx.lineTo(p[2][0],p[2][1]);ctx.closePath();}ctx.fill();}
   if(cmd.segments.length){strokePaths(ctx,cmd.segments);}

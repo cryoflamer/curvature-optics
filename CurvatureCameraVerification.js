@@ -18,5 +18,28 @@ function verify(scene,camera,preview,tolerance){
   for(var j=0;j<2;j++){var error=Math.abs(actual[j]-legacy[j]);r.comparedCoordinates++;if(!Number.isFinite(error)||error>tolerance){r.passed=false;if(!r.firstMismatch)r.firstMismatch={commandIndex:p.commandIndex,vertexIndex:i,axis:j?'y':'x',independent:actual[j],legacy:legacy[j],absoluteError:error};}if(Number.isFinite(error))r.maxAbsoluteError=Math.max(r.maxAbsoluteError,error);}
  });});return r;
 }
-return {verify:verify};
+// Unlike verify(), this checks camera-screen -> final backing-store pixels too.
+function verifyPixels(scene,graph,snapshot,preview,width,height,tolerance){
+ if(!scene||!Array.isArray(scene.primitives)||!graph||!graph.Camera||typeof graph.Camera.Trans!=='function'||
+    !graph.WinTrans||typeof graph.WinTrans.TransX!=='function'||typeof graph.WinTrans.TransY!=='function')throw new TypeError('Invalid pixel verification inputs');
+ tolerance=tolerance===undefined?1e-7:tolerance;
+ var view=preview.project({primitives:[]},snapshot,width,height).pixelTransform;
+ var c=snapshot,back=unit(sub(c.pos,c.center)),right=unit(cross(unit(c.up),back)),up=unit(cross(back,right));
+ var distance=Math.hypot.apply(null,sub(c.center,c.pos)),focal=c.sceneSize!==0?c.screenSize/c.sceneSize*(distance-c.objectZExtend):1;
+ var r={passed:true,tolerance:tolerance,comparedPoints:0,comparedCoordinates:0,skippedBehindCamera:0,maxAbsoluteError:0,firstMismatch:null,transformMode:view.mode};
+ scene.primitives.forEach(function(p){p.points.forEach(function(v,i){
+  var d=sub(v,c.pos),depth=-dot(d,back);
+  if(!(depth>(c.near||1e-6))){r.skippedBehindCamera++;return;}
+  var x=dot(d,right)*focal*c.zoom/depth,y=dot(d,up)*focal*c.zoom/depth;
+  var actual=[view.offsetX+x*view.scaleX,view.offsetY+y*view.scaleY];
+  var legacy=graph.Camera.Trans(v),expected=[graph.WinTrans.TransX(legacy[0])*graph.ContextScale,graph.WinTrans.TransY(legacy[1])*graph.ContextScale];
+  r.comparedPoints++;
+  for(var j=0;j<2;j++){
+   var delta=Math.abs(actual[j]-expected[j]);r.comparedCoordinates++;
+   if(!Number.isFinite(delta)||delta>tolerance){r.passed=false;if(!r.firstMismatch)r.firstMismatch={commandIndex:p.commandIndex,vertexIndex:i,axis:j?'y':'x',independent:actual[j],legacy:expected[j],absoluteError:delta};}
+   if(Number.isFinite(delta))r.maxAbsoluteError=Math.max(r.maxAbsoluteError,delta);
+  }
+ });});return r;
+}
+return {verify:verify,verifyPixels:verifyPixels};
 }));

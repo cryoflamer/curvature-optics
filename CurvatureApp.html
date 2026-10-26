@@ -80,6 +80,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="LegacyGeometryExtractor.js"></script>
 <script src="LegacyGeometryFrameVerification.js"></script>
 <script src="CurvatureScenePreview.js"></script>
+<script src="CurvatureCanvasProjection.js"></script>
 <script src="CurvaturePerspectivePreview.js"></script>
 <script src="CurvatureViewportReference.js"></script>
 <script src="CurvatureNearPlaneReference.js"></script>
@@ -1538,6 +1539,7 @@ function DrawModelWithOptionalAudit(g) {
       // not the fixed-size orthographic diagnostic preview. No image resampling.
       var cameraWidth=captureEndPixels?captureEndPixels.width:900;
       var cameraHeight=captureEndPixels?captureEndPixels.height:500;
+      cameraSnapshot.pixelTransform=window.CurvatureCanvasProjection.capture(g,cameraWidth,cameraHeight);
       var scales={};
       views.forEach(function(name){
         var view=name.split('-')[0],factor=name.indexOf('exaggerated')>=0?preview.autoVerticalFactor(scene,view):1;
@@ -1687,8 +1689,10 @@ function DrawModelWithOptionalAudit(g) {
         }catch(grayError){grayOccluderAudit={available:false,reason:String(grayError)};}
       }
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
+      var cameraCanvasVerification=window.CurvatureCameraVerification.verifyPixels(scene,g,cameraSnapshot,perspective,cameraWidth,cameraHeight);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
+        cameraCanvasVerification:cameraCanvasVerification,
         cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
         cameraFilled:filledResult.statistics,
         cameraZBuffer:zResult.statistics,

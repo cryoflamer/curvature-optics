@@ -1,5 +1,5 @@
 /* Independent camera wireframe projection; no GraphX3DX drawing calls. */
-(function(root,factory){var api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.CurvaturePerspectivePreview=api;}(typeof globalThis!=='undefined'?globalThis:this,function(){
+(function(root,factory){var api=factory(root.CurvatureCanvasProjection||(typeof require==='function'?require('./CurvatureCanvasProjection'):null));if(typeof module==='object'&&module.exports)module.exports=api;root.CurvaturePerspectivePreview=api;}(typeof globalThis!=='undefined'?globalThis:this,function(canvasProjection){
 'use strict';
 function valid(v){return Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);}
 function sub(a,b){return a.map(function(x,i){return x-b[i];});}
@@ -25,6 +25,7 @@ if(!scene||!Array.isArray(scene.primitives)||!(width>0&&height>0))throw new Type
 var c=camera.pos?camera:snapshot(camera),back=unit(sub(c.pos,c.center)),right=unit(cross(unit(c.up),back)),up=unit(cross(back,right));
 var distance=Math.hypot.apply(null,sub(c.center,c.pos)),focal=c.sceneSize!==0?c.screenSize/c.sceneSize*(distance-c.objectZExtend):1;
 if(!(c.screenSize>0))throw new RangeError('Invalid screen size');
+var windowPixels=canvasProjection.resolve(c,width,height);
 var segments=[],skipped=0,clippedOutsideViewport=0,clippedToViewport=0,clippedAtNearPlane=0;
 var reference=typeof globalThis!=='undefined'?globalThis.CurvatureViewportReference:null;
 var nearReference=typeof globalThis!=='undefined'?globalThis.CurvatureNearPlaneReference:null;
@@ -47,7 +48,7 @@ if(nearReference){
  if(!Number.isFinite(nearError)){nearVerification.mismatches++;if(!nearVerification.firstMismatch)nearVerification.firstMismatch={commandIndex:p.commandIndex,edgeIndex:i,actual:[a,b],expected:expectedNear};}
  else nearVerification.maxAbsoluteError=Math.max(nearVerification.maxAbsoluteError,nearError);
 }
-function pix(q){var scale=height/c.screenSize;return [width/2+q.x*focal*c.zoom/q.z*scale,height/2-q.y*focal*c.zoom/q.z*scale];}
+function pix(q){return canvasProjection.point(windowPixels,q.x*focal*c.zoom/q.z,q.y*focal*c.zoom/q.z);}
 var raw=[pix(a),pix(b)];
 if(!raw[0].every(Number.isFinite)||!raw[1].every(Number.isFinite)){clippedOutsideViewport++;continue;}
 var visible=clipViewport(raw[0],raw[1],width,height);
@@ -61,7 +62,7 @@ if(!visible){clippedOutsideViewport++;continue;}
 if(visible.some(function(v,i){return v.some(function(n,j){return n!==raw[i][j];});}))clippedToViewport++;
 segments.push({commandIndex:p.commandIndex,points:visible});
 }});
-return {segments:segments,skippedBehindCamera:skipped,clippedOutsideViewport:clippedOutsideViewport,clippedToViewport:clippedToViewport,clippedAtNearPlane:clippedAtNearPlane,clippingMode:"independent-near-and-viewport",viewportVerification:verification,nearPlaneVerification:nearVerification,camera:c};}
+return {segments:segments,skippedBehindCamera:skipped,clippedOutsideViewport:clippedOutsideViewport,clippedToViewport:clippedToViewport,clippedAtNearPlane:clippedAtNearPlane,clippingMode:"independent-near-and-viewport",viewportVerification:verification,nearPlaneVerification:nearVerification,camera:c,pixelTransform:windowPixels};}
 function draw(canvas,scene,camera){var ctx=canvas.getContext('2d');if(!ctx)throw new Error('2D context unavailable');var r=project(scene,camera,canvas.width,canvas.height);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.strokeStyle='#333';ctx.lineWidth=0.8;r.segments.forEach(function(s){ctx.beginPath();ctx.moveTo(s.points[0][0],s.points[0][1]);ctx.lineTo(s.points[1][0],s.points[1][1]);ctx.stroke();});return r;}
 return {snapshot:snapshot,project:project,draw:draw,clipViewport:clipViewport};
 }));
