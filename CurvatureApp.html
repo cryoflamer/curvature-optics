@@ -88,6 +88,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureZBufferPreview.js"></script>
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
+<script src="CurvatureContourDiagnostics.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
@@ -1566,6 +1567,21 @@ function DrawModelWithOptionalAudit(g) {
         stageDefinition:'cameraXY is camera-plane projection before near clipping; screen stages use perspective division; screen-before-clipping is unavailable when points are behind near plane',
         failureReasonSamplesTruncated:topologyFailures.length>25};
       earResult.statistics.worldTopology=window.CurvatureWorldTopologyAudit.summarize(scene,topologyFailures);
+      // GraphX3DX.js: JsGraph.Polygon(mode&2) -> DriverDrawPoly -> ctx.fill().
+      // Canvas 2D fill() defaults to nonzero winding; no explicit evenodd rule is passed.
+      var contourEntries=window.CurvatureContourDiagnostics.select(scene,topologyFailures,[61,62]);
+      earResult.statistics.legacyFillSemantics={source:'GraphX3DX.js JsGraph.Polygon / DriverDrawPoly / JsGraph.Path',
+        polygonFillFlag:'mode & 2',canvasCall:'Context2D.fill() without a fillRule argument',
+        defaultCanvasFillRule:'nonzero',caveat:'This identifies the Canvas fill rule, not the outcome of any preceding legacy graph clipping'};
+      earResult.statistics.contourExamples=contourEntries.map(function(entry){return {commandIndex:entry.commandIndex,mode:entry.mode,
+        sourceCommandIndices:entry.sourceCommandIndices,vertices:entry.points.length,image:'contour-command-'+entry.commandIndex+'.png'};});
+      contourEntries.forEach(function(entry){
+        var contourCanvas=document.createElement('canvas');contourCanvas.width=900;contourCanvas.height=600;
+        window.CurvatureContourDiagnostics.render(contourCanvas,entry);
+        var binary=atob(contourCanvas.toDataURL('image/png').split(',')[1]),bytes=new Uint8Array(binary.length);
+        for(var ci=0;ci<binary.length;ci++)bytes[ci]=binary.charCodeAt(ci);
+        images.push({name:'contour-command-'+entry.commandIndex+'.png',data:bytes});
+      });
       var earBinary=atob(earCanvas.toDataURL('image/png').split(',')[1]);
       var earBytes=new Uint8Array(earBinary.length);
       for(var e=0;e<earBinary.length;e++)earBytes[e]=earBinary.charCodeAt(e);
@@ -1585,7 +1601,7 @@ function DrawModelWithOptionalAudit(g) {
       var zipUrl=URL.createObjectURL(zip),zipLink=document.createElement('a');
       zipLink.href=zipUrl;zipLink.download='geometry-diagnostics.zip';document.body.appendChild(zipLink);
       zipLink.click();zipLink.remove();setTimeout(function(){URL.revokeObjectURL(zipUrl);},1000);
-      if(status)status.textContent='Geometry diagnostics ZIP exported (8 PNGs and JSON).';
+      if(status)status.textContent='Geometry diagnostics ZIP exported ('+images.length+' PNGs and JSON).';
     } else {
     var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
     var url = URL.createObjectURL(blob);
