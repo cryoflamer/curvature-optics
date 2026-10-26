@@ -80,6 +80,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="LegacyGeometryExtractor.js"></script>
 <script src="LegacyGeometryFrameVerification.js"></script>
 <script src="CurvatureScenePreview.js"></script>
+<script src="CurvaturePerspectivePreview.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
 <script src="LegacySceneAudit.js"></script>
@@ -1511,6 +1512,9 @@ function DrawModelWithOptionalAudit(g) {
         throw new Error('Geometry diagnostics dependencies unavailable');
       var scene=geometryExtraction.scene,preview=window.CurvatureScenePreview;
       var images=[],views=['xy','xz','yz','xz-exaggerated','yz-exaggerated'];
+      var perspective=window.CurvaturePerspectivePreview;
+      if(!perspective)throw new Error('Perspective preview unavailable');
+      var cameraSnapshot=perspective.snapshot(g.Camera);
       var scales={};
       views.forEach(function(name){
         var view=name.split('-')[0],factor=name.indexOf('exaggerated')>=0?preview.autoVerticalFactor(scene,view):1;
@@ -1521,7 +1525,15 @@ function DrawModelWithOptionalAudit(g) {
         for(var i=0;i<binary.length;i++)data[i]=binary.charCodeAt(i);
         images.push({name:name+'.png',data:data});scales[name]=factor;
       });
-      var diagnostics={schema:'geometry-diagnostics-v1',audit:report,bounds:preview.bounds3D(scene),
+      var perspectiveCanvas=document.createElement('canvas');perspectiveCanvas.width=900;perspectiveCanvas.height=500;
+      var perspectiveResult=perspective.draw(perspectiveCanvas,scene,cameraSnapshot);
+      var perspectiveBinary=atob(perspectiveCanvas.toDataURL('image/png').split(',')[1]);
+      var perspectiveBytes=new Uint8Array(perspectiveBinary.length);
+      for(var j=0;j<perspectiveBinary.length;j++)perspectiveBytes[j]=perspectiveBinary.charCodeAt(j);
+      images.push({name:'camera-perspective.png',data:perspectiveBytes});
+      var diagnostics={schema:'geometry-diagnostics-v2',audit:report,bounds:preview.bounds3D(scene),
+        cameraPerspective:{camera:cameraSnapshot,segments:perspectiveResult.segments.length,skippedBehindCamera:perspectiveResult.skippedBehindCamera,
+          limitations:['Near-plane line clipping only','No viewport clipping, polygon fill, depth ordering or legacy styling']},
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
@@ -1530,7 +1542,7 @@ function DrawModelWithOptionalAudit(g) {
       var zipUrl=URL.createObjectURL(zip),zipLink=document.createElement('a');
       zipLink.href=zipUrl;zipLink.download='geometry-diagnostics.zip';document.body.appendChild(zipLink);
       zipLink.click();zipLink.remove();setTimeout(function(){URL.revokeObjectURL(zipUrl);},1000);
-      if(status)status.textContent='Geometry diagnostics ZIP exported (5 PNGs and JSON).';
+      if(status)status.textContent='Geometry diagnostics ZIP exported (6 PNGs and JSON).';
     } else {
     var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
     var url = URL.createObjectURL(blob);
