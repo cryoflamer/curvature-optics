@@ -1383,8 +1383,11 @@ function DrawModelWithOptionalAudit(g) {
         }, originalClippingTrace);
       });
     });
-    var snapshotProbe = compareCanvas && window.LegacyCanvasReplayProbe;
-    var captureEndPixels = snapshotProbe ? snapshotProbe.snapshotCanvas(g.Canvas) : null;
+    // Geometry export needs the original finished Canvas even when detached replay is off.
+    var captureProbe = window.LegacyCanvasReplayProbe;
+    var snapshotProbe = compareCanvas && captureProbe;
+    var captureEndPixels = (compareCanvas || geometryDiagnosticsExportRequested) && captureProbe ?
+      captureProbe.snapshotCanvas(g.Canvas) : null;
     // Convert the completed graph-command trace to a standalone frame.
     // The legacy trace remains available for opt-in export.
     var sceneFrame = window.SceneFrame && result.trace.complete ?
@@ -1597,13 +1600,22 @@ function DrawModelWithOptionalAudit(g) {
         for(var si=0;si<binary.length;si++)bytes[si]=binary.charCodeAt(si);
         images.push({name:item[1],data:bytes});
       });
-      // Compare only equal-size native pixels: resizing would invalidate pixel-level geometry evidence.
-      var pixelComparison={available:false,reason:'Original Canvas capture unavailable'};
+      // Preserve the native reference before comparing; never rescale pixel evidence.
+      if(captureEndPixels){
+        var originalBinary=atob(captureEndPixels.toDataURL('image/png').split(',')[1]);
+        var originalBytes=new Uint8Array(originalBinary.length);
+        for(var oi=0;oi<originalBinary.length;oi++)originalBytes[oi]=originalBinary.charCodeAt(oi);
+        images.push({name:'camera-original.png',data:originalBytes});
+      }
+      var pixelComparison={available:false,reason:'Original Canvas capture unavailable',
+        originalSize:captureEndPixels?[captureEndPixels.width,captureEndPixels.height]:null,
+        independentSize:[combinedCanvas.width,combinedCanvas.height],
+        originalImage:captureEndPixels?'camera-original.png':null};
       if(captureEndPixels&&window.CurvaturePixelComparison){
         if(captureEndPixels.width!==combinedCanvas.width||captureEndPixels.height!==combinedCanvas.height){
           pixelComparison={available:false,reason:'Viewport dimensions differ; no resampling performed',
             originalSize:[captureEndPixels.width,captureEndPixels.height],
-            independentSize:[combinedCanvas.width,combinedCanvas.height]};
+            independentSize:[combinedCanvas.width,combinedCanvas.height],originalImage:'camera-original.png'};
         }else{
           try{
             var legacyPixels=captureEndPixels.getContext('2d').getImageData(0,0,combinedCanvas.width,combinedCanvas.height).data;
@@ -1615,7 +1627,9 @@ function DrawModelWithOptionalAudit(g) {
             var diffBinary=atob(diffCanvas.toDataURL('image/png').split(',')[1]),diffBytes=new Uint8Array(diffBinary.length);
             for(var di=0;di<diffBinary.length;di++)diffBytes[di]=diffBinary.charCodeAt(di);
             images.push({name:'camera-foreground-diff.png',data:diffBytes});
-            pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png'},comparison.statistics);
+            pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png',
+              originalImage:'camera-original.png',originalSize:[captureEndPixels.width,captureEndPixels.height],
+              independentSize:[combinedCanvas.width,combinedCanvas.height]},comparison.statistics);
           }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
         }
       }
