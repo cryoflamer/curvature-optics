@@ -87,6 +87,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureFilledPreview.js"></script>
 <script src="CurvatureZBufferPreview.js"></script>
 <script src="CurvatureStrokePreview.js"></script>
+<script src="CurvatureLegacyOrderPreview.js"></script>
 <script src="CurvaturePixelComparison.js"></script>
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
@@ -1604,6 +1605,11 @@ function DrawModelWithOptionalAudit(g) {
         for(var si=0;si<binary.length;si++)bytes[si]=binary.charCodeAt(si);
         images.push({name:item[1],data:bytes});
       });
+      var legacyOrderCanvas=document.createElement('canvas');legacyOrderCanvas.width=cameraWidth;legacyOrderCanvas.height=cameraHeight;
+      var legacyOrderResult=window.CurvatureLegacyOrderPreview.draw(legacyOrderCanvas,scene,cameraSnapshot,earResult.triangles);
+      var legacyOrderBinary=atob(legacyOrderCanvas.toDataURL('image/png').split(',')[1]),legacyOrderBytes=new Uint8Array(legacyOrderBinary.length);
+      for(var li=0;li<legacyOrderBinary.length;li++)legacyOrderBytes[li]=legacyOrderBinary.charCodeAt(li);
+      images.push({name:'camera-legacy-order.png',data:legacyOrderBytes});
       // Preserve the native reference before comparing; never rescale pixel evidence.
       if(captureEndPixels){
         var originalBinary=atob(captureEndPixels.toDataURL('image/png').split(',')[1]);
@@ -1638,9 +1644,17 @@ function DrawModelWithOptionalAudit(g) {
             var edgeBinary=atob(edgeCanvas.toDataURL('image/png').split(',')[1]),edgeBytes=new Uint8Array(edgeBinary.length);
             for(var ei=0;ei<edgeBinary.length;ei++)edgeBytes[ei]=edgeBinary.charCodeAt(ei);
             images.push({name:'camera-edge-diff.png',data:edgeBytes});
+            var orderPixels=legacyOrderCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+            var orderEdges=window.CurvaturePixelComparison.compareEdges(legacyPixels,orderPixels,cameraWidth,cameraHeight);
+            var orderDiffCanvas=document.createElement('canvas');orderDiffCanvas.width=cameraWidth;orderDiffCanvas.height=cameraHeight;
+            var orderDiffContext=orderDiffCanvas.getContext('2d'),orderDiffImage=orderDiffContext.createImageData(cameraWidth,cameraHeight);
+            orderDiffImage.data.set(orderEdges.rgba);orderDiffContext.putImageData(orderDiffImage,0,0);
+            var orderDiffBinary=atob(orderDiffCanvas.toDataURL('image/png').split(',')[1]),orderDiffBytes=new Uint8Array(orderDiffBinary.length);
+            for(var ld=0;ld<orderDiffBinary.length;ld++)orderDiffBytes[ld]=orderDiffBinary.charCodeAt(ld);
+            images.push({name:'camera-legacy-order-edge-diff.png',data:orderDiffBytes});
             pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png',
               originalImage:'camera-original.png',originalSize:[captureEndPixels.width,captureEndPixels.height],
-              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics,edgeRegions:window.CurvaturePixelComparison.localizeUnmatchedEdges(edgeComparison.rgba,independentPixels,combinedCanvas.width,combinedCanvas.height)},comparison.statistics);
+              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics,legacyOrderEdgeComparison:Object.assign({image:'camera-legacy-order-edge-diff.png'},orderEdges.statistics),edgeRegions:window.CurvaturePixelComparison.localizeUnmatchedEdges(edgeComparison.rgba,independentPixels,combinedCanvas.width,combinedCanvas.height)},comparison.statistics);
           }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
         }
       }
@@ -1653,6 +1667,7 @@ function DrawModelWithOptionalAudit(g) {
         cameraEarClip:earResult.statistics,
         cameraStrokes:strokeResult.statistics,
         cameraCombined:combinedResult.statistics,
+        cameraLegacyOrder:legacyOrderResult.statistics,
         cameraPixelComparison:pixelComparison,
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
