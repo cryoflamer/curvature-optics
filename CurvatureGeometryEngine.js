@@ -68,5 +68,68 @@
   function createTowerType2Scene(plane,metadata){
     return contract.createScene('legacy',placeOnPlane(localTowerType2(),plane),Object.assign({generator:'CurvatureGeometryEngine',objectType:3,towerVariant:2},metadata||{}));
   }
-  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene};
+  // Opt-in sequence builder. It does not read CurveApp, invoke DrawModel, or
+  // decide which towers are occluded by the horizon. Entries are far-to-near,
+  // matching the legacy object's iteration order before horizon partitioning.
+  function towerSequence(model,objIx,globe){
+    if(!model||![0,1].includes(objIx))throw new TypeError('Model and object index required');
+    var keys=['geometryRadius','Height','NObjects','ObjDist','ObjDeltaDist','ObjSidePos',
+      'ObjSideVar','ObjSideType','ObjSize','ObjSizeVar','ObjSizeType','ObjType'];
+    keys.forEach(function(k){
+      var v=model[k];
+      if(k==='geometryRadius'||k==='Height'){
+        if(!Number.isFinite(v))throw new TypeError('Finite '+k+' required');
+      }else if(!Array.isArray(v)||!Number.isFinite(v[objIx]))throw new TypeError('Finite '+k+' required');
+    });
+    var r=model.geometryRadius,n=model.NObjects[objIx];
+    if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
+    if(model.ObjType[objIx]!==3)throw new RangeError('Only type-2 transmission towers (ObjType 3) are supported');
+    var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
+    if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
+    var max=n;
+    if(n&&first+(n-1)*delta>Math.PI){
+      max=Math.max(0,Math.min(n,Math.floor(Math.PI/delta)));
+    }
+    var entries=[];
+    for(var drawn=0;drawn<max;drawn++){
+      var lng=first+(max-1-drawn)*delta;
+      var variation=model.ObjSizeVar[objIx],size=1,sizeType=model.ObjSizeType[objIx];
+      if(sizeType===0&&max>1)size=1+variation*(2*(max-1-drawn)/(max-1)-1);
+      else if(sizeType===1)size=1+variation*Math.cos(Math.PI*drawn);
+      else if(sizeType===2)size=1+variation*((64894678.9798467*Math.sqrt(drawn))%2-1);
+      else if(sizeType===3)size=max>1?1-variation*Math.cos(2*Math.PI*drawn/(max-1)):1+variation;
+      else if(sizeType===4)size=max>1?1-variation*Math.sin(2*Math.PI*drawn/(max-1)):1;
+      else if(sizeType<0||sizeType>4)throw new RangeError('Unsupported size variation');
+      size=(size+1-Math.abs(variation))/2;
+      if(size<0)size=-size;
+      var side=model.ObjSidePos[objIx]/r,sideVar=model.ObjSideVar[objIx]/r/2;
+      var sideType=model.ObjSideType[objIx];
+      if(sideType===0&&max>1)sideVar*=2*(max-1-drawn)/(max-1)-1;
+      else if(sideType===2)sideVar*=(186573.6498496*Math.sqrt(drawn)%2)-1;
+      else if(sideType===3&&max>1)sideVar*=Math.cos(2*Math.PI*drawn/(max-1));
+      else if(sideType===4)sideVar=max>1?sideVar*Math.sin(2*Math.PI*drawn/(max-1)):0;
+      else if(sideType<0||sideType>4)throw new RangeError('Unsupported side variation');
+      var positions=sideType===1?[side-sideVar,side+sideVar]:[side+sideVar];
+      if(sideType===1&&Math.abs(positions[0])<Math.abs(positions[1]))positions.reverse();
+      positions.forEach(function(lat,col){
+        var params={geometryRadius:r,height:model.Height,objectSize:model.ObjSize[objIx],
+          longitude:lng,latitude:lat,globe:!!globe,verticalScale:size,horizontalScale:size,
+          // Legacy SetPlane uses [side,0,0] for cosine/sine side modes.
+          planeOffset:(sideType===3||sideType===4)?side:0};
+        var scene=createPlacedTowerType2Scene(params,{objectIndex:objIx,sequenceIndex:drawn,
+          column:sideType===1?col+1:0,longitude:lng,latitude:lat});
+        entries.push({params:params,scene:scene});
+      });
+    }
+    return entries;
+  }
+  function createTowerSequenceScene(model,objIx,globe){
+    var entries=towerSequence(model,objIx,globe);
+    var primitives=[];
+    entries.forEach(function(entry){entry.scene.primitives.forEach(function(p){primitives.push(p);});});
+    return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
+      objectIndex:objIx,globe:!!globe,towerCount:entries.length,
+      horizonPartitioned:false});
+  }
+  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene};
 }));

@@ -220,3 +220,20 @@ original path, and object traversal/spacing/size variation are not yet ported.
 GraphX3DX's actual matrix operators across globe/flat, positive/negative
 longitude and latitude, and plane offsets. This establishes the placement
 primitive, not equivalence of a complete scene or the renderer.
+
+## Phase 7: independent tower sequences (compatch 67)
+
+`CurvatureGeometryEngine.towerSequence(model, objectIndex, globe)` generates
+ordered world-space tower scenes for `ObjType === 3`, without calling
+`DrawModel`, `DrawShapeVariants`, GraphX3DX or Canvas. It supports both object
+slots, all five legacy size-variation and side-variation modes, deterministic
+pseudo-random variations, two-column ordering, flat/globe placement, and the
+legacy maximum-distance cap. `createTowerSequenceScene()` flattens the results
+into a validated scene with `horizonPartitioned:false` metadata.
+
+The sequence is **not** a drop-in replacement for the complete scene: the
+legacy horizon partition, white disk occlusion, camera and other object types
+remain on the old path. No production draw path is changed. The regression
+test executes the real `DrawShapeVariants` function with fake drawing methods
+and compares its placement arguments and ordering across both Earth models
+and all variation modes. This avoids copying expected formulas into the test.
