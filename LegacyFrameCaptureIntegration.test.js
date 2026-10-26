@@ -5,7 +5,7 @@ const html=fs.readFileSync('CurvatureApp.html','latin1');
 assert.match(html,/DrawFunc:\s*DrawModelWithOptionalAudit/);
 assert.match(html,/function DrawModelWithOptionalAudit\(g\)/);
 assert.match(html,/if \(!legacyFrameAuditRequested \|\| legacyFrameAuditInProgress/);
-assert.match(html,/LegacySceneAudit\.captureFrame\(g, DrawModel\)/);
+assert.match(html,/LegacySceneAudit\.captureFrame\(g, function\(graph\)/);
 assert.match(html,/replayVerified: false/);
 assert.match(html,/legacyFrameAuditRequested = false;/);
 assert.match(html,/legacyFrameAuditInProgress = false;/);

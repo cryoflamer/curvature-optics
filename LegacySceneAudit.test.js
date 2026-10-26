@@ -11,7 +11,7 @@ assert(report.captured.includes('SetAlpha'));
 assert(report.captured.includes('SetCamera'));
 assert(report.captured.includes('SetCameraZoom'));
 assert(report.captured.includes('SetTextRotation'));
-assert(report.missing.includes('CircleOnPlane'));
+assert(report.captured.includes('CircleOnPlane'));
 assert.equal(report.complete,false);
 assert.equal(report.used.length,report.captured.length+report.missing.length);
 const calls=[];

@@ -64,12 +64,32 @@
     if(!frame||!Array.isArray(frame.commands))throw new TypeError('SceneFrame commands required');
     var primitives=[],unsupported={},supported=0,polygons=0,vertices=0,discarded=0;
     var active=null, plane=null, matrix=null, stack=[],angleMeasure=frame.bootstrap&&frame.bootstrap.AngleMeasure||'rad';
+    var style={fill:'white',stroke:'black',lineWidth:1,alpha:1},cameraNear=1e-6;
+    function styleCopy(){return Object.assign({},style);}
+    function color(v){if(typeof v==='string')return v;if(Array.isArray(v)&&v.length>=3&&v.slice(0,3).every(Number.isFinite)){var n=v.slice(0,3).map(x=>Math.max(0,Math.min(255,Math.round(255*x))));return 'rgb('+n.join(',')+')';}return null;}
+    function setColor(key,v){var c=color(v);if(c===null)return false;style[key]=c;return true;}
+    function setWidth(v){if(!Number.isFinite(v))return false;style.lineWidth=Math.max(0,v);return true;}
     var transformOps={TransMove3D:1,TransScale3D:1,TransRotateX3D:1,TransRotateY3D:1,TransRotateZ3D:1};
     function reject(method){unsupported[method]=(unsupported[method]||0)+1;}
     frame.commands.forEach(function(command,index){
       var method=command&&command.method, args=command&&command.args;
       if(!Array.isArray(args)){reject(method||'<invalid>');return;}
-      if(transformOps[method]){
+      if(method==='SetBgColor'||method==='SetColor'){
+        if(args.length===1&&setColor(method==='SetBgColor'?'fill':'stroke',args[0]))supported++;else reject(method);
+      }else if(method==='SetLineWidth'){
+        if(args.length===1&&setWidth(args[0]))supported++;else reject(method);
+      }else if(method==='SetAlpha'){
+        if(args.length===1&&Number.isFinite(args[0])){style.alpha=Math.max(0,Math.min(1,args[0]));supported++;}else reject(method);
+      }else if(method==='SetAreaAttr'||method==='SetLineAttr'){
+        if(args.length<1||args.length>(method==='SetAreaAttr'?3:2)){reject(method);}else{
+          var updated=styleCopy(),ok=true;
+          if(method==='SetAreaAttr'){if(args[0]!=null)ok=setColor('fill',args[0])&&ok;if(args[1]!=null)ok=setColor('stroke',args[1])&&ok;if(args[2]!=null)ok=setWidth(args[2])&&ok;}
+          else{if(args[0]!=null)ok=setColor('stroke',args[0])&&ok;if(args[1]!=null)ok=setWidth(args[1])&&ok;}
+          if(ok)supported++;else{style=updated;reject(method);}
+        }
+      }else if(method==='SetCameraClipping'){
+        if(args.length===1&&Number.isFinite(args[0])&&args[0]>=0){cameraNear=args[0]||1e-6;supported++;}else reject(method);
+      }else if(transformOps[method]){
         var next=affine(method,args,angleMeasure);
         if(next){matrix=matrix?multiply(next,matrix):next;supported++;}else reject(method);
       }else if(method==='ResetTrans3D'){
@@ -91,7 +111,7 @@
         var poly=planePolygon(args);
         if(plane&&poly){
           primitives.push({type:'polygon',points:poly.xs.map(function(x,i){return transform(matrix,planePoint(plane,x,poly.ys[i]));}),
-            mode:poly.mode,commandIndex:index,sourceCommandIndices:[index]});
+            mode:poly.mode,style:styleCopy(),commandIndex:index,sourceCommandIndices:[index]});
           supported++;polygons++;vertices+=poly.xs.length;
         }else reject(method);
       }else if(method==='CircleOnPlane'){
@@ -104,19 +124,19 @@
             var theta=2*Math.PI*k/steps;
             points.push(transform(matrix,planePoint(plane,cx+radius*Math.cos(theta),cy+radius*Math.sin(theta))));
           }
-          primitives.push({type:'polygon',points:points,mode:mode,commandIndex:index,sourceCommandIndices:[index],sourceMethod:'CircleOnPlane',approximation:'256-segment circle'});
+          primitives.push({type:'polygon',points:points,mode:mode,style:styleCopy(),commandIndex:index,sourceCommandIndices:[index],sourceMethod:'CircleOnPlane',approximation:'256-segment circle'});
           supported++;polygons++;vertices+=steps;
         }else reject(method);
       }else if(method==='LineOnPlane'){
         var coords=args.length>=2&&Array.isArray(args[0])&&Array.isArray(args[1])&&args[0].length===2&&args[1].length===2?
           [args[0][0],args[0][1],args[1][0],args[1][1]]:args.slice(0,4);
         if(plane&&coords.length===4&&coords.every(Number.isFinite)){
-          primitives.push({type:'line',points:[planePoint(plane,coords[0],coords[1]),planePoint(plane,coords[2],coords[3])].map(function(p){return transform(matrix,p);}),commandIndex:index});
+          primitives.push({type:'line',points:[planePoint(plane,coords[0],coords[1]),planePoint(plane,coords[2],coords[3])].map(function(p){return transform(matrix,p);}),style:styleCopy(),commandIndex:index});
           supported++;
         }else reject(method);
       }else if(method==='Line3D'){
         var ends=endpoints(args);
-        if(ends){primitives.push({type:'line',points:ends.map(function(p){return transform(matrix,p);}),commandIndex:index});supported++;}
+        if(ends){primitives.push({type:'line',points:ends.map(function(p){return transform(matrix,p);}),style:styleCopy(),commandIndex:index});supported++;}
         else reject(method);
       }else if(method==='NewPoly3D'){
         // GraphX3DX defaults applyTrans to false. True needs the live matrix.
@@ -134,7 +154,7 @@
           // Mode bit 16 reverses the reusable polygon in the graph implementation.
           if(mode&16)active.points.reverse();
           primitives.push({type:'polygon',points:active.points.map(function(p){return active.applyTrans?p.slice():transform(matrix,p);}),
-            mode:mode,commandIndex:index,sourceCommandIndices:active.indices.concat(index)});
+            mode:mode,style:styleCopy(),commandIndex:index,sourceCommandIndices:active.indices.concat(index)});
           supported++;polygons++;
         }else{reject(method);discarded++;}
         // Keep the inverted buffer for any subsequent DrawPoly3D call.
@@ -142,7 +162,7 @@
     });
     return {
       scene:contract.createScene('legacy',primitives,{partial:true,coordinateSpace:'world',
-        warning:'Supported 3D affine transforms resolved; camera, clipping and viewport-dependent curves remain unresolved'}),
+        cameraNear:cameraNear,warning:'Supported 3D affine transforms resolved; clipping and viewport-dependent curves remain approximations'}),
       coverage:{total:frame.commands.length,supported:supported,unsupported:frame.commands.length-supported,
         unsupportedByMethod:unsupported,complete:supported===frame.commands.length,
         completedPolygons:polygons,polygonVertices:vertices,discardedPolygonSequences:discarded,

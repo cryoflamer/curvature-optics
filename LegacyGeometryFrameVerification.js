@@ -49,6 +49,17 @@
         if(plane&&Array.isArray(xs)&&Array.isArray(ys)&&Number.isInteger(size)&&size>=3&&size<=xs.length&&size<=ys.length){
           expected.set(index,Array.from({length:size},function(_,i){return apply(Array.from(plane.PointOnPlane(xs[i],ys[i])));}));
         }
+      }else if(m==='CircleOnPlane'){
+        // Compare against analytic JsgPlane coordinates, not the extractor's
+        // planePoint implementation. Adaptive GraphX3DX ellipse tessellation
+        // may choose a different number of vertices at runtime.
+        var cx=a[0],cy=a[1],r=a[2];
+        if(plane&&[cx,cy,r].every(Number.isFinite)&&r>0){
+          expected.set(index,Array.from({length:256},function(_,i){
+            var t=2*Math.PI*i/256;
+            return apply(Array.from(plane.PointOnPlane(cx+r*Math.cos(t),cy+r*Math.sin(t))));
+          }));
+        }
       }else if(m==='LineOnPlane'){
         var v=a.length>=2&&Array.isArray(a[0])&&Array.isArray(a[1])?[a[0][0],a[0][1],a[1][0],a[1][1]]:a.slice(0,4);
         if(plane&&v.length===4&&v.every(Number.isFinite))expected.set(index,[apply(Array.from(plane.PointOnPlane(v[0],v[1]))),apply(Array.from(plane.PointOnPlane(v[2],v[3])))]);
@@ -87,7 +98,7 @@
       }});
     });
     expected.forEach(function(_,index){if(!seen.has(index)){missingExtracted++;skip('missingExtractedPrimitive');if(!firstMismatch)firstMismatch={commandIndex:index,reason:'missingExtractedPrimitive'};}});
-    return {reference:'GraphX3DX JsgMat3/JsgPlane',tolerance:tolerance,extractedPrimitives:scene.primitives.length,
+    return {reference:'GraphX3DX JsgMat3/JsgPlane; analytic 256-sample circles (not adaptive Canvas tessellation)',tolerance:tolerance,extractedPrimitives:scene.primitives.length,
       referencePrimitives:expected.size,comparedPrimitives:compared,comparedCoordinates:coordinates,
       missingExtractedPrimitives:missingExtracted,duplicateCommandIndices:duplicateIndices,invalidCoordinates:invalidCoordinates,
       maxAbsoluteError:maxError,firstMismatch:firstMismatch,skipped:skipped,

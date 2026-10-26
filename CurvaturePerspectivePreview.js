@@ -32,8 +32,8 @@ var nearVerification={comparedSegments:0,maxAbsoluteError:0,mismatches:0,firstMi
 var verification={comparedSegments:0,maxAbsoluteError:0,mismatches:0,firstMismatch:null,reference:'Cohen-Sutherland viewport only'};
 scene.primitives.forEach(function(p){if(p.type!=='line'&&p.type!=='polygon')throw new TypeError('Unknown primitive');
 var pts=p.points.map(function(v){if(!valid(v))throw new TypeError('Invalid world point');var d=sub(v,c.pos);return {x:dot(d,right),y:dot(d,up),z:-dot(d,back)};});
-var count=p.type==='polygon'?pts.length:pts.length-1;
-for(var i=0;i<count;i++){var a=pts[i],b=pts[(i+1)%pts.length],near=1e-6;
+var mode=p.mode==null?1:p.mode;var count=p.type==='polygon'?((mode&1)?pts.length-1+(((mode&4)||p.sourceMethod==='CircleOnPlane')?1:0):0):pts.length-1;
+for(var i=0;i<count;i++){var a=pts[i],b=pts[(i+1)%pts.length],near=c.near>0?c.near:(scene.metadata&&scene.metadata.cameraNear>0?scene.metadata.cameraNear:1e-6);
 var originalA=a,originalB=b;
 if(a.z<=near&&b.z<=near){
  if(nearReference){var expectedRejected=nearReference.clip(originalA,originalB,near);nearVerification.comparedSegments++;if(expectedRejected!==null){nearVerification.mismatches++;if(!nearVerification.firstMismatch)nearVerification.firstMismatch={commandIndex:p.commandIndex,edgeIndex:i,actual:null,expected:expectedRejected};}}

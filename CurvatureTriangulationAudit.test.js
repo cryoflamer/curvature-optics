@@ -21,7 +21,7 @@ test('fan degenerate triangles are reported',()=>{
 test('build includes bounded real-scene audit with command indices',()=>{
  const camera={pos:[0,0,0],center:[0,10,0],up:[0,0,1],sceneSize:10,screenSize:2,objectZExtend:0,zoom:1};
  const points=[[-1,10,-1],[1,10,-1],[1,10,1],[-1,10,1]];
- const r=z.build({primitives:[{type:'polygon',commandIndex:22,points}]},camera,100,100);
+ const r=z.build({primitives:[{type:'polygon',mode:2,commandIndex:22,points}]},camera,100,100);
  assert.equal(r.statistics.triangulationAudit.analyzedPolygons,1);
  assert.equal(r.statistics.triangulationAudit.concavePolygons,0);
 });

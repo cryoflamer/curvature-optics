@@ -85,8 +85,10 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureNearPlaneReference.js"></script>
 <script src="CurvaturePerspectiveDiagnostics.js"></script>
 <script src="CurvatureFilledPreview.js"></script>
+<script src="CurvatureViewportPolygonClip.js"></script>
 <script src="CurvatureZBufferPreview.js"></script>
 <script src="CurvatureStrokePreview.js"></script>
+<script src="CurvatureStyledCombinedPreview.js"></script>
 <script src="CurvatureLegacyOrderPreview.js"></script>
 <script src="CurvaturePixelComparison.js"></script>
 <script src="CurvatureGrayOccluderAudit.js"></script>
@@ -1531,6 +1533,7 @@ function DrawModelWithOptionalAudit(g) {
       var perspective=window.CurvaturePerspectivePreview;
       if(!perspective)throw new Error('Perspective preview unavailable');
       var cameraSnapshot=perspective.snapshot(g.Camera);
+      cameraSnapshot.near=g.CameraClipPlaneDist>0?g.CameraClipPlaneDist:1e-6;
       // Camera diagnostics must use the captured Canvas backing-store viewport,
       // not the fixed-size orthographic diagnostic preview. No image resampling.
       var cameraWidth=captureEndPixels?captureEndPixels.width:900;
@@ -1606,6 +1609,11 @@ function DrawModelWithOptionalAudit(g) {
         for(var si=0;si<binary.length;si++)bytes[si]=binary.charCodeAt(si);
         images.push({name:item[1],data:bytes});
       });
+      var styledCanvas=document.createElement('canvas');styledCanvas.width=cameraWidth;styledCanvas.height=cameraHeight;
+      var styledResult=window.CurvatureStyledCombinedPreview.draw(styledCanvas,scene,cameraSnapshot,earResult.triangles);
+      var styledBinary=atob(styledCanvas.toDataURL('image/png').split(',')[1]),styledBytes=new Uint8Array(styledBinary.length);
+      for(var sci=0;sci<styledBinary.length;sci++)styledBytes[sci]=styledBinary.charCodeAt(sci);
+      images.push({name:'camera-styled-combined.png',data:styledBytes});
       var legacyOrderCanvas=document.createElement('canvas');legacyOrderCanvas.width=cameraWidth;legacyOrderCanvas.height=cameraHeight;
       var legacyOrderResult=window.CurvatureLegacyOrderPreview.draw(legacyOrderCanvas,scene,cameraSnapshot,earResult.triangles);
       var legacyOrderBinary=atob(legacyOrderCanvas.toDataURL('image/png').split(',')[1]),legacyOrderBytes=new Uint8Array(legacyOrderBinary.length);
@@ -1645,6 +1653,8 @@ function DrawModelWithOptionalAudit(g) {
             var edgeBinary=atob(edgeCanvas.toDataURL('image/png').split(',')[1]),edgeBytes=new Uint8Array(edgeBinary.length);
             for(var ei=0;ei<edgeBinary.length;ei++)edgeBytes[ei]=edgeBinary.charCodeAt(ei);
             images.push({name:'camera-edge-diff.png',data:edgeBytes});
+            var styledPixels=styledCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+            var styledEdges=window.CurvaturePixelComparison.compareEdges(legacyPixels,styledPixels,cameraWidth,cameraHeight);
             var orderPixels=legacyOrderCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
             var orderEdges=window.CurvaturePixelComparison.compareEdges(legacyPixels,orderPixels,cameraWidth,cameraHeight);
             var orderDiffCanvas=document.createElement('canvas');orderDiffCanvas.width=cameraWidth;orderDiffCanvas.height=cameraHeight;
@@ -1655,7 +1665,7 @@ function DrawModelWithOptionalAudit(g) {
             images.push({name:'camera-legacy-order-edge-diff.png',data:orderDiffBytes});
             pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png',
               originalImage:'camera-original.png',originalSize:[captureEndPixels.width,captureEndPixels.height],
-              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics,legacyOrderEdgeComparison:Object.assign({image:'camera-legacy-order-edge-diff.png'},orderEdges.statistics),edgeRegions:window.CurvaturePixelComparison.localizeUnmatchedEdges(edgeComparison.rgba,independentPixels,combinedCanvas.width,combinedCanvas.height)},comparison.statistics);
+              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics,styledEdgeComparison:Object.assign({image:'camera-styled-combined.png'},styledEdges.statistics),legacyOrderEdgeComparison:Object.assign({image:'camera-legacy-order-edge-diff.png'},orderEdges.statistics),edgeRegions:window.CurvaturePixelComparison.localizeUnmatchedEdges(edgeComparison.rgba,independentPixels,combinedCanvas.width,combinedCanvas.height)},comparison.statistics);
           }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
         }
       }
@@ -1683,6 +1693,7 @@ function DrawModelWithOptionalAudit(g) {
         cameraEarClip:earResult.statistics,
         cameraStrokes:strokeResult.statistics,
         cameraCombined:combinedResult.statistics,
+        cameraStyledCombined:styledResult.statistics,
         cameraLegacyOrder:legacyOrderResult.statistics,
         cameraPixelComparison:pixelComparison,
         cameraGrayOccluderAudit:grayOccluderAudit,
