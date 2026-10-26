@@ -1551,7 +1551,19 @@ function DrawModelWithOptionalAudit(g) {
       for(var z=0;z<zBinary.length;z++)zBytes[z]=zBinary.charCodeAt(z);
       images.push({name:'camera-zbuffer.png',data:zBytes});
       var earCanvas=document.createElement('canvas');earCanvas.width=900;earCanvas.height=500;
-      var earResult=window.CurvatureZBufferPreview.draw(earCanvas,scene,cameraSnapshot,window.CurvatureEarClip.triangulate);
+      var topologyEntries=new Map();
+      function inspectTopology(entry){
+        var id=entry.commandIndex,record=topologyEntries.get(id)||{commandIndex:id};
+        function inspectStage(name,points){record[name]=points?window.CurvatureEarClip.inspect(points):{unavailable:true,reason:'vertices behind near plane'};}
+        if('preCamera' in entry){inspectStage('cameraXYBeforeNearClip',entry.preCamera);inspectStage('screenBeforeNearClip',entry.preProjected);inspectStage('screenAfterNearClip',entry.postProjected);}
+        if('cleanedProjected' in entry){inspectStage('screenAfterCleanup',entry.cleanedProjected);record.failureReason=entry.reason;}
+        topologyEntries.set(id,record);
+      }
+      var earResult=window.CurvatureZBufferPreview.draw(earCanvas,scene,cameraSnapshot,window.CurvatureEarClip.triangulate,inspectTopology);
+      var topologyFailures=Array.from(topologyEntries.values()).filter(function(x){return x.failureReason;});
+      earResult.statistics.topologyStages={failedPolygons:topologyFailures.length,reportedFailureExamples:topologyFailures.slice(0,25),
+        stageDefinition:'cameraXY is camera-plane projection before near clipping; screen stages use perspective division; screen-before-clipping is unavailable when points are behind near plane',
+        failureReasonSamplesTruncated:topologyFailures.length>25};
       var earBinary=atob(earCanvas.toDataURL('image/png').split(',')[1]);
       var earBytes=new Uint8Array(earBinary.length);
       for(var e=0;e<earBinary.length;e++)earBytes[e]=earBinary.charCodeAt(e);
