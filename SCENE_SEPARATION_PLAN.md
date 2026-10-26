@@ -293,3 +293,17 @@ It rejects camera and viewport mismatches rather than inventing parity.
 An end-to-end parity claim still requires capturing both render pipelines with
 the same camera/projection and comparing their actual frames. Independent
 geometry still omits scene objects beyond type-2 towers and polygonal horizon.
+
+### Phase 72: explicit real-frame capture bridge
+
+`CurvatureCompositionCapture.capture()` accepts an actual legacy Canvas capture
+(callback), a separate Canvas factory, the same immutable camera snapshot and
+model inputs. It generates the independent tower/horizon composition, builds
+triangles and renders it with the existing painter-order renderer, then runs
+`CurvatureCompositionComparison.compare()` on actual pixel buffers. A missing
+reference capture, mismatched viewport/camera, or reused Canvas is rejected.
+This is an **opt-in integration API**, not yet wired to the application export
+button: the application must supply a trustworthy capture of `DrawModel()` at
+exactly the candidate viewport and camera. Synthetic or unrelated images must
+not be reported as old-vs-new evidence. This phase does not establish pixel
+parity or replace the legacy rendering path.
