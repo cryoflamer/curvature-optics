@@ -78,6 +78,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="SceneFrame.js"></script>
 <script src="CurvatureSceneContract.js"></script>
 <script src="LegacyGeometryExtractor.js"></script>
+<script src="LegacyGeometryFrameVerification.js"></script>
 <script src="SceneFrameRenderer.js"></script>
 <script src="LegacySceneAudit.js"></script>
 <script src="LegacyReplayProbe.js"></script>
@@ -1345,6 +1346,10 @@ function DrawModelWithOptionalAudit(g) {
     legacyGeometryAnalyzeRequested = false;
     var geometryExtraction = analyzeGeometry && sceneFrame && window.LegacyGeometryExtractor ?
       window.LegacyGeometryExtractor.extract(sceneFrame) : null;
+    var geometryVerification = geometryExtraction && window.LegacyGeometryFrameVerification &&
+      window.JsgMat3 && window.JsgPlane ?
+      window.LegacyGeometryFrameVerification.verify(sceneFrame,geometryExtraction.scene,
+        {mat:window.JsgMat3,plane:window.JsgPlane}) : null;
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       sceneFrame || result.trace, window.JsgPolygon);
@@ -1420,6 +1425,7 @@ function DrawModelWithOptionalAudit(g) {
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
       schema: 'legacy-frame-audit-v2',
+      geometryVerification: geometryVerification,
       geometryExtraction: geometryExtraction ? {coverage:geometryExtraction.coverage,
         sceneMetadata:geometryExtraction.scene.metadata,
         primitiveCount:geometryExtraction.scene.primitives.length} : null,
