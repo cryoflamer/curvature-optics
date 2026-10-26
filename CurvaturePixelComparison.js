@@ -24,6 +24,22 @@ function compareEdges(a,b,w,h,options){
  stats.referenceRecall=stats.referenceMatched/(stats.referenceEdges||1);stats.candidatePrecision=stats.candidateMatched/(stats.candidateEdges||1);stats.f1=stats.referenceRecall+stats.candidatePrecision?2*stats.referenceRecall*stats.candidatePrecision/(stats.referenceRecall+stats.candidatePrecision):0;
  stats.alphaNormalization='RGBA composited over white before luminance edges';stats.caveats=['Local edges only; not a proof of geometry or depth equivalence','ROI suppresses some annotations, not all','Tolerance matches nearby edges regardless of color'];return {rgba,statistics:stats};
 }
+function compareRgba(reference,candidate,width,height){
+ if(!reference||!candidate||reference.length!==width*height*4||reference.length!==candidate.length)throw Error('RGBA dimensions mismatch');
+ var count=width*height,exact=0,alphaExact=0,alphaAbs=0,rgbAbs=0,compositedAbs=0;
+ for(var i=0;i<reference.length;i+=4){
+  var ra=reference[i+3]/255,ca=candidate[i+3]/255;
+  if(reference[i+3]===candidate[i+3])alphaExact++;
+  alphaAbs+=Math.abs(reference[i+3]-candidate[i+3]);
+  var match=true;for(var j=0;j<4;j++)if(reference[i+j]!==candidate[i+j])match=false;
+  if(match)exact++;
+  for(var j=0;j<3;j++){
+   rgbAbs+=Math.abs(reference[i+j]-candidate[i+j]);
+   compositedAbs+=Math.abs(255*(1-ra)+reference[i+j]*ra-(255*(1-ca)+candidate[i+j]*ca));
+  }
+ }
+ return {width,height,pixels:count,exactRgbaPixels:exact,exactRgbaFraction:exact/count,exactAlphaPixels:alphaExact,alphaMae:alphaAbs/count,rgbMae:rgbAbs/(count*3),compositedWhiteRgbMae:compositedAbs/(count*3),caveats:['RGB values of transparent pixels are implementation-dependent; compare compositedWhiteRgbMae for displayed colors','Antialiasing, clipping and painter-order versus depth-test can still differ']};
+}
 function localizeUnmatchedEdges(edgeRgba,candidate,width,height,columns,rows){
  if(!edgeRgba||!candidate||edgeRgba.length!==width*height*4||candidate.length!==edgeRgba.length)throw Error('RGBA dimensions mismatch');
  columns=columns||4;rows=rows||3;
@@ -41,5 +57,5 @@ function localizeUnmatchedEdges(edgeRgba,candidate,width,height,columns,rows){
  }
  return {columns,rows,totalUnmatchedCandidateEdges:total,strokeNearby:stroke,fillNearby:fill,unclassified:other,tiles:tiles,classification:'Unmatched candidate edge pixels are identified by blue edge-diff color; candidate raster colors are inspected within one pixel',caveats:['Approximate pixel-color attribution, not primitive-level provenance','Stroke takes precedence when nearby fill and stroke pixels coexist','Edge pixels outside the diagnostic ROI are excluded','No inference about depth ordering or correctness']};
 }
-return {compare,compareEdges,localizeUnmatchedEdges};
+return {compare,compareEdges,compareRgba,localizeUnmatchedEdges};
 });

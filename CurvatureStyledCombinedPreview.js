@@ -4,7 +4,7 @@
 'use strict';
 function color(value){
  var v=typeof value==='string'?value.trim().toLowerCase():'',hex;
- if(v==='white')return [255,255,255,1];if(v==='black')return [0,0,0,1];
+ if(v==='white')return [255,255,255,1];if(v==='black')return [0,0,0,1];if(v==='blue')return [0,0,255,1];
  if(v==='transparent')return [0,0,0,0];
  if((hex=/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(v))){var h=hex[1];if(h.length<=4)h=h.split('').map(c=>c+c).join('');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16),h.length===8?parseInt(h.slice(6,8),16)/255:1];}
  var m=/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(v);
@@ -14,8 +14,8 @@ function color(value){
 function draw(canvas,scene,camera,triangles){
  var width=canvas.width,height=canvas.height,fill=zbuffer.rasterize(triangles,width,height),out=new Uint8ClampedArray(width*height*4),unparsed=new Set();
  function brush(style,key,fallback){var spec=style&&style[key]||fallback,c=color(spec);if(!c){unparsed.add(spec);return color(fallback);}return c;}
- function paint(off,c,alpha){var a=Math.max(0,Math.min(1,alpha*c[3])),i=off*4;for(var j=0;j<3;j++)out[i+j]=out[i+j]*(1-a)+c[j]*a;}
- for(var p=0;p<width*height;p++){var i=p*4;out[i]=out[i+1]=out[i+2]=255;out[i+3]=255;var owner=fill.owner[p];if(owner<0)continue;var style=triangles[owner].style,c=brush(style,'fill','#a8b8c7');paint(p,c,style&&style.alpha!=null?style.alpha:1);}
+ function paint(off,c,alpha){var a=Math.max(0,Math.min(1,alpha*c[3])),i=off*4,old=out[i+3]/255,combined=a+old*(1-a);if(combined<=0)return;for(var j=0;j<3;j++)out[i+j]=(c[j]*a+out[i+j]*old*(1-a))/combined;out[i+3]=Math.round(combined*255);}
+ for(var p=0;p<width*height;p++){var i=p*4;out[i]=out[i+1]=out[i+2]=0;out[i+3]=0;var owner=fill.owner[p];if(owner<0)continue;var style=triangles[owner].style,c=brush(style,'fill','#a8b8c7');paint(p,c,style&&style.alpha!=null?style.alpha:1);}
  var lines=strokes.build(scene,camera,width,height),depth=Float64Array.from(fill.depth),strokePixels=0;
  for(var s of lines.segments){var a=s.points[0],b=s.points[1],dx=b[0]-a[0],dy=b[1]-a[1],steps=Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dy)))),style=s.style,c=brush(style,'stroke','#30435a'),alpha=style&&style.alpha!=null?style.alpha:1,strokeWidth=style&&Number.isFinite(style.lineWidth)?style.lineWidth:1;
   // Keep diagnostics finite for pathological style widths; joins/caps are approximate.
@@ -30,7 +30,7 @@ function draw(canvas,scene,camera,triangles){
   }
  }
  var ctx=canvas.getContext('2d'),img=ctx.createImageData(width,height);img.data.set(out);ctx.putImageData(img,0,0);
- return {statistics:{filledPixels:fill.owner.reduce((n,o)=>n+(o>=0),0),strokeSamples:strokePixels,segmentCount:lines.segments.length,unparsedStyles:Array.from(unparsed),nearPlane:lines.statistics.nearPlane,limitations:['Approximate stroke widths, joins, and caps','Z-buffer visibility differs from original painter-order overpainting','Background composited over white; no browser-native antialiasing parity']}};
+ return {statistics:{filledPixels:fill.owner.reduce((n,o)=>n+(o>=0),0),strokeSamples:strokePixels,segmentCount:lines.segments.length,unparsedStyles:Array.from(unparsed),nearPlane:lines.statistics.nearPlane,limitations:['Approximate stroke widths, joins, and caps','Z-buffer visibility differs from original painter-order overpainting','Transparent background retained; no browser-native antialiasing parity']}};
 }
 return {draw,color};
 });
