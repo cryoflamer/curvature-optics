@@ -84,6 +84,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureViewportReference.js"></script>
 <script src="CurvatureNearPlaneReference.js"></script>
 <script src="CurvaturePerspectiveDiagnostics.js"></script>
+<script src="CurvatureFilledPreview.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
@@ -1535,19 +1536,26 @@ function DrawModelWithOptionalAudit(g) {
       var perspectiveBytes=new Uint8Array(perspectiveBinary.length);
       for(var j=0;j<perspectiveBinary.length;j++)perspectiveBytes[j]=perspectiveBinary.charCodeAt(j);
       images.push({name:'camera-perspective.png',data:perspectiveBytes});
+      var filledCanvas=document.createElement('canvas');filledCanvas.width=900;filledCanvas.height=500;
+      var filledResult=window.CurvatureFilledPreview.draw(filledCanvas,scene,cameraSnapshot);
+      var filledBinary=atob(filledCanvas.toDataURL('image/png').split(',')[1]);
+      var filledBytes=new Uint8Array(filledBinary.length);
+      for(var k=0;k<filledBinary.length;k++)filledBytes[k]=filledBinary.charCodeAt(k);
+      images.push({name:'camera-filled.png',data:filledBytes});
       var cameraVerification=window.CurvatureCameraVerification.verify(scene,g.Camera,perspective);
       var diagnostics={schema:'geometry-diagnostics-v3',audit:report,bounds:preview.bounds3D(scene),
         cameraVerification:cameraVerification,
         cameraPerspective:window.CurvaturePerspectiveDiagnostics.summarize(perspectiveResult,cameraSnapshot),
+        cameraFilled:filledResult.statistics,
         primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
-          'Images are diagnostic wireframes, not equivalent to legacy camera rendering']};
+          'Diagnostic images are not equivalent to legacy camera rendering; filled preview uses approximate depth sorting']};
       var zip=window.GeometryDiagnosticsZip.build([{name:'geometry-audit.json',data:JSON.stringify(diagnostics,null,2)}].concat(images));
       var zipUrl=URL.createObjectURL(zip),zipLink=document.createElement('a');
       zipLink.href=zipUrl;zipLink.download='geometry-diagnostics.zip';document.body.appendChild(zipLink);
       zipLink.click();zipLink.remove();setTimeout(function(){URL.revokeObjectURL(zipUrl);},1000);
-      if(status)status.textContent='Geometry diagnostics ZIP exported (6 PNGs and JSON).';
+      if(status)status.textContent='Geometry diagnostics ZIP exported (7 PNGs and JSON).';
     } else {
     var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
     var url = URL.createObjectURL(blob);
