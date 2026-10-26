@@ -237,3 +237,16 @@ remain on the old path. No production draw path is changed. The regression
 test executes the real `DrawShapeVariants` function with fake drawing methods
 and compares its placement arguments and ordering across both Earth models
 and all variation modes. This avoids copying expected formulas into the test.
+
+## Phase 8: horizon drawing-order partition (compatch 68)
+
+`CurvatureGeometryEngine.towerHorizonPartition()` independently divides the
+far-to-near type-2 tower sequence into behind-horizon and before-horizon layers,
+using the legacy disk-side cutoff geometry. `createHorizonPartitionedTowerScenes()`
+exposes both as separate validated scenes and returns `requiresHorizonMask`.
+The horizon mask itself is **not** generated: it remains a legacy renderer
+operation. In particular, the partition is not a physically exact per-vertex
+occlusion result; individual towers may straddle the horizon. This is an
+opt-in API and does not alter the production draw path. The Node regression
+runs the original horizon functions with a stub graph and compares emitted
+tower order over flat/globe, lateral offset, and disk radius combinations.

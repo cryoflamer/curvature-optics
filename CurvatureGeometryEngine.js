@@ -131,5 +131,44 @@
       objectIndex:objIx,globe:!!globe,towerCount:entries.length,
       horizonPartitioned:false});
   }
-  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene};
+  // Partition the far-to-near sequence using the same geometric cutoff as
+  // DrawObjectsBehindHorizon. This is a drawing-order partition, NOT an
+  // analytic per-vertex visibility test: the legacy white disk masks the
+  // behind-horizon geometry after it is drawn.
+  function towerHorizonPartition(model,objIx,globe){
+    if(!model||!Number.isFinite(model.rDisk)||!Number.isFinite(model.hDip))
+      throw new TypeError('Finite horizon disk radius and dip required');
+    if(model.rDisk<0)throw new RangeError('Nonnegative horizon disk radius required');
+    var entries=towerSequence(model,objIx,globe),aClip=0;
+    if(globe){
+      var r=model.geometryRadius,side=model.ObjSidePos[objIx]/r;
+      var sideOnDisk=(r-model.hDip)*Math.tan(side);
+      if(model.rDisk>Math.abs(sideOnDisk)){
+        var ratio=Math.sqrt(model.rDisk*model.rDisk-sideOnDisk*sideOnDisk)/r;
+        aClip=Math.asin(Math.min(1,ratio));
+      }
+    }
+    var behind=[],before=[];
+    entries.forEach(function(entry){
+      (globe&&entry.params.longitude>aClip?behind:before).push(entry);
+    });
+    return {behind:behind,before:before,cutoffAngle:aClip,
+      // The legacy masking circle is a renderer operation, not a tower.
+      requiresHorizonMask:globe&&behind.length>0,
+      total:entries.length};
+  }
+  function createHorizonPartitionedTowerScenes(model,objIx,globe){
+    var partition=towerHorizonPartition(model,objIx,globe);
+    function scene(entries,layer){
+      var primitives=[];
+      entries.forEach(function(entry){entry.scene.primitives.forEach(function(p){primitives.push(p);});});
+      return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
+        objectIndex:objIx,globe:!!globe,horizonPartitioned:true,layer:layer,
+        towerCount:entries.length});
+    }
+    return {behind:scene(partition.behind,'behind'),before:scene(partition.before,'before'),
+      cutoffAngle:partition.cutoffAngle,requiresHorizonMask:partition.requiresHorizonMask,
+      total:partition.total};
+  }
+  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes};
 }));
