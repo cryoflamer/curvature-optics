@@ -80,6 +80,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="LegacyGeometryExtractor.js"></script>
 <script src="LegacyGeometryFrameVerification.js"></script>
 <script src="CurvatureScenePreview.js"></script>
+<script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
 <script src="LegacySceneAudit.js"></script>
 <script src="LegacyReplayProbe.js"></script>
@@ -103,6 +104,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <div style="padding:0.5em 1em;">
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
     <button type="button" id="LegacyGeometryAnalyzeButton">Analyze geometry extraction</button>
+    <button type="button" id="GeometryDiagnosticsExportButton">Export geometry diagnostics (ZIP)</button>
     <button type="button" id="LegacyGeometryPreviewButton">Preview extracted scene (orthographic)</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
     <label><input type="checkbox" id="LegacyFrameCompareCanvas"> Compare detached replay canvas (experimental)</label>
@@ -1306,6 +1308,7 @@ var graph = NewGraphX3D( {
   AutoScalePix: true
 } );
 
+var geometryDiagnosticsExportRequested = false;
 var legacyGeometryPreviewRequested = false;
 var lastGeometryPreviewScene = null;
 function updateLegacyGeometryPreview() {
@@ -1316,6 +1319,13 @@ function updateLegacyGeometryPreview() {
   document.getElementById('LegacyGeometryPreviewStatus').textContent =
     result.primitives.length + ' world-space primitives (' + view.toUpperCase() + ' wireframe)';
 }
+document.getElementById('GeometryDiagnosticsExportButton').addEventListener('click',function(){
+  geometryDiagnosticsExportRequested=true;
+  legacyGeometryAnalyzeRequested=true;
+  legacyFrameAuditRequested=true;
+  document.getElementById('LegacyFrameCaptureStatus').textContent='Capturing geometry diagnostics ZIP...';
+  graph.Redraw();
+});
 document.getElementById('LegacyGeometryPreviewAxes').addEventListener('change', updateLegacyGeometryPreview);
 document.getElementById('LegacyGeometryPreviewButton').addEventListener('click', function () {
   legacyGeometryPreviewRequested = true;
@@ -1380,6 +1390,8 @@ function DrawModelWithOptionalAudit(g) {
         updateLegacyGeometryPreview();
       }
     }
+    var exportGeometryZip=geometryDiagnosticsExportRequested;
+    geometryDiagnosticsExportRequested=false;
     var geometryVerification = geometryExtraction && window.LegacyGeometryFrameVerification &&
       window.JsgMat3 && window.JsgPlane ?
       window.LegacyGeometryFrameVerification.verify(sceneFrame,geometryExtraction.scene,
@@ -1494,6 +1506,32 @@ function DrawModelWithOptionalAudit(g) {
     else if (status) status.textContent = 'Captured ' + result.summary.count +
       ' commands; unsupported arguments: ' + result.trace.unsupported.length +
       '. Downloading diagnostic report.';
+    if(exportGeometryZip){
+      if(!geometryExtraction||!window.CurvatureScenePreview||!window.GeometryDiagnosticsZip)
+        throw new Error('Geometry diagnostics dependencies unavailable');
+      var scene=geometryExtraction.scene,preview=window.CurvatureScenePreview;
+      var images=[],views=['xy','xz','yz','xz-exaggerated','yz-exaggerated'];
+      var scales={};
+      views.forEach(function(name){
+        var view=name.split('-')[0],factor=name.indexOf('exaggerated')>=0?preview.autoVerticalFactor(scene,view):1;
+        var canvas=document.createElement('canvas');canvas.width=900;canvas.height=500;
+        preview.draw(canvas,scene,view,factor);
+        var encoded=canvas.toDataURL('image/png').split(',')[1];
+        var binary=atob(encoded),data=new Uint8Array(binary.length);
+        for(var i=0;i<binary.length;i++)data[i]=binary.charCodeAt(i);
+        images.push({name:name+'.png',data:data});scales[name]=factor;
+      });
+      var diagnostics={schema:'geometry-diagnostics-v1',audit:report,bounds:preview.bounds3D(scene),
+        primitiveTypes:scene.primitives.reduce(function(a,p){a[p.type]=(a[p.type]||0)+1;return a;},{}),
+        verticalFactors:scales,notes:['Single captured SceneFrame for all views',
+          'Exaggerated views multiply world Z by the reported factor before orthographic projection',
+          'Images are diagnostic wireframes, not equivalent to legacy camera rendering']};
+      var zip=window.GeometryDiagnosticsZip.build([{name:'geometry-audit.json',data:JSON.stringify(diagnostics,null,2)}].concat(images));
+      var zipUrl=URL.createObjectURL(zip),zipLink=document.createElement('a');
+      zipLink.href=zipUrl;zipLink.download='geometry-diagnostics.zip';document.body.appendChild(zipLink);
+      zipLink.click();zipLink.remove();setTimeout(function(){URL.revokeObjectURL(zipUrl);},1000);
+      if(status)status.textContent='Geometry diagnostics ZIP exported (5 PNGs and JSON).';
+    } else {
     var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
@@ -1503,6 +1541,7 @@ function DrawModelWithOptionalAudit(g) {
     link.click();
     document.body.removeChild(link);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
     if (canvasImages) {
       Object.keys(canvasImages).forEach(function (name) {
         var pngLink = document.createElement('a');

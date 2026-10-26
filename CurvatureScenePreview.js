@@ -8,7 +8,9 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var AXES={xy:[0,1],xz:[0,2],yz:[1,2]};
-  function project(scene,view,width,height,padding){
+  function project(scene,view,width,height,padding,verticalFactor){
+    verticalFactor=verticalFactor===undefined?1:verticalFactor;
+    if(!Number.isFinite(verticalFactor)||verticalFactor<=0)throw new RangeError('Invalid vertical factor');
     if(!scene||!Array.isArray(scene.primitives))throw new TypeError('Scene primitives required');
     if(!Object.prototype.hasOwnProperty.call(AXES,view))throw new TypeError('Unknown orthographic view');
     if(!(width>0&&height>0))throw new RangeError('Positive dimensions required');
@@ -18,7 +20,7 @@
       if(p.type!=='line'&&p.type!=='polygon')throw new TypeError('Unknown primitive');
       return {type:p.type,commandIndex:p.commandIndex,points:p.points.map(function(v){
         if(!Array.isArray(v)||v.length!==3||!v.every(Number.isFinite))throw new TypeError('Invalid world point');
-        return [v[axes[0]],v[axes[1]]];
+        return [v[axes[0]],v[axes[1]]*verticalFactor];
       })};
     });
     var all=raw.flatMap(function(p){return p.points;});
@@ -33,11 +35,11 @@
         return [width/2+(v[0]-midX)*scale,height/2-(v[1]-midY)*scale];
       })};})};
   }
-  function draw(canvas,scene,view){
+  function draw(canvas,scene,view,verticalFactor){
     if(!canvas||typeof canvas.getContext!=='function')throw new TypeError('Canvas required');
     var ctx=canvas.getContext('2d');
     if(!ctx)throw new Error('2D context unavailable');
-    var result=project(scene,view,canvas.width,canvas.height);
+    var result=project(scene,view,canvas.width,canvas.height,undefined,verticalFactor);
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.strokeStyle='#333';ctx.lineWidth=0.8;
@@ -50,5 +52,19 @@
     });
     return result;
   }
-  return {project:project,draw:draw};
+  function bounds3D(scene){
+    var b={x:[Infinity,-Infinity],y:[Infinity,-Infinity],z:[Infinity,-Infinity]};
+    scene.primitives.forEach(function(p){p.points.forEach(function(v){
+      if(!Array.isArray(v)||v.length!==3||!v.every(Number.isFinite))throw new TypeError('Invalid world point');
+      ['x','y','z'].forEach(function(k,i){b[k][0]=Math.min(b[k][0],v[i]);b[k][1]=Math.max(b[k][1],v[i]);});
+    });});
+    return scene.primitives.length?b:null;
+  }
+  function autoVerticalFactor(scene,view){
+    var b=bounds3D(scene);if(!b)return 1;
+    var horizontal=view==='xz'?'x':'y';
+    var dx=b[horizontal][1]-b[horizontal][0],dz=b.z[1]-b.z[0];
+    return dx>0&&dz>0?Math.max(1,Math.min(1000000,dx/dz)):1;
+  }
+  return {project:project,draw:draw,bounds3D:bounds3D,autoVerticalFactor:autoVerticalFactor};
 }));
