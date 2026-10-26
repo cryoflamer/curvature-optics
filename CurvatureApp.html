@@ -87,6 +87,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureFilledPreview.js"></script>
 <script src="CurvatureZBufferPreview.js"></script>
 <script src="CurvatureEarClip.js"></script>
+<script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
 <script src="GeometryDiagnosticsZip.js"></script>
 <script src="SceneFrameRenderer.js"></script>
@@ -1564,6 +1565,7 @@ function DrawModelWithOptionalAudit(g) {
       earResult.statistics.topologyStages={failedPolygons:topologyFailures.length,reportedFailureExamples:topologyFailures.slice(0,25),
         stageDefinition:'cameraXY is camera-plane projection before near clipping; screen stages use perspective division; screen-before-clipping is unavailable when points are behind near plane',
         failureReasonSamplesTruncated:topologyFailures.length>25};
+      earResult.statistics.worldTopology=window.CurvatureWorldTopologyAudit.summarize(scene,topologyFailures);
       var earBinary=atob(earCanvas.toDataURL('image/png').split(',')[1]);
       var earBytes=new Uint8Array(earBinary.length);
       for(var e=0;e<earBinary.length;e++)earBytes[e]=earBinary.charCodeAt(e);
