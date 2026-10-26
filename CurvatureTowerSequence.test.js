@@ -37,10 +37,10 @@ for(const globe of [true,false])for(const {sideType,sizeType} of cases){
     assert.ok(Math.abs(p.horizontalScale-e.plane.x[0])<1e-12);
     assert.ok(Math.abs(p.verticalScale-e.plane.y[2])<1e-12);
     assert.ok(Math.abs(p.planeOffset-e.plane.o[0])<1e-12);
-    assert.equal(entry.scene.primitives.length,11);
+    assert.equal(entry.scene.primitives.length,4);
   });
   const scene=engine.createTowerSequenceScene(m,0,globe);
-  assert.equal(scene.primitives.length,actual.length*11);
+  assert.equal(scene.primitives.length,actual.length*4);
   assert.equal(scene.metadata.horizonPartitioned,false);
   assert.deepEqual(scene.primitives[0].points,actual[0].scene.primitives[0].points);
 }
@@ -50,7 +50,7 @@ const base={geometryRadius:6371000,Height:5,ObjType:[3,3],NObjects:[0,0],
 assert.equal(engine.towerSequence(base,0,true).length,0);
 base.NObjects[0]=3;
 assert.equal(engine.towerSequence(base,0,true).length,3);
-assert.throws(()=>engine.towerSequence({...base,ObjType:[4,3]},0,true),/Only type-2/);
+assert.throws(()=>engine.towerSequence({...base,ObjType:[4,3]},0,true),/Only transmission towers/);
 assert.throws(()=>engine.towerSequence({...base,ObjDeltaDist:[0,100]},0,true),/Positive spacing/);
 assert.throws(()=>engine.towerSequence({...base,NObjects:[501,0]},0,true),/Invalid tower count/);
 console.log('CurvatureTowerSequence: passed');

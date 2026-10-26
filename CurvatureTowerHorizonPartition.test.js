@@ -30,7 +30,7 @@ for(const globe of [true,false])for(const side of [0,100,10000])for(const disk o
   assert.equal(result.requiresHorizonMask,globe&&drawn.behind.length>0);
   const scenes=engine.createHorizonPartitionedTowerScenes(model,0,globe);
   for(const kind of ['behind','before']){
-    assert.equal(scenes[kind].primitives.length,result[kind].length*11);
+    assert.equal(scenes[kind].primitives.length,result[kind].length*4);
     assert.equal(scenes[kind].metadata.horizonPartitioned,true);
   }
 }

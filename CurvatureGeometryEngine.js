@@ -1,6 +1,6 @@
-/* Phase 2: pure, opt-in world-space geometry for a type-2 transmission tower.
+/* Pure, opt-in world-space geometry for both transmission tower variants.
  * No GraphX3DX, DOM, canvas or legacy command recording is used here.
- * Other object types remain on the legacy path until independently ported.
+ * Non-tower object types remain on the legacy path until independently ported.
  */
 (function(root,factory){
   var api=factory(root.CurvatureSceneContract || (typeof require==='function'?require('./CurvatureSceneContract'):null));
@@ -27,6 +27,30 @@
     var foundation=shapes[7];
     primitives.push({type:'polygon',points:foundation[0].map(function(x,i){return [x,foundation[1][i]];}),mode:3,style:{fill:'#a38d60'}});
     return primitives;
+  }
+  // The first object bank uses a distinct T-Tower silhouette. Preserve
+  // DrawShape's polygon order and closure, including the foundation fill.
+  function localTowerType1(){
+    var polygons=[
+      [[.09,-.12,-.06,.14,.12,.12,.16,.16,.14,.06,-.06,-.14,-.12,-.12,-.16,-.16,-.14,.06,.12,-.09],
+       [.31,.14,.48,.82,.89,.93,1,.89,.82,.48,.48,.82,.89,.93,1,.89,.82,.48,.14,.31]],
+      [[.06,-.09,.09,-.06],[.48,.31,.31,.48]],
+      [[-.28,.28,.16,-.16,-.28],[.89,.89,.93,.93,.89]],
+      [[-.145,-.095,-.095,.095,.095,.145,.145,-.145,-.145],[0,0,.105,.105,0,0,.137,.137,0]]
+    ];
+    return polygons.map(function(v,i){
+      var p={type:'polygon',points:v[0].map(function(x,j){return [x,v[1][j]];}),mode:i===3?3:1};
+      if(i===3)p.style={fill:'#a38d60'};
+      return p;
+    });
+  }
+  function localTower(objIx){
+    if(objIx!==0&&objIx!==1)throw new RangeError('Tower bank must be 0 or 1');
+    return objIx===0?localTowerType1():localTowerType2();
+  }
+  function createPlacedTowerScene(params,objIx,metadata){
+    return contract.createScene('legacy',placeOnPlane(localTower(objIx),towerPlacement(params)),
+      Object.assign({generator:'CurvatureGeometryEngine',objectType:3,towerVariant:objIx+1},metadata||{}));
   }
   // Explicit plane basis: pos + u*xAxis + v*yAxis. The axes carry size.
   // This keeps placement independent of GraphX3DX's mutable SetPlane/SetTrans.
@@ -83,7 +107,7 @@
     });
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
-    if(model.ObjType[objIx]!==3)throw new RangeError('Only type-2 transmission towers (ObjType 3) are supported');
+    if(model.ObjType[objIx]!==3)throw new RangeError('Only transmission towers (ObjType 3) are supported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -116,7 +140,7 @@
           longitude:lng,latitude:lat,globe:!!globe,verticalScale:size,horizontalScale:size,
           // Legacy SetPlane uses [side,0,0] for cosine/sine side modes.
           planeOffset:(sideType===3||sideType===4)?side:0};
-        var scene=createPlacedTowerType2Scene(params,{objectIndex:objIx,sequenceIndex:drawn,
+        var scene=createPlacedTowerScene(params,objIx,{objectIndex:objIx,sequenceIndex:drawn,
           column:sideType===1?col+1:0,longitude:lng,latitude:lat});
         entries.push({params:params,scene:scene});
       });
@@ -226,5 +250,5 @@
       before:towers.before,cutoffAngle:towers.cutoffAngle,
       requiresHorizonMask:towers.requiresHorizonMask};
   }
-  return {localTowerType2:localTowerType2,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
