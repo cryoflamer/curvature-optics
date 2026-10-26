@@ -99,6 +99,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureEarClip.js"></script>
 <script src="CurvatureCompositionCapture.js"></script>
 <script src="CurvatureDiagnosticPresets.js"></script>
+<script src="CurvatureControlledLegacyCapture.js"></script>
 <script src="CurvatureWorldTopologyAudit.js"></script>
 <script src="CurvatureContourDiagnostics.js"></script>
 <script src="CurvatureCameraVerification.js"></script>
@@ -1742,24 +1743,69 @@ function DrawModelWithOptionalAudit(g) {
           referenceScope:'complete legacy DrawModel frame; includes grids, text and other graphics',
           candidateScope:'only one type-2 tower series and polygonal horizon; comparison metrics do NOT establish full-scene parity'};
       } catch(compositionError){independentCompositionComparison.reason=compositionError.message;}
-      // Controlled geometry-only snapshots; no changes to CurveApp or the UI.
-      // These are NOT matched legacy comparisons: the legacy frame belongs to
-      // the user's current configuration, not to the isolated presets.
+      // Four controlled comparisons. The real legacy DrawModel is rendered
+      // synchronously against a cloned model, then the live model and Canvas
+      // are restored before export finishes. No UI controls are updated.
       var controlledPresets=[];
-      if(window.CurvatureDiagnosticPresets&&window.CurvatureCompositionComparison&&window.CurvatureZBufferPreview&&window.CurvatureLegacyOrderPreview&&window.CurvatureEarClip){
+      if(window.CurvatureDiagnosticPresets&&window.CurvatureControlledLegacyCapture&&
+         window.CurvatureCompositionComparison&&window.CurvatureZBufferPreview&&
+         window.CurvatureLegacyOrderPreview&&window.CurvatureEarClip&&captureProbe){
         window.CurvatureDiagnosticPresets.scenarios(CurveApp).forEach(function(preset){
-          var entry={id:preset.id,parameters:preset.parameters,referenceAvailable:false,
-            reason:'No independent legacy DrawModel capture exists for this isolated preset'};
+          var entry={id:preset.id,parameters:preset.parameters,referenceAvailable:false};
           try {
             var prepared=window.CurvatureCompositionComparison.prepare(preset.model,0,preset.globe);
             var presetCanvas=document.createElement('canvas');presetCanvas.width=cameraWidth;presetCanvas.height=cameraHeight;
             var triangles=window.CurvatureZBufferPreview.build(prepared.scene,cameraSnapshot,cameraWidth,cameraHeight,window.CurvatureEarClip.triangulate).triangles;
             window.CurvatureLegacyOrderPreview.draw(presetCanvas,prepared.scene,cameraSnapshot,triangles);
-            var png=atob(presetCanvas.toDataURL('image/png').split(',')[1]);var bytes=new Uint8Array(png.length);
-            for(var bi=0;bi<png.length;bi++)bytes[bi]=png.charCodeAt(bi);
+            var candidatePixels=presetCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+            function addPresetPng(name,canvas){
+              var png=atob(canvas.toDataURL('image/png').split(',')[1]),bytes=new Uint8Array(png.length);
+              for(var bi=0;bi<png.length;bi++)bytes[bi]=png.charCodeAt(bi);
+              images.push({name:name,data:bytes});
+            }
+            function addPresetRgba(name,rgba){
+              var c=document.createElement('canvas');c.width=cameraWidth;c.height=cameraHeight;
+              var ctx=c.getContext('2d'),im=ctx.createImageData(cameraWidth,cameraHeight);
+              im.data.set(rgba);ctx.putImageData(im,0,0);addPresetPng(name,c);
+            }
             entry.image='controlled-'+preset.id+'.png';entry.primitiveCount=prepared.scene.primitives.length;
-            entry.cameraScope='current viewport/camera (not a controlled legacy reference)';
-            images.push({name:entry.image,data:bytes});
+            addPresetPng(entry.image,presetCanvas);
+            // The cloned model has its own mutable arrays and derived fields.
+            // Disable BaroModel because its Update() closes over the live model.
+            var liveModel=CurveApp;
+            var controlledModel=preset.model;
+            Object.setPrototypeOf(controlledModel,Object.getPrototypeOf(liveModel));
+            controlledModel.BaroModel=null;
+            controlledModel.Update();
+            var referenceCanvas=window.CurvatureControlledLegacyCapture.capture({
+              model:controlledModel,
+              install:function(model){CurveApp=model;},
+              draw:function(){
+                g.Context2D.clearRect(0,0,g.Canvas.width,g.Canvas.height);
+                DrawModel(g);
+              },
+              snapshot:function(){return captureProbe.snapshotCanvas(g.Canvas);},
+              restore:function(){
+                CurveApp=liveModel;
+                g.Context2D.clearRect(0,0,g.Canvas.width,g.Canvas.height);
+                DrawModel(g);
+              }
+            });
+            entry.referenceImage='controlled-'+preset.id+'-legacy.png';
+            addPresetPng(entry.referenceImage,referenceCanvas);
+            var referencePixels=referenceCanvas.getContext('2d').getImageData(0,0,cameraWidth,cameraHeight).data;
+            var comparison=window.CurvatureCompositionComparison.compare(
+              {width:cameraWidth,height:cameraHeight,camera:cameraSnapshot,rgba:referencePixels},
+              {width:cameraWidth,height:cameraHeight,camera:cameraSnapshot,rgba:candidatePixels});
+            entry.referenceAvailable=true;
+            entry.foreground=comparison.foreground;entry.edges=comparison.edges;entry.rgba=comparison.rgba;
+            entry.foregroundDifferenceImage='controlled-'+preset.id+'-foreground-diff.png';
+            entry.edgesDifferenceImage='controlled-'+preset.id+'-edges-diff.png';
+            addPresetRgba(entry.foregroundDifferenceImage,comparison.differenceImages.foreground);
+            addPresetRgba(entry.edgesDifferenceImage,comparison.differenceImages.edges);
+            entry.referenceScope='complete legacy DrawModel scene, with auxiliary geometry';
+            entry.candidateScope='partial independent tower/horizon scene';
+            entry.caveats=comparison.caveats;
           }catch(presetError){entry.error=String(presetError);}
           controlledPresets.push(entry);
         });

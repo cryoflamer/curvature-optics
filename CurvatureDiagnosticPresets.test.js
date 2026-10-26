@@ -19,5 +19,7 @@ test('export wires preset images and explicitly labels missing legacy references
  assert.match(html,/CurvatureDiagnosticPresets\.js/);
  assert.match(html,/controlledPresets:controlledPresets/);
  assert.match(html,/referenceAvailable:false/);
+ assert.match(html,/CurvatureControlledLegacyCapture\.capture/);
+ assert.match(html,/controlled-.*-legacy\.png/);
  assert.match(html,/controlled-.*preset\.id/);
 });

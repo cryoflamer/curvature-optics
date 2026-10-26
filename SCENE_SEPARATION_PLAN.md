@@ -336,3 +336,12 @@ reference**; `controlledPresets[].referenceAvailable` is false and no IoU/F1 is
 reported for them. Capturing a truly matched legacy frame for each isolated
 preset remains necessary before numerical cross-pipeline parity can be claimed.
 The preset camera is currently inherited from the live viewport, not fixed.
+
+### Phase 76 — controlled legacy references
+
+Four diagnostic presets now synchronously invoke the genuine legacy `DrawModel`
+with a cloned model and export matching reference/difference images. The live
+model binding and Canvas are restored in a `finally` block; controls are never
+updated. Reference frames contain auxiliary graphics absent from the partial
+independent scene; whole-frame metrics must not be interpreted as geometry parity.
+The browser export remains the end-to-end validation step.
