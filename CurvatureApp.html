@@ -76,6 +76,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="GraphX3DX.js"></script>
 <script src="LegacySceneAdapter.js"></script>
 <script src="SceneFrame.js"></script>
+<script src="CurvatureSceneContract.js"></script>
+<script src="LegacyGeometryExtractor.js"></script>
 <script src="SceneFrameRenderer.js"></script>
 <script src="LegacySceneAudit.js"></script>
 <script src="LegacyReplayProbe.js"></script>
@@ -98,6 +100,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <summary style="cursor:pointer;user-select:none;">Advanced diagnostics (optics tests)</summary>
   <div style="padding:0.5em 1em;">
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
+    <button type="button" id="LegacyGeometryAnalyzeButton">Analyze geometry extraction</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
     <label><input type="checkbox" id="LegacyFrameCompareCanvas"> Compare detached replay canvas (experimental)</label>
     <label><input type="checkbox" id="LegacyFrameBootstrapSensitivity"> Probe hidden bootstrap state (extra detached replay)</label>
@@ -1294,6 +1297,13 @@ var graph = NewGraphX3D( {
   AutoScalePix: true
 } );
 
+document.getElementById('LegacyGeometryAnalyzeButton').addEventListener('click', function () {
+  legacyGeometryAnalyzeRequested = true;
+  legacyFrameAuditRequested = true;
+  document.getElementById('LegacyFrameCaptureStatus').textContent = 'Capturing geometry coverage...';
+  graph.Redraw();
+});
+
 document.getElementById('LegacyFrameCaptureButton').addEventListener('click', function () {
   var status = document.getElementById('LegacyFrameCaptureStatus');
   legacyFrameAuditRequested = true;
@@ -1304,6 +1314,7 @@ document.getElementById('LegacyFrameCaptureButton').addEventListener('click', fu
 // Phase 4: an explicitly requested ONE-SHOT pass-through capture of a real
 // graph DrawFunc invocation. The normal DrawModel remains the only renderer.
 var legacyFrameAuditRequested = false;
+var legacyGeometryAnalyzeRequested = false;
 var legacyFrameAuditInProgress = false;
 var previousLegacyFrameCapture = null;
 function DrawModelWithOptionalAudit(g) {
@@ -1330,6 +1341,10 @@ function DrawModelWithOptionalAudit(g) {
     var sceneFrame = window.SceneFrame && result.trace.complete ?
       window.SceneFrame.fromTrace(result.trace, {
         MaxCurveSegments:g.MaxCurveSegments,AngleMeasure:g.AngleMeasure}) : null;
+    var analyzeGeometry = legacyGeometryAnalyzeRequested;
+    legacyGeometryAnalyzeRequested = false;
+    var geometryExtraction = analyzeGeometry && sceneFrame && window.LegacyGeometryExtractor ?
+      window.LegacyGeometryExtractor.extract(sceneFrame) : null;
     // Isolated dispatch preflight does not assert visual equivalence.
     var preflight = window.LegacyReplayProbe && window.LegacyReplayProbe.preflight(
       sceneFrame || result.trace, window.JsgPolygon);
@@ -1405,6 +1420,9 @@ function DrawModelWithOptionalAudit(g) {
     // Counts are diagnostic; a trace is not a validated replayable scene.
     var report = {
       schema: 'legacy-frame-audit-v2',
+      geometryExtraction: geometryExtraction ? {coverage:geometryExtraction.coverage,
+        sceneMetadata:geometryExtraction.scene.metadata,
+        primitiveCount:geometryExtraction.scene.primitives.length} : null,
       unsupported: result.trace.unsupported,
       captureComplete: result.trace.complete,
       replayVerified: false,
@@ -1429,7 +1447,11 @@ function DrawModelWithOptionalAudit(g) {
     // Retain the trace for debugging, but only download it with explicit opt-in.
     window.LastLegacyFrameTrace = result.trace;
     window.LastSceneFrame = sceneFrame;
-    if (status) status.textContent = 'Captured ' + result.summary.count +
+    if (status && geometryExtraction) status.textContent = 'Geometry extraction: ' +
+      geometryExtraction.coverage.supported + '/' + geometryExtraction.coverage.total +
+      ' commands (' + (100 * geometryExtraction.coverage.supported / Math.max(1,geometryExtraction.coverage.total)).toFixed(2) +
+      '%); partial scene, not render coverage. Downloading report.';
+    else if (status) status.textContent = 'Captured ' + result.summary.count +
       ' commands; unsupported arguments: ' + result.trace.unsupported.length +
       '. Downloading diagnostic report.';
     var blob = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
