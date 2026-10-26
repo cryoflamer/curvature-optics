@@ -1631,9 +1631,16 @@ function DrawModelWithOptionalAudit(g) {
             var diffBinary=atob(diffCanvas.toDataURL('image/png').split(',')[1]),diffBytes=new Uint8Array(diffBinary.length);
             for(var di=0;di<diffBinary.length;di++)diffBytes[di]=diffBinary.charCodeAt(di);
             images.push({name:'camera-foreground-diff.png',data:diffBytes});
+            var edgeComparison=window.CurvaturePixelComparison.compareEdges(legacyPixels,independentPixels,combinedCanvas.width,combinedCanvas.height);
+            var edgeCanvas=document.createElement('canvas');edgeCanvas.width=combinedCanvas.width;edgeCanvas.height=combinedCanvas.height;
+            var edgeContext=edgeCanvas.getContext('2d'),edgeImage=edgeContext.createImageData(edgeCanvas.width,edgeCanvas.height);
+            edgeImage.data.set(edgeComparison.rgba);edgeContext.putImageData(edgeImage,0,0);
+            var edgeBinary=atob(edgeCanvas.toDataURL('image/png').split(',')[1]),edgeBytes=new Uint8Array(edgeBinary.length);
+            for(var ei=0;ei<edgeBinary.length;ei++)edgeBytes[ei]=edgeBinary.charCodeAt(ei);
+            images.push({name:'camera-edge-diff.png',data:edgeBytes});
             pixelComparison=Object.assign({available:true,image:'camera-foreground-diff.png',
               originalImage:'camera-original.png',originalSize:[captureEndPixels.width,captureEndPixels.height],
-              independentSize:[combinedCanvas.width,combinedCanvas.height]},comparison.statistics);
+              independentSize:[combinedCanvas.width,combinedCanvas.height],edgeImage:'camera-edge-diff.png',edgeComparison:edgeComparison.statistics},comparison.statistics);
           }catch(pixelError){pixelComparison={available:false,reason:String(pixelError)};}
         }
       }
