@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
 const fs=require('node:fs');
-const html=fs.readFileSync(require('node:path').join(__dirname,'../CurvatureApp.html'),'latin1');
+const html=require('./helpers/readCurvatureSources')();
 test('presentation and region dependencies load before the full capture bridge',()=>{
  const names=['src/renderers/CurvatureCanvasProjection.js','src/renderers/CurvatureStrokePreview.js',
   'src/scene/CurvatureFullSceneDecorations.js','src/diagnostics/CurvatureRegionComparison.js','src/diagnostics/CurvatureCompositionCapture.js'];

@@ -18,4 +18,4 @@ test('camera build triangulates a visible polygon and clips near plane',()=>{
  const r=z.build({primitives:[polygon(1,[[-1,10,-1],[1,10,-1],[1,10,1],[-1,10,1]]),polygon(2,[[-1,-10,0],[1,-10,0],[0,-10,1]])]},camera,100,100);
  assert.equal(r.statistics.triangles,2);assert.equal(r.statistics.rejectedNearPlane,1);
 });
-test('diagnostic export includes z-buffer PNG and statistics',()=>{const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');assert.match(html,/CurvatureZBufferPreview\.js/);assert.match(html,/camera-zbuffer\.png/);assert.match(html,/cameraZBuffer:zResult\.statistics/);});
+test('diagnostic export includes z-buffer PNG and statistics',()=>{const html=require('./helpers/readCurvatureSources')();assert.match(html,/CurvatureZBufferPreview\.js/);assert.match(html,/camera-zbuffer\.png/);assert.match(html,/cameraZBuffer:zResult\.statistics/);});

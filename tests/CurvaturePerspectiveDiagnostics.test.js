@@ -23,7 +23,7 @@ test('ZIP camera diagnostics carry actual projection clipping counters',()=>{
  assert.ok(report.limitations.every(x=>!x.includes('No viewport clipping')));
 });
 test('HTML ZIP exporter serializes the summary of the same drawn perspective result',()=>{
- const html=fs.readFileSync(path.join(__dirname,'../CurvatureApp.html'),'utf8');
+ const html=require('./helpers/readCurvatureSources')();
  assert.match(html,/<script src="src\/diagnostics\/CurvaturePerspectiveDiagnostics\.js"><\/script>/);
  assert.match(html,/cameraPerspective:window\.CurvaturePerspectiveDiagnostics\.summarize\(perspectiveResult,cameraSnapshot\)/);
 });

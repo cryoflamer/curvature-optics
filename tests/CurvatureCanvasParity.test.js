@@ -20,6 +20,6 @@ test('RGBA diagnostic distinguishes alpha, raw RGB and composited RGB',()=>{
  assert.equal(r.exactRgbaPixels,1);assert.equal(r.exactAlphaPixels,1);assert.equal(r.compositedWhiteRgbMae,0);
 });
 test('diagnostic export records both RGBA comparisons',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','latin1');
+ const html=require('./helpers/readCurvatureSources')();
  assert.match(html,/styledRgbaComparison:styledRgba/);assert.match(html,/legacyOrderRgbaComparison:legacyOrderRgba/);
 });

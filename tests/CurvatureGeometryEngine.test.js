@@ -9,7 +9,7 @@ assert.equal(shapes.filter(p=>p.type==='polygon').length,8);
 assert.equal(shapes.filter(p=>p.type==='line').length,3);
 // Reference DrawShape is executed with a minimal fake graph; no browser renderer.
 // The reference is only used in the TEST, not by the new generator.
-const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');
+const html=require('./helpers/readCurvatureSources')();
 const start=html.indexOf('function DrawShape( objIx, g, m ) {');
 const end=html.indexOf('\nfunction ',start+10);
 assert.ok(start>=0&&end>start);

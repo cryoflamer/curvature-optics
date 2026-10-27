@@ -26,7 +26,7 @@ test('stroke rasterizer depth-tests against existing fill',()=>{
  assert.ok(strokes.rasterize(line,10,10).visiblePixels>0);
 });
 test('diagnostics export includes separate strokes and combined previews',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');
+ const html=require('./helpers/readCurvatureSources')();
  for(const token of ['CurvatureStrokePreview.js','camera-strokes.png','camera-combined.png','cameraStrokes:strokeResult.statistics','cameraCombined:combinedResult.statistics'])assert.ok(html.includes(token));
 });
 

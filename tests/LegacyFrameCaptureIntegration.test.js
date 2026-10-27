@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const html=fs.readFileSync(require('node:path').join(__dirname,'../CurvatureApp.html'),'latin1');
+const html=require('./helpers/readCurvatureSources')();
 assert.match(html,/DrawFunc:\s*DrawModelWithOptionalAudit/);
 assert.match(html,/function DrawModelWithOptionalAudit\(g\)/);
 assert.match(html,/if \(!legacyFrameAuditRequested \|\| legacyFrameAuditInProgress/);

@@ -15,7 +15,7 @@ test('eligible type-2 series are reported without changing model',()=>{
  assert.deepEqual(p.eligible({NObjects:[2,3],ObjType:[1,2]}),[]);
 });
 test('export wires preset images and explicitly labels missing legacy references',()=>{
- const fs=require('node:fs');const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');
+ const fs=require('node:fs');const html=require('./helpers/readCurvatureSources')();
  assert.match(html,/CurvatureDiagnosticPresets\.js/);
  assert.match(html,/controlledPresets:controlledPresets/);
  assert.match(html,/referenceAvailable:false/);

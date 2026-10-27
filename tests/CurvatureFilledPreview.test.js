@@ -23,6 +23,6 @@ test('farther polygons precede nearer polygons',()=>{
  assert.deepEqual(r.polygons.map(p=>p.commandIndex),[2,1]);
 });
 test('ZIP export includes filled PNG and its diagnostic counters',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');
+ const html=require('./helpers/readCurvatureSources')();
  assert.match(html,/CurvatureFilledPreview\.js/);assert.match(html,/camera-filled\.png/);assert.match(html,/cameraFilled:filledResult\.statistics/);
 });

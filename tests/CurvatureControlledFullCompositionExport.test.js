@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const html=fs.readFileSync(require('node:path').join(__dirname,'../CurvatureApp.html'),'latin1');
+const html=require('./helpers/readCurvatureSources')();
 test('one export iterates the built-in Globe and Flat controlled presets',()=>{
  assert.match(html,/CurvatureDiagnosticPresets\.scenarios\(CurveApp\)\.forEach/);
  assert.match(html,/compositionScope:'full',width:cameraWidth,height:cameraHeight/);

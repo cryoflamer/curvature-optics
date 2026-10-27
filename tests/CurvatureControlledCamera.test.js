@@ -29,7 +29,7 @@ test('camera comparison verifies nested viewport properties instead of discardin
  assert.throws(()=>comparison.compare(ref,candidate),/Camera mismatch/);
 });
 test('actual legacy DrawModel has a separate controlled towers-only path',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','latin1');
+ const html=require('./helpers/readCurvatureSources')();
  const start=html.indexOf('function DrawModel( g ) {');
  const end=html.indexOf('\nfunction ',start+10);
  assert.ok(start>=0&&end>start);
@@ -49,7 +49,7 @@ test('actual legacy DrawModel has a separate controlled towers-only path',()=>{
  assert.throws(()=>context.draw(graph,{towerOnlyIndex:0}),/Objects 2/);
 });
 test('controlled export validates independently sampled cameras and isolated comparisons',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','latin1');
+ const html=require('./helpers/readCurvatureSources')();
  assert.match(html,/controlledModel\.Update\(\);[\s\S]*CurvatureControlledLegacyCapture\.capture/);
  assert.match(html,/legacyFullCamera=cameraFromGraph\(\)/);
  assert.match(html,/legacyTowerCamera=cameraFromGraph\(\)/);

@@ -65,7 +65,7 @@ test('styled depth preview resolves recorded CSS colors and exposes diagnostics'
  assert.deepEqual(styled.color('#ffa'),[255,255,170,1]);
  assert.deepEqual(styled.color('#666'),[102,102,102,1]);
  assert.deepEqual(styled.color('white'),[255,255,255,1]);
- const fs=require('node:fs'),html=fs.readFileSync(__dirname+'/../CurvatureApp.html','latin1');
+ const fs=require('node:fs'),html=require('./helpers/readCurvatureSources')();
  assert.ok(html.includes('CurvatureStyledCombinedPreview.js'));
  assert.ok(html.includes('camera-styled-combined.png'));
  assert.ok(html.includes('styledEdgeComparison'));

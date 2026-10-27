@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','latin1');
+const html=require('./helpers/readCurvatureSources')();
 test('geometry diagnostics capture original canvas independently of replay checkbox',()=>{
   assert.match(html,/\(compareCanvas \|\| geometryDiagnosticsExportRequested\) && captureProbe/);
   assert.match(html,/captureProbe\.snapshotCanvas\(g\.Canvas\)/);

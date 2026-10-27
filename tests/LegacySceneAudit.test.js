@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const audit = require('../src/legacy/LegacySceneAudit');
 const adapter = require('../src/legacy/LegacySceneAdapter');
 const fs = require('node:fs');
-const html = fs.readFileSync(require('node:path').join(__dirname,'../CurvatureApp.html'),'latin1');
+const html = require('./helpers/readCurvatureSources')();
 const report = audit.inspectSource(html);
 assert(report.used.includes('PolygonOnPlane'));
 assert(report.captured.includes('PolygonOnPlane'));

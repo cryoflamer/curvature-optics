@@ -15,5 +15,5 @@ test('build exposes pre- and post-near-clipping stages without altering geometry
  assert.equal(entries.length,1);assert.equal(entries[0].commandIndex,17);assert.equal(entries[0].preCamera.length,4);assert.equal(entries[0].postProjected.length,4);assert.deepEqual(after.triangles,before.triangles);
 });
 test('diagnostic export includes topology stages',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');assert.match(html,/topologyStages/);assert.match(html,/screenAfterCleanup/);
+ const html=require('./helpers/readCurvatureSources')();assert.match(html,/topologyStages/);assert.match(html,/screenAfterCleanup/);
 });

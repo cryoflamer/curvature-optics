@@ -73,7 +73,7 @@ test('painter-order uses physical width rather than raw Canvas CSS width',()=>{
 });
 test('styled depth renderer receives physical stroke width through shared mapping',()=>{
  assert.match(fs.readFileSync(require.resolve('../src/renderers/CurvatureStyledCombinedPreview'),'utf8'),/canvasProjection\.lineWidth\(style&&style\.lineWidth,camera\)/);
- assert.match(fs.readFileSync(require.resolve('../CurvatureApp.html'),'latin1'),/cameraSnapshot\.pixelTransform=window\.CurvatureCanvasProjection\.capture\(g,cameraWidth,cameraHeight\)/);
+ assert.match(require('./helpers/readCurvatureSources')(),/cameraSnapshot\.pixelTransform=window\.CurvatureCanvasProjection\.capture\(g,cameraWidth,cameraHeight\)/);
  assert.equal(typeof styled.draw,'function');
 });
 test('old camera fixtures without a viewport still use the historical fallback',()=>{

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const audit = require('../src/diagnostics/CurvatureSeparationAudit');
 const contract = require('../src/scene/CurvatureSceneContract');
-const html = fs.readFileSync(__dirname + '/../CurvatureApp.html', 'latin1');
+const html = require('./helpers/readCurvatureSources')();
 const report = audit.inspect(html);
 assert.equal(report.entrypoint, 'DrawModel');
 assert(report.modelReads.includes('Height'));

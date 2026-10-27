@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const engine=require('../src/geometry/CurvatureGeometryEngine');
-const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','utf8');
+const html=require('./helpers/readCurvatureSources')();
 const start=html.indexOf('function DrawModel(');
 const end=html.indexOf('\nfunction ',start+10);
 assert.ok(start>=0&&end>start);

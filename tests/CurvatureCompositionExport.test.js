@@ -2,11 +2,11 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const html=fs.readFileSync(require('node:path').join(__dirname,'../CurvatureApp.html'),'latin1');
+const html=require('./helpers/readCurvatureSources')();
 test('composition dependencies are loaded before application execution',()=>{
  for(const name of ['CurvatureIndependentComposition','CurvatureCompositionComparison','CurvatureCompositionCapture']){
   assert.match(html,new RegExp('<script src="'+({CurvatureIndependentComposition:'src/scene/',CurvatureCompositionComparison:'src/diagnostics/',CurvatureCompositionCapture:'src/diagnostics/'}[name]+name)+'\\.js"></script>'));
-  assert.ok(html.indexOf('<script src="'+name+'.js">')<html.indexOf('var CurveApp = new CurveAppClass()'));
+  assert.ok(html.indexOf('<script src="'+({CurvatureIndependentComposition:'src/scene/',CurvatureCompositionComparison:'src/diagnostics/',CurvatureCompositionCapture:'src/diagnostics/'}[name]+name)+'.js"></script>') < html.indexOf('<script src="src/app/CurvatureAppRuntime.js"></script>'));
  }
 });
 test('ZIP captures actual legacy frame and exports independent images and metrics',()=>{

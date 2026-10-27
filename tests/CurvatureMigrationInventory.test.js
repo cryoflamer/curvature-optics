@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const inventory = require('../src/diagnostics/CurvatureMigrationInventory');
-const html = fs.readFileSync(__dirname + '/../CurvatureApp.html', 'latin1');
+const html = require('./helpers/readCurvatureSources')();
 const result = inventory.inspect(html);
 assert.equal(result.complete, true, JSON.stringify(result.missingAnchors));
 assert.equal(result.schemaVersion, 1);

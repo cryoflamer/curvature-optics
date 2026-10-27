@@ -40,7 +40,7 @@ test('primitive and mode disagreements are reported without false passes',()=>{
  assert.throws(()=>parity.compare(null,c.scene,c.ranges),/Valid scenes/);
 });
 test('controlled export runs legacy command tracing and reports world and pixel checks',()=>{
- const html=fs.readFileSync(__dirname+'/../CurvatureApp.html','latin1');
+ const html=require('./helpers/readCurvatureSources')();
  assert.match(html,/LegacySceneAdapter\.record\(g,function\(graph\)/);
  assert.match(html,/LegacyGeometryExtractor\.extract\(towerFrame\)/);
  assert.match(html,/CurvatureControlledGeometryParity\.compare\(/);

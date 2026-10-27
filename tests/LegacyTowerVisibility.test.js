@@ -2,7 +2,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
-const html = fs.readFileSync(__dirname + '/../CurvatureApp.html', 'latin1');
+const html = require('./helpers/readCurvatureSources')();
 const start = html.indexOf('function DrawShape( objIx, g, m ) {');
 const end = html.indexOf('\nfunction PointOnEarth(', start);
 assert(start >= 0 && end > start);

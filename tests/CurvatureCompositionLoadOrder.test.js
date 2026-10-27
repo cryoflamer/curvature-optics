@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const html=fs.readFileSync(require('node:path').join(__dirname,'../CurvatureApp.html'),'latin1');
+const html=require('./helpers/readCurvatureSources')();
 
 test('browser loads ear clipping before composition capture factory',()=>{
  const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1]);
