@@ -1,0 +1,21 @@
+'use strict';
+const assert=require('node:assert/strict');
+const engine=require('./CurvatureGeometryEngine');
+const model={Height:1000,rDisk:10000,zDisk:990,sceneWidth:3000,PanRad:Math.PI/2,
+  showGrid:2,showTangent:true,showData:false,GlobeFGridCol:'red',GlobeGridCol:'blue',TangentCol:'green'};
+const scene=engine.globeHorizonGuides(model,{segments:16});
+assert.deepEqual(scene.primitives.map(p=>p.metadata.kind),['projected-horizon','globe-horizon','horizon-tangent']);
+assert.equal(scene.metadata.occlusionMask,false);
+assert.equal(scene.primitives[0].points.length,16);
+assert.equal(scene.primitives[0].points[0][2],-model.Height);
+assert.equal(scene.primitives[1].points[0][2],-model.zDisk);
+const tangent=scene.primitives[2];
+assert(Math.abs(tangent.points[0][0]-model.rDisk)<1e-8);
+assert(Math.abs(tangent.points[1][0]-model.rDisk)<1e-8);
+assert(Math.abs(tangent.points[0][1]-6000)<1e-8);
+assert(Math.abs(tangent.points[1][1]+6000)<1e-8);
+assert.equal(engine.globeHorizonGuides({...model,showGrid:0,showTangent:false}).primitives.length,1);
+assert.equal(engine.globeHorizonGuides({...model,showGrid:0,showTangent:false,showData:true}).primitives.length,2);
+assert.throws(()=>engine.globeHorizonGuides(model,{segments:2}),/Horizon segments/);
+assert.throws(()=>engine.globeHorizonGuides({...model,rDisk:-1}),/Valid finite/);
+console.log('Independent globe horizon guides passed');

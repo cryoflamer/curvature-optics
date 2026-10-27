@@ -479,6 +479,38 @@
       layer:'globe-surface-guides',visualAid:true,globeGridEnabled:!!(model.showGrid&1),
       projectedGridEnabled:!!(model.showGrid&2),angularStep:delta});
   }
+  // Non-occluding reference geometry from DrawModel. The white occlusion disk
+  // remains owned by createHorizonScenes; these guides must never fill it.
+  function globeHorizonGuides(model,options){
+    options=options||{};
+    if(!model||![model.Height,model.rDisk,model.zDisk,model.sceneWidth,model.PanRad].every(Number.isFinite)||
+        model.Height<0||model.rDisk<0||model.sceneWidth<=0)
+      throw new RangeError('Valid finite globe horizon geometry required');
+    var segments=options.segments===undefined?128:options.segments;
+    if(!Number.isInteger(segments)||segments<3||segments>8192)
+      throw new RangeError('Horizon segments must be an integer from 3 to 8192');
+    var primitives=[];
+    function circle(z,stroke,kind){
+      var points=[];
+      for(var i=0;i<segments;i++){
+        var angle=2*Math.PI*i/segments;
+        points.push([model.rDisk*Math.cos(angle),model.rDisk*Math.sin(angle),z]);
+      }
+      primitives.push({type:'polygon',points:points,mode:1,closed:true,
+        style:{stroke:stroke,lineWidth:1.5,alpha:1},metadata:{kind:kind,visualAid:true}});
+    }
+    if(model.showGrid&2)circle(-model.Height,model.GlobeFGridCol,'projected-horizon');
+    circle(-model.zDisk,model.GlobeGridCol,'globe-horizon');
+    if(model.showTangent||model.showData){
+      var a=-model.PanRad,c=Math.cos(a),s=Math.sin(a),w=2*model.sceneWidth;
+      function rotate(x,y){return [c*x-s*y,s*x+c*y,-model.zDisk];}
+      primitives.push({type:'line',points:[rotate(-w,model.rDisk),rotate(w,model.rDisk)],
+        style:{stroke:model.TangentCol,lineWidth:1,alpha:1},
+        metadata:{kind:'horizon-tangent',visualAid:true}});
+    }
+    return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
+      layer:'globe-horizon-guides',visualAid:true,occlusionMask:false});
+  }
   function createObjectHorizonComposition(model,objIx,globe,options){
     var objects=createHorizonPartitionedObjectScenes(model,objIx,globe);
     var horizon=createHorizonScenes(model,Object.assign({},options,{globe:!!globe}));
@@ -495,5 +527,5 @@
       throw new RangeError('Only transmission towers (ObjType 3) are supported');
     return createObjectHorizonComposition(model,objIx,globe,options);
   }
-  return {globeSurfaceGuides:globeSurfaceGuides,flatSurfaceGuides:flatSurfaceGuides,objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {globeHorizonGuides:globeHorizonGuides,globeSurfaceGuides:globeSurfaceGuides,flatSurfaceGuides:flatSurfaceGuides,objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
