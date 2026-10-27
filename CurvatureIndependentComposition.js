@@ -32,6 +32,67 @@
     return {scene:scene,ranges:ranges,cutoffAngle:composition.cutoffAngle,
       requiresHorizonMask:composition.requiresHorizonMask};
   }
+  // Opt-in assembled frame. Keep guide primitives distinct from the opaque
+  // horizon mask, so neither consumers nor audits confuse visual aids with
+  // physical occlusion. The legacy DrawModel remains the default renderer.
+  function composeFull(model,objIx,globe,options){
+    options=options||{};
+    var core=engine.createObjectHorizonComposition(model,objIx,globe,options);
+    var surface=globe?engine.globeSurfaceGuides(model):engine.flatSurfaceGuides(model,options);
+    var horizonGuides=globe?engine.globeHorizonGuides(model,options):null;
+    var layers=globe?[
+      {name:'behind',scene:core.behind,role:'objects'},
+      {name:'surface-guides',scene:surface,role:'visual-aid'},
+      {name:'mask',scene:core.mask,role:'occlusion'},
+      {name:'outline',scene:core.outline,role:'visual-aid'},
+      {name:'horizon-guides',scene:horizonGuides,role:'visual-aid'},
+      {name:'before',scene:core.before,role:'objects'}
+    ]:[
+      {name:'surface-guides',scene:surface,role:'visual-aid'},
+      {name:'behind',scene:core.behind,role:'objects'},
+      {name:'mask',scene:core.mask,role:'occlusion'},
+      {name:'outline',scene:core.outline,role:'visual-aid'},
+      {name:'before',scene:core.before,role:'objects'}
+    ];
+    var primitives=[],ranges=[];
+    layers.forEach(function(layer){
+      var start=primitives.length;
+      layer.scene.primitives.forEach(function(p){
+        var copy=Object.assign({},p,{commandIndex:primitives.length});
+        if(p.style)copy.style=Object.assign({},p.style);
+        if(p.metadata)copy.metadata=Object.assign({},p.metadata);
+        primitives.push(copy);
+      });
+      ranges.push({name:layer.name,role:layer.role,start:start,
+        end:primitives.length,count:primitives.length-start});
+    });
+    var scene=contract.createScene('legacy',primitives,{
+      generator:'CurvatureGeometryEngine',composition:'full-independent-guides',
+      objectIndex:objIx,globe:!!globe,layerRanges:ranges,
+      limitations:['Guide curves are discretized in world space',
+        'Legacy camera, labels, overlays and unsupported objects are not included']
+    });
+    return {scene:scene,ranges:ranges,cutoffAngle:core.cutoffAngle,
+      requiresHorizonMask:core.requiresHorizonMask};
+  }
+  function auditFull(composed){
+    if(!composed||!composed.scene||!Array.isArray(composed.ranges))
+      throw new TypeError('Composition required');
+    var p=composed.scene.primitives,r=composed.ranges;
+    var expected=composed.scene.metadata.globe?
+      ['behind','surface-guides','mask','outline','horizon-guides','before']:
+      ['surface-guides','behind','mask','outline','before'];
+    var continuous=r.length===expected.length&&r.every(function(layer,i){
+      return layer.name===expected[i]&&layer.count===layer.end-layer.start&&
+        layer.start===(i?r[i-1].end:0);
+    })&&r[r.length-1].end===p.length;
+    var unique=new Set(p.map(function(x){return x.commandIndex;}));
+    return {primitiveCount:p.length,continuousRanges:continuous,
+      uniqueCommandIndices:unique.size,layerCounts:r.map(function(x){
+        return {name:x.name,role:x.role,count:x.count};
+      }),rendererReady:continuous&&unique.size===p.length&&
+        p.every(function(x,i){return x.commandIndex===i;})};
+  }
   function audit(composed){
     if(!composed||!composed.scene||!Array.isArray(composed.ranges))throw new TypeError('Composition required');
     var p=composed.scene.primitives,r=composed.ranges;
@@ -44,5 +105,5 @@
       layerCounts:r.map(function(x){return {name:x.name,count:x.count};}),
       rendererReady:unique.size===p.length&&continuous&&ids.every(function(x,i){return x===i;})};
   }
-  return {compose:compose,audit:audit};
+  return {compose:compose,audit:audit,composeFull:composeFull,auditFull:auditFull};
 }));
