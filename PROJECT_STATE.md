@@ -1,6 +1,6 @@
 # Curvature optics migration — project state
 
-Updated at compatpatch **101** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
+Updated at compatpatch **102** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
 ## Objective
 
@@ -8,12 +8,12 @@ An independently computed physical comparison of Globe and Flat observations: wo
 
 ## Current baseline
 
-- Latest migration milestone: **101**, bounded first-ground-event detection and vacuum point-to-point visibility (`docs/MIGRATION_GROUND_EVENTS_101.md`). It detects tangencies and within-step Globe entry/exit, but does not change the Canvas or enable atmospheric image rendering.
-- Recent sequence: 95 runtime extraction, 96 render-frame/renderer contract, 97 main Canvas preview, 97.1 two active object groups, 97.2 horizon tessellation and stroke styles, 98 independent vacuum/geometry regression, 99 core audit, 100 RK4 tests and ground-impact accuracy, 101 bounded ground events and 2D vacuum target visibility.
+- Latest migration milestone: **102**, analytic qualification of standard, exponential-occlusion and exact inverse-spherical atmospheric profiles (`docs/MIGRATION_ATMOSPHERIC_PROFILES_102.md`). Profile radius `occlusionRadius` is intentionally distinct from Globe geometry radius. No Canvas or UI selection changes.
+- Recent sequence: 95 runtime extraction, 96 render-frame/renderer contract, 97 main Canvas preview, 97.1 two active object groups, 97.2 horizon tessellation and stroke styles, 98 independent vacuum/geometry regression, 99 core audit, 100 RK4 tests and ground-impact accuracy, 101 bounded ground events and 2D vacuum target visibility, 102 engineered atmospheric profiles and analytic tangent/trajectory validation.
 - Legacy DrawModel remains selectable/default; Independent painter preview handles Globe and Flat separately, both supported object groups, with some overlays/annotations absent. `Both` uses Legacy fallback.
 - Independent geometric composition uses an ordered horizon disk/mask for presentation; this is **not** physical ray-derived occlusion.
 - Numerical `CurvatureRayTracer` already exists (2D fixed-step RK4, vacuum/standard/custom `n(h)`), now tested for analytic vacuum impacts, numerical refinement, invariants and reciprocity; a signed one-step `advanceState()` API and bounded first-ground-event search are available for diagnostics. `vacuumTargetVisibility()` gives restricted 2D ground-only `visible`/`blocked`/`indeterminate` semantics. It is **not** the physical primary-Canvas renderer. Optical P4 diagnostics/overlays and effective-radius `legacy-k` are separate mechanisms.
-- Patch 99 retained the 270-test baseline. Patch 100 added 12 independent numerical tests; patch 101 adds 11 bounded ground-event/visibility tests (expected total: 293; verify against the current environment).
+- Patch 99 retained the 270-test baseline. Patch 100 added 12 numerical tests; patch 101 added 11 ground-event/visibility tests; patch 102 adds 8 independent analytic profile tests (expected 301; verify against current environment).
 
 ## Source of truth / workflow
 
@@ -32,6 +32,10 @@ Only use the user-supplied `chatgpt-pack-*` archive (choose the explicitly named
 
 2D/3D coupling, global completeness of ground-event isolation for rapidly varying profiles, lack of adaptive error control, atmospheric target shooting/multi-path completeness, physical mesh intersections, and ray-driven main Canvas visibility. Details and proposed interface contracts: `docs/MIGRATION_OPTICS_AUDIT_99.md`.
 
+## Architectural decision after patch 101
+
+The intended optics scope is standard exponential atmospheric refractivity and an analytically engineered positive-gradient profile for Flat horizon occlusion, not mirages or arbitrary multipath rendering. The inverse-spherical profile from Maslovsky (2026), Eq. (73), reproduces the exact spherical *grazing visibility boundary* at equal endpoint heights for configurable R. The simpler exponential-occlusion profile has an exact non-paraxial ray family and is useful as an independent RK4 oracle. Neither is claimed to reproduce all Globe image geometry. The user proposes to accelerate the rendering of all towers by caching a shared optical field covering their common bounding rectangular prism, **not** running an integrator per tower edge.
+
 ## Next steps
 
-100: completed numeric RK4 qualification and bracketed ground-contact refinement. 101: completed bounded first-ground-event and vacuum 2D target visibility semantics. 102: atmospheric validation and convergence of event detection. 103+: controlled physical rendering and 3D integration, scoped after tests. Recommended effort: Medium for isolated audits/docs; High for changes involving numerical physics, near-horizon geometry or 2D-to-3D visibility.
+100–102: complete (fixed-step numerical core, bounded ground events and atmospheric analytical profile validation). 103: target-angle/visibility API for stratified n(h) with explicit solver failure. 104: shared cached ray bundle / optical mapping inside the tower prism. 105: measured interpolation errors vs reference tracing and 2/10/85 tower performance, adjusting pixel tolerance. 106: physical tower silhouettes with first-hit occlusion. 107: wire into Independent Canvas. 108: Globe vs Flat validation for several observer heights and R. Update this file after about 5–10 patches or significant architectural decisions. Recommended effort: High for numerical physics, and potentially Extra High for 103 shooting solver.

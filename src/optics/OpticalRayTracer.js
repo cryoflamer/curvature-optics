@@ -26,6 +26,35 @@
         dn: function (h) { return -N0 * Math.exp(-h / H) / H; }
       };
     }
+    // Mathematical flat-surface occlusion models. The parameter
+    // occlusionRadius is the radius of the *comparison sphere*, not the
+    // radius of the actual Flat geometry (or the Globe geometry).
+    // Ref: Maslovsky, Inverse Geometric Optics (2026), Eqs. (27) and (73).
+    if (kind === 'exponential-occlusion' || kind === 'inverse-spherical') {
+      var R = options.occlusionRadius;
+      var n0 = options.n0 === undefined ? 1 : options.n0;
+      if (!Number.isFinite(R) || !(R > 0) ||
+          !Number.isFinite(n0) || !(n0 > 0))
+        throw Error('A positive finite occlusionRadius and n0 are required');
+      if (kind === 'exponential-occlusion') return {
+        n: function (h) { return n0 * Math.exp(h / R); },
+        dn: function (h) { return n0 * Math.exp(h / R) / R; }
+      };
+      // Let u=1+h/R. In the exact reconstruction,
+      // n^2/n0^2 = 1 + u^4 - u^2 = 1 + t*(2+t)*(1+t)^2.
+      // The t formulation avoids catastrophic cancellation near h=0.
+      function shape(h) {
+        var t = h / R, u = 1 + t;
+        return Math.sqrt(1 + t * (2 + t) * u * u);
+      }
+      return {
+        n: function (h) { return n0 * shape(h); },
+        dn: function (h) {
+          var u = 1 + h / R;
+          return n0 * (2 * u * u * u - u) / (R * shape(h));
+        }
+      };
+    }
     if (kind === 'custom') {
       if (typeof options.n !== 'function' || typeof options.dn !== 'function')
         throw Error('Custom profile requires n(h) and dn(h) functions');
