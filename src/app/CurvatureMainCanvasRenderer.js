@@ -101,9 +101,13 @@
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
       primitiveCount:frame.scene.primitives.length,
       layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,
+      unresolvedReasons:stats.unresolvedReasons,sampleStatuses:stats.sampleStatuses,
+      perGroup:stats.perGroup,step:stats.step,
       warning:'Physical optics in shared painter; geometric horizon/grid guides retained (not physical refraction).'+
         ' Object fills and mutual occlusion pending (fill-only shapes shown as outlines).'+
-        (stats.unresolved?' Incomplete: '+stats.unresolved+' unresolved fragments.':'')};
+        (stats.budgetExceeded?' Numerical preview budget exceeded.':'')+
+        ((stats.sampleStatuses.solver_failed||0)?' Some optical point solves failed.':'')+
+        (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')};
   }
   return {render:render,renderPhysical:renderPhysical,support:support,
     supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};

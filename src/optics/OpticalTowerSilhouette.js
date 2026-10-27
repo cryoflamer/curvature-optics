@@ -47,13 +47,14 @@
       throw TypeError('Invalid physical tower outline projection options');
     var segments=[], unresolved=[];
     var stats={edges:0,evaluations:0,visiblePieces:0,hiddenLeaves:0,
-      unresolvedLeaves:0,depthLimitedLeaves:0,interpolated:0,exact:0};
+      unresolvedLeaves:0,depthLimitedLeaves:0,interpolated:0,exact:0,
+      unresolvedReasons:{},sampleStatuses:{}};
     var samples=new Map();
     function sample(p) {
       var key=p.join(',');
       if(samples.has(key)) return samples.get(key);
       var coord=coordinate(p,geometry,radius,observerHeight);
-      var record={world:p,coordinate:coord,status:'solver_failed',angle:null,method:null};
+      var record={world:p,coordinate:coord,status:'solver_failed',angle:null,method:null,reason:null};
       if (stats.evaluations<maxSamples) {
         stats.evaluations++;
         // A point strictly inside the physical surface cannot be drawn.
@@ -65,6 +66,7 @@
           if (projected && STATUSES.includes(projected.status)) {
             record.status=projected.status;
             record.method=projected.method||'unknown';
+            record.reason=projected.reason||null;
             if (projected.status==='visible' && Number.isFinite(projected.angle)) {
               record.angle=projected.angle;
               if(projected.method==='interpolated') stats.interpolated++;
@@ -73,6 +75,7 @@
           }
         }
       }
+      stats.sampleStatuses[record.status]=(stats.sampleStatuses[record.status]||0)+1;
       samples.set(key,record);
       return record;
     }
@@ -87,6 +90,13 @@
       return Math.max(Math.abs(m.angle-(a.angle+b.angle)/2),
         Math.abs(angularDelta(m.coordinate.azimuth,aAz+angularDelta(bAz,aAz)/2)));
     }
+    function noteUnresolved(source,reason,points) {
+      stats.unresolvedLeaves++;
+      stats.unresolvedReasons[reason]=(stats.unresolvedReasons[reason]||0)+1;
+      unresolved.push({source:source,reason:reason,
+        statuses:points.map(function(p){return p.status;}),
+        details:points.filter(function(p){return p.reason;}).map(function(p){return p.reason;})});
+    }
     function clipEdge(start,end,source) {
       var a=sample(start),b=sample(end);
       function visit(left,right,depth) {
@@ -98,13 +108,20 @@
         var length=separation(left.world,right.world);
         if(depth>=minimumDepth) {
           if(blocked){stats.hiddenLeaves++;return;}
-          if(uncertain){stats.unresolvedLeaves++;unresolved.push({source:source,reason:'undetermined-path'});return;}
+          if(uncertain){noteUnresolved(source,
+            statuses.includes('solver_failed')?'optical-solver':'grazing-uncertainty',
+            [left,mid,right]);return;}
           if(visible && error(left,right,mid)<=angularTolerance){emit(left,right,source);return;}
         }
         if(depth>=maximumDepth || length<=boundaryTolerance || stats.evaluations>=maxSamples) {
           if(visible && error(left,right,mid)<=angularTolerance)emit(left,right,source);
           else if(blocked)stats.hiddenLeaves++;
-          else {stats.unresolvedLeaves++;unresolved.push({source:source,reason:stats.evaluations>=maxSamples?'sample-budget':'boundary-or-solver'});}
+          else {
+            var reason=stats.evaluations>=maxSamples?'sample-budget':
+              statuses.includes('solver_failed')?'optical-solver':
+              statuses.includes('indeterminate')?'grazing-uncertainty':'visibility-boundary';
+            noteUnresolved(source,reason,[left,mid,right]);
+          }
           if(depth>=maximumDepth)stats.depthLimitedLeaves++;
           return;
         }

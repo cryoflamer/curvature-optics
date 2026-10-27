@@ -70,15 +70,23 @@
           // Only the first, forward-x branch is part of this API's contract.
           if (!(next[0] > state[0])) return null;
           if (next[0] >= xGoal) {
-            var lo = 0, hi = delta, endpoint = next;
-            for (var j = 0; j < 48 && hi - lo > Math.max(1e-10, delta * 1e-13); j++) {
-              var mid = (lo + hi) / 2;
-              var test = rt.advanceState(state,mid,setup);
-              if (test[0] < xGoal) lo = mid;
-              else { hi = mid; endpoint = test; }
+            // RK4 endpoint correction: dx/ds is the ray's positive horizontal
+            // direction. Secant initialization followed by safeguarded Newton
+            // avoids dozens of half-step RK4 solves per shot.
+            var lo=0,hi=delta;
+            var t=delta*(xGoal-state[0])/(next[0]-state[0]);
+            var endpoint=next;
+            for(var j=0;j<12;j++) {
+              endpoint=rt.advanceState(state,t,setup);
+              var difference=endpoint[0]-xGoal;
+              if(Math.abs(difference)<=Math.max(1e-9,xGoal*1e-14))break;
+              if(difference>0)hi=t;else lo=t;
+              var corrected=t-difference/endpoint[2];
+              t=(Number.isFinite(corrected)&&corrected>lo&&corrected<hi)?corrected:(lo+hi)/2;
             }
+            if(Math.abs(endpoint[0]-xGoal)>Math.max(1e-8,xGoal*1e-12))return null;
             return {angle:angle,residual:endpoint[1]-zGoal,
-              state:endpoint,pathLength:travelled+hi};
+              state:endpoint,pathLength:travelled+t};
           }
           state=next; travelled+=delta;
         }
@@ -121,12 +129,23 @@
       }
       if (!lower) return failed('No sign-changing angular bracket was found');
       best = null;
+      // Regula falsi is particularly effective for smooth, weakly bent
+      // stratified rays. Keep the bracket throughout; bisect if a proposed
+      // angle repeatedly crowds its edge (nonlinear/near-grazing cases).
+      var stuck=0,previousSide=0;
       for (var k = 0; k < maxIterations; k++) {
-        var middle = shoot((lower.angle+upper.angle)/2);
+        var width=upper.angle-lower.angle;
+        var candidate=(lower.angle*upper.residual-upper.angle*lower.residual)/
+          (upper.residual-lower.residual);
+        if (!Number.isFinite(candidate)||candidate<=lower.angle||candidate>=upper.angle||stuck>=5)
+          candidate=(lower.angle+upper.angle)/2;
+        var middle=shoot(candidate);
         if (!middle) return failed('Integration failed inside the angular bracket');
         if (Math.abs(middle.residual) <= solveTolerance) { best=middle; break; }
-        if (Math.sign(middle.residual) === Math.sign(lower.residual)) lower=middle;
-        else upper=middle;
+        var side=Math.sign(middle.residual)===Math.sign(lower.residual)?-1:1;
+        if(side<0)lower=middle;else upper=middle;
+        stuck=(side===previousSide&&Math.abs(upper.angle-lower.angle)>0.8*width)?stuck+1:0;
+        previousSide=side;
       }
       if (!best) return failed('Shooting did not meet the requested target tolerance');
     }

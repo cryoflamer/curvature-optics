@@ -92,10 +92,15 @@
       var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,settings:options.settings});
       if(cached&&cached.key===key)return {composition:assemble(composed,cached.results,geometry),
         stats:cached.stats,reused:true};
-      var began=Date.now(),settings=Object.assign({maxBuildMs:3500,
-        step:200,fieldTolerance:1e-5,angularTolerance:2e-5,
+      // Representative profiles are smooth over kilometre scales. RK4 at
+      // 2 km was checked against the 200 m shooting oracle; cap the step
+      // relative to smaller geometric or engineered curvature radii.
+      var characteristicRadius=kind==='standard'?model.rEarth:Math.min(model.rEarth,R);
+      var automaticStep=Math.max(20,Math.min(2000,characteristicRadius/3000));
+      var began=Date.now(),settings=Object.assign({maxBuildMs:null,
+        step:automaticStep,fieldTolerance:1e-5,angularTolerance:2e-5,
         minimumDepth:0,maximumDepth:10,maxSamples:25000},options.settings||{});
-      if(!Number.isFinite(settings.maxBuildMs)||settings.maxBuildMs<0)
+      if(settings.maxBuildMs!==null&&(!Number.isFinite(settings.maxBuildMs)||settings.maxBuildMs<0))
         throw RangeError('Invalid physical scene budget');
       var source=composed.scene.primitives,groups=composed.ranges.filter(function(r){return r.role==='objects';});
       var objects=[];
@@ -112,14 +117,18 @@
           distances:span.distances,heights:span.heights,
           angleTolerance:settings.fieldTolerance,step:settings.step});
       }
-      var deadline=Date.now()+settings.maxBuildMs,cutoff=false;
+      var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;
       var limited=field&&{sample:function(d,h){
         if(kind!=='vacuum'&&Date.now()>=deadline){cutoff=true;return {status:'solver_failed',reason:'preview-time-budget'};}
         return field.sample(d,h);
       }};
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
-        unresolved:0,hiddenLeaves:0,fieldStats:null,budgetExceeded:false,
-        atmosphere:kind,guideIsGeometric:true};
+        unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
+        fieldStats:null,budgetExceeded:false,
+        atmosphere:kind,step:settings.step,guideIsGeometric:true};
+      function countInto(dest,source){Object.keys(source).forEach(function(k){
+        dest[k]=(dest[k]||0)+source[k];
+      });}
       // Small bank first so a long causeway cannot exhaust the numerical
       // budget before the important comparison/focus tower is processed.
       var prioritized=groups.slice().sort(function(a,b){return a.count-b.count;});
@@ -146,12 +155,20 @@
         stats.visibleSegments+=projected.segments.length;
         stats.unresolved+=projected.unresolved.length;
         stats.hiddenLeaves+=projected.stats.hiddenLeaves;
+        countInto(stats.unresolvedReasons,projected.stats.unresolvedReasons);
+        countInto(stats.sampleStatuses,projected.stats.sampleStatuses);
+        stats.perGroup.push({name:r.name,sourcePrimitives:prim.length,
+          visibleSegments:projected.segments.length,unresolved:projected.unresolved.length,
+          unresolvedReasons:projected.stats.unresolvedReasons});
       });
       if(field&&field.stats)fieldStats=field.stats();
       stats.fieldStats=fieldStats;stats.budgetExceeded=cutoff;stats.buildMs=Date.now()-began;
       // The only cached artifact is physical geometry; LIVE guides and
       // camera-dependent projections are rebuilt by the common painter.
-      cached={key:key,stats:stats,results:results};
+      // A budget-expired preview is partial; never freeze it in the cache.
+      if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget'])
+        cached={key:key,stats:stats,results:results};
+      else cached=null;
       return {composition:assemble(composed,results,geometry),stats:stats,reused:false};
     }
     return {transform:transform,clearCache:function(){cached=null;}};
