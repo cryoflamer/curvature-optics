@@ -26,10 +26,11 @@ test('legacy drawing declarations load before application boot and diagnostics',
   const diagnostics = scripts.indexOf('src/diagnostics/CurvatureLegacyFrameCaptureController.js');
   assert.ok(drawing >= 0 && model === drawing + 1);
   assert.equal(diagnostics, model + 1);
-  assert.equal(bootstrap, diagnostics + 1);
+  assert.equal(scripts[diagnostics + 1], 'src/app/CurvatureMainCanvasRenderer.js');
+  assert.equal(bootstrap, diagnostics + 2);
   assert.match(read('src/legacy/CurvatureLegacyDrawing.js'), /function DrawModel\( g \)/);
   assert.match(read('src/legacy/CurvatureLegacyDrawing.js'), /function DrawShape\( objIx, g, m \)/);
-  assert.match(read('src/app/CurvatureAppRuntime.js'), /DrawFunc: DrawModelWithOptionalAudit/);
+  assert.match(read('src/app/CurvatureAppRuntime.js'), /DrawFunc: DrawMainCanvasFrame/);
   assert.ok(scripts.indexOf('src/scene/CurvatureIndependentComposition.js') < drawing);
 });
 
@@ -52,7 +53,7 @@ test('parser-time panel creation remains synchronous at its original DOM locatio
 
 test('all extracted classic scripts parse independently', () => {
   const extracted = scripts.filter(name => /^(?:src\/(?:app|animation)|src\/ui\/|src\/legacy\/CurvatureLegacyDrawing\.js|src\/diagnostics\/CurvatureLegacyFrameCaptureController\.js)/.test(name) && !['src/ui/ControlPanelX.js', 'src/ui/ModelAnimationX.js'].includes(name));
-  assert.equal(extracted.length, 25);
+  assert.equal(extracted.length, 26);
   for (const file of extracted) assert.doesNotThrow(() => new vm.Script(read(file), {filename:file}), file);
 });
 

@@ -103,7 +103,9 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 
 <!-- Renderer stays visible; experimental controls are collapsed by default. -->
 <div id="OpticsRendererToolbar" style="padding:0.45em 0.7em; margin:0.5em 0; border:1px solid #bbb; background:#f7f7f7;">
-  <label>Renderer <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both (diagnostic)</option></select></label>
+  <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option></select></label>
+  <span id="MainCanvasRendererStatus" role="status" aria-live="polite" style="margin-left:0.5em;font-size:0.85em;"></span>
+  <label style="margin-left:0.9em;">Optical comparison <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both (diagnostic)</option></select></label>
   <button type="button" id="FlatP4TestPreset" style="margin-left:0.7em;font-weight:bold;">Flat Earth P4 Test</button>
   <span id="OpticsComparisonStatus" role="status" aria-live="polite" style="margin-left:0.6em;font-size:0.85em;"></span>
 </div>
@@ -225,6 +227,7 @@ Click a Button to Start a Demo. Click again to skip one step. Click the Animatio
 <script src="src/legacy/CurvatureLegacyDrawing.js"></script>
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/diagnostics/CurvatureLegacyFrameCaptureController.js"></script>
+<script src="src/app/CurvatureMainCanvasRenderer.js"></script>
 <script src="src/app/CurvatureAppRuntime.js"></script>
 
 
