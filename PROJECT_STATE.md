@@ -1,6 +1,6 @@
 # Curvature optics migration — project state
 
-Updated at compatpatch **103** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
+Updated at compatpatch **104** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
 ## Objective
 
@@ -8,8 +8,8 @@ An independently computed physical comparison of Globe and Flat observations: wo
 
 ## Current baseline
 
-- Latest migration milestone: **103**, standalone stratified-atmosphere point-to-point shooting with first-ground-contact visibility statuses (`docs/MIGRATION_TARGET_PROJECTION_103.md`). `CurvatureTargetProjection.solve` returns a launch angle and residual when one forward-x connecting path is found; numerical/search failures are explicitly `solver_failed`. No Canvas or UI selection changes.
-- Recent sequence: 95 runtime extraction, 96 render-frame/renderer contract, 97 main Canvas preview, 97.1 two active object groups, 97.2 horizon tessellation and stroke styles, 98 independent vacuum/geometry regression, 99 core audit, 100 RK4 tests and ground-impact accuracy, 101 bounded ground events and 2D vacuum target visibility, 102 engineered atmospheric profiles and analytic tangent/trajectory validation, 103 atmospheric target-angle shooting and ground-only visibility.
+- Latest migration milestone: **104**, independent shared-field point-projection cache with measured cell interpolation checks (`docs/MIGRATION_SHARED_RAY_FIELD_104.md`). `CurvatureTargetProjection.solve` returns a launch angle and residual when one forward-x connecting path is found; numerical/search failures are explicitly `solver_failed`. No Canvas or UI selection changes.
+- Recent sequence: 95 runtime extraction, 96 render-frame/renderer contract, 97 main Canvas preview, 97.1 two active object groups, 97.2 horizon tessellation and stroke styles, 98 independent vacuum/geometry regression, 99 core audit, 100 RK4 tests and ground-impact accuracy, 101 bounded ground events and 2D vacuum target visibility, 102 engineered atmospheric profiles and analytic tangent/trajectory validation, 103 atmospheric target-angle shooting and ground-only visibility, 104 lazy/eager shared projection cells with conservative exact fallbacks.
 - Legacy DrawModel remains selectable/default; Independent painter preview handles Globe and Flat separately, both supported object groups, with some overlays/annotations absent. `Both` uses Legacy fallback.
 - Independent geometric composition uses an ordered horizon disk/mask for presentation; this is **not** physical ray-derived occlusion.
 - Numerical `CurvatureRayTracer` already exists (2D fixed-step RK4, vacuum/standard/custom `n(h)`), now tested for analytic vacuum impacts, numerical refinement, invariants and reciprocity; a signed one-step `advanceState()` API and bounded first-ground-event search are available for diagnostics. `vacuumTargetVisibility()` gives restricted 2D ground-only `visible`/`blocked`/`indeterminate` semantics. It is **not** the physical primary-Canvas renderer. Optical P4 diagnostics/overlays and effective-radius `legacy-k` are separate mechanisms.
@@ -38,4 +38,4 @@ The intended optics scope is standard exponential atmospheric refractivity and a
 
 ## Next steps
 
-100–103: complete (fixed-step numerical core, bounded ground events, atmospheric analytical validation, and single-branch target-angle/visibility API). 104: shared cached ray bundle / optical mapping inside the tower prism. 105: measured interpolation errors vs reference tracing and 2/10/85 tower performance, adjusting pixel tolerance. 106: physical tower silhouettes with first-hit occlusion. 107: wire into Independent Canvas. 108: Globe vs Flat validation for several observer heights and R. Update this file after about 5–10 patches or significant architectural decisions. Recommended effort: High for numerical physics, and potentially Extra High for 103 shooting solver.
+100–103: complete (fixed-step numerical core, bounded ground events, atmospheric analytical validation, and single-branch target-angle/visibility API). 104: complete (bounded shared-grid projection cache). 105: measured interpolation errors vs reference tracing and 2/10/85 tower performance, adjusting pixel tolerance. 106: physical tower silhouettes with first-hit occlusion. 107: wire into Independent Canvas. 108: Globe vs Flat validation for several observer heights and R. Update this file after about 5–10 patches or significant architectural decisions. Recommended effort: High for numerical physics, and potentially Extra High for 103 shooting solver.
