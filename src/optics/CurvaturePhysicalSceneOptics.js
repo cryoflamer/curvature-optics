@@ -7,12 +7,13 @@
 (function(root,factory){
   var api=factory(root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
     root.CurvatureSharedRayField||(typeof require==='function'?require('./OpticalSharedRayField'):null),
-    root.CurvatureOpticalTowerSilhouette||(typeof require==='function'?require('./OpticalTowerSilhouette'):null));
+    root.CurvatureOpticalTowerSilhouette||(typeof require==='function'?require('./OpticalTowerSilhouette'):null),
+    root.CurvaturePhysicalGroundGuides||(typeof require==='function'?require('./CurvaturePhysicalGroundGuides'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalSceneOptics=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette){
+}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides){
   'use strict';
-  if(!contract||!fields||!silhouette)throw Error('Physical scene optics dependencies required');
+  if(!contract||!fields||!silhouette||!groundGuides)throw Error('Physical scene optics dependencies required');
   var ATMOSPHERES=['vacuum','standard','exponential-occlusion','inverse-spherical'];
   function arrivalPoint(pair){
     var az=pair[0],el=pair[1],ce=Math.cos(el),range=1000;
@@ -35,6 +36,7 @@
       model.ObjType,model.NObjects,model.ObjDist,model.ObjDeltaDist,
       model.ObjSidePos,model.ObjSideVar,model.ObjSideType,
       model.ObjSize,model.ObjSizeVar,model.ObjSizeType,
+      model.showGrid,model.aDelta,model.rFEarth,model.aDip,
       options.atmosphere,options.occlusionRadius,
       options.settings||null]);
   }
@@ -56,7 +58,7 @@
     for(var j=0;j<=3;j++)heights.push(hlo+(hhi-hlo)*j/3);
     return {distances:distances,heights:heights};
   }
-  function assemble(composed,results,geometry){
+  function assemble(composed,results,geometry,guides){
     // Guides remain live presentation data. A pan may rotate the tangent
     // line without invalidating expensive, view-independent optical rays.
     var primitives=[],ranges=[],source=composed.scene.primitives;
@@ -65,14 +67,15 @@
       items.forEach(function(p){primitives.push(Object.assign({},p,{commandIndex:primitives.length}));});
       ranges.push({name:name,role:role,start:start,end:primitives.length,count:primitives.length-start});
     }
-    composed.ranges.filter(function(r){return r.role==='visual-aid';}).forEach(function(r){
-      append(r.name,'visual-aid',source.slice(r.start,r.end));
+    var guideRanges=composed.ranges.filter(function(r){return r.role==='visual-aid';});
+    guideRanges.forEach(function(r,i){
+      append(r.name,'visual-aid',i===0?guides:[]);
     });
     append('physically-projected-objects','objects',results);
     var scene=contract.createScene('legacy',primitives,{
       generator:'CurvaturePhysicalSceneOptics',composition:'physical-projected-main',
       layerRanges:ranges,globe:geometry==='globe',
-      limitations:['Geometric surface/horizon GUIDE lines are not refracted physical surface silhouettes',
+      limitations:['Ground grids are sampled through atmospheric optics and bounded by optical horizon; no surface fill',
         'All objects have physically clipped outlines; polygon fills and mutual occlusion are not yet projected']});
     return {scene:scene,ranges:ranges};
   }
@@ -90,7 +93,7 @@
       if(!geometry||!(model.rEarth>0)||!Number.isFinite(model.Height)||model.Height<0)
         throw RangeError('Globe/Flat physical model required');
       var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,settings:options.settings});
-      if(cached&&cached.key===key)return {composition:assemble(composed,cached.results,geometry),
+      if(cached&&cached.key===key)return {composition:assemble(composed,cached.results,geometry,cached.guides),
         stats:cached.stats,reused:true};
       // Representative profiles are smooth over kilometre scales. RK4 at
       // 2 km was checked against the 200 m shooting oracle; cap the step
@@ -122,10 +125,18 @@
         if(kind!=='vacuum'&&Date.now()>=deadline){cutoff=true;return {status:'solver_failed',reason:'preview-time-budget'};}
         return field.sample(d,h);
       }};
+      var guideSource=[];
+      composed.ranges.filter(function(r){return r.role==='visual-aid';}).forEach(function(r){
+        guideSource.push.apply(guideSource,source.slice(r.start,r.end));
+      });
+      var guideProjection=groundGuides.create({model:model,geometry:geometry,
+        atmosphere:kind,occlusionRadius:R,step:settings.step,maxDistance:Math.min(100000,model.rEarth*.1)});
+      var physicalGuides=guideProjection.transform(guideSource);
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
         fieldStats:null,budgetExceeded:false,
-        atmosphere:kind,step:settings.step,guideIsGeometric:true};
+        atmosphere:kind,step:settings.step,guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
+        guideSolves:guideProjection.solves(),guideSegments:physicalGuides.length};
       function countInto(dest,source){Object.keys(source).forEach(function(k){
         dest[k]=(dest[k]||0)+source[k];
       });}
@@ -167,9 +178,9 @@
       // camera-dependent projections are rebuilt by the common painter.
       // A budget-expired preview is partial; never freeze it in the cache.
       if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget'])
-        cached={key:key,stats:stats,results:results};
+        cached={key:key,stats:stats,results:results,guides:physicalGuides};
       else cached=null;
-      return {composition:assemble(composed,results,geometry),stats:stats,reused:false};
+      return {composition:assemble(composed,results,geometry,physicalGuides),stats:stats,reused:false};
     }
     return {transform:transform,clearCache:function(){cached=null;}};
   }

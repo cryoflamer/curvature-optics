@@ -71,8 +71,13 @@ function DrawMainCanvasFrame(g) {
         pieces.push(result.cacheReused?'optical geometry cached':'optical geometry '+result.buildMs+' ms');
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
         if(result.fieldStats)pieces.push(result.fieldStats.solves+' exact ray solves');
+        if(result.groundHorizon!==null&&Number.isFinite(result.groundHorizon))
+          pieces.push('optical horizon '+(result.groundHorizon/1000).toFixed(2)+' km');
+        else pieces.push('no finite ground horizon resolved');
+        if(result.guideSegments!==undefined)pieces.push(result.guideSegments+' physical surface guide pieces');
+        if(result.guideSolves!==undefined)pieces.push(result.guideSolves+' ground ray solves');
         status.textContent=(result.budgetExceeded?'PARTIAL (time budget): ':failure?'CHECK SOLVER: ':result.unresolved?'BOUNDARY UNCERTAINTY: ':'')+
-          pieces.join(' · ')+'. Geometric horizon/grid guides; fills pending.';
+          pieces.join(' | ')+'. Physical ground grid/horizon; fills pending.';
       }
     } else {
       result = independent.render(g, CurveApp);

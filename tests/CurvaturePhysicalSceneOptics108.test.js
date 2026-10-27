@@ -53,7 +53,8 @@ test('108: vacuum adapter preserves one shared painter frame and optical source 
     assert.equal(p.scene.metadata.composition,'physical-projected-main');
     assert.deepEqual(p.ranges.slice(0,-1).map(x=>x.role),
       c.ranges.filter(x=>x.role==='visual-aid').map(x=>x.role));
-    assert.deepEqual(allLayers(p,'visual-aid'),allLayers(c,'visual-aid'));
+    assert.ok(allLayers(p,'visual-aid').every(x=>x.metadata.physicalGround));
+    assert.ok(allLayers(p,'visual-aid').some(x=>x.metadata.kind==='physical-horizon') || !globe);
     assert.equal(p.ranges.some(x=>x.role==='occlusion'),false);
     assert.ok(allLayers(p,'objects').length>0);
     assert.equal(allLayers(p,'objects').length,r.stats.visibleSegments);
@@ -86,7 +87,8 @@ test('108: optical scene is camera independent and invalidated by atmosphere and
   const withUpdatedGuides=model({NObjects:[2,1],PanRad:0.1});
   const reused=a.transform(compose.composeOpticalMain(withUpdatedGuides,true),withUpdatedGuides,{atmosphere:'vacuum'});
   assert.equal(reused.reused,true);
-  assert.notDeepEqual(allLayers(reused.composition,'visual-aid'),allLayers(r.composition,'visual-aid'));
+  assert.deepEqual(allLayers(reused.composition,'visual-aid'),allLayers(r.composition,'visual-aid'),
+    'Optically projected ground guides do not depend on camera pan');
   const s=a.transform(c,m,{atmosphere:'standard',settings:{maxBuildMs:0,maximumDepth:1}});
   assert.equal(s.reused,false);
   assert.ok(s.stats.unresolved>0);

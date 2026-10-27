@@ -104,7 +104,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <!-- Renderer stays visible; experimental controls are collapsed by default. -->
 <div id="OpticsRendererToolbar" style="padding:0.45em 0.7em; margin:0.5em 0; border:1px solid #bbb; background:#f7f7f7;">
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5em 1em;">
-    <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option><option value="physical">Physical optics · shared scene (preview)</option></select></label>
+    <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option><option value="physical">Physical optics &middot; shared scene (preview)</option></select></label>
     <label>Optical comparison <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both (diagnostic)</option></select></label>
     <button type="button" id="FlatP4TestPreset" style="font-weight:bold;">Flat Earth P4 Test</button>
     <span id="OpticsComparisonStatus" role="status" aria-live="polite" style="font-size:0.85em;"></span>
@@ -167,6 +167,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="src/optics/OpticalSharedRayField.js"></script>
 <script src="src/optics/OpticalTowerSilhouette.js"></script>
 <script src="src/renderers/CurvaturePhysicalTowerCanvas.js"></script>
+<script src="src/optics/CurvaturePhysicalGroundGuides.js"></script>
 <script src="src/optics/CurvaturePhysicalSceneOptics.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
