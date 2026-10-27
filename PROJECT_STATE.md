@@ -124,3 +124,22 @@ individual object order. Camera-only Pan/Nick/Roll changes do not invalidate
 optical rays. No arbitrary intersecting-mesh Z buffer was added. See
 `docs/MIGRATION_TOWER_PAINTER_DEPTH_114_1.md` and
 `tests/PhysicalTowerPainterOrder1141.test.js`.
+
+## Compatpatch 115 — physical and shared-painter validation harness
+
+`tools/validate-physical-scene-115.js` adds reproducible numerical and
+painter-contract checks, including a `--full --json` suite for 202 authored
+objects. It validates independent Globe-vacuum and engineered Flat grazing
+limits at two radii and multiple heights; Standard RK4 2000 m versus 200 m
+shooting; off-cell adaptive prism errors versus direct fine-step shooting;
+vacuum world/camera angle consistency; and per-object far-to-near fill/stroke
+batches through the existing shared painter. It also verifies that rebuilding
+the source after Pan/Nick camera changes retains the optical composition and
+that fully occluded authored towers need not emit Canvas commands. No physics
+or renderer code has been replaced. A sampled 1920px/60-degree angular metric
+found ~0.015 px maximum in selected cases (not a global pixel guarantee).
+Globe Standard at 87 and 202 towers still reports respectively ~130 and ~276
+**boundary** leaves. Full browser raster correctness and arbitrary intersecting
+mesh occlusion remain unverified. See `docs/MIGRATION_PHYSICAL_VALIDATION_115.md`
+and `tests/PhysicalValidation115.test.js`. Next: review any real-browser issues
+and focus on horizon boundary closure before claiming full image completeness.
