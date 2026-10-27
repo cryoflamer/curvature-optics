@@ -15,3 +15,18 @@ for(const globe of [false,true])test(`full composition capture globe=${globe}`,(
  assert.equal(full.candidate.rgba.length,24*24*4);
 });
 test('unknown composition scope is rejected',()=>assert.throws(()=>bridge.capture({compositionScope:'unknown',captureLegacy(){},createCanvas(){},width:4,height:4,camera}),/scope/));
+
+for(const globe of [false,true])test(`shared legacy reference globe=${globe}`,()=>{
+ let calls=0;const args={model,objectIndex:0,globe,width:24,height:24,camera,geometryOptions:{segments:12},createCanvas:canvas,captureLegacy:()=>{calls++;return {canvas:canvas(24,24),camera}}};
+ const partial=bridge.capture(args);
+ const full=bridge.capture({...args,compositionScope:'full',legacyReference:partial.reference,
+  captureLegacy:()=>{throw new Error('legacy capture must not run twice')}});
+ assert.equal(calls,1);assert.deepEqual(full.reference.rgba,partial.reference.rgba);
+ assert.notStrictEqual(full.reference.rgba,partial.reference.rgba);
+ assert.equal(full.comparison.cameraMatched,true);
+});
+test('shared reference rejects viewport and RGBA mismatch',()=>{
+ const args={model,objectIndex:0,globe:false,width:24,height:24,camera,createCanvas:canvas};
+ assert.throws(()=>bridge.capture({...args,legacyReference:{width:25,height:24,camera,rgba:new Uint8ClampedArray(24*24*4)}}),/reference/);
+ assert.throws(()=>bridge.capture({...args,legacyReference:{width:24,height:24,camera,rgba:new Uint8ClampedArray(5)}}),/reference/);
+});

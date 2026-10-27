@@ -1735,8 +1735,7 @@ function DrawModelWithOptionalAudit(g) {
         var fullCompositionResult=window.CurvatureCompositionCapture.capture({
           model:CurveApp,objectIndex:supportedIndices[0],globe:independentGlobe,
           compositionScope:'full',width:cameraWidth,height:cameraHeight,
-          camera:cameraSnapshot,
-          captureLegacy:function(){return {canvas:captureEndPixels,camera:cameraSnapshot};},
+          camera:cameraSnapshot,legacyReference:compositionResult.reference,
           createCanvas:function(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
         });
         addComparisonImage('independent-full-composition.png',fullCompositionResult.candidate.rgba);

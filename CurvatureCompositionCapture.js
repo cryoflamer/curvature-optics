@@ -14,7 +14,7 @@
   return new Uint8ClampedArray(ctx.getImageData(0,0,width,height).data);
  }
  function capture(args){
-  if(!args||typeof args.captureLegacy!=='function'||typeof args.createCanvas!=='function')throw new TypeError('Legacy capture and independent canvas factory required');
+  if(!args||(typeof args.captureLegacy!=='function'&&!args.legacyReference)||typeof args.createCanvas!=='function')throw new TypeError('Legacy capture or reference and independent canvas factory required');
   var width=args.width,height=args.height;
   if(!Number.isInteger(width)||width<1||!Number.isInteger(height)||height<1)throw new RangeError('Invalid viewport');
   if(!args.camera||typeof args.camera!=='object')throw new TypeError('Camera snapshot required');
@@ -30,14 +30,24 @@
    if(!audit.rendererReady)throw new Error('Full composition is not renderer-ready');
    prepared={scene:assembled.scene,audit:audit,limitations:assembled.scene.metadata.limitations};
   }else prepared=comparison.prepare(args.model,args.objectIndex,args.globe,args.geometryOptions);
-  // Capture the reference first. It must be the actual legacy output, not a
-  // frame produced from the independent scene.
-  var legacy=args.captureLegacy({width:width,height:height,camera:args.camera});
-  if(!legacy||!legacy.canvas)throw new TypeError('Legacy capture must return {canvas,camera}');
-  if(!legacy.camera)throw new TypeError('Legacy camera metadata required');
-  var reference={width:width,height:height,camera:legacy.camera,rgba:pixels(legacy.canvas,width,height)};
+  // A caller may reuse the exact same immutable reference for partial and full
+  // comparisons. This avoids recapturing a mutable legacy canvas between modes.
+  var reference;
+  if(args.legacyReference){
+   var supplied=args.legacyReference;
+   if(supplied.width!==width||supplied.height!==height||!supplied.camera||
+      !supplied.rgba||supplied.rgba.length!==width*height*4)
+    throw new RangeError('Invalid shared legacy reference');
+   reference={width:width,height:height,camera:supplied.camera,
+    rgba:new Uint8ClampedArray(supplied.rgba)};
+  }else{
+   var legacy=args.captureLegacy({width:width,height:height,camera:args.camera});
+   if(!legacy||!legacy.canvas)throw new TypeError('Legacy capture must return {canvas,camera}');
+   if(!legacy.camera)throw new TypeError('Legacy camera metadata required');
+   reference={width:width,height:height,camera:legacy.camera,rgba:pixels(legacy.canvas,width,height)};
+  }
   var canvas=args.createCanvas(width,height);
-  if(!canvas||canvas.width!==width||canvas.height!==height||canvas===legacy.canvas)throw new TypeError('Distinct candidate canvas with matching dimensions required');
+  if(!canvas||canvas.width!==width||canvas.height!==height||(typeof legacy!=='undefined'&&legacy&&canvas===legacy.canvas))throw new TypeError('Distinct candidate canvas with matching dimensions required');
   var camera=args.camera;
   // Fail explicitly instead of silently using fan triangulation.
   if(!earClip||typeof earClip.triangulate!=='function')throw new Error('CurvatureEarClip.triangulate is required before composition capture');
