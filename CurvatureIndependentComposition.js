@@ -78,7 +78,8 @@
       generator:'CurvatureGeometryEngine',composition:'full-independent-guides',
       objectIndex:objIx,globe:!!globe,layerRanges:ranges,
       limitations:['Guide curves are discretized in world space',
-        'Legacy camera, labels, overlays and unsupported objects are not included']
+        'Screen captions/frame are rendered separately by the optional full-scene capture bridge',
+        'Data labels, optical overlays and unsupported objects are not included']
     });
     return {scene:scene,ranges:ranges,cutoffAngle:core.cutoffAngle,
       requiresHorizonMask:core.requiresHorizonMask};

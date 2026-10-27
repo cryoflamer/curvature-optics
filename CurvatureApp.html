@@ -97,6 +97,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="CurvatureCompositionComparison.js"></script>
 <script src="CurvatureGrayOccluderAudit.js"></script>
 <script src="CurvatureEarClip.js"></script>
+<script src="CurvatureFullSceneDecorations.js"></script>
+<script src="CurvatureRegionComparison.js"></script>
 <script src="CurvatureCompositionCapture.js"></script>
 <script src="CurvatureDiagnosticPresets.js"></script>
 <script src="CurvatureControlledLegacyCapture.js"></script>
@@ -1744,7 +1746,7 @@ function DrawModelWithOptionalAudit(g) {
         addComparisonImage('independent-composition.png',compositionResult.candidate.rgba);
         addComparisonImage('independent-foreground-diff.png',compositionResult.comparison.differenceImages.foreground);
         addComparisonImage('independent-edges-diff.png',compositionResult.comparison.differenceImages.edges);
-        independentCompositionComparison={available:true,fullComposition:{scope:'full',audit:fullCompositionResult.compositionAudit,renderStatistics:fullCompositionResult.renderStatistics,foreground:fullCompositionResult.comparison.foreground,edges:fullCompositionResult.comparison.edges,rgba:fullCompositionResult.comparison.rgba,caveats:fullCompositionResult.comparison.caveats.concat(fullCompositionResult.limitations),candidateImage:'independent-full-composition.png',foregroundDifferenceImage:'independent-full-foreground-diff.png',edgesDifferenceImage:'independent-full-edges-diff.png'},mode:independentGlobe?'globe':'flat',
+        independentCompositionComparison={available:true,fullComposition:{scope:'full',audit:fullCompositionResult.compositionAudit,renderStatistics:fullCompositionResult.renderStatistics,foreground:fullCompositionResult.comparison.foreground,edges:fullCompositionResult.comparison.edges,rgba:fullCompositionResult.comparison.rgba,geometryForeground:fullCompositionResult.geometryForeground,decorations:fullCompositionResult.decorations&&{frameSegments:fullCompositionResult.decorations.frameSegments,captionCount:fullCompositionResult.decorations.captionCount},caveats:fullCompositionResult.comparison.caveats.concat(fullCompositionResult.limitations),candidateImage:'independent-full-composition.png',foregroundDifferenceImage:'independent-full-foreground-diff.png',edgesDifferenceImage:'independent-full-edges-diff.png'},mode:independentGlobe?'globe':'flat',
           objectIndex:supportedIndices[0],compositionAudit:compositionResult.compositionAudit,
           renderStatistics:compositionResult.renderStatistics,
           foreground:compositionResult.comparison.foreground,
@@ -1908,6 +1910,8 @@ function DrawModelWithOptionalAudit(g) {
                 renderStatistics:controlledFull.renderStatistics,
                 foreground:controlledFull.comparison.foreground,
                 edges:controlledFull.comparison.edges,rgba:controlledFull.comparison.rgba,
+                geometryForeground:controlledFull.geometryForeground,
+                decorations:controlledFull.decorations&&{frameSegments:controlledFull.decorations.frameSegments,captionCount:controlledFull.decorations.captionCount},
                 cameraMatched:controlledFull.comparison.cameraMatched,
                 caveats:controlledFull.comparison.caveats.concat(controlledFull.limitations)};
             }catch(fullPresetError){entry.fullComposition.reason=String(fullPresetError);}

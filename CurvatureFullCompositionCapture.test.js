@@ -13,6 +13,10 @@ for(const globe of [false,true])test(`full composition capture globe=${globe}`,(
  assert.ok(full.compositionAudit.layerCounts.some(x=>x.name==='surface-guides'&&x.count>0));
  assert.ok(full.compositionAudit.primitiveCount>partial.compositionAudit.primitiveCount);
  assert.equal(full.candidate.rgba.length,24*24*4);
+ assert.equal(full.geometryForeground.comparedPixels,24*24);
+ assert.equal(full.geometryForeground.excludedPixels,0);
+ assert.equal(full.decorations.frameSegments,0);
+ assert.equal(full.decorations.captionCount,0);
 });
 test('unknown composition scope is rejected',()=>assert.throws(()=>bridge.capture({compositionScope:'unknown',captureLegacy(){},createCanvas(){},width:4,height:4,camera}),/scope/));
 

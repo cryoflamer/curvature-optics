@@ -3,10 +3,10 @@
  * The candidate uses the independent world-space composition and painter renderer.
  */
 (function(root,factory){
- var api=factory(root.CurvatureCompositionComparison||(typeof require==='function'?require('./CurvatureCompositionComparison'):null),root.CurvatureZBufferPreview||(typeof require==='function'?require('./CurvatureZBufferPreview'):null),root.CurvatureLegacyOrderPreview||(typeof require==='function'?require('./CurvatureLegacyOrderPreview'):null),root.CurvatureEarClip||(typeof require==='function'?require('./CurvatureEarClip'):null),root.CurvatureIndependentComposition||(typeof require==='function'?require('./CurvatureIndependentComposition'):null));
+ var api=factory(root.CurvatureCompositionComparison||(typeof require==='function'?require('./CurvatureCompositionComparison'):null),root.CurvatureZBufferPreview||(typeof require==='function'?require('./CurvatureZBufferPreview'):null),root.CurvatureLegacyOrderPreview||(typeof require==='function'?require('./CurvatureLegacyOrderPreview'):null),root.CurvatureEarClip||(typeof require==='function'?require('./CurvatureEarClip'):null),root.CurvatureIndependentComposition||(typeof require==='function'?require('./CurvatureIndependentComposition'):null),root.CurvatureFullSceneDecorations||(typeof require==='function'?require('./CurvatureFullSceneDecorations'):null),root.CurvatureRegionComparison||(typeof require==='function'?require('./CurvatureRegionComparison'):null));
  if(typeof module==='object'&&module.exports)module.exports=api;
  root.CurvatureCompositionCapture=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(comparison,zbuffer,painter,earClip,composition){
+}(typeof globalThis!=='undefined'?globalThis:this,function(comparison,zbuffer,painter,earClip,composition,decorations,regions){
  'use strict';
  function pixels(canvas,width,height){
   if(!canvas||canvas.width!==width||canvas.height!==height)throw new RangeError('Canvas viewport mismatch');
@@ -53,12 +53,24 @@
   if(!earClip||typeof earClip.triangulate!=='function')throw new Error('CurvatureEarClip.triangulate is required before composition capture');
   var triangles=zbuffer.build(prepared.scene,camera,width,height,earClip.triangulate).triangles;
   var render=painter.draw(canvas,prepared.scene,camera,triangles);
+  // Capture the geometry before drawing frame/captions. Full-frame parity
+  // includes the decorations, while a separately reported geometry score
+  // excludes their measured bounds from both reference and candidate.
+  var geometricRgba=full?pixels(canvas,width,height):null;
+  var deco=full&&decorations?decorations.draw(canvas,args.model,camera):null;
+  if(deco)render.statistics.decorations={frameSegments:deco.frameSegments,captionCount:deco.captionCount};
   var candidate={width:width,height:height,camera:camera,rgba:pixels(canvas,width,height)};
   var result=comparison.compare(reference,candidate,args.compareOptions);
+  var geometryForeground=null;
+  if(full&&deco&&regions){
+   geometryForeground=regions.compare(reference.rgba,geometricRgba,width,height,deco.excludedRects,
+     args.compareOptions&&args.compareOptions.foregroundThreshold);
+  }
   if(full)result.caveats=result.caveats.filter(function(x){return !x.includes('only type-2 towers');}).concat([
-   'Full independent guides still omit labels, optical overlays and unsupported object types',
+   'The frame and demo captions are now separately rendered without legacy GraphX3DX',
+   'Data annotations, optical overlays and unsupported object types are not yet ported',
    'Guide discretization and painter ordering may differ from legacy DrawModel']);
-  return {comparison:result,reference:reference,candidate:candidate,compositionAudit:prepared.audit,renderStatistics:render.statistics,limitations:prepared.limitations,compositionScope:full?'full':'partial'};
+  return {comparison:result,reference:reference,candidate:candidate,compositionAudit:prepared.audit,renderStatistics:render.statistics,limitations:prepared.limitations,geometryForeground:geometryForeground,decorations:deco,compositionScope:full?'full':'partial'};
  }
  return {capture:capture};
 }));
