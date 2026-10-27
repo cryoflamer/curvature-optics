@@ -57,9 +57,15 @@ test('108: vacuum adapter preserves one shared painter frame and optical source 
     assert.ok(allLayers(p,'visual-aid').some(x=>x.metadata.kind==='physical-horizon') || !globe);
     assert.equal(p.ranges.some(x=>x.role==='occlusion'),false);
     assert.ok(allLayers(p,'objects').length>0);
-    assert.equal(allLayers(p,'objects').length,r.stats.visibleSegments);
-    assert.ok(allLayers(p,'objects').every(x=>x.type==='line'&&x.mode===1&&
-      x.metadata.kind==='physical-object-stroke'&&x.metadata.opticalSourceIndex>=0));
+    const projectedObjects=allLayers(p,'objects');
+    const outlines=projectedObjects.filter(x=>x.metadata.kind==='physical-object-stroke');
+    const fills=projectedObjects.filter(x=>x.metadata.kind==='physical-object-fill');
+    assert.equal(outlines.length,r.stats.visibleSegments);
+    assert.equal(fills.length,r.stats.fillTriangles);
+    assert.ok(fills.length>0);
+    assert.ok(outlines.every(x=>x.type==='line'&&x.mode===1&&x.metadata.opticalSourceIndex>=0));
+    assert.ok(fills.every(x=>x.type==='polygon'&&x.mode===2&&x.points.length===3&&
+      x.metadata.opticalSourceIndex>=0));
     assert.ok(new Set(allLayers(p,'objects').map(x=>x.metadata.objectLayer)).has('objects-1'),
       'the second/large tower bank must not be starved');
     assert.equal(r.stats.budgetExceeded,false);

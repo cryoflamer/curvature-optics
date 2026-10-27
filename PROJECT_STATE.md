@@ -91,3 +91,22 @@ cached optics adapter on one Node run; Globe Standard with 202 towers remained
 Canvas renderer, atmospheric model or clipping approximation was introduced.
 See `docs/MIGRATION_SHARED_SCENE_CACHE_113.md` and
 `tests/SharedSceneCache113.test.js`.
+
+## Patch 114 — physical foundation polygon fills in the shared painter
+
+The independent geometry's actual authored fill polygons (`mode & 2`) now pass
+through `CurvaturePhysicalPolygonFills` to the same shared `CurvatureFrameRenderer`
+used since patch 108, preserving source fill styles and both tower banks.
+Source-plane ear clipping handles concave foundation rings; each emitted fill
+triangle is checked at corners, edge midpoints and centroid with the same
+adaptive `F(d,h)` optic oracle as tower outlines. Near the physical ground
+boundary, intersections are bracketed along original world edges and retained
+on the **confirmed visible** side. Mixed/uncertain pieces are never filled
+blindly; fill-specific triangle/uncertainty counters are shown separately from
+outline uncertainty. All previously stroke-only lattice features remain
+stroke-only; the patch does not create bogus solid plates. Mutual 3D object
+occlusion, formal global/pixel error guarantees and physical ground **surface**
+fills are still out of scope. See
+`docs/MIGRATION_PHYSICAL_FOUNDATION_FILLS_114.md` and
+`tests/PhysicalPolygonFills114.test.js`. Next: independent optical/visual
+validation and remaining horizon boundary cases (115).

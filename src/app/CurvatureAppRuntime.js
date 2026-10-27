@@ -62,6 +62,12 @@ function DrawMainCanvasFrame(g) {
         var failure=(samples.solver_failed||0)+(samples.indeterminate||0);
         var pieces=[];
         pieces.push(result.drawn+' lines (visible outline pieces)');
+        if(result.fillTriangles!==undefined){
+          pieces.push(result.fillTriangles+' physical fill triangles | '+
+            result.fillUnresolved+' uncertain fill triangles omitted');
+          if(result.fillUnresolved)pieces.push('fill boundaries: '+
+            JSON.stringify(result.fillUnresolvedReasons||{}));
+        }
         pieces.push(result.unresolved+' unresolved ('+
           (reasons['visibility-boundary']||0)+' horizon/boundary, '+
           (reasons['optical-solver']||0)+' solver, '+
@@ -96,7 +102,7 @@ function DrawMainCanvasFrame(g) {
           pieces.push('ground-grid drawing limited to '+Math.round(result.guideRenderExtent/1000)+
             ' km ('+result.guideCulling.skippedEdges+' skipped, '+result.guideCulling.clippedEdges+' clipped edges; NOT an optical horizon)');
         status.textContent=(result.budgetExceeded?'PARTIAL (time budget): ':failure?'CHECK SOLVER: ':result.unresolved?'BOUNDARY UNCERTAINTY: ':'')+
-          pieces.join(' | ')+'. Physical ground grid/horizon; fills pending.';
+          pieces.join(' | ')+'. Physical ground grid/horizon; authored foundation fills, mutual object occlusion pending.';
       }
     } else {
       result = independent.render(g, CurveApp);

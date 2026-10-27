@@ -107,11 +107,15 @@
       sharedGroundSolves:stats.sharedGroundSolves,
       sharedGroundCacheHits:stats.sharedGroundCacheHits,towerSolves:stats.towerSolves,
       guideRenderExtent:stats.guideRenderExtent,guideCulling:stats.guideCulling,
+      fillTriangles:stats.fillTriangles,fillUnresolved:stats.fillUnresolved,
+      fillUnresolvedReasons:stats.fillUnresolvedReasons,fillHidden:stats.fillHidden,
+      fillSamples:stats.fillSamples,fillSubdivisions:stats.fillSubdivisions,
       warning:'Physical optics in shared painter; physical ground/horizon guides projected through optical rays.'+
-        ' Object fills and mutual occlusion pending (fill-only shapes shown as outlines).'+
+        ' Authored foundations are filled where ground-visible; mutual object occlusion is pending.'+
         (stats.budgetExceeded?' Numerical preview budget exceeded.':'')+
         ((stats.sampleStatuses.solver_failed||0)?' Some optical point solves failed.':'')+
-        (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')};
+        (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')+
+        (stats.fillUnresolved?' '+stats.fillUnresolved+' unresolved fill triangles omitted.':'')};
   }
   return {render:render,renderPhysical:renderPhysical,support:support,
     supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};

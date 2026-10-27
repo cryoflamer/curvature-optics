@@ -8,12 +8,13 @@
   var api=factory(root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
     root.CurvatureSharedRayField||(typeof require==='function'?require('./OpticalSharedRayField'):null),
     root.CurvatureOpticalTowerSilhouette||(typeof require==='function'?require('./OpticalTowerSilhouette'):null),
-    root.CurvaturePhysicalGroundGuides||(typeof require==='function'?require('./CurvaturePhysicalGroundGuides'):null));
+    root.CurvaturePhysicalGroundGuides||(typeof require==='function'?require('./CurvaturePhysicalGroundGuides'):null),
+    root.CurvaturePhysicalPolygonFills||(typeof require==='function'?require('./CurvaturePhysicalPolygonFills'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalSceneOptics=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides){
+}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills){
   'use strict';
-  if(!contract||!fields||!silhouette||!groundGuides)throw Error('Physical scene optics dependencies required');
+  if(!contract||!fields||!silhouette||!groundGuides||!polygonFills)throw Error('Physical scene optics dependencies required');
   var ATMOSPHERES=['vacuum','standard','exponential-occlusion','inverse-spherical'];
   function arrivalPoint(pair){
     var az=pair[0],el=pair[1],ce=Math.cos(el),range=1000;
@@ -98,7 +99,7 @@
       generator:'CurvaturePhysicalSceneOptics',composition:'physical-projected-main',
       layerRanges:ranges,globe:geometry==='globe',
       limitations:['Ground grids are sampled through atmospheric optics and bounded by optical horizon; no surface fill',
-        'All objects have physically clipped outlines; polygon fills and mutual occlusion are not yet projected']});
+        'Authored polygon fills are sampled and ground-clipped; mutual 3D mesh occlusion is not supported']});
     return {scene:scene,ranges:ranges};
   }
   function create(){
@@ -178,7 +179,9 @@
         atmosphere:kind,step:settings.step,guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
         guideSolves:guideProjection.solves(),sharedGroundSolves:groundFieldSolves,
         sharedGroundCacheHits:groundCacheHits,guideSegments:physicalGuides.length,
-        guideRenderExtent:guideProjection.renderExtent,guideCulling:guideProjection.cullingStats()};
+        guideRenderExtent:guideProjection.renderExtent,guideCulling:guideProjection.cullingStats(),
+        fillTriangles:0,fillUnresolved:0,fillHidden:0,fillSubdivisions:0,fillSamples:0,
+        fillUnresolvedReasons:{}};
       function countInto(dest,source){Object.keys(source).forEach(function(k){
         dest[k]=(dest[k]||0)+source[k];
       });}
@@ -196,6 +199,20 @@
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
           angularTolerance:settings.angularTolerance,minimumDepth:settings.minimumDepth,
           maximumDepth:settings.maximumDepth,maxSamples:settings.maxSamples});
+        // Only authored filled polygons participate: tower struts remain
+        // strokes, while their foundation polygons regain their actual fill.
+        // The polygon adapter reuses the exact SAME qualified field as outlines.
+        var fills=polygonFills.project({polygons:prim,field:limited,
+          geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
+          angularTolerance:settings.angularTolerance,maximumDepth:7,
+          maxSamples:settings.maxSamples,layer:r.name});
+        fills.primitives.forEach(function(p){results.push(p);});
+        stats.fillTriangles+=fills.stats.fillTriangles;
+        stats.fillUnresolved+=fills.stats.unresolvedTriangles;
+        stats.fillHidden+=fills.stats.hiddenTriangles;
+        stats.fillSubdivisions+=fills.stats.subdivisions;
+        stats.fillSamples+=fills.stats.samples;
+        countInto(stats.fillUnresolvedReasons,fills.stats.unresolvedReasons);
         projected.segments.forEach(function(segment){
           var original=prim[segment.source.primitiveIndex];
           results.push({type:'line',mode:1,
@@ -210,7 +227,8 @@
         stats.hiddenLeaves+=projected.stats.hiddenLeaves;
         countInto(stats.unresolvedReasons,projected.stats.unresolvedReasons);
         countInto(stats.sampleStatuses,projected.stats.sampleStatuses);
-        stats.perGroup.push({name:r.name,sourcePrimitives:prim.length,
+        stats.perGroup.push({name:r.name,fillTriangles:fills.stats.fillTriangles,
+          fillUnresolved:fills.stats.unresolvedTriangles,sourcePrimitives:prim.length,
           visibleSegments:projected.segments.length,unresolved:projected.unresolved.length,
           unresolvedReasons:projected.stats.unresolvedReasons});
       });
@@ -223,7 +241,7 @@
       // frames and pixel projections on every redraw. A budget-expired
       // preview is partial; never freeze it in the cache.
       var presentation=assemble(composed,results,geometry,physicalGuides);
-      if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget'])
+      if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])
         cached={key:key,stats:stats,composition:presentation};
       else cached=null;
       return {composition:presentation,stats:stats,reused:false};
