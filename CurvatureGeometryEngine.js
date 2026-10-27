@@ -73,15 +73,78 @@
       style:{fill:hidden?v[3]:v[2]}});});
     return result;
   }
-  function localObject(objType,objIx,hidden){
+  // Bedford Level markers depend on their position in the *drawn* sequence.
+  // Curved paths are tessellated in local space with an explicit resolution;
+  // unlike the legacy renderer this resolution is not camera dependent.
+  function localBedford(drawn,total,hidden,options){
+    if(!Number.isInteger(drawn)||drawn<0||!Number.isInteger(total)||total<1||drawn>=total)
+      throw new RangeError('Valid Bedford sequence index and count required');
+    options=options||{};
+    var segments=options.segments===undefined?64:options.segments;
+    if(!Number.isInteger(segments)||segments<8||segments>4096||segments%2)
+      throw new RangeError('Even Bedford curve resolution from 8 to 4096 required');
+    function poly(points,fill,alpha){
+      var p={type:'polygon',points:points,mode:3,style:{fill:fill}};
+      if(alpha!==undefined)p.style.alpha=alpha;
+      return p;
+    }
+    function rect(x1,y1,x2,y2,fill,alpha){
+      return poly([[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]],fill,alpha);
+    }
+    function circle(x,y,r){
+      var result=[];
+      for(var i=0;i<segments;i++){
+        var a=2*Math.PI*i/segments;
+        result.push([x+r*Math.cos(a),y+Math.abs(r)*Math.sin(a)]);
+      }
+      return result;
+    }
+    if(drawn===0){
+      // The first marker is the bridge/bar. Its legacy OpenPath3D contains
+      // an arc followed by the six-vertex deck polygon.
+      var arc=[];
+      for(var i=0;i<=segments/2;i++){
+        var angle=Math.PI-Math.PI*i/(segments/2);
+        arc.push([-.8*Math.cos(angle),.8*Math.sin(angle)]);
+      }
+      return [poly(arc.concat([[.8,0],[1.2,0],[1.2,1.1],[-1.2,1.1],[-1.2,0],[-.8,0]]),
+          hidden?'#ccc':'#aaa'),
+        rect(-.3,.85,.3,1.15,'white'),
+        rect(-.3,.95,.3,1.05,hidden?'#444':'black')];
+    }
+    if(total>2&&drawn===total-1){
+      var result=[rect(-.01,0,.01,.955,'black',.3)];
+      // The legacy scope is a compound path (outer radius .05, inner -.04).
+      // Tessellate it as annular quads to retain the transparent aperture.
+      var outer=circle(0,1,.05),inner=circle(0,1,.04);
+      for(var j=0;j<segments;j++){
+        var k=(j+1)%segments;
+        result.push(poly([outer[j],outer[k],inner[k],inner[j],outer[j]],'black',.3));
+      }
+      var lines=[[-.04,1,.04,1],[-.02,.98,-.005,.995],[.02,.98,.005,.995],
+        [-.02,1.02,-.005,1.005],[.02,1.02,.005,1.005]];
+      lines.forEach(function(v){result.push({type:'line',points:[[v[0],v[1]],[v[2],v[3]]],
+        style:{stroke:'orange'}});});
+      return result;
+    }
+    return [rect(-.025,0,.025,1,hidden?'#ff4':'yellow'),
+      poly(circle(0,1,.06),hidden?'#f44':'red')];
+  }
+  function localObject(objType,objIx,hidden,options){
+    if(objType===0){
+      if(!options||!Number.isInteger(options.drawn)||!Number.isInteger(options.total))
+        throw new TypeError('Bedford requires explicit drawn and total sequence context');
+      return localBedford(options.drawn,options.total,!!hidden,options);
+    }
     if(objType===3)return localTower(objIx);
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
     throw new RangeError('Object type has not been independently ported');
   }
   function createPlacedObjectScene(params,objType,objIx,hidden,metadata){
-    return contract.createScene('legacy',placeOnPlane(localObject(objType,objIx,hidden),towerPlacement(params)),
-      Object.assign({generator:'CurvatureGeometryEngine',objectType:objType,objectIndex:objIx},metadata||{}));
+    var opts=metadata||{};
+    return contract.createScene('legacy',placeOnPlane(localObject(objType,objIx,hidden,opts),towerPlacement(params)),
+      Object.assign({generator:'CurvatureGeometryEngine',objectType:objType,objectIndex:objIx},opts));
   }
   function localTower(objIx){
     if(objIx!==0&&objIx!==1)throw new RangeError('Tower bank must be 0 or 1');
@@ -289,5 +352,5 @@
       before:towers.before,cutoffAngle:towers.cutoffAngle,
       requiresHorizonMask:towers.requiresHorizonMask};
   }
-  return {localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
