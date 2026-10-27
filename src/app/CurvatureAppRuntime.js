@@ -37,21 +37,35 @@ function DrawMainCanvasFrame(g) {
   var selector = document.getElementById('MainCanvasRenderer');
   var status = document.getElementById('MainCanvasRendererStatus');
   var independent = window.CurvatureMainCanvasRenderer;
-  if (!selector || selector.value !== 'independent' || !independent ||
+  if (!selector || (selector.value !== 'independent' && selector.value !== 'physical') || !independent ||
       legacyFrameAuditRequested || legacyFrameAuditInProgress) {
     if (status && (!selector || selector.value === 'legacy')) status.textContent = '';
     return DrawModelWithOptionalAudit(g);
   }
-  var availability = independent.support(CurveApp);
+  var physicalMode = selector.value === 'physical';
+  var availability = physicalMode ? independent.supportPhysical(CurveApp) : independent.support(CurveApp);
   if (!availability.supported) {
     if (status) status.textContent = availability.reason;
     return DrawModelWithOptionalAudit(g);
   }
   try {
-    var result = independent.render(g, CurveApp);
-    if (status) status.textContent = result.warning;
+    var result;
+    if (physicalMode) {
+      var atmosphere = document.getElementById('PhysicalCanvasAtmosphere');
+      var radius = document.getElementById('PhysicalCanvasOcclusionRadius');
+      result = independent.renderPhysical(g, CurveApp, {
+        atmosphere:atmosphere ? atmosphere.value : 'vacuum',
+        occlusionRadius:radius ? Number(radius.value) : 6371000
+      });
+      if (status) status.textContent = result.warning + ' ' + result.drawn +
+        ' lines, ' + result.unresolved + ' unresolved; ' +
+        (result.cacheReused ? 'field reused' : 'field built in '+result.buildMs+' ms') + '.';
+    } else {
+      result = independent.render(g, CurveApp);
+      if (status) status.textContent = result.warning;
+    }
   } catch (error) {
-    if (status) status.textContent = 'Independent failed; Legacy restored: ' + error.message;
+    if (status) status.textContent = (physicalMode ? 'Physical' : 'Independent') + ' failed; Legacy restored: ' + error.message;
     console.error('Independent main Canvas render:', error);
     // On failure, avoid leaving behind a partly rendered preview.
     g.Reset(true);
@@ -70,6 +84,10 @@ var graph = NewGraphX3D( {
   AutoScalePix: true
 } );
 
+['PhysicalCanvasAtmosphere','PhysicalCanvasOcclusionRadius'].forEach(function(id){
+  var control=document.getElementById(id);
+  if(control)control.addEventListener('change',function(){graph.Redraw();});
+});
 var mainCanvasRendererSelect = document.getElementById('MainCanvasRenderer');
 if (mainCanvasRendererSelect) mainCanvasRendererSelect.addEventListener('change', function() {
   graph.Redraw();

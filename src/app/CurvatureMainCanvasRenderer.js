@@ -9,11 +9,13 @@
     root.CurvatureFrameRenderer||(typeof require==='function'?require('../renderers/CurvatureFrameRenderer'):null),
     root.CurvaturePerspectivePreview||(typeof require==='function'?require('../renderers/CurvaturePerspectivePreview'):null),
     root.CurvatureCanvasProjection||(typeof require==='function'?require('../renderers/CurvatureCanvasProjection'):null),
-    root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null));
+    root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),
+    root.CurvaturePhysicalTowerCanvas||(typeof require==='function'?require('../renderers/CurvaturePhysicalTowerCanvas'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,physical){
   'use strict';
+  var physicalSession=physical.create();
   function selectObject(m){
     var index=m.NObjects[0]===0?1:0;
     if(m.NObjects[0]>0&&m.NObjects[1]>0&&m.ObjDist[0]>m.ObjDist[1])index=1;
@@ -72,5 +74,19 @@
     return {mode:result.mode,primitiveCount:audit.primitiveCount,
       warning:'Independent preview: both object groups are rendered; optical overlays and annotations are not yet ported.'};
   }
-  return {render:render,support:support,selectObject:selectObject,configureCamera:configureCamera};
+  function renderPhysical(g,m,options){
+    var available=physical.availability(m);
+    if(!available.supported)throw RangeError(available.reason);
+    if(!g||!g.Canvas)throw TypeError('Main graph Canvas required');
+    var camera=configureCamera(g,m),ctx=g.Canvas.getContext('2d');
+    if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
+       typeof ctx.restore!=='function')throw TypeError('Canvas 2D context required');
+    ctx.save();
+    try {
+      ctx.setTransform(1,0,0,1,0,0);
+      return physicalSession.render(g.Canvas,camera,m,options);
+    } finally {ctx.restore();}
+  }
+  return {render:render,renderPhysical:renderPhysical,support:support,
+    supportPhysical:physical.availability,selectObject:selectObject,configureCamera:configureCamera};
 }));

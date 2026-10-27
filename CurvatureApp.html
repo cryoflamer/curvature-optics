@@ -103,7 +103,13 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 
 <!-- Renderer stays visible; experimental controls are collapsed by default. -->
 <div id="OpticsRendererToolbar" style="padding:0.45em 0.7em; margin:0.5em 0; border:1px solid #bbb; background:#f7f7f7;">
-  <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option></select></label>
+  <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option><option value="physical">Physical tower outlines (preview)</option></select></label>
+  <label style="margin-left:0.7em;">Physical atmosphere <select id="PhysicalCanvasAtmosphere">
+    <option value="vacuum">Vacuum</option><option value="standard">Standard</option>
+    <option value="exponential-occlusion">Exponential occlusion</option>
+    <option value="inverse-spherical">Inverse spherical</option>
+  </select></label>
+  <label>Occlusion R (m) <input id="PhysicalCanvasOcclusionRadius" type="number" min="1" step="1000" value="6371000" style="width:8em"></label>
   <span id="MainCanvasRendererStatus" role="status" aria-live="polite" style="margin-left:0.5em;font-size:0.85em;"></span>
   <label style="margin-left:0.9em;">Optical comparison <select id="OpticsSceneComparison"><option value="original">Original (legacy k)</option><option value="optical">Optical P4</option><option value="both">Both (diagnostic)</option></select></label>
   <button type="button" id="FlatP4TestPreset" style="margin-left:0.7em;font-weight:bold;">Flat Earth P4 Test</button>
@@ -152,6 +158,10 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="src/renderers/CurvatureInverseOpticsBridge.js"></script>
 <script src="src/optics/OpticalProjectionCalibration.js"></script>
 <script src="src/optics/OpticalRenderedVertexAudit.js"></script>
+<script src="src/optics/OpticalTargetProjection.js"></script>
+<script src="src/optics/OpticalSharedRayField.js"></script>
+<script src="src/optics/OpticalTowerSilhouette.js"></script>
+<script src="src/renderers/CurvaturePhysicalTowerCanvas.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test</button>
