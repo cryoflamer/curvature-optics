@@ -1,0 +1,21 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const audit = require('../src/diagnostics/CurvatureSeparationAudit');
+const contract = require('../src/scene/CurvatureSceneContract');
+const html = fs.readFileSync(__dirname + '/../CurvatureApp.html', 'latin1');
+const report = audit.inspect(html);
+assert.equal(report.entrypoint, 'DrawModel');
+assert(report.modelReads.includes('Height'));
+assert(report.graphCalls.includes('SetCamera'));
+assert(report.graphWrites.includes('MaxCurveSegments'));
+assert(report.missingStateFields.includes('EyeLvlCol'));
+assert(report.unrecordedGraphCalls.includes('SetAngleMeasure'));
+assert.equal(report.readyForIndependentEngine, false);
+assert(contract.STATE_FIELDS.includes('Height'));
+assert.equal(new Set(contract.STATE_FIELDS).size, contract.STATE_FIELDS.length);
+assert.deepEqual(audit.inspect('function DrawModel(g) { var m = CurveApp; g.SetCamera(m.Height); }').missingStateFields, []);
+assert.throws(() => audit.inspect('function nothing() {}'), /not found/);
+assert.throws(() => audit.inspect(null), /HTML source/);
+console.log('CurvatureSeparationAudit: passed; missing model fields:', report.missingStateFields.length,
+  'unrecorded graph calls:', report.unrecordedGraphCalls.length);

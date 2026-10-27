@@ -3,7 +3,7 @@
 /* Diagnostic only: test whether the horizon bias tracks the ground-clearance
  * allowance. Does not change the application's default (0.03 m).
  */
-const diag = require('../OpticalTowerDiagnostics');
+const diag = require('../src/optics/OpticalTowerDiagnostics');
 const R = 6371000;
 const observerHeight = 15;
 const tolerances = [0.1, 0.05, 0.03, 0.01, 0.001, 0];

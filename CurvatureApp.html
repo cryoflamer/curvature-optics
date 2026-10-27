@@ -12,8 +12,8 @@
 
 <title>Curvature App: Simulation of Globe-Earth and Flat-Earth - Walter Bislin</title>
 
-<link rel="stylesheet" type="text/css" href="styles.css" media="all">
-<link rel="stylesheet" type="text/css" href="ControlPanelStyles.css" media="all">
+<link rel="stylesheet" type="text/css" href="src/ui/styles.css" media="all">
+<link rel="stylesheet" type="text/css" href="src/ui/ControlPanelStyles.css" media="all">
 
 <style>
 #Object-Sliders0 .Row5 { background-color: #dfd; }
@@ -73,49 +73,49 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 -->
 <!-- debug: minified javascript includes -->
 
-<script src="GraphX3DX.js"></script>
-<script src="LegacySceneAdapter.js"></script>
-<script src="SceneFrame.js"></script>
-<script src="CurvatureSceneContract.js"></script>
-<script src="CurvatureGeometryEngine.js"></script>
-<script src="LegacyGeometryExtractor.js"></script>
-<script src="LegacyGeometryFrameVerification.js"></script>
-<script src="CurvatureScenePreview.js"></script>
-<script src="CurvatureCanvasProjection.js"></script>
-<script src="CurvaturePerspectivePreview.js"></script>
-<script src="CurvatureViewportReference.js"></script>
-<script src="CurvatureNearPlaneReference.js"></script>
-<script src="CurvaturePerspectiveDiagnostics.js"></script>
-<script src="CurvatureFilledPreview.js"></script>
-<script src="CurvatureViewportPolygonClip.js"></script>
-<script src="CurvatureZBufferPreview.js"></script>
-<script src="CurvatureStrokePreview.js"></script>
-<script src="CurvatureStyledCombinedPreview.js"></script>
-<script src="CurvatureLegacyOrderPreview.js"></script>
-<script src="CurvaturePixelComparison.js"></script>
-<script src="CurvatureIndependentComposition.js"></script>
-<script src="CurvatureCompositionComparison.js"></script>
-<script src="CurvatureGrayOccluderAudit.js"></script>
-<script src="CurvatureEarClip.js"></script>
-<script src="CurvatureFullSceneDecorations.js"></script>
-<script src="CurvatureRegionComparison.js"></script>
-<script src="CurvatureCompositionCapture.js"></script>
-<script src="CurvatureDiagnosticPresets.js"></script>
-<script src="CurvatureControlledLegacyCapture.js"></script>
-<script src="CurvatureControlledCamera.js"></script>
-<script src="CurvatureControlledGeometryParity.js"></script>
-<script src="CurvatureWorldTopologyAudit.js"></script>
-<script src="CurvatureContourDiagnostics.js"></script>
-<script src="CurvatureCameraVerification.js"></script>
-<script src="CurvatureVisibilityOracle.js"></script>
-<script src="CurvatureVisibilityVerification.js"></script>
-<script src="GeometryDiagnosticsZip.js"></script>
-<script src="SceneFrameRenderer.js"></script>
-<script src="LegacySceneAudit.js"></script>
-<script src="LegacyReplayProbe.js"></script>
-<script src="LegacyCanvasReplayProbe.js"></script>
-<script src="ControlPanelX.js"></script>
-<script src="ModelAnimationX.js"></script>
+<script src="src/legacy/GraphX3DX.js"></script>
+<script src="src/legacy/LegacySceneAdapter.js"></script>
+<script src="src/scene/SceneFrame.js"></script>
+<script src="src/scene/CurvatureSceneContract.js"></script>
+<script src="src/geometry/CurvatureGeometryEngine.js"></script>
+<script src="src/legacy/LegacyGeometryExtractor.js"></script>
+<script src="src/legacy/LegacyGeometryFrameVerification.js"></script>
+<script src="src/renderers/CurvatureScenePreview.js"></script>
+<script src="src/renderers/CurvatureCanvasProjection.js"></script>
+<script src="src/renderers/CurvaturePerspectivePreview.js"></script>
+<script src="src/renderers/CurvatureViewportReference.js"></script>
+<script src="src/renderers/CurvatureNearPlaneReference.js"></script>
+<script src="src/diagnostics/CurvaturePerspectiveDiagnostics.js"></script>
+<script src="src/renderers/CurvatureFilledPreview.js"></script>
+<script src="src/renderers/CurvatureViewportPolygonClip.js"></script>
+<script src="src/renderers/CurvatureZBufferPreview.js"></script>
+<script src="src/renderers/CurvatureStrokePreview.js"></script>
+<script src="src/renderers/CurvatureStyledCombinedPreview.js"></script>
+<script src="src/renderers/CurvatureLegacyOrderPreview.js"></script>
+<script src="src/diagnostics/CurvaturePixelComparison.js"></script>
+<script src="src/scene/CurvatureIndependentComposition.js"></script>
+<script src="src/diagnostics/CurvatureCompositionComparison.js"></script>
+<script src="src/diagnostics/CurvatureGrayOccluderAudit.js"></script>
+<script src="src/geometry/CurvatureEarClip.js"></script>
+<script src="src/scene/CurvatureFullSceneDecorations.js"></script>
+<script src="src/diagnostics/CurvatureRegionComparison.js"></script>
+<script src="src/diagnostics/CurvatureCompositionCapture.js"></script>
+<script src="src/diagnostics/CurvatureDiagnosticPresets.js"></script>
+<script src="src/diagnostics/CurvatureControlledLegacyCapture.js"></script>
+<script src="src/diagnostics/CurvatureControlledCamera.js"></script>
+<script src="src/diagnostics/CurvatureControlledGeometryParity.js"></script>
+<script src="src/diagnostics/CurvatureWorldTopologyAudit.js"></script>
+<script src="src/diagnostics/CurvatureContourDiagnostics.js"></script>
+<script src="src/diagnostics/CurvatureCameraVerification.js"></script>
+<script src="src/diagnostics/CurvatureVisibilityOracle.js"></script>
+<script src="src/diagnostics/CurvatureVisibilityVerification.js"></script>
+<script src="src/diagnostics/GeometryDiagnosticsZip.js"></script>
+<script src="src/scene/SceneFrameRenderer.js"></script>
+<script src="src/legacy/LegacySceneAudit.js"></script>
+<script src="src/legacy/LegacyReplayProbe.js"></script>
+<script src="src/legacy/LegacyCanvasReplayProbe.js"></script>
+<script src="src/ui/ControlPanelX.js"></script>
+<script src="src/ui/ModelAnimationX.js"></script>
 
  <!-- end javascript includes -->
 
@@ -164,13 +164,13 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   </label>
   <div id="OpticsBackendStatus" role="status" aria-live="polite" style="margin-top:0.45em; font-size:0.9em;"></div>
 </section>
-<script src="OpticalRayTracer.js"></script>
-<script src="OpticsBackendUI.js"></script>
-<script src="OpticalTowerDiagnostics.js"></script>
-<script src="OpticalTowerOverlay.js"></script>
-<script src="CurvatureInverseOpticsBridge.js"></script>
-<script src="OpticalProjectionCalibration.js"></script>
-<script src="OpticalRenderedVertexAudit.js"></script>
+<script src="src/optics/OpticalRayTracer.js"></script>
+<script src="src/optics/OpticsBackendUI.js"></script>
+<script src="src/optics/OpticalTowerDiagnostics.js"></script>
+<script src="src/optics/OpticalTowerOverlay.js"></script>
+<script src="src/renderers/CurvatureInverseOpticsBridge.js"></script>
+<script src="src/optics/OpticalProjectionCalibration.js"></script>
+<script src="src/optics/OpticalRenderedVertexAudit.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test</button>

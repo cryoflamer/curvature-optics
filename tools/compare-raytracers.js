@@ -3,7 +3,7 @@
 // Compare the current solver at multiple integration steps; optionally compare
 // against an independently supplied adapter. No reference solver is bundled.
 const path = require('path');
-const diag = require('../OpticalTowerDiagnostics');
+const diag = require('../src/optics/OpticalTowerDiagnostics');
 const arcsec = 180 * 3600 / Math.PI;
 const args = process.argv.slice(2);
 const externalAt = args.indexOf('--reference');

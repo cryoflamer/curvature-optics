@@ -1,0 +1,16 @@
+'use strict';
+const assert = require('assert');
+const optics = require('../src/optics/OpticalRayTracer');
+const vac = optics.atmosphere('vacuum');
+const flat = optics.trace({ geometry:'flat', profile:vac, angle:0.02, observerHeight:10, length:10000, step:25 });
+assert(Math.abs(flat.x - 10000*Math.cos(0.02)) < 0.001);
+assert(Math.abs(flat.z - (10+10000*Math.sin(0.02))) < 0.001);
+const globe = optics.trace({ geometry:'globe', profile:vac, angle:0.02, observerHeight:10, length:10000, step:25 });
+assert(Math.abs(globe.x-flat.x) < 0.001 && Math.abs(globe.z-flat.z) < 0.001);
+const standard = optics.trace({ geometry:'flat', atmosphere:'standard', angle:0, observerHeight:100, length:10000, step:10 });
+assert(standard.z < 100 && !standard.hitGround, 'Normal negative dn/dh bends ray downward');
+const inverse = optics.trace({ geometry:'flat', profile:optics.atmosphere('custom', {n:h=>1.0003+1e-8*h,dn:h=>1e-8}), angle:0, observerHeight:100, length:10000 });
+assert(inverse.z > 100, 'Positive dn/dh bends ray upward');
+const ground = optics.trace({ geometry:'flat', profile:vac, angle:-0.1, observerHeight:10, length:1000 });
+assert(ground.hitGround && Math.abs(ground.z)<1e-6);
+console.log('OpticalRayTracer: 5 tests passed');

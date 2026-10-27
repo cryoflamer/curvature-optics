@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // Independent paraxial, constant-gradient approximation; not an exact oracle.
-const diag = require('../OpticalTowerDiagnostics');
+const diag = require('../src/optics/OpticalTowerDiagnostics');
 const R = 6371000, observerHeight = 15;
 function effectiveRadius(N, H) {
   const e = Math.exp(-observerHeight / H);

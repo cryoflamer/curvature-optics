@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // Regression of the zero-clearance default and near-tangent stability.
-const diag = require('../OpticalTowerDiagnostics');
+const diag = require('../src/optics/OpticalTowerDiagnostics');
 const R = 6371000, ho = 15, arcsec = 180 * 3600 / Math.PI;
 const distances = [20000, 25000];
 const strengths = [0, 0.000293];
