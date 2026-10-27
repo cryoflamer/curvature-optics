@@ -35,3 +35,9 @@ test('mode 4 explicitly closes the stroke, unlike modes 1 and 3',()=>{
  const r=strokes.build({primitives:[poly(1,p),poly(3,p),poly(7,p)]},camera,100,100);
  assert.equal(r.statistics.inputSegments,7);
 });
+
+test('independent closed curve emits final-to-first segment; latitude polyline does not',()=>{
+ const p=[[-1,10,-1],[1,10,-1],[1,10,1]];
+ const r=strokes.build({primitives:[{...poly(1,p),closed:true},poly(1,p)]},camera,100,100);
+ assert.equal(r.statistics.inputSegments,5);
+});

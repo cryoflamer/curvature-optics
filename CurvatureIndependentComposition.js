@@ -40,18 +40,26 @@
     var core=engine.createObjectHorizonComposition(model,objIx,globe,options);
     var surface=globe?engine.globeSurfaceGuides(model):engine.flatSurfaceGuides(model,options);
     var horizonGuides=globe?engine.globeHorizonGuides(model,options):null;
+    // DrawObjectsBehindHorizon paints the disk BEFORE the globe grid.
+    // Previously the full scene placed the grid under the opaque disk,
+    // erasing most latitude/longitude lines in the controlled Globe captures.
+    // The outlines in createHorizonScenes are used by partial/objects-only
+    // composition; in a full scene the same circles are already emitted by
+    // globeHorizonGuides (Globe) or flatSurfaceGuides (Flat). Do not overdraw.
+    var emptyOutline=contract.createScene('legacy',[],{
+      generator:'CurvatureGeometryEngine',layer:'full-outline-already-in-guides'});
     var layers=globe?[
       {name:'behind',scene:core.behind,role:'objects'},
-      {name:'surface-guides',scene:surface,role:'visual-aid'},
       {name:'mask',scene:core.mask,role:'occlusion'},
-      {name:'outline',scene:core.outline,role:'visual-aid'},
+      {name:'surface-guides',scene:surface,role:'visual-aid'},
+      {name:'outline',scene:emptyOutline,role:'visual-aid'},
       {name:'horizon-guides',scene:horizonGuides,role:'visual-aid'},
       {name:'before',scene:core.before,role:'objects'}
     ]:[
       {name:'surface-guides',scene:surface,role:'visual-aid'},
       {name:'behind',scene:core.behind,role:'objects'},
       {name:'mask',scene:core.mask,role:'occlusion'},
-      {name:'outline',scene:core.outline,role:'visual-aid'},
+      {name:'outline',scene:emptyOutline,role:'visual-aid'},
       {name:'before',scene:core.before,role:'objects'}
     ];
     var primitives=[],ranges=[];
@@ -80,7 +88,7 @@
       throw new TypeError('Composition required');
     var p=composed.scene.primitives,r=composed.ranges;
     var expected=composed.scene.metadata.globe?
-      ['behind','surface-guides','mask','outline','horizon-guides','before']:
+      ['behind','mask','surface-guides','outline','horizon-guides','before']:
       ['surface-guides','behind','mask','outline','before'];
     var continuous=r.length===expected.length&&r.every(function(layer,i){
       return layer.name===expected[i]&&layer.count===layer.end-layer.start&&

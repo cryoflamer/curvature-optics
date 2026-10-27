@@ -371,14 +371,14 @@
       globe:circle.globe,approximation:'fixed-world-polygon'};
     // DrawModel uses rFEarth and 2*rFEarth on the flat plane, not rDisk.
     // The globe mask is the sole filled diagnostic horizon primitive.
-    var outlines=[{type:'polygon',points:circle.points,mode:1}];
+    var outlines=[{type:'polygon',points:circle.points,mode:1,closed:true}];
     if(!circle.globe)outlines.push({type:'polygon',points:circle.points.map(function(p){
       return [p[0]*2,p[1]*2,p[2]];
-    }),mode:1});
+    }),mode:1,closed:true});
     var outline=contract.createScene('legacy',outlines,
       Object.assign({},metadata,{layer:'horizon-outline'}));
     var mask=contract.createScene('legacy',circle.globe?[{type:'polygon',
-      points:circle.points,mode:2,style:{fill:'white',alpha:1}}]:[],
+      points:circle.points,mode:2,closed:true,style:{fill:'white',alpha:1}}]:[],
       Object.assign({},metadata,{layer:'horizon-mask',maskColor:'white',
         maskRequired:circle.globe}));
     return {outline:outline,mask:mask,circle:circle};
@@ -402,8 +402,9 @@
         var a=2*Math.PI*k/segments;
         points.push([radius*Math.cos(a),radius*Math.sin(a),z]);
       }
-      primitives.push({type:'polygon',points:points,mode:1,
+      primitives.push({type:'polygon',points:points,mode:1,closed:true,
         style:{stroke:kind==='equator'?model.FEEqCol:model.FEGridCol,
+          lineWidth:kind==='equator'&&radius===2*model.rFEarth?2:1,
           alpha:kind==='equator'?1:0.6-0.5*Math.log10(model.Height)/9},
         metadata:{kind:kind,radius:radius}});
     }
@@ -516,6 +517,12 @@
     var horizon=createHorizonScenes(model,Object.assign({},options,{globe:!!globe}));
     if(options&&(options.objectsOnly||options.towersOnly)){
       horizon.outline=contract.createScene('legacy',[],{layer:'horizon-outline',objectsOnly:true});
+    }
+    // Legacy only draws the opaque globe disk after at least one object has
+    // been painted behind the horizon. Without distant objects, a disk here
+    // would create a white surface that DrawModel never draws.
+    if(!objects.requiresHorizonMask){
+      horizon.mask=contract.createScene('legacy',[],{layer:'horizon-mask',maskRequired:false});
     }
     return {layers:[objects.behind,horizon.mask,horizon.outline,objects.before],
       behind:objects.behind,mask:horizon.mask,outline:horizon.outline,
