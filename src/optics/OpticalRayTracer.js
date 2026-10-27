@@ -90,21 +90,75 @@
     return step(state,ds,setup.geometry,setup.radius,setup.profile);
   }
 
-  // Refine a BRACKETED first crossing with the same RK4 trajectory used by
-  // trace(). Do not interpolate positions or directions across a curved step.
-  // Tangential contacts without a sign change are not detected here; robust
-  // grazing/multiple-event handling is deliberately left to patch 101.
-  function groundCrossing(state, delta, geometry, radius, profile) {
-    var lo = 0, hi = delta;
-    for (var j = 0; j < 52; j++) {
-      var mid = (lo + hi) / 2;
-      var candidate = step(state, mid, geometry, radius, profile);
-      if (height(candidate[0],candidate[1],geometry,radius) < 0) hi = mid;
-      else lo = mid;
-      if (hi - lo <= Math.max(1e-10,delta * 1e-12)) break;
+  // A first-event search uses integrated intermediate states, not a chord
+  // between the outer RK4 nodes. Sampling remains bounded: it cannot prove
+  // that an arbitrary rapidly varying n(h) has no hidden events.
+  var DEFAULT_EVENT_SUBSTEPS = 8;
+  var DEFAULT_CONTACT_TOLERANCE = 1e-6; // metres, in h(x,z)
+
+  function altitudeSlope(state, geometry, radius) {
+    var n = normal(state[0], state[1], geometry, radius);
+    return n[0] * state[2] + n[1] * state[3];
+  }
+  function sample(state, distance, geometry, radius, profile) {
+    var s = distance === 0 ? state : step(state,distance,geometry,radius,profile);
+    return {distance:distance,state:s,
+      altitude:height(s[0],s[1],geometry,radius),
+      slope:altitudeSlope(s,geometry,radius)};
+  }
+  // Precondition: there is a strictly below-ground sample at hi and an
+  // above-ground (or exactly surface) sample at lo. Always choose the first
+  // positive-to-negative crossing, never the far-side exit from a sphere.
+  function crossing(state, lo, hi, geometry, radius, profile) {
+    for (var j=0; j<60 && hi-lo>Math.max(1e-10,hi*1e-13); j++) {
+      var mid=(lo+hi)/2;
+      var candidate=sample(state,mid,geometry,radius,profile);
+      if (candidate.altitude < 0) hi=mid;
+      else lo=mid;
     }
-    var distance = (lo + hi) / 2;
-    return {state:step(state,distance,geometry,radius,profile),distance:distance};
+    return sample(state,(lo+hi)/2,geometry,radius,profile);
+  }
+  // Find a local minimum of physical altitude inside a bracket in which
+  // dh/ds changes from negative to positive (including a zero at the end).
+  function minimum(state, lo, hi, geometry, radius, profile) {
+    for (var j=0; j<60 && hi-lo>Math.max(1e-10,hi*1e-13); j++) {
+      var mid=(lo+hi)/2;
+      if (sample(state,mid,geometry,radius,profile).slope < 0) lo=mid;
+      else hi=mid;
+    }
+    return sample(state,(lo+hi)/2,geometry,radius,profile);
+  }
+  function groundEvent(state, delta, geometry, radius, profile, substeps, tolerance) {
+    var previous=sample(state,0,geometry,radius,profile);
+    // Avoid a spurious event for a ray *departing* tangentially from the
+    // surface. A ray launched into the surface is an immediate impact.
+    if (previous.altitude <= 0 && previous.slope < -1e-12)
+      return {contact:'crossing',point:previous};
+    for (var i=1; i<=substeps; i++) {
+      var current=sample(state,delta*i/substeps,geometry,radius,profile);
+      if (previous.altitude >= 0 && current.altitude < 0) {
+        return {contact:'crossing',point:crossing(state,previous.distance,
+          current.distance,geometry,radius,profile)};
+      }
+      if (previous.slope < 0 && current.slope >= 0) {
+        var lowest=minimum(state,previous.distance,current.distance,geometry,radius,profile);
+        if (lowest.altitude < -tolerance) {
+          // The endpoints can both be above ground. A local minimum below
+          // ground still implies an entry and exit within this RK4 step.
+          return {contact:'crossing',point:crossing(state,previous.distance,
+            lowest.distance,geometry,radius,profile)};
+        }
+        if (Math.abs(lowest.altitude) <= tolerance)
+          return {contact:'grazing',point:lowest};
+      }
+      // The minimum can coincide with the *last* sample of the requested
+      // path, leaving no right-hand derivative bracket for the loop above.
+      if (i===substeps && previous.slope<0 &&
+          Math.abs(current.slope)<=1e-10 && Math.abs(current.altitude)<=tolerance)
+        return {contact:'grazing',point:current};
+      previous=current;
+    }
+    return null;
   }
 
   function trace(options) {
@@ -118,28 +172,74 @@
     if (!Number.isFinite(angle) || !Number.isFinite(observerHeight) || observerHeight < 0 ||
         !Number.isFinite(length) || length < 0 || !Number.isFinite(ds) || ds <= 0)
       throw Error('Invalid ray parameters');
+    var substeps=options.eventSubsteps===undefined?DEFAULT_EVENT_SUBSTEPS:options.eventSubsteps;
+    var contactTolerance=options.contactTolerance===undefined?DEFAULT_CONTACT_TOLERANCE:options.contactTolerance;
+    if (!Number.isInteger(substeps) || substeps<2 || substeps>64 ||
+        !Number.isFinite(contactTolerance) || contactTolerance<=0 || contactTolerance>0.01)
+      throw Error('Invalid ground event search parameters');
     var count = Math.ceil(length / ds);
     if (count > 1000000) throw Error('Too many integration steps');
     var state = [0, observerHeight, Math.cos(angle), Math.sin(angle)];
     var points = options.collect ? [[state[0], state[1]]] : null;
-    var hitGround = false, travelled = 0;
+    var hitGround = false, travelled = 0, event = null;
     for (var i = 0; i < count; i++) {
       var delta = Math.min(ds, length - travelled);
-      var next = step(state, delta, geometry, radius, profile);
-      if (options.stopAtGround !== false && height(next[0], next[1], geometry, radius) < 0 &&
-          height(state[0], state[1], geometry, radius) >= 0) {
-        var impact = groundCrossing(state,delta,geometry,radius,profile);
-        next = impact.state;
-        travelled += impact.distance;
-        hitGround = true;
-      } else travelled += delta;
-      state = next;
+      var impact=options.stopAtGround===false?null:
+        groundEvent(state,delta,geometry,radius,profile,substeps,contactTolerance);
+      if (impact) {
+        state=impact.point.state;
+        travelled+=impact.point.distance;
+        hitGround=true;
+        event={kind:'ground',contact:impact.contact,pathLength:travelled,
+          x:state[0],z:state[1],height:height(state[0],state[1],geometry,radius),
+          tolerance:contactTolerance};
+      } else {
+        state=step(state,delta,geometry,radius,profile);
+        travelled+=delta;
+      }
       if (points) points.push([state[0], state[1]]);
       if (hitGround) break;
     }
     return { x: state[0], z: state[1], angle: Math.atan2(state[3], state[2]),
       height: height(state[0], state[1], geometry, radius),
-      hitGround: hitGround, travelled: travelled, points: points };
+      hitGround: hitGround, travelled: travelled, points: points,
+      termination:hitGround?'ground':(options.stopAtGround===false?'range-unchecked':'range'),
+      event:event };
   }
-  return { atmosphere: atmosphere, height: height, trace: trace, advanceState: advanceState };
+
+  // A deliberately restricted target-point visibility query. Since n=1,
+  // there is exactly one straight observer-to-target ray. In an atmosphere,
+  // finding *all* connecting rays needs a separate shooting solver: do not
+  // infer occlusion from its absence.
+  function vacuumTargetVisibility(options) {
+    options=options||{};
+    if (options.profile!==undefined || options.atmosphere!==undefined ||
+        options.profileOptions!==undefined)
+      throw Error('Vacuum target visibility does not accept atmospheric profiles');
+    var target=options.target;
+    if (!Array.isArray(target)||target.length!==2 || !target.every(Number.isFinite))
+      throw Error('Target must be a finite [x,z] in the observer tangent plane');
+    var observerHeight=options.observerHeight===undefined?0:options.observerHeight;
+    if (!Number.isFinite(observerHeight)||observerHeight<0)throw Error('Invalid observer height');
+    var distance=Math.hypot(target[0],target[1]-observerHeight);
+    if (!(distance>0)||!Number.isFinite(distance))
+      throw Error('Distinct finite target point required');
+    var tolerance=options.contactTolerance===undefined?DEFAULT_CONTACT_TOLERANCE:options.contactTolerance;
+    var ray=trace({geometry:options.geometry,radius:options.radius,
+      profile:atmosphere('vacuum'),observerHeight:observerHeight,
+      angle:Math.atan2(target[1]-observerHeight,target[0]),length:distance,
+      step:options.step===undefined?20:options.step,
+      eventSubsteps:options.eventSubsteps,contactTolerance:tolerance});
+    // A surface endpoint can be seen; the terrain is blocking only if it
+    // is encountered *before* the target. Grazing is tolerance-dependent,
+    // so a ray that may just touch the surface is not asserted visible.
+    var priorHit=ray.hitGround && ray.travelled < distance-1e-7;
+    var status= !priorHit?'visible':
+      ray.event.contact==='crossing'?'blocked':'indeterminate';
+    return {status:status,ray:ray,target:target.slice(),
+      caveat:'Vacuum straight ray only; no atmospheric shooting or 3D mesh intersection'};
+  }
+
+  return { atmosphere: atmosphere, height: height, trace: trace, advanceState: advanceState,
+    vacuumTargetVisibility:vacuumTargetVisibility };
 }));
