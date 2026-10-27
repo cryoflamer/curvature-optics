@@ -9,7 +9,7 @@
   'use strict';
   if(!engine||!contract)throw new Error('Geometry engine and scene contract required');
   function compose(model,objIx,globe,options){
-    var composition=engine.createTowerHorizonComposition(model,objIx,globe,options);
+    var composition=engine.createObjectHorizonComposition(model,objIx,globe,options);
     var primitives=[],ranges=[],nextIndex=0;
     composition.layers.forEach(function(layer,index){
       var first=nextIndex;
@@ -24,9 +24,9 @@
       ranges.push({name:['behind','mask','outline','before'][index],start:first,end:nextIndex,count:nextIndex-first});
     });
     var scene=contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
-      composition:'tower-horizon',objectIndex:objIx,globe:!!globe,
+      composition:'object-horizon',objectIndex:objIx,globe:!!globe,
       layerRanges:ranges,approximation:'fixed-world-polygon',
-      limitations:['Only type-2 towers from Objects 2 and horizon are included',
+      limitations:['Only independently supported object types and horizon are included',
         'World-polygon horizon is not pixel-identical to legacy CircleOnPlane',
         'Legacy camera and additional scene objects are not independently generated']});
     return {scene:scene,ranges:ranges,cutoffAngle:composition.cutoffAngle,

@@ -292,11 +292,14 @@
   // DrawObjectsBehindHorizon. This is a drawing-order partition, NOT an
   // analytic per-vertex visibility test: the legacy white disk masks the
   // behind-horizon geometry after it is drawn.
-  function towerHorizonPartition(model,objIx,globe){
+  // Common legacy painter-order horizon partition for all independently
+  // supported object shapes. Partitioning is by object placement, not by
+  // clipping individual triangles: the white disk masks the distant layer.
+  function objectHorizonPartition(model,objIx,globe){
     if(!model||!Number.isFinite(model.rDisk)||!Number.isFinite(model.hDip))
       throw new TypeError('Finite horizon disk radius and dip required');
     if(model.rDisk<0)throw new RangeError('Nonnegative horizon disk radius required');
-    var entries=towerSequence(model,objIx,globe),aClip=0;
+    var entries=objectSequence(model,objIx,globe),aClip=0;
     if(globe){
       var r=model.geometryRadius,side=model.ObjSidePos[objIx]/r;
       var sideOnDisk=(r-model.hDip)*Math.tan(side);
@@ -310,22 +313,33 @@
       (globe&&entry.params.longitude>aClip?behind:before).push(entry);
     });
     return {behind:behind,before:before,cutoffAngle:aClip,
-      // The legacy masking circle is a renderer operation, not a tower.
-      requiresHorizonMask:globe&&behind.length>0,
-      total:entries.length};
+      requiresHorizonMask:!!globe&&behind.length>0,total:entries.length};
   }
-  function createHorizonPartitionedTowerScenes(model,objIx,globe){
-    var partition=towerHorizonPartition(model,objIx,globe);
+  function createHorizonPartitionedObjectScenes(model,objIx,globe){
+    var partition=objectHorizonPartition(model,objIx,globe);
     function scene(entries,layer){
       var primitives=[];
       entries.forEach(function(entry){entry.scene.primitives.forEach(function(p){primitives.push(p);});});
       return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
-        objectIndex:objIx,globe:!!globe,horizonPartitioned:true,layer:layer,
-        towerCount:entries.length});
+        objectIndex:objIx,objectType:model.ObjType[objIx],globe:!!globe,
+        horizonPartitioned:true,layer:layer,objectCount:entries.length});
     }
     return {behind:scene(partition.behind,'behind'),before:scene(partition.before,'before'),
       cutoffAngle:partition.cutoffAngle,requiresHorizonMask:partition.requiresHorizonMask,
       total:partition.total};
+  }
+  // Backwards-compatible tower-only entrypoints remain strict.
+  function towerHorizonPartition(model,objIx,globe){
+    if(!model||!Array.isArray(model.ObjType)||model.ObjType[objIx]!==3)
+      throw new RangeError('Only transmission towers (ObjType 3) are supported');
+    return objectHorizonPartition(model,objIx,globe);
+  }
+  function createHorizonPartitionedTowerScenes(model,objIx,globe){
+    towerHorizonPartition(model,objIx,globe);
+    var scenes=createHorizonPartitionedObjectScenes(model,objIx,globe);
+    scenes.behind.metadata.towerCount=scenes.behind.metadata.objectCount;
+    scenes.before.metadata.towerCount=scenes.before.metadata.objectCount;
+    return scenes;
   }
   // World-space horizon circle and white occlusion disk. Tessellation is an
   // explicit geometry resolution, not GraphX3DX's camera-dependent ellipse
@@ -369,19 +383,21 @@
         maskRequired:circle.globe}));
     return {outline:outline,mask:mask,circle:circle};
   }
-  function createTowerHorizonComposition(model,objIx,globe,options){
-    var towers=createHorizonPartitionedTowerScenes(model,objIx,globe);
+  function createObjectHorizonComposition(model,objIx,globe,options){
+    var objects=createHorizonPartitionedObjectScenes(model,objIx,globe);
     var horizon=createHorizonScenes(model,Object.assign({},options,{globe:!!globe}));
-    if(options&&options.towersOnly){
-      // Legacy DrawObjectsBehindHorizon already paints the white occlusion disk;
-      // the auxiliary visible horizon and flat-equator outlines are omitted.
-      horizon.outline=contract.createScene('legacy',[],{layer:'horizon-outline',towersOnly:true});
+    if(options&&(options.objectsOnly||options.towersOnly)){
+      horizon.outline=contract.createScene('legacy',[],{layer:'horizon-outline',objectsOnly:true});
     }
-    // Explicit painter order; consumer must not infer order from scene names.
-    return {layers:[towers.behind,horizon.mask,horizon.outline,towers.before],
-      behind:towers.behind,mask:horizon.mask,outline:horizon.outline,
-      before:towers.before,cutoffAngle:towers.cutoffAngle,
-      requiresHorizonMask:towers.requiresHorizonMask};
+    return {layers:[objects.behind,horizon.mask,horizon.outline,objects.before],
+      behind:objects.behind,mask:horizon.mask,outline:horizon.outline,
+      before:objects.before,cutoffAngle:objects.cutoffAngle,
+      requiresHorizonMask:objects.requiresHorizonMask};
   }
-  return {objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  function createTowerHorizonComposition(model,objIx,globe,options){
+    if(!model||!Array.isArray(model.ObjType)||model.ObjType[objIx]!==3)
+      throw new RangeError('Only transmission towers (ObjType 3) are supported');
+    return createObjectHorizonComposition(model,objIx,globe,options);
+  }
+  return {objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
