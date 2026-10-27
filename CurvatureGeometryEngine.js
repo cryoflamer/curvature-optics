@@ -383,6 +383,58 @@
         maskRequired:circle.globe}));
     return {outline:outline,mask:mask,circle:circle};
   }
+  // Flat-Earth reference rings and radial grid from DrawModel. These are
+  // visual guides on z=-Height, not physical Earth-surface geometry.
+  // The original camera-dependent ArcOnPlane is represented by explicit
+  // world-space polygons; radii and angles remain exact in metadata.
+  function flatSurfaceGuides(model,options){
+    options=options||{};
+    if(!model||!Number.isFinite(model.Height)||model.Height<=0||
+        !Number.isFinite(model.rFEarth)||model.rFEarth<=0)
+      throw new RangeError('Positive finite Height and rFEarth required');
+    var segments=options.segments===undefined?128:options.segments;
+    if(!Number.isInteger(segments)||segments<12||segments>8192)
+      throw new RangeError('Flat guide segments must be from 12 to 8192');
+    var z=-model.Height,primitives=[];
+    function ring(radius,kind){
+      var points=[];
+      for(var k=0;k<segments;k++){
+        var a=2*Math.PI*k/segments;
+        points.push([radius*Math.cos(a),radius*Math.sin(a),z]);
+      }
+      primitives.push({type:'polygon',points:points,mode:1,
+        style:{stroke:kind==='equator'?model.FEEqCol:model.FEGridCol,
+          alpha:kind==='equator'?1:0.6-0.5*Math.log10(model.Height)/9},
+        metadata:{kind:kind,radius:radius}});
+    }
+    ring(model.rFEarth,'equator');
+    ring(2*model.rFEarth,'equator');
+    var gridRadii=[];
+    if(model.showGrid>0){
+      var delta=model.rFEarth/12,max=2*model.rFEarth-delta/2;
+      function gridRings(){
+        // Match the legacy floating-point increment and termination rule.
+        for(var r=delta;r<max;r+=delta){ring(r,'grid-circle');gridRadii.push(r);}
+      }
+      gridRings();
+      [700000,30000,3000,300].forEach(function(limit){
+        if(model.Height<limit){max=delta;delta/=10;max-=delta/2;gridRings();}
+      });
+      var angleStep=Math.PI/12,angleMax=2*Math.PI-angleStep/2;
+      for(var angle=0;angle<angleMax;angle+=angleStep){
+        primitives.push({type:'line',points:[
+          [2*model.rFEarth*Math.cos(angle),2*model.rFEarth*Math.sin(angle),z],
+          [0,0,z]],style:{stroke:model.FEGridCol,
+            alpha:0.6-0.5*Math.log10(model.Height)/9},
+          metadata:{kind:'grid-ray',angle:angle}});
+      }
+    }
+    return contract.createScene('legacy',primitives,{
+      generator:'CurvatureGeometryEngine',layer:'flat-surface-guides',
+      visualAid:true,planeZ:z,segments:segments,
+      equatorRadii:[model.rFEarth,2*model.rFEarth],gridRadii:gridRadii,
+      gridEnabled:model.showGrid>0});
+  }
   function createObjectHorizonComposition(model,objIx,globe,options){
     var objects=createHorizonPartitionedObjectScenes(model,objIx,globe);
     var horizon=createHorizonScenes(model,Object.assign({},options,{globe:!!globe}));
@@ -399,5 +451,5 @@
       throw new RangeError('Only transmission towers (ObjType 3) are supported');
     return createObjectHorizonComposition(model,objIx,globe,options);
   }
-  return {objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {flatSurfaceGuides:flatSurfaceGuides,objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
