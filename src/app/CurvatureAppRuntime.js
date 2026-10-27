@@ -76,6 +76,9 @@ function DrawMainCanvasFrame(g) {
         else pieces.push('no finite ground horizon resolved');
         if(result.guideSegments!==undefined)pieces.push(result.guideSegments+' physical surface guide pieces');
         if(result.guideSolves!==undefined)pieces.push(result.guideSolves+' ground ray solves');
+        if(result.guideCulling&&(result.guideCulling.skippedEdges||result.guideCulling.clippedEdges))
+          pieces.push('ground-grid drawing limited to '+Math.round(result.guideRenderExtent/1000)+
+            ' km ('+result.guideCulling.skippedEdges+' skipped, '+result.guideCulling.clippedEdges+' clipped edges; NOT an optical horizon)');
         status.textContent=(result.budgetExceeded?'PARTIAL (time budget): ':failure?'CHECK SOLVER: ':result.unresolved?'BOUNDARY UNCERTAINTY: ':'')+
           pieces.join(' | ')+'. Physical ground grid/horizon; fills pending.';
       }

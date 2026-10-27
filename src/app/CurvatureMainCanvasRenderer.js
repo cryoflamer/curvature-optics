@@ -104,6 +104,7 @@
       unresolvedReasons:stats.unresolvedReasons,sampleStatuses:stats.sampleStatuses,
       perGroup:stats.perGroup,step:stats.step,groundHorizon:stats.groundHorizon,
       guideSegments:stats.guideSegments,guideSolves:stats.guideSolves,
+      guideRenderExtent:stats.guideRenderExtent,guideCulling:stats.guideCulling,
       warning:'Physical optics in shared painter; physical ground/horizon guides projected through optical rays.'+
         ' Object fills and mutual occlusion pending (fill-only shapes shown as outlines).'+
         (stats.budgetExceeded?' Numerical preview budget exceeded.':'')+

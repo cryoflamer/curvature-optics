@@ -136,7 +136,8 @@
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
         fieldStats:null,budgetExceeded:false,
         atmosphere:kind,step:settings.step,guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
-        guideSolves:guideProjection.solves(),guideSegments:physicalGuides.length};
+        guideSolves:guideProjection.solves(),guideSegments:physicalGuides.length,
+        guideRenderExtent:guideProjection.renderExtent,guideCulling:guideProjection.cullingStats()};
       function countInto(dest,source){Object.keys(source).forEach(function(k){
         dest[k]=(dest[k]||0)+source[k];
       });}
