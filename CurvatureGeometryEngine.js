@@ -194,10 +194,10 @@
   function createTowerType2Scene(plane,metadata){
     return contract.createScene('legacy',placeOnPlane(localTowerType2(),plane),Object.assign({generator:'CurvatureGeometryEngine',objectType:3,towerVariant:2},metadata||{}));
   }
-  // Opt-in sequence builder. It does not read CurveApp, invoke DrawModel, or
-  // decide which towers are occluded by the horizon. Entries are far-to-near,
-  // matching the legacy object's iteration order before horizon partitioning.
-  function towerSequence(model,objIx,globe){
+  // Shared sequence placement for independently supported object types.
+  // Entries are far-to-near and retain legacy drawn/total context for Bedford.
+  // Hidden styling is determined by the same horizon cutoff as legacy drawing.
+  function objectSequence(model,objIx,globe){
     if(!model||![0,1].includes(objIx))throw new TypeError('Model and object index required');
     var keys=['geometryRadius','Height','NObjects','ObjDist','ObjDeltaDist','ObjSidePos',
       'ObjSideVar','ObjSideType','ObjSize','ObjSizeVar','ObjSizeType','ObjType'];
@@ -209,7 +209,8 @@
     });
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
-    if(model.ObjType[objIx]!==3)throw new RangeError('Only transmission towers (ObjType 3) are supported');
+    var objType=model.ObjType[objIx];
+    if(![0,1,2,3].includes(objType))throw new RangeError('Object type has not been independently ported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -217,6 +218,18 @@
       max=Math.max(0,Math.min(n,Math.floor(Math.PI/delta)));
     }
     var entries=[];
+    var cutoff=0;
+    if(globe){
+      if(!Number.isFinite(model.rDisk)||!Number.isFinite(model.hDip)){
+        // A missing horizon is acceptable for standalone placement, but not
+        // for a visibility decision. Explicitly leave all entries visible.
+        cutoff=Infinity;
+      }else{
+        var sideOnDisk=(r-model.hDip)*Math.tan(model.ObjSidePos[objIx]/r);
+        if(model.rDisk>Math.abs(sideOnDisk))
+          cutoff=Math.asin(Math.min(1,Math.sqrt(model.rDisk*model.rDisk-sideOnDisk*sideOnDisk)/r));
+      }
+    }
     for(var drawn=0;drawn<max;drawn++){
       var lng=first+(max-1-drawn)*delta;
       var variation=model.ObjSizeVar[objIx],size=1,sizeType=model.ObjSizeType[objIx];
@@ -228,6 +241,8 @@
       else if(sizeType<0||sizeType>4)throw new RangeError('Unsupported size variation');
       size=(size+1-Math.abs(variation))/2;
       if(size<0)size=-size;
+      var sizeHor=size;
+      if(objType===2){sizeHor=.25*size+.75;size=.5*size+.5;}
       var side=model.ObjSidePos[objIx]/r,sideVar=model.ObjSideVar[objIx]/r/2;
       var sideType=model.ObjSideType[objIx];
       if(sideType===0&&max>1)sideVar*=2*(max-1-drawn)/(max-1)-1;
@@ -239,15 +254,31 @@
       if(sideType===1&&Math.abs(positions[0])<Math.abs(positions[1]))positions.reverse();
       positions.forEach(function(lat,col){
         var params={geometryRadius:r,height:model.Height,objectSize:model.ObjSize[objIx],
-          longitude:lng,latitude:lat,globe:!!globe,verticalScale:size,horizontalScale:size,
+          longitude:lng,latitude:lat,globe:!!globe,verticalScale:size,horizontalScale:sizeHor,
           // Legacy SetPlane uses [side,0,0] for cosine/sine side modes.
           planeOffset:(sideType===3||sideType===4)?side:0};
-        var scene=createPlacedTowerScene(params,objIx,{objectIndex:objIx,sequenceIndex:drawn,
-          column:sideType===1?col+1:0,longitude:lng,latitude:lat});
-        entries.push({params:params,scene:scene});
+        var hidden=!!globe&&lng>cutoff;
+        var legacyDrawn=drawn+(globe?n-max:0);
+        var metadata={objectIndex:objIx,sequenceIndex:drawn,drawn:legacyDrawn,
+          total:n,column:sideType===1?col+1:0,longitude:lng,latitude:lat,hidden:hidden};
+        var scene=createPlacedObjectScene(params,objType,objIx,hidden,metadata);
+        entries.push({params:params,scene:scene,hidden:hidden});
       });
     }
     return entries;
+  }
+  function towerSequence(model,objIx,globe){
+    if(!model||!Array.isArray(model.ObjType)||model.ObjType[objIx]!==3)
+      throw new RangeError('Only transmission towers (ObjType 3) are supported');
+    return objectSequence(model,objIx,globe);
+  }
+  function createObjectSequenceScene(model,objIx,globe){
+    var entries=objectSequence(model,objIx,globe);
+    var primitives=[];
+    entries.forEach(function(entry){entry.scene.primitives.forEach(function(p){primitives.push(p);});});
+    return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
+      objectIndex:objIx,objectType:model.ObjType[objIx],globe:!!globe,objectCount:entries.length,
+      horizonPartitioned:false});
   }
   function createTowerSequenceScene(model,objIx,globe){
     var entries=towerSequence(model,objIx,globe);
@@ -352,5 +383,5 @@
       before:towers.before,cutoffAngle:towers.cutoffAngle,
       requiresHorizonMask:towers.requiresHorizonMask};
   }
-  return {localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
