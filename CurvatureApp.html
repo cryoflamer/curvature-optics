@@ -1879,6 +1879,39 @@ function DrawModelWithOptionalAudit(g) {
             Object.assign(entry,fullReport);
             entry.referenceAvailable=true;
             entry.referenceScope='complete legacy DrawModel scene including auxiliary geometry';
+            // One click now includes both Globe and Flat full-composition checks
+            // for each controlled near/far preset, regardless of the live mode.
+            // The controlled reference and candidate share exactly one camera.
+            entry.fullComposition={available:false};
+            try {
+              if(!window.CurvatureCompositionCapture)
+                throw new Error('Full composition capture module unavailable');
+              var controlledFull=window.CurvatureCompositionCapture.capture({
+                model:controlledModel,objectIndex:preset.objectIndex,globe:preset.globe,
+                compositionScope:'full',width:cameraWidth,height:cameraHeight,
+                camera:fullCamera,
+                legacyReference:{width:cameraWidth,height:cameraHeight,
+                  camera:referenceFrames.fullCamera,rgba:snapshotPixels(referenceFrames.full)},
+                createCanvas:function(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+              });
+              var fullBase='controlled-'+preset.id+'-full-composition';
+              var fullCandidateName=fullBase+'.png';
+              var fullForegroundName=fullBase+'-foreground-diff.png';
+              var fullEdgesName=fullBase+'-edges-diff.png';
+              addPresetRgba(fullCandidateName,controlledFull.candidate.rgba);
+              addPresetRgba(fullForegroundName,controlledFull.comparison.differenceImages.foreground);
+              addPresetRgba(fullEdgesName,controlledFull.comparison.differenceImages.edges);
+              entry.fullComposition={available:true,mode:preset.globe?'globe':'flat',
+                referenceImage:entry.referenceImage,candidateImage:fullCandidateName,
+                foregroundDifferenceImage:fullForegroundName,edgesDifferenceImage:fullEdgesName,
+                compositionAudit:controlledFull.compositionAudit,
+                renderStatistics:controlledFull.renderStatistics,
+                foreground:controlledFull.comparison.foreground,
+                edges:controlledFull.comparison.edges,rgba:controlledFull.comparison.rgba,
+                cameraMatched:controlledFull.comparison.cameraMatched,
+                caveats:controlledFull.comparison.caveats.concat(controlledFull.limitations)};
+            }catch(fullPresetError){entry.fullComposition.reason=String(fullPresetError);}
+
             entry.candidateScope='independent type-2 towers and horizon outlines';
             var isolated=renderCandidate({towersOnly:true},towerCamera);
             var towerBase='controlled-'+preset.id+'-towers';
