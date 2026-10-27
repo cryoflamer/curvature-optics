@@ -1730,10 +1730,22 @@ function DrawModelWithOptionalAudit(g) {
           for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
           images.push({name:name,data:bytes});
         }
+        // Phase 88: second, opt-in full-guide comparison using the same real
+        // reference pixels and camera. Keep the established partial export intact.
+        var fullCompositionResult=window.CurvatureCompositionCapture.capture({
+          model:CurveApp,objectIndex:supportedIndices[0],globe:independentGlobe,
+          compositionScope:'full',width:cameraWidth,height:cameraHeight,
+          camera:cameraSnapshot,
+          captureLegacy:function(){return {canvas:captureEndPixels,camera:cameraSnapshot};},
+          createCanvas:function(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+        });
+        addComparisonImage('independent-full-composition.png',fullCompositionResult.candidate.rgba);
+        addComparisonImage('independent-full-foreground-diff.png',fullCompositionResult.comparison.differenceImages.foreground);
+        addComparisonImage('independent-full-edges-diff.png',fullCompositionResult.comparison.differenceImages.edges);
         addComparisonImage('independent-composition.png',compositionResult.candidate.rgba);
         addComparisonImage('independent-foreground-diff.png',compositionResult.comparison.differenceImages.foreground);
         addComparisonImage('independent-edges-diff.png',compositionResult.comparison.differenceImages.edges);
-        independentCompositionComparison={available:true,mode:independentGlobe?'globe':'flat',
+        independentCompositionComparison={available:true,fullComposition:{scope:'full',audit:fullCompositionResult.compositionAudit,renderStatistics:fullCompositionResult.renderStatistics,foreground:fullCompositionResult.comparison.foreground,edges:fullCompositionResult.comparison.edges,rgba:fullCompositionResult.comparison.rgba,caveats:fullCompositionResult.comparison.caveats.concat(fullCompositionResult.limitations),candidateImage:'independent-full-composition.png',foregroundDifferenceImage:'independent-full-foreground-diff.png',edgesDifferenceImage:'independent-full-edges-diff.png'},mode:independentGlobe?'globe':'flat',
           objectIndex:supportedIndices[0],compositionAudit:compositionResult.compositionAudit,
           renderStatistics:compositionResult.renderStatistics,
           foreground:compositionResult.comparison.foreground,
