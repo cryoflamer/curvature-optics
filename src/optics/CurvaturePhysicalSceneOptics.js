@@ -81,6 +81,37 @@
     for(var j=0;j<=3;j++)heights.push(hlo+(hhi-hlo)*j/3);
     return {distances:distances,heights:heights};
   }
+  // Painter ordering: opaque foundations in nearer towers must cover the
+  // geometry of farther towers. Depth is measured from the fixed observer,
+  // not from the camera's Pan/Nick/Roll, so turning the view does not trigger
+  // new atmospheric ray integrations or invalidate the optical composition.
+  // For overlapping/intersecting meshes a real Z buffer would be required.
+  function placedObjects(source,groups){
+    var placed=[];
+    groups.forEach(function(r){
+      var byObject=new Map();
+      source.slice(r.start,r.end).forEach(function(p){
+        var meta=p.metadata||{},id=meta.placedObjectIndex;
+        // Older or hand-authored scenes lacking placement metadata remain
+        // one batch, preserving their original primitive order.
+        var key=Number.isInteger(id)?id:'unknown';
+        if(!byObject.has(key))byObject.set(key,[]);
+        byObject.get(key).push(p);
+      });
+      byObject.forEach(function(primitives,id){
+        var radial=0,n=0;
+        primitives.forEach(function(p){p.points.forEach(function(v){
+          radial+=Math.hypot(v[0],v[1]);n++;
+        });});
+        placed.push({name:r.name,id:id,primitives:primitives,
+          distance:n?radial/n:0});
+      });
+    });
+    // Stable in modern JS; explicit tie-break also makes tests deterministic.
+    placed.sort(function(a,b){return b.distance-a.distance ||
+      a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));});
+    return placed;
+  }
   function assemble(composed,results,geometry,guides){
     // Guides remain live presentation data. A pan may rotate the tangent
     // line without invalidating expensive, view-independent optical rays.
@@ -172,7 +203,7 @@
       var groundCacheHits=groundAfter?groundAfter.hits-groundBefore.hits:0;
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
-        fieldStats:null,fieldPrism:span?{
+        fieldStats:null,perObject:[],fieldPrism:span?{
           minDistance:span.distances[0],maxDistance:span.distances[span.distances.length-1],
           minHeight:span.heights[0],maxHeight:span.heights[span.heights.length-1]
         }:null,budgetExceeded:false,
@@ -185,14 +216,13 @@
       function countInto(dest,source){Object.keys(source).forEach(function(k){
         dest[k]=(dest[k]||0)+source[k];
       });}
-      // Small bank first so a long causeway cannot exhaust the numerical
-      // budget before the important comparison/focus tower is processed.
-      var prioritized=groups.slice().sort(function(a,b){return a.count-b.count;});
+      // Each placed tower is an atomic painter batch: FARTHER first, then
+      // its own fills followed by its own outlines. Drawing the whole bank's
+      // fills and only then its strokes made far tower strokes cross foreground
+      // foundations regardless of the bank sorting order.
+      var prioritized=placedObjects(source,groups);
       prioritized.forEach(function(r){
-        // Every authored primitive is represented. Fill-only polygons remain
-        // outlines until true physical polygon clipping is available; they
-        // must not silently disappear when the optics backend is switched.
-        var prim=source.slice(r.start,r.end);
+        var prim=r.primitives;
         if(!prim.length)return;
         if(!limited){stats.unresolved+=prim.length;return;}
         var projected=silhouette.projectPrimitives({primitives:prim,field:limited,
@@ -227,10 +257,22 @@
         stats.hiddenLeaves+=projected.stats.hiddenLeaves;
         countInto(stats.unresolvedReasons,projected.stats.unresolvedReasons);
         countInto(stats.sampleStatuses,projected.stats.sampleStatuses);
-        stats.perGroup.push({name:r.name,fillTriangles:fills.stats.fillTriangles,
+        // Public perGroup metrics remain aggregated by bank for the existing
+        // diagnostics/tests. New perObject metrics expose painter Z ordering.
+        var one={name:r.name,placedObjectIndex:r.id,distance:r.distance,
+          fillTriangles:fills.stats.fillTriangles,
           fillUnresolved:fills.stats.unresolvedTriangles,sourcePrimitives:prim.length,
           visibleSegments:projected.segments.length,unresolved:projected.unresolved.length,
-          unresolvedReasons:projected.stats.unresolvedReasons});
+          unresolvedReasons:projected.stats.unresolvedReasons};
+        stats.perObject.push(one);
+        var bank=stats.perGroup.find(function(g){return g.name===r.name;});
+        if(!bank){bank={name:r.name,fillTriangles:0,fillUnresolved:0,
+          sourcePrimitives:0,visibleSegments:0,unresolved:0,unresolvedReasons:{}};
+          stats.perGroup.push(bank);}
+        bank.fillTriangles+=one.fillTriangles;bank.fillUnresolved+=one.fillUnresolved;
+        bank.sourcePrimitives+=one.sourcePrimitives;
+        bank.visibleSegments+=one.visibleSegments;bank.unresolved+=one.unresolved;
+        countInto(bank.unresolvedReasons,one.unresolvedReasons);
       });
       if(field&&field.stats)fieldStats=field.stats();
       stats.fieldStats=fieldStats;
@@ -248,5 +290,5 @@
     }
     return {transform:transform,clearCache:function(){cached=null;}};
   }
-  return {create:create,vacuumSample:vacuumSample,arrivalPoint:arrivalPoint};
+  return {create:create,vacuumSample:vacuumSample,arrivalPoint:arrivalPoint,placedObjects:placedObjects};
 }));

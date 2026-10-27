@@ -110,3 +110,17 @@ fills are still out of scope. See
 `docs/MIGRATION_PHYSICAL_FOUNDATION_FILLS_114.md` and
 `tests/PhysicalPolygonFills114.test.js`. Next: independent optical/visual
 validation and remaining horizon boundary cases (115).
+
+## Compatpatch 114.1 — individual tower painter depth ordering
+
+The previous all-fills-then-all-strokes arrangement per bank was replaced by
+placed-object batches. `CurvatureGeometryEngine.createObjectSequenceScene`
+retains `placedObjectIndex`/`objectBank` metadata on authored primitives;
+`CurvaturePhysicalSceneOptics` orders the two banks' objects together far to
+near by observer-relative radial distance, emitting each object's clipped
+foundation fills and then its outlines. The common painter stays unchanged.
+`stats.perGroup` remains a bank aggregate, while `stats.perObject` exposes the
+individual object order. Camera-only Pan/Nick/Roll changes do not invalidate
+optical rays. No arbitrary intersecting-mesh Z buffer was added. See
+`docs/MIGRATION_TOWER_PAINTER_DEPTH_114_1.md` and
+`tests/PhysicalTowerPainterOrder1141.test.js`.

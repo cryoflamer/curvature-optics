@@ -275,7 +275,15 @@
   function createObjectSequenceScene(model,objIx,globe){
     var entries=objectSequence(model,objIx,globe);
     var primitives=[];
-    entries.forEach(function(entry){entry.scene.primitives.forEach(function(p){primitives.push(p);});});
+    // Preserve each placed object's identity through the optics-neutral scene.
+    // All of its authored primitives share one depth/order key; grouping by
+    // polygon alone would paint the whole bank's strokes over nearer fills.
+    entries.forEach(function(entry,placedIndex){
+      entry.scene.primitives.forEach(function(p){
+        primitives.push(Object.assign({},p,{metadata:Object.assign({},p.metadata,{
+          placedObjectIndex:placedIndex,objectBank:objIx})}));
+      });
+    });
     return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
       objectIndex:objIx,objectType:model.ObjType[objIx],globe:!!globe,objectCount:entries.length,
       horizonPartitioned:false});
