@@ -93,11 +93,16 @@
     options=options||{};
     var first=model.ObjDist[0]>model.ObjDist[1]?0:1;
     var order=[first,1-first].filter(function(i){return model.NObjects[i]>0;});
+    // The globe horizon is a projected silhouette. A 128-sided world disk
+    // introduces visible straight chords at ordinary main-Canvas zoom levels.
+    // Increase only the interactive main-frame mask resolution; controlled
+    // diagnostic captures retain their explicitly requested resolution.
+    var mainOptions=Object.assign({segments:512},options);
     var cores=order.map(function(i){
-      return {index:i,parts:engine.createObjectHorizonComposition(model,i,globe,options)};
+      return {index:i,parts:engine.createObjectHorizonComposition(model,i,globe,mainOptions)};
     });
-    var surface=globe?engine.globeSurfaceGuides(model):engine.flatSurfaceGuides(model,options);
-    var horizonGuides=globe?engine.globeHorizonGuides(model,options):null;
+    var surface=globe?engine.globeSurfaceGuides(model):engine.flatSurfaceGuides(model,mainOptions);
+    var horizonGuides=globe?engine.globeHorizonGuides(model,mainOptions):null;
     var layers=[];
     if(!globe)layers.push({name:'surface-guides',role:'visual-aid',scene:surface});
     cores.forEach(function(group){
@@ -118,6 +123,11 @@
         var copy=Object.assign({},p,{commandIndex:primitives.length});
         if(p.style)copy.style=Object.assign({},p.style);
         if(p.metadata)copy.metadata=Object.assign({},p.metadata);
+        // The generic painter defaults to slate strokes for an unstyled
+        // primitive; legacy tower lines are black. Keep surface guide colors
+        // unchanged, including the blue projected horizon.
+        if(layer.role==='objects' && (!copy.style || !copy.style.stroke))
+          copy.style=Object.assign({},copy.style,{stroke:'black'});
         primitives.push(copy);
       });
       ranges.push({name:layer.name,role:layer.role,start:start,

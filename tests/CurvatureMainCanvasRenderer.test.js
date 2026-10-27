@@ -110,3 +110,21 @@ test('unsupported populated object groups are not silently omitted',()=>{
   assert.equal(adapter.support({...model,showModel:1,NObjects:[85,2],ObjType:[3,99]}).supported,false);
   assert.equal(adapter.support({...model,showModel:1,NObjects:[85,0],ObjType:[3,99]}).supported,true);
 });
+
+test('main-frame horizon mask uses finer independent tessellation and object strokes stay black',()=>{
+  const bridge=require('../src/scene/CurvatureIndependentComposition');
+  const m={...model,ObjType:[3,3],NObjects:[85,2],ObjDist:[50,25550],
+    ObjDeltaDist:[297.55,373],ObjSidePos:[32,22.4],ObjSize:[23,64]};
+  const frame=bridge.composeMain(m,true);
+  const masks=frame.scene.primitives.filter(p=>p.type==='polygon'&&p.mode===2&&p.style&&p.style.fill==='white');
+  assert.ok(masks.length>0,'globe has an occluding horizon mask');
+  assert.ok(masks.every(p=>p.points.length===512),'main Canvas uses a finer circular silhouette');
+  for(const range of frame.ranges.filter(r=>r.role==='objects')){
+    for(const p of frame.scene.primitives.slice(range.start,range.end))
+      assert.equal(p.style.stroke,'black','objects retain legacy black strokes');
+  }
+  const flat=bridge.composeMain(m,false);
+  assert.equal(flat.scene.primitives.some(p=>p.type==='polygon'&&p.mode===2&&p.style&&p.style.fill==='white'),false);
+  const guide=frame.ranges.find(r=>r.name==='surface-guides');
+  assert.ok(frame.scene.primitives.slice(guide.start,guide.end).some(p=>p.style&&p.style.stroke!=='black'));
+});
