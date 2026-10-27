@@ -3,10 +3,10 @@
  * The candidate uses the independent world-space composition and painter renderer.
  */
 (function(root,factory){
- var api=factory(root.CurvatureCompositionComparison||(typeof require==='function'?require('./CurvatureCompositionComparison'):null),root.CurvatureZBufferPreview||(typeof require==='function'?require('../renderers/CurvatureZBufferPreview'):null),root.CurvatureLegacyOrderPreview||(typeof require==='function'?require('../renderers/CurvatureLegacyOrderPreview'):null),root.CurvatureEarClip||(typeof require==='function'?require('../geometry/CurvatureEarClip'):null),root.CurvatureIndependentComposition||(typeof require==='function'?require('../scene/CurvatureIndependentComposition'):null),root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),root.CurvatureRegionComparison||(typeof require==='function'?require('./CurvatureRegionComparison'):null));
+ var api=factory(root.CurvatureCompositionComparison||(typeof require==='function'?require('./CurvatureCompositionComparison'):null),root.CurvatureRenderFrame||(typeof require==='function'?require('../scene/CurvatureRenderFrame'):null),root.CurvatureFrameRenderer||(typeof require==='function'?require('../renderers/CurvatureFrameRenderer'):null),root.CurvatureIndependentComposition||(typeof require==='function'?require('../scene/CurvatureIndependentComposition'):null),root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),root.CurvatureRegionComparison||(typeof require==='function'?require('./CurvatureRegionComparison'):null));
  if(typeof module==='object'&&module.exports)module.exports=api;
  root.CurvatureCompositionCapture=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(comparison,zbuffer,painter,earClip,composition,decorations,regions){
+}(typeof globalThis!=='undefined'?globalThis:this,function(comparison,frames,renderer,composition,decorations,regions){
  'use strict';
  function pixels(canvas,width,height){
   if(!canvas||canvas.width!==width||canvas.height!==height)throw new RangeError('Canvas viewport mismatch');
@@ -28,7 +28,7 @@
    var assembled=composition.composeFull(args.model,args.objectIndex,args.globe,args.geometryOptions);
    var audit=composition.auditFull(assembled);
    if(!audit.rendererReady)throw new Error('Full composition is not renderer-ready');
-   prepared={scene:assembled.scene,audit:audit,limitations:assembled.scene.metadata.limitations};
+   prepared={scene:assembled.scene,ranges:assembled.ranges,audit:audit,limitations:assembled.scene.metadata.limitations};
   }else prepared=comparison.prepare(args.model,args.objectIndex,args.globe,args.geometryOptions);
   // A caller may reuse the exact same immutable reference for partial and full
   // comparisons. This avoids recapturing a mutable legacy canvas between modes.
@@ -49,10 +49,11 @@
   var canvas=args.createCanvas(width,height);
   if(!canvas||canvas.width!==width||canvas.height!==height||(typeof legacy!=='undefined'&&legacy&&canvas===legacy.canvas))throw new TypeError('Distinct candidate canvas with matching dimensions required');
   var camera=args.camera;
-  // Fail explicitly instead of silently using fan triangulation.
-  if(!earClip||typeof earClip.triangulate!=='function')throw new Error('CurvatureEarClip.triangulate is required before composition capture');
-  var triangles=zbuffer.build(prepared.scene,camera,width,height,earClip.triangulate).triangles;
-  var render=painter.draw(canvas,prepared.scene,camera,triangles);
+  // Both independent renderers now consume the same validated world frame.
+  // Keep painter ordering as the reference-comparison default; z-buffer depth
+  // semantics are deliberately opt-in rather than a disguised paint-order mask.
+  var frame=frames.fromComposition(prepared,camera,width,height);
+  var render=renderer.render(canvas,frame,{mode:args.rendererMode||'painter'});
   // Capture the geometry before drawing frame/captions. Full-frame parity
   // includes the decorations, while a separately reported geometry score
   // excludes their measured bounds from both reference and candidate.

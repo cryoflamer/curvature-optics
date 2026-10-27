@@ -21,7 +21,9 @@
         if(copy.style)copy.style=Object.assign({},copy.style);
         primitives.push(copy);
       });
-      ranges.push({name:['behind','mask','outline','before'][index],start:first,end:nextIndex,count:nextIndex-first});
+      ranges.push({name:['behind','mask','outline','before'][index],
+        role:['objects','occlusion','visual-aid','objects'][index],
+        start:first,end:nextIndex,count:nextIndex-first});
     });
     var scene=contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
       composition:'object-horizon',objectIndex:objIx,globe:!!globe,
