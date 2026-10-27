@@ -71,7 +71,9 @@ function DrawMainCanvasFrame(g) {
         pieces.push(result.cacheReused?'optical geometry cached':'optical geometry '+result.buildMs+' ms');
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
         if(result.fieldStats){
-          pieces.push(result.fieldStats.solves+' exact ray solves');
+          pieces.push(result.fieldStats.solves+' shared exact ray solves'+
+            (result.towerSolves!==undefined?' ('+result.towerSolves+' tower, '+
+              result.sharedGroundSolves+' ground)':''));
           if(result.fieldPrism)pieces.push('tower prism '+
             Math.round(result.fieldPrism.minDistance/1000)+'-'+
             Math.round(result.fieldPrism.maxDistance/1000)+' km | '+
@@ -88,7 +90,8 @@ function DrawMainCanvasFrame(g) {
           pieces.push('optical horizon '+(result.groundHorizon/1000).toFixed(2)+' km');
         else pieces.push('no finite ground horizon resolved');
         if(result.guideSegments!==undefined)pieces.push(result.guideSegments+' physical surface guide pieces');
-        if(result.guideSolves!==undefined)pieces.push(result.guideSolves+' ground ray solves');
+        if(result.guideSolves!==undefined)pieces.push(result.guideSolves+' ground ray queries'+
+          (result.sharedGroundCacheHits?' ('+result.sharedGroundCacheHits+' exact cache hits)':''));
         if(result.guideCulling&&(result.guideCulling.skippedEdges||result.guideCulling.clippedEdges))
           pieces.push('ground-grid drawing limited to '+Math.round(result.guideRenderExtent/1000)+
             ' km ('+result.guideCulling.skippedEdges+' skipped, '+result.guideCulling.clippedEdges+' clipped edges; NOT an optical horizon)');

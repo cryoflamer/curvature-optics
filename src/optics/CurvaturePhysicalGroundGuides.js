@@ -21,6 +21,11 @@
     var guideExtent=Math.min(100000,options.maxDistance===undefined?100000:options.maxDistance);
     if(!Number.isFinite(guideExtent)||guideExtent<=0)throw RangeError('Invalid ground guide rendering extent');
     var calls=0,clippedEdges=0,skippedEdges=0;
+    // Optional exact-ground lookup from the tower prism's shared RK4 cache.
+    // Ground rays retain their own radial interpolation table, but no longer
+    // need a second independent exact-solve store. The caller guarantees the
+    // same geometry, atmosphere, eye height and integration settings.
+    var sampleGround=typeof options.sampleGround==='function'?options.sampleGround:null;
     function shoot(d){
       if(!(d>0))return {status:'visible',angle:-Math.PI/2};
       if(kind==='vacuum'){
@@ -30,6 +35,7 @@
         return {status:d>=horizon?'blocked':'visible',angle:Math.atan2(z,x)};
       }
       calls++;
+      if(sampleGround)return sampleGround(d);
       return project.solve({geometry:options.geometry,radius:R,observerHeight:eye,
         target:globe?[R*Math.sin(d/R),R*Math.cos(d/R)-R]:[d,0],
         atmosphere:kind,profileOptions:profile,step:step});

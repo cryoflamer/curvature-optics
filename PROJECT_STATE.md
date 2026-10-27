@@ -71,3 +71,23 @@ Full details and acceptance checks: `docs/MIGRATION_ADAPTIVE_TOWER_PRISM_112.md`
 Next priority: instrument shared optical-field reuse across ground guides and
 other geometry, assess boundary completeness, then polygon fills. No new
 Canvas renderer, legacy mask or atmospheric model was introduced.
+
+## Patch 113 — shared scene optics cache and performance
+
+The physical ground-guide radial table now uses the tower prism's shared
+`OpticalSharedRayField.exact(d,0)` RK4 memoization, with standalone ground-guide
+callers retaining their original oracle. Ground and tower exact solve counts
+are displayed separately while preserving their combined total. The scene
+cache key now incorporates exact physically contributing authored geometry,
+styles and metadata, excluding discarded camera-dependent legacy tangent and
+horizon guides, preventing stale frames when input geometry changes without model
+controls changing. For camera-only redraws, the complete optical composition
+is reused without rebuilding thousands of painter-ready strokes; the shared
+renderer continues to project and validate the camera frame independently.
+An independent real-mesh benchmark covers 2/10/85/200 towers and Globe/Flat
+profiles. Flat Standard with 202 towers measured ~0.24 s cold and ~12 ms
+cached optics adapter on one Node run; Globe Standard with 202 towers remained
+~4.7 s cold, with 276 explicitly unresolved near-horizon leaves. No new
+Canvas renderer, atmospheric model or clipping approximation was introduced.
+See `docs/MIGRATION_SHARED_SCENE_CACHE_113.md` and
+`tests/SharedSceneCache113.test.js`.

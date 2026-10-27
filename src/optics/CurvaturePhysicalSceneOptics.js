@@ -40,6 +40,28 @@
       options.atmosphere,options.occlusionRadius,
       options.settings||null]);
   }
+  // Cache is keyed by the physically contributing scene as well as the model.
+  // A style or vertex may change without a corresponding legacy model control.
+  // Exact serialization avoids collisions; obsolete geometric reference aids
+  // and camera attributes must not invalidate the optical result.
+  function sceneKey(composed){
+    var primitives=composed.scene.primitives;
+    // These geometric debug guides are explicitly dropped by the physical
+    // ground adapter. For example the tangent line rotates with camera PanRad,
+    // but its optical contribution is always empty. Do NOT let that obsolete
+    // legacy presentation line invalidate the camera-independent ray cache.
+    var relevant=[];
+    composed.ranges.forEach(function(r){
+      for(var i=r.start;i<r.end;i++){
+        var p=primitives[i],meta=p.metadata||{};
+        if(r.role==='visual-aid'&&(meta.projection==='plane'||
+            /horizon|tangent/.test(meta.kind||'')))continue;
+        if(r.role!=='visual-aid'&&r.role!=='objects')continue;
+        relevant.push([r.name,p.type,p.mode,p.points,p.style,p.metadata,p.commandIndex]);
+      }
+    });
+    return JSON.stringify(relevant);
+  }
   function bounds(primitives,geometry,radius,eye){
     var dmin=Infinity,dmax=0,hmin=Infinity,hmax=0;
     primitives.forEach(function(p){p.points.forEach(function(point){
@@ -92,8 +114,12 @@
       var geometry=model.showModel===1?'globe':model.showModel===2?'flat':null;
       if(!geometry||!(model.rEarth>0)||!Number.isFinite(model.Height)||model.Height<0)
         throw RangeError('Globe/Flat physical model required');
-      var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,settings:options.settings});
-      if(cached&&cached.key===key)return {composition:assemble(composed,cached.results,geometry,cached.guides),
+      var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,settings:options.settings})+
+        '\n'+sceneKey(composed);
+      // The common frame/painter copies and validates its input scene. A
+      // camera-only redraw may therefore reuse the optical composition itself
+      // instead of rebuilding thousands of validated line primitives.
+      if(cached&&cached.key===key)return {composition:cached.composition,
         stats:cached.stats,reused:true};
       // Representative profiles are smooth over kilometre scales. RK4 at
       // 2 km was checked against the 200 m shooting oracle; cap the step
@@ -132,9 +158,17 @@
       composed.ranges.filter(function(r){return r.role==='visual-aid';}).forEach(function(r){
         guideSource.push.apply(guideSource,source.slice(r.start,r.end));
       });
+      // Ground h=0 and tower h>=0 use the SAME exact RK4 oracle/cache.
+      // The radial surface table still limits ground tessellation and never
+      // extrapolates a physical horizon from the prism bounds.
+      var groundBefore=field&&field.stats?field.stats():null;
       var guideProjection=groundGuides.create({model:model,geometry:geometry,
-        atmosphere:kind,occlusionRadius:R,step:settings.step,maxDistance:Math.min(100000,model.rEarth*.1)});
+        atmosphere:kind,occlusionRadius:R,step:settings.step,maxDistance:Math.min(100000,model.rEarth*.1),
+        sampleGround:kind!=='vacuum'&&field?function(d){return field.exact(d,0);}:null});
       var physicalGuides=guideProjection.transform(guideSource);
+      var groundAfter=field&&field.stats?field.stats():null;
+      var groundFieldSolves=groundAfter?groundAfter.solves-groundBefore.solves:0;
+      var groundCacheHits=groundAfter?groundAfter.hits-groundBefore.hits:0;
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
         fieldStats:null,fieldPrism:span?{
@@ -142,7 +176,8 @@
           minHeight:span.heights[0],maxHeight:span.heights[span.heights.length-1]
         }:null,budgetExceeded:false,
         atmosphere:kind,step:settings.step,guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
-        guideSolves:guideProjection.solves(),guideSegments:physicalGuides.length,
+        guideSolves:guideProjection.solves(),sharedGroundSolves:groundFieldSolves,
+        sharedGroundCacheHits:groundCacheHits,guideSegments:physicalGuides.length,
         guideRenderExtent:guideProjection.renderExtent,guideCulling:guideProjection.cullingStats()};
       function countInto(dest,source){Object.keys(source).forEach(function(k){
         dest[k]=(dest[k]||0)+source[k];
@@ -180,14 +215,18 @@
           unresolvedReasons:projected.stats.unresolvedReasons});
       });
       if(field&&field.stats)fieldStats=field.stats();
-      stats.fieldStats=fieldStats;stats.budgetExceeded=cutoff;stats.buildMs=Date.now()-began;
-      // The only cached artifact is physical geometry; LIVE guides and
-      // camera-dependent projections are rebuilt by the common painter.
-      // A budget-expired preview is partial; never freeze it in the cache.
+      stats.fieldStats=fieldStats;
+      stats.towerSolves=fieldStats?fieldStats.solves-groundFieldSolves:0;
+      stats.budgetExceeded=cutoff;stats.buildMs=Date.now()-began;
+      // Cache the camera-independent physical scene INCLUDING its optical
+      // ground guides. The common painter still rebuilds camera-dependent
+      // frames and pixel projections on every redraw. A budget-expired
+      // preview is partial; never freeze it in the cache.
+      var presentation=assemble(composed,results,geometry,physicalGuides);
       if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget'])
-        cached={key:key,stats:stats,results:results,guides:physicalGuides};
+        cached={key:key,stats:stats,composition:presentation};
       else cached=null;
-      return {composition:assemble(composed,results,geometry,physicalGuides),stats:stats,reused:false};
+      return {composition:presentation,stats:stats,reused:false};
     }
     return {transform:transform,clearCache:function(){cached=null;}};
   }
