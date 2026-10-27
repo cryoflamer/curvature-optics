@@ -86,3 +86,27 @@ test('runtime routes normal frames, Both fallback, errors, and audit captures in
   context.legacyFrameAuditRequested=false;
   element('MainCanvasRenderer').listeners.change();assert.deepEqual(calls,['redraw']);
 });
+test('main Canvas includes both Pontchartrain tower groups with independent horizon layers',()=>{
+  const bridge=require('../src/scene/CurvatureIndependentComposition');
+  const m={...model,ObjType:[3,3],NObjects:[85,2],ObjDist:[50,25550],
+    ObjDeltaDist:[297.55,373],ObjSidePos:[32,22.4],ObjSize:[23,64]};
+  for(const globe of [true,false]){
+    const c=bridge.composeMain(m,globe);
+    const audit=bridge.auditFull(c);
+    assert.equal(audit.rendererReady,true);
+    assert.deepEqual(c.scene.metadata.objectIndices,[1,0]);
+    for(const index of [0,1]){
+      assert.ok(c.ranges.filter(x=>x.name==='behind-'+index||x.name==='before-'+index)
+        .reduce((sum,x)=>sum+x.count,0)>0,'object group '+index+' present');
+    }
+    const names=c.ranges.map(x=>x.name);
+    assert.ok(names.indexOf('behind-1')<names.indexOf('behind-0'));
+    assert.ok(names.indexOf('before-1')<names.indexOf('before-0'));
+    assert.ok(names.indexOf('mask-0')<names.indexOf('before-0'));
+    assert.ok(c.scene.primitives.every((x,i)=>x.commandIndex===i));
+  }
+});
+test('unsupported populated object groups are not silently omitted',()=>{
+  assert.equal(adapter.support({...model,showModel:1,NObjects:[85,2],ObjType:[3,99]}).supported,false);
+  assert.equal(adapter.support({...model,showModel:1,NObjects:[85,0],ObjType:[3,99]}).supported,true);
+});

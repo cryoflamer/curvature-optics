@@ -86,11 +86,58 @@
     return {scene:scene,ranges:ranges,cutoffAngle:core.cutoffAngle,
       requiresHorizonMask:core.requiresHorizonMask};
   }
+  // The main Canvas must render BOTH object groups, unlike controlled diagnostic
+  // captures which intentionally isolate one group. Preserve the legacy draw
+  // ordering: far groups (each with its horizon mask), guides, near groups.
+  function composeMain(model,globe,options){
+    options=options||{};
+    var first=model.ObjDist[0]>model.ObjDist[1]?0:1;
+    var order=[first,1-first].filter(function(i){return model.NObjects[i]>0;});
+    var cores=order.map(function(i){
+      return {index:i,parts:engine.createObjectHorizonComposition(model,i,globe,options)};
+    });
+    var surface=globe?engine.globeSurfaceGuides(model):engine.flatSurfaceGuides(model,options);
+    var horizonGuides=globe?engine.globeHorizonGuides(model,options):null;
+    var layers=[];
+    if(!globe)layers.push({name:'surface-guides',role:'visual-aid',scene:surface});
+    cores.forEach(function(group){
+      layers.push({name:'behind-'+group.index,role:'objects',scene:group.parts.behind});
+      layers.push({name:'mask-'+group.index,role:'occlusion',scene:group.parts.mask});
+    });
+    if(globe){
+      layers.push({name:'surface-guides',role:'visual-aid',scene:surface});
+      layers.push({name:'horizon-guides',role:'visual-aid',scene:horizonGuides});
+    }
+    cores.forEach(function(group){
+      layers.push({name:'before-'+group.index,role:'objects',scene:group.parts.before});
+    });
+    var primitives=[],ranges=[];
+    layers.forEach(function(layer){
+      var start=primitives.length;
+      layer.scene.primitives.forEach(function(p){
+        var copy=Object.assign({},p,{commandIndex:primitives.length});
+        if(p.style)copy.style=Object.assign({},p.style);
+        if(p.metadata)copy.metadata=Object.assign({},p.metadata);
+        primitives.push(copy);
+      });
+      ranges.push({name:layer.name,role:layer.role,start:start,
+        end:primitives.length,count:primitives.length-start});
+    });
+    var scene=contract.createScene('legacy',primitives,{
+      generator:'CurvatureGeometryEngine',composition:'main-independent-groups',
+      objectIndices:order,globe:!!globe,layerRanges:ranges,
+      limitations:['World-space horizon disk differs from legacy pixel silhouette',
+        'Optical overlays and data annotations remain on the legacy path']});
+    return {scene:scene,ranges:ranges,requiresHorizonMask:cores.some(function(x){
+      return x.parts.requiresHorizonMask;
+    })};
+  }
   function auditFull(composed){
     if(!composed||!composed.scene||!Array.isArray(composed.ranges))
       throw new TypeError('Composition required');
     var p=composed.scene.primitives,r=composed.ranges;
-    var expected=composed.scene.metadata.globe?
+    var main=composed.scene.metadata.composition==='main-independent-groups';
+    var expected=main?composed.ranges.map(function(x){return x.name;}):composed.scene.metadata.globe?
       ['behind','mask','surface-guides','outline','horizon-guides','before']:
       ['surface-guides','behind','mask','outline','before'];
     var continuous=r.length===expected.length&&r.every(function(layer,i){
@@ -116,5 +163,5 @@
       layerCounts:r.map(function(x){return {name:x.name,count:x.count};}),
       rendererReady:unique.size===p.length&&continuous&&ids.every(function(x,i){return x===i;})};
   }
-  return {compose:compose,audit:audit,composeFull:composeFull,auditFull:auditFull};
+  return {compose:compose,audit:audit,composeFull:composeFull,composeMain:composeMain,auditFull:auditFull};
 }));

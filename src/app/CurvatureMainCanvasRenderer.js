@@ -22,6 +22,10 @@
   function support(m){
     if(m.showModel!==1&&m.showModel!==2)
       return {supported:false,reason:'Independent supports Globe or Flat separately; Both uses Legacy.'};
+    for(var i=0;i<2;i++){
+      if(m.NObjects[i]>0&&![0,1,2,3].includes(m.ObjType[i]))
+        return {supported:false,reason:'Unsupported object group '+(i+1)+' uses Legacy.'};
+    }
     return {supported:true,reason:''};
   }
   function configureCamera(g,m){
@@ -47,8 +51,8 @@
     if(!Number.isInteger(width)||width<1||!Number.isInteger(height)||height<1)
       throw new RangeError('Invalid main Canvas dimensions');
     var camera=configureCamera(g,m);
-    var objIx=selectObject(m),globe=m.showModel===1;
-    var composed=composition.composeFull(m,objIx,globe);
+    var globe=m.showModel===1;
+    var composed=composition.composeMain(m,globe);
     var audit=composition.auditFull(composed);
     if(!audit.rendererReady)throw new Error('Independent composition is not renderer-ready');
     var frame=frames.fromComposition(composed,camera,width,height);
@@ -66,7 +70,7 @@
       if(decorations)decorations.draw(g.Canvas,m,camera);
     } finally {ctx.restore();}
     return {mode:result.mode,primitiveCount:audit.primitiveCount,
-      warning:'Independent preview is incomplete: only one object group; optical overlays, annotations and unsupported objects are not ported.'};
+      warning:'Independent preview: both object groups are rendered; optical overlays and annotations are not yet ported.'};
   }
   return {render:render,support:support,selectObject:selectObject,configureCamera:configureCamera};
 }));
