@@ -10,12 +10,12 @@
     root.CurvaturePerspectivePreview||(typeof require==='function'?require('../renderers/CurvaturePerspectivePreview'):null),
     root.CurvatureCanvasProjection||(typeof require==='function'?require('../renderers/CurvatureCanvasProjection'):null),
     root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),
-    root.CurvaturePhysicalTowerCanvas||(typeof require==='function'?require('../renderers/CurvaturePhysicalTowerCanvas'):null));
+    root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,physical){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical){
   'use strict';
-  var physicalSession=physical.create();
+  var opticalSession=optical.create();
   function selectObject(m){
     var index=m.NObjects[0]===0?1:0;
     if(m.NObjects[0]>0&&m.NObjects[1]>0&&m.ObjDist[0]>m.ObjDist[1])index=1;
@@ -75,18 +75,36 @@
       warning:'Independent preview: both object groups are rendered; optical overlays and annotations are not yet ported.'};
   }
   function renderPhysical(g,m,options){
-    var available=physical.availability(m);
+    var available=support(m);
     if(!available.supported)throw RangeError(available.reason);
     if(!g||!g.Canvas)throw TypeError('Main graph Canvas required');
     var camera=configureCamera(g,m),ctx=g.Canvas.getContext('2d');
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
        typeof ctx.restore!=='function')throw TypeError('Canvas 2D context required');
+    // The optical backend transforms the SAME independently authored scene;
+    // the exact same frame/painter handles camera, styles and all guides.
+    var globe=m.showModel===1;
+    var physicalModel=Object.assign({},m,{geometryRadius:m.rEarth});
+    var composed=composition.composeOpticalMain(physicalModel,globe);
+    var opticalFrame=opticalSession.transform(composed,physicalModel,options);
+    var frame=frames.fromComposition(opticalFrame.composition,camera,g.Canvas.width,g.Canvas.height);
+    var painted;
     ctx.save();
     try {
       ctx.setTransform(1,0,0,1,0,0);
-      return physicalSession.render(g.Canvas,camera,m,options);
+      painted=renderer.render(g.Canvas,frame,{mode:'painter'});
+      if(decorations)decorations.draw(g.Canvas,m,camera);
     } finally {ctx.restore();}
+    var stats=opticalFrame.stats;
+    return {mode:'physical-scene',drawn:stats.visibleSegments,
+      unresolved:stats.unresolved,buildMs:stats.buildMs,
+      cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
+      primitiveCount:frame.scene.primitives.length,
+      layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,
+      warning:'Physical optics in shared painter; geometric horizon/grid guides retained (not physical refraction).'+
+        ' Object fills and mutual occlusion pending (fill-only shapes shown as outlines).'+
+        (stats.unresolved?' Incomplete: '+stats.unresolved+' unresolved fragments.':'')};
   }
   return {render:render,renderPhysical:renderPhysical,support:support,
-    supportPhysical:physical.availability,selectObject:selectObject,configureCamera:configureCamera};
+    supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};
 }));

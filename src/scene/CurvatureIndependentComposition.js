@@ -142,6 +142,56 @@
       return x.parts.requiresHorizonMask;
     })};
   }
+  // Optics-neutral scene for BOTH the independent painter and its physical
+  // projection adapter. It carries the same surface guides and placed object
+  // primitives as composeMain, but excludes the legacy horizon MASK and the
+  // artificial behind/before styling partition. Ground occlusion belongs to
+  // the optical backend, not to the scene author or painter.
+  function composeOpticalMain(model,globe,options){
+    options=options||{};
+    var first=model.ObjDist[0]>model.ObjDist[1]?0:1;
+    var order=[first,1-first].filter(function(i){return model.NObjects[i]>0;});
+    // Geometric reference guides must not inherit the legacy effective
+    // refraction radius. The physical atmosphere modifies ray directions,
+    // never the underlying Earth radius or the vacuum tangent geometry.
+    var guideModel=model;
+    if(globe){
+      var R=model.geometryRadius,H=model.Height,ratio=R/(R+H);
+      guideModel=Object.assign({},model,{
+        rDisk:R*Math.sqrt(Math.max(0,1-ratio*ratio)),
+        zDisk:R+H-R*ratio,hDisk:R*ratio
+      });
+    }
+    var surface=globe?engine.globeSurfaceGuides(guideModel):engine.flatSurfaceGuides(model,
+      Object.assign({segments:128},options));
+    var horizon=globe?engine.globeHorizonGuides(guideModel,options):null;
+    var layers=[{name:'surface-guides',role:'visual-aid',scene:surface}];
+    if(horizon)layers.push({name:'horizon-guides',role:'visual-aid',scene:horizon});
+    order.forEach(function(i){
+      layers.push({name:'objects-'+i,role:'objects',
+        scene:engine.createObjectSequenceScene(model,i,globe)});
+    });
+    var primitives=[],ranges=[];
+    layers.forEach(function(layer){
+      var start=primitives.length;
+      layer.scene.primitives.forEach(function(primitive){
+        var p=Object.assign({},primitive,{commandIndex:primitives.length});
+        if(primitive.metadata)p.metadata=Object.assign({},primitive.metadata);
+        p.style=Object.assign({},primitive.style);
+        if(layer.role==='objects'&&!p.style.stroke)p.style.stroke='black';
+        primitives.push(p);
+      });
+      ranges.push({name:layer.name,role:layer.role,start:start,
+        end:primitives.length,count:primitives.length-start});
+    });
+    return {scene:contract.createScene('legacy',primitives,{
+      generator:'CurvatureGeometryEngine',composition:'optics-neutral-main',
+      objectIndices:order,globe:!!globe,layerRanges:ranges,
+      horizonGuideIsGeometric:true,
+      limitations:['Surface grids and horizon lines are geometric reference guides, not refracted ground silhouettes',
+        'Object visibility is delegated to the optical backend; there is no horizon painter mask']}),
+      ranges:ranges,requiresHorizonMask:false};
+  }
   function auditFull(composed){
     if(!composed||!composed.scene||!Array.isArray(composed.ranges))
       throw new TypeError('Composition required');
@@ -173,5 +223,5 @@
       layerCounts:r.map(function(x){return {name:x.name,count:x.count};}),
       rendererReady:unique.size===p.length&&continuous&&ids.every(function(x,i){return x===i;})};
   }
-  return {compose:compose,audit:audit,composeFull:composeFull,composeMain:composeMain,auditFull:auditFull};
+  return {compose:compose,audit:audit,composeFull:composeFull,composeMain:composeMain,composeOpticalMain:composeOpticalMain,auditFull:auditFull};
 }));

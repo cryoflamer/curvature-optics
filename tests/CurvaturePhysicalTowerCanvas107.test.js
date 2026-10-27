@@ -99,7 +99,7 @@ test('107: entrypoint loads optical modules before main Canvas adapter; physical
     assert.ok(html.indexOf(module+'.js')<html.indexOf('CurvatureMainCanvasRenderer.js'));
   }
   assert.match(html,/<option value="legacy" selected>Legacy/);
-  assert.match(html,/<option value="physical">Physical tower outlines/);
+  assert.match(html,/<option value="physical">Physical optics/);
   assert.match(html,/PhysicalCanvasOcclusionRadius/);
 });
 test('107: runtime dispatches physical mode and preserves Legacy fallback and audit protections',()=>{
@@ -131,23 +131,26 @@ test('107: runtime dispatches physical mode and preserves Legacy fallback and au
   el('PhysicalCanvasOcclusionRadius').listeners.change();assert.deepEqual(calls,['redraw']);
 });
 
-test('107: physical main Canvas restores the scaled GraphX context and does not add legacy ground or decoration layers',()=>{
+test('108: physical main Canvas shares painter and restores the scaled GraphX context',()=>{
   const events=[];
   const ctx={save(){events.push('save');},restore(){events.push('restore');},
-    setTransform(...a){events.push(['transform',...a]);},fillRect(){events.push('background');},
-    beginPath(){events.push('begin');},moveTo(){},lineTo(){},stroke(){events.push('stroke');}};
+    setTransform(...a){events.push(['transform',...a]);},fillRect(){events.push('background');},clearRect(){events.push('clear');},
+    beginPath(){events.push('begin');},moveTo(){},lineTo(){},closePath(){},fill(){},stroke(){events.push('stroke');}};
   const g={Canvas:{width:400,height:300,getContext(){return ctx;}},Camera:{},
     WinTrans:{ScaleX:1,ScaleY:-1,OffsetX:200,OffsetY:150},ContextScale:1,
     AutoScalePix:true,MinLineWidth:1,ScalePixInt:false,DevicePixelRatio:1,
     GetPixScaling(){return 1;},SetViewport(){},SetGraphClipping(){},SetCameraClipping(v){this.CameraClipPlaneDist=v;},
     SetWindowToCameraScreen(){},SetCamera(c){this.Camera={...c,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
-  const m={...base,NObjects:[0,0],camPos:[0,0,0],camViewCenter:[0,1,0],
+  const m={...base,NObjects:[0,0],rFEarth:10007543,showGrid:0,camPos:[0,0,0],camViewCenter:[0,1,0],
     camUp:[0,0,1],camSceneSize:1};
   const r=main.renderPhysical(g,m,{atmosphere:'vacuum'});
-  assert.equal(r.mode,'physical-outlines');
+  assert.equal(r.mode,'physical-scene');
   assert.equal(r.drawn,0);assert.equal(r.unresolved,0);
-  assert.deepEqual(events,['save',['transform',1,0,0,1,0,0],'background','restore']);
+  assert.ok(events.includes('save'));
+  assert.ok(events.includes('restore'));
+  assert.deepEqual(events.filter(x=>Array.isArray(x)&&x[0]==='transform')[0],
+    ['transform',1,0,0,1,0,0]);
 });
 test('107: exhausted physical preview budget omits unknown fragments, never paints them',()=>{
   const bounded=physical.create().outlines(base,{atmosphere:'standard',settings:{

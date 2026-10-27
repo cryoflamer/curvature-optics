@@ -103,7 +103,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 
 <!-- Renderer stays visible; experimental controls are collapsed by default. -->
 <div id="OpticsRendererToolbar" style="padding:0.45em 0.7em; margin:0.5em 0; border:1px solid #bbb; background:#f7f7f7;">
-  <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option><option value="physical">Physical tower outlines (preview)</option></select></label>
+  <label>Canvas engine <select id="MainCanvasRenderer"><option value="legacy" selected>Legacy</option><option value="independent">Independent (preview)</option><option value="physical">Physical optics · shared scene (preview)</option></select></label>
   <label style="margin-left:0.7em;">Physical atmosphere <select id="PhysicalCanvasAtmosphere">
     <option value="vacuum">Vacuum</option><option value="standard">Standard</option>
     <option value="exponential-occlusion">Exponential occlusion</option>
@@ -162,6 +162,7 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
 <script src="src/optics/OpticalSharedRayField.js"></script>
 <script src="src/optics/OpticalTowerSilhouette.js"></script>
 <script src="src/renderers/CurvaturePhysicalTowerCanvas.js"></script>
+<script src="src/optics/CurvaturePhysicalSceneOptics.js"></script>
 <section id="OpticsTowerDiagnostic" style="padding:0.7em 1em; margin:0.6em 0; border:1px solid #bbb; background:#f7f7f7;">
   <strong>Transmission towers: ray-tracing diagnostics</strong>
   <button type="button" id="OpticsTestPreset" style="margin-left:1em;font-weight:bold;">Optics Test</button>
