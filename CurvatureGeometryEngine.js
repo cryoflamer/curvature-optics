@@ -44,6 +44,45 @@
       return p;
     });
   }
+  // Small non-tower silhouettes from DrawShape. Geometry is authored as
+  // values; no Canvas/GraphX3DX methods are called by the engine.
+  function localMRod(hidden){
+    function rect(x1,y1,x2,y2,mode,fill){
+      return {type:'polygon',points:[[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]],
+        mode:mode,style:{fill:fill}};
+    }
+    var yellow=hidden?'#ff4':'yellow',red=hidden?'#f66':'red';
+    var result=[rect(-.1,0,.1,1,2,yellow),rect(-.1,.5,0,1,2,red)];
+    for(var i=.1;i<1;i+=.2)result.push(rect(0,i,.1,i+.1,2,red));
+    result.push(rect(-.1,0,.1,1,1,red));
+    return result;
+  }
+  function localShip(hidden){
+    var data=[
+      [[-.15,.15,.2,-.2,-.15],[0,0,.15,.15,0],'#654130','#937162'],
+      [[-.2,-.1,.1,.2,.3,-.3,-.2],[.15,.2,.2,.15,.4,.4,.15],'#7b899a','#a9b6c6'],
+      [[-.3,-.1,.1,.3,.25,-.25,-.3],[.4,.45,.45,.4,.6,.6,.4],'#b5bdc3','#d4d9dd'],
+      [[-.25,-.1,.1,.25,.2,-.2,-.25],[.6,.65,.65,.6,.8,.8,.6],'#dfe0df','#eff0ef'],
+      [[-.2,-.05,.05,.2,.1,-.1,-.2],[.8,.85,.85,.8,1,1,.8],'#dfe0df','#eff0ef']
+    ];
+    var result=[{type:'polygon',points:data[0][0].map(function(x,i){return [x,data[0][1][i]];}),
+      mode:3,style:{fill:hidden?data[0][3]:data[0][2]}} ,
+      {type:'line',points:[[0,0],[0,1.05]]}];
+    data.slice(1).forEach(function(v){result.push({type:'polygon',
+      points:v[0].map(function(x,i){return [x,v[1][i]];}),mode:3,
+      style:{fill:hidden?v[3]:v[2]}});});
+    return result;
+  }
+  function localObject(objType,objIx,hidden){
+    if(objType===3)return localTower(objIx);
+    if(objType===1)return localMRod(!!hidden);
+    if(objType===2)return localShip(!!hidden);
+    throw new RangeError('Object type has not been independently ported');
+  }
+  function createPlacedObjectScene(params,objType,objIx,hidden,metadata){
+    return contract.createScene('legacy',placeOnPlane(localObject(objType,objIx,hidden),towerPlacement(params)),
+      Object.assign({generator:'CurvatureGeometryEngine',objectType:objType,objectIndex:objIx},metadata||{}));
+  }
   function localTower(objIx){
     if(objIx!==0&&objIx!==1)throw new RangeError('Tower bank must be 0 or 1');
     return objIx===0?localTowerType1():localTowerType2();
@@ -250,5 +289,5 @@
       before:towers.before,cutoffAngle:towers.cutoffAngle,
       requiresHorizonMask:towers.requiresHorizonMask};
   }
-  return {localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
