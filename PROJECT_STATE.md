@@ -1,6 +1,6 @@
 # Curvature optics migration — project state
 
-Updated at compatpatch **109** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
+Updated at compatpatch **112** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
 ## Objective
 
@@ -51,3 +51,23 @@ Physical optics now projects ground guide lines through a radial optical field a
 ## Patch 111 — Flat ground-guide drawing extent
 
 Before patch 111, Flat + Standard performed ~29,745 ground guide point shoots from world-radius grid segments up to 20,015 km, far beyond a 100 km radial lookup. Ground reference strokes now clip to a finite **rendering** disk before projection; this disk is not a new physical horizon and does not change tower visibility or the physical ground horizon result. It correctly keeps chords crossing the disk. Flat guide subdivision is bounded by retained segment length, and UI diagnostics include skipped/clipped guide edge counts. Tests: `PhysicalGroundGuideExtent111.test.js`. See `docs/MIGRATION_FLAT_GROUND_GUIDE_EXTENT_111.md`. Future: viewport-specific culling and screen-error based guide tessellation, plus the shared-prism field.
+
+## Patch 112 — lazy adaptive tower-prism optical field
+
+The physically projected tower scene now refines `OpticalSharedRayField` cells
+**on demand** rather than rejecting the entire 13 × 4 root prism grid and
+shooting every vertex/edge sample individually. New opt-in API controls are
+`adaptiveDepth` (public default 0, scene default 3) and `maxAdaptiveCells`
+(scene default 4096). Only checked all-visible cells are interpolated; mixed,
+uncertain, out-of-prism, depth-limited and budget-limited samples still use the
+exact numerical solver. Independent off-grid tests and real scene comparisons
+cover Flat/Globe with Standard and Flat engineered horizons. Measured full
+85+2 Flat Standard case reduced 5659 to 1628 exact shooting solves with 3333
+unchanged visible strokes, and the same ground-guide calculations. This is a
+sampled, **not globally guaranteed**, interpolation error qualification.
+Current UI reports adaptive interpolations/fallbacks, qualified cells and the
+prism distance/height bounds. Benchmark: `tools/benchmark-adaptive-prism-112.js`.
+Full details and acceptance checks: `docs/MIGRATION_ADAPTIVE_TOWER_PRISM_112.md`.
+Next priority: instrument shared optical-field reuse across ground guides and
+other geometry, assess boundary completeness, then polygon fills. No new
+Canvas renderer, legacy mask or atmospheric model was introduced.

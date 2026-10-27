@@ -100,7 +100,7 @@
       unresolved:stats.unresolved,buildMs:stats.buildMs,
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
       primitiveCount:frame.scene.primitives.length,
-      layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,
+      layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,fieldPrism:stats.fieldPrism,
       unresolvedReasons:stats.unresolvedReasons,sampleStatuses:stats.sampleStatuses,
       perGroup:stats.perGroup,step:stats.step,groundHorizon:stats.groundHorizon,
       guideSegments:stats.guideSegments,guideSolves:stats.guideSolves,

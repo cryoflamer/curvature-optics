@@ -101,7 +101,8 @@
       var characteristicRadius=kind==='standard'?model.rEarth:Math.min(model.rEarth,R);
       var automaticStep=Math.max(20,Math.min(2000,characteristicRadius/3000));
       var began=Date.now(),settings=Object.assign({maxBuildMs:null,
-        step:automaticStep,fieldTolerance:1e-5,angularTolerance:2e-5,
+        step:automaticStep,fieldTolerance:1e-5,fieldAdaptiveDepth:3,
+        fieldMaxAdaptiveCells:4096,angularTolerance:2e-5,
         minimumDepth:0,maximumDepth:10,maxSamples:25000},options.settings||{});
       if(settings.maxBuildMs!==null&&(!Number.isFinite(settings.maxBuildMs)||settings.maxBuildMs<0))
         throw RangeError('Invalid physical scene budget');
@@ -110,15 +111,17 @@
       groups.forEach(function(r){source.slice(r.start,r.end).forEach(function(p){
         objects.push(p);
       });});
-      var field,fieldStats=null;
+      var field,fieldStats=null,span=null;
       if(kind==='vacuum')field={sample:function(d,h){return vacuumSample(geometry,model.rEarth,model.Height,d,h);}};
       else {
-        var span=bounds(objects,geometry,model.rEarth,model.Height);
+        span=bounds(objects,geometry,model.rEarth,model.Height);
         if(span)field=fields.create({geometry:geometry,radius:model.rEarth,
           observerHeight:model.Height,atmosphere:kind,
           profileOptions:kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:R}:undefined,
           distances:span.distances,heights:span.heights,
-          angleTolerance:settings.fieldTolerance,step:settings.step});
+          angleTolerance:settings.fieldTolerance,step:settings.step,
+          adaptiveDepth:settings.fieldAdaptiveDepth,
+          maxAdaptiveCells:settings.fieldMaxAdaptiveCells});
       }
       var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;
       var limited=field&&{sample:function(d,h){
@@ -134,7 +137,10 @@
       var physicalGuides=guideProjection.transform(guideSource);
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
-        fieldStats:null,budgetExceeded:false,
+        fieldStats:null,fieldPrism:span?{
+          minDistance:span.distances[0],maxDistance:span.distances[span.distances.length-1],
+          minHeight:span.heights[0],maxHeight:span.heights[span.heights.length-1]
+        }:null,budgetExceeded:false,
         atmosphere:kind,step:settings.step,guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
         guideSolves:guideProjection.solves(),guideSegments:physicalGuides.length,
         guideRenderExtent:guideProjection.renderExtent,guideCulling:guideProjection.cullingStats()};

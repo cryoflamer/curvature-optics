@@ -70,7 +70,20 @@ function DrawMainCanvasFrame(g) {
         pieces.push(failure+' uncertain/failed point evaluations');
         pieces.push(result.cacheReused?'optical geometry cached':'optical geometry '+result.buildMs+' ms');
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
-        if(result.fieldStats)pieces.push(result.fieldStats.solves+' exact ray solves');
+        if(result.fieldStats){
+          pieces.push(result.fieldStats.solves+' exact ray solves');
+          if(result.fieldPrism)pieces.push('tower prism '+
+            Math.round(result.fieldPrism.minDistance/1000)+'-'+
+            Math.round(result.fieldPrism.maxDistance/1000)+' km | '+
+            Math.round(result.fieldPrism.minHeight)+'-'+
+            Math.round(result.fieldPrism.maxHeight)+' m elevation');
+          pieces.push(result.fieldStats.interpolations+' interpolated points | '+
+            result.fieldStats.fallbacks+' exact fallbacks');
+          if(result.fieldStats.refinements!==undefined)
+            pieces.push(result.fieldStats.acceptedCells+' qualified adaptive cells | '+
+              result.fieldStats.refinements+' refinements'+
+              (result.fieldStats.adaptiveLimits?' | '+result.fieldStats.adaptiveLimits+' refinement limits':''));
+        }
         if(result.groundHorizon!==null&&Number.isFinite(result.groundHorizon))
           pieces.push('optical horizon '+(result.groundHorizon/1000).toFixed(2)+' km');
         else pieces.push('no finite ground horizon resolved');

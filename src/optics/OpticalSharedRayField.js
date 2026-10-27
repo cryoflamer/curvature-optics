@@ -47,16 +47,27 @@
     var angleTolerance=options.angleTolerance === undefined ? 1e-7 : options.angleTolerance;
     if (!Number.isFinite(angleTolerance) || angleTolerance <= 0 || angleTolerance > 0.1)
       throw Error('Invalid angular interpolation tolerance');
+    // Patch 112: optionally refine only those prism cells visited by actual
+    // geometry. The legacy 104/105 uniform-cell API remains the default.
+    var adaptiveDepth=options.adaptiveDepth === undefined ? 0 : options.adaptiveDepth;
+    var maxAdaptiveCells=options.maxAdaptiveCells === undefined ? 4096 : options.maxAdaptiveCells;
+    if (!Number.isInteger(adaptiveDepth) || adaptiveDepth < 0 || adaptiveDepth > 8 ||
+        !Number.isInteger(maxAdaptiveCells) || maxAdaptiveCells < 1 || maxAdaptiveCells > 100000)
+      throw Error('Invalid adaptive-field controls');
     var solverOptions=Object.assign({},options);
     delete solverOptions.distances;
     delete solverOptions.heights;
     delete solverOptions.angleTolerance;
+    delete solverOptions.adaptiveDepth;
+    delete solverOptions.maxAdaptiveCells;
     if (solverOptions.profileOptions)
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
     // Cache lifetime is the returned field: changing atmosphere, camera height,
     // or R means constructing a new field. No hidden cross-configuration cache.
     var cache=new Map();
-    var statistics={solves:0,hits:0,interpolations:0,fallbacks:0};
+    var statistics={solves:0,hits:0,interpolations:0,fallbacks:0,
+      refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
+      maxDepthUsed:0};
     function exact(d,h) {
       var key=d+','+h;
       if (cache.has(key)) {statistics.hits++;return cache.get(key);}
@@ -70,64 +81,87 @@
       statistics.solves++;
       return record;
     }
-    var cells=new Map();
+    var cells=new Map(), cellCount=0;
     function linear(a,b,t) {return a+(b-a)*t;}
     function bilinear(corners,u,v) {
       return linear(linear(corners[0].angle,corners[1].angle,u),
         linear(corners[2].angle,corners[3].angle,u),v);
     }
-    function prepare(i,j) {
-      var key=i+','+j;
-      if (cells.has(key)) return cells.get(key);
-      var d0=distances[i], d1=distances[i+1], h0=heights[j], h1=heights[j+1];
+    function makeCell(d0,d1,h0,h1,depth) {
+      cellCount++;
+      statistics.maxDepthUsed=Math.max(statistics.maxDepthUsed,depth);
+      return {d0:d0,d1:d1,h0:h0,h1:h1,depth:depth,
+        state:'unprepared',children:null,checkedError:0,corners:null};
+    }
+    function prepare(cell) {
+      if (cell.state!=='unprepared') return cell;
+      var d0=cell.d0,d1=cell.d1,h0=cell.h0,h1=cell.h1;
       var corners=[exact(d0,h0),exact(d1,h0),exact(d0,h1),exact(d1,h1)];
-      var accepted=corners.every(function (c) {return c.status === 'visible' && Number.isFinite(c.angle);});
-      // Four edge midpoints and the centre detect common curvature missed by
-      // corner-only interpolation. This is empirical, not a global error bound.
-      var check=[[0.5,0],[0.5,1],[0,0.5],[1,0.5],[0.5,0.5]];
-      var error=0;
-      if (accepted) {
-        for (var k=0;k<check.length;k++) {
-          var u=check[k][0],v=check[k][1];
-          var observed=exact(linear(d0,d1,u),linear(h0,h1,v));
-          if (observed.status !== 'visible' || !Number.isFinite(observed.angle)) {
-            accepted=false; break;
-          }
-          error=Math.max(error,Math.abs(observed.angle-bilinear(corners,u,v)));
+      var accepted=corners.every(function(c){return c.status==='visible'&&Number.isFinite(c.angle);});
+      // Qualification is empirical, NOT a certified maximum error bound.
+      // Test the centre first; many broad root cells can be rejected early.
+      var check=[[0.5,0.5],[0.5,0],[0.5,1],[0,0.5],[1,0.5]],error=0;
+      if(accepted)for(var k=0;k<check.length;k++) {
+        var u=check[k][0],v=check[k][1];
+        var observed=exact(linear(d0,d1,u),linear(h0,h1,v));
+        if(observed.status!=='visible'||!Number.isFinite(observed.angle)) {
+          accepted=false;break;
         }
+        error=Math.max(error,Math.abs(observed.angle-bilinear(corners,u,v)));
+        if(error>angleTolerance){accepted=false;break;}
       }
-      accepted=accepted && error <= angleTolerance;
-      var cell={accepted:accepted,checkedError:error,corners:corners};
-      cells.set(key,cell);
+      cell.corners=corners;cell.checkedError=error;
+      cell.state=accepted?'accepted':'rejected';
+      if(accepted)statistics.acceptedCells++;else statistics.rejectedCells++;
       return cell;
+    }
+    function rootCell(i,j) {
+      var key=i+','+j,cell=cells.get(key);
+      if(!cell){cell=makeCell(distances[i],distances[i+1],heights[j],heights[j+1],0);
+        cells.set(key,cell);}
+      return cell;
+    }
+    function children(cell) {
+      if(cell.children)return cell.children;
+      if(cellCount+4>maxAdaptiveCells)return null;
+      var dm=(cell.d0+cell.d1)/2,hm=(cell.h0+cell.h1)/2,depth=cell.depth+1;
+      cell.children=[makeCell(cell.d0,dm,cell.h0,hm,depth),
+        makeCell(dm,cell.d1,cell.h0,hm,depth),
+        makeCell(cell.d0,dm,hm,cell.h1,depth),
+        makeCell(dm,cell.d1,hm,cell.h1,depth)];
+      statistics.refinements++;
+      return cell.children;
     }
     function sample(d,h) {
       if (!Number.isFinite(d) || !Number.isFinite(h) || d <= 0 || h < 0)
         throw Error('Invalid shared-field target coordinates');
       var i=interval(distances,d),j=interval(heights,h);
-      if (i < 0 || j < 0) {
-        statistics.fallbacks++;
-        return exact(d,h);
+      if(i<0||j<0){statistics.fallbacks++;return exact(d,h);}
+      var cell=rootCell(i,j);
+      while(true){
+        prepare(cell);
+        if(cell.state==='accepted'){
+          var u=(d-cell.d0)/(cell.d1-cell.d0),v=(h-cell.h0)/(cell.h1-cell.h0);
+          statistics.interpolations++;
+          return {status:'visible',angle:bilinear(cell.corners,u,v),
+            residual:null,method:'interpolated',checkedError:cell.checkedError,reason:null};
+        }
+        if(cell.depth>=adaptiveDepth)break;
+        var next=children(cell);
+        if(!next){statistics.adaptiveLimits++;break;}
+        var index=(d>(cell.d0+cell.d1)/2?1:0)+(h>(cell.h0+cell.h1)/2?2:0);
+        cell=next[index];
       }
-      var cell=prepare(i,j);
-      if (!cell.accepted) {
-        statistics.fallbacks++;
-        return exact(d,h);
-      }
-      var u=(d-distances[i])/(distances[i+1]-distances[i]);
-      var v=(h-heights[j])/(heights[j+1]-heights[j]);
-      statistics.interpolations++;
-      return {status:'visible',angle:bilinear(cell.corners,u,v),
-        residual:null,method:'interpolated',checkedError:cell.checkedError,
-        reason:null};
+      statistics.fallbacks++;
+      return exact(d,h);
     }
     // Explicit eager qualification is optional; cells also build lazily.
     function warm() {
       for(var i=0;i<distances.length-1;i++)
-        for(var j=0;j<heights.length-1;j++) prepare(i,j);
+        for(var j=0;j<heights.length-1;j++) prepare(rootCell(i,j));
       return stats();
     }
-    function stats() {return Object.assign({cells:cells.size,points:cache.size},statistics);}
+    function stats() {return Object.assign({cells:cellCount,roots:cells.size,points:cache.size},statistics);}
     return {sample:sample,exact:exact,warm:warm,stats:stats,
       distances:distances.slice(),heights:heights.slice()};
   }
