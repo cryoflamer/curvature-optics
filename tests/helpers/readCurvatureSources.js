@@ -13,6 +13,8 @@ module.exports = function readCurvatureSources() {
   // Keep DrawModel and its helper functions contiguous: several existing
   // geometry tests extract these functions to execute them in a VM.
   const sources = [
+    'src/app/CurvatureModel.js',
+    'src/diagnostics/CurvatureLegacyFrameCaptureController.js',
     'src/app/CurvatureAppRuntime.js',
     'src/legacy/CurvatureLegacyDrawing.js',
     'src/animation/CurvatureAnimations.js',
