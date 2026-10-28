@@ -451,3 +451,18 @@ persists while switching Scene/Compare in the same page session. No experiments
 are saved across reloads: versioned shareable experiments remain planned for
 #134. See `docs/modern-ui-plan.md` and
 `tests/ModernIndependentCompare133.test.js`.
+
+
+### Compatibility patch 133.2 — forward-traced horizon diagnostic
+
+A separate `OpticalRayHorizon1332` module scans launch angles through the
+existing RK4 ray tracer and accepts a finite first-contact tangent boundary
+only after a hit/confirmed interior-clear-minimum angular bracket converges.
+Its result is shown numerically under each Compare viewport and optionally
+as an orange dashed angle guide alongside the independent green Eye-level
+reference. Diagnostic results are cached per model and do not change
+renderer/Scene/Legacy physics. If not resolved within finite range, the
+readout explicitly says so; no horizon is inferred from clipping, failed
+shooting or exhausted integration distance. Camera Roll currently suppresses
+the horizontal horizon overlay. See `docs/modern-ui-plan.md` and
+`tests/OpticalRayHorizon1332.test.js`.

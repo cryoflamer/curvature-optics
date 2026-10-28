@@ -96,3 +96,7 @@ button{cursor:pointer}
 .modern-compare-settings .modern-eye-level-option label{display:flex;align-items:center;gap:9px;font-weight:600;color:#355b82}
 .modern-compare-settings .modern-eye-level-option input{width:16px;height:16px;accent-color:#168b4d}
 .modern-compare-settings .modern-eye-level-option .modern-note{margin:5px 0 0 25px}
+
+/* 133.2: compact and explicitly qualified optical-horizon diagnostic. */
+.modern-compare-grid .modern-viewport-foot{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.modern-horizon-readout{font-size:10px;color:#ffc47b;line-height:1.4}

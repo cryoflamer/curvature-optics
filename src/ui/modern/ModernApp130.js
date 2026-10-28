@@ -7,7 +7,7 @@
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    compareEyeLevel:false,compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
+    compareEyeLevel:false,compareHorizon:true,horizonCache:{A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState131;
   var compareAdapter=root.CurvatureModernCompareModel132;
   var compareState=root.CurvatureModernCompareState133;
@@ -83,6 +83,8 @@
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
       state.compareLast[side]=result;
       if(state.compareEyeLevel)drawCompareEyeLevel(g,m);
+      if(state.compareHorizon)drawCompareHorizon(side,g,m,options);
+      else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
       var node=el('ModernCompareStatus'+side);
       if(node){
         node.textContent=(result.cacheReused?'Cached':'Computed')+' · '+result.drawn+
@@ -100,17 +102,9 @@
   // This guide never enters optical shooting or the physical scene model.
   function drawCompareEyeLevel(g,m){
     var canvas=g.Canvas,ctx=canvas.getContext('2d');
-    var width=canvas.width,height=canvas.height;
-    if(!(width>0&&height>0))return;
-    var aspect=Number(m.deviceRatio),diagonalFov=Number(m.camViewAngle);
-    if(!(aspect>0&&diagonalFov>0))return;
-    var verticalHalfTan=Math.tan(diagonalFov/2)/Math.sqrt(1+aspect*aspect);
-    var tilt=Number(m.Nick)*Math.PI/180;
-    // Physical camera's eye-level aim is zero; other aim modes can shift it.
-    var aim=m.viewcenterHorizon===3?0:root.CurvaturePhysicalCamera127.create(m).aimDip;
-    var relative=aim-tilt;
-    var y=height/2-height*Math.tan(relative)/(2*verticalHalfTan);
-    if(!Number.isFinite(y)||y<0||y>height)return;
+    var width=canvas.width;
+    var y=compareAngleY(g,m,0);
+    if(y===null)return;
     ctx.save();
     try{
       ctx.setTransform(1,0,0,1,0,0);
@@ -120,6 +114,68 @@
       ctx.textBaseline=y<18?'top':'bottom';
       ctx.fillText('Eye level · 0°',8,y<18?y+3:y-4);
     }finally{ctx.restore();}
+  }
+  // The optical horizon is a *forward-RK4 first-ground-contact diagnostic*.
+  // It is neither the renderer's guide clipping distance nor a ready-made
+  // geometric horizon law. An unresolved angular boundary draws no line.
+  function drawCompareHorizon(side,g,m,options){
+    if(!g||!g.Canvas)return; // DOM-free renderer harnesses have no pixel overlay.
+    var readout=el('ModernHorizonStatus'+side);
+    var detector=root.CurvatureRayHorizon1332;
+    if(!detector){if(readout)readout.textContent='Horizon: tracer unavailable';return;}
+    var geometry=m.showModel===2?'flat':'globe';
+    var arguments_={geometry:geometry,radius:m.rEarth,observerHeight:m.Height,
+      atmosphere:options.atmosphere,profileOptions:{occlusionRadius:options.occlusionRadius}};
+    var key=JSON.stringify(arguments_),cached=state.horizonCache[side];
+    if(!cached||cached.key!==key){
+      var measured;
+      try{measured=detector.diagnose(arguments_);}
+      catch(error){measured={status:'unresolved',reason:error.message};}
+      state.horizonCache[side]={key:key,result:measured};
+    }
+    var result=state.horizonCache[side].result;
+    if(result.status!=='resolved'){
+      if(readout){readout.textContent='Horizon: '+(result.status==='ambiguous'?'ambiguous':'unresolved')+
+        ' (finite tangent not established)';readout.title=result.reason||'';}
+      return;
+    }
+    var angle=result.angleDegrees;
+    if(readout){readout.textContent='Horizon '+angle.toFixed(4)+'° · dip '+
+      result.dipDegrees.toFixed(4)+'° · tangent ≈ '+
+      (result.tangentDistance/1000).toFixed(2)+' km';
+      readout.title='Forward RK4 first-contact diagnostic; 100 km search, angular bracket '+
+        result.bracketDegrees.map(function(v){return v.toFixed(6)+'°';}).join(' to ')+
+        '. Not a global uniqueness proof.';}
+    if(m.Roll!==0){
+      if(readout)readout.textContent+=' · overlay omitted for camera roll';
+      return; // A rolled camera requires a sloped angle-isoline, not a flat stripe.
+    }
+    var y=compareAngleY(g,m,angle);
+    if(y===null){if(readout)readout.textContent+=' · outside view';return;}
+    var canvas=g.Canvas,ctx=canvas.getContext('2d');
+    ctx.save();
+    try{
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.strokeStyle='#d48313';ctx.fillStyle='#ad640a';ctx.lineWidth=Math.max(1,canvas.width/850);
+      if(typeof ctx.setLineDash==='function')ctx.setLineDash([7,5]);
+      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
+      if(typeof ctx.setLineDash==='function')ctx.setLineDash([]);
+      ctx.font=Math.max(11,Math.round(canvas.width/65))+'px Arial, sans-serif';
+      ctx.textBaseline=y<18?'top':'bottom';
+      ctx.fillText('Traced horizon · '+angle.toFixed(4)+'°',8,y<18?y+3:y-4);
+    }finally{ctx.restore();}
+  }
+  function compareAngleY(g,m,elevationDegrees){
+    var canvas=g.Canvas;
+    if(!canvas||!(canvas.width>0&&canvas.height>0))return null;
+    var aspect=Number(m.deviceRatio),diagonalFov=Number(m.camViewAngle);
+    if(!(aspect>0&&diagonalFov>0))return null;
+    var verticalHalfTan=Math.tan(diagonalFov/2)/Math.sqrt(1+aspect*aspect);
+    var tilt=Number(m.Nick)*Math.PI/180;
+    var aim=m.viewcenterHorizon===3?0:root.CurvaturePhysicalCamera127.create(m).aimDip;
+    var relative=aim-tilt-elevationDegrees*Math.PI/180;
+    var y=canvas.height/2-canvas.height*Math.tan(relative)/(2*verticalHalfTan);
+    return Number.isFinite(y)&&y>=0&&y<=canvas.height?y:null;
   }
   function registerCompareGraph(side,g){
     if(side!=='A'&&side!=='B')throw RangeError('Invalid Compare side');
@@ -195,6 +251,8 @@
     var eye=el('ModernCompareEyeLevel');if(eye){eye.checked=state.compareEyeLevel;eye.addEventListener('change',function(){
       state.compareEyeLevel=eye.checked;redraw();
     });}
+    var horizon=el('ModernCompareHorizon');if(horizon){horizon.checked=state.compareHorizon;
+      horizon.addEventListener('change',function(){state.compareHorizon=horizon.checked;redraw();});}
     var button=el('ModernRecalculateCompare');if(button)button.addEventListener('click',redraw);
   }
   function resizeGraph(g){

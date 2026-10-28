@@ -33,6 +33,7 @@
 <script src="src/renderers/CurvatureScreenSpaceGuides119.js"></script>
 <script src="src/scene/CurvatureFullSceneDecorations.js"></script>
 <script src="src/optics/OpticalRayTracer.js"></script>
+<script src="src/optics/OpticalRayHorizon1332.js"></script>
 <script src="src/optics/OpticalTargetProjection.js"></script>
 <script src="src/optics/OpticalSharedRayField.js"></script>
 <script src="src/optics/OpticalTowerSilhouette.js"></script>
@@ -143,6 +144,7 @@
           <label for="ModernModelOcclusion">Atmospheric comparison radius (m)</label>
           <input id="ModernModelOcclusion" type="number" min="1" max="10000000000000000" step="any"></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green reference line in both viewports; independent of atmospheric refraction.</p></div>
+        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration. Unresolved cases are not assumed to have a horizon.</p></div>
         <button type="button" class="modern-primary-button" id="ModernRecalculateCompare">Recalculate A/B</button>
         <p class="modern-note">Changing a physics parameter updates Compare only. Pair presets replace both A/B models; they never alter Scene. Shared camera and objects can be edited in Scene.</p>
       </section>
@@ -175,17 +177,17 @@
             <div class="modern-graph-host" id="ModernCompareHostA">
               <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="A"></script>
             </div>
-            <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span></div>
+            <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span><span class="modern-horizon-readout" id="ModernHorizonStatusA">Horizon: not calculated</span></div>
           </section>
           <section class="modern-viewport-panel" aria-label="Physical model B">
             <div class="modern-viewport-head"><span>Model B · Physical optics</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostB">
               <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="B"></script>
             </div>
-            <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span></div>
+            <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>
         </div>
-        <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. Arbitrary A/B pairs arrive in patch 133.</p>
+        <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. The orange horizon marker, when resolved, is derived from forward-traced first-ground-contact rays and is not a guarantee of unique global visibility.</p>
       </section>
       <div class="modern-compare-message" id="ModernCompareMessage" hidden>
         <button type="button" id="ModernBackToScene">Return to Scene</button>

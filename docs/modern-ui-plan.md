@@ -221,3 +221,46 @@ these belong to patch 134 or the engineering suite. Acceptance is covered by
 `tests/ModernIndependentCompare133.test.js` plus the full existing tests.
 Manual browser review remains necessary for viewport layout, visual contrast
 and real-world performance on different presets.
+
+## Patch 133.1 — Compare eye-level reference
+
+The optional green Eye-level line displays the shared zero-elevation direction
+for both Compare canvases. It is a presentation-only angular reference, not
+an optical ray, a visible surface edge, or evidence of a horizon.
+
+## Patch 133.2 — finite first-contact optical horizon (research diagnostic)
+
+`src/optics/OpticalRayHorizon1332.js` measures an **angular first-ground-contact
+boundary** with the existing `CurvatureRayTracer.trace` and its real surface
+event detector. Angular launch directions are scanned, then bisected between
+a confirmed ground hit and a confirmed escaping ray with an **interior minimum
+of altitude above the surface**. The latter is essential: reaching the end
+of the finite integration range is not proof that a ray escapes, much less
+proof of a horizon. No analytic horizon law, geometric tangent distance,
+grid extent, screenshot contour, or sphere-to-flat substitution is used by
+this diagnostic. The closest-approach distance is estimated directly from
+the integrated escaping ray.
+
+Compare displays the signed elevation angle relative to shared Eye level
+(negative = below 0°), positive dip for a downward horizon, approximate
+first-contact tangent distance, and an optional dashed orange guide. Both
+models have **separately keyed diagnostic caches**; changing eye-level or
+horizon overlay visibility does not re-trace, and neither measurement changes
+the Physical renderer's optics or its object/shadow visibility. The orange
+guide uses the same screen-angle mapping as the green Eye-level guide. For
+nonzero camera Roll the horizontal overlay is suppressed: a correct rolled
+isoline needs a separate camera-space projection.
+
+**Scientific scope:** this is a finite 100 km, forward-RK4 first-contact
+search, with 200 m outer integration steps and a 0.00005° angular target. It
+can detect a *locally supported* tangent branch and is **not** a proof of
+global uniqueness, arbitrary atmospheric ray topology, absence of a horizon,
+or true multipath visibility. Flat Vacuum and Flat Standard are reported
+**unresolved** by this detector, not as demonstrated horizon-free models.
+Extreme radius/observer profiles and range-limited or ambiguous rays are
+also left unresolved rather than forcing an answer. The independent analytic
+spherical-vacuum horizon formula is used ONLY in regression tests, never in
+the diagnostic implementation.
+
+Full Modern and Legacy integration are still based on the shared optics
+engine. Versioned experiment saving remains scoped to patch 134.

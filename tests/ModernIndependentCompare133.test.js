@@ -85,7 +85,8 @@ test('133: real compare UI reuses independent optical caches and updates only se
     'ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB',
     'ModernSceneSettings','ModernCompareSettings','ModernPairPreset','ModernModelTabA',
     'ModernModelTabB','ModernModelSurface','ModernModelRadius','ModernModelAtmosphere',
-    'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare'];
+    'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
+    'ModernCompareEyeLevel','ModernCompareHorizon'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
