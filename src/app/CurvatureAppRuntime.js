@@ -59,7 +59,8 @@ function DrawMainCanvasFrame(g) {
       });
       if (status) {
         var reasons=result.unresolvedReasons||{},samples=result.sampleStatuses||{};
-        var failure=(samples.solver_failed||0)+(samples.indeterminate||0);
+        var solverFailures=samples.solver_failed||0;
+        var grazingSamples=samples.indeterminate||0;
         var pieces=[];
         pieces.push(result.drawn+' lines (visible outline pieces)');
         if(result.fillTriangles!==undefined){
@@ -73,7 +74,12 @@ function DrawMainCanvasFrame(g) {
           (reasons['optical-solver']||0)+' solver, '+
           (reasons['sample-budget']||0)+' sample-budget, '+
           (reasons['grazing-uncertainty']||0)+' grazing)');
-        pieces.push(failure+' uncertain/failed point evaluations');
+        if(result.boundaryClipped)pieces.push(result.boundaryClipped+
+          ' bounded boundary clips (gap <= '+
+          result.maxBoundaryGapMetres.toFixed(4)+' m; hidden gap not drawn'+
+          (result.boundaryGrazingStops?'; '+result.boundaryGrazingStops+' grazing stops':'')+')');
+        pieces.push(solverFailures+' failed point evaluations | '+
+          grazingSamples+' grazing/indeterminate point samples');
         pieces.push(result.cacheReused?'optical geometry cached':'optical geometry '+result.buildMs+' ms');
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
         if(result.fieldStats){
@@ -101,7 +107,7 @@ function DrawMainCanvasFrame(g) {
         if(result.guideCulling&&(result.guideCulling.skippedEdges||result.guideCulling.clippedEdges))
           pieces.push('ground-grid drawing limited to '+Math.round(result.guideRenderExtent/1000)+
             ' km ('+result.guideCulling.skippedEdges+' skipped, '+result.guideCulling.clippedEdges+' clipped edges; NOT an optical horizon)');
-        status.textContent=(result.budgetExceeded?'PARTIAL (time budget): ':failure?'CHECK SOLVER: ':result.unresolved?'BOUNDARY UNCERTAINTY: ':'')+
+        status.textContent=(result.budgetExceeded?'PARTIAL (time budget): ':solverFailures?'CHECK SOLVER: ':result.unresolved?'BOUNDARY UNCERTAINTY: ':'')+
           pieces.join(' | ')+'. Physical ground grid/horizon; authored foundation fills, mutual object occlusion pending.';
       }
     } else {

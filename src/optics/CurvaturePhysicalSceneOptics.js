@@ -203,6 +203,7 @@
       var groundCacheHits=groundAfter?groundAfter.hits-groundBefore.hits:0;
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
+        boundaryClipped:0,maxBoundaryGapMetres:0,boundaryGapMetres:0,boundaryGrazingStops:0,
         fieldStats:null,perObject:[],fieldPrism:span?{
           minDistance:span.distances[0],maxDistance:span.distances[span.distances.length-1],
           minHeight:span.heights[0],maxHeight:span.heights[span.heights.length-1]
@@ -255,6 +256,11 @@
         stats.visibleSegments+=projected.segments.length;
         stats.unresolved+=projected.unresolved.length;
         stats.hiddenLeaves+=projected.stats.hiddenLeaves;
+        stats.boundaryClipped+=projected.stats.boundaryClipped;
+        stats.boundaryGrazingStops+=projected.stats.boundaryGrazingStops;
+        stats.maxBoundaryGapMetres=Math.max(stats.maxBoundaryGapMetres,
+          projected.stats.maxBoundaryGapMetres);
+        stats.boundaryGapMetres+=projected.stats.boundaryGapMetres;
         countInto(stats.unresolvedReasons,projected.stats.unresolvedReasons);
         countInto(stats.sampleStatuses,projected.stats.sampleStatuses);
         // Public perGroup metrics remain aggregated by bank for the existing
@@ -263,15 +269,17 @@
           fillTriangles:fills.stats.fillTriangles,
           fillUnresolved:fills.stats.unresolvedTriangles,sourcePrimitives:prim.length,
           visibleSegments:projected.segments.length,unresolved:projected.unresolved.length,
+          boundaryClipped:projected.stats.boundaryClipped,
           unresolvedReasons:projected.stats.unresolvedReasons};
         stats.perObject.push(one);
         var bank=stats.perGroup.find(function(g){return g.name===r.name;});
         if(!bank){bank={name:r.name,fillTriangles:0,fillUnresolved:0,
-          sourcePrimitives:0,visibleSegments:0,unresolved:0,unresolvedReasons:{}};
+          sourcePrimitives:0,visibleSegments:0,unresolved:0,boundaryClipped:0,unresolvedReasons:{}};
           stats.perGroup.push(bank);}
         bank.fillTriangles+=one.fillTriangles;bank.fillUnresolved+=one.fillUnresolved;
         bank.sourcePrimitives+=one.sourcePrimitives;
         bank.visibleSegments+=one.visibleSegments;bank.unresolved+=one.unresolved;
+        bank.boundaryClipped+=one.boundaryClipped;
         countInto(bank.unresolvedReasons,one.unresolvedReasons);
       });
       if(field&&field.stats)fieldStats=field.stats();

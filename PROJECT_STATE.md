@@ -143,3 +143,30 @@ Globe Standard at 87 and 202 towers still reports respectively ~130 and ~276
 mesh occlusion remain unverified. See `docs/MIGRATION_PHYSICAL_VALIDATION_115.md`
 and `tests/PhysicalValidation115.test.js`. Next: review any real-browser issues
 and focus on horizon boundary closure before claiming full image completeness.
+
+## Compatpatch 116 — bounded near-horizon outline closure and valid fill-painter camera checks
+
+`OpticalTowerSilhouette` now closes sampled single-transition visible/blocked
+horizon leaves by bracketing the transition with the existing physical point
+oracle. It emits **only confirmed-visible strokes** and leaves the remaining
+spatial bracket unpainted; `boundaryClipped`, `maxBoundaryGapMetres`,
+`boundaryGapMetres` and `boundaryGrazingStops` explicitly quantify this
+conservative approximation. The ordinary 85+2 Globe Standard scene's former
+130 `visibility-boundary` unresolved leaves are now 130 bounded clips with
+zero unresolved, the maximum measured world gap being ~0.0062 m. The 200+2
+scene's former 276 leaves are bounded to ~0.0102 m maximum, with two grazing
+samples retained as unpainted intervals. Real `solver_failed`, unbounded,
+nonmonotone and sample-budget leaves are **not** claimed as bounded closures.
+The numerical integrator, shared ray field and Canvas renderer are unchanged.
+
+The original #115 synthetic painter camera aimed away from all Globe fill
+facets: its zero `fill()` count was a viewport-test false negative, not a
+missing fill feature. Its validation now checks a third camera pose aimed at
+a nondegenerate emitted foundation triangle and independently requires an
+actual `fill()` operation. Original camera counts are separately available
+in JSON. On Globe/Flat scenes a targeted camera yields nonzero fill calls.
+The UI distinguishes genuine solver failures from grazing samples and shows
+measured conservative boundary-gap sizes. See
+`docs/MIGRATION_BOUNDARY_CLOSURE_116.md` and
+`tests/PhysicalBoundaryClosure116.test.js`. No general pixel-exact guarantee,
+multiray completeness, or arbitrary 3D mesh z-buffer was introduced.

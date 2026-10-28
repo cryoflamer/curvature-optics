@@ -43,16 +43,19 @@ test('115: full 87-tower Flat Standard scene has complete painter batches, visib
   assert.equal(row.outlineUnresolved,0);
   assert.ok(row.drawnFillCalls>0);
   assert.ok(row.visibleSegments>3000);
-  assert.equal(row.painterViewsChecked,2);
+  assert.equal(row.painterViewsChecked,3);
   assert.equal(row.cacheReused,true);
 });
 
-test('115: Globe Standard boundary leaves stay explicitly reported and cannot be mistaken for budget failures',()=>{
+test('115/116: Globe Standard boundary leaves are conservatively clipped without budget failures',()=>{
   const result=validation.sceneMatrix({workloads:[['globe','standard',85]]});
   assert.deepEqual(result.failures,[]);
   const row=result.rows[0];
   assert.equal(row.towers,87);
-  assert.ok(row.outlineUnresolved>0,'known narrow horizon leaves must be reported');
+  assert.equal(row.outlineUnresolved,0);
+  assert.equal(row.boundaryClipped,130);
+  assert.ok(row.maxBoundaryGapMetres<0.1);
+  assert.ok(row.painterViews.find(v=>v.name==='foundation-targeted').fillCalls>0);
   assert.equal(row.unresolvedReasons['sample-budget']||0,0);
   assert.equal(row.unresolvedReasons['optical-solver']||0,0);
   assert.equal(row.fillUnresolved,0);

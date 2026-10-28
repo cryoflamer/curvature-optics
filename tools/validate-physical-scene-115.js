@@ -104,8 +104,22 @@ function projectionMatrix(){
   return {name:'independent-target-shooting',viewport:{width:WIDTH,horizontalFovDegrees:60},
     tolerancePixels:0.5,rows:rows,failures:rows.flatMap(r=>r.failures)};
 }
+function nondegenerateFillAim(primitives){
+  // A fixed camera may point outside every foundation (notably on Globe),
+  // yielding zero Canvas fill calls despite hundreds of valid authored fills.
+  // Aim a third, independent painter probe at an ACTUAL projected fill facet.
+  let best=null,bestArea=0;
+  for(const p of primitives){
+    if(p.metadata?.kind!=='physical-object-fill'||p.points.length!==3)continue;
+    const [a,b,c]=p.points;
+    const u=b.map((v,i)=>v-a[i]),v=c.map((x,i)=>x-a[i]);
+    const area=Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]);
+    if(area>bestArea){bestArea=area;best=a.map((x,i)=>(x+b[i]+c[i])/3);}
+  }
+  return bestArea>1e-8?best:null;
+}
 function camera(x){
-  return {pos:[0,0,0],center:[x,1000,0],up:[0,0,1],sceneSize:2,
+  return {pos:[0,0,0],center:Array.isArray(x)?x:[x,1000,0],up:[0,0,1],sceneSize:2,
     screenSize:2,objectZExtend:0,zoom:1,near:1e-5};
 }
 function sceneMatrix({full=false,workloads}={}){
@@ -172,8 +186,14 @@ function sceneMatrix({full=false,workloads}={}){
       if(batch.firstStroke!==null&&batch.lastFill!==null&&batch.firstStroke<batch.lastFill)
         errors.push('fill-painted-over-own-stroke');
     let checks=0,totalDrawnFills=0,totalDrawnStrokes=0;
-    for(const pan of [0,0.3]){
-      const frame=frames.fromComposition(result.composition,camera(pan),480,320);
+    const fillAim=nondegenerateFillAim(primitives);
+    if(!fillAim)errors.push('no-nondegenerate-fill-facet');
+    const views=[{name:'reference',camera:camera(0)},
+      {name:'pan',camera:camera(0.3)}];
+    if(fillAim)views.push({name:'foundation-targeted',camera:camera(fillAim)});
+    const painterViews=[];
+    for(const view of views){
+      const frame=frames.fromComposition(result.composition,view.camera,480,320);
       let fills=0,strokes=0;
       const ctx={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},
         fill(){fills++;},stroke(){strokes++;}};
@@ -181,13 +201,20 @@ function sceneMatrix({full=false,workloads}={}){
       const render=painter.render(canvas,frame,{mode:'painter'});
       if(render.mode!=='painter'||!strokes)errors.push('shared-canvas-painter');
       totalDrawnFills+=fills;totalDrawnStrokes+=strokes;checks++;
+      painterViews.push({name:view.name,fillCalls:fills,strokeCalls:strokes});
     }
+    if(fillAim&&!painterViews.some(v=>v.name==='foundation-targeted'&&v.fillCalls>0))
+      errors.push('visible-foundation-was-not-filled');
+    if(result.stats.boundaryClipped>0 &&
+        !(result.stats.maxBoundaryGapMetres<=0.1))errors.push('unbounded-ground-clip-gap');
     rows.push({geometry,atmosphere,towers:count+2,
       coldMs:+coldMs.toFixed(2),cachedMs:+warmMs.toFixed(2),
       visibleSegments:result.stats.visibleSegments,fillTriangles:result.stats.fillTriangles,
       fillUnresolved:result.stats.fillUnresolved,outlineUnresolved:result.stats.unresolved,
       unresolvedReasons:result.stats.unresolvedReasons,sharedExactSolves:result.stats.fieldStats?.solves||0,
-      painterViewsChecked:checks,drawnFillCalls:totalDrawnFills,drawnStrokeCalls:totalDrawnStrokes,
+      boundaryClipped:result.stats.boundaryClipped,maxBoundaryGapMetres:result.stats.maxBoundaryGapMetres,
+      boundaryGrazingStops:result.stats.boundaryGrazingStops,
+      painterViewsChecked:checks,painterViews,drawnFillCalls:totalDrawnFills,drawnStrokeCalls:totalDrawnStrokes,
       groundHorizon:result.stats.groundHorizon,
       cacheReused:again.reused,cameraTurnReused:turned.reused,failures:errors});
   }

@@ -48,7 +48,8 @@
     var segments=[], unresolved=[];
     var stats={edges:0,evaluations:0,visiblePieces:0,hiddenLeaves:0,
       unresolvedLeaves:0,depthLimitedLeaves:0,interpolated:0,exact:0,
-      unresolvedReasons:{},sampleStatuses:{}};
+      unresolvedReasons:{},sampleStatuses:{},boundaryClipped:0,
+      maxBoundaryGapMetres:0,boundaryGapMetres:0,boundaryGrazingStops:0};
     var samples=new Map();
     function sample(p) {
       var key=p.join(',');
@@ -97,6 +98,54 @@
         statuses:points.map(function(p){return p.status;}),
         details:points.filter(function(p){return p.reason;}).map(function(p){return p.reason;})});
     }
+    // Conservative single-transition closure.  When a leaf is shorter than
+    // the specified spatial boundary tolerance and its three samples are
+    // monotonically visible/blocked, bracket the transition from both sides.
+    // Emit ONLY the confirmed-visible side; the remaining centimetre-scale gap
+    // is accounted for explicitly, never promoted to a visible ray.  Mixed
+    // grazing/failed/multi-transition leaves remain unresolved.
+    function closeBoundary(left,mid,right,source,length) {
+      var statuses=[left,mid,right].map(function(p){return p.status;});
+      if(length>boundaryTolerance ||
+          !statuses.every(function(s){return s==='visible'||s==='blocked';}) ||
+          !statuses.includes('visible') || !statuses.includes('blocked') ||
+          statuses[0]===statuses[2])return false;
+      var startVisible=statuses[0]==='visible';
+      var endVisible=startVisible?left:right;
+      var v=startVisible?(mid.status==='visible'?mid:left):
+        (mid.status==='visible'?mid:right);
+      var b=startVisible?(mid.status==='blocked'?mid:right):
+        (mid.status==='blocked'?mid:left);
+      var limit=Math.min(boundaryTolerance/16,0.01);
+      for(var i=0;i<12&&separation(v.world,b.world)>limit;i++){
+        if(stats.evaluations>=maxSamples)return false;
+        var next=sample(between(v.world,b.world,0.5));
+        if(next.status==='visible')v=next;
+        else if(next.status==='blocked')b=next;
+        else if(next.status==='indeterminate'){
+          // This sample lies in the solver's grazing band.  The V/B
+          // bracket is already shorter than the spatial clip tolerance;
+          // keep the entire uncertain bracket EMPTY rather than declaring
+          // a visible ray, and account for its width.
+          stats.boundaryGrazingStops++;
+          break;
+        }else return false;
+      }
+      // Qualify the short terminal stroke at a separate interior point.
+      if(separation(endVisible.world,v.world)>1e-10){
+        if(stats.evaluations>=maxSamples)return false;
+        var interior=sample(between(endVisible.world,v.world,0.5));
+        if(interior.status!=='visible'||error(endVisible,v,interior)>angularTolerance)
+          return false;
+        if(startVisible)emit(endVisible,v,source);
+        else emit(v,endVisible,source);
+      }
+      stats.boundaryClipped++;
+      var gap=separation(v.world,b.world);
+      stats.maxBoundaryGapMetres=Math.max(stats.maxBoundaryGapMetres,gap);
+      stats.boundaryGapMetres+=gap;
+      return true;
+    }
     function clipEdge(start,end,source) {
       var a=sample(start),b=sample(end);
       function visit(left,right,depth) {
@@ -114,6 +163,7 @@
           if(visible && error(left,right,mid)<=angularTolerance){emit(left,right,source);return;}
         }
         if(depth>=maximumDepth || length<=boundaryTolerance || stats.evaluations>=maxSamples) {
+          if(!visible&&!blocked&&closeBoundary(left,mid,right,source,length))return;
           if(visible && error(left,right,mid)<=angularTolerance)emit(left,right,source);
           else if(blocked)stats.hiddenLeaves++;
           else {

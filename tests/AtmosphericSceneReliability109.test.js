@@ -87,8 +87,10 @@ test('109: geometric visibility boundary is counted separately from numerical fa
     radius:R,observerHeight:0,maximumDepth:12,boundaryTolerance:0.01});
   assert.ok(result.segments.length>0);
   assert.equal(result.stats.sampleStatuses.solver_failed||0,0);
-  assert.ok((result.stats.unresolvedReasons['visibility-boundary']||0)>0);
-  assert.equal(result.unresolved.length,result.stats.unresolvedLeaves);
+  assert.equal(result.unresolved.length,0);
+  assert.ok(result.stats.boundaryClipped>0,
+    'single-transition leaves are conservatively clipped within the spatial tolerance');
+  assert.ok(result.stats.maxBoundaryGapMetres<=0.01);
 });
 test('109: main UI separates mode, atmosphere, help and runtime diagnostics',()=>{
   const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureApp.html'),'utf8');
