@@ -613,3 +613,15 @@ purposefully committed extreme profile. Node regression: 566/566 passed.
   JSON interchange remain backward-compatible; switching modes does not
   reset the selections. Canvas-free test shims safely skip painter annotations.
 - Node regression: 573/573 passed. Browser acceptance remains unverified.
+
+## Patch 136 — atmospheric inverse physical requirements (research note)
+
+The future atmospheric inverse problem has been documented in
+`docs/ATMOSPHERIC_INVERSE_PHYSICAL_REQUIREMENTS_136.md`. The note separates
+hydrostatic mathematical existence, convective stability, and nonlinear
+mixing times; derives the dry-air inverse temperature relation for the
+engineered exponential `n(h)`; records the **illustrative local** ~188 K/km
+lapse-rate and ~13 s linear instability e-folding estimates with their
+assumptions; and scopes a later temperature/gradient visualization. This
+patch changes **documentation only**; no atmospheric solver or UI has been
+implemented. For Vacuum, thermodynamic diagnostics are not applicable.
