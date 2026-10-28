@@ -290,3 +290,20 @@ ZIP is required to confirm end-to-end latency improvement. See
 `docs/MIGRATION_OPTICAL_WARM_START_123.md`,
 `tests/OpticalWarmStarts123.test.js` and
 `tools/benchmark-optical-warm-start-123.js`.
+
+## Compatpatch 124 — standalone continuous-curvature surface geometry
+
+A new independent module `src/geometry/CurvatureSurfaceGeometry.js` defines
+stable local surface coordinates, altitude, unit normal, and *geometric*
+horizon for a non-negative curvature `k=1/R`, including an **exact** planar
+case `k=0`. Both 2D ray-plane and 3D geodesic-placement APIs are supplied,
+with no giant-number radius substitution. Sagitta and altitude evaluations
+avoid catastrophic `R*cos(d/R)-R` and `hypot(x,z+R)-R` cancellation in the
+observer-facing domain; an analytic tangent horizon avoids large-radius
+`acos` cancellation. Tests cover spherical analytic references, 3D round
+trips, exact plane, flat-limit convergence, altitude normals, centre
+singularity, extreme radii and UMD export. **This patch deliberately does
+not change any existing renderer, model, Optical Solver, ground grid, or UI.**
+Physical integration is reserved for #125–128. See
+`docs/MIGRATION_CONTINUOUS_SURFACE_GEOMETRY_124.md` and
+`tests/CurvatureSurfaceGeometry124.test.js`.
