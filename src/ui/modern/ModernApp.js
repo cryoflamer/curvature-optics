@@ -222,6 +222,8 @@
     var pill=el('ModernModePill');if(pill)pill.textContent=state.mode.toUpperCase();
     var wrap=el('ModernOcclusionWrap');
     if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(state.atmosphere);
+    showLegacyOption('ModernAtmosphere',state.atmosphere);
+    renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     var fov=el('ModernViewAngle');if(fov&&Number.isFinite(model.ViewAngle))
       fov.value=String(Number(model.ViewAngle.toFixed(4)));
   }
@@ -377,6 +379,49 @@
     }
     return true;
   }
+  // Hidden legacy entries are revealed only when the current experiment uses
+  // them. Old URLs/JSON/library entries remain editable and round-trippable.
+  function showLegacyOption(selectId,value){
+    var select=el(selectId);
+    if(!select||!select.options)return;
+    for(var i=0;i<select.options.length;i++){
+      var option=select.options[i];
+      if(option.value==='inverse-spherical'||option.value==='standard-inverse'||option.value==='flat-inverse'){
+        var active=option.value===value;
+        option.hidden=!active;
+        option.disabled=!active;
+      }
+    }
+  }
+  function atmosphereDescription(kind){
+    var info={
+      vacuum:['Vacuum · idealized','n(h) = 1',
+        'No atmospheric refraction; rays travel in straight lines in the chosen surface geometry.',
+        'No refractive parameters.'],
+      standard:['Standard atmosphere · approximation','n(h) = 1 + 0.000293 × exp(−h / 7350 m)',
+        'Simplified exponential decrease of refractivity with height; this is not a weather-dependent atmospheric model.',
+        'Near-surface refractivity 293 ppm; scale height H = 7350 m.'],
+      'exponential-occlusion':['Exponential refractive profile · hypothetical','n(h) = n₀ × exp(h / R)',
+        'Engineered increasing refractive index; bends rays toward lower heights. Not an observed model of Earth’s atmosphere.',
+        'R is the atmospheric comparison radius (metres), independent of the surface radius; n₀ = 1 in this UI.'],
+      'inverse-spherical':['Inverse spherical · legacy experimental profile','n(h) = n₀ × √(1 + (1+h/R)⁴ − (1+h/R)²)',
+        'An alternative inverse-optics construction retained to reproduce previously saved experiments; not offered for new selection.',
+        'R is the atmospheric comparison radius (metres); n₀ = 1 in this UI.']
+    }[kind];
+    return info||null;
+  }
+  function renderAtmosphereDescription(id,kind){
+    var node=newUiEl(id),info=atmosphereDescription(kind);
+    if(!node||!info||typeof node.appendChild!=='function'||typeof document.createElement!=='function')return;
+    // Use textContent instead of HTML interpolation for robustness.
+    node.textContent='';
+    var title=document.createElement('strong');title.textContent=info[0];node.appendChild(title);
+    var formula=document.createElement('div');formula.className='modern-atmosphere-formula';
+    formula.textContent=info[1];node.appendChild(formula);
+    var details=document.createElement('div');details.textContent=info[2];node.appendChild(details);
+    var note=document.createElement('div');note.className='modern-atmosphere-note';
+    note.textContent=info[3];node.appendChild(note);
+  }
   function syncCompareEditor(){
     if(!compareState||!state.compareConfig)return;
     var spec=state.compareConfig[state.compareSelected];
@@ -386,7 +431,9 @@
       tab.classList.toggle('is-active',active);
       tab.setAttribute('aria-pressed',String(active));
     });
-    var pairPreset=el('ModernPairPreset');if(pairPreset)pairPreset.value=state.compareConfig.preset;
+    var pairPreset=el('ModernPairPreset');if(pairPreset){showLegacyOption('ModernPairPreset',state.compareConfig.preset);pairPreset.value=state.compareConfig.preset;}
+    showLegacyOption('ModernModelAtmosphere',spec.atmosphere);
+    renderAtmosphereDescription('ModernModelAtmosphereInfo',spec.atmosphere);
     var fields={ModernModelSurface:'surface',ModernModelRadius:'radiusKm',
       ModernModelAtmosphere:'atmosphere',ModernModelOcclusion:'occlusionRadius'};
     Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
@@ -546,7 +593,8 @@
       ModernNick:'Nick',ModernRoll:'Roll'};
     Object.keys(pairs).forEach(function(id){var node=el(id);if(node)node.value=String(model[pairs[id]]);});
     var aim=el('ModernCameraAim');if(aim)aim.value=String(model.viewcenterHorizon);
-    var atmosphere=el('ModernAtmosphere');if(atmosphere)atmosphere.value=state.atmosphere;
+    var atmosphere=el('ModernAtmosphere');if(atmosphere){showLegacyOption('ModernAtmosphere',state.atmosphere);atmosphere.value=state.atmosphere;}
+    renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius);
     var grid=el('ModernGrid');if(grid)grid.checked=model.showGrid!==0;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
@@ -723,7 +771,7 @@
       else {model.viewcenterHorizon=Number(this.value);redraw();}
     });
     el('ModernAtmosphere').addEventListener('change',function(){
-      state.atmosphere=this.value;markCustom();redraw();
+      state.atmosphere=this.value;markCustom();refreshLabels();redraw();
     });
     el('ModernGrid').addEventListener('change',function(){model.showGrid=this.checked?1:0;markCustom();redraw();});
     var curvature=root.CurvaturePhysicalCurvature;

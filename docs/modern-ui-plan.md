@@ -358,3 +358,16 @@ Legacy and the optical renderer remain unchanged. Regression coverage:
 `tests/ModernSharedCompareControls.test.js` (shared edits, independent B,
 keyboard navigation, panel switching, no tab-triggered optical work) plus full
 existing tests. Browser acceptance remains required for final visual layout.
+
+## Patch 134.3 — atmospheric descriptions and historical profile visibility
+
+Both Modern atmosphere editors now provide a small formula and physical-status
+panel for the currently selected profile. `Standard atmosphere` explicitly
+uses the implementation's 293 ppm near-surface refractivity and 7350 m scale
+height, not a fitted weather profile. `Exponential refractive profile` is an
+engineered hypothetical law, with the unchanged internal identifier
+`exponential-occlusion`. Atmospheric comparison radius is independent from
+surface curvature. The inverse-spherical profile is preserved for backward
+compatibility, but it and its historical physics-pair presets are hidden
+unless currently restored. All optics and serializable parameter names stay
+unchanged. Browser visual verification is still required.

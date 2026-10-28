@@ -518,3 +518,16 @@ panel visibility without recomputing optics; model or shared parameter changes
 continue to redraw through the existing Physical renderer and use unchanged
 version-1 experiment URL/localStorage/JSON serialization. Legacy is untouched.
 Node regression: 558/558 tests, including three new shared-controls checks.
+
+### Patch 134.3 — Atmospheric model help and legacy option cleanup
+
+Modern Scene and Compare Atmosphere panels show a concise description and the
+actual refractive-index law from `OpticalRayTracer.atmosphere`: vacuum `n=1`,
+standard `n=1+0.000293 exp(-h/7350 m)`, and the hypothetical engineered
+exponential `n=n0 exp(h/R)`. The UI calls the latter **Exponential refractive
+profile** rather than occlusion, while keeping the stable internal key
+`exponential-occlusion` for saved links and tests. The inverse-spherical law
+is described when loading a historical experiment; it and the two inverse
+pair presets are hidden from the default picker but retained, restorable and
+editable when selected by URL, JSON, or named library. No physics formulas,
+experiment schema version, Legacy behavior, or cache keys were changed.

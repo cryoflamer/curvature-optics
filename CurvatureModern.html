@@ -80,8 +80,8 @@
             <option value="custom">Custom pair · from Scene</option>
             <option value="globe-flat-vacuum">Globe vacuum / Flat vacuum</option>
             <option value="standard-vacuum">Globe standard / Globe vacuum</option>
-            <option value="standard-inverse">Globe standard / Globe inverse spherical</option>
-            <option value="flat-inverse">Globe standard / Flat inverse spherical</option>
+            <option value="standard-inverse" hidden disabled>Globe standard / Globe inverse spherical (legacy)</option>
+            <option value="flat-inverse" hidden disabled>Globe standard / Flat inverse spherical (legacy)</option>
           </select></div>
         <div class="modern-model-tabs" role="group" aria-label="Model to edit">
           <button type="button" id="ModernModelTabA" class="is-active" aria-pressed="true">Model A</button>
@@ -135,20 +135,22 @@
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
           <option value="standard" selected>Standard atmosphere</option><option value="vacuum">Vacuum · straight rays</option>
-          <option value="inverse-spherical">Inverse spherical</option><option value="exponential-occlusion">Exponential occlusion</option>
+          <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option><option value="exponential-occlusion">Exponential refractive profile · engineered</option>
         </select></div>
         <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Comparison/occlusion radius (m)</label><input id="ModernOcclusion" type="number" min="1" max="1e16" step="1000" value="6371000"></div>
+        <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere · selected model</h2>
         <div class="modern-field"><label for="ModernModelAtmosphere">Optical atmosphere</label>
           <select id="ModernModelAtmosphere"><option value="vacuum">Vacuum · straight rays</option>
             <option value="standard">Standard atmosphere</option>
-            <option value="inverse-spherical">Inverse spherical · engineered</option>
-            <option value="exponential-occlusion">Exponential occlusion · engineered</option></select></div>
+            <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option>
+            <option value="exponential-occlusion">Exponential refractive profile · engineered</option></select></div>
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
           <label for="ModernModelOcclusion">Atmospheric comparison radius (m)</label>
           <input id="ModernModelOcclusion" type="number" min="1" max="10000000000000000" step="any"></div>
+        <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>
         <p class="modern-note">Two physical object groups shared by Scene and both Compare models: towers, ships, rods and Bedford objects.</p>
