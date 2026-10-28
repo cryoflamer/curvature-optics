@@ -50,7 +50,7 @@ test('Modern document is isolated from legacy control/runtime scripts and uses a
 test('Modern standalone runtime binds working scene controls and does not instantiate Legacy UI',()=>{
   const ids=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill','ModernOcclusionWrap',
     'ModernSceneTab','ModernCompareTab','ModernCompareMessage','ModernGraphHost',
-    'ModernBackToScene','ModernHeight','ModernFocal','ModernPan','ModernNick','ModernOcclusion',
+    'ModernBackToScene','ModernCompareViews','ModernHeight','ModernFocal','ModernPan','ModernNick','ModernOcclusion',
     'ModernCameraAim','ModernAtmosphere','ModernGrid','ModernCurvature','ModernEarth','ModernRender',
     'ModernRoll','ModernViewAngle','ModernRadiusKm','ModernFlat','ModernPreset','ModernResetPreset',
     'ModernObjectFields0','ModernObjectFields1','ModernSceneTitle','ModernSceneDescription'];

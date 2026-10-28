@@ -415,3 +415,24 @@ viewport and field help available by hover or keyboard focus. The model, optics,
 Legacy interface and 131 field IDs/handlers were not changed. FOV is formatted
 for display with four decimals only. See `docs/modern-ui-plan.md` for acceptance
 and the continued 132–134 roadmap.
+
+### Compatibility patch 132 — twin Physical Compare viewports
+
+Modern Compare now paints two **independent real Physical Canvas scenes**
+side by side with one shared observer, object configuration, FOV and Eye-level
+camera. A retains the Scene curvature; B is exact flat (κ=0) using the same
+atmospheric model. Their model snapshots are independent and do not mutate
+Scene. Both invoke the existing `CurvatureMainCanvasRenderer.renderPhysical`,
+not legacy `Globe+FE` or copied raster output. Each comparison graph has its
+own equal-sized Canvas and clipping, created at HTML parse time; at mode
+changes, dimensions and redraws are synchronized. The reduced half-panel
+width changes pixel density relative to single Scene, but A and B retain
+identical angular scale within Compare. User-selectable independent A/B
+surface and atmosphere parameters are postponed to #133.
+
+Patch 132 also removes redundant native browser tooltips from custom Modern
+help buttons, clarifies physical-object help, and drops an unused Modern-only
+`SceneFrame` script that previously raised a missing legacy-adapter exception.
+`docs/modern-ui-plan.md` is the canonical roadmap; Legacy/physics remain
+unchanged. The JS/Physical test suite and inlined Chromium browser smoke
+(including 85+2 towers in Standard atmosphere) exercise both panels.

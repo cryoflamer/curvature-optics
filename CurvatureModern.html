@@ -12,7 +12,6 @@
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, animations, diagnostic UI or legacy runtime is loaded. -->
 <script src="src/legacy/GraphX3DX.js"></script>
-<script src="src/scene/SceneFrame.js"></script>
 <script src="src/scene/CurvatureSceneContract.js"></script>
 <script src="src/scene/CurvatureRenderFrame.js"></script>
 <script src="src/geometry/CurvatureSurfaceGeometry.js"></script>
@@ -45,6 +44,7 @@
 <script src="src/app/CurvaturePhysicalCurvature127.js"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js"></script>
 <script src="src/ui/modern/ModernSceneState131.js"></script>
+<script src="src/ui/modern/ModernCompareModel132.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -134,9 +134,26 @@
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
+      <section class="modern-compare-viewports" id="ModernCompareViews" aria-label="Side-by-side physical comparison" aria-hidden="true">
+        <div class="modern-compare-grid">
+          <section class="modern-viewport-panel" aria-label="Physical model A">
+            <div class="modern-viewport-head"><span>A · Current surface</span><span id="ModernCompareLabelA">Current curvature · shared atmosphere</span></div>
+            <div class="modern-graph-host" id="ModernCompareHostA">
+              <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="A"></script>
+            </div>
+            <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span></div>
+          </section>
+          <section class="modern-viewport-panel" aria-label="Physical model B">
+            <div class="modern-viewport-head"><span>B · Exact flat</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
+            <div class="modern-graph-host" id="ModernCompareHostB">
+              <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="B"></script>
+            </div>
+            <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span></div>
+          </section>
+        </div>
+        <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. A uses the current surface; B is exact flat (κ = 0). Atmosphere is shared for now. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. Arbitrary A/B pairs arrive in patch 133.</p>
+      </section>
       <div class="modern-compare-message" id="ModernCompareMessage" hidden>
-        <h2>Model comparison is next</h2>
-        <p>This preview already uses the same physical solver as Legacy. Two synchronized physical viewports and independent A/B atmospheres arrive in patches 132–133.</p>
         <button type="button" id="ModernBackToScene">Return to Scene</button>
       </div>
       <div class="modern-footnote">Modern UI is experimental. Engineering checks and all Legacy controls remain at <a href="CurvatureApp.html?ui=legacy">Legacy diagnostics</a>.</div>

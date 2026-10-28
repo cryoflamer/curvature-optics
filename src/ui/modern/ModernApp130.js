@@ -5,8 +5,10 @@
 (function(root){
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
-    preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{}};
+    preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
+    compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState131;
+  var compareAdapter=root.CurvatureModernCompareModel132;
   var model=new root.CurveAppClass();
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
@@ -60,6 +62,46 @@
       if(root.console&&root.console.error)root.console.error('Modern Scene render:',error);
     }
   }
+  function drawCompare(side,g){
+    if(state.mode!=='compare'||!state.comparePair)return;
+    var m=state.comparePair[side];
+    if(!m)return;
+    try{
+      // A and B invoke the actual Physical renderer separately, not copied pixels.
+      var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,{
+        atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
+      });
+      state.compareLast[side]=result;
+      var node=el('ModernCompareStatus'+side);
+      if(node){
+        node.textContent=(result.cacheReused?'Cached':'Computed')+' · '+result.drawn+
+          ' contours · '+result.fillTriangles+' fills · '+result.unresolved+' unresolved';
+        node.classList.toggle('is-error',!!result.unresolved);
+      }
+    }catch(error){
+      var status=el('ModernCompareStatus'+side);
+      if(status){status.textContent='Physical model '+side+': '+error.message;status.classList.toggle('is-error',true);}
+      if(root.console&&root.console.error)root.console.error('Modern Compare '+side+':',error);
+    }
+  }
+  function registerCompareGraph(side,g){
+    if(side!=='A'&&side!=='B')throw RangeError('Invalid Compare side');
+    state.compareGraphs[side]=g;
+  }
+  function prepareCompare(){
+    if(!compareAdapter){updateStatus('Compare adapter is unavailable',true);return false;}
+    var result=compareAdapter.pair(model);
+    if(!compareAdapter.invariant(result))throw Error('Compare shared-scene invariant failed');
+    state.comparePair=result;
+    var aLabel=el('ModernCompareLabelA'),bLabel=el('ModernCompareLabelB');
+    if(aLabel)aLabel.textContent=(result.A.showModel===2?'Exact flat':'R = '+(result.A.rEarth/1000).toLocaleString('en-US')+' km')+
+      ' · '+state.atmosphere;
+    if(bLabel)bLabel.textContent='κ = 0 · '+state.atmosphere;
+    return true;
+  }
+  function resizeGraph(g){
+    if(g&&typeof g.UpdateCanvasSize==='function'){g.UpdateCanvasSize();}
+  }
   var graph=root.NewGraphX3D({Id:'ModernSceneGraph',Width:'100%',Height:'66.67%',
     DrawFunc:draw,AutoReset:true,AutoClear:true,AutoScalePix:true});
   state.graph=graph;
@@ -70,7 +112,18 @@
   function redraw(){
     cancelPending();
     model.Update();refreshLabels();
-    state.frame=requestAnimationFrame(function(){state.frame=null;graph.Redraw();});
+    if(state.mode==='compare'){
+      if(!prepareCompare())return;
+      state.frame=requestAnimationFrame(function(){
+        state.frame=null;
+        ['A','B'].forEach(function(side){
+          var view=state.compareGraphs[side];
+          if(view){resizeGraph(view);view.Redraw();}
+        });
+      });
+    }else{
+      state.frame=requestAnimationFrame(function(){state.frame=null;resizeGraph(graph);graph.Redraw();});
+    }
   }
   function scheduleRedraw(){
     cancelPending();
@@ -86,8 +139,11 @@
     el('ModernCompareTab').setAttribute('aria-pressed',String(mode==='compare'));
     el('ModernCompareMessage').hidden=mode!=='compare';
     el('ModernGraphHost').closest('.modern-viewport-panel').hidden=mode==='compare';
+    var views=el('ModernCompareViews');
+    if(views){views.classList.toggle('is-active',mode==='compare');
+      views.setAttribute('aria-hidden',String(mode!=='compare'));}
     refreshLabels();
-    if(mode==='scene')redraw();
+    redraw();
   }
   function markCustom(){
     var preset=el('ModernPreset');if(preset)preset.value='custom';
@@ -240,7 +296,7 @@
     ModernGrid:'Metric guide lines are measured along the actual surface and do not determine the optical horizon.'
   };
   var objectHelp={
-    NObjects:'Number of objects in this group.',ObjType:'Physical shape rendered for this group.',
+    NObjects:'Number of objects in this group.',ObjType:'Selects the actual 3D object shape, not just its appearance: tower, ship, measuring rod or Bedford marker.',
     ObjDist:'Along-surface distance to the first object in metres.',
     ObjDeltaDist:'Along-surface separation of consecutive objects in metres.',
     ObjSidePos:'Lateral offset from the observation axis, in metres.',
@@ -256,7 +312,6 @@
     help.type='button';help.className='modern-help';help.textContent='?';
     help.setAttribute('aria-label','Help: '+label.textContent.trim());
     help.setAttribute('data-tip',message);
-    help.title=message;
     help.addEventListener('click',function(){help.focus();});
     label.appendChild(help);
   }
@@ -325,5 +380,8 @@
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
   root.CurvatureModernApp130={getModel:function(){return model;},getMode:function(){return state.mode;},
-    getLastRender:function(){return state.last;},getPreset:function(){return state.preset;}};
+    getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
+    registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
+    getCompareModels:function(){return state.comparePair;},
+    getCompareLast:function(){return state.compareLast;}};
 }(window));

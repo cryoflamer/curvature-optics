@@ -66,3 +66,16 @@ button{cursor:pointer}
 @media(max-width:900px){.modern-workspace{grid-template-columns:1fr}.modern-sidebar{width:auto}.modern-settings-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.modern-scene-presets{order:3;flex-basis:100%}.modern-scene-presets select{flex:1;max-width:none}}
 @media(max-width:550px){.modern-settings-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}.modern-scene-presets{flex-wrap:wrap}}
 @media(max-width:850px){.modern-sidebar{display:block}}
+/* 132: real independently painted Physical model comparison. */
+.modern-main{position:relative}
+.modern-compare-viewports{width:100%;margin:0 0 12px}
+/* Keep both parser-time GraphX3DX canvases measurable before Compare is opened.
+   display:none here would initialize them with zero-width backing stores. */
+.modern-compare-viewports:not(.is-active){position:absolute;left:0;top:0;visibility:hidden;pointer-events:none}
+.modern-compare-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.modern-compare-grid .modern-viewport-head{font-size:11px;flex-wrap:wrap}
+.modern-compare-grid .modern-viewport-foot{font-size:10px;overflow-wrap:anywhere}
+.modern-compare-note{margin:12px 2px 4px;color:#60768f;font-size:12px;line-height:1.55}
+.modern-compare-message{min-height:0;padding:0;border:0;background:none;box-shadow:none}
+.modern-compare-message button{padding:7px 12px;font-size:12px}
+@media(max-width:750px){.modern-compare-grid{grid-template-columns:1fr}}

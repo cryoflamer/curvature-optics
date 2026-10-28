@@ -136,3 +136,46 @@ all previous tests green, and a manual Modern browser layout check. Compare
 remains the explicit placeholder for 132–133. Future controls should follow the
 same tab-and-help conventions rather than reinstating an infinitely scrolling
 sidebar.
+
+## Patch 132 — paired Physical viewports (initial Compare)
+
+Patch **132** implements **two real Physical render calls** side by side in the
+Modern Compare workspace. Both A and B have their own GraphX3DX Canvas,
+backing store, viewport transform and raster clipping, and both invoke the
+existing `CurvatureMainCanvasRenderer.renderPhysical` rather than reusing a
+screenshot or legacy `Globe+FE` path. No physics routines have been forked.
+The new `ModernCompareModel132` clones the shared authored `CurveAppClass`
+state (copying its object arrays) to isolate per-model changes.
+
+The **initial fixed pair** is A = current Scene curvature and B = exact
+flat (`showModel=2`, κ=0), with the **same** atmosphere and atmospheric
+comparison/occlusion radius. Both use the observer-fixed Eye-level camera
+(`viewcenterHorizon=3`) regardless of any curvature-dependent horizon aiming
+selected in Scene, and retain identical observer position, Pan/Nick/Roll,
+FOV, object coordinates, counts, dimensions and grid settings. The source
+Scene model is not mutated by switching to Compare. **Arbitrary independently
+configurable A/B atmospheres, surface radii, presets and cache policy are
+reserved for patch 133.**
+
+Each Compare canvas has an equal aspect ratio, equal physical pixel dimensions
+and **equal angular field of view**, hence equal *pixels per degree within
+Compare*. A half-width comparison viewport has fewer pixels per degree than
+full-width single Scene; that is an explicitly documented UI choice, not
+asymmetric camera or geometry. The `visibility:hidden` positioning before
+activation is intentional: GraphX3DX creates canvases via parser-time
+`document.writeln` and requires measurable container widths. On activation
+both graph backing stores are resized before redrawing. Each canvas clips
+strictly to its own HTML viewport.
+
+Patch 132 also eliminates duplicate native `title` tooltips from custom
+`?` help controls; contextual text explains physical effects instead of
+repeating labels. The Modern-only unused legacy command `SceneFrame` script
+was removed because its unsatisfied `LegacySceneAdapter` import raised a
+browser exception; the actual independent physical `CurvatureRenderFrame`
+remains present. Legacy entrypoint and diagnostics are unchanged.
+
+Acceptance: renderer is invoked **twice**, once per distinct Canvas;
+A/B object geometry and observer-fixed cameras agree; B has truly zero
+curvature; Scene state survives entering/exiting Compare; both viewports show
+finite nonzero equal backing dimensions and complete independent outlines;
+no unresolved pieces for the reference scene; all older regression tests pass.
