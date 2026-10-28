@@ -179,3 +179,45 @@ A/B object geometry and observer-fixed cameras agree; B has truly zero
 curvature; Scene state survives entering/exiting Compare; both viewports show
 finite nonzero equal backing dimensions and complete independent outlines;
 no unresolved pieces for the reference scene; all older regression tests pass.
+
+## Patch 133 — independent A/B physics with the same camera/scene
+
+Patch **133** removes the fixed-pair limitation while keeping the 132 dual
+Canvas and shared Physical renderer. `ModernCompareState133.js` owns two
+**validated, ephemeral descriptors** (`A`, `B`): surface kind (`globe` or
+`flat`), radius in kilometres, atmosphere name, and independently editable
+engineered-atmosphere comparison radius (metres). Editing a descriptor leaves
+Scene untouched. `ModernCompareModel132.clone` creates a fresh physical model
+for each side, forces the **same Eye-level observer-fixed camera**, and runs
+`CurveAppClass.Update()`; no optics formula is implemented in either UI adapter.
+Both sides use the original `CurvatureMainCanvasRenderer.renderPhysical`.
+
+The Compare sidebar shows a physics-pair preset and A/B editor, replacing
+Scene's parameter tabs **only while Compare is active**. Camera, object groups,
+observer and display configuration are shared from Scene; switch to Scene to
+change them. Returning to Compare preserves independently edited A/B physics.
+The first Compare activation defaults to **A = current Scene surface and
+atmosphere; B = exact flat with the same atmosphere**, preserving the visual
+baseline from 132. A named pair preset explicitly overwrites both A/B physics;
+all manual edits mark the pair Custom. Presets: Globe vacuum / Flat vacuum,
+Globe standard / Globe vacuum, Globe standard / Globe inverse spherical, and
+Globe standard / Flat inverse spherical. Engineered atmospheres are deliberately
+marked as engineered models, not measured equivalence claims. The stored radius
+for an exact flat model remains a finite **reference** for the physical optics
+backend and does not introduce surface curvature.
+
+The Physical renderer now accepts an optional `cacheSession` provided by
+Compare. The app creates **two independent instances** of the existing optical
+transformation cache (`CurvaturePhysicalSceneOptics.create()`), one for each
+side, so redrawing A does not evict B's optically different result. Within each
+session the established key includes model geometry, source scene, atmospheric
+kind and engineered radius; there is no new independent optical algorithm.
+Scene continues to use its original optical cache. Neither the Legacy document
+nor its controls, state or persistence have changed.
+
+Patch 133 deliberately does **not** implement experiment save/restore, URL
+serialization, arbitrary UI preferences, or full end-to-end image matching;
+these belong to patch 134 or the engineering suite. Acceptance is covered by
+`tests/ModernIndependentCompare133.test.js` plus the full existing tests.
+Manual browser review remains necessary for viewport layout, visual contrast
+and real-world performance on different presets.

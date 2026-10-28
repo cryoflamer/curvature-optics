@@ -79,3 +79,15 @@ button{cursor:pointer}
 .modern-compare-message{min-height:0;padding:0;border:0;background:none;box-shadow:none}
 .modern-compare-message button{padding:7px 12px;font-size:12px}
 @media(max-width:750px){.modern-compare-grid{grid-template-columns:1fr}}
+
+/* 133: a focused physics editor replaces Scene settings in Compare mode. */
+.modern-compare-settings[hidden]{display:none!important}
+.modern-compare-settings h2{font-size:17px;margin:1px 0 9px;color:#132840}
+.modern-compare-settings .modern-note{margin:8px 0 17px}
+.modern-compare-settings .modern-field{margin:14px 0}
+.modern-compare-settings .modern-field label{display:block;font-size:12px;margin-bottom:6px;color:#4c607a}
+.modern-compare-settings input,.modern-compare-settings select{box-sizing:border-box;width:100%;height:36px;border:1px solid #cdd9e7;border-radius:7px;background:#fafdff;color:#263c5a;padding:6px 8px;font-size:12px}
+.modern-model-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:16px 0 20px}
+.modern-model-tabs button{border:1px solid #b9cce3;border-radius:7px;background:#f5f9ff;padding:9px;color:#355b82;font-size:12px;font-weight:700}
+.modern-model-tabs button.is-active{background:#236ab4;color:white;border-color:#236ab4}
+.modern-compare-settings .modern-primary-button{margin-top:16px}

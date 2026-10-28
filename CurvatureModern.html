@@ -45,6 +45,7 @@
 <script src="src/app/CurvatureMainCanvasRenderer.js"></script>
 <script src="src/ui/modern/ModernSceneState131.js"></script>
 <script src="src/ui/modern/ModernCompareModel132.js"></script>
+<script src="src/ui/modern/ModernCompareState133.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -59,6 +60,7 @@
   </header>
   <div class="modern-workspace">
     <aside class="modern-sidebar" aria-label="Scene settings">
+      <div class="modern-scene-settings" id="ModernSceneSettings">
       <div class="modern-sidebar-heading"><span>Scene settings</span><small>Shared physical renderer</small></div>
       <div class="modern-settings-tabs" role="tablist" aria-label="Scene parameter groups">
         <button type="button" class="modern-settings-tab is-active" role="tab" id="ModernSettingsCamera" aria-controls="ModernPanelCamera" aria-selected="true" tabindex="0">Camera</button>
@@ -112,12 +114,43 @@
         <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
       </section>      <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
       <p class="modern-note">Valid changes automatically update the scene. Manual recalculation is optional.</p>
+      </div>
+      <section class="modern-compare-settings" id="ModernCompareSettings" hidden aria-label="Compare model settings">
+        <h2>Compare models</h2>
+        <p class="modern-note">A and B have independent surfaces and atmospheres. The observer, camera, objects and grid are shared from Scene.</p>
+        <div class="modern-field"><label for="ModernPairPreset">Physics pair</label>
+          <select id="ModernPairPreset">
+            <option value="custom">Custom pair · from Scene</option>
+            <option value="globe-flat-vacuum">Globe vacuum / Flat vacuum</option>
+            <option value="standard-vacuum">Globe standard / Globe vacuum</option>
+            <option value="standard-inverse">Globe standard / Globe inverse spherical</option>
+            <option value="flat-inverse">Globe standard / Flat inverse spherical</option>
+          </select></div>
+        <div class="modern-model-tabs" role="group" aria-label="Model to edit">
+          <button type="button" id="ModernModelTabA" class="is-active" aria-pressed="true">Model A</button>
+          <button type="button" id="ModernModelTabB" aria-pressed="false">Model B</button>
+        </div>
+        <div class="modern-field"><label for="ModernModelSurface">Surface geometry</label>
+          <select id="ModernModelSurface"><option value="globe">Spherical surface</option><option value="flat">Exact flat · κ = 0</option></select></div>
+        <div class="modern-field"><label for="ModernModelRadius">Surface/reference radius (km)</label>
+          <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000"></div>
+        <div class="modern-field"><label for="ModernModelAtmosphere">Optical atmosphere</label>
+          <select id="ModernModelAtmosphere"><option value="vacuum">Vacuum · straight rays</option>
+            <option value="standard">Standard atmosphere</option>
+            <option value="inverse-spherical">Inverse spherical · engineered</option>
+            <option value="exponential-occlusion">Exponential occlusion · engineered</option></select></div>
+        <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
+          <label for="ModernModelOcclusion">Atmospheric comparison radius (m)</label>
+          <input id="ModernModelOcclusion" type="number" min="1" max="10000000000000000" step="any"></div>
+        <button type="button" class="modern-primary-button" id="ModernRecalculateCompare">Recalculate A/B</button>
+        <p class="modern-note">Changing a physics parameter updates Compare only. Pair presets replace both A/B models; they never alter Scene. Shared camera and objects can be edited in Scene.</p>
+      </section>
     </aside>
     <main class="modern-main">
       <div class="modern-scene-bar"><div><h1 id="ModernSceneTitle">Lake Pontchartrain Transmission Line</h1>
         <p id="ModernSceneDescription">85 transmission towers across Lake Pontchartrain</p></div>
         <div class="modern-scene-presets" aria-label="Scene presets">
-          <label for="ModernPreset">Preset</label>
+          <label for="ModernPreset">Scene preset</label>
           <select id="ModernPreset"><option value="pontchartrain">Lake Pontchartrain · towers</option>
             <option value="single">Single tower · sample</option>
             <option value="rows">Two tower rows · sample</option>
@@ -137,21 +170,21 @@
       <section class="modern-compare-viewports" id="ModernCompareViews" aria-label="Side-by-side physical comparison" aria-hidden="true">
         <div class="modern-compare-grid">
           <section class="modern-viewport-panel" aria-label="Physical model A">
-            <div class="modern-viewport-head"><span>A · Current surface</span><span id="ModernCompareLabelA">Current curvature · shared atmosphere</span></div>
+            <div class="modern-viewport-head"><span>Model A · Physical optics</span><span id="ModernCompareLabelA">Current curvature · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostA">
               <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="A"></script>
             </div>
             <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span></div>
           </section>
           <section class="modern-viewport-panel" aria-label="Physical model B">
-            <div class="modern-viewport-head"><span>B · Exact flat</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
+            <div class="modern-viewport-head"><span>Model B · Physical optics</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostB">
               <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="B"></script>
             </div>
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span></div>
           </section>
         </div>
-        <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. A uses the current surface; B is exact flat (κ = 0). Atmosphere is shared for now. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. Arbitrary A/B pairs arrive in patch 133.</p>
+        <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. Arbitrary A/B pairs arrive in patch 133.</p>
       </section>
       <div class="modern-compare-message" id="ModernCompareMessage" hidden>
         <button type="button" id="ModernBackToScene">Return to Scene</button>

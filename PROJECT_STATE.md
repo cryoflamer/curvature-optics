@@ -436,3 +436,18 @@ help buttons, clarifies physical-object help, and drops an unused Modern-only
 `docs/modern-ui-plan.md` is the canonical roadmap; Legacy/physics remain
 unchanged. The JS/Physical test suite and inlined Chromium browser smoke
 (including 85+2 towers in Standard atmosphere) exercise both panels.
+
+### Compatibility patch 133 — independent physical Compare models
+
+Modern Compare now offers validated independent A/B surface curvatures,
+exact-flat endpoints, atmospheres and engineered profile comparison radii,
+including four explicit physics-pair presets. The authored Scene camera,
+observer, physical objects and grid remain common and are not overwritten by
+Compare edits. The 132 `CurveAppClass` cloning and Physical renderer are reused.
+The original single-scene optics cache is retained; A and B now receive their
+own instances of the existing keyed optical transform cache, preventing
+alternating viewports from invalidating each other. The selected Compare pair
+persists while switching Scene/Compare in the same page session. No experiments
+are saved across reloads: versioned shareable experiments remain planned for
+#134. See `docs/modern-ui-plan.md` and
+`tests/ModernIndependentCompare133.test.js`.

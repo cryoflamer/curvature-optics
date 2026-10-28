@@ -109,6 +109,7 @@
       warning:'Independent preview: both object groups are rendered; optical overlays and annotations are not yet ported.'};
   }
   function renderPhysical(g,m,options){
+    options=options||{};
     var available=support(m);
     if(!available.supported)throw RangeError(available.reason);
     if(!g||!g.Canvas)throw TypeError('Main graph Canvas required');
@@ -121,7 +122,7 @@
     var physicalModel=Object.assign({},m,{geometryRadius:m.rEarth});
     var composed=composition.composeOpticalMain(physicalModel,globe,{physicalWorld:true});
     var composedAt=now();
-    var opticalFrame=opticalSession.transform(composed,physicalModel,options);
+    var opticalFrame=(options.cacheSession||opticalSession).transform(composed,physicalModel,options);
     var opticalAt=now();
     var drawSource=options.interactive?previewComposition(opticalFrame.composition):
       {composition:opticalFrame.composition,preview:false};

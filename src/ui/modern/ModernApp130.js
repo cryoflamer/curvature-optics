@@ -6,9 +6,11 @@
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
-    compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null}};
+    compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
+    compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState131;
   var compareAdapter=root.CurvatureModernCompareModel132;
+  var compareState=root.CurvatureModernCompareState133;
   var model=new root.CurveAppClass();
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
@@ -20,6 +22,10 @@
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0],rEarth:6371000
   });
   model.Update();
+  if(root.CurvaturePhysicalSceneOptics&&typeof root.CurvaturePhysicalSceneOptics.create==='function'){
+    state.compareCache.A=root.CurvaturePhysicalSceneOptics.create();
+    state.compareCache.B=root.CurvaturePhysicalSceneOptics.create();
+  }
   function el(id){return document.getElementById(id);}
   function updateStatus(text,isError){
     var node=el('ModernStatus');
@@ -68,9 +74,13 @@
     if(!m)return;
     try{
       // A and B invoke the actual Physical renderer separately, not copied pixels.
-      var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,{
-        atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
-      });
+      var spec=state.compareConfig&&state.compareConfig[side];
+      var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
+        occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,interactive:false};
+      // Separate optical sessions prevent A and B from evicting each other's
+      // keyed ray fields as two viewports are rendered in succession.
+      if(state.compareCache[side])options.cacheSession=state.compareCache[side];
+      var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
       state.compareLast[side]=result;
       var node=el('ModernCompareStatus'+side);
       if(node){
@@ -90,14 +100,72 @@
   }
   function prepareCompare(){
     if(!compareAdapter){updateStatus('Compare adapter is unavailable',true);return false;}
-    var result=compareAdapter.pair(model);
+    if(compareState&&!state.compareConfig)
+      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius);
+    var result=compareState?compareState.pair(model,state.compareConfig,compareAdapter):compareAdapter.pair(model);
     if(!compareAdapter.invariant(result))throw Error('Compare shared-scene invariant failed');
     state.comparePair=result;
     var aLabel=el('ModernCompareLabelA'),bLabel=el('ModernCompareLabelB');
-    if(aLabel)aLabel.textContent=(result.A.showModel===2?'Exact flat':'R = '+(result.A.rEarth/1000).toLocaleString('en-US')+' km')+
-      ' · '+state.atmosphere;
-    if(bLabel)bLabel.textContent='κ = 0 · '+state.atmosphere;
+    if(compareState){
+      if(aLabel)aLabel.textContent=compareState.label(state.compareConfig.A);
+      if(bLabel)bLabel.textContent=compareState.label(state.compareConfig.B);
+    }else{
+      if(aLabel)aLabel.textContent=(result.A.showModel===2?'Exact flat':'R = '+(result.A.rEarth/1000).toLocaleString('en-US')+' km')+' · '+state.atmosphere;
+      if(bLabel)bLabel.textContent='κ = 0 · '+state.atmosphere;
+    }
     return true;
+  }
+  function syncCompareEditor(){
+    if(!compareState||!state.compareConfig)return;
+    var spec=state.compareConfig[state.compareSelected];
+    ['A','B'].forEach(function(side){
+      var tab=el('ModernModelTab'+side);if(!tab)return;
+      var active=state.compareSelected===side;
+      tab.classList.toggle('is-active',active);
+      tab.setAttribute('aria-pressed',String(active));
+    });
+    var pairPreset=el('ModernPairPreset');if(pairPreset)pairPreset.value=state.compareConfig.preset;
+    var fields={ModernModelSurface:'surface',ModernModelRadius:'radiusKm',
+      ModernModelAtmosphere:'atmosphere',ModernModelOcclusion:'occlusionRadius'};
+    Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
+    var wrap=el('ModernModelOcclusionWrap');if(wrap)
+      wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
+  }
+  function bindCompareEditor(){
+    if(!compareState)return; // 132 compatibility (older isolated test harness)
+    ['A','B'].forEach(function(side){
+      var tab=el('ModernModelTab'+side);if(tab)tab.addEventListener('click',function(){
+        cancelEdits();state.compareSelected=side;syncCompareEditor();
+      });
+    });
+    var preset=el('ModernPairPreset');if(preset)preset.addEventListener('change',function(){
+      if(this.value==='custom')return;
+      try{cancelEdits();state.compareConfig=compareState.preset(this.value);syncCompareEditor();redraw();}
+      catch(error){updateStatus(error.message,true);syncCompareEditor();}
+    });
+    [['ModernModelSurface','surface'],['ModernModelAtmosphere','atmosphere']].forEach(function(row){
+      var node=el(row[0]);if(!node)return;
+      node.addEventListener('change',function(){
+        try{state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,row[1],node.value);
+          syncCompareEditor();redraw();}
+        catch(error){updateStatus(error.message,true);syncCompareEditor();}
+      });
+    });
+    [['ModernModelRadius','radiusKm'],['ModernModelOcclusion','occlusionRadius']].forEach(function(row){
+      var node=el(row[0]);if(!node)return;
+      function commit(){
+        if(state.editTimeouts[row[0]]!==undefined){clearTimeout(state.editTimeouts[row[0]]);delete state.editTimeouts[row[0]];}
+        try{state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,row[1],node.value);
+          syncCompareEditor();redraw();}
+        catch(error){updateStatus('Invalid '+row[1]+': '+error.message,true);syncCompareEditor();}
+      }
+      node.addEventListener('input',function(){
+        if(state.editTimeouts[row[0]]!==undefined)clearTimeout(state.editTimeouts[row[0]]);
+        state.editTimeouts[row[0]]=setTimeout(commit,420);
+      });
+      node.addEventListener('change',commit);
+    });
+    var button=el('ModernRecalculateCompare');if(button)button.addEventListener('click',redraw);
   }
   function resizeGraph(g){
     if(g&&typeof g.UpdateCanvasSize==='function'){g.UpdateCanvasSize();}
@@ -132,12 +200,22 @@
   }
   function setMode(mode){
     if(mode!=='scene'&&mode!=='compare')throw RangeError('Invalid Modern UI mode');
-    state.mode=mode;
+    cancelEdits();state.mode=mode;
     el('ModernSceneTab').classList.toggle('is-active',mode==='scene');
     el('ModernCompareTab').classList.toggle('is-active',mode==='compare');
     el('ModernSceneTab').setAttribute('aria-pressed',String(mode==='scene'));
     el('ModernCompareTab').setAttribute('aria-pressed',String(mode==='compare'));
     el('ModernCompareMessage').hidden=mode!=='compare';
+    if(compareState){
+      var sceneSettings=el('ModernSceneSettings'),compareSettings=el('ModernCompareSettings');
+      if(sceneSettings)sceneSettings.hidden=mode==='compare';
+      if(compareSettings)compareSettings.hidden=mode!=='compare';
+    }
+    if(mode==='compare'&&compareState){
+      if(!state.compareConfig)
+        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius);
+      syncCompareEditor();
+    }
     el('ModernGraphHost').closest('.modern-viewport-panel').hidden=mode==='compare';
     var views=el('ModernCompareViews');
     if(views){views.classList.toggle('is-active',mode==='compare');
@@ -333,6 +411,7 @@
     bindObjectFields();
     bindSettingsTabs();
     bindHelp();
+    bindCompareEditor();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
     bindNumber('ModernPan',function(v){adapter?adapter.setCamera(model,'Pan',v):model.Pan=v;},'pan');
@@ -383,5 +462,6 @@
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
     getCompareModels:function(){return state.comparePair;},
-    getCompareLast:function(){return state.compareLast;}};
+    getCompareLast:function(){return state.compareLast;},
+    getCompareConfig:function(){return state.compareConfig;}};
 }(window));

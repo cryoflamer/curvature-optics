@@ -1,6 +1,6 @@
-/* Fixed physical A/B comparison for patch 132.
- * Both viewports inherit one authored scene and one observer-fixed camera.
- * Only B's surface curvature differs. Arbitrary A/B optics are patch 133.
+/* Patch 132 baseline A/B comparison. The default pair stays current-vs-flat.
+ * Patch 133 reuses clone() and the shared camera/object invariant for
+ * independently configured physics, with no duplicate optical implementation.
  * No Legacy DOM, renderer, or global model state is accessed here.
  */
 (function(root,factory){
@@ -34,8 +34,7 @@
     var groups=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType',
       'ObjSidePos','ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
     return fields.every(function(key){return a[key]===b[key];})&&
-      groups.every(function(key){return JSON.stringify(a[key])===JSON.stringify(b[key]);})&&
-      b.showModel===2;
+      groups.every(function(key){return JSON.stringify(a[key])===JSON.stringify(b[key]);});
   }
   return Object.freeze({pair:pair,clone:clone,invariant:invariant});
 }));
