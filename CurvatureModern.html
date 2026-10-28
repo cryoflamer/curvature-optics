@@ -137,7 +137,7 @@
           <option value="standard" selected>Standard atmosphere</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option><option value="exponential-occlusion">Exponential refractive profile · engineered</option>
         </select></div>
-        <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Comparison/occlusion radius (m)</label><input id="ModernOcclusion" type="number" min="1" max="1e16" step="1000" value="6371000"></div>
+        <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Refraction scale radius (km)</label><input id="ModernOcclusion" type="number" min="0.001" max="10000000000000" step="any" value="6371"></div>
         <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
@@ -148,8 +148,8 @@
             <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option>
             <option value="exponential-occlusion">Exponential refractive profile · engineered</option></select></div>
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
-          <label for="ModernModelOcclusion">Atmospheric comparison radius (m)</label>
-          <input id="ModernModelOcclusion" type="number" min="1" max="10000000000000000" step="any"></div>
+          <label for="ModernModelOcclusion">Refraction scale radius (km)</label>
+          <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any"></div>
         <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>

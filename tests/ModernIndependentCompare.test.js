@@ -124,7 +124,7 @@ test('133: real compare UI reuses independent optical caches and updates only se
   assert.equal(renders[4].m.showModel,2);
   assert.equal(renders[4].options.occlusionRadius,6371000);
   nodes.get('ModernModelTabB').listeners.click();
-  nodes.get('ModernModelOcclusion').value='8000000';
+  nodes.get('ModernModelOcclusion').value='8000';
   nodes.get('ModernModelOcclusion').listeners.change();
   assert.equal(app.getCompareConfig().B.occlusionRadius,8000000);
   assert.equal(app.getCompareConfig().A.occlusionRadius,6371000);

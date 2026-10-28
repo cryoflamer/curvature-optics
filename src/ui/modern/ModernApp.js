@@ -442,10 +442,17 @@
     showLegacyOption('ModernModelAtmosphere',spec.atmosphere);
     renderAtmosphereDescription('ModernModelAtmosphereInfo',spec.atmosphere);
     var fields={ModernModelSurface:'surface',ModernModelRadius:'radiusKm',
-      ModernModelAtmosphere:'atmosphere',ModernModelOcclusion:'occlusionRadius'};
+      ModernModelAtmosphere:'atmosphere'};
     Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
+    var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
+  }
+  function scaleRadiusMetres(raw){
+    if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
+    var km=Number(raw);
+    if(!Number.isFinite(km)||km<0.001||km>1e13)throw RangeError('Expected radius in [0.001, 1e13] km');
+    return km*1000;
   }
   function bindCompareEditor(){
     if(!compareState)return; // 132 compatibility (older isolated test harness)
@@ -471,7 +478,8 @@
       var node=el(row[0]);if(!node)return;
       function commit(){
         if(state.editTimeouts[row[0]]!==undefined){clearTimeout(state.editTimeouts[row[0]]);delete state.editTimeouts[row[0]];}
-        try{state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,row[1],node.value);
+        try{var raw=row[1]==='occlusionRadius'?scaleRadiusMetres(node.value):node.value;
+          state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,row[1],raw);
           syncCompareEditor();redraw();}
         catch(error){updateStatus('Invalid '+row[1]+': '+error.message,true);syncCompareEditor();}
       }
@@ -602,7 +610,7 @@
     var aim=el('ModernCameraAim');if(aim)aim.value=String(model.viewcenterHorizon);
     var atmosphere=el('ModernAtmosphere');if(atmosphere){showLegacyOption('ModernAtmosphere',state.atmosphere);atmosphere.value=state.atmosphere;}
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
-    var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius);
+    var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius/1000);
     var grid=el('ModernGrid');if(grid)grid.checked=model.showGrid!==0;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
     var description=el('ModernSceneDescription');if(description)description.textContent=model.Description||'Custom physical scene';
@@ -720,7 +728,7 @@
     ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
     ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',
     ModernAtmosphere:'Controls how light propagates. Vacuum has straight rays; Standard refracts; engineered profiles have separate parameters.',
-    ModernOcclusion:'Parameter of the engineered atmosphere in metres, distinct from the surface radius.',
+    ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.',
     ModernGrid:'Metric guide lines are measured along the actual surface and do not determine the optical horizon.'
   };
   var objectHelp={
@@ -771,8 +779,8 @@
     bindNumber('ModernViewAngle',function(v){adapter.setCamera(model,'ViewAngleField',v);},'field of view');
     bindNumber('ModernRadiusKm',function(v){adapter.setRadiusKm(model,v);},'radius');
     bindNumber('ModernOcclusion',function(v){
-      state.occlusionRadius=adapter?adapter.finiteNumber(v,1,1e16):v;
-    },'comparison radius');
+      state.occlusionRadius=scaleRadiusMetres(v);
+    },'refraction scale radius');
     var aim=el('ModernCameraAim');aim.addEventListener('change',function(){
       if(adapter)applyField(function(v){adapter.setAim(model,v);},this.value,'camera aim');
       else {model.viewcenterHorizon=Number(this.value);redraw();}

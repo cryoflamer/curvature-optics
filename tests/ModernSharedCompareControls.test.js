@@ -156,3 +156,36 @@ test('134.2: keyboard settings navigation works in Compare and leaves optics unt
   assert.equal(n.get('ModernPanelDisplay').hidden,false);
   assert.equal(h.getRenderCount(),rendered);
 });
+
+
+test('135: exponential scale radius edits use kilometres in Scene and Compare while preserving metres in model',()=>{
+  const {nodes:n,app}=boot();
+  assert.match(html,/for="ModernOcclusion">Refraction scale radius \(km\)/);
+  assert.match(html,/for="ModernModelOcclusion">Refraction scale radius \(km\)/);
+  n.get('ModernAtmosphere').value='exponential-occlusion';
+  n.get('ModernAtmosphere').dispatch('change');
+  assert.equal(n.get('ModernOcclusionWrap').hidden,false);
+  assert.equal(n.get('ModernOcclusion').value,'6371');
+  n.get('ModernOcclusion').value='8000.5';
+  n.get('ModernOcclusion').dispatch('change');
+  assert.equal(n.get('ModernOcclusion').value,'8000.5');
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernSettingsAtmosphere').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernModelAtmosphere').value='exponential-occlusion';
+  n.get('ModernModelAtmosphere').dispatch('change');
+  assert.equal(n.get('ModernModelOcclusionWrap').hidden,false);
+  const originalA=app.getCompareConfig().A.occlusionRadius;
+  n.get('ModernModelOcclusion').value='12345.25';
+  n.get('ModernModelOcclusion').dispatch('change');
+  assert.equal(app.getCompareConfig().B.occlusionRadius,12345250);
+  assert.equal(app.getCompareConfig().A.occlusionRadius,originalA);
+  assert.equal(n.get('ModernModelOcclusion').value,'12345.25');
+  n.get('ModernModelTabA').dispatch('click');
+  assert.equal(n.get('ModernModelOcclusion').value,String(originalA/1000));
+  n.get('ModernModelTabB').dispatch('click');
+  assert.equal(n.get('ModernModelOcclusion').value,'12345.25');
+  n.get('ModernModelOcclusion').value='';
+  n.get('ModernModelOcclusion').dispatch('change');
+  assert.equal(app.getCompareConfig().B.occlusionRadius,12345250,'invalid edits are rejected');
+});
