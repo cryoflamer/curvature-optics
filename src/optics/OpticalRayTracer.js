@@ -4,12 +4,14 @@
  * Angles are radians, distances are metres.
  */
 (function (root, factory) {
-  var api = factory();
+  var api = factory(typeof module === 'object' && module.exports
+    ? require('../geometry/CurvatureSurfaceGeometry') : root.CurvatureSurfaceGeometry);
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CurvatureRayTracer = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (surfaces) {
   'use strict';
   var DEFAULT_RADIUS = 6371000;
+  if (!surfaces) throw Error('Continuous-curvature surface geometry dependency required');
 
   function atmosphere(kind, options) {
     options = options || {};
@@ -69,37 +71,73 @@
     throw Error('Unknown atmosphere: ' + kind);
   }
 
-  function height(x, z, geometry, radius) {
-    return geometry === 'flat' ? z : Math.hypot(x, z + radius) - radius;
-  }
-  function normal(x, z, geometry, radius) {
-    if (geometry === 'flat') return [0, 1];
-    var d = Math.hypot(x, z + radius);
-    return [x / d, (z + radius) / d];
-  }
-  function derivative(s, geometry, radius, profile) {
-    var h = height(s[0], s[1], geometry, radius);
-    var n = profile.n(h), dn = profile.dn(h);
-    if (!(n > 0) || !isFinite(n) || !isFinite(dn)) throw Error('Invalid refractive index');
-    // Algebraically identical to normal(...), without the per-stage
-    // temporary array (four derivative evaluations per RK4 step).
-    var nx=0,nz=1;
-    if(geometry!=='flat'){
-      var d=Math.hypot(s[0],s[1]+radius);
-      nx=s[0]/d;nz=(s[1]+radius)/d;
+  // The explicit curvature is authoritative. Legacy geometry/radius options
+  // remain accepted so existing UI and physical-scene callers do not change.
+  // When curvature is present a contradictory geometry tag is an error, not a
+  // silent second model. Atmospheric occlusionRadius is entirely independent.
+  // Migration comparison only: reproduce #123's arithmetic byte-for-byte
+  // at a finite radius. New and ordinary requests use the stable kernel.
+  // This switch is deliberately explicit and scoped to the optical call;
+  // it is NOT another physical geometry or a UI option.
+  function legacySurface(k,radius){
+    var flat=k===0;
+    function height2(x,z){return flat?z:Math.hypot(x,z+radius)-radius;}
+    function normal2(x,z){
+      if(flat)return [0,1];
+      var d=Math.hypot(x,z+radius);
+      return [x/d,(z+radius)/d];
     }
-    var dot = s[2] * nx + s[3] * nz;
-    var q = dn / n;
-    return [s[2], s[3], q * (nx - dot * s[2]), q * (nz - dot * s[3])];
+    function metric2(x,z){
+      if(flat)return [z,0,1];
+      var d=Math.hypot(x,z+radius);
+      return [Math.hypot(x,z+radius)-radius,x/d,(z+radius)/d];
+    }
+    return {flat:flat,curvature:k,legacy:true,radius:radius,height2:height2,
+      normal2:normal2,metric2:metric2};
+  }
+  // Used at the boundary of tracing/shooting; derivative stages receive one
+  // prepared surface object rather than rebuilding it at every RK4 substep.
+  function resolveGeometry(options) {
+    options=options||{};
+    var explicit=Object.prototype.hasOwnProperty.call(options,'curvature');
+    var k=explicit?options.curvature:null;
+    if(explicit && (typeof k!=='number'||!Number.isFinite(k)||k<0))
+      throw Error('Invalid surface curvature');
+    var geometry=options.geometry===undefined?
+      (explicit&&k===0?'flat':'globe'):options.geometry;
+    if(geometry!=='flat'&&geometry!=='globe')throw Error('Unknown geometry');
+    if(explicit && (geometry==='flat')!==(k===0))
+      throw Error('Surface curvature contradicts geometry');
+    var arithmetic=options.surfaceArithmetic===undefined?'stable':options.surfaceArithmetic;
+    if(arithmetic!=='stable'&&arithmetic!=='legacy')throw Error('Invalid surface arithmetic');
+    var radius=options.radius===undefined?DEFAULT_RADIUS:options.radius;
+    if(!(radius>0)||!Number.isFinite(radius))throw Error('Invalid ray radius');
+    if(!explicit)k=geometry==='flat'?0:surfaces.curvatureFromRadius(radius);
+    if(arithmetic==='legacy' && explicit && k>0 &&
+        Math.abs(k*radius-1)>8*Number.EPSILON)
+      throw Error('Legacy surface arithmetic requires the matching finite radius');
+    return {geometry:geometry,radius:radius,curvature:k,surfaceArithmetic:arithmetic,
+      surface:arithmetic==='legacy'?legacySurface(k,radius):surfaces.createFromCurvature(k)};
+  }
+  function height(x,z,geometry,radius) {
+    return resolveGeometry({geometry:geometry,radius:radius}).surface.height2(x,z);
+  }
+  function derivative(s, surface, profile) {
+    var metric=surface.metric2(s[0],s[1]);
+    var n=profile.n(metric[0]),dn=profile.dn(metric[0]);
+    if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))throw Error('Invalid refractive index');
+    var nx=metric[1],nz=metric[2];
+    var dot=s[2]*nx+s[3]*nz,q=dn/n;
+    return [s[2],s[3],q*(nx-dot*s[2]),q*(nz-dot*s[3])];
   }
   function add(s, k, dt) {
     return [s[0]+dt*k[0],s[1]+dt*k[1],s[2]+dt*k[2],s[3]+dt*k[3]];
   }
-  function step(s, ds, geometry, radius, profile) {
-    var a = derivative(s, geometry, radius, profile);
-    var b = derivative(add(s, a, ds / 2), geometry, radius, profile);
-    var c = derivative(add(s, b, ds / 2), geometry, radius, profile);
-    var d = derivative(add(s, c, ds), geometry, radius, profile);
+  function step(s, ds, surface, profile) {
+    var a = derivative(s, surface, profile);
+    var b = derivative(add(s, a, ds / 2), surface, profile);
+    var c = derivative(add(s, b, ds / 2), surface, profile);
+    var d = derivative(add(s, c, ds), surface, profile);
     var out = [
       s[0]+ds*(a[0]+2*b[0]+2*c[0]+d[0])/6,
       s[1]+ds*(a[1]+2*b[1]+2*c[1]+d[1])/6,
@@ -115,15 +153,13 @@
   }
 
   function validateSetup(options) {
-    options = options || {};
-    var geometry = options.geometry === undefined ? 'globe' : options.geometry;
-    if (geometry !== 'globe' && geometry !== 'flat') throw Error('Unknown geometry');
-    var radius = options.radius === undefined ? DEFAULT_RADIUS : options.radius;
-    if (!(radius > 0) || !Number.isFinite(radius)) throw Error('Invalid ray radius');
-    var profile = options.profile || atmosphere(options.atmosphere || 'standard', options.profileOptions);
-    if (!profile || typeof profile.n !== 'function' || typeof profile.dn !== 'function')
+    options=options||{};
+    var setup=resolveGeometry(options);
+    var profile=options.profile||atmosphere(options.atmosphere||'standard',options.profileOptions);
+    if(!profile||typeof profile.n!=='function'||typeof profile.dn!=='function')
       throw Error('Invalid ray profile');
-    return {geometry:geometry,radius:radius,profile:profile};
+    setup.profile=profile;
+    return setup;
   }
 
   // One signed RK4 path-length step, available for convergence and reciprocal
@@ -135,7 +171,7 @@
         !state.every(Number.isFinite) ||
         Math.abs(Math.hypot(state[2],state[3]) - 1) > 1e-8 ||
         !Number.isFinite(ds)) throw Error('Invalid ray state or signed step');
-    return step(state,ds,setup.geometry,setup.radius,setup.profile);
+    return step(state,ds,setup.surface,setup.profile);
   }
 
   // Prepared RK4 stepper for repeated shooting integrations in a single optical
@@ -152,7 +188,7 @@
           Math.abs(Math.hypot(state[2],state[3])-1)>1e-8||!Number.isFinite(distance)))
         throw Error('Invalid ray state or signed step');
       if(!Number.isFinite(distance))throw Error('Invalid ray step');
-      return step(state,distance,setup.geometry,setup.radius,setup.profile);
+      return step(state,distance,setup.surface,setup.profile);
     };
   }
 
@@ -162,57 +198,62 @@
   var DEFAULT_EVENT_SUBSTEPS = 8;
   var DEFAULT_CONTACT_TOLERANCE = 1e-6; // metres, in h(x,z)
 
-  function altitudeSlope(state, geometry, radius) {
-    var n = normal(state[0], state[1], geometry, radius);
-    return n[0] * state[2] + n[1] * state[3];
+  function altitudeSlope(state,surface) {
+    var n=surface.normal2(state[0],state[1]);
+    return n[0]*state[2]+n[1]*state[3];
   }
-  function sample(state, distance, geometry, radius, profile) {
-    var s = distance === 0 ? state : step(state,distance,geometry,radius,profile);
+  function sample(state, distance, surface, profile) {
+    var s = distance === 0 ? state : step(state,distance,surface,profile);
     return {distance:distance,state:s,
-      altitude:height(s[0],s[1],geometry,radius),
-      slope:altitudeSlope(s,geometry,radius)};
+      altitude:surface.height2(s[0],s[1]),
+      slope:altitudeSlope(s,surface)};
   }
   // Precondition: there is a strictly below-ground sample at hi and an
   // above-ground (or exactly surface) sample at lo. Always choose the first
   // positive-to-negative crossing, never the far-side exit from a sphere.
-  function crossing(state, lo, hi, geometry, radius, profile) {
+  function crossing(state, lo, hi, surface, profile) {
     for (var j=0; j<60 && hi-lo>Math.max(1e-10,hi*1e-13); j++) {
       var mid=(lo+hi)/2;
-      var candidate=sample(state,mid,geometry,radius,profile);
+      var candidate=sample(state,mid,surface,profile);
       if (candidate.altitude < 0) hi=mid;
       else lo=mid;
     }
-    return sample(state,(lo+hi)/2,geometry,radius,profile);
+    return sample(state,(lo+hi)/2,surface,profile);
   }
   // Find a local minimum of physical altitude inside a bracket in which
   // dh/ds changes from negative to positive (including a zero at the end).
-  function minimum(state, lo, hi, geometry, radius, profile) {
+  function minimum(state, lo, hi, surface, profile) {
     for (var j=0; j<60 && hi-lo>Math.max(1e-10,hi*1e-13); j++) {
       var mid=(lo+hi)/2;
-      if (sample(state,mid,geometry,radius,profile).slope < 0) lo=mid;
+      if (sample(state,mid,surface,profile).slope < 0) lo=mid;
       else hi=mid;
     }
-    return sample(state,(lo+hi)/2,geometry,radius,profile);
+    return sample(state,(lo+hi)/2,surface,profile);
   }
-  function groundEvent(state, delta, geometry, radius, profile, substeps, tolerance) {
-    var previous=sample(state,0,geometry,radius,profile);
+  function groundEvent(state, delta, surface, profile, substeps, tolerance) {
+    var previous=sample(state,0,surface,profile);
+    // Stable radial height can retain sub-nanometre signed roundoff at a
+    // mathematically exact surface endpoint/tangency. A numerical sign alone
+    // must not turn this into a first *crossing*; the grazing test below
+    // retains its original (larger) contact tolerance.
+    var signedRoundoff=surface.legacy?0:Math.min(1e-9,tolerance*0.001);
     // Avoid a spurious event for a ray *departing* tangentially from the
     // surface. A ray launched into the surface is an immediate impact.
     if (previous.altitude <= 0 && previous.slope < -1e-12)
       return {contact:'crossing',point:previous};
     for (var i=1; i<=substeps; i++) {
-      var current=sample(state,delta*i/substeps,geometry,radius,profile);
-      if (previous.altitude >= 0 && current.altitude < 0) {
+      var current=sample(state,delta*i/substeps,surface,profile);
+      if (previous.altitude >= -signedRoundoff && current.altitude < -signedRoundoff) {
         return {contact:'crossing',point:crossing(state,previous.distance,
-          current.distance,geometry,radius,profile)};
+          current.distance,surface,profile)};
       }
       if (previous.slope < 0 && current.slope >= 0) {
-        var lowest=minimum(state,previous.distance,current.distance,geometry,radius,profile);
+        var lowest=minimum(state,previous.distance,current.distance,surface,profile);
         if (lowest.altitude < -tolerance) {
           // The endpoints can both be above ground. A local minimum below
           // ground still implies an entry and exit within this RK4 step.
           return {contact:'crossing',point:crossing(state,previous.distance,
-            lowest.distance,geometry,radius,profile)};
+            lowest.distance,surface,profile)};
         }
         if (Math.abs(lowest.altitude) <= tolerance)
           return {contact:'grazing',point:lowest};
@@ -230,18 +271,26 @@
   // Minimum surface altitude of the straight chord joining two states.
   // The true ray can depart from this chord by no more than K*ds^2/8 when
   // its curvature is bounded by K. Ground altitude is 1-Lipschitz in space.
-  function chordClearance(a,b,geometry,radius) {
-    if(geometry==='flat')return Math.min(a[1],b[1]);
-    var dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
-    var t=den>0?-(a[0]*dx+(a[1]+radius)*dz)/den:0;
+  function chordClearance(a,b,surface) {
+    if(surface.flat)return Math.min(a[1],b[1]);
+    if(surface.legacy){
+      var oldDx=b[0]-a[0],oldDz=b[1]-a[1],oldDen=oldDx*oldDx+oldDz*oldDz;
+      var oldT=oldDen>0?-(a[0]*oldDx+(a[1]+surface.radius)*oldDz)/oldDen:0;
+      oldT=Math.max(0,Math.min(1,oldT));
+      return surface.height2(a[0]+oldT*oldDx,a[1]+oldT*oldDz);
+    }
+    var k=surface.curvature,dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
+    // The centre is at -1/k. Scale the closest-point calculation by k
+    // instead of building z+R, which loses small offsets at large R.
+    var t=den>0?-(k*a[0]*dx+(1+k*a[1])*dz)/(k*den):0;
     t=Math.max(0,Math.min(1,t));
-    return Math.hypot(a[0]+t*dx,a[1]+radius+t*dz)-radius;
+    return surface.height2(a[0]+t*dx,a[1]+t*dz);
   }
 
   function trace(options) {
     options = options || {};
     var setup=validateSetup(options);
-    var geometry=setup.geometry, radius=setup.radius, profile=setup.profile;
+    var geometry=setup.geometry, radius=setup.radius, surface=setup.surface, profile=setup.profile;
     var angle = options.angle === undefined ? 0 : options.angle;
     var observerHeight = options.observerHeight === undefined ? 0 : options.observerHeight;
     var length = options.length === undefined ? 50000 : options.length;
@@ -266,37 +315,37 @@
       var delta = Math.min(ds, length - travelled);
       var clearNext=null,provedClear=false;
       if(fastGround && options.stopAtGround!==false &&
-          height(state[0],state[1],geometry,radius)>0) {
-        clearNext=step(state,delta,geometry,radius,profile);
-        var h=height(state[0],state[1],geometry,radius);
+          surface.height2(state[0],state[1])>0) {
+        clearNext=step(state,delta,surface,profile);
+        var h=surface.height2(state[0],state[1]);
         var curvature=profile.rayCurvatureUpperBound(h-delta);
         // The additional factor of 2 and 1 mm cushion make the shortcut
         // more conservative than the continuous-curve chord bound. A near-
         // horizon or uncertain segment always takes the original event path.
         var margin=curvature*delta*delta/4+0.001;
         provedClear=Number.isFinite(margin) &&
-          chordClearance(state,clearNext,geometry,radius)>margin;
+          chordClearance(state,clearNext,surface)>margin;
         if(provedClear)fastGroundSkips++;
       }
       if(!provedClear && options.stopAtGround!==false)fullGroundChecks++;
       var impact=options.stopAtGround===false||provedClear?null:
-        groundEvent(state,delta,geometry,radius,profile,substeps,contactTolerance);
+        groundEvent(state,delta,surface,profile,substeps,contactTolerance);
       if (impact) {
         state=impact.point.state;
         travelled+=impact.point.distance;
         hitGround=true;
         event={kind:'ground',contact:impact.contact,pathLength:travelled,
-          x:state[0],z:state[1],height:height(state[0],state[1],geometry,radius),
+          x:state[0],z:state[1],height:surface.height2(state[0],state[1]),
           tolerance:contactTolerance};
       } else {
-        state=provedClear?clearNext:step(state,delta,geometry,radius,profile);
+        state=provedClear?clearNext:step(state,delta,surface,profile);
         travelled+=delta;
       }
       if (points) points.push([state[0], state[1]]);
       if (hitGround) break;
     }
     return { x: state[0], z: state[1], angle: Math.atan2(state[3], state[2]),
-      height: height(state[0], state[1], geometry, radius),
+      height: surface.height2(state[0], state[1]),
       hitGround: hitGround, travelled: travelled, points: points,
       termination:hitGround?'ground':(options.stopAtGround===false?'range-unchecked':'range'),
       fastGroundSkips:fastGroundSkips,fullGroundChecks:fullGroundChecks,
@@ -321,11 +370,11 @@
     if (!(distance>0)||!Number.isFinite(distance))
       throw Error('Distinct finite target point required');
     var tolerance=options.contactTolerance===undefined?DEFAULT_CONTACT_TOLERANCE:options.contactTolerance;
-    var ray=trace({geometry:options.geometry,radius:options.radius,
+    var ray=trace(Object.assign({},options.curvature===undefined?{}:{curvature:options.curvature},{geometry:options.geometry,radius:options.radius,surfaceArithmetic:options.surfaceArithmetic,
       profile:atmosphere('vacuum'),observerHeight:observerHeight,
       angle:Math.atan2(target[1]-observerHeight,target[0]),length:distance,
       step:options.step===undefined?20:options.step,
-      eventSubsteps:options.eventSubsteps,contactTolerance:tolerance});
+      eventSubsteps:options.eventSubsteps,contactTolerance:tolerance}));
     // A surface endpoint can be seen; the terrain is blocking only if it
     // is encountered *before* the target. Grazing is tolerance-dependent,
     // so a ray that may just touch the surface is not asserted visible.
@@ -336,6 +385,6 @@
       caveat:'Vacuum straight ray only; no atmospheric shooting or 3D mesh intersection'};
   }
 
-  return { atmosphere: atmosphere, height: height, trace: trace, advanceState: advanceState, prepareStepper:prepareStepper,
+  return { atmosphere: atmosphere, height: height, resolveGeometry:resolveGeometry, trace: trace, advanceState: advanceState, prepareStepper:prepareStepper,
     vacuumTargetVisibility:vacuumTargetVisibility };
 }));

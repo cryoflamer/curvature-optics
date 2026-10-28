@@ -52,7 +52,7 @@ test('122: all projected physical primitive bytes equal the #121 oracle for four
   const sourceOriginal=JSON.stringify(source.scene.primitives);
   const adapter=optics.create();
   const r=adapter.transform(source,m,{atmosphere:expected.atmosphere,
-    settings:{shootingWarmStart:false}});
+    settings:{shootingWarmStart:false,surfaceArithmetic:'legacy'}});
   const p=r.composition;
   assert.equal(source.scene.primitives.length,expected.sourceCount);
   assert.equal(p.scene.primitives.length,expected.projectedCount);
@@ -65,7 +65,7 @@ test('122: all projected physical primitive bytes equal the #121 oracle for four
     'the adopted physical scene must not modify any authored geometry');
   assert.ok(p.scene.primitives.every((piece,i)=>piece.commandIndex===i));
   assert.strictEqual(adapter.transform(source,m,{atmosphere:expected.atmosphere,
-    settings:{shootingWarmStart:false}}).composition,p);
+    settings:{shootingWarmStart:false,surfaceArithmetic:'legacy'}}).composition,p);
  }
 });
 

@@ -194,7 +194,8 @@
           adaptiveDepth:settings.fieldAdaptiveDepth,
           maxAdaptiveCells:settings.fieldMaxAdaptiveCells,
           shootingOptimization:settings.shootingOptimization,
-          shootingWarmStart:settings.shootingWarmStart});
+          shootingWarmStart:settings.shootingWarmStart,
+          surfaceArithmetic:settings.surfaceArithmetic});
       }
       var fieldSetupMs=clock()-startedProfile;
       var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;

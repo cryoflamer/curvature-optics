@@ -307,3 +307,28 @@ not change any existing renderer, model, Optical Solver, ground grid, or UI.**
 Physical integration is reserved for #125–128. See
 `docs/MIGRATION_CONTINUOUS_SURFACE_GEOMETRY_124.md` and
 `tests/CurvatureSurfaceGeometry124.test.js`.
+
+## Compatpatch 125 — continuous-curvature optical solver integration
+
+The #124 stable surface kernel is now connected to the physical RK4 tracer,
+point-to-point shooting solver and shared-field target coordinate generation.
+`curvature: k>=0` is an authoritative optional input; `k=0` is an exact
+plane, and legacy `geometry/radius` calls remain compatible. The radial
+height/normal metric is evaluated together in each RK4 derivative stage;
+contact, grazing and fast-clear-ground checks use the same surface.
+Near-flat ground endpoint classification avoids infinite-radius tolerance
+overflow. Existing predictor, shooting residual, event verification and
+field-local cache semantics are retained. The surface kernel is now loaded
+before the tracer in the browser HTML.
+
+A diagnostic-only `surfaceArithmetic:'legacy'` comparison option retains
+byte-exact #119/#121/#122 reference hashes; the default stable path
+intentionally need not reproduce old floating-point rounding. Two full
+85+2 tower scenes retain topology and shooting work with measured, finite
+near-grazing coordinate/horizon differences (see migration document).
+Atmospheric `occlusionRadius` is not linked to the physical surface
+curvature. The UI/model, common source grid and camera will be unified in
+#126–128, not in this patch.
+
+See `docs/MIGRATION_CONTINUOUS_OPTICAL_SOLVER_125.md` and
+`tests/OpticalContinuousCurvature125.test.js`.

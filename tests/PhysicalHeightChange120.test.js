@@ -101,7 +101,7 @@ test('120: the unaccelerated reference retains #119 hashes at two eye heights',(
     const m=atHeight(model(85,'globe'),expected.height);
     const composed=composition.composeOpticalMain(m,true);
     const result=optical.create().transform(composed,m,{atmosphere:'standard',
-      settings:{shootingOptimization:false}});
+      settings:{shootingOptimization:false,surfaceArithmetic:'legacy'}});
     const stats=result.stats;
     const hash=crypto.createHash('sha256').update(
       JSON.stringify(result.composition.scene.primitives)).digest('hex');

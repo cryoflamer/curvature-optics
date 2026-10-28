@@ -119,6 +119,20 @@
       }
       return finiteResult(h,'surface altitude');
     }
+    // A joint altitude/normal sample avoids two radial hypot() operations per
+    // RK4 derivative stage. The plane is exact, not a very large sphere.
+    // Output is [physical altitude, horizontal normal, vertical normal].
+    function metric2(x,z){
+      finite(x,'horizontal coordinate');finite(z,'vertical coordinate');
+      if(flat)return [z,0,1];
+      var a=finiteResult(1+k*z,'scaled radial vertical');
+      var b=finiteResult(k*x,'scaled radial horizontal');
+      var length=finiteResult(Math.hypot(b,a),'scaled radial length');
+      if(length===0)throw new RangeError('surface normal is undefined at the sphere centre');
+      var h=a>=0?z+k*x*x/(length+a):
+        (2*z+k*(x*x+z*z))/(length+1);
+      return [finiteResult(h,'surface altitude'),b/length,a/length];
+    }
     function height2(x,z){return altitude(x,0,z);}
     function height3(x,y,z){return altitude(x,y,z);}
     function normal2(x,z){var n=scaledNormal(x,0,z);return [n[0],n[2]];}
@@ -155,7 +169,7 @@
     }
     return Object.freeze({curvature:k,flat:flat,
       surfacePoint2:surfacePoint2,surfacePoint3:surfacePoint3,
-      height2:height2,height3:height3,normal2:normal2,normal3:normal3,
+      height2:height2,height3:height3,normal2:normal2,normal3:normal3,metric2:metric2,
       surfaceNormal2:surfaceNormal2,surfaceNormal3:surfaceNormal3,
       geometricHorizon:geometricHorizon});
   }

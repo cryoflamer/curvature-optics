@@ -151,12 +151,12 @@ test('124: back hemisphere, centre singularity and invalid domains are explicit'
  assert.throws(()=>geom.sinc(NaN),/finite/);
 });
 
-test('124: independent module does not alter live ray tracer or UI contracts',()=>{
+test('124/125: integrated surface preserves the prior vacuum ray to numerical tolerance',()=>{
  const tracer=require('../src/optics/OpticalRayTracer');
  const previous=tracer.trace({geometry:'globe',radius:R,atmosphere:'vacuum',
    observerHeight:15,angle:-0.01,length:1000,step:100});
  const fixture=[previous.x,previous.z,previous.height,previous.hitGround];
- nearVector(fixture.slice(0,3),[999.9500004166654,5.00016666583333,5.078639372251928],1e-10,'#123 vacuum ray');
+ nearVector(fixture.slice(0,3),[999.9500004166654,5.00016666583333,5.078639372251928],3e-9,'#123 vacuum ray');
  assert.equal(fixture[3],false);
 });
 

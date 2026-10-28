@@ -5,10 +5,12 @@
  */
 (function (root, factory) {
   var api = factory(typeof module === 'object' && module.exports
-    ? require('./OpticalTargetProjection') : root.CurvatureTargetProjection);
+    ? require('./OpticalTargetProjection') : root.CurvatureTargetProjection,
+    typeof module === 'object' && module.exports
+      ? require('../geometry/CurvatureSurfaceGeometry') : root.CurvatureSurfaceGeometry);
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CurvatureSharedRayField = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function (projection) {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (projection,surfaces) {
   'use strict';
   function axis(values, name, positive) {
     if (!Array.isArray(values) || values.length < 2 ||
@@ -17,12 +19,7 @@
       throw Error('Invalid increasing ' + name + ' axis');
     return values.slice();
   }
-  function target(distance, height, geometry, radius) {
-    if (geometry === 'flat') return [distance, height];
-    var theta = distance / radius;
-    return [(radius + height) * Math.sin(theta),
-      (radius + height) * Math.cos(theta) - radius];
-  }
+  if(!surfaces)throw Error('Continuous-curvature surface geometry dependency required');
   function interval(values, x) {
     if (x < values[0] || x > values[values.length - 1]) return -1;
     if (x === values[values.length - 1]) return values.length - 2;
@@ -38,11 +35,19 @@
     var distances=axis(options.distances,'distance',true);
     var heights=axis(options.heights,'height',false);
     if (heights[0] < 0) throw Error('Field heights cannot be negative');
-    var geometry=options.geometry === undefined ? 'flat' : options.geometry;
-    var radius=options.radius === undefined ? 6371000 : options.radius;
-    if ((geometry !== 'flat' && geometry !== 'globe') ||
-        !Number.isFinite(radius) || radius <= 0 ||
-        (geometry === 'globe' && distances[distances.length-1] >= radius * Math.PI / 2))
+    var explicit=Object.prototype.hasOwnProperty.call(options,'curvature');
+    var k=options.curvature;
+    if(explicit&&(!Number.isFinite(k)||k<0))throw Error('Invalid shared-field curvature');
+    var geometry=options.geometry===undefined?(explicit&&k>0?'globe':'flat'):options.geometry;
+    var radius=options.radius===undefined?6371000:options.radius;
+    if((geometry!=='flat'&&geometry!=='globe')||!Number.isFinite(radius)||radius<=0)
+      throw Error('Invalid shared-field geometry or range');
+    if(explicit&&(geometry==='flat')!==(k===0))
+      throw Error('Shared-field curvature contradicts geometry');
+    if(!explicit)k=geometry==='flat'?0:surfaces.curvatureFromRadius(radius);
+    var surface=surfaces.createFromCurvature(k);
+    var legacy=options.surfaceArithmetic==='legacy';
+    if(k>0 && k*distances[distances.length-1]>=Math.PI/2)
       throw Error('Invalid shared-field geometry or range');
     var angleTolerance=options.angleTolerance === undefined ? 1e-7 : options.angleTolerance;
     if (!Number.isFinite(angleTolerance) || angleTolerance <= 0 || angleTolerance > 0.1)
@@ -54,7 +59,7 @@
     if (!Number.isInteger(adaptiveDepth) || adaptiveDepth < 0 || adaptiveDepth > 8 ||
         !Number.isInteger(maxAdaptiveCells) || maxAdaptiveCells < 1 || maxAdaptiveCells > 100000)
       throw Error('Invalid adaptive-field controls');
-    var solverOptions=Object.assign({},options);
+    var solverOptions=Object.assign({},options,{curvature:k});
     delete solverOptions.distances;
     delete solverOptions.heights;
     delete solverOptions.angleTolerance;
@@ -89,8 +94,10 @@
     function exact(d,h) {
       var key=d+','+h;
       if (cache.has(key)) {statistics.hits++;return cache.get(key);}
-      var started=clock(),shootOpts={geometry:geometry,radius:radius,
-        target:target(d,h,geometry,radius)};
+      var started=clock(),shootOpts={geometry:geometry,radius:radius,curvature:k,
+        target:legacy?(geometry==='flat'?[d,h]:[
+          (radius+h)*Math.sin(d/radius),(radius+h)*Math.cos(d/radius)-radius]):
+          surface.surfacePoint2(d,h)};
       // Two already integrated angles at effectively one distance supply a local
       // height/angle secant. Restrict to distant rays: nearby steep angles
       // are substantially nonlinear in height. Only the standard-profile

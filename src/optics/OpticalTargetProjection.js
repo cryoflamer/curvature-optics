@@ -32,10 +32,8 @@
       throw Error('Invalid target-shooting controls');
     if (options.profile !== undefined && (options.atmosphere !== undefined || options.profileOptions !== undefined))
       throw Error('Specify either a refractive profile or atmosphere options');
-    var geometry = options.geometry === undefined ? 'globe' : options.geometry;
-    var radius = options.radius === undefined ? 6371000 : options.radius;
-    if ((geometry !== 'globe' && geometry !== 'flat') || !Number.isFinite(radius) || radius <= 0)
-      throw Error('Invalid target geometry');
+    var resolved=rt.resolveGeometry(options);
+    var geometry=resolved.geometry,radius=resolved.radius,surface=resolved.surface;
     var profile = options.profile || rt.atmosphere(options.atmosphere || 'standard', options.profileOptions);
     if (!profile || typeof profile.n !== 'function' || typeof profile.dn !== 'function')
       throw Error('Invalid refractive profile');
@@ -44,7 +42,7 @@
     if (!Number.isInteger(eventSubsteps) || eventSubsteps < 2 || eventSubsteps > 64 ||
         !Number.isFinite(contactTolerance) || contactTolerance <= 0 || contactTolerance > 0.01)
       throw Error('Invalid ground-contact controls');
-    var targetAltitude = rt.height(target[0], target[1], geometry, radius);
+    var targetAltitude = surface.height2(target[0],target[1]);
     if (targetAltitude < -contactTolerance)
       throw Error('Target is below the opaque boundary');
     var groundEndpoint = targetAltitude <= contactTolerance;
@@ -53,7 +51,8 @@
     var solveTolerance = groundEndpoint ? Math.min(tolerance,1e-10) : tolerance;
 
     var directionAngle = Math.atan2(target[1] - observerHeight, target[0]);
-    var setup = {geometry:geometry,radius:radius,profile:profile};
+    var setup = {curvature:resolved.curvature,geometry:geometry,radius:radius,
+      surfaceArithmetic:resolved.surfaceArithmetic,profile:profile};
     var advance = rt.prepareStepper(setup,true);
     var xGoal = target[0], zGoal = target[1];
     var maxPath = 6 * Math.hypot(xGoal, zGoal - observerHeight) + 4 * step;
@@ -213,7 +212,8 @@
     // endpoint. In particular, contact *at* the target is not prior occlusion.
     var ray;
     try {
-      ray=rt.trace({geometry:geometry,radius:radius,profile:profile,
+      ray=rt.trace({geometry:geometry,radius:radius,curvature:resolved.curvature,
+        surfaceArithmetic:resolved.surfaceArithmetic,profile:profile,
         observerHeight:observerHeight,angle:best.angle,length:best.pathLength,
         step:step,eventSubsteps:eventSubsteps,contactTolerance:contactTolerance,
         fastClearGround:options.shootingPredictor===true});
@@ -225,15 +225,30 @@
     // A ground-level endpoint or near-tangent target can have a tiny crossing
     // distance because residual height is finite. Do not present that as a
     // proved blockage if the event is within the shooting error envelope.
-    if (prior && groundEndpoint &&
-        best.pathLength-ray.travelled <= Math.sqrt(2 * Math.max(radius,1000) * (Math.abs(best.residual)+solveTolerance))) {
-      // An ordinary descending contact at the endpoint is visible. A nearly
-      // tangent arrival remains numerically ambiguous; do not promote it.
-      var nx = geometry === 'flat' ? 0 : xGoal/(radius+targetAltitude);
-      var nz = geometry === 'flat' ? 1 : (zGoal+radius)/(radius+targetAltitude);
-      var incomingSlope = nx*best.state[2] + nz*best.state[3];
-      var safelyDescending = incomingSlope < -Math.sqrt(2 * contactTolerance / Math.max(radius,1000));
-      status = ray.event.contact === 'crossing' && safelyDescending ? 'visible' : 'indeterminate';
+    if(prior&&groundEndpoint){
+      var n=surface.normal2(xGoal,zGoal);
+      var incomingSlope=resolved.surfaceArithmetic==='legacy' && geometry==='globe'?
+        (xGoal/(radius+targetAltitude))*best.state[2]+
+        ((zGoal+radius)/(radius+targetAltitude))*best.state[3]:
+        n[0]*best.state[2]+n[1]*best.state[3];
+      var error=Math.abs(best.residual)+solveTolerance;
+      // Positive curvature: local tangent sagitta gives the original
+      // conservative envelope. In the exact plane there is no sagitta:
+      // use the local descent slope, keeping near-tangencies uncertain.
+      var localRadius=resolved.curvature>0?1/resolved.curvature:Infinity;
+      // At an effectively infinite radius, the old sqrt(R*error) test would
+      // grow without bound (or overflow), turning a prior impact into a
+      // spurious visible endpoint. Use the finite local descent slope there.
+      var nearPlane=!Number.isFinite(localRadius)||localRadius>=1e15;
+      var envelope=nearPlane?
+        (incomingSlope<0?error/Math.max(-incomingSlope,1e-12):0):
+        Math.sqrt(2*Math.max(localRadius,1000)*error);
+      if(best.pathLength-ray.travelled<=envelope){
+        var safelyDescending=nearPlane?
+          incomingSlope< -Math.sqrt(2*contactTolerance/1000):
+          incomingSlope< -Math.sqrt(2*contactTolerance/Math.max(localRadius,1000));
+        status=ray.event.contact==='crossing'&&safelyDescending?'visible':'indeterminate';
+      }
     }
     return {status:status,angle:best.angle,residual:best.residual,
       pathLength:best.pathLength,target:target.slice(),ray:ray,evaluations:evaluations,shootRK4Calls:shootRK4Calls,
