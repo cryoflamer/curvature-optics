@@ -394,3 +394,15 @@ visual and performance verification.
 ## Patch 130 — Modern UI bootstrap and long-term UI split
 
 The new **Modern visualization UI** is developed in parallel with the existing **Legacy engineering interface**; no Legacy controls are removed. The canonical request `CurvatureApp.html?ui=modern` routes to an isolated Modern document using the same `CurveAppClass`, physical scene, ray tracer and painter, while the default and `?ui=legacy` retain the original application. The Modern shell provides Scene (initial Transmission Line Physical view and basic camera/surface/atmosphere/display controls) plus an explicitly unimplemented Compare tab. Detailed RK4, shooting, audits, Physical sanity check and ZIP exports remain Legacy-only. The complete agreed architecture, risks, compatibility contract and patch 130–134 roadmap are preserved in **`docs/modern-ui-plan.md`**. Before the next patch, obtain a manual browser check of both routes; do not treat URL parsing tests alone as a browser acceptance test.
+
+### Compatibility patch 131 — Modern Scene controls
+
+Modern-only Scene control expansion was added without altering Legacy startup,
+optical geometry, solver, or painting. The isolated Modern document loads
+`src/ui/modern/ModernSceneState131.js` (validated shared-model adapter) before
+its Modern bootstrap. The Scene sidebar adds camera roll/FOV, direct radius and
+exact-flat controls, two editable physical object groups, preset selection,
+and automatic debounced rendering. Lake Pontchartrain is the primary preset;
+single-tower and two-row samples are explicitly illustrative. Modern edits do
+not overwrite Legacy saved state; full experiment persistence stays in patch
+134. The architecture/delivery plan is updated in `docs/modern-ui-plan.md`.

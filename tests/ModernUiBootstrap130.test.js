@@ -51,7 +51,9 @@ test('Modern standalone runtime binds working scene controls and does not instan
   const ids=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill','ModernOcclusionWrap',
     'ModernSceneTab','ModernCompareTab','ModernCompareMessage','ModernGraphHost',
     'ModernBackToScene','ModernHeight','ModernFocal','ModernPan','ModernNick','ModernOcclusion',
-    'ModernCameraAim','ModernAtmosphere','ModernGrid','ModernCurvature','ModernEarth','ModernRender'];
+    'ModernCameraAim','ModernAtmosphere','ModernGrid','ModernCurvature','ModernEarth','ModernRender',
+    'ModernRoll','ModernViewAngle','ModernRadiusKm','ModernFlat','ModernPreset','ModernResetPreset',
+    'ModernObjectFields0','ModernObjectFields1','ModernSceneTitle','ModernSceneDescription'];
   const nodes=new Map(ids.map(id=>[id,{
     id,value:{ModernHeight:'15',ModernFocal:'2000',ModernPan:'0.0464',ModernNick:'0.0121',
       ModernCameraAim:'3',ModernAtmosphere:'standard',ModernOcclusion:'6371000',ModernCurvature:'164'}[id]||'',

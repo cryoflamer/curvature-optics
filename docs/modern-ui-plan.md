@@ -76,3 +76,38 @@ Exact numbers may be split if an integration reveals a larger risk; tests and ph
 - Browser check both entrypoints (including local `file://` when used), initial Modern Physical output, curvature and atmosphere controls, and `Scene`/`Compare` switches. Report browser access restrictions rather than assuming success.
 - Do **not** add React or a new build/dependency chain solely for styling; classic JavaScript, HTML and CSS are sufficient.
 - Scientific precision requirements and full multipath/occlusion support are outside this UI restructuring; they remain a Legacy-engineering concern.
+
+## Patch 131 delivery — Modern Scene controls
+
+Patch 131 keeps the two-entry architecture and the one actual `CurveAppClass` +
+Physical renderer. `src/ui/modern/ModernSceneState131.js` is a small, pure,
+validated Scene-state adapter, **not** an independent scene model or optics
+engine. Input events mutate the active model; `model.Update()` remains the
+single calculation/normalization path. Numeric typing is debounced (420 ms),
+slider dragging (300 ms) is coalesced and change/Enter flushes immediately.
+Selecting a preset cancels pending edits so earlier typing cannot overwrite it.
+
+The Modern Scene panel now offers observer height, focal length and directly
+editable FOV, Pan/Nick/Roll, aim, exact-flat toggle, continuous curvature and a
+finite radius in km, atmosphere, the independently set comparison/occlusion
+radius for engineered optics, both physical object groups (type, count, start,
+spacing, lateral offset, size and variation), and metric grid visibility. The
+Physical renderer currently supports group object types 0–3 only; the Modern
+selector intentionally excludes unsupported legacy-only object types rather
+than displaying a working-looking but broken control. Camera FOV and focal
+length are two synchronized inputs to one model, not separate camera states.
+
+Three self-contained Scene presets are available: the known Lake Pontchartrain
+transmission-line tower configuration and two **explicitly illustrative** tower
+scenes, not reimplementations of Bislin's animation demos. Presets reset both
+object groups and variations. Editing marks the selection "Custom (edited)";
+"Reset selected preset" restores the last selected preset. No Save/Load is
+implemented in 131. Changes remain in the current Modern page session and do
+**not** silently overwrite Legacy saved settings; versioned reusable experiments
+and share links remain scheduled for **134**.
+
+Patch 131 acceptance: controls mutate exactly one model and drive the shared
+renderer; FOV/focal and radius/curvature controls stay synchronized; presets
+reset consistently; invalid input never changes geometry; numeric typing does
+not repeatedly run expensive shooting; no Legacy UI initialization. Compare is
+still an explicit placeholder until patches 132–133.

@@ -44,6 +44,7 @@
 <script src="src/app/CurvaturePhysicalCamera127.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature127.js"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js"></script>
+<script src="src/ui/modern/ModernSceneState131.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -59,21 +60,45 @@
   <div class="modern-workspace">
     <aside class="modern-sidebar" aria-label="Scene settings">
       <div class="modern-sidebar-heading"><span>Scene settings</span><small>Shared physical renderer</small></div>
+      <section class="modern-section modern-preset-section">
+        <h2>Scene presets</h2>
+        <div class="modern-field"><label for="ModernPreset">Select a scene</label>
+          <select id="ModernPreset"><option value="pontchartrain">Lake Pontchartrain · towers</option>
+            <option value="single">Single tower · sample</option>
+            <option value="rows">Two tower rows · sample</option>
+            <option value="custom" disabled>Custom scene (edited)</option>
+          </select></div>
+        <button type="button" class="modern-ghost-button" id="ModernResetPreset">Reset selected preset</button>
+        <p class="modern-note">Edits are temporary in Modern preview. Saved experiments and sharing arrive in patch 134; Legacy saved settings are never overwritten.</p>
+      </section>
       <section class="modern-section">
         <h2>Camera</h2>
         <div class="modern-field"><label for="ModernHeight">Observer height (m)</label><input id="ModernHeight" type="number" min="0.001" max="1000000000" step="0.1" value="15"></div>
-        <div class="modern-field"><label for="ModernFocal">Focal length (mm)</label><input id="ModernFocal" type="number" min="1" max="100000" step="10" value="2000"></div>
         <div class="modern-two-fields">
-          <div class="modern-field"><label for="ModernPan">Pan (°)</label><input id="ModernPan" type="number" step="0.01" value="0.0464"></div>
-          <div class="modern-field"><label for="ModernNick">Nick (°)</label><input id="ModernNick" type="number" step="0.01" value="0.0121"></div>
+          <div class="modern-field"><label for="ModernFocal">Focal length (mm)</label><input id="ModernFocal" type="number" min="1" max="100000" step="1" value="2000"></div>
+          <div class="modern-field"><label for="ModernViewAngle">Field of view (°)</label><input id="ModernViewAngle" type="number" min="0.1" max="160" step="0.01" value="1.2376"></div>
         </div>
-        <div class="modern-field"><label for="ModernCameraAim">Camera aim</label><select id="ModernCameraAim"><option value="3" selected>Eye level · fixed</option><option value="0">Geometric horizon</option></select></div>
+        <div class="modern-two-fields">
+          <div class="modern-field"><label for="ModernPan">Pan (°)</label><input id="ModernPan" type="number" step="0.01" min="-360" max="360" value="0.0464"></div>
+          <div class="modern-field"><label for="ModernNick">Nick (°)</label><input id="ModernNick" type="number" step="0.01" min="-90" max="90" value="0.0121"></div>
+        </div>
+        <div class="modern-two-fields">
+          <div class="modern-field"><label for="ModernRoll">Roll (°)</label><input id="ModernRoll" type="number" step="0.1" min="-180" max="180" value="0"></div>
+          <div class="modern-field"><label for="ModernCameraAim">Camera aim</label><select id="ModernCameraAim">
+            <option value="3" selected>Eye level · fixed</option><option value="0">Geometric horizon</option>
+            <option value="2">Between horizons</option><option value="1">Flat Earth equivalent</option>
+          </select></div>
+        </div>
       </section>
       <section class="modern-section">
         <h2>Surface</h2>
         <label for="ModernCurvature">Surface curvature</label>
         <input id="ModernCurvature" type="range" min="0" max="1000" step="1" value="164">
         <output id="ModernCurvatureLabel" for="ModernCurvature">R = 6371 km</output>
+        <div class="modern-two-fields modern-align-end">
+          <div class="modern-field"><label for="ModernRadiusKm">Radius (km)</label><input id="ModernRadiusKm" type="number" min="100" max="10000000000000" step="any" value="6371"></div>
+          <div class="modern-field"><label class="modern-check" for="ModernFlat"><input id="ModernFlat" type="checkbox"> Exact flat (κ = 0)</label></div>
+        </div>
         <button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button>
       </section>
       <section class="modern-section">
@@ -82,17 +107,24 @@
           <option value="standard" selected>Standard atmosphere</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical">Inverse spherical</option><option value="exponential-occlusion">Exponential occlusion</option>
         </select></div>
-        <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Comparison radius (m)</label><input id="ModernOcclusion" type="number" min="1" step="1000" value="6371000"></div>
+        <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Comparison/occlusion radius (m)</label><input id="ModernOcclusion" type="number" min="1" max="1e16" step="1000" value="6371000"></div>
+      </section>
+      <section class="modern-section">
+        <h2>Objects</h2>
+        <p class="modern-note">Two physical groups, sharing the same camera and surface. Supported by the Physical renderer: towers, ships, rods and Bedford objects.</p>
+        <details class="modern-objects" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
+        <details class="modern-objects"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
       </section>
       <section class="modern-section">
         <h2>Display</h2>
         <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
       </section>
-      <button type="button" class="modern-primary-button" id="ModernRender">Update scene</button>
+      <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
+      <p class="modern-note">Valid changes automatically update the scene. Manual recalculation is optional.</p>
     </aside>
     <main class="modern-main">
       <div class="modern-scene-bar"><div><h1 id="ModernSceneTitle">Lake Pontchartrain Transmission Line</h1>
-        <p>One shared geometry model, physically traced light</p></div>
+        <p id="ModernSceneDescription">85 transmission towers across Lake Pontchartrain</p></div>
         <span class="modern-mode-pill" id="ModernModePill">SCENE</span></div>
       <section class="modern-viewport-panel" aria-label="Physical scene preview">
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
