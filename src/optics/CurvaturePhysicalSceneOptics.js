@@ -15,6 +15,7 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills){
   'use strict';
   if(!contract||!fields||!silhouette||!groundGuides||!polygonFills)throw Error('Physical scene optics dependencies required');
+  function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   var ATMOSPHERES=['vacuum','standard','exponential-occlusion','inverse-spherical'];
   function arrivalPoint(pair){
     var az=pair[0],el=pair[1],ce=Math.cos(el),range=1000;
@@ -164,6 +165,7 @@
         minimumDepth:0,maximumDepth:10,maxSamples:25000},options.settings||{});
       if(settings.maxBuildMs!==null&&(!Number.isFinite(settings.maxBuildMs)||settings.maxBuildMs<0))
         throw RangeError('Invalid physical scene budget');
+      var startedProfile=clock();
       var source=composed.scene.primitives,groups=composed.ranges.filter(function(r){return r.role==='objects';});
       var objects=[];
       groups.forEach(function(r){source.slice(r.start,r.end).forEach(function(p){
@@ -181,6 +183,7 @@
           adaptiveDepth:settings.fieldAdaptiveDepth,
           maxAdaptiveCells:settings.fieldMaxAdaptiveCells});
       }
+      var fieldSetupMs=clock()-startedProfile;
       var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;
       var limited=field&&{sample:function(d,h){
         if(kind!=='vacuum'&&Date.now()>=deadline){cutoff=true;return {status:'solver_failed',reason:'preview-time-budget'};}
@@ -198,6 +201,7 @@
         atmosphere:kind,occlusionRadius:R,step:settings.step,maxDistance:Math.min(100000,model.rEarth*.1),
         sampleGround:kind!=='vacuum'&&field?function(d){return field.exact(d,0);}:null});
       var physicalGuides=guideProjection.transform(guideSource);
+      var groundGuidesMs=clock()-startedProfile-fieldSetupMs;
       var groundAfter=field&&field.stats?field.stats():null;
       var groundFieldSolves=groundAfter?groundAfter.solves-groundBefore.solves:0;
       var groundCacheHits=groundAfter?groundAfter.hits-groundBefore.hits:0;
@@ -222,14 +226,18 @@
       // fills and only then its strokes made far tower strokes cross foreground
       // foundations regardless of the bank sorting order.
       var prioritized=placedObjects(source,groups);
+      var outlinesMs=0,fillsMs=0;
       prioritized.forEach(function(r){
         var prim=r.primitives;
         if(!prim.length)return;
         if(!limited){stats.unresolved+=prim.length;return;}
+        var beganOutline=clock();
         var projected=silhouette.projectPrimitives({primitives:prim,field:limited,
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
           angularTolerance:settings.angularTolerance,minimumDepth:settings.minimumDepth,
           maximumDepth:settings.maximumDepth,maxSamples:settings.maxSamples});
+        outlinesMs+=clock()-beganOutline;
+        var beganFill=clock();
         // Only authored filled polygons participate: tower struts remain
         // strokes, while their foundation polygons regain their actual fill.
         // The polygon adapter reuses the exact SAME qualified field as outlines.
@@ -237,6 +245,7 @@
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
           angularTolerance:settings.angularTolerance,maximumDepth:7,
           maxSamples:settings.maxSamples,layer:r.name});
+        fillsMs+=clock()-beganFill;
         fills.primitives.forEach(function(p){results.push(p);});
         stats.fillTriangles+=fills.stats.fillTriangles;
         stats.fillUnresolved+=fills.stats.unresolvedTriangles;
@@ -290,7 +299,11 @@
       // ground guides. The common painter still rebuilds camera-dependent
       // frames and pixel projections on every redraw. A budget-expired
       // preview is partial; never freeze it in the cache.
+      var assemblyStarted=clock();
       var presentation=assemble(composed,results,geometry,physicalGuides);
+      stats.opticalStages={fieldSetupMs:fieldSetupMs,groundGuidesMs:groundGuidesMs,
+        outlinesMs:outlinesMs,fillsMs:fillsMs,assemblyMs:clock()-assemblyStarted,
+        exactSolveMs:fieldStats&&fieldStats.exactSolveMs||0};
       if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])
         cached={key:key,stats:stats,composition:presentation};
       else cached=null;

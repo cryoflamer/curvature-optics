@@ -4,6 +4,32 @@ var UpdateAllRunning = false;
 // tower visibility. After the last change the complete frame is restored.
 var physicalCanvasInteractive = false;
 var physicalCanvasSettleTimer = null;
+// Only changes to the observer height debounce the expensive RK4 cold build.
+// A pending height never triggers an incorrect/approximate Physical scene.
+var physicalCanvasPreviousHeight = null;
+var physicalHeightScheduler120 = null;
+function QueuePhysicalHeightChange(){
+  if(!physicalHeightScheduler120&&window.CurvatureHeightChangeScheduler120){
+    physicalHeightScheduler120=CurvatureHeightChangeScheduler120.create(
+      setTimeout,clearTimeout,function(){
+        var selector=document.getElementById('MainCanvasRenderer');
+        if(!selector||selector.value!=='physical')return;
+        physicalCanvasInteractive=false;
+        graph.Redraw();
+      },150);
+  }
+  if(!physicalHeightScheduler120)return false;
+  physicalCanvasInteractive=false;
+  if(physicalCanvasSettleTimer!==null){
+    clearTimeout(physicalCanvasSettleTimer);physicalCanvasSettleTimer=null;
+  }
+  if(physicalCanvasFrameScheduler)physicalCanvasFrameScheduler.cancel();
+  physicalHeightScheduler120.schedule();
+  var status=document.getElementById('MainCanvasRendererStatus');
+  if(status)status.textContent='HEIGHT CHANGING: exact Physical optics pending; previous image is shown until the latest height is solved.';
+  return true;
+}
+
 function SchedulePhysicalCanvasFinalFrame(){
   var selector=document.getElementById('MainCanvasRenderer');
   if(!selector||selector.value!=='physical')return;
@@ -31,8 +57,18 @@ function UpdateAll( stopAnimation ) {
     CurveApp.Update();
     if (window.CurvatureOpticsUI) CurvatureOpticsUI.sync();
     ControlPanels.Update();
-    SchedulePhysicalCanvasFinalFrame();
-    graph.Redraw();
+    var currentHeight=CurveApp.Height;
+    var changedHeight=physicalCanvasPreviousHeight!==null&&
+      currentHeight!==physicalCanvasPreviousHeight;
+    physicalCanvasPreviousHeight=currentHeight;
+    var physicalSelector=document.getElementById('MainCanvasRenderer');
+    var heightPending=changedHeight&&physicalSelector&&physicalSelector.value==='physical'&&
+      QueuePhysicalHeightChange();
+    if(!heightPending){
+      if(physicalHeightScheduler120)physicalHeightScheduler120.cancel();
+      SchedulePhysicalCanvasFinalFrame();
+      graph.Redraw();
+    }
     if (typeof ScheduleOpticalP4Refresh === 'function') ScheduleOpticalP4Refresh();
   }
   finally {
@@ -123,6 +159,12 @@ function DrawMainCanvasFrame(g) {
             l.removedBySimplification+' simplified, '+l.unsafeNearPlane+
             ' near-plane preserved)');
         }
+        if(result.opticalStages&&!result.cacheReused){
+          var ot=result.opticalStages;
+          pieces.push('cold optics: ground '+Math.round(ot.groundGuidesMs)+
+            ', outlines '+Math.round(ot.outlinesMs)+', fills '+Math.round(ot.fillsMs)+
+            ', exact solver '+Math.round(ot.exactSolveMs)+' ms (solver included in ground/outlines/fills)');
+        }
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
         if(result.fieldStats){
           pieces.push(result.fieldStats.solves+' shared exact ray solves'+
@@ -186,10 +228,14 @@ if (window.CurvatureCanvasFrameScheduler && typeof requestAnimationFrame === 'fu
   physicalCanvasFrameScheduler=CurvatureCanvasFrameScheduler.create(
     requestAnimationFrame.bind(window),cancelAnimationFrame.bind(window),immediateGraphRedraw);
   graph.Redraw=function(){
+    // A direct redraw (mode/atmosphere/settings change) supersedes a queued
+    // height-only redraw; otherwise the later timer would draw twice.
+    if(physicalHeightScheduler120)physicalHeightScheduler120.cancel();
     var selector=document.getElementById('MainCanvasRenderer');
     if(selector&&selector.value==='physical')physicalCanvasFrameScheduler.schedule();
     else {
       physicalCanvasInteractive=false;
+      if(physicalHeightScheduler120)physicalHeightScheduler120.cancel();
       if(physicalCanvasSettleTimer!==null){clearTimeout(physicalCanvasSettleTimer);physicalCanvasSettleTimer=null;}
       physicalCanvasFrameScheduler.cancel();immediateGraphRedraw();
     }

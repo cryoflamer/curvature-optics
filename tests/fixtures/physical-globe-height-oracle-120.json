@@ -1,0 +1,28 @@
+[
+  {
+    "height": 15,
+    "primitiveHash": "15f7ea26599caa550716305e5e7ccd9e11719bf11f2f6177a886afbae1097aca",
+    "primitives": 82618,
+    "visibleSegments": 3684,
+    "unresolved": 0,
+    "fillTriangles": 896,
+    "fillUnresolved": 0,
+    "groundHorizon": 16004.350713244621,
+    "solves": 6258,
+    "interpolations": 6065,
+    "fallbacks": 6182
+  },
+  {
+    "height": 15.3,
+    "primitiveHash": "697984e7752dafec930672cf1c175adcd3389a5a88b75bff268ce06cb50817b2",
+    "primitives": 82595,
+    "visibleSegments": 3663,
+    "unresolved": 0,
+    "fillTriangles": 894,
+    "fillUnresolved": 0,
+    "groundHorizon": 16162.56290913219,
+    "solves": 6114,
+    "interpolations": 6064,
+    "fallbacks": 6022
+  }
+]

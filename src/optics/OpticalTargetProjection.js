@@ -54,9 +54,10 @@
 
     var directionAngle = Math.atan2(target[1] - observerHeight, target[0]);
     var setup = {geometry:geometry,radius:radius,profile:profile};
+    var advance = rt.prepareStepper(setup,true);
     var xGoal = target[0], zGoal = target[1];
     var maxPath = 6 * Math.hypot(xGoal, zGoal - observerHeight) + 4 * step;
-    var evaluations = 0;
+    var evaluations = 0,shootRK4Calls=0;
 
     function shoot(angle) {
       evaluations++;
@@ -66,7 +67,8 @@
       try {
         for (var i = 0; i < maxSteps && travelled < maxPath; i++) {
           var delta = Math.min(step, maxPath - travelled);
-          var next = rt.advanceState(state,delta,setup);
+          shootRK4Calls++;
+          var next = advance(state,delta);
           // Only the first, forward-x branch is part of this API's contract.
           if (!(next[0] > state[0])) return null;
           if (next[0] >= xGoal) {
@@ -77,7 +79,8 @@
             var t=delta*(xGoal-state[0])/(next[0]-state[0]);
             var endpoint=next;
             for(var j=0;j<12;j++) {
-              endpoint=rt.advanceState(state,t,setup);
+              shootRK4Calls++;
+              endpoint=advance(state,t);
               var difference=endpoint[0]-xGoal;
               if(Math.abs(difference)<=Math.max(1e-9,xGoal*1e-14))break;
               if(difference>0)hi=t;else lo=t;
@@ -99,7 +102,7 @@
 
     function failed(reason) {
       return {status:'solver_failed',angle:null,ray:null,target:target.slice(),
-        residual:null,evaluations:evaluations,reason:reason,
+        residual:null,evaluations:evaluations,shootRK4Calls:shootRK4Calls,reason:reason,
         scope:'Only a forward-x single shooting branch was searched; no global multipath guarantee'};
     }
 
@@ -176,10 +179,21 @@
       status = ray.event.contact === 'crossing' && safelyDescending ? 'visible' : 'indeterminate';
     }
     return {status:status,angle:best.angle,residual:best.residual,
-      pathLength:best.pathLength,target:target.slice(),ray:ray,evaluations:evaluations,
+      pathLength:best.pathLength,target:target.slice(),ray:ray,evaluations:evaluations,shootRK4Calls:shootRK4Calls,
       reason:status==='indeterminate'?'Possible grazing or endpoint contact within numerical tolerance':null,
       scope:'Single forward-x shooting branch; a blocked branch does not exclude unsearched paths'};
   }
 
-  return { solve:solve };
+  // Reuse the atmospheric function pair for every point in one shared field.
+  // The profile is immutable by convention; a new field is still constructed
+  // whenever observer height, geometry or atmosphere changes.
+  function preparedOptions(options){
+    options=options||{};
+    if(options.profile!==undefined||options.atmosphere===undefined)return Object.assign({},options);
+    var prepared=Object.assign({},options,{profile:rt.atmosphere(options.atmosphere,options.profileOptions)});
+    delete prepared.atmosphere;
+    delete prepared.profileOptions;
+    return prepared;
+  }
+  return {solve:solve,preparedOptions:preparedOptions};
 }));

@@ -64,16 +64,23 @@
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
     // Cache lifetime is the returned field: changing atmosphere, camera height,
     // or R means constructing a new field. No hidden cross-configuration cache.
+    solverOptions=projection.preparedOptions(solverOptions);
     var cache=new Map();
+    function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
     var statistics={solves:0,hits:0,interpolations:0,fallbacks:0,
+      exactSolveMs:0,shootRK4Calls:0,shootEvaluations:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
       maxDepthUsed:0};
     function exact(d,h) {
       var key=d+','+h;
       if (cache.has(key)) {statistics.hits++;return cache.get(key);}
+      var started=clock();
       var result=projection.solve(Object.assign({},solverOptions,{
         geometry:geometry,radius:radius,target:target(d,h,geometry,radius)
       }));
+      statistics.exactSolveMs+=clock()-started;
+      statistics.shootRK4Calls+=result.shootRK4Calls||0;
+      statistics.shootEvaluations+=result.evaluations||0;
       var record={status:result.status,angle:result.angle,
         residual:result.residual,method:'exact',reason:result.reason};
       Object.freeze(record);

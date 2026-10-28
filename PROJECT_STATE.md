@@ -207,3 +207,22 @@ the change. **Browser performance must be measured on real user hardware**;
 0.5 px is a bound on sampled vertices relative to the prior polyline, not a
 proof against the original continuous optical curve. See
 `docs/MIGRATION_SCREEN_GUIDE_LOD_119.md`.
+
+## Compatpatch 120 — height-change RK4 efficiency, exact final scheduling, and profiling
+
+The user confirmed that Height changes, unlike cached Pan, remain slow in
+Physical/Globe/Standard. An 85+2 tower cold scene requires ~6,258 independent
+exact target solves and ~216k RK4 step calls in shooting. #120 reduces
+per-step allocation/callback overhead using the algebraically identical RK4
+recurrence and prepares the unchanging optical setup/profile once per solve/
+shared field. The Physical Height slider now debounces repeated intermediate
+updates by 150 ms while displaying an explicit stale-frame warning, then
+rebuilds the **last height precisely**; no fake cross-height ray reuse occurs.
+The existing ZIP profiler adds a detached height sweep and solver/stage
+counters. Full numerical scene hashes and 54 baseline projection points are
+regression-checked against #119 at two heights. A Node-only benchmark showed
+~29% median cold-build improvement across three warmed height samples,
+**not** a browser FPS/latency guarantee. Details:
+`docs/MIGRATION_PHYSICAL_HEIGHT_CHANGE_120.md`,
+`tools/benchmark-height-change-120.js`,
+`tests/PhysicalHeightChange120.test.js`.

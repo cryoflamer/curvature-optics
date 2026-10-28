@@ -1,0 +1,866 @@
+[
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.005078436977169366
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.00010843579743531623
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0001356729869666568
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.015077338082357712
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0009417673834924661
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0005902164233328252
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.09974635587357247
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.008024916235697859
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.004453806827061106
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.005058519842319179
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.00013045299312043233
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.0003019923492884597
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.015057438985653551
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0007030949658016985
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.00015294754806760674
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0997266093614004
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.007788074116407835
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0040198916105245374
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.005666678527855054
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.007167077324203438
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.013075191452429689
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.0156655926276791
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.008000564840248865
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.013530020777253548
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        999.999995893862,
+        -0.0784806152805686
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.10033472085252076
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        12000.02115759962,
+        3.6987681314349174
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.01508503892363868
+  },
+  {
+    "options": {
+      "geometry": "globe",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        22000.09440347721,
+        2.015181460417807
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.01739604077727458
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0049999583339583225
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.0008333331404321792
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.0015909077487185422
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.014998875151850595
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.001136363147226775
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.09966865249116204
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.00708321487142883
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "vacuum",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.002727265965469696
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.004980041239728824
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.0010721603619537146
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.002028194959954315
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.014978976106152344
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.0002386107741724658
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": 0.001573253977600615
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.09964890611771733
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.006846435023970624
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "standard",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000
+    },
+    "status": "visible",
+    "angle": -0.0022937281114911432
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.005588199768175544
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.006225360119911961
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 5,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.011348951567186592
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.015587129272930421
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.007058845498764024
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 15,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.01180377528395168
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        1000,
+        0
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.10025701442952144
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        12000,
+        15
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "visible",
+    "angle": -0.014143354195955972
+  },
+  {
+    "options": {
+      "geometry": "flat",
+      "atmosphere": "inverse-spherical",
+      "radius": 6371000,
+      "observerHeight": 100,
+      "target": [
+        22000,
+        40
+      ],
+      "step": 2000,
+      "profileOptions": {
+        "occlusionRadius": 850000
+      }
+    },
+    "status": "blocked",
+    "angle": -0.015669776425188242
+  }
+]

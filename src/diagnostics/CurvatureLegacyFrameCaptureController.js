@@ -21,16 +21,27 @@ document.getElementById('GeometryDiagnosticsExportButton').addEventListener('cli
   try {
     var selection=document.getElementById('MainCanvasRenderer');
     if(selection&&selection.value==='physical'&&window.CurvaturePerformanceProfile118){
-      status.textContent='Profiling Physical Canvas (cold, cached, grid-off, preview and pan)...';
+      status.textContent='Profiling Physical Canvas (cold, cached, grid, pan and height changes)...';
       // Cancel a pending camera redraw so diagnostics never compete with it.
       if(typeof physicalCanvasFrameScheduler!=='undefined'&&physicalCanvasFrameScheduler)
         physicalCanvasFrameScheduler.cancel();
+      if(typeof physicalHeightScheduler120!=='undefined'&&physicalHeightScheduler120)
+        physicalHeightScheduler120.cancel();
+      if(typeof physicalCanvasSettleTimer!=='undefined'&&physicalCanvasSettleTimer!==null){
+        clearTimeout(physicalCanvasSettleTimer);physicalCanvasSettleTimer=null;
+      }
       var atmosphere=document.getElementById('PhysicalCanvasAtmosphere');
       var radius=document.getElementById('PhysicalCanvasOcclusionRadius');
       var opts={atmosphere:atmosphere?atmosphere.value:'vacuum',
         occlusionRadius:radius?Number(radius.value):6371000};
       performanceProfile118Pending=await CurvaturePerformanceProfile118.run({
         model:CurveApp,
+        modelAtHeight:function(height){
+          // Full CurveAppClass.Update recalculates horizon, surface guides,
+          // camera vector and dependent object geometry for the new eye height.
+          // Clone array properties; do not update the real model or BaroModel.
+          return CurvatureHeightChangeScheduler120.cloneUpdated(CurveApp,height);
+        },
         reset:function(){CurvatureMainCanvasRenderer.resetPhysicalSession();},
         render:function(model,flags){return CurvatureMainCanvasRenderer.renderPhysical(graph,model,
           Object.assign({},opts,flags));}
@@ -675,7 +686,12 @@ function DrawModelWithOptionalAudit(g) {
           'Legacy geometry audit is separate from Physical profile.',
           'Scenarios (median / p95 wall ms):'];
         Object.keys(details).forEach(function(name){
-          summary.push(name+': '+details[name].wall.medianMs+' / '+details[name].wall.p95Ms);
+          var d=details[name];
+          summary.push(name+': '+d.wall.medianMs+' / '+d.wall.p95Ms);
+          if(name==='height-change-cold')summary.push(
+            '  height optical median: '+d.optics.medianMs+
+            ' ms; exact solver median: '+d.exactSolver.medianMs+
+            ' ms (included in outlines/fills/ground)');
         });
         (profiler.failures||[]).forEach(function(f){summary.push('FAILED '+f.scenario+': '+f.error);});
         if(profiler.unavailable)summary.push('Unavailable: '+profiler.unavailable);

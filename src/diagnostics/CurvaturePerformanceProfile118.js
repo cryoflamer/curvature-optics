@@ -15,9 +15,9 @@
     return {count:sorted.length,medianMs:sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2,
       p95Ms:sorted[Math.ceil(sorted.length*.95)-1],minMs:sorted[0],maxMs:sorted[sorted.length-1]};
   }
-  function sample(label,result,wallMs){
+  function sample(label,result,wallMs,model){
     var t=result.timings||{};
-    return {scenario:label,wallMs:wallMs,composeMs:t.composeMs,opticsMs:t.opticsMs,
+    return {scenario:label,observerHeight:model&&model.Height,wallMs:wallMs,composeMs:t.composeMs,opticsMs:t.opticsMs,
       snapshotMs:t.frameMs,screenLodMs:t.screenLodMs,snapshotOnlyMs:t.snapshotOnlyMs,
       screenLodStats:result.guideScreenLod||null,painterMs:t.paintMs,validationMs:t.validationMs,
       fillGeometryMs:t.projectionMs,canvasPaintMs:t.canvasMs,
@@ -25,6 +25,10 @@
       opticalCacheReused:!!result.cacheReused,guidePrimitives:result.primitiveCount,
       interactivePreview:!!result.interactiveGuidePreview,
       exactRaySolves:result.fieldStats&&result.fieldStats.solves,
+      shootRK4Calls:result.fieldStats&&result.fieldStats.shootRK4Calls,
+      shootEvaluations:result.fieldStats&&result.fieldStats.shootEvaluations,
+      exactSolveMs:result.fieldStats&&result.fieldStats.exactSolveMs,
+      opticalStages:result.cacheReused?null:(result.opticalStages||null),
       unresolved:result.unresolved};
   }
   // Optional dependencies permit isolated Node tests with injected renderer.
@@ -38,7 +42,7 @@
       await pause();
       var start=now();
       try {var result=options.render(model,{interactive:interactive});
-        records.push(sample(name,result,now()-start));
+        records.push(sample(name,result,now()-start,model));
       }catch(error){failures.push({scenario:name,error:String(error)});}
     }
     if(typeof options.reset==='function')options.reset();
@@ -57,6 +61,23 @@
         await measure('pan-sweep',clone({camViewCenter:view}),false);
       }
     }else failures.push({scenario:'pan-sweep',error:'Camera vector unavailable'});
+    // Height changes are new physical problems, not camera changes. The
+    // callback constructs fully updated *detached* model instances, so no
+    // live slider, barometer or camera state is mutated during the export.
+    if(typeof options.modelAtHeight==='function'){
+      var h=Number(base.Height);
+      if(Number.isFinite(h)&&h>0){
+        for(var q=0;q<3;q++){
+          var targetHeight=h*[0.98,1.02,1][q];
+          try{
+            var changed=options.modelAtHeight(targetHeight);
+            if(!changed||Math.abs(changed.Height-targetHeight)>Math.max(1e-10,h*1e-10))
+              throw Error('Height-model factory did not apply requested observer height');
+            await measure('height-change-cold',changed,false);
+          }catch(error){failures.push({scenario:'height-change-cold',height:targetHeight,error:String(error)});}
+        }
+      }
+    }
     var names=Array.from(new Set(records.map(function(r){return r.scenario;})));
     var groups={};names.forEach(function(name){
       var group=records.filter(function(r){return r.scenario===name;});
@@ -67,7 +88,11 @@
         screenLod:summarize(group.map(function(r){return r.screenLodMs;}).filter(Number.isFinite)),
         snapshotOnly:summarize(group.map(function(r){return r.snapshotOnlyMs;}).filter(Number.isFinite)),
         painter:summarize(group.map(function(r){return r.painterMs;})),
-        canvas:summarize(group.map(function(r){return r.canvasPaintMs;}))};
+        canvas:summarize(group.map(function(r){return r.canvasPaintMs;})),
+        exactSolver:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.exactSolveMs;}).filter(Number.isFinite)),
+        groundGuides:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.groundGuidesMs;}).filter(Number.isFinite)),
+        outlines:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.outlinesMs;}).filter(Number.isFinite)),
+        fills:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.fillsMs;}).filter(Number.isFinite))};
     });
     return {profile:{schema:'curvature-performance-profile-v118',timestamp:new Date().toISOString(),
       scenarios:groups,failures:failures,limitations:[
@@ -76,7 +101,9 @@
         'Render wall time includes graph configuration; frame is a subset of wall time',
         'Grid-off intentionally changes visual guides only, not physics or tower geometry',
         'Warm and cold samples are order-dependent; compare medians and raw samples',
-        'The legacy geometry ZIP capture is separate from these Physical samples']},samples:records};
+        'The legacy geometry ZIP capture is separate from these Physical samples',
+        'Height-change samples represent separate fully updated models; no approximate rays are displayed',
+        'Exact-solver time is contained within ground/outlines/fills; do not sum it again']},samples:records};
   }
   return {run:run,summarize:summarize,sample:sample};
 }));
