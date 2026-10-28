@@ -29,6 +29,9 @@
     state.compareCache.B=root.CurvaturePhysicalSceneOptics.create();
   }
   function el(id){return document.getElementById(id);}
+  // Older isolated Node harnesses have no document.querySelector. These are
+  // optional new presentation nodes, not new physical-model requirements.
+  function newUiEl(id){return typeof document.querySelector==='function'?el(id):null;}
   function updateStatus(text,isError){
     var node=el('ModernStatus');
     if(node){node.textContent=text;node.classList.toggle('is-error',!!isError);}
@@ -472,15 +475,30 @@
     el('ModernCompareTab').setAttribute('aria-pressed',String(mode==='compare'));
     el('ModernCompareMessage').hidden=mode!=='compare';
     if(compareState){
-      var sceneSettings=el('ModernSceneSettings'),compareSettings=el('ModernCompareSettings');
-      if(sceneSettings)sceneSettings.hidden=mode==='compare';
-      if(compareSettings)compareSettings.hidden=mode!=='compare';
+      // One sidebar and one set of Camera/Objects/Display controls in both modes.
+      // Surface/Atmosphere are the only panels that edit different physics.
+      var pairSettings=el('ModernCompareSettings');
+      if(pairSettings)pairSettings.hidden=mode!=='compare';
+      var title=newUiEl('ModernSidebarTitle');if(title)title.textContent=mode==='compare'?'Compare settings':'Scene settings';
+      var subtitle=newUiEl('ModernSidebarSubtitle');if(subtitle)subtitle.textContent=mode==='compare'?'Shared scene · independent physics':'Shared physical renderer';
+      var display=newUiEl('ModernCompareDisplayOptions');if(display)display.hidden=mode!=='compare';
+      var aim=el('ModernCameraAim');if(aim)aim.disabled=mode==='compare';
+      var aimNote=newUiEl('ModernCompareCameraAimNote');if(aimNote)aimNote.hidden=mode!=='compare';
+      var sceneRender=el('ModernRender');if(sceneRender)sceneRender.hidden=mode==='compare';
+      var compareRender=el('ModernRecalculateCompare');if(compareRender)compareRender.hidden=mode!=='compare';
+      var sceneNote=newUiEl('ModernSceneEditNote');if(sceneNote)sceneNote.hidden=mode==='compare';
+      var compareNote=newUiEl('ModernCompareEditNote');if(compareNote)compareNote.hidden=mode!=='compare';
     }
     if(mode==='compare'&&compareState){
       if(!state.compareConfig)
         state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius);
       syncCompareEditor();
     }
+    // Compare's source model retains Scene aiming for later, but the A/B clones
+    // always use a common eye-level aim. Do not show a misleading Scene aim.
+    var cameraAim=el('ModernCameraAim');
+    if(cameraAim)cameraAim.value=mode==='compare'?'3':String(model.viewcenterHorizon);
+    if(typeof document.querySelector==='function')activateSettings(activeSettings,false);
     el('ModernGraphHost').closest('.modern-viewport-panel').hidden=mode==='compare';
     var views=el('ModernCompareViews');
     if(views){views.classList.toggle('is-active',mode==='compare');
@@ -593,18 +611,30 @@
       redraw();
     }catch(error){updateStatus(error.message,true);}
   }
-  // 131.1: Presentation-only tabs and accessible contextual explanations.
-  // Neither control identifiers nor physics/model state are duplicated here.
+  // Shared Scene/Compare tabs; only Surface and Atmosphere have model-specific panels.
+  // Camera, Objects and Display keep the very same inputs and event handlers.
   var settingGroups=['Camera','Surface','Atmosphere','Objects','Display'];
+  var activeSettings='Camera';
+  function settingsPanel(group){
+    if(state.mode==='compare'&&(group==='Surface'||group==='Atmosphere'))
+      return 'ModernComparePanel'+group;
+    return 'ModernPanel'+group;
+  }
   function activateSettings(name,focus){
+    if(!settingGroups.includes(name))return;
+    activeSettings=name;
     settingGroups.forEach(function(group){
-      var tab=el('ModernSettings'+group),panel=el('ModernPanel'+group);
-      if(!tab||!panel)return;
-      var active=group===name;
+      var tab=el('ModernSettings'+group),scenePanel=el('ModernPanel'+group);
+      if(!tab||!scenePanel)return;
+      var comparePanel=(group==='Surface'||group==='Atmosphere')?
+        el('ModernComparePanel'+group):null;
+      var active=group===name,selectedId=settingsPanel(group);
       tab.classList.toggle('is-active',active);
       tab.setAttribute('aria-selected',String(active));
+      tab.setAttribute('aria-controls',selectedId);
       tab.tabIndex=active?0:-1;
-      panel.hidden=!active;
+      scenePanel.hidden=!active||selectedId!==scenePanel.id;
+      if(comparePanel)comparePanel.hidden=!active||selectedId!==comparePanel.id;
       if(active&&focus&&typeof tab.focus==='function')tab.focus();
     });
   }
@@ -630,7 +660,7 @@
     ModernPan:'Horizontal aiming angle in degrees. Changes the camera, not the object azimuths.',
     ModernNick:'Vertical camera pitch in degrees. Does not change observer height.',
     ModernRoll:'Rotation around the camera viewing axis, in degrees.',
-    ModernCameraAim:'Eye level holds a common local direction for comparisons. Horizon modes intentionally move their aim when curvature changes.',
+    ModernCameraAim:'Scene can aim using geometric horizons. Compare always uses the common eye-level direction (0°) so both physical models share one camera.',
     ModernCurvature:'Surface curvature is κ = 1/R. The far-right endpoint is exactly flat (κ = 0), not merely a very large sphere.',
     ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
     ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',

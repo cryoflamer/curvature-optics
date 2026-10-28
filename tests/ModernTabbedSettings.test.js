@@ -14,7 +14,7 @@ test('131.1: five exclusive accessible scene settings panels retain the original
     assert.match(html,new RegExp('role="tab" id="ModernSettings'+name+'" aria-controls="ModernPanel'+name+'"'));
     assert.match(html,new RegExp('id="ModernPanel'+name+'" role="tabpanel" aria-labelledby="ModernSettings'+name+'"'+(index?' hidden':'')));
   });
-  assert.match(code,/panel\.hidden=!active/);
+  assert.match(code,/scenePanel\.hidden=!active\|\|selectedId!==scenePanel\.id/);
   assert.match(code,/tab\.setAttribute\('aria-selected',String\(active\)\)/);
   assert.match(code,/event\.key==='ArrowRight'/);
   assert.match(code,/event\.key==='Home'/);

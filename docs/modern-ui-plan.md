@@ -192,10 +192,9 @@ for each side, forces the **same Eye-level observer-fixed camera**, and runs
 `CurveAppClass.Update()`; no optics formula is implemented in either UI adapter.
 Both sides use the original `CurvatureMainCanvasRenderer.renderPhysical`.
 
-The Compare sidebar shows a physics-pair preset and A/B editor, replacing
-Scene's parameter tabs **only while Compare is active**. Camera, object groups,
-observer and display configuration are shared from Scene; switch to Scene to
-change them. Returning to Compare preserves independently edited A/B physics.
+At patch 133 the Compare sidebar showed a separate physics-pair editor,
+replacing Scene's tabs; Camera, objects, observer and display could then only be
+changed after switching to Scene. This limitation was removed in patch 134.2. Returning to Compare preserves independently edited A/B physics.
 The first Compare activation defaults to **A = current Scene surface and
 atmosphere; B = exact flat with the same atmosphere**, preserving the visual
 baseline from 132. A named pair preset explicitly overwrites both A/B physics;
@@ -332,3 +331,30 @@ explicit-URL precedence, local restore, automatic URL updates, manual copying,
 reset behavior and the continuing Legacy parameter namespace. Browser visual
 acceptance remains required, especially for `file://` clipboard permission
 and `history.replaceState` restrictions.
+
+## Patch 134.2 — shared Scene/Compare parameter tabs
+
+Both workspaces now show the same five accessible tabs: **Camera, Surface,
+Atmosphere, Objects, Display**. One DOM instance and the same state handlers
+serve Camera, both physical Object groups, and the metric ground Grid: editing
+these from Compare updates the authored Scene model and both A/B physical clones.
+Only Surface and Atmosphere substitute Compare-specific panels, which edit the
+currently selected A or B descriptor without changing Scene's physics; the
+physics-pair preset and Model A/B selector remain visible above the tabs.
+
+Compare forces a common observer-fixed eye-level camera on both physical
+clones. Scene-only curvature-dependent Camera aim is **disabled in Compare**
+with an explicit explanation; returning to Scene restores its saved selection.
+The green eye-level and orange traced-horizon guides live under Compare's
+Display tab, alongside the shared grid. Switching a settings tab only updates
+visibility/ARIA (including dynamic `aria-controls`) and never re-renders or
+re-traces optics. Switching Scene/Compare updates the panels and the physical
+viewports but does not duplicate Camera/Object inputs or override A/B physics.
+
+All edits continue through the same `CurveAppClass` Scene state and existing
+`ModernCompareState` descriptor API, so the version-1 experiment URL/JSON and
+named library need **no migration** and include edits made from either mode.
+Legacy and the optical renderer remain unchanged. Regression coverage:
+`tests/ModernSharedCompareControls.test.js` (shared edits, independent B,
+keyboard navigation, panel switching, no tab-triggered optical work) plus full
+existing tests. Browser acceptance remains required for final visual layout.

@@ -505,3 +505,16 @@ by Modern URLs; imports are validated before applying and do not silently
 overwrite named entries. Library persistence is separate from the automatic
 last-session state. Legacy URL/state and the physical optical engine remain
 unchanged. Source names continue to be responsibility-based.
+
+### Patch 134.2 — shared settings tabs in Compare
+
+Scene and Compare now use one five-tab settings sidebar. Camera, Objects and
+Display are the same actual input nodes bound to the shared `CurveAppClass`;
+Compare-specific Surface and Atmosphere tabs edit only the selected A/B physics
+descriptor. Model selection and pair presets remain above the tab list. Compare
+Camera aim is explicitly fixed to eye level while retaining Scene's saved aim.
+Compare guide toggles were moved to Display. Changing tabs updates ARIA and
+panel visibility without recomputing optics; model or shared parameter changes
+continue to redraw through the existing Physical renderer and use unchanged
+version-1 experiment URL/localStorage/JSON serialization. Legacy is untouched.
+Node regression: 558/558 tests, including three new shared-controls checks.

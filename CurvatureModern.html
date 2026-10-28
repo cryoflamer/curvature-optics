@@ -70,10 +70,25 @@
   </section>
   <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
   <div class="modern-workspace">
-    <aside class="modern-sidebar" aria-label="Scene settings">
+    <aside class="modern-sidebar" aria-label="Experiment settings">
       <div class="modern-scene-settings" id="ModernSceneSettings">
-      <div class="modern-sidebar-heading"><span>Scene settings</span><small>Shared physical renderer</small></div>
-      <div class="modern-settings-tabs" role="tablist" aria-label="Scene parameter groups">
+      <div class="modern-sidebar-heading"><span id="ModernSidebarTitle">Scene settings</span><small id="ModernSidebarSubtitle">Shared physical renderer</small></div>
+      <section id="ModernCompareSettings" class="modern-compare-settings modern-pair-settings" hidden aria-label="Physics pair">
+        <p class="modern-note">Models A/B have independent surfaces and atmospheres; camera, objects and grid are shared.</p>
+        <div class="modern-field"><label for="ModernPairPreset">Physics pair</label>
+          <select id="ModernPairPreset">
+            <option value="custom">Custom pair · from Scene</option>
+            <option value="globe-flat-vacuum">Globe vacuum / Flat vacuum</option>
+            <option value="standard-vacuum">Globe standard / Globe vacuum</option>
+            <option value="standard-inverse">Globe standard / Globe inverse spherical</option>
+            <option value="flat-inverse">Globe standard / Flat inverse spherical</option>
+          </select></div>
+        <div class="modern-model-tabs" role="group" aria-label="Model to edit">
+          <button type="button" id="ModernModelTabA" class="is-active" aria-pressed="true">Model A</button>
+          <button type="button" id="ModernModelTabB" aria-pressed="false">Model B</button>
+        </div>
+      </section>
+      <div class="modern-settings-tabs" role="tablist" aria-label="Experiment parameter groups">
         <button type="button" class="modern-settings-tab is-active" role="tab" id="ModernSettingsCamera" aria-controls="ModernPanelCamera" aria-selected="true" tabindex="0">Camera</button>
         <button type="button" class="modern-settings-tab" role="tab" id="ModernSettingsSurface" aria-controls="ModernPanelSurface" aria-selected="false" tabindex="-1">Surface</button>
         <button type="button" class="modern-settings-tab" role="tab" id="ModernSettingsAtmosphere" aria-controls="ModernPanelAtmosphere" aria-selected="false" tabindex="-1">Atmosphere</button>
@@ -98,6 +113,7 @@
             <option value="2">Between horizons</option><option value="1">Flat Earth equivalent</option>
           </select></div>
         </div>
+        <p id="ModernCompareCameraAimNote" class="modern-note" hidden>Compare uses a fixed eye-level aim (0°) for both models; other Scene aiming modes are not applied.</p>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface</h2>
         <label for="ModernCurvature">Surface curvature</label>
@@ -108,6 +124,13 @@
           <div class="modern-field"><label class="modern-check" for="ModernFlat"><input id="ModernFlat" type="checkbox"> Exact flat (κ = 0)</label></div>
         </div>
         <button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button>
+      </section>
+      <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
+        <h2>Surface · selected model</h2>
+        <div class="modern-field"><label for="ModernModelSurface">Surface geometry</label>
+          <select id="ModernModelSurface"><option value="globe">Spherical surface</option><option value="flat">Exact flat · κ = 0</option></select></div>
+        <div class="modern-field"><label for="ModernModelRadius">Surface/reference radius (km)</label>
+          <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000"></div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
@@ -115,36 +138,9 @@
           <option value="inverse-spherical">Inverse spherical</option><option value="exponential-occlusion">Exponential occlusion</option>
         </select></div>
         <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Comparison/occlusion radius (m)</label><input id="ModernOcclusion" type="number" min="1" max="1e16" step="1000" value="6371000"></div>
-      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
-        <h2>Objects</h2>
-        <p class="modern-note">Two physical groups, sharing the same camera and surface. Supported by the Physical renderer: towers, ships, rods and Bedford objects.</p>
-        <details class="modern-objects" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
-        <details class="modern-objects"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
-      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
-        <h2>Display</h2>
-        <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
-      </section>      <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
-      <p class="modern-note">Valid changes automatically update the scene. Manual recalculation is optional.</p>
-      </div>
-      <section class="modern-compare-settings" id="ModernCompareSettings" hidden aria-label="Compare model settings">
-        <h2>Compare models</h2>
-        <p class="modern-note">A and B have independent surfaces and atmospheres. The observer, camera, objects and grid are shared from Scene.</p>
-        <div class="modern-field"><label for="ModernPairPreset">Physics pair</label>
-          <select id="ModernPairPreset">
-            <option value="custom">Custom pair · from Scene</option>
-            <option value="globe-flat-vacuum">Globe vacuum / Flat vacuum</option>
-            <option value="standard-vacuum">Globe standard / Globe vacuum</option>
-            <option value="standard-inverse">Globe standard / Globe inverse spherical</option>
-            <option value="flat-inverse">Globe standard / Flat inverse spherical</option>
-          </select></div>
-        <div class="modern-model-tabs" role="group" aria-label="Model to edit">
-          <button type="button" id="ModernModelTabA" class="is-active" aria-pressed="true">Model A</button>
-          <button type="button" id="ModernModelTabB" aria-pressed="false">Model B</button>
-        </div>
-        <div class="modern-field"><label for="ModernModelSurface">Surface geometry</label>
-          <select id="ModernModelSurface"><option value="globe">Spherical surface</option><option value="flat">Exact flat · κ = 0</option></select></div>
-        <div class="modern-field"><label for="ModernModelRadius">Surface/reference radius (km)</label>
-          <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000"></div>
+      </section>
+      <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
+        <h2>Atmosphere · selected model</h2>
         <div class="modern-field"><label for="ModernModelAtmosphere">Optical atmosphere</label>
           <select id="ModernModelAtmosphere"><option value="vacuum">Vacuum · straight rays</option>
             <option value="standard">Standard atmosphere</option>
@@ -153,11 +149,24 @@
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
           <label for="ModernModelOcclusion">Atmospheric comparison radius (m)</label>
           <input id="ModernModelOcclusion" type="number" min="1" max="10000000000000000" step="any"></div>
+      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
+        <h2>Objects</h2>
+        <p class="modern-note">Two physical object groups shared by Scene and both Compare models: towers, ships, rods and Bedford objects.</p>
+        <details class="modern-objects" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
+        <details class="modern-objects"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
+      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
+        <h2>Display</h2>
+        <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
+        <div id="ModernCompareDisplayOptions" hidden>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green reference line in both viewports; independent of atmospheric refraction.</p></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration. Unresolved cases are not assumed to have a horizon.</p></div>
-        <button type="button" class="modern-primary-button" id="ModernRecalculateCompare">Recalculate A/B</button>
-        <p class="modern-note">Changing a physics parameter updates Compare only. Pair presets replace both A/B models; they never alter Scene. Shared camera and objects can be edited in Scene.</p>
+        </div>
       </section>
+      <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
+      <button type="button" class="modern-primary-button" id="ModernRecalculateCompare" hidden>Recalculate A/B</button>
+      <p class="modern-note" id="ModernSceneEditNote">Valid changes automatically update the scene. Manual recalculation is optional.</p>
+      <p class="modern-note" id="ModernCompareEditNote" hidden>Camera, objects and grid update both views. Surface and atmosphere change only the selected model. Switching tabs never recalculates optics.</p>
+      </div>
     </aside>
     <main class="modern-main">
       <div class="modern-scene-bar"><div><h1 id="ModernSceneTitle">Lake Pontchartrain Transmission Line</h1>
