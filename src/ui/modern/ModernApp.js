@@ -6,6 +6,7 @@
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
+    curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
     compareEyeLevel:false,compareHorizon:true,horizonCache:{A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState;
@@ -267,7 +268,7 @@
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
       var node=el('ModernCompareStatus'+side);
       if(node){
-        node.textContent=(result.cacheReused?'Cached':'Computed')+' · '+result.drawn+
+        node.textContent=(result.cacheReused?'Repainted (cached rays)':'Computed optics')+' · '+result.drawn+
           ' contours · '+result.fillTriangles+' fills · '+result.unresolved+' unresolved';
         node.classList.toggle('is-error',!!result.unresolved);
       }
@@ -476,6 +477,8 @@
     if(!compareState)return; // 132 compatibility (older isolated test harness)
     ['A','B'].forEach(function(side){
       var tab=el('ModernModelTab'+side);if(tab)tab.addEventListener('click',function(){
+        // Do not leave a changed slider paired with the previous model's image.
+        if(state.curvaturePending)redraw();
         cancelEdits();state.compareSelected=side;syncCompareEditor();scheduleExperimentSave();
       });
     });
@@ -494,23 +497,59 @@
     });
     var curvature=root.CurvaturePhysicalCurvature;
     var slider=el('ModernModelCurvature');
+    function commitCompareCurvature(){
+      // Browser range controls may emit change on release, keyboard input, or
+      // neither (some touch/embedded implementations). Commit exactly once.
+      if(state.curvatureCommitTimer!==null){
+        clearTimeout(state.curvatureCommitTimer);state.curvatureCommitTimer=null;
+      }
+      if(!state.curvaturePending)return;
+      redraw();
+    }
     function applyCompareCurvature(step){
       var selected=state.compareSelected;
       var spec=state.compareConfig[selected];
       var geometry={showModel:spec.surface==='flat'?2:1,rEarth:spec.radiusKm*1000};
       var result=curvature.applyStep(geometry,step);
-      var config=compareState.update(state.compareConfig,selected,'surface',result.showModel===2?'flat':'globe');
-      if(result.showModel===1)config=compareState.update(config,selected,'radiusKm',result.radius/1000);
+      var nextSurface=result.showModel===2?'flat':'globe';
+      var nextRadius=result.showModel===1?result.radius/1000:spec.radiusKm;
+      if(spec.surface===nextSurface&&spec.radiusKm===nextRadius)return false;
+      var config=compareState.update(state.compareConfig,selected,'surface',nextSurface);
+      if(result.showModel===1)config=compareState.update(config,selected,'radiusKm',nextRadius);
       state.compareConfig=config;
       syncCompareEditor();
-      scheduleExperimentSave();
+      state.curvaturePending=true;
+      var status=el('ModernCompareStatus'+selected);
+      if(status){status.textContent='Pending curvature change · release slider to render';
+        status.classList.toggle('is-error',false);}
+      return true;
     }
     if(slider&&curvature){
-      slider.addEventListener('input',function(){applyCompareCurvature(Number(slider.value));});
-      slider.addEventListener('change',function(){redraw();});
+      slider.addEventListener('input',function(){
+        if(!applyCompareCurvature(Number(slider.value)))return;
+        // Fallback for browsers where a drag produces input but no final
+        // change/pointerup. Never run a full trace for every intermediate step.
+        if(state.curvatureCommitTimer!==null)clearTimeout(state.curvatureCommitTimer);
+        state.curvatureCommitTimer=setTimeout(function(){
+          state.curvatureCommitTimer=null;commitCompareCurvature();
+        },700);
+      });
+      function finishSlider(){
+        // Also works with keyboard-only changes that do not emit input.
+        applyCompareCurvature(Number(slider.value));
+        commitCompareCurvature();
+      }
+      slider.addEventListener('change',finishSlider);
+      slider.addEventListener('pointerup',finishSlider);
+      slider.addEventListener('pointercancel',finishSlider);
+      slider.addEventListener('keyup',function(event){
+        if(event.key==='ArrowLeft'||event.key==='ArrowRight'||
+            event.key==='Home'||event.key==='End'||event.key==='PageUp'||
+            event.key==='PageDown')finishSlider();
+      });
     }
     var flatButton=el('ModernModelFlat');if(flatButton)flatButton.addEventListener('click',function(){
-      applyCompareCurvature(1000);redraw();
+      applyCompareCurvature(1000);commitCompareCurvature();
     });
     var earthButton=el('ModernModelEarth');if(earthButton)earthButton.addEventListener('click',function(){
       var selected=state.compareSelected;
@@ -555,6 +594,10 @@
     DrawFunc:draw,AutoReset:true,AutoClear:true,AutoScalePix:true});
   state.graph=graph;
   function cancelPending(){
+    if(state.curvatureCommitTimer!==null){
+      clearTimeout(state.curvatureCommitTimer);state.curvatureCommitTimer=null;
+    }
+    state.curvaturePending=false;
     if(state.timer!==null){clearTimeout(state.timer);state.timer=null;}
     if(state.frame!==null){cancelAnimationFrame(state.frame);state.frame=null;}
   }
@@ -564,6 +607,10 @@
     scheduleExperimentSave();
     if(state.mode==='compare'){
       if(!prepareCompare())return;
+      ['A','B'].forEach(function(side){
+        var status=el('ModernCompareStatus'+side);
+        if(status)status.textContent='Rendering current model '+side+'…';
+      });
       state.frame=requestAnimationFrame(function(){
         state.frame=null;
         ['A','B'].forEach(function(side){

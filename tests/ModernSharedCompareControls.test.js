@@ -48,6 +48,8 @@ function boot(){
   nodes.get('ModernCompareHorizon').checked=true;
   let renderCount=0;
   const renders=[];
+  const timers=new Map();
+  let nextTimer=0;
   function Model(){Object.assign(this,{
     Height:15,FocalLengthField:2000,Pan:0.0464,Nick:0.0121,Roll:0,
     rEarth:6371000,showModel:1,viewcenterHorizon:3,deviceRatio:1.5,showGrid:1,
@@ -62,7 +64,7 @@ function boot(){
     CurvaturePhysicalSceneOptics:{create(){return {}}},
     CurvaturePhysicalCurvature:curvature,
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renderCount++;
-      renders.push({surface:m.showModel,options:{...options}});
+      renders.push({surface:m.showModel,radius:m.rEarth,options:{...options}});
       return {drawn:12,fillTriangles:6,unresolved:0};}},
     NewGraphX3D(spec){return {UpdateCanvasSize(){},Redraw(){spec.DrawFunc({})}}},
     xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}};
@@ -71,13 +73,16 @@ function boot(){
     querySelector(){return null;},createElement(){return {setAttribute(){},addEventListener(){}};}};
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),{
     window,document,console,requestAnimationFrame(fn){fn();return 1},
-    cancelAnimationFrame(){},setTimeout(){return 1},clearTimeout(){}
+    cancelAnimationFrame(){},setTimeout(fn){const id=++nextTimer;timers.set(id,fn);return id},
+    clearTimeout(id){timers.delete(id)}
   });
   const app=window.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},
     Redraw(){app.drawCompare(side,{})}});
   callbacks[0]();
-  return {nodes,app,renders,getRenderCount(){return renderCount;}};
+  return {nodes,app,renders,getRenderCount(){return renderCount;},
+    flushTimers(){const scheduled=[...timers.values()];timers.clear();scheduled.forEach(fn=>fn());},
+    pendingTimers(){return timers.size;}};
 }
 
 test('134.2: one set of Camera, Objects and Display controls; tab panels match mode',()=>{
@@ -314,4 +319,65 @@ test('135.3: logarithmic Compare curvature slider keeps exact flat endpoint and 
   assert.equal(h.app.getCompareConfig().B.surface,'globe');
   assert.equal(h.app.getCompareConfig().B.radiusKm,6371);
   assert.equal(h.app.getCompareConfig().A.surface,'globe');
+});
+
+
+test('135.4: Compare curvature remains visibly pending until pointer release and redraws exactly once',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernSettingsSurface').dispatch('click');
+  const slider=n.get('ModernModelCurvature'),before=h.getRenderCount();
+  slider.value='164';slider.dispatch('input');
+  assert.equal(h.app.getCompareConfig().B.surface,'globe');
+  assert.equal(h.getRenderCount(),before,'dragging should not trace intermediate radii');
+  assert.match(n.get('ModernCompareStatusB').textContent,/Pending curvature change/);
+  assert.equal(h.pendingTimers(),1,'a missing change event has an idle fallback');
+  slider.dispatch('pointerup');
+  assert.equal(h.getRenderCount(),before+2,'release must render both Compare views');
+  assert.equal(h.renders.at(-1).surface,1);
+  assert.equal(h.renders.at(-1).radius,h.app.getCompareConfig().B.radiusKm*1000);
+  assert.equal(h.renders.at(-2).radius,6371000,'A physics is independent');
+  assert.doesNotMatch(n.get('ModernCompareStatusB').textContent,/Pending/);
+  slider.dispatch('change');
+  assert.equal(h.getRenderCount(),before+2,'pointerup plus change must not render twice');
+  h.flushTimers();
+  assert.equal(h.getRenderCount(),before+2,'stale idle callback must be canceled');
+});
+
+test('135.4: keyboard-only change and idle fallback both commit physical radius',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  const slider=n.get('ModernModelCurvature');
+  const before=h.getRenderCount();
+  // Range controls may emit a change without a preceding input event.
+  slider.value='164';slider.dispatch('change');
+  assert.equal(h.getRenderCount(),before+2);
+  assert.equal(h.renders.at(-1).surface,1);
+  // Some embedded/touch controls emit only input; the idle fallback commits.
+  const after=h.getRenderCount();
+  slider.value='500';slider.dispatch('input');
+  assert.equal(h.getRenderCount(),after);
+  h.flushTimers();
+  assert.equal(h.getRenderCount(),after+2);
+  assert.equal(h.renders.at(-1).radius,h.app.getCompareConfig().B.radiusKm*1000);
+  assert.ok(h.renders.at(-1).radius>1e10,'physically different radius reaches the renderer');
+  slider.dispatch('pointerup');
+  assert.equal(h.getRenderCount(),after+2,'late pointer event cannot retrace');
+});
+
+test('135.4: switching selected model commits pending curvature without stale view',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  const slider=n.get('ModernModelCurvature'),before=h.getRenderCount();
+  slider.value='164';slider.dispatch('input');
+  n.get('ModernModelTabA').dispatch('click');
+  assert.equal(h.getRenderCount(),before+2);
+  assert.equal(h.renders.at(-1).surface,1);
+  assert.equal(h.app.getCompareConfig().A.radiusKm,6371);
+  assert.equal(h.app.getCompareConfig().B.surface,'globe');
+  h.flushTimers();
+  assert.equal(h.getRenderCount(),before+2);
 });

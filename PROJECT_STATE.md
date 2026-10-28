@@ -575,3 +575,27 @@ purposefully committed extreme profile. Node regression: 566/566 passed.
 - The existing compare schema (`surface`, `radiusKm`) and the physical solver are
   unchanged. Flat models retain their previous finite reference radius.
 - Node regression: 568/568 passed.
+
+### 135.4 — Compare curvature commit and redraw synchronization
+
+- Compare curvature input updates the selected A/B descriptor and explicitly
+  marks the existing viewport as **Pending curvature change**, rather than
+  displaying an old `Cached` status beneath a new surface radius.
+- Expensive optics are rendered once on range `change`, `pointerup`,
+  `pointercancel`, or keyboard completion; a 700 ms idle fallback covers
+  controls that emit only `input`. Duplicate release/change events do not
+  retrace. Switching the selected A/B model commits pending slider edits.
+- The viewport reports `Rendering current model` before the new frame;
+  completed cache hits are labelled `Repainted (cached rays)` to distinguish
+  painter refresh from recalculating optical ray fields.
+- Physical cache and renderer code are intentionally untouched: the cache
+  already includes `showModel` and `rEarth`. A new integration regression
+  exercises real metric ground and tower optics and verifies that changing
+  Model B from flat to Earth-radius sphere invalidates the B cache and
+  changes visibility and horizon, while Model A reuses its cache.
+- The internal `surface` + `radiusKm` experiment schema and Legacy UI are
+  unchanged. A nearly flat radius can still render nearly identically to
+  an exact flat surface, for legitimate geometric reasons.
+- Node regression: 572/572 passed; Chromium was available but local/file
+  navigation was blocked by administrator policy, so no browser acceptance
+  result is claimed.
