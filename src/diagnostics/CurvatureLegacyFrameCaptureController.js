@@ -699,7 +699,9 @@ function DrawModelWithOptionalAudit(g) {
               var w=d.opticalWorkByPhase&&d.opticalWorkByPhase[phase];
               if(w&&w.solves)summary.push('  '+phase+': '+w.solves.median+
                 ' new exact targets, '+w.shootEvaluations.median+
-                ' shooting angle trials, '+w.hits.median+' cached targets');
+                ' shooting angle trials, '+w.hits.median+' cached targets'+
+                (w.warmStartAccepted?' ('+w.warmStartAccepted.median+
+                  ' verified warm starts / '+w.warmStartAttempts.median+' attempts)':''));
             });
           }
         });

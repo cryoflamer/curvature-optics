@@ -266,3 +266,27 @@ runs; browser timing needs confirmation. See
 `docs/MIGRATION_PHYSICAL_SCENE_ASSEMBLY_122.md`,
 `tests/PhysicalAssemblyAndSolverAudit122.test.js` and
 `tools/benchmark-scene-assembly-122.js`.
+
+## Compatpatch 123 — verified warm starts across nearby target heights
+
+`geometry-diagnostics (45).zip` after #122 measured ~327.3 ms median for a
+cold Height change in the user's browser. #123 examined **where** the 6,258
+Standard target solves spend their 16,779 shooting angle evaluations. For
+faraway targets with almost equal surface distance and different heights, the
+field now keeps two previous **validated** target angles and tries their
+height/angle secant as the next initial angle. Every candidate runs the same
+RK4 and target-residual check, then the same ground-event classification;
+failed guesses continue through the unchanged #121 solver. Custom/nonstandard
+profiles and near targets retain previous behavior. Test-only
+`settings.shootingWarmStart:false` reproduces exact #122 scene hashes.
+In the 85+2 Globe/Standard/15 m Node scene this changes 16,779 -> 13,066
+shooting angle trials and 159,685 -> 112,076 RK4 shooting calls, while
+keeping all 6,258 unique exact target solves. Fully projected scene statuses,
+primitive ordering and horizon stay equal across the tested 15 m/15.3 m
+scenes; tiny (<1.3e-7 m on the 1,000 m presentation sphere) residual-bounded
+coordinate differences mean accelerated scene hashes are not identical.
+Wall-clock Node runs have noticeable scheduling/JIT/GC variance; the browser
+ZIP is required to confirm end-to-end latency improvement. See
+`docs/MIGRATION_OPTICAL_WARM_START_123.md`,
+`tests/OpticalWarmStarts123.test.js` and
+`tools/benchmark-optical-warm-start-123.js`.

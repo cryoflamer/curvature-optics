@@ -59,6 +59,7 @@
     var maxPath = 6 * Math.hypot(xGoal, zGoal - observerHeight) + 4 * step;
     var evaluations = 0,shootRK4Calls=0;
     var predictorAttempts=0,predictorAccepted=0,predictorFallbacks=0;
+    var warmStartAttempts=0,warmStartAccepted=0,warmStartMisses=0;
 
     function shoot(angle) {
       evaluations++;
@@ -104,18 +105,38 @@
     function failed(reason) {
       return {status:'solver_failed',angle:null,ray:null,target:target.slice(),
         residual:null,evaluations:evaluations,shootRK4Calls:shootRK4Calls,predictorAttempts:predictorAttempts,
-        predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,reason:reason,
+        predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,
+        warmStartAttempts:warmStartAttempts,warmStartAccepted:warmStartAccepted,
+        warmStartMisses:warmStartMisses,reason:reason,
         scope:'Only a forward-x single shooting branch was searched; no global multipath guarantee'};
     }
 
     // Vacuum admits a unique analytic shooting angle. The ground-contact
     // query is still evaluated by the same finite-ray event detector below.
     var vacuum = options.profile === undefined && (options.atmosphere === 'vacuum');
+    // #123: when the field has already solved two different target heights
+    // at nearly the same surface distance, a local secant in (height,
+    // launch angle) can predict the next ray. Never RETURN an extrapolated
+    // result: the predicted ray is fully integrated, subjected to the original
+    // residual tolerance and verified by the original ground-event search.
+    // Misses resume the untouched direction-first shooting branch.
+    var warmStart=options.shootingPredictor===true&&
+      Number.isFinite(options.shootingWarmStartAngle)&&
+      Math.abs(options.shootingWarmStartAngle)<HALF_PI-0.001&&
+      Math.abs(options.shootingWarmStartAngle-directionAngle)<0.02;
+    var warmShot=null;
+    if(!vacuum&&warmStart){
+      warmStartAttempts++;
+      warmShot=shoot(options.shootingWarmStartAngle);
+      if(warmShot&&Math.abs(warmShot.residual)<=solveTolerance)
+        warmStartAccepted++;
+      else warmStartMisses++;
+    }
     var best = vacuum ? {
       angle:directionAngle,residual:0,
       pathLength:Math.hypot(xGoal,zGoal-observerHeight),
       state:[xGoal,zGoal,Math.cos(directionAngle),Math.sin(directionAngle)]
-    } : shoot(directionAngle);
+    } : warmStartAccepted ? warmShot : shoot(directionAngle);
     if (!best) return failed('The initial ray did not reach the target x coordinate');
     // #121: a guarded, local predictor for well-behaved standard-atmosphere
     // paths. The first probe uses the straight-ray fixed-x angular derivative;
@@ -217,7 +238,8 @@
     return {status:status,angle:best.angle,residual:best.residual,
       pathLength:best.pathLength,target:target.slice(),ray:ray,evaluations:evaluations,shootRK4Calls:shootRK4Calls,
       predictorAttempts:predictorAttempts,predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,
-      reason:status==='indeterminate'?'Possible grazing or endpoint contact within numerical tolerance':null,
+      warmStartAttempts:warmStartAttempts,warmStartAccepted:warmStartAccepted,
+      warmStartMisses:warmStartMisses,reason:status==='indeterminate'?'Possible grazing or endpoint contact within numerical tolerance':null,
       scope:'Single forward-x shooting branch; a blocked branch does not exclude unsearched paths'};
   }
 

@@ -193,7 +193,8 @@
           angleTolerance:settings.fieldTolerance,step:settings.step,
           adaptiveDepth:settings.fieldAdaptiveDepth,
           maxAdaptiveCells:settings.fieldMaxAdaptiveCells,
-          shootingOptimization:settings.shootingOptimization});
+          shootingOptimization:settings.shootingOptimization,
+          shootingWarmStart:settings.shootingWarmStart});
       }
       var fieldSetupMs=clock()-startedProfile;
       var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;
@@ -214,6 +215,7 @@
       // while RK4 calls are the individual integration steps of those trials.
       var WORK_FIELDS=['solves','hits','interpolations','fallbacks','shootEvaluations',
         'shootRK4Calls','predictorAttempts','predictorAccepted','predictorFallbacks',
+        'warmStartAttempts','warmStartAccepted','warmStartMisses',
         'clearGroundSteps','fullGroundEventSteps','exactSolveMs'];
       function counters(){return field&&field.stats?field.stats():null;}
       function workDelta(before,after){

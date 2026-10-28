@@ -77,28 +77,60 @@
     var statistics={solves:0,hits:0,interpolations:0,fallbacks:0,
       exactSolveMs:0,shootRK4Calls:0,shootEvaluations:0,
       predictorAttempts:0,predictorAccepted:0,predictorFallbacks:0,
+      warmStartAttempts:0,warmStartAccepted:0,warmStartMisses:0,
       clearGroundSteps:0,fullGroundEventSteps:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
       maxDepthUsed:0};
+    // Bounded history per 0.1 mm distance bucket, owned by this field alone.
+    // Bucketing absorbs last-bit distance drift across nearly identical
+    // tower ranges. It is ONLY used to guess an angle; not to cache results.
+    // A separate field is created after any observer-height/atmosphere change.
+    var heightSeeds=new Map();
     function exact(d,h) {
       var key=d+','+h;
       if (cache.has(key)) {statistics.hits++;return cache.get(key);}
-      var started=clock();
-      var result=projection.solve(Object.assign({},solverOptions,{
-        geometry:geometry,radius:radius,target:target(d,h,geometry,radius)
-      }));
+      var started=clock(),shootOpts={geometry:geometry,radius:radius,
+        target:target(d,h,geometry,radius)};
+      // Two already integrated angles at effectively one distance supply a local
+      // height/angle secant. Restrict to distant rays: nearby steep angles
+      // are substantially nonlinear in height. Only the standard-profile
+      // guarded predictor path is allowed to consume the seed.
+      var seedKey=Math.round(d*10000);
+      var seeds=d>=5000&&solverOptions.shootingPredictor===true&&
+        options.shootingWarmStart!==false?
+        heightSeeds.get(seedKey):null;
+      if(seeds&&seeds.length===2&&seeds[0].h!==seeds[1].h){
+        var a=seeds[0],b=seeds[1];
+        var angle=b.angle+(a.angle-b.angle)*(h-b.h)/(a.h-b.h);
+        if(Number.isFinite(angle))shootOpts.shootingWarmStartAngle=angle;
+      }
+      var result=projection.solve(Object.assign({},solverOptions,shootOpts));
       statistics.exactSolveMs+=clock()-started;
       statistics.shootRK4Calls+=result.shootRK4Calls||0;
       statistics.shootEvaluations+=result.evaluations||0;
       statistics.predictorAttempts+=result.predictorAttempts||0;
       statistics.predictorAccepted+=result.predictorAccepted||0;
       statistics.predictorFallbacks+=result.predictorFallbacks||0;
+      statistics.warmStartAttempts+=result.warmStartAttempts||0;
+      statistics.warmStartAccepted+=result.warmStartAccepted||0;
+      statistics.warmStartMisses+=result.warmStartMisses||0;
       statistics.clearGroundSteps+=result.ray&&result.ray.fastGroundSkips||0;
       statistics.fullGroundEventSteps+=result.ray&&result.ray.fullGroundChecks||0;
       var record={status:result.status,angle:result.angle,
         residual:result.residual,method:'exact',reason:result.reason};
       Object.freeze(record);
       cache.set(key,record);
+      if(d>=5000&&solverOptions.shootingPredictor===true&&
+          options.shootingWarmStart!==false&&Number.isFinite(result.angle)&&Number.isFinite(result.residual)){
+        var previous=heightSeeds.get(seedKey)||[];
+        // Keep the two most recently solved distinct heights. This also
+        // prevents a repeated exact key from biasing the secant slope.
+        if(!previous.length||previous[previous.length-1].h!==h){
+          previous=previous.length===2?[previous[1]]:previous.slice();
+          previous.push({h:h,angle:result.angle});
+          heightSeeds.set(seedKey,previous);
+        }
+      }
       statistics.solves++;
       return record;
     }

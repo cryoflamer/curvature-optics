@@ -110,7 +110,7 @@ test('121: full Globe/Standard scene preserves physical fragments, statuses and 
     assert.equal(ref.fallbacks,old.fallbacks);
     assert.ok(ref.shootEvaluations<old.shootEvaluations*.8);
     assert.ok(ref.shootRK4Calls<old.shootRK4Calls*.8);
-    assert.equal(ref.predictorAccepted,ref.solves);
+    assert.equal(ref.predictorAccepted+ref.warmStartAccepted,ref.solves);
     assert.equal(ref.predictorFallbacks,0);
     assert.ok(ref.clearGroundSteps>0);
     assert.ok(ref.fullGroundEventSteps>0);

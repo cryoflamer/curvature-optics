@@ -28,6 +28,9 @@
       shootRK4Calls:result.fieldStats&&result.fieldStats.shootRK4Calls,
       shootEvaluations:result.fieldStats&&result.fieldStats.shootEvaluations,
       predictorAttempts:result.fieldStats&&result.fieldStats.predictorAttempts,
+      warmStartAttempts:result.fieldStats&&result.fieldStats.warmStartAttempts,
+      warmStartAccepted:result.fieldStats&&result.fieldStats.warmStartAccepted,
+      warmStartMisses:result.fieldStats&&result.fieldStats.warmStartMisses,
       predictorAccepted:result.fieldStats&&result.fieldStats.predictorAccepted,
       predictorFallbacks:result.fieldStats&&result.fieldStats.predictorFallbacks,
       provenClearGroundSteps:result.fieldStats&&result.fieldStats.clearGroundSteps,
@@ -107,7 +110,8 @@
         opticalWorkByPhase:(function(){
           var out={};['ground','outlines','fills'].forEach(function(phase){
             var metrics={};['solves','hits','interpolations','fallbacks',
-              'shootEvaluations','shootRK4Calls','exactSolveMs'].forEach(function(key){
+              'shootEvaluations','shootRK4Calls','warmStartAttempts',
+              'warmStartAccepted','warmStartMisses','exactSolveMs'].forEach(function(key){
               var values=group.map(function(r){return r.opticalWork&&r.opticalWork[phase]&&
                 r.opticalWork[phase][key];}).filter(Number.isFinite);
               if(values.length){var sorted=values.sort(function(a,b){return a-b;});
