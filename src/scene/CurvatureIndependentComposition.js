@@ -2,10 +2,11 @@
  * No legacy graph, DOM or Canvas dependencies. This module does not alter DrawModel.
  */
 (function(root,factory){
-  var api=factory(root.CurvatureGeometryEngine||(typeof require==='function'?require('../geometry/CurvatureGeometryEngine'):null),root.CurvatureSceneContract||(typeof require==='function'?require('./CurvatureSceneContract'):null));
+  var api=factory(root.CurvatureGeometryEngine||(typeof require==='function'?require('../geometry/CurvatureGeometryEngine'):null),root.CurvatureSceneContract||(typeof require==='function'?require('./CurvatureSceneContract'):null),
+    root.CurvaturePhysicalWorldGeometry||(typeof require==='function'?require('../geometry/CurvaturePhysicalWorldGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureIndependentComposition=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(engine,contract){
+}(typeof globalThis!=='undefined'?globalThis:this,function(engine,contract,physicalWorld){
   'use strict';
   if(!engine||!contract)throw new Error('Geometry engine and scene contract required');
   function compose(model,objIx,globe,options){
@@ -154,22 +155,28 @@
     // Geometric reference guides must not inherit the legacy effective
     // refraction radius. The physical atmosphere modifies ray directions,
     // never the underlying Earth radius or the vacuum tangent geometry.
+    var physical=options.physicalWorld===true;
     var guideModel=model;
-    if(globe){
+    if(globe&&!physical){
       var R=model.geometryRadius,H=model.Height,ratio=R/(R+H);
       guideModel=Object.assign({},model,{
         rDisk:R*Math.sqrt(Math.max(0,1-ratio*ratio)),
         zDisk:R+H-R*ratio,hDisk:R*ratio
       });
     }
-    var surface=globe?engine.globeSurfaceGuides(guideModel):engine.flatSurfaceGuides(model,
-      Object.assign({segments:128},options));
-    var horizon=globe?engine.globeHorizonGuides(guideModel,options):null;
+    if(physical&&!physicalWorld)throw Error('Physical world geometry required');
+    var surface=physical?physicalWorld.metricGuides({curvature:globe?1/model.rEarth:0,
+      observerHeight:model.Height,showGrid:model.showGrid,
+      maxDistance:Math.min(100000,model.rEarth*.1),
+      stroke:globe?model.GlobeGridCol:model.FEGridCol}):
+      globe?engine.globeSurfaceGuides(guideModel):engine.flatSurfaceGuides(model,
+        Object.assign({segments:128},options));
+    var horizon=physical?null:globe?engine.globeHorizonGuides(guideModel,options):null;
     var layers=[{name:'surface-guides',role:'visual-aid',scene:surface}];
     if(horizon)layers.push({name:'horizon-guides',role:'visual-aid',scene:horizon});
     order.forEach(function(i){
       layers.push({name:'objects-'+i,role:'objects',
-        scene:engine.createObjectSequenceScene(model,i,globe)});
+        scene:engine.createObjectSequenceScene(model,i,globe,physical?{physicalSurface:true}:undefined)});
     });
     var primitives=[],ranges=[];
     layers.forEach(function(layer){
@@ -187,8 +194,8 @@
     return {scene:contract.createScene('legacy',primitives,{
       generator:'CurvatureGeometryEngine',composition:'optics-neutral-main',
       objectIndices:order,globe:!!globe,layerRanges:ranges,
-      horizonGuideIsGeometric:true,
-      limitations:['Surface grids and horizon lines are geometric reference guides, not refracted ground silhouettes',
+      horizonGuideIsGeometric:!physical,physicalMetricWorld:physical,
+      limitations:[physical?'Metric ground guide spacing is independent of radius/horizon; physical horizon is determined by the optical backend':'Surface grids and horizon lines are geometric reference guides, not refracted ground silhouettes',
         'Object visibility is delegated to the optical backend; there is no horizon painter mask']}),
       ranges:ranges,requiresHorizonMask:false};
   }

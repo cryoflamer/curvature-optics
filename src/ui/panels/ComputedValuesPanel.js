@@ -39,7 +39,7 @@ ControlPanels.NewPanel( {
 
 } ).AddTextField( {
   Name: 'dDelta',
-  Label: 'LineSpacing',
+  Label: 'Legacy LineSpacing',
   Units: 'm'
 
 } ).AddTextField( {

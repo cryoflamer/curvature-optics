@@ -5,10 +5,12 @@
  */
 (function (root, factory) {
   var api = factory(root.CurvatureGeometryEngine ||
-    (typeof module === 'object' && module.exports ? require('../geometry/CurvatureGeometryEngine') : null));
+    (typeof module === 'object' && module.exports ? require('../geometry/CurvatureGeometryEngine') : null),
+    root.CurvatureSurfaceGeometry ||
+    (typeof module === 'object' && module.exports ? require('../geometry/CurvatureSurfaceGeometry') : null));
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CurvatureOpticalTowerSilhouette = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function (engine) {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (engine,surfaceApi) {
   'use strict';
   if (!engine) throw Error('Independent geometry engine required');
   var STATUSES = ['visible','blocked','indeterminate','solver_failed'];
@@ -17,11 +19,19 @@
   function between(a,b,t) { return a.map(function (v,i) { return lerp(v,b[i],t); }); }
   function separation(a,b) { return Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]); }
   function angularDelta(a,b) { return Math.atan2(Math.sin(a-b),Math.cos(a-b)); }
-  function coordinate(point,geometry,radius,observerHeight) {
+  function coordinate(point,geometry,radius,observerHeight,surface) {
     if (!finite3(point)) throw TypeError('Finite world-space [x,y,z] required');
     var lateral=Math.hypot(point[0],point[1]);
     var azimuth=Math.atan2(point[0],point[1]);
     if (geometry === 'flat') return {distance:lateral,height:point[2]+observerHeight,azimuth:azimuth};
+    if(surface){
+      // Physical metric world: no R+h-R subtraction, even when h is
+      // much smaller than the ULP of an enormous radius.
+      var z=point[2]+observerHeight;
+      return {distance:radius*Math.atan2(lateral/radius,1+z/radius),
+        height:surface.height3(point[0],point[1],z),azimuth:azimuth};
+    }
+    // Strict historical numeric path used by independent diagnostic hashes.
     var radial=point[2]+radius+observerHeight;
     return {distance:radius*Math.atan2(lateral,radial),
       height:Math.hypot(lateral,radial)-radius,azimuth:azimuth};
@@ -45,6 +55,7 @@
         !Number.isFinite(boundaryTolerance) || boundaryTolerance<=0 ||
         !Number.isInteger(maxSamples) || maxSamples<1)
       throw TypeError('Invalid physical tower outline projection options');
+    var metric=options.physicalSurface?surfaceApi.createFromCurvature(geometry==='globe'?1/radius:0):null;
     var segments=[], unresolved=[];
     var stats={edges:0,evaluations:0,visiblePieces:0,hiddenLeaves:0,
       unresolvedLeaves:0,depthLimitedLeaves:0,interpolated:0,exact:0,
@@ -54,7 +65,7 @@
     function sample(p) {
       var key=p.join(',');
       if(samples.has(key)) return samples.get(key);
-      var coord=coordinate(p,geometry,radius,observerHeight);
+      var coord=coordinate(p,geometry,radius,observerHeight,metric);
       var record={world:p,coordinate:coord,status:'solver_failed',angle:null,method:null,reason:null};
       if (stats.evaluations<maxSamples) {
         stats.evaluations++;

@@ -3,10 +3,11 @@
  * Non-tower object types remain on the legacy path until independently ported.
  */
 (function(root,factory){
-  var api=factory(root.CurvatureSceneContract || (typeof require==='function'?require('../scene/CurvatureSceneContract'):null));
+  var api=factory(root.CurvatureSceneContract || (typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
+    root.CurvaturePhysicalWorldGeometry || (typeof require==='function'?require('./CurvaturePhysicalWorldGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureGeometryEngine=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(contract){
+}(typeof globalThis!=='undefined'?globalThis:this,function(contract,physicalWorld){
   'use strict';
   if(!contract)throw new Error('CurvatureSceneContract required');
   var shapes=[
@@ -171,6 +172,10 @@
     if(!params||!['geometryRadius','height','objectSize','longitude','latitude','verticalScale','horizontalScale'].every(function(k){return Number.isFinite(params[k]);}))
       throw new TypeError('Finite tower placement parameters required');
     if(params.geometryRadius<=0)throw new RangeError('Positive geometry radius required');
+    if(params.physicalSurface){
+      if(!physicalWorld)throw Error('Physical world geometry is required');
+      return physicalWorld.placement(params);
+    }
     var r=params.geometryRadius,h=params.height,os=params.objectSize;
     var xs=(params.globe?os:-os);
     var lat=params.latitude,lng=params.longitude;
@@ -197,7 +202,8 @@
   // Shared sequence placement for independently supported object types.
   // Entries are far-to-near and retain legacy drawn/total context for Bedford.
   // Hidden styling is determined by the same horizon cutoff as legacy drawing.
-  function objectSequence(model,objIx,globe){
+  function objectSequence(model,objIx,globe,options){
+    var physical=!!(options&&options.physicalSurface);
     if(!model||![0,1].includes(objIx))throw new TypeError('Model and object index required');
     var keys=['geometryRadius','Height','NObjects','ObjDist','ObjDeltaDist','ObjSidePos',
       'ObjSideVar','ObjSideType','ObjSize','ObjSizeVar','ObjSizeType','ObjType'];
@@ -219,7 +225,7 @@
     }
     var entries=[];
     var cutoff=0;
-    if(globe){
+    if(globe&&!physical){
       if(!Number.isFinite(model.rDisk)||!Number.isFinite(model.hDip)){
         // A missing horizon is acceptable for standalone placement, but not
         // for a visibility decision. Explicitly leave all entries visible.
@@ -256,8 +262,9 @@
         var params={geometryRadius:r,height:model.Height,objectSize:model.ObjSize[objIx],
           longitude:lng,latitude:lat,globe:!!globe,verticalScale:size,horizontalScale:sizeHor,
           // Legacy SetPlane uses [side,0,0] for cosine/sine side modes.
-          planeOffset:(sideType===3||sideType===4)?side:0};
-        var hidden=!!globe&&lng>cutoff;
+          planeOffset:(sideType===3||sideType===4)?side:0,
+          physicalSurface:physical};
+        var hidden=!!globe&&!physical&&lng>cutoff;
         var legacyDrawn=drawn+(globe?n-max:0);
         var metadata={objectIndex:objIx,sequenceIndex:drawn,drawn:legacyDrawn,
           total:n,column:sideType===1?col+1:0,longitude:lng,latitude:lat,hidden:hidden};
@@ -272,8 +279,8 @@
       throw new RangeError('Only transmission towers (ObjType 3) are supported');
     return objectSequence(model,objIx,globe);
   }
-  function createObjectSequenceScene(model,objIx,globe){
-    var entries=objectSequence(model,objIx,globe);
+  function createObjectSequenceScene(model,objIx,globe,options){
+    var entries=objectSequence(model,objIx,globe,options);
     var primitives=[];
     // Preserve each placed object's identity through the optics-neutral scene.
     // All of its authored primitives share one depth/order key; grouping by

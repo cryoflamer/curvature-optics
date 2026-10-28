@@ -189,6 +189,7 @@ function DrawMainCanvasFrame(g) {
         if(result.groundHorizon!==null&&Number.isFinite(result.groundHorizon))
           pieces.push('optical horizon '+(result.groundHorizon/1000).toFixed(2)+' km');
         else pieces.push('no finite ground horizon resolved');
+        if(result.physicalMetricWorld)pieces.push('metric ground grid (physical metres, independent of horizon)');
         if(result.guideSegments!==undefined)pieces.push(result.guideSegments+' physical surface guide pieces');
         if(result.guideSolves!==undefined)pieces.push(result.guideSolves+' ground ray queries'+
           (result.sharedGroundCacheHits?' ('+result.sharedGroundCacheHits+' exact cache hits)':''));

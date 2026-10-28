@@ -116,7 +116,7 @@
     // the exact same frame/painter handles camera, styles and all guides.
     var globe=m.showModel===1;
     var physicalModel=Object.assign({},m,{geometryRadius:m.rEarth});
-    var composed=composition.composeOpticalMain(physicalModel,globe);
+    var composed=composition.composeOpticalMain(physicalModel,globe,{physicalWorld:true});
     var composedAt=now();
     var opticalFrame=opticalSession.transform(composed,physicalModel,options);
     var opticalAt=now();
@@ -150,6 +150,7 @@
       mode:'physical-scene',drawn:stats.visibleSegments,
       unresolved:stats.unresolved,buildMs:stats.buildMs,
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
+      physicalMetricWorld:stats.physicalMetricWorld,
       primitiveCount:frame.scene.primitives.length,
       layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,fieldPrism:stats.fieldPrism,
       opticalStages:stats.opticalStages,opticalWork:stats.opticalWork,
@@ -162,7 +163,7 @@
       fillTriangles:stats.fillTriangles,fillUnresolved:stats.fillUnresolved,
       fillUnresolvedReasons:stats.fillUnresolvedReasons,fillHidden:stats.fillHidden,
       fillSamples:stats.fillSamples,fillSubdivisions:stats.fillSubdivisions,
-      warning:'Physical optics in shared painter; physical ground/horizon guides projected through optical rays.'+
+      warning:'Physical optics in shared painter; metric ground guides (100 m to 100 km) projected through optical rays, horizon independent.'+
         ' Authored foundations are filled where ground-visible; mutual object occlusion is pending.'+
         (stats.budgetExceeded?' Numerical preview budget exceeded.':'')+
         ((stats.sampleStatuses.solver_failed||0)?' Some optical point solves failed.':'')+

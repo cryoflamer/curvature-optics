@@ -9,10 +9,11 @@
     root.CurvatureSharedRayField||(typeof require==='function'?require('./OpticalSharedRayField'):null),
     root.CurvatureOpticalTowerSilhouette||(typeof require==='function'?require('./OpticalTowerSilhouette'):null),
     root.CurvaturePhysicalGroundGuides||(typeof require==='function'?require('./CurvaturePhysicalGroundGuides'):null),
-    root.CurvaturePhysicalPolygonFills||(typeof require==='function'?require('./CurvaturePhysicalPolygonFills'):null));
+    root.CurvaturePhysicalPolygonFills||(typeof require==='function'?require('./CurvaturePhysicalPolygonFills'):null),
+    root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalSceneOptics=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills){
+}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills,surfaceApi){
   'use strict';
   if(!contract||!fields||!silhouette||!groundGuides||!polygonFills)throw Error('Physical scene optics dependencies required');
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
@@ -23,9 +24,16 @@
   }
   // Analytic, non-shooting vacuum path. This prevents a 3.5-second numerical
   // budget from hiding the second tower bank even when rays are straight.
-  function vacuumSample(geometry,radius,eye,d,h){
+  function vacuumSample(geometry,radius,eye,d,h,physicalSurface){
     if(!(d>0&&h>=0))throw RangeError('Invalid vacuum target');
     if(geometry==='flat')return {status:'visible',angle:Math.atan2(h-eye,d),method:'vacuum-analytic'};
+    if(physicalSurface){
+      var s=surfaceApi.createFromCurvature(1/radius),p=s.surfacePoint2(d,h),
+        horizon=(s.geometricHorizon(eye).dipAngle+s.geometricHorizon(h).dipAngle)*radius,
+        gap=d-horizon,tol=Math.max(1e-6,1e-12*d);
+      return {status:Math.abs(gap)<=tol?'indeterminate':gap>0?'blocked':'visible',
+        angle:Math.atan2(p[1]-eye,p[0]),method:'vacuum-analytic'};
+    }
     var theta=d/radius,dx=(radius+h)*Math.sin(theta),
       dz=(radius+h)*Math.cos(theta)-radius-eye;
     var horizon=radius*(Math.acos(radius/(radius+eye))+Math.acos(radius/(radius+h)));
@@ -38,7 +46,8 @@
       model.ObjType,model.NObjects,model.ObjDist,model.ObjDeltaDist,
       model.ObjSidePos,model.ObjSideVar,model.ObjSideType,
       model.ObjSize,model.ObjSizeVar,model.ObjSizeType,
-      model.showGrid,model.aDelta,model.rFEarth,model.aDip,
+      model.showGrid,
+      options.metricWorld?null:[model.aDelta,model.rFEarth,model.aDip],
       options.atmosphere,options.occlusionRadius,
       options.settings||null]);
   }
@@ -64,10 +73,11 @@
     });
     return JSON.stringify(relevant);
   }
-  function bounds(primitives,geometry,radius,eye){
+  function bounds(primitives,geometry,radius,eye,physicalSurface){
+    var metric=physicalSurface?surfaceApi.createFromCurvature(geometry==='globe'?1/radius:0):null;
     var dmin=Infinity,dmax=0,hmin=Infinity,hmax=0;
     primitives.forEach(function(p){p.points.forEach(function(point){
-      var q=silhouette.coordinate(point,geometry,radius,eye);
+      var q=silhouette.coordinate(point,geometry,radius,eye,metric);
       if(q.distance>0&&(geometry==='flat'||q.distance<radius*Math.PI/2)&&q.height>=-1e-6){
         dmin=Math.min(dmin,q.distance);dmax=Math.max(dmax,q.distance);
         hmin=Math.min(hmin,Math.max(0,q.height));hmax=Math.max(hmax,Math.max(0,q.height));
@@ -156,9 +166,11 @@
       if(!ATMOSPHERES.includes(kind)||!Number.isFinite(R)||R<=0)
         throw RangeError('Invalid physical atmospheric configuration');
       var geometry=model.showModel===1?'globe':model.showModel===2?'flat':null;
+      var physicalSurface=composed.scene.metadata.physicalMetricWorld===true;
       if(!geometry||!(model.rEarth>0)||!Number.isFinite(model.Height)||model.Height<0)
         throw RangeError('Globe/Flat physical model required');
-      var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,settings:options.settings})+
+      var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,settings:options.settings,
+        metricWorld:composed.scene.metadata.physicalMetricWorld===true})+
         '\n'+sceneKey(composed);
       // The common frame/painter copies and validates its input scene. A
       // camera-only redraw may therefore reuse the optical composition itself
@@ -183,9 +195,9 @@
         objects.push(p);
       });});
       var field,fieldStats=null,span=null;
-      if(kind==='vacuum')field={sample:function(d,h){return vacuumSample(geometry,model.rEarth,model.Height,d,h);}};
+      if(kind==='vacuum')field={sample:function(d,h){return vacuumSample(geometry,model.rEarth,model.Height,d,h,physicalSurface);}};
       else {
-        span=bounds(objects,geometry,model.rEarth,model.Height);
+        span=bounds(objects,geometry,model.rEarth,model.Height,physicalSurface);
         if(span)field=fields.create({geometry:geometry,radius:model.rEarth,
           observerHeight:model.Height,atmosphere:kind,
           profileOptions:kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:R}:undefined,
@@ -232,7 +244,9 @@
       }
       var groundBefore=counters();
       var guideProjection=groundGuides.create({model:model,geometry:geometry,
-        atmosphere:kind,occlusionRadius:R,step:settings.step,maxDistance:Math.min(100000,model.rEarth*.1),
+        atmosphere:kind,occlusionRadius:R,step:settings.step,
+        metricGrid:physicalSurface,
+        maxDistance:Math.min(100000,model.rEarth*.1),
         sampleGround:kind!=='vacuum'&&field?function(d){return field.exact(d,0);}:null});
       var physicalGuides=guideProjection.transform(guideSource);
       var groundGuidesMs=clock()-startedProfile-fieldSetupMs;
@@ -241,7 +255,8 @@
       var workCheckpoint=groundAfter;
       var groundFieldSolves=groundAfter?groundAfter.solves-groundBefore.solves:0;
       var groundCacheHits=groundAfter?groundAfter.hits-groundBefore.hits:0;
-      var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
+      var results=[],stats={sourceObjects:objects.length,physicalMetricWorld:physicalSurface,
+        visibleSegments:0,
         unresolved:0,unresolvedReasons:{},sampleStatuses:{},perGroup:[],hiddenLeaves:0,
         boundaryClipped:0,maxBoundaryGapMetres:0,boundaryGapMetres:0,boundaryGrazingStops:0,
         fieldStats:null,perObject:[],fieldPrism:span?{
@@ -270,6 +285,7 @@
         var beganOutline=clock();
         var projected=silhouette.projectPrimitives({primitives:prim,field:limited,
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
+          physicalSurface:physicalSurface,
           angularTolerance:settings.angularTolerance,minimumDepth:settings.minimumDepth,
           maximumDepth:settings.maximumDepth,maxSamples:settings.maxSamples});
         outlinesMs+=clock()-beganOutline;
@@ -282,6 +298,7 @@
         // The polygon adapter reuses the exact SAME qualified field as outlines.
         var fills=polygonFills.project({polygons:prim,field:limited,
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
+          physicalSurface:physicalSurface,
           angularTolerance:settings.angularTolerance,maximumDepth:7,
           maxSamples:settings.maxSamples,layer:r.name});
         fillsMs+=clock()-beganFill;

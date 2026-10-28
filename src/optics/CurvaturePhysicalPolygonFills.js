@@ -10,12 +10,17 @@
   var api=factory(root.CurvatureOpticalTowerSilhouette||
     (typeof require==='function'?require('./OpticalTowerSilhouette'):null),
     root.CurvatureEarClip||
-    (typeof require==='function'?require('../geometry/CurvatureEarClip'):null));
+    (typeof require==='function'?require('../geometry/CurvatureEarClip'):null),
+    root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalPolygonFills=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(silhouette,earClip){
+}(typeof globalThis!=='undefined'?globalThis:this,function(silhouette,earClip,surfaceApi){
   'use strict';
   if(!silhouette||!earClip)throw Error('Physical coordinate and triangulator required');
+  function requireSurface(geometry,radius){
+    if(!surfaceApi)throw Error('Surface geometry required for physical polygons');
+    return surfaceApi.createFromCurvature(geometry==='globe'?1/radius:0);
+  }
   function difference(a,b){return a.map(function(v,i){return v-b[i];});}
   function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
   function norm(a){return Math.hypot(a[0],a[1],a[2]);}
@@ -58,11 +63,12 @@
     var primitives=[],stats={sourcePolygons:0,triangulated:0,fillTriangles:0,
       hiddenTriangles:0,unresolvedTriangles:0,unresolvedReasons:{},samples:0,
       subdivisions:0,interpolated:0,exact:0};
+    var metric=options.physicalSurface?requireSurface(geometry,radius):null;
     var samples=new Map();
     function sample(world){
       var key=world.join(',');
       if(samples.has(key))return samples.get(key);
-      var q=silhouette.coordinate(world,geometry,radius,eye),result={world:world,status:'solver_failed',reason:'sample-budget'};
+      var q=silhouette.coordinate(world,geometry,radius,eye,metric),result={world:world,status:'solver_failed',reason:'sample-budget'};
       if(stats.samples<maxSamples){
         stats.samples++;
         if(q.height< -1e-6){result.status='blocked';result.reason='under-ground';}

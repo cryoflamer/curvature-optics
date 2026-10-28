@@ -332,3 +332,25 @@ curvature. The UI/model, common source grid and camera will be unified in
 
 See `docs/MIGRATION_CONTINUOUS_OPTICAL_SOLVER_125.md` and
 `tests/OpticalContinuousCurvature125.test.js`.
+
+## Compatpatch 126 — shared physical surface world and metric grid
+
+Main Physical Canvas now opts into `CurvaturePhysicalWorldGeometry`, which
+uses the shared #124 continuous-curvature surface for placed object anchors,
+local tangent/normal bases and bounded metric reference guides. The grid's
+ring radii (100 m to 100 km) do not depend on `aDip`, `nLines`, height,
+planet radius or a finite horizon. Its spokes share the same metre
+landmarks. Surface-arc distances are projected through exact, memoized
+radial ground oracles, not the old sparse near-eye angle interpolation.
+Contours/fills use stable physical inverse altitude and arc-distance
+coordinates; a stable vacuum analytic path is provided for the physical
+adapter. Ground-guide culling at 100 km is presentation-only and does not
+set the physical optical horizon. Legacy geometry, diagnostics fixtures,
+existing model controls and old compatibility hashes stay intact, with
+`LineSpacing` clarified as **Legacy LineSpacing**.
+
+The UI still selects `Globe`/`Flat`; continuous curvature slider, infinity
+boundary and camera decoupling are reserved for #127. See
+`docs/MIGRATION_PHYSICAL_METRIC_WORLD_126.md` and
+`tests/PhysicalMetricWorld126.test.js`. Real browser grid appearance and
+end-to-end profiling require a fresh user Diagnostics ZIP after application.

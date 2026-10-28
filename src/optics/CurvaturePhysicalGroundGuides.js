@@ -1,18 +1,20 @@
 /* Ground-surface guides transformed by the same optical point solver as objects.
  * No geometric tangent circle is reused as a physical horizon. Ray directions
  * are radial in a vertically stratified atmosphere, so a one-dimensional
- * radial sample table serves every azimuth of the ground grid.
+ * radial sampling/caching serves every azimuth of the ground grid.
  */
 (function(root,factory){
-  var api=factory(root.CurvatureTargetProjection||(typeof require==='function'?require('./OpticalTargetProjection'):null));
+  var api=factory(root.CurvatureTargetProjection||(typeof require==='function'?require('./OpticalTargetProjection'):null),
+    root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalGroundGuides=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(project){
+}(typeof globalThis!=='undefined'?globalThis:this,function(project,surfaceApi){
   'use strict';
-  if(!project)throw Error('Optical target projection required');
+  if(!project||!surfaceApi)throw Error('Optical target projection and surface geometry required');
   function make(options){
     var m=options.model,kind=options.atmosphere,globe=options.geometry==='globe';
     var R=m.rEarth,eye=m.Height;
+    var surface=surfaceApi.createFromCurvature(globe?1/R:0);
     var profile=kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:options.occlusionRadius}:undefined;
     var step=options.step||1000;
     // Rendering extent, NOT a physical horizon. Flat surfaces have no finite
@@ -21,6 +23,7 @@
     var guideExtent=Math.min(100000,options.maxDistance===undefined?100000:options.maxDistance);
     if(!Number.isFinite(guideExtent)||guideExtent<=0)throw RangeError('Invalid ground guide rendering extent');
     var calls=0,clippedEdges=0,skippedEdges=0;
+    var metricGrid=options.metricGrid===true,metricAngles=new Map();
     // Optional exact-ground lookup from the tower prism's shared RK4 cache.
     // Ground rays retain their own radial interpolation table, but no longer
     // need a second independent exact-solve store. The caller guarantees the
@@ -30,14 +33,18 @@
       if(!(d>0))return {status:'visible',angle:-Math.PI/2};
       if(kind==='vacuum'){
         if(!globe)return {status:'visible',angle:Math.atan2(-eye,d)};
-        var angle=d/R,x=R*Math.sin(angle),z=R*Math.cos(angle)-R-eye;
-        var horizon=R*Math.acos(R/(R+eye));
+        var point=metricGrid?surface.surfacePoint2(d,0):null;
+        var angle=d/R,x=metricGrid?point[0]:R*Math.sin(angle),
+          z=metricGrid?point[1]-eye:R*Math.cos(angle)-R-eye;
+        var horizon=metricGrid?surface.geometricHorizon(eye).arcDistance:
+          R*Math.acos(R/(R+eye));
         return {status:d>=horizon?'blocked':'visible',angle:Math.atan2(z,x)};
       }
       calls++;
       if(sampleGround)return sampleGround(d);
       return project.solve({geometry:options.geometry,radius:R,observerHeight:eye,
-        target:globe?[R*Math.sin(d/R),R*Math.cos(d/R)-R]:[d,0],
+        target:metricGrid?surface.surfacePoint2(d,0):
+          (globe?[R*Math.sin(d/R),R*Math.cos(d/R)-R]:[d,0]),
         atmosphere:kind,profileOptions:profile,step:step});
     }
     // A finite ground horizon exists on the globe and for engineered Flat
@@ -67,7 +74,7 @@
     // A null horizon here is NOT a proof that an arbitrary Flat profile has no horizon.
     var maxRadius=horizon===null?guideExtent:horizon;
     var radial=[],N=32;
-    for(var t=0;t<=N;t++){
+    for(var t=0;!metricGrid&&t<=N;t++){
       var d=Math.max(.01,maxRadius*(t+.001)/(N+.001));
       if(horizon!==null)d=Math.min(d,Math.max(.01,lastVisible*.999));
       var value=shoot(d);
@@ -76,6 +83,18 @@
     function angleAt(d){
       if(horizon!==null && d>=horizon)return null;
       if(d<=0)return -Math.PI/2;
+      if(metricGrid){
+        // Ring/spoke geometry supplies the exact surface distance. One real
+        // optical solve per DISTINCT distance is both cheaper and more
+        // accurate than interpolating a sparsely spaced radial table near
+        // eye level. Rotational symmetry shares the result across azimuths.
+        if(horizon===null&&d>guideExtent+1e-7)return null;
+        if(metricAngles.has(d))return metricAngles.get(d);
+        var sample=shoot(d),angle=sample.status==='visible'&&
+          Number.isFinite(sample.angle)?sample.angle:null;
+        metricAngles.set(d,angle);
+        return angle;
+      }
       if(radial.length<2)return null;
       if(d>=radial[radial.length-1].d){
         // Never extrapolate through a physical horizon. For a Flat profile
@@ -91,11 +110,14 @@
       return a.angle+(b.angle-a.angle)*(d-a.d)/(b.d-a.d);
     }
     function arrival(az,el){var r=1000,c=Math.cos(el);return [r*Math.sin(az)*c,r*Math.cos(az)*c,r*Math.sin(el)];}
-    function guidePoint(world){
-      var x=world[0],y=world[1],d=Math.hypot(x,y);
-      if(globe){var radialZ=world[2]+R+eye;d=R*Math.atan2(d,radialZ);}
+    function guidePoint(world,metricDistance,metricAzimuth){
+      var x=world[0],y=world[1],d=metricDistance;
+      if(d===undefined){
+        d=Math.hypot(x,y);
+        if(globe){var radialZ=world[2]+R+eye;d=R*Math.atan2(d,radialZ);}
+      }
       var a=angleAt(d);
-      return a===null?null:arrival(Math.atan2(x,y),a);
+      return a===null?null:arrival(metricAzimuth===undefined?Math.atan2(x,y):metricAzimuth,a);
     }
     // Clip source edges in the ground plane BEFORE shooting. This works for
     // rays as well as circular polygon chords whose endpoints lie outside the
@@ -145,19 +167,35 @@
             // Retain the original Globe subdivision. On Flat, use few
             // segments for small, nearly straight screen-space guides; bound
             // refinement to avoid tens of thousands of identical ray queries.
-            var pieces=globe?6:Math.max(1,Math.min(6,Math.ceil(length/3000)));
+            var pieces=p.metadata&&p.metadata.metricSurface?
+              (globe?4:Math.max(1,Math.min(4,Math.ceil(length/3000)))):
+              (globe?6:Math.max(1,Math.min(6,Math.ceil(length/3000))));
             var prev=null;
             for(var j=0;j<=pieces;j++){
               var t=interval[0]+(interval[1]-interval[0])*j/pieces;
               var world=from.map(function(v,i){return v+(to[i]-v)*t;});
-              var current=guidePoint(world);
+              // A chord is not a surface arc. Metric guides carry exact
+              // ground distances, so every refined point stays on the same
+              // physical ring/spoke instead of cutting through the sphere.
+              var metricDistance,metricAzimuth;
+              if(p.metadata&&p.metadata.metricSurface){
+                if(p.metadata.kind==='metric-ring'){
+                  metricDistance=p.metadata.radius;
+                  metricAzimuth=2*Math.PI*(k+t)/n;
+                }else if(p.metadata.kind==='metric-spoke'){
+                  metricDistance=p.metadata.fromMetres+
+                    (p.metadata.toMetres-p.metadata.fromMetres)*t;
+                  metricAzimuth=p.metadata.angle;
+                }
+              }
+              var current=guidePoint(world,metricDistance,metricAzimuth);
               if(j)emit(prev,current,p.style,p.metadata);
               prev=current;
             }
           });
         }
       });
-      if(horizon!==null&&radial.length){
+      if(horizon!==null&&(metricGrid||radial.length)){
         var dipAngle=angleAt(Math.max(.01,lastVisible*.999));
         if(dipAngle!==null){
           var style={stroke:m.GlobeGridCol||m.FEGridCol||'blue',lineWidth:1.5,alpha:1};
@@ -171,6 +209,7 @@
     }
     return {transform:transform,horizonDistance:horizon,solves:function(){return calls;},
       radialSamples:radial.length,renderExtent:guideExtent,
+      metricExactDistances:function(){return metricAngles.size;},
       cullingStats:function(){return {clippedEdges:clippedEdges,skippedEdges:skippedEdges};}};
   }
   return {create:make};
