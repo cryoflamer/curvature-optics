@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
 const source=p=>fs.readFileSync(path.join(root,p),'utf8');
-const route=require('../src/ui/modern/ModernRoute130');
+const route=require('../src/ui/modern/ModernRoute');
 
 test('URL router keeps Legacy default and routes only explicit modern requests',()=>{
   assert.equal(route.isModern(''),false);
@@ -30,12 +30,12 @@ test('URL router keeps Legacy default and routes only explicit modern requests',
 
 test('Modern document is isolated from legacy control/runtime scripts and uses actual physical renderer',()=>{
   const modern=source('CurvatureModern.html'),legacy=source('CurvatureApp.html');
-  assert.match(legacy,/<script src="src\/ui\/modern\/ModernRoute130\.js"><\/script>/);
+  assert.match(legacy,/<script src="src\/ui\/modern\/ModernRoute\.js"><\/script>/);
   assert.match(modern,/src\/app\/CurvatureMainCanvasRenderer\.js/);
   assert.match(modern,/src\/optics\/CurvaturePhysicalSceneOptics\.js/);
   assert.match(modern,/src\/geometry\/CurvatureSurfaceGeometry\.js/);
   assert.match(modern,/src\/app\/CurvatureModel\.js/);
-  assert.match(modern,/src\/ui\/modern\/ModernApp130\.js/);
+  assert.match(modern,/src\/ui\/modern\/ModernApp\.js/);
   assert.doesNotMatch(modern,/src\/ui\/ControlPanelX\.js|src\/app\/CurvatureAppRuntime\.js|src\/animation\/CurvatureDemos\.js|src\/legacy\/CurvatureLegacyDrawing\.js/);
   const htmlSrcs=[...modern.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1]);
   for(const p of htmlSrcs)assert.ok(fs.existsSync(path.join(root,p)),p+' missing');
@@ -66,7 +66,7 @@ test('Modern standalone runtime binds working scene controls and does not instan
   const ctx={window:{CurveAppClass:FakeModel,
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renderOptions.push({g,m,options});return {
       cacheReused:false,drawn:30,fillTriangles:12,unresolved:0,timings:{totalMs:12}};}},
-    CurvaturePhysicalCurvature127:{modelStep(m){return m.showModel===2?1000:164;},
+    CurvaturePhysicalCurvature:{modelStep(m){return m.showModel===2?1000:164;},
       applyStep(m,step){m.showModel=step===1000?2:1;},
       resetEarth(m){m.showModel=1;m.rEarth=6371000;},
       label(m){return m.showModel===2?'Flat':'Globe';}},
@@ -76,7 +76,7 @@ test('Modern standalone runtime binds working scene controls and does not instan
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 2;},clearTimeout(){},console};
   ctx.window.window=ctx.window;
-  vm.runInNewContext(source('src/ui/modern/ModernApp130.js'),ctx,{filename:'ModernApp130.js'});
+  vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx,{filename:'ModernApp.js'});
   assert.equal(calls.includes('graph'),true);
   // The explicit xOnLoad callback, not the old legacy animation/bootstrap.
   callbacks.find(item=>typeof item==='function')();
@@ -92,10 +92,10 @@ test('Modern standalone runtime binds working scene controls and does not instan
   assert.equal(renderOptions.at(-1).m.showModel,2);
   assert.match(nodes.get('ModernCurvatureLabel').textContent,/Flat/);
   nodes.get('ModernCompareTab').listeners.click();
-  assert.equal(ctx.window.CurvatureModernApp130.getMode(),'compare');
+  assert.equal(ctx.window.CurvatureModernApp.getMode(),'compare');
   assert.equal(nodes.get('ModernCompareMessage').hidden,false);
   nodes.get('ModernBackToScene').listeners.click();
-  assert.equal(ctx.window.CurvatureModernApp130.getMode(),'scene');
+  assert.equal(ctx.window.CurvatureModernApp.getMode(),'scene');
 });
 
 test('Modern demo configuration renders real 85+2 Physical optics, not a placeholder image',()=>{

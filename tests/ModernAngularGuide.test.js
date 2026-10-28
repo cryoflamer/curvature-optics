@@ -4,11 +4,11 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const compare132=require('../src/ui/modern/ModernCompareModel132');
-const compare133=require('../src/ui/modern/ModernCompareState133');
-const physicalCamera=require('../src/app/CurvaturePhysicalCamera127');
+const compare132=require('../src/ui/modern/ModernCompareModel');
+const compare133=require('../src/ui/modern/ModernCompareState');
+const physicalCamera=require('../src/app/CurvaturePhysicalCamera');
 const perspective=require('../src/renderers/CurvaturePerspectivePreview');
-const code=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp130.js'),'utf8');
+const code=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
 const R=6371000;
 
 // This is the actual painter's perspective projection of a physical ray,
@@ -57,15 +57,15 @@ function compareFixture(nick,angleDegrees){
     ObjSideType:[0,0],ObjSidePos:[30,40],ObjSideVar:[0,0],
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0]});}
   FakeModel.prototype.Update=function(){};
-  const browser={CurveAppClass:FakeModel,CurvatureModernSceneState131:null,
-    CurvatureModernCompareModel132:compare132,CurvatureModernCompareState133:compare133,
-    CurvatureRayHorizon1332:{diagnose(){return {status:'resolved',angleDegrees,
+  const browser={CurveAppClass:FakeModel,CurvatureModernSceneState:null,
+    CurvatureModernCompareModel:compare132,CurvatureModernCompareState:compare133,
+    CurvatureRayHorizon:{diagnose(){return {status:'resolved',angleDegrees,
       dipDegrees:-angleDegrees,tangentDistance:14000,
       bracketDegrees:[angleDegrees-1e-5,angleDegrees+1e-5]};}},
-    CurvaturePhysicalCamera127:physicalCamera,
+    CurvaturePhysicalCamera:physicalCamera,
     CurvaturePhysicalSceneOptics:{create(){return {};}},
     CurvatureMainCanvasRenderer:{renderPhysical(){return {drawn:10,fillTriangles:10,unresolved:0};}},
-    CurvaturePhysicalCurvature127:{modelStep(){return 164;},label(){return 'Earth';}},
+    CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'scene'});}};},
     xOnLoad(fn){calls.push(fn);},console:{error(e){throw e;}}};
   const context={window:browser,document:{getElementById(id){
@@ -74,7 +74,7 @@ function compareFixture(nick,angleDegrees){
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   browser.window=browser;
   vm.runInNewContext(code,context);
-  const app=browser.CurvatureModernApp130;
+  const app=browser.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{
     Canvas:canvas,UpdateCanvasSize(){},Redraw(){app.drawCompare(side,{Canvas:canvas});}});
   calls[0]();

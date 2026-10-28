@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const sanity=require('../src/diagnostics/CurvaturePhysicalSanity129');
+const sanity=require('../src/diagnostics/CurvaturePhysicalSanity');
 test('129: read-only sanity checks have independent fixed reference cases',()=>{
  const r=sanity.run();
  assert.equal(r.schema,'physical-sanity-check-v129');

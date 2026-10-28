@@ -5,8 +5,8 @@ const fs=require('node:fs');
 const path=require('node:path');
 const root=path.join(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
-const code=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp130.js'),'utf8');
-const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp130.css'),'utf8');
+const code=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
+const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
 
 test('131.1: five exclusive accessible scene settings panels retain the original control IDs',()=>{
   const tabs=['Camera','Surface','Atmosphere','Objects','Display'];

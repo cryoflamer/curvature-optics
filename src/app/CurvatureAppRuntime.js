@@ -9,8 +9,8 @@ var physicalCanvasSettleTimer = null;
 var physicalCanvasPreviousHeight = null;
 var physicalHeightScheduler120 = null;
 function QueuePhysicalHeightChange(){
-  if(!physicalHeightScheduler120&&window.CurvatureHeightChangeScheduler120){
-    physicalHeightScheduler120=CurvatureHeightChangeScheduler120.create(
+  if(!physicalHeightScheduler120&&window.CurvatureHeightChangeScheduler){
+    physicalHeightScheduler120=CurvatureHeightChangeScheduler.create(
       setTimeout,clearTimeout,function(){
         var selector=document.getElementById('MainCanvasRenderer');
         if(!selector||selector.value!=='physical')return;
@@ -249,7 +249,7 @@ if (window.CurvatureCanvasFrameScheduler && typeof requestAnimationFrame === 'fu
 }
 
 function SyncPhysicalCurvatureControl127(){
-  var api=window.CurvaturePhysicalCurvature127;
+  var api=window.CurvaturePhysicalCurvature;
   if(!api)return;
   var slider=document.getElementById('PhysicalCanvasCurvature');
   var label=document.getElementById('PhysicalCanvasCurvatureLabel');
@@ -262,7 +262,7 @@ function SyncPhysicalCurvatureControl127(){
   slider.disabled=CurveApp.showModel===3;
 }
 function WirePhysicalCurvature127(){
-  var api=window.CurvaturePhysicalCurvature127;
+  var api=window.CurvaturePhysicalCurvature;
   if(!api)return;
   var slider=document.getElementById('PhysicalCanvasCurvature');
   var earth=document.getElementById('PhysicalCanvasEarthRadius');

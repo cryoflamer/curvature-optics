@@ -6,7 +6,7 @@
 (function(root,factory){
   var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureModernCompareModel132=api;
+  root.CurvatureModernCompareModel=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   function clone(source){

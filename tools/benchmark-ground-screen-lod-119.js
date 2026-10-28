@@ -4,7 +4,7 @@
  */
 'use strict';
 const {performance}=require('node:perf_hooks');
-const lod=require('../src/renderers/CurvatureScreenSpaceGuides119');
+const lod=require('../src/renderers/CurvatureScreenSpaceGuides');
 const contract=require('../src/scene/CurvatureSceneContract');
 const frame=require('../src/scene/CurvatureRenderFrame');
 const renderer=require('../src/renderers/CurvatureFrameRenderer');

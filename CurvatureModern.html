@@ -7,8 +7,8 @@
 <!-- Keep asset paths pinned even after history.replaceState exposes the canonical URL. -->
 <base href="./">
 <title>Curvature App · Modern Preview</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp130.css">
-<script src="src/ui/modern/ModernRoute130.js"></script>
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css">
+<script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, animations, diagnostic UI or legacy runtime is loaded. -->
 <script src="src/legacy/GraphX3DX.js"></script>
@@ -30,10 +30,10 @@
 <script src="src/scene/CurvatureIndependentComposition.js"></script>
 <script src="src/geometry/CurvatureEarClip.js"></script>
 <script src="src/renderers/CurvatureFrameRenderer.js"></script>
-<script src="src/renderers/CurvatureScreenSpaceGuides119.js"></script>
+<script src="src/renderers/CurvatureScreenSpaceGuides.js"></script>
 <script src="src/scene/CurvatureFullSceneDecorations.js"></script>
 <script src="src/optics/OpticalRayTracer.js"></script>
-<script src="src/optics/OpticalRayHorizon1332.js"></script>
+<script src="src/optics/OpticalRayHorizon.js"></script>
 <script src="src/optics/OpticalTargetProjection.js"></script>
 <script src="src/optics/OpticalSharedRayField.js"></script>
 <script src="src/optics/OpticalTowerSilhouette.js"></script>
@@ -41,12 +41,12 @@
 <script src="src/optics/CurvaturePhysicalPolygonFills.js"></script>
 <script src="src/optics/CurvaturePhysicalSceneOptics.js"></script>
 <script src="src/app/CurvatureModel.js"></script>
-<script src="src/app/CurvaturePhysicalCamera127.js"></script>
-<script src="src/app/CurvaturePhysicalCurvature127.js"></script>
+<script src="src/app/CurvaturePhysicalCamera.js"></script>
+<script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js"></script>
-<script src="src/ui/modern/ModernSceneState131.js"></script>
-<script src="src/ui/modern/ModernCompareModel132.js"></script>
-<script src="src/ui/modern/ModernCompareState133.js"></script>
+<script src="src/ui/modern/ModernSceneState.js"></script>
+<script src="src/ui/modern/ModernCompareModel.js"></script>
+<script src="src/ui/modern/ModernCompareState.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -166,7 +166,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp130.js"></script>
+          <script src="src/ui/modern/ModernApp.js"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
@@ -175,14 +175,14 @@
           <section class="modern-viewport-panel" aria-label="Physical model A">
             <div class="modern-viewport-head"><span>Model A · Physical optics</span><span id="ModernCompareLabelA">Current curvature · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostA">
-              <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="A"></script>
+              <script src="src/ui/modern/ModernCompareGraph.js" data-compare-side="A"></script>
             </div>
             <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span><span class="modern-horizon-readout" id="ModernHorizonStatusA">Horizon: not calculated</span></div>
           </section>
           <section class="modern-viewport-panel" aria-label="Physical model B">
             <div class="modern-viewport-head"><span>Model B · Physical optics</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostB">
-              <script src="src/ui/modern/ModernCompareGraph132.js" data-compare-side="B"></script>
+              <script src="src/ui/modern/ModernCompareGraph.js" data-compare-side="B"></script>
             </div>
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>

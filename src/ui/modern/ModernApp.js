@@ -8,9 +8,9 @@
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
     compareEyeLevel:false,compareHorizon:true,horizonCache:{A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
-  var adapter=root.CurvatureModernSceneState131;
-  var compareAdapter=root.CurvatureModernCompareModel132;
-  var compareState=root.CurvatureModernCompareState133;
+  var adapter=root.CurvatureModernSceneState;
+  var compareAdapter=root.CurvatureModernCompareModel;
+  var compareState=root.CurvatureModernCompareState;
   var model=new root.CurveAppClass();
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
@@ -32,7 +32,7 @@
     if(node){node.textContent=text;node.classList.toggle('is-error',!!isError);}
   }
   function refreshLabels(){
-    var curvature=root.CurvaturePhysicalCurvature127;
+    var curvature=root.CurvaturePhysicalCurvature;
     var output=el('ModernCurvatureLabel');
     if(output)output.textContent=curvature.label(model);
     var slider=el('ModernCurvature');
@@ -121,7 +121,7 @@
   function drawCompareHorizon(side,g,m,options){
     if(!g||!g.Canvas)return; // DOM-free renderer harnesses have no pixel overlay.
     var readout=el('ModernHorizonStatus'+side);
-    var detector=root.CurvatureRayHorizon1332;
+    var detector=root.CurvatureRayHorizon;
     if(!detector){if(readout)readout.textContent='Horizon: tracer unavailable';return;}
     var geometry=m.showModel===2?'flat':'globe';
     var arguments_={geometry:geometry,radius:m.rEarth,observerHeight:m.Height,
@@ -172,7 +172,7 @@
     if(!(aspect>0&&diagonalFov>0))return null;
     var verticalHalfTan=Math.tan(diagonalFov/2)/Math.sqrt(1+aspect*aspect);
     var tilt=Number(m.Nick)*Math.PI/180;
-    var aim=m.viewcenterHorizon===3?0:root.CurvaturePhysicalCamera127.create(m).aimDip;
+    var aim=m.viewcenterHorizon===3?0:root.CurvaturePhysicalCamera.create(m).aimDip;
     // PhysicalCamera127 aims at elevation (Nick - aimDip). Positive ray
     // elevation projects UP in the painter, while Canvas y increases DOWN.
     // Thus a negative horizon elevation must land BELOW the 0° eye-level.
@@ -522,7 +522,7 @@
       state.atmosphere=this.value;markCustom();redraw();
     });
     el('ModernGrid').addEventListener('change',function(){model.showGrid=this.checked?1:0;markCustom();redraw();});
-    var curvature=root.CurvaturePhysicalCurvature127;
+    var curvature=root.CurvaturePhysicalCurvature;
     var slider=el('ModernCurvature');
     slider.value=String(curvature.modelStep(model));
     slider.addEventListener('input',function(){
@@ -550,7 +550,7 @@
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
-  root.CurvatureModernApp130={getModel:function(){return model;},getMode:function(){return state.mode;},
+  root.CurvatureModernApp={getModel:function(){return model;},getMode:function(){return state.mode;},
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
     getCompareModels:function(){return state.comparePair;},

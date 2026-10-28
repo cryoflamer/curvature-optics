@@ -6,8 +6,8 @@ const path=require('node:path');
 const vm=require('node:vm');
 const base=path.resolve(__dirname,'..');
 const read=p=>fs.readFileSync(path.join(base,p),'utf8');
-const adapter=require('../src/ui/modern/ModernSceneState131');
-const curvature=require('../src/app/CurvaturePhysicalCurvature127');
+const adapter=require('../src/ui/modern/ModernSceneState');
+const curvature=require('../src/app/CurvaturePhysicalCurvature');
 const vec={Norm:a=>{const l=Math.hypot(...a);return a.map(v=>v/l);},
   Mult:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
   Scale:(a,s)=>a.map(v=>v*s),Add:(a,b)=>a.map((v,i)=>v+b[i]),
@@ -80,7 +80,7 @@ test('131 HTML controls and isolated module order are explicit and no Legacy han
     'ModernRadiusKm','ModernFlat','ModernObjectFields0','ModernObjectFields1']){
     assert.ok(ids.includes(id),id);
   }
-  assert.ok(html.indexOf('src/ui/modern/ModernSceneState131.js')<html.indexOf('src/ui/modern/ModernApp130.js'));
+  assert.ok(html.indexOf('src/ui/modern/ModernSceneState.js')<html.indexOf('src/ui/modern/ModernApp.js'));
   assert.doesNotMatch(html,/src\/ui\/ControlPanelX\.js|CurvatureAppRuntime\.js|CurvatureDemos\.js/);
   assert.match(read('docs/modern-ui-plan.md'),/131/);
 });
@@ -119,8 +119,8 @@ function buildRuntime(){
   const modelCtx=vm.createContext({JsgVect3:vec});
   vm.runInContext(read('src/app/CurvatureModel.js'),modelCtx);
   const CurveAppClass=vm.runInContext('CurveAppClass',modelCtx);
-  const win={CurveAppClass,CurvatureModernSceneState131:adapter,
-    CurvaturePhysicalCurvature127:curvature,
+  const win={CurveAppClass,CurvatureModernSceneState:adapter,
+    CurvaturePhysicalCurvature:curvature,
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opts){
       draws.push({height:m.Height,roll:m.Roll,viewAngle:m.ViewAngle,
         radius:m.rEarth,showModel:m.showModel,atmosphere:opts.atmosphere,
@@ -134,7 +134,7 @@ function buildRuntime(){
     setTimeout(fn){const id=++sequence;timers.set(id,fn);return id;},
     clearTimeout(id){timers.delete(id);},console};
   win.window=win;
-  vm.runInNewContext(read('src/ui/modern/ModernApp130.js'),sandbox);
+  vm.runInNewContext(read('src/ui/modern/ModernApp.js'),sandbox);
   callbacks[0]();
   function fire(id,type,value){const n=node(id);if(value!==undefined)n.value=value;
     const cb=n.listeners[type];assert.equal(typeof cb,'function',id+': '+type);
@@ -144,7 +144,7 @@ function buildRuntime(){
 }
 
 test('131 Modern events change the shared model; presets/flat/atmosphere keep state in sync',()=>{
-  const r=buildRuntime(),m=r.win.CurvatureModernApp130.getModel();
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   assert.equal(r.draws.length,1);
   assert.deepEqual(r.draws[0].count,[85,2]);
   r.fire('ModernRoll','change','15');assert.equal(m.Roll,15);
@@ -173,12 +173,12 @@ test('131 Modern events change the shared model; presets/flat/atmosphere keep st
   r.fire('ModernResetPreset','click');
   assert.equal(m.NObjects[0],1);
   assert.equal(r.nodes.get('ModernPreset').value,'single');
-  assert.equal(r.win.CurvatureModernApp130.getPreset(),'single');
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'single');
   assert.equal(r.nodes.get('ModernStatus').classList!==undefined,true);
 });
 
 test('131 input debounce coalesces expensive optics and invalid entries never mutate model',()=>{
-  const r=buildRuntime(),m=r.win.CurvatureModernApp130.getModel();
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   r.fire('ModernHeight','input','24');
   r.fire('ModernHeight','input','25');
   r.fire('ModernHeight','input','26');

@@ -208,7 +208,7 @@ The existing Export geometry diagnostics ZIP now runs Physical cold/warm/grid-of
 
 The browser ZIP profile from #118 isolated ground guides as the primary
 redraw cost (~434 ms cached full scene versus ~31 ms without guides; user
-hardware). `CurvatureScreenSpaceGuides119` now indexes continuous, already
+hardware). `CurvatureScreenSpaceGuides` now indexes continuous, already
 optically projected ground curves and reduces them under 0.5 **backing-store**
 pixel sampled-polyline error *before* frame snapshot cloning/validation and
 Canvas projection. Whole viewport-outside/near-plane-behind portions are
@@ -373,7 +373,7 @@ end-to-end profiling require a fresh user Diagnostics ZIP after application.
 
 ## Patch 127 — Physical observer-fixed camera and curvature slider (2026-10-28)
 
-`src/app/CurvaturePhysicalCamera127.js` supplies a finite observer-fixed
+`src/app/CurvaturePhysicalCamera.js` supplies a finite observer-fixed
 camera for the **Physical** main Canvas: fixed 1000 m view reference, direct
 FOV, pan/nick/roll and aspect ratio, stable geometric dip in Horizon mode.
 `Eye-Lvl` is independent of the surface curvature. The legacy and Independent
@@ -399,7 +399,7 @@ The new **Modern visualization UI** is developed in parallel with the existing *
 
 Modern-only Scene control expansion was added without altering Legacy startup,
 optical geometry, solver, or painting. The isolated Modern document loads
-`src/ui/modern/ModernSceneState131.js` (validated shared-model adapter) before
+`src/ui/modern/ModernSceneState.js` (validated shared-model adapter) before
 its Modern bootstrap. The Scene sidebar adds camera roll/FOV, direct radius and
 exact-flat controls, two editable physical object groups, preset selection,
 and automatic debounced rendering. Lake Pontchartrain is the primary preset;
@@ -450,12 +450,12 @@ alternating viewports from invalidating each other. The selected Compare pair
 persists while switching Scene/Compare in the same page session. No experiments
 are saved across reloads: versioned shareable experiments remain planned for
 #134. See `docs/modern-ui-plan.md` and
-`tests/ModernIndependentCompare133.test.js`.
+`tests/ModernIndependentCompare.test.js`.
 
 
 ### Compatibility patch 133.2 — forward-traced horizon diagnostic
 
-A separate `OpticalRayHorizon1332` module scans launch angles through the
+A separate `OpticalRayHorizon` module scans launch angles through the
 existing RK4 ray tracer and accepts a finite first-contact tangent boundary
 only after a hit/confirmed interior-clear-minimum angular bracket converges.
 Its result is shown numerically under each Compare viewport and optionally
@@ -465,7 +465,7 @@ renderer/Scene/Legacy physics. If not resolved within finite range, the
 readout explicitly says so; no horizon is inferred from clipping, failed
 shooting or exhausted integration distance. Camera Roll currently suppresses
 the horizontal horizon overlay. See `docs/modern-ui-plan.md` and
-`tests/OpticalRayHorizon1332.test.js`.
+`tests/OpticalRayHorizon.test.js`.
 
 
 ### Compatibility patch 133.2.1 — angular guide projection corrected
@@ -475,5 +475,9 @@ optical horizon elevation is now drawn below the 0° Eye-level line, and the
 marker matches the actual Physical perspective projection across camera
 Nick values (and shared off-axis Pan). No optical or numerical horizon
 algorithm was changed. Regression tests include
-`tests/ModernAngularGuide13321.test.js`; the limitations stated for
+`tests/ModernAngularGuide.test.js`; the limitations stated for
 patch 133.2 remain in effect.
+
+### Source naming convention (compatpatch 133.3)
+
+Source filenames, module exports, browser globals, classes, and functions are named for their responsibilities, not the patch that introduced them. Patch identifiers remain in Git history, patch artifacts, and historical documentation. Historical test case labels and numbered fixtures may retain their identifiers where they describe a specific regression or oracle version. This cleanup does not change physical calculations or rendering behavior.

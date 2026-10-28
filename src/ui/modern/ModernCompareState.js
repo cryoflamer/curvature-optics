@@ -4,7 +4,7 @@
 (function(root,factory){
   var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureModernCompareState133=api;
+  root.CurvatureModernCompareState=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var ATMOSPHERES=['vacuum','standard','inverse-spherical','exponential-occlusion'];

@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const profile=require('../src/diagnostics/CurvaturePerformanceProfile118');
+const profile=require('../src/diagnostics/CurvaturePerformanceProfile');
 const fs=require('node:fs');
 const path=require('node:path');
 test('profile collects disjoint stages and restores immutable model',async()=>{
@@ -33,5 +33,5 @@ test('existing exporter retains its original zip path and adds profile files',()
   assert.match(controller,/performance-samples\.json/);
   assert.match(controller,/browser-info\.json/);
   assert.match(controller,/DrawModelWithOptionalAudit\(graph\)/);
-  assert.match(html,/CurvaturePerformanceProfile118\.js/);
+  assert.match(html,/CurvaturePerformanceProfile\.js/);
 });

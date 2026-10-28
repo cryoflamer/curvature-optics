@@ -9,8 +9,8 @@ const compose=require('../src/scene/CurvatureIndependentComposition');
 const ground=require('../src/optics/CurvaturePhysicalGroundGuides');
 const optics=require('../src/optics/CurvaturePhysicalSceneOptics');
 const targets=require('../src/optics/OpticalTargetProjection');
-const camera=require('../src/app/CurvaturePhysicalCamera127');
-const ctrl=require('../src/app/CurvaturePhysicalCurvature127');
+const camera=require('../src/app/CurvaturePhysicalCamera');
+const ctrl=require('../src/app/CurvaturePhysicalCurvature');
 const nearly=(a,b,tol,message)=>assert.ok(Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=tol,
   `${message||'mismatch'}: ${a} vs ${b}, tolerance ${tol}`);
 function state(radius=6371000,flat=false,n=85){

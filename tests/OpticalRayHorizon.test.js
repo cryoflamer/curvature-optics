@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const detector=require('../src/optics/OpticalRayHorizon1332');
+const detector=require('../src/optics/OpticalRayHorizon');
 const tracer=require('../src/optics/OpticalRayTracer');
 const R=6371000,H=15;
 function measure(geometry,atmosphere,extras={}){
@@ -65,8 +65,8 @@ test('133.2: invalid search ranges and dimensions are rejected',()=>{
 });
 test('133.2: Modern Compare integrates the diagnostic without touching Legacy',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
-  const code=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp130.js'),'utf8');
-  assert.match(html,/src\/optics\/OpticalRayHorizon1332.js/);
+  const code=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(html,/src\/optics\/OpticalRayHorizon.js/);
   for(const id of ['ModernCompareHorizon','ModernHorizonStatusA','ModernHorizonStatusB'])
     assert.ok(html.includes('id="'+id+'"'));
   assert.match(code,/detector\.diagnose\(arguments_\)/);
@@ -77,9 +77,9 @@ test('133.2: Modern Compare integrates the diagnostic without touching Legacy',(
 
 test('133.2: Compare horizon is cached independently per side and never recomputed by guide toggles',()=>{
   const vm=require('node:vm');
-  const compare132=require('../src/ui/modern/ModernCompareModel132');
-  const compare133=require('../src/ui/modern/ModernCompareState133');
-  const src=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp130.js'),'utf8');
+  const compare132=require('../src/ui/modern/ModernCompareModel');
+  const compare133=require('../src/ui/modern/ModernCompareState');
+  const src=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   const names=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill',
     'ModernOcclusionWrap','ModernSceneTab','ModernCompareTab','ModernCompareMessage',
     'ModernGraphHost','ModernCompareViews','ModernBackToScene','ModernHeight','ModernFocal',
@@ -105,14 +105,14 @@ test('133.2: Compare horizon is cached independently per side and never recomput
   const graphics={save(){},restore(){},setTransform(){},setLineDash(){},beginPath(){},
     moveTo(){},lineTo(){},stroke(){drawCalls.push('stroke');},fillText(t){drawCalls.push(t);}};
   const canvas={width:600,height:400,getContext(){return graphics;}};
-  const browser={CurveAppClass:FakeModel,CurvatureModernSceneState131:null,
-    CurvatureModernCompareModel132:compare132,CurvatureModernCompareState133:compare133,
-    CurvatureRayHorizon1332:{diagnose(o){paths.push(o);return o.geometry==='globe'?{
+  const browser={CurveAppClass:FakeModel,CurvatureModernSceneState:null,
+    CurvatureModernCompareModel:compare132,CurvatureModernCompareState:compare133,
+    CurvatureRayHorizon:{diagnose(o){paths.push(o);return o.geometry==='globe'?{
       status:'resolved',angleDegrees:-.12,dipDegrees:.12,tangentDistance:14000,
       bracketDegrees:[-.12001,-.11999]}:{status:'unresolved',reason:'not tangent'};}},
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
     CurvatureMainCanvasRenderer:{renderPhysical(){return {drawn:10,fillTriangles:10,unresolved:0};}},
-    CurvaturePhysicalCurvature127:{modelStep(){return 164;},label(){return 'Earth';}},
+    CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'scene'});}};},
     xOnLoad(fn){listeners.push(fn);},console:{error(e){throw e;}}};
   const ctx={window:browser,
@@ -121,8 +121,8 @@ test('133.2: Compare horizon is cached independently per side and never recomput
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   browser.window=browser;
   vm.runInNewContext(src,ctx);
-  for(const side of ['A','B'])browser.CurvatureModernApp130.registerCompareGraph(side,{
-    Canvas:canvas,UpdateCanvasSize(){},Redraw(){browser.CurvatureModernApp130.drawCompare(side,{Canvas:canvas});}});
+  for(const side of ['A','B'])browser.CurvatureModernApp.registerCompareGraph(side,{
+    Canvas:canvas,UpdateCanvasSize(){},Redraw(){browser.CurvatureModernApp.drawCompare(side,{Canvas:canvas});}});
   listeners[0]();
   nodes.get('ModernCompareTab').listeners.click();
   assert.equal(paths.length,2);

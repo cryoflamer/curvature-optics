@@ -4,7 +4,7 @@
 (function(root,factory){
   var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureModernRoute130=api;
+  root.CurvatureModernRoute=api;
   if(root.location&&root.location.pathname){
     if(/CurvatureApp\.html$/.test(root.location.pathname))api.redirect(root.location);
     else if(/CurvatureModern\.html$/.test(root.location.pathname)){

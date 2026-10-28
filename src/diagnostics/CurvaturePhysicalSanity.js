@@ -3,7 +3,7 @@
   var api=factory(root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null),
     root.CurvatureTargetProjection||(typeof require==='function'?require('../optics/OpticalTargetProjection'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvaturePhysicalSanity129=api;
+  root.CurvaturePhysicalSanity=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(surfaces,targets){
   'use strict';
   function run(){

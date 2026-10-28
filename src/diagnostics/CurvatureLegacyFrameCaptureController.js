@@ -2,7 +2,7 @@ var lastPhysicalSanity129 = null;
 document.getElementById('PhysicalSanityCheckButton').addEventListener('click',function(){
   var status=document.getElementById('PhysicalSanityCheckStatus');
   try{
-    lastPhysicalSanity129=window.CurvaturePhysicalSanity129.run();
+    lastPhysicalSanity129=window.CurvaturePhysicalSanity.run();
     var counts=lastPhysicalSanity129.summary;
     status.textContent='PASS '+counts.PASS+' / WARN '+counts.WARN+' / FAIL '+counts.FAIL+
       ' — '+lastPhysicalSanity129.checks.map(function(c){return c.id+': '+c.status;}).join('; ')+
@@ -31,7 +31,7 @@ document.getElementById('GeometryDiagnosticsExportButton').addEventListener('cli
   performanceProfile118Pending=null;
   try {
     var selection=document.getElementById('MainCanvasRenderer');
-    if(selection&&selection.value==='physical'&&window.CurvaturePerformanceProfile118){
+    if(selection&&selection.value==='physical'&&window.CurvaturePerformanceProfile){
       status.textContent='Profiling Physical Canvas (cold, cached, grid, pan and height changes)...';
       // Cancel a pending camera redraw so diagnostics never compete with it.
       if(typeof physicalCanvasFrameScheduler!=='undefined'&&physicalCanvasFrameScheduler)
@@ -45,13 +45,13 @@ document.getElementById('GeometryDiagnosticsExportButton').addEventListener('cli
       var radius=document.getElementById('PhysicalCanvasOcclusionRadius');
       var opts={atmosphere:atmosphere?atmosphere.value:'vacuum',
         occlusionRadius:radius?Number(radius.value):6371000};
-      performanceProfile118Pending=await CurvaturePerformanceProfile118.run({
+      performanceProfile118Pending=await CurvaturePerformanceProfile.run({
         model:CurveApp,
         modelAtHeight:function(height){
           // Full CurveAppClass.Update recalculates horizon, surface guides,
           // camera vector and dependent object geometry for the new eye height.
           // Clone array properties; do not update the real model or BaroModel.
-          return CurvatureHeightChangeScheduler120.cloneUpdated(CurveApp,height);
+          return CurvatureHeightChangeScheduler.cloneUpdated(CurveApp,height);
         },
         reset:function(){CurvatureMainCanvasRenderer.resetPhysicalSession();},
         render:function(model,flags){return CurvatureMainCanvasRenderer.renderPhysical(graph,model,

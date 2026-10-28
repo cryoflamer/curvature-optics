@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=p=>fs.readFileSync(path.join(root,p),'utf8');
-const compare=require('../src/ui/modern/ModernCompareModel132');
+const compare=require('../src/ui/modern/ModernCompareModel');
 
 function actualModel(){
   const vec={Norm:a=>{const n=Math.hypot(...a);return a.map(x=>x/n);},
@@ -47,7 +47,7 @@ test('132: physical A/B models keep one observer/camera and authored scene witho
 });
 
 test('132: observer-fixed physical cameras agree across surface curvature and preserve FOV',()=>{
-  const camera=require('../src/app/CurvaturePhysicalCamera127');
+  const camera=require('../src/app/CurvaturePhysicalCamera');
   const sourceModel=actualModel(),{A,B}=compare.pair(sourceModel);
   const a=camera.create(A),b=camera.create(B);
   assert.deepEqual(a.center,b.center);
@@ -59,12 +59,12 @@ test('132: observer-fixed physical cameras agree across surface curvature and pr
 });
 
 test('132: Compare markup creates two actual independent GraphX3DX canvases and tooltip has no native duplicate',()=>{
-  const html=source('CurvatureModern.html'),code=source('src/ui/modern/ModernApp130.js');
-  const graphCode=source('src/ui/modern/ModernCompareGraph132.js');
-  const css=source('src/ui/modern/ModernApp130.css');
+  const html=source('CurvatureModern.html'),code=source('src/ui/modern/ModernApp.js');
+  const graphCode=source('src/ui/modern/ModernCompareGraph.js');
+  const css=source('src/ui/modern/ModernApp.css');
   assert.match(html,/id="ModernCompareViews"/);
-  assert.match(html,/ModernCompareGraph132\.js" data-compare-side="A"/);
-  assert.match(html,/ModernCompareGraph132\.js" data-compare-side="B"/);
+  assert.match(html,/ModernCompareGraph\.js" data-compare-side="A"/);
+  assert.match(html,/ModernCompareGraph\.js" data-compare-side="B"/);
   assert.match(graphCode,/root\.NewGraphX3D\(/);
   assert.match(graphCode,/app\.drawCompare\(side,g\)/);
   assert.match(code,/CurvatureMainCanvasRenderer\.renderPhysical\(g,m/);
@@ -91,18 +91,18 @@ test('132: each Compare viewport invokes Physical renderer separately with share
   const renders=[],callbacks=[];
   function FakeModel(){this.Update=function(){};this.showModel=1;this.rEarth=6371000;}
   const ctx={window:{CurveAppClass:FakeModel,
-    CurvatureModernSceneState131:null,CurvatureModernCompareModel132:compare,
+    CurvatureModernSceneState:null,CurvatureModernCompareModel:compare,
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renders.push({g,m,options});
       return {drawn:28,fillTriangles:11,unresolved:0,cacheReused:false,timings:{totalMs:5}};}},
-    CurvaturePhysicalCurvature127:{modelStep(){return 164;},label(){return 'Earth';}},
+    CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'Scene'});}};},
     xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}},
     document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   ctx.window.window=ctx.window;
-  vm.runInNewContext(source('src/ui/modern/ModernApp130.js'),ctx);
-  const app=ctx.window.CurvatureModernApp130;
+  vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx);
+  const app=ctx.window.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{
     UpdateCanvasSize(){},Redraw(){app.drawCompare(side,{id:'compare-'+side});}
   });

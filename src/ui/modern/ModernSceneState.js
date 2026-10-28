@@ -5,7 +5,7 @@
 (function(root,factory){
   var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureModernSceneState131=api;
+  root.CurvatureModernSceneState=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var CAMERA={Height:[0.001,1e9],FocalLengthField:[1,100000],ViewAngleField:[0.1,160],

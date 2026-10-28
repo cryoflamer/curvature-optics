@@ -4,7 +4,7 @@
  * redraw restores the visible scene. No synthetic percentages are invented.
  */
 (function(root,factory){var api=factory();if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvaturePerformanceProfile118=api;
+  root.CurvaturePerformanceProfile=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}

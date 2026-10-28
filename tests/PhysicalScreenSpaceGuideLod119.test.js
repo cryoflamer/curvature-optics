@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const lod=require('../src/renderers/CurvatureScreenSpaceGuides119');
+const lod=require('../src/renderers/CurvatureScreenSpaceGuides');
 const stroke=require('../src/renderers/CurvatureStrokePreview');
 const frames=require('../src/scene/CurvatureRenderFrame');
 const contract=require('../src/scene/CurvatureSceneContract');

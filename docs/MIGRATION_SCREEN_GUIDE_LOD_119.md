@@ -11,7 +11,7 @@ This patch reduces input primitive counts **before** the shared
 
 ## Implementation
 
-`CurvatureScreenSpaceGuides119` constructs an index of coherent ground-guide
+`CurvatureScreenSpaceGuides` constructs an index of coherent ground-guide
 chains from the **already optically transformed** scene, reused across camera
 changes via a weak reference to its immutable source primitives. It treats only
 `line` primitives marked `metadata.physicalGround` as candidates. It never

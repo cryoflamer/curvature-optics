@@ -5,7 +5,7 @@
 (function(root,factory){
   var api=factory(root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvaturePhysicalCamera127=api;
+  root.CurvaturePhysicalCamera=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(surfaces){
   'use strict';
   if(!surfaces)throw Error('Curvature surface geometry required');

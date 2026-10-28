@@ -3,7 +3,7 @@
  * Globe has k=1/rEarth; Flat has k=0 and retains the finite radius value.
  */
 (function(root,factory){var api=factory();if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvaturePhysicalCurvature127=api;
+  root.CurvaturePhysicalCurvature=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var MIN_RADIUS=100000,MAX_RADIUS=1e16,MAX_STEP=1000,EARTH_RADIUS=6371000;

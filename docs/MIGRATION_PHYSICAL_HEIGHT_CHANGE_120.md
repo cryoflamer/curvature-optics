@@ -40,7 +40,7 @@ remain unchanged.
 
 ## Height slider latency and accuracy
 
-A new Physical-only `CurvatureHeightChangeScheduler120` replaces successive
+A new Physical-only `CurvatureHeightChangeScheduler` replaces successive
 height-change frames with one **final exact rebuild** after 150 ms without a
 new height update. `CurveApp.Update()` and control updates still run on every
 input: only the expensive Physical Canvas redraw is delayed. While waiting,

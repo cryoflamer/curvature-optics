@@ -9,7 +9,7 @@ on radius and could lose precision near the flat limit.
 
 ## What changed
 
-* **Physical only:** `CurvaturePhysicalCamera127.create(model)` fixes the
+* **Physical only:** `CurvaturePhysicalCamera.create(model)` fixes the
   camera origin at the observer, looks toward a *finite* 1000 m reference
   distance, and sets its angular field from `camViewAngle`, Pan, Nick, Roll
   and aspect ratio. Neither the view-center range nor field of view depends

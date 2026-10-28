@@ -11,7 +11,7 @@
 (function(root,factory){
   var api=factory(root.CurvatureRayTracer||(typeof require==='function'?require('./OpticalRayTracer'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureRayHorizon1332=api;
+  root.CurvatureRayHorizon=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(tracer){
   'use strict';
   if(!tracer||typeof tracer.trace!=='function')throw Error('Physical ray tracer is required');

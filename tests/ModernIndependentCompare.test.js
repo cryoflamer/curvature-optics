@@ -5,8 +5,8 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const source=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
-const compare132=require('../src/ui/modern/ModernCompareModel132');
-const compare133=require('../src/ui/modern/ModernCompareState133');
+const compare132=require('../src/ui/modern/ModernCompareModel');
+const compare133=require('../src/ui/modern/ModernCompareState');
 
 function model(){
   const obj={Height:15,FocalLengthField:2000,Pan:.0464,Nick:.0121,Roll:0,
@@ -67,7 +67,7 @@ test('133: invalid inputs fail atomically and do not change pair state',()=>{
 });
 test('133: Modern document offers A/B input, explicit engineered physics and no legacy loaders',()=>{
   const html=source('CurvatureModern.html');
-  assert.match(html,/ModernCompareState133.js/);
+  assert.match(html,/ModernCompareState.js/);
   for(const id of ['ModernPairPreset','ModernModelTabA','ModernModelTabB','ModernModelSurface',
     'ModernModelRadius','ModernModelAtmosphere','ModernModelOcclusion','ModernRecalculateCompare'])
     assert.match(html,new RegExp('id="'+id+'"'));
@@ -93,20 +93,20 @@ test('133: real compare UI reuses independent optical caches and updates only se
   const renders=[],callbacks=[],sessions=[];
   function Model(){Object.assign(this,model());}
   const ctx={window:{CurveAppClass:Model,
-    CurvatureModernSceneState131:null,CurvatureModernCompareModel132:compare132,
-    CurvatureModernCompareState133:compare133,
+    CurvatureModernSceneState:null,CurvatureModernCompareModel:compare132,
+    CurvatureModernCompareState:compare133,
     CurvaturePhysicalSceneOptics:{create(){const value={id:sessions.length+1};sessions.push(value);return value;}},
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renders.push({g,m,options});
       return {drawn:20,fillTriangles:10,unresolved:0,cacheReused:false};}},
-    CurvaturePhysicalCurvature127:{modelStep(){return 164;},label(){return 'Earth';}},
+    CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'scene'});}};},
     xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}},
     document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   ctx.window.window=ctx.window;
-  vm.runInNewContext(source('src/ui/modern/ModernApp130.js'),ctx);
-  const app=ctx.window.CurvatureModernApp130;
+  vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx);
+  const app=ctx.window.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},
     Redraw(){app.drawCompare(side,{id:side});}});
   callbacks[0]();

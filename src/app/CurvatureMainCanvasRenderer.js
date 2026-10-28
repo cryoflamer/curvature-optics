@@ -12,8 +12,8 @@
     root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),
     root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null),
     root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
-    root.CurvatureScreenSpaceGuides119||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides119'):null),
-    root.CurvaturePhysicalCamera127||(typeof require==='function'?require('./CurvaturePhysicalCamera127'):null));
+    root.CurvatureScreenSpaceGuides||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides'):null),
+    root.CurvaturePhysicalCamera||(typeof require==='function'?require('./CurvaturePhysicalCamera'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera){

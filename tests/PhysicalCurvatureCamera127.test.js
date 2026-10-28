@@ -3,8 +3,8 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const camera=require('../src/app/CurvaturePhysicalCamera127');
-const curve=require('../src/app/CurvaturePhysicalCurvature127');
+const camera=require('../src/app/CurvaturePhysicalCamera');
+const curve=require('../src/app/CurvaturePhysicalCurvature');
 const surface=require('../src/geometry/CurvatureSurfaceGeometry');
 const preview=require('../src/renderers/CurvaturePerspectivePreview');
 const root=path.resolve(__dirname,'..');
@@ -116,14 +116,14 @@ test('127: existing Legacy/Independent camera path and optical caching remain un
  assert.match(main,/configureCamera\(g,m,true\)/);
  assert.match(main,/physical\?physicalCamera\.create\(m\)/);
  const optical=fs.readFileSync(path.join(root,'src/optics/CurvaturePhysicalSceneOptics.js'),'utf8');
- assert.doesNotMatch(optical,/CurvaturePhysicalCamera127/);
+ assert.doesNotMatch(optical,/CurvaturePhysicalCamera/);
 });
 
 test('127: browser controls are physical-only and synchronize with saved or numeric model edits',()=>{
  const html=fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8');
  const runtime=fs.readFileSync(path.join(root,'src/app/CurvatureAppRuntime.js'),'utf8');
- assert.ok(html.indexOf('CurvaturePhysicalCamera127.js')<html.indexOf('CurvatureMainCanvasRenderer.js'));
- assert.ok(html.indexOf('CurvaturePhysicalCurvature127.js')<html.indexOf('CurvatureAppRuntime.js'));
+ assert.ok(html.indexOf('CurvaturePhysicalCamera.js')<html.indexOf('CurvatureMainCanvasRenderer.js'));
+ assert.ok(html.indexOf('CurvaturePhysicalCurvature.js')<html.indexOf('CurvatureAppRuntime.js'));
  for(const id of ['PhysicalCanvasCurvature','PhysicalCanvasCurvatureLabel','PhysicalCanvasEarthRadius'])
   assert.match(html,new RegExp('id="'+id+'"'));
  assert.match(runtime,/SyncPhysicalCurvatureControl127\(\)/);

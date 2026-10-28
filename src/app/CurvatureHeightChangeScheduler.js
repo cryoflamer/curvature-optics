@@ -6,7 +6,7 @@
 (function(root,factory){
   var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureHeightChangeScheduler120=api;
+  root.CurvatureHeightChangeScheduler=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   function create(setTimer,clearTimer,draw,delayMs){

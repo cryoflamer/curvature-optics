@@ -80,7 +80,7 @@ Exact numbers may be split if an integration reveals a larger risk; tests and ph
 ## Patch 131 delivery — Modern Scene controls
 
 Patch 131 keeps the two-entry architecture and the one actual `CurveAppClass` +
-Physical renderer. `src/ui/modern/ModernSceneState131.js` is a small, pure,
+Physical renderer. `src/ui/modern/ModernSceneState.js` is a small, pure,
 validated Scene-state adapter, **not** an independent scene model or optics
 engine. Input events mutate the active model; `model.Update()` remains the
 single calculation/normalization path. Numeric typing is debounced (420 ms),
@@ -144,7 +144,7 @@ Modern Compare workspace. Both A and B have their own GraphX3DX Canvas,
 backing store, viewport transform and raster clipping, and both invoke the
 existing `CurvatureMainCanvasRenderer.renderPhysical` rather than reusing a
 screenshot or legacy `Globe+FE` path. No physics routines have been forked.
-The new `ModernCompareModel132` clones the shared authored `CurveAppClass`
+The new `ModernCompareModel` clones the shared authored `CurveAppClass`
 state (copying its object arrays) to isolate per-model changes.
 
 The **initial fixed pair** is A = current Scene curvature and B = exact
@@ -183,11 +183,11 @@ no unresolved pieces for the reference scene; all older regression tests pass.
 ## Patch 133 — independent A/B physics with the same camera/scene
 
 Patch **133** removes the fixed-pair limitation while keeping the 132 dual
-Canvas and shared Physical renderer. `ModernCompareState133.js` owns two
+Canvas and shared Physical renderer. `ModernCompareState.js` owns two
 **validated, ephemeral descriptors** (`A`, `B`): surface kind (`globe` or
 `flat`), radius in kilometres, atmosphere name, and independently editable
 engineered-atmosphere comparison radius (metres). Editing a descriptor leaves
-Scene untouched. `ModernCompareModel132.clone` creates a fresh physical model
+Scene untouched. `ModernCompareModel.clone` creates a fresh physical model
 for each side, forces the **same Eye-level observer-fixed camera**, and runs
 `CurveAppClass.Update()`; no optics formula is implemented in either UI adapter.
 Both sides use the original `CurvatureMainCanvasRenderer.renderPhysical`.
@@ -218,7 +218,7 @@ nor its controls, state or persistence have changed.
 Patch 133 deliberately does **not** implement experiment save/restore, URL
 serialization, arbitrary UI preferences, or full end-to-end image matching;
 these belong to patch 134 or the engineering suite. Acceptance is covered by
-`tests/ModernIndependentCompare133.test.js` plus the full existing tests.
+`tests/ModernIndependentCompare.test.js` plus the full existing tests.
 Manual browser review remains necessary for viewport layout, visual contrast
 and real-world performance on different presets.
 
@@ -230,7 +230,7 @@ an optical ray, a visible surface edge, or evidence of a horizon.
 
 ## Patch 133.2 — finite first-contact optical horizon (research diagnostic)
 
-`src/optics/OpticalRayHorizon1332.js` measures an **angular first-ground-contact
+`src/optics/OpticalRayHorizon.js` measures an **angular first-ground-contact
 boundary** with the existing `CurvatureRayTracer.trace` and its real surface
 event detector. Angular launch directions are scanned, then bisected between
 a confirmed ground hit and a confirmed escaping ray with an **interior minimum
@@ -280,7 +280,7 @@ markers still share the same camera/FOV and remain overlay-only, without any
 additional ray tracing. Nonzero Roll suppression for the orange marker is
 unchanged.
 
-`tests/ModernAngularGuide13321.test.js` checks both signs and several camera
+`tests/ModernAngularGuide.test.js` checks both signs and several camera
 Nick values against the independently implemented perspective camera/painter
 projection, including an off-axis Pan. The scientific scope and limitations
 of the forward-traced first-contact diagnostic remain unchanged.

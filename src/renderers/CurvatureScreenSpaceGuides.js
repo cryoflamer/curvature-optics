@@ -7,7 +7,7 @@
   var api=factory(root.CurvatureCanvasProjection||(typeof require==='function'?require('./CurvatureCanvasProjection'):null),
     root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureScreenSpaceGuides119=api;
+  root.CurvatureScreenSpaceGuides=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(canvasProjection,contract){
   'use strict';
   var indexed=new WeakMap();
