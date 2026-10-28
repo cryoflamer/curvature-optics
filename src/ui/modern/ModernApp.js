@@ -8,7 +8,7 @@
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    compareEyeLevel:false,compareHorizon:true,horizonCache:{A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
+    compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -238,6 +238,9 @@
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
       });
       state.last=result;
+      var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
+      if(state.compareEyeLevel&&g&&g.Canvas)drawCompareEyeLevel(g,model);
+      if(state.compareHorizon)drawCompareHorizon('Scene',g,model,sceneOptions);
       var fullStatus=(result.cacheReused?'Cached optics':'Physical optics')+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
         ' fill triangles · '+result.unresolved+' unresolved'+
@@ -263,7 +266,7 @@
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
       state.compareLast[side]=result;
-      if(state.compareEyeLevel)drawCompareEyeLevel(g,m);
+      if(state.compareEyeLevel&&g&&g.Canvas)drawCompareEyeLevel(g,m);
       if(state.compareHorizon)drawCompareHorizon(side,g,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
       var node=el('ModernCompareStatus'+side);
@@ -642,7 +645,8 @@
       if(pairSettings)pairSettings.hidden=mode!=='compare';
       var title=newUiEl('ModernSidebarTitle');if(title)title.textContent=mode==='compare'?'Compare settings':'Scene settings';
       var subtitle=newUiEl('ModernSidebarSubtitle');if(subtitle)subtitle.textContent=mode==='compare'?'Shared scene · independent physics':'Shared physical renderer';
-      var display=newUiEl('ModernCompareDisplayOptions');if(display)display.hidden=mode!=='compare';
+      // The three Display controls are shared in Scene and Compare.
+      var display=newUiEl('ModernCompareDisplayOptions');if(display)display.hidden=false;
       var aim=el('ModernCameraAim');if(aim)aim.disabled=mode==='compare';
       var aimNote=newUiEl('ModernCompareCameraAimNote');if(aimNote)aimNote.hidden=mode!=='compare';
       var sceneRender=el('ModernRender');if(sceneRender)sceneRender.hidden=mode==='compare';
@@ -725,6 +729,8 @@
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius/1000);
     var grid=el('ModernGrid');if(grid)grid.checked=model.showGrid!==0;
+    var eye=newUiEl('ModernCompareEyeLevel');if(eye)eye.checked=state.compareEyeLevel;
+    var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
     var description=el('ModernSceneDescription');if(description)description.textContent=model.Description||'Custom physical scene';
     for(var i=0;i<2;i++){

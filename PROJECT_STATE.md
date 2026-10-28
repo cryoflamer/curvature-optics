@@ -599,3 +599,17 @@ purposefully committed extreme profile. Node regression: 566/566 passed.
 - Node regression: 572/572 passed; Chromium was available but local/file
   navigation was blocked by administrator policy, so no browser acceptance
   result is claimed.
+
+### 135.5 — Unified Scene and Compare Display controls
+
+- Display now exposes the same ground grid, eye-level angle guide, and forward
+  traced horizon switches in both Scene and Compare. All three controls remain
+  mounted once and apply to the active viewport(s).
+- The Scene painter now draws the same optional screen-space angle overlays
+  used in Compare, with a separate cached horizon diagnostic keyed by physical
+  parameters. Existing physical ray tracing and independent A/B atmosphere
+  configuration are unchanged.
+- Display options use the existing version-1 experiment fields, so URL and
+  JSON interchange remain backward-compatible; switching modes does not
+  reset the selections. Canvas-free test shims safely skip painter annotations.
+- Node regression: 573/573 passed. Browser acceptance remains unverified.

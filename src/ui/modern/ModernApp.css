@@ -125,7 +125,7 @@ button{cursor:pointer}
 /* Shared parameter tabs for Scene and Compare (134.2). The actual Camera,
    Objects and Display fields are mounted once; only physics panels switch. */
 .modern-pair-settings[hidden],.modern-compare-panel[hidden],
-#ModernCompareDisplayOptions[hidden],#ModernCompareCameraAimNote[hidden],
+#ModernCompareCameraAimNote[hidden],
 #ModernRender[hidden],#ModernRecalculateCompare[hidden],
 #ModernSceneEditNote[hidden],#ModernCompareEditNote[hidden]{display:none!important}
 .modern-pair-settings{padding-top:6px}

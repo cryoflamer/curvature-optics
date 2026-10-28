@@ -170,9 +170,9 @@
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
         <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
-        <div id="ModernCompareDisplayOptions" hidden>
-        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green reference line in both viewports; independent of atmospheric refraction.</p></div>
-        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration. Unresolved cases are not assumed to have a horizon.</p></div>
+        <div id="ModernCompareDisplayOptions">
+        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
+        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
         </div>
       </section>
       <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>

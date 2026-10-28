@@ -113,7 +113,7 @@ test('134.2: one set of Camera, Objects and Display controls; tab panels match m
   assert.equal(h.getRenderCount(),rendered,'tab changes must not retrace');
   n.get('ModernSceneTab').dispatch('click');
   assert.equal(n.get('ModernCompareSettings').hidden,true);
-  assert.equal(n.get('ModernCompareDisplayOptions').hidden,true);
+  assert.equal(n.get('ModernCompareDisplayOptions').hidden,false);
   assert.equal(n.get('ModernSettingsDisplay').attributes['aria-controls'],'ModernPanelDisplay');
 });
 
@@ -380,4 +380,28 @@ test('135.4: switching selected model commits pending curvature without stale vi
   assert.equal(h.app.getCompareConfig().B.surface,'globe');
   h.flushTimers();
   assert.equal(h.getRenderCount(),before+2);
+});
+
+test('135.5: Display toggles remain visible and shared while Scene and Compare switch',()=>{
+  const {nodes:n,app,getRenderCount}=boot();
+  n.get('ModernSettingsDisplay').dispatch('click');
+  assert.equal(n.get('ModernCompareDisplayOptions').hidden,false);
+  assert.equal(n.get('ModernCompareEyeLevel').checked,false);
+  assert.equal(n.get('ModernCompareHorizon').checked,true);
+  let before=getRenderCount();
+  n.get('ModernCompareEyeLevel').checked=true;
+  n.get('ModernCompareEyeLevel').dispatch('change');
+  assert.equal(getRenderCount(),before+1,'Scene redraws after eye-level toggle');
+  n.get('ModernCompareHorizon').checked=false;
+  n.get('ModernCompareHorizon').dispatch('change');
+  assert.equal(getRenderCount(),before+2,'Scene redraws after horizon toggle');
+  n.get('ModernCompareTab').dispatch('click');
+  assert.equal(n.get('ModernCompareDisplayOptions').hidden,false);
+  assert.equal(n.get('ModernCompareEyeLevel').checked,true);
+  assert.equal(n.get('ModernCompareHorizon').checked,false);
+  n.get('ModernSceneTab').dispatch('click');
+  assert.equal(n.get('ModernCompareDisplayOptions').hidden,false);
+  assert.equal(n.get('ModernCompareEyeLevel').checked,true);
+  assert.equal(n.get('ModernCompareHorizon').checked,false);
+  assert.equal(app.getMode(),'scene');
 });
