@@ -60,8 +60,15 @@
     delete solverOptions.angleTolerance;
     delete solverOptions.adaptiveDepth;
     delete solverOptions.maxAdaptiveCells;
+    delete solverOptions.shootingOptimization;
     if (solverOptions.profileOptions)
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
+    // Only the bounded, smooth standard atmosphere opts into the guarded
+    // predictor. A user-provided profile and engineered grazing atmospheres
+    // retain the original bracket-first solver.
+    if(options.atmosphere==='standard' && options.profile===undefined &&
+        options.shootingOptimization!==false)
+      solverOptions.shootingPredictor=true;
     // Cache lifetime is the returned field: changing atmosphere, camera height,
     // or R means constructing a new field. No hidden cross-configuration cache.
     solverOptions=projection.preparedOptions(solverOptions);
@@ -69,6 +76,8 @@
     function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
     var statistics={solves:0,hits:0,interpolations:0,fallbacks:0,
       exactSolveMs:0,shootRK4Calls:0,shootEvaluations:0,
+      predictorAttempts:0,predictorAccepted:0,predictorFallbacks:0,
+      clearGroundSteps:0,fullGroundEventSteps:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
       maxDepthUsed:0};
     function exact(d,h) {
@@ -81,6 +90,11 @@
       statistics.exactSolveMs+=clock()-started;
       statistics.shootRK4Calls+=result.shootRK4Calls||0;
       statistics.shootEvaluations+=result.evaluations||0;
+      statistics.predictorAttempts+=result.predictorAttempts||0;
+      statistics.predictorAccepted+=result.predictorAccepted||0;
+      statistics.predictorFallbacks+=result.predictorFallbacks||0;
+      statistics.clearGroundSteps+=result.ray&&result.ray.fastGroundSkips||0;
+      statistics.fullGroundEventSteps+=result.ray&&result.ray.fullGroundChecks||0;
       var record={status:result.status,angle:result.angle,
         residual:result.residual,method:'exact',reason:result.reason};
       Object.freeze(record);

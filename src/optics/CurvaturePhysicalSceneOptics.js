@@ -181,7 +181,8 @@
           distances:span.distances,heights:span.heights,
           angleTolerance:settings.fieldTolerance,step:settings.step,
           adaptiveDepth:settings.fieldAdaptiveDepth,
-          maxAdaptiveCells:settings.fieldMaxAdaptiveCells});
+          maxAdaptiveCells:settings.fieldMaxAdaptiveCells,
+          shootingOptimization:settings.shootingOptimization});
       }
       var fieldSetupMs=clock()-startedProfile;
       var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;

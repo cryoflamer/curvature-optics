@@ -226,3 +226,25 @@ regression-checked against #119 at two heights. A Node-only benchmark showed
 `docs/MIGRATION_PHYSICAL_HEIGHT_CHANGE_120.md`,
 `tools/benchmark-height-change-120.js`,
 `tests/PhysicalHeightChange120.test.js`.
+
+## Compatpatch 121 — guarded Standard shooting and ground-event reduction
+
+On the #120 85+2 Globe Standard cold scene, 6,258 exact target points required
+23,611 trial shooting integrations. #121 adds a local, residual-verified
+shooting predictor (three attempts max, original bracketed fallback) for
+built-in Standard only. Standard ground verification now avoids most costly
+substep event probes when an explicit upper bound on ray curvature proves a
+step's chord safely above the physical surface, keeping full old ground-event
+search for near-contact, grazing and uncertain spans. The RK4 recurrence,
+shooting tolerance, atmosphere, physical horizon, tower fills and renderer
+are unchanged. A test-only `settings.shootingOptimization:false` retains the
+original #120 exact pixel-source scene hashes. Paired Node cold-builds on
+85+2 towers reduced 23,611 -> 16,779 shooting evaluations and 36,833 ->
+2,878 full ground-event step searches at Height 15 m; wall time varied from
+~792 -> ~461 ms in one Node comparison (not a browser latency guarantee).
+For standard rays numerical arrival angles may differ by <1e-8 rad; exact
+bitwise equality is not claimed on the accelerated path. The ZIP profiler
+reports predictor and ground step statistics. See
+`docs/MIGRATION_SHOOTING_REDUCTION_121.md`,
+`tests/OpticalShootingReduction121.test.js` and
+`tools/benchmark-shooting-reduction-121.js`.

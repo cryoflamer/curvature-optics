@@ -58,6 +58,7 @@
     var xGoal = target[0], zGoal = target[1];
     var maxPath = 6 * Math.hypot(xGoal, zGoal - observerHeight) + 4 * step;
     var evaluations = 0,shootRK4Calls=0;
+    var predictorAttempts=0,predictorAccepted=0,predictorFallbacks=0;
 
     function shoot(angle) {
       evaluations++;
@@ -102,7 +103,8 @@
 
     function failed(reason) {
       return {status:'solver_failed',angle:null,ray:null,target:target.slice(),
-        residual:null,evaluations:evaluations,shootRK4Calls:shootRK4Calls,reason:reason,
+        residual:null,evaluations:evaluations,shootRK4Calls:shootRK4Calls,predictorAttempts:predictorAttempts,
+        predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,reason:reason,
         scope:'Only a forward-x single shooting branch was searched; no global multipath guarantee'};
     }
 
@@ -115,6 +117,39 @@
       state:[xGoal,zGoal,Math.cos(directionAngle),Math.sin(directionAngle)]
     } : shoot(directionAngle);
     if (!best) return failed('The initial ray did not reach the target x coordinate');
+    // #121: a guarded, local predictor for well-behaved standard-atmosphere
+    // paths. The first probe uses the straight-ray fixed-x angular derivative;
+    // subsequent probes use an observed secant derivative. Every proposed
+    // arrival is *integrated* and checked against the unchanged tolerance.
+    // Failure returns to the original bracketed shooting algorithm, never to
+    // an extrapolated or unverified arrival angle. Custom/multipath profiles
+    // do not opt in to this single-branch acceleration.
+    if (!vacuum && options.shootingPredictor === true &&
+        Math.abs(best.residual) > solveTolerance) {
+      var origin=best,previous=null,current=best;
+      var guessSlope=xGoal/(Math.cos(directionAngle)*Math.cos(directionAngle));
+      var converged=false;
+      for(var p=0;p<3;p++) {
+        if(!(Number.isFinite(guessSlope)&&guessSlope>0))break;
+        var correction=-current.residual/guessSlope;
+        if(!Number.isFinite(correction)||Math.abs(correction)>0.01||
+            Math.abs(current.angle+correction)>=HALF_PI-0.001 ||
+            Math.abs(correction)<1e-15)break;
+        predictorAttempts++;
+        var guess=shoot(current.angle+correction);
+        if(!guess)break;
+        if(Math.abs(guess.residual)<=solveTolerance){
+          best=guess;predictorAccepted=1;converged=true;break;
+        }
+        // Never pursue a noncontractive step. In particular near a grazing
+        // singularity the original bracket search remains authoritative.
+        if(Math.abs(guess.residual)>=Math.abs(current.residual)*0.9)break;
+        previous=current;current=guess;
+        guessSlope=(current.residual-previous.residual)/
+          (current.angle-previous.angle);
+      }
+      if(!converged){best=origin;predictorFallbacks=1;}
+    }
     if (!vacuum && Math.abs(best.residual) > solveTolerance) {
       var atStart=best, span=initialSpan, lower, upper;
       var sign = atStart.residual > 0 ? -1 : 1;
@@ -159,7 +194,8 @@
     try {
       ray=rt.trace({geometry:geometry,radius:radius,profile:profile,
         observerHeight:observerHeight,angle:best.angle,length:best.pathLength,
-        step:step,eventSubsteps:eventSubsteps,contactTolerance:contactTolerance});
+        step:step,eventSubsteps:eventSubsteps,contactTolerance:contactTolerance,
+        fastClearGround:options.shootingPredictor===true});
     } catch (error) {
       return failed('Ground-event verification failed: '+error.message);
     }
@@ -180,6 +216,7 @@
     }
     return {status:status,angle:best.angle,residual:best.residual,
       pathLength:best.pathLength,target:target.slice(),ray:ray,evaluations:evaluations,shootRK4Calls:shootRK4Calls,
+      predictorAttempts:predictorAttempts,predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,
       reason:status==='indeterminate'?'Possible grazing or endpoint contact within numerical tolerance':null,
       scope:'Single forward-x shooting branch; a blocked branch does not exclude unsearched paths'};
   }

@@ -27,6 +27,11 @@
       exactRaySolves:result.fieldStats&&result.fieldStats.solves,
       shootRK4Calls:result.fieldStats&&result.fieldStats.shootRK4Calls,
       shootEvaluations:result.fieldStats&&result.fieldStats.shootEvaluations,
+      predictorAttempts:result.fieldStats&&result.fieldStats.predictorAttempts,
+      predictorAccepted:result.fieldStats&&result.fieldStats.predictorAccepted,
+      predictorFallbacks:result.fieldStats&&result.fieldStats.predictorFallbacks,
+      provenClearGroundSteps:result.fieldStats&&result.fieldStats.clearGroundSteps,
+      fullGroundEventSteps:result.fieldStats&&result.fieldStats.fullGroundEventSteps,
       exactSolveMs:result.fieldStats&&result.fieldStats.exactSolveMs,
       opticalStages:result.cacheReused?null:(result.opticalStages||null),
       unresolved:result.unresolved};

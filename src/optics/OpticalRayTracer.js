@@ -23,7 +23,13 @@
         throw Error('Invalid atmospheric constants');
       return {
         n: function (h) { return 1 + N0 * Math.exp(-h / H); },
-        dn: function (h) { return -N0 * Math.exp(-h / H) / H; }
+        dn: function (h) { return -N0 * Math.exp(-h / H) / H; },
+        // Conservative upper bound on |d(n)/dh / n| for altitudes >= h.
+        // Used only to prove a whole RK4 segment remains above the ground;
+        // arbitrary user profiles have no such shortcut.
+        rayCurvatureUpperBound: function (lowestHeight) {
+          return N0 * Math.exp(-lowestHeight / H) / H;
+        }
       };
     }
     // Mathematical flat-surface occlusion models. The parameter
@@ -221,6 +227,17 @@
     return null;
   }
 
+  // Minimum surface altitude of the straight chord joining two states.
+  // The true ray can depart from this chord by no more than K*ds^2/8 when
+  // its curvature is bounded by K. Ground altitude is 1-Lipschitz in space.
+  function chordClearance(a,b,geometry,radius) {
+    if(geometry==='flat')return Math.min(a[1],b[1]);
+    var dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
+    var t=den>0?-(a[0]*dx+(a[1]+radius)*dz)/den:0;
+    t=Math.max(0,Math.min(1,t));
+    return Math.hypot(a[0]+t*dx,a[1]+radius+t*dz)-radius;
+  }
+
   function trace(options) {
     options = options || {};
     var setup=validateSetup(options);
@@ -242,9 +259,27 @@
     var state = [0, observerHeight, Math.cos(angle), Math.sin(angle)];
     var points = options.collect ? [[state[0], state[1]]] : null;
     var hitGround = false, travelled = 0, event = null;
+    var fastGroundSkips=0,fullGroundChecks=0;
+    var fastGround=options.fastClearGround===true &&
+      typeof profile.rayCurvatureUpperBound==='function';
     for (var i = 0; i < count; i++) {
       var delta = Math.min(ds, length - travelled);
-      var impact=options.stopAtGround===false?null:
+      var clearNext=null,provedClear=false;
+      if(fastGround && options.stopAtGround!==false &&
+          height(state[0],state[1],geometry,radius)>0) {
+        clearNext=step(state,delta,geometry,radius,profile);
+        var h=height(state[0],state[1],geometry,radius);
+        var curvature=profile.rayCurvatureUpperBound(h-delta);
+        // The additional factor of 2 and 1 mm cushion make the shortcut
+        // more conservative than the continuous-curve chord bound. A near-
+        // horizon or uncertain segment always takes the original event path.
+        var margin=curvature*delta*delta/4+0.001;
+        provedClear=Number.isFinite(margin) &&
+          chordClearance(state,clearNext,geometry,radius)>margin;
+        if(provedClear)fastGroundSkips++;
+      }
+      if(!provedClear && options.stopAtGround!==false)fullGroundChecks++;
+      var impact=options.stopAtGround===false||provedClear?null:
         groundEvent(state,delta,geometry,radius,profile,substeps,contactTolerance);
       if (impact) {
         state=impact.point.state;
@@ -254,7 +289,7 @@
           x:state[0],z:state[1],height:height(state[0],state[1],geometry,radius),
           tolerance:contactTolerance};
       } else {
-        state=step(state,delta,geometry,radius,profile);
+        state=provedClear?clearNext:step(state,delta,geometry,radius,profile);
         travelled+=delta;
       }
       if (points) points.push([state[0], state[1]]);
@@ -264,6 +299,7 @@
       height: height(state[0], state[1], geometry, radius),
       hitGround: hitGround, travelled: travelled, points: points,
       termination:hitGround?'ground':(options.stopAtGround===false?'range-unchecked':'range'),
+      fastGroundSkips:fastGroundSkips,fullGroundChecks:fullGroundChecks,
       event:event };
   }
 

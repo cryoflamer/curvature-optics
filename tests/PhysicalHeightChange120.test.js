@@ -93,14 +93,15 @@ test('120: profiler captures three actual height-dependent cold renders',async()
   assert.deepEqual(original,{Height:15,showGrid:1,camViewCenter:[0,1,0]});
 });
 
-test('120: 85-tower Globe + Standard scene is bit-for-bit identical to #119 at two eye heights',()=>{
+test('120: the unaccelerated reference retains #119 hashes at two eye heights',()=>{
   const crypto=require('node:crypto');
   const {atHeight}=require('../tools/benchmark-height-change-120');
   const oracle=require('./fixtures/physical-globe-height-oracle-120.json');
   for(const expected of oracle){
     const m=atHeight(model(85,'globe'),expected.height);
     const composed=composition.composeOpticalMain(m,true);
-    const result=optical.create().transform(composed,m,{atmosphere:'standard'});
+    const result=optical.create().transform(composed,m,{atmosphere:'standard',
+      settings:{shootingOptimization:false}});
     const stats=result.stats;
     const hash=crypto.createHash('sha256').update(
       JSON.stringify(result.composition.scene.primitives)).digest('hex');

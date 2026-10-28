@@ -177,6 +177,10 @@ function DrawMainCanvasFrame(g) {
             Math.round(result.fieldPrism.maxHeight)+' m elevation');
           pieces.push(result.fieldStats.interpolations+' interpolated points | '+
             result.fieldStats.fallbacks+' exact fallbacks');
+          if(!result.cacheReused&&result.fieldStats.predictorAccepted)
+            pieces.push('fast shooting '+result.fieldStats.predictorAccepted+' verified roots / '+
+              result.fieldStats.shootEvaluations+' trials | '+
+              result.fieldStats.clearGroundSteps+' clear ground steps (no substep search)');
           if(result.fieldStats.refinements!==undefined)
             pieces.push(result.fieldStats.acceptedCells+' qualified adaptive cells | '+
               result.fieldStats.refinements+' refinements'+
