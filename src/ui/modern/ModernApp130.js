@@ -40,7 +40,7 @@
     var wrap=el('ModernOcclusionWrap');
     if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(state.atmosphere);
     var fov=el('ModernViewAngle');if(fov&&Number.isFinite(model.ViewAngle))
-      fov.value=String(Number(model.ViewAngle.toPrecision(10)));
+      fov.value=String(Number(model.ViewAngle.toFixed(4)));
   }
   function draw(g){
     if(state.mode!=='scene')return;
@@ -49,11 +49,12 @@
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
       });
       state.last=result;
-      updateStatus((result.cacheReused?'Cached optics':'Physical optics')+
+      var fullStatus=(result.cacheReused?'Cached optics':'Physical optics')+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
         ' fill triangles · '+result.unresolved+' unresolved'+
-        (result.timings?' · '+Math.round(result.timings.totalMs)+' ms':''),
-        result.unresolved>0);
+        (result.timings?' · '+Math.round(result.timings.totalMs)+' ms':'');
+      var statusNode=el('ModernStatus');if(statusNode)statusNode.title=fullStatus;
+      updateStatus(fullStatus,result.unresolved>0);
     }catch(error){
       updateStatus('Physical renderer: '+error.message,true);
       if(root.console&&root.console.error)root.console.error('Modern Scene render:',error);
@@ -193,8 +194,90 @@
       redraw();
     }catch(error){updateStatus(error.message,true);}
   }
+  // 131.1: Presentation-only tabs and accessible contextual explanations.
+  // Neither control identifiers nor physics/model state are duplicated here.
+  var settingGroups=['Camera','Surface','Atmosphere','Objects','Display'];
+  function activateSettings(name,focus){
+    settingGroups.forEach(function(group){
+      var tab=el('ModernSettings'+group),panel=el('ModernPanel'+group);
+      if(!tab||!panel)return;
+      var active=group===name;
+      tab.classList.toggle('is-active',active);
+      tab.setAttribute('aria-selected',String(active));
+      tab.tabIndex=active?0:-1;
+      panel.hidden=!active;
+      if(active&&focus&&typeof tab.focus==='function')tab.focus();
+    });
+  }
+  function bindSettingsTabs(){
+    // The old 130/131 fake DOM has no querySelector; real documents do.
+    if(typeof document.querySelector!=='function')return;
+    settingGroups.forEach(function(group,index){
+      var tab=el('ModernSettings'+group);if(!tab)return;
+      tab.addEventListener('click',function(){activateSettings(group,false);});
+      tab.addEventListener('keydown',function(event){
+        var offset=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:0;
+        if(event.key==='Home'){event.preventDefault();activateSettings(settingGroups[0],true);}
+        else if(event.key==='End'){event.preventDefault();activateSettings(settingGroups[settingGroups.length-1],true);}
+        else if(offset){event.preventDefault();activateSettings(settingGroups[(index+offset+settingGroups.length)%settingGroups.length],true);}
+      });
+    });
+    activateSettings('Camera',false);
+  }
+  var fieldHelp={
+    ModernHeight:'Observer height above the local surface, in metres. Does not move the towers.',
+    ModernFocal:'Camera focal length in millimetres. This and field of view describe the same camera zoom.',
+    ModernViewAngle:'Angular field of view in degrees, synchronized with focal length. Only the displayed number is rounded.',
+    ModernPan:'Horizontal aiming angle in degrees. Changes the camera, not the object azimuths.',
+    ModernNick:'Vertical camera pitch in degrees. Does not change observer height.',
+    ModernRoll:'Rotation around the camera viewing axis, in degrees.',
+    ModernCameraAim:'Eye level holds a common local direction for comparisons. Horizon modes intentionally move their aim when curvature changes.',
+    ModernCurvature:'Surface curvature is κ = 1/R. The far-right endpoint is exactly flat (κ = 0), not merely a very large sphere.',
+    ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
+    ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',
+    ModernAtmosphere:'Controls how light propagates. Vacuum has straight rays; Standard refracts; engineered profiles have separate parameters.',
+    ModernOcclusion:'Parameter of the engineered atmosphere in metres, distinct from the surface radius.',
+    ModernGrid:'Metric guide lines are measured along the actual surface and do not determine the optical horizon.'
+  };
+  var objectHelp={
+    NObjects:'Number of objects in this group.',ObjType:'Physical shape rendered for this group.',
+    ObjDist:'Along-surface distance to the first object in metres.',
+    ObjDeltaDist:'Along-surface separation of consecutive objects in metres.',
+    ObjSidePos:'Lateral offset from the observation axis, in metres.',
+    ObjSize:'Height or characteristic size of each object, in metres.',
+    ObjSideType:'How lateral offset varies across the group.',
+    ObjSideVar:'Magnitude of the lateral offset variation, in metres.',
+    ObjSizeType:'How object size varies across the group.',
+    ObjSizeVar:'Amplitude of object size variation relative to its baseline.'
+  };
+  function addHelpToLabel(label,message){
+    if(!label||!message||label.querySelector('.modern-help'))return;
+    var help=document.createElement('button');
+    help.type='button';help.className='modern-help';help.textContent='?';
+    help.setAttribute('aria-label','Help: '+label.textContent.trim());
+    help.setAttribute('data-tip',message);
+    help.title=message;
+    help.addEventListener('click',function(){help.focus();});
+    label.appendChild(help);
+  }
+  function bindHelp(){
+    if(typeof document.querySelector!=='function'||typeof document.createElement!=='function')return;
+    Object.keys(fieldHelp).forEach(function(id){
+      var field=el(id);
+      if(!field)return;
+      var label=document.querySelector('label[for="'+id+'"]');
+      if(label)addHelpToLabel(label,fieldHelp[id]);
+    });
+    for(var i=0;i<2;i++)Object.keys(objectHelp).forEach(function(key){
+      var id='ModernObject'+i+key;
+      var label=document.querySelector('label[for="'+id+'"]');
+      if(label)addHelpToLabel(label,objectHelp[key]);
+    });
+  }
   function bind(){
     bindObjectFields();
+    bindSettingsTabs();
+    bindHelp();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
     bindNumber('ModernPan',function(v){adapter?adapter.setCamera(model,'Pan',v):model.Pan=v;},'pan');

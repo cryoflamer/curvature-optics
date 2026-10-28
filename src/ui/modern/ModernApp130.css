@@ -43,3 +43,26 @@ button{cursor:pointer}
 .modern-sidebar{max-height:calc(100vh - 120px);overflow-y:auto;scrollbar-width:thin}
 @media(max-width:850px){.modern-sidebar{max-height:none;overflow-y:visible}.modern-preset-section{grid-column:1/-1}}
 @media(max-width:550px){.modern-object-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 131.1: compact, keyboard-accessible settings tabs and inline field help. */
+.modern-sidebar{width:320px;max-width:100%;overflow:visible;max-height:none;align-self:start}
+.modern-workspace{grid-template-columns:320px minmax(0,1fr)}
+.modern-settings-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:14px 0 8px}
+.modern-settings-tab{border:1px solid #d2deec;background:#f5f9ff;color:#355b82;border-radius:7px;padding:8px 3px;font-size:11px;font-weight:650;white-space:nowrap}
+.modern-settings-tab.is-active{background:#236ab4;border-color:#236ab4;color:white}
+.modern-settings-tab:focus-visible,.modern-help:focus-visible{outline:2px solid #2c83d3;outline-offset:2px}
+.modern-settings-panel{padding:13px 0 5px;border-bottom:0;min-height:160px}
+.modern-settings-panel[hidden]{display:none!important}
+.modern-section .modern-field>label{display:flex;align-items:center;gap:5px}
+.modern-help{position:relative;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:16px;height:16px;min-width:16px;padding:0;border:1px solid #a9c3df;background:#eff6ff;border-radius:50%;font-size:10px;font-weight:750;color:#28629d;line-height:1;cursor:help}
+.modern-help:hover:after,.modern-help:focus:after{content:attr(data-tip);position:absolute;z-index:40;top:calc(100% + 8px);left:-10px;width:min(270px,75vw);padding:10px 12px;border-radius:8px;background:#203550;color:#fff;font-size:12px;font-weight:400;line-height:1.5;white-space:normal;text-align:left;box-shadow:0 6px 22px #0d24454a;pointer-events:none}
+.modern-scene-bar{flex-wrap:wrap}
+.modern-scene-bar>div:first-child{flex:1 1 240px;min-width:0}
+.modern-scene-presets{display:flex;gap:8px;align-items:center;flex:0 1 auto}
+.modern-scene-presets label{font-size:12px;color:#637b98}
+.modern-scene-presets select{height:36px;min-width:195px;max-width:260px;border:1px solid #cad7e6;border-radius:7px;background:white;color:#223b59;padding:5px 8px}
+.modern-scene-presets .modern-ghost-button{margin:0;height:36px}
+.modern-mode-pill{flex:0 0 auto}
+.modern-settings-panel .modern-note{margin-top:5px}
+@media(max-width:900px){.modern-workspace{grid-template-columns:1fr}.modern-sidebar{width:auto}.modern-settings-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.modern-scene-presets{order:3;flex-basis:100%}.modern-scene-presets select{flex:1;max-width:none}}
+@media(max-width:550px){.modern-settings-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}.modern-scene-presets{flex-wrap:wrap}}
+@media(max-width:850px){.modern-sidebar{display:block}}

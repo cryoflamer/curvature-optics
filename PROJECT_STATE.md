@@ -406,3 +406,12 @@ and automatic debounced rendering. Lake Pontchartrain is the primary preset;
 single-tower and two-row samples are explicitly illustrative. Modern edits do
 not overwrite Legacy saved state; full experiment persistence stays in patch
 134. The architecture/delivery plan is updated in `docs/modern-ui-plan.md`.
+
+### Compatibility patch 131.1 — Modern settings ergonomics
+
+Modern Scene groups were reorganized into five tab panels (Camera / Surface /
+Atmosphere / Objects / Display), with the existing presets moved above the
+viewport and field help available by hover or keyboard focus. The model, optics,
+Legacy interface and 131 field IDs/handlers were not changed. FOV is formatted
+for display with four decimals only. See `docs/modern-ui-plan.md` for acceptance
+and the continued 132–134 roadmap.

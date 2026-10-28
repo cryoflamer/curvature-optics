@@ -111,3 +111,28 @@ renderer; FOV/focal and radius/curvature controls stay synchronized; presets
 reset consistently; invalid input never changes geometry; numeric typing does
 not repeatedly run expensive shooting; no Legacy UI initialization. Compare is
 still an explicit placeholder until patches 132–133.
+
+## Patch 131.1 — compact settings navigation and contextual help
+
+Following browser acceptance of patch 131, the long left-hand scroll was deemed
+unwieldy. Patch **131.1** changes **Modern presentation only**:
+
+- Scene settings use five mutually exclusive keyboard-accessible tabs: **Camera,
+  Surface, Atmosphere, Objects, Display**. A single category is visible at a
+  time; controls keep their IDs, values, event handlers, validation and one
+  active `CurveAppClass`. Switching a tab must not reset a field or recalculate
+  optical paths.
+- Preset selection and Reset move to the toolbar **above the physical scene**;
+  their existing 131 state adapter remains the only preset implementation.
+- Small `?` help controls explain the *physical meaning* of parameters on hover
+  and keyboard focus, especially curvature versus atmospheric occlusion radius.
+- The sidebar is wider, numeric **FOV display** is rounded to four decimals
+  without reducing the internal model precision; full render diagnostics remain
+  available via the status tooltip. No changes to the Legacy diagnostic UI.
+
+Acceptance: no new physics/raster implementation, stable IDs and state binding,
+no accidental optical calculation on tab switch, no hidden legacy UI execution,
+all previous tests green, and a manual Modern browser layout check. Compare
+remains the explicit placeholder for 132–133. Future controls should follow the
+same tab-and-help conventions rather than reinstating an infinitely scrolling
+sidebar.

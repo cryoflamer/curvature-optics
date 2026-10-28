@@ -60,18 +60,14 @@
   <div class="modern-workspace">
     <aside class="modern-sidebar" aria-label="Scene settings">
       <div class="modern-sidebar-heading"><span>Scene settings</span><small>Shared physical renderer</small></div>
-      <section class="modern-section modern-preset-section">
-        <h2>Scene presets</h2>
-        <div class="modern-field"><label for="ModernPreset">Select a scene</label>
-          <select id="ModernPreset"><option value="pontchartrain">Lake Pontchartrain · towers</option>
-            <option value="single">Single tower · sample</option>
-            <option value="rows">Two tower rows · sample</option>
-            <option value="custom" disabled>Custom scene (edited)</option>
-          </select></div>
-        <button type="button" class="modern-ghost-button" id="ModernResetPreset">Reset selected preset</button>
-        <p class="modern-note">Edits are temporary in Modern preview. Saved experiments and sharing arrive in patch 134; Legacy saved settings are never overwritten.</p>
-      </section>
-      <section class="modern-section">
+      <div class="modern-settings-tabs" role="tablist" aria-label="Scene parameter groups">
+        <button type="button" class="modern-settings-tab is-active" role="tab" id="ModernSettingsCamera" aria-controls="ModernPanelCamera" aria-selected="true" tabindex="0">Camera</button>
+        <button type="button" class="modern-settings-tab" role="tab" id="ModernSettingsSurface" aria-controls="ModernPanelSurface" aria-selected="false" tabindex="-1">Surface</button>
+        <button type="button" class="modern-settings-tab" role="tab" id="ModernSettingsAtmosphere" aria-controls="ModernPanelAtmosphere" aria-selected="false" tabindex="-1">Atmosphere</button>
+        <button type="button" class="modern-settings-tab" role="tab" id="ModernSettingsObjects" aria-controls="ModernPanelObjects" aria-selected="false" tabindex="-1">Objects</button>
+        <button type="button" class="modern-settings-tab" role="tab" id="ModernSettingsDisplay" aria-controls="ModernPanelDisplay" aria-selected="false" tabindex="-1">Display</button>
+      </div>
+      <section class="modern-section modern-settings-panel" id="ModernPanelCamera" role="tabpanel" aria-labelledby="ModernSettingsCamera">
         <h2>Camera</h2>
         <div class="modern-field"><label for="ModernHeight">Observer height (m)</label><input id="ModernHeight" type="number" min="0.001" max="1000000000" step="0.1" value="15"></div>
         <div class="modern-two-fields">
@@ -89,8 +85,7 @@
             <option value="2">Between horizons</option><option value="1">Flat Earth equivalent</option>
           </select></div>
         </div>
-      </section>
-      <section class="modern-section">
+      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface</h2>
         <label for="ModernCurvature">Surface curvature</label>
         <input id="ModernCurvature" type="range" min="0" max="1000" step="1" value="164">
@@ -100,31 +95,36 @@
           <div class="modern-field"><label class="modern-check" for="ModernFlat"><input id="ModernFlat" type="checkbox"> Exact flat (κ = 0)</label></div>
         </div>
         <button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button>
-      </section>
-      <section class="modern-section">
+      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
           <option value="standard" selected>Standard atmosphere</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical">Inverse spherical</option><option value="exponential-occlusion">Exponential occlusion</option>
         </select></div>
         <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Comparison/occlusion radius (m)</label><input id="ModernOcclusion" type="number" min="1" max="1e16" step="1000" value="6371000"></div>
-      </section>
-      <section class="modern-section">
+      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>
         <p class="modern-note">Two physical groups, sharing the same camera and surface. Supported by the Physical renderer: towers, ships, rods and Bedford objects.</p>
         <details class="modern-objects" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
         <details class="modern-objects"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
-      </section>
-      <section class="modern-section">
+      </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
         <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
-      </section>
-      <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
+      </section>      <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
       <p class="modern-note">Valid changes automatically update the scene. Manual recalculation is optional.</p>
     </aside>
     <main class="modern-main">
       <div class="modern-scene-bar"><div><h1 id="ModernSceneTitle">Lake Pontchartrain Transmission Line</h1>
         <p id="ModernSceneDescription">85 transmission towers across Lake Pontchartrain</p></div>
+        <div class="modern-scene-presets" aria-label="Scene presets">
+          <label for="ModernPreset">Preset</label>
+          <select id="ModernPreset"><option value="pontchartrain">Lake Pontchartrain · towers</option>
+            <option value="single">Single tower · sample</option>
+            <option value="rows">Two tower rows · sample</option>
+            <option value="custom" disabled>Custom scene (edited)</option>
+          </select>
+          <button type="button" class="modern-ghost-button" id="ModernResetPreset" title="Restore the chosen preset's initial scene parameters">Reset</button>
+        </div>
         <span class="modern-mode-pill" id="ModernModePill">SCENE</span></div>
       <section class="modern-viewport-panel" aria-label="Physical scene preview">
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
