@@ -25,7 +25,8 @@ test('legacy drawing declarations load before application boot and diagnostics',
   const model = scripts.indexOf('src/app/CurvatureModel.js');
   const diagnostics = scripts.indexOf('src/diagnostics/CurvatureLegacyFrameCaptureController.js');
   assert.ok(drawing >= 0 && model === drawing + 1);
-  assert.equal(diagnostics, model + 1);
+  assert.equal(scripts[model + 1], 'src/diagnostics/CurvaturePhysicalSanity129.js');
+  assert.equal(diagnostics, model + 2);
   assert.equal(scripts[diagnostics + 1], 'src/app/CurvaturePhysicalCamera127.js');
   assert.equal(scripts[diagnostics + 2], 'src/app/CurvaturePhysicalCurvature127.js');
   assert.equal(scripts[diagnostics + 3], 'src/app/CurvatureMainCanvasRenderer.js');

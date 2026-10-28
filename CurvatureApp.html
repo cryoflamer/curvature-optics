@@ -134,6 +134,8 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
   <div style="padding:0.5em 1em;">
     <button type="button" id="LegacyFrameCaptureButton">Capture legacy frame audit</button>
     <button type="button" id="LegacyGeometryAnalyzeButton">Analyze geometry extraction</button>
+    <button type="button" id="PhysicalSanityCheckButton">Physical sanity check</button>
+    <span id="PhysicalSanityCheckStatus" role="status" aria-live="polite"></span>
     <button type="button" id="GeometryDiagnosticsExportButton">Export geometry diagnostics (ZIP)</button>
     <button type="button" id="LegacyGeometryPreviewButton">Preview extracted scene (orthographic)</button>
     <label><input type="checkbox" id="LegacyFrameExportTrace"> Export full command trace (large JSON)</label>
@@ -253,6 +255,7 @@ Click a Button to Start a Demo. Click again to skip one step. Click the Animatio
 
 <script src="src/legacy/CurvatureLegacyDrawing.js"></script>
 <script src="src/app/CurvatureModel.js"></script>
+<script src="src/diagnostics/CurvaturePhysicalSanity129.js"></script>
 <script src="src/diagnostics/CurvatureLegacyFrameCaptureController.js"></script>
 <script src="src/app/CurvaturePhysicalCamera127.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature127.js"></script>

@@ -1,3 +1,14 @@
+var lastPhysicalSanity129 = null;
+document.getElementById('PhysicalSanityCheckButton').addEventListener('click',function(){
+  var status=document.getElementById('PhysicalSanityCheckStatus');
+  try{
+    lastPhysicalSanity129=window.CurvaturePhysicalSanity129.run();
+    var counts=lastPhysicalSanity129.summary;
+    status.textContent='PASS '+counts.PASS+' / WARN '+counts.WARN+' / FAIL '+counts.FAIL+
+      ' — '+lastPhysicalSanity129.checks.map(function(c){return c.id+': '+c.status;}).join('; ')+
+      '. Included in the next Geometry Diagnostics ZIP.';
+  }catch(error){lastPhysicalSanity129=null;status.textContent='Sanity check failed: '+error;}
+});
 var geometryDiagnosticsExportRequested = false;
 var performanceProfile118Pending = null;
 var performanceProfile118Busy = false;
@@ -673,6 +684,8 @@ function DrawModelWithOptionalAudit(g) {
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
           'Diagnostic images are not equivalent to legacy camera rendering; filled preview uses approximate depth sorting']};
       var zipEntries=[{name:'geometry-audit.json',data:JSON.stringify(diagnostics,null,2)}];
+      if(lastPhysicalSanity129)zipEntries.push({name:'physical-sanity-check.json',
+        data:JSON.stringify(lastPhysicalSanity129,null,2)});
       if(performanceProfile118Pending){
         zipEntries.push({name:'performance-profile.json',data:JSON.stringify(performanceProfile118Pending.profile,null,2)});
         zipEntries.push({name:'performance-samples.json',data:JSON.stringify(performanceProfile118Pending.samples,null,2)});
