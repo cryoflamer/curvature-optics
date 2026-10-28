@@ -116,23 +116,23 @@
         <p id="ModernCompareCameraAimNote" class="modern-note" hidden>Compare uses a fixed eye-level aim (0°) for both models; other Scene aiming modes are not applied.</p>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface</h2>
-        <label for="ModernCurvature">Surface curvature</label>
+        <div id="ModernSceneCurvatureWrap"><label for="ModernCurvature">Surface curvature</label>
         <input id="ModernCurvature" type="range" min="0" max="1000" step="1" value="164">
-        <output id="ModernCurvatureLabel" for="ModernCurvature">R = 6371 km</output>
+        <output id="ModernCurvatureLabel" for="ModernCurvature">R = 6371 km</output></div>
         <div class="modern-two-fields modern-align-end">
-          <div class="modern-field"><label for="ModernRadiusKm">Radius (km)</label><input id="ModernRadiusKm" type="number" min="100" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernRadiusKmDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
+          <div class="modern-field" id="ModernSceneRadiusWrap"><label for="ModernRadiusKm">Radius (km)</label><input id="ModernRadiusKm" type="number" min="100" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernRadiusKmDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
           <div class="modern-field"><label class="modern-check" for="ModernFlat"><input id="ModernFlat" type="checkbox"> Exact flat (κ = 0)</label></div>
         </div>
-        <button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button>
+        <div id="ModernSceneEarthWrap"><button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button></div>
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface · selected model</h2>
         <div class="modern-field"><label for="ModernModelSurface">Surface geometry</label>
           <select id="ModernModelSurface"><option value="globe">Spherical surface</option><option value="flat">Exact flat · κ = 0</option></select></div>
-        <div class="modern-field"><label for="ModernModelRadius">Surface/reference radius (km)</label>
+        <div class="modern-field" id="ModernModelRadiusWrap"><label for="ModernModelRadius">Surface radius (km)</label>
           <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000">
           <p class="modern-note modern-radius-draft" id="ModernModelRadiusDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p>
-          <p class="modern-note" id="ModernModelFlatRadiusNote" hidden>Exact flat geometry has zero curvature regardless of this reference radius. To change the engineered bending of rays, use Refraction scale radius in Atmosphere.</p></div>
+        </div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">

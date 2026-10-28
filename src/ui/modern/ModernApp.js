@@ -213,6 +213,9 @@
     var slider=el('ModernCurvature');
     if(slider)slider.value=String(curvature.modelStep(model));
     var flat=el('ModernFlat');if(flat)flat.checked=model.showModel===2;
+    ['ModernSceneCurvatureWrap','ModernSceneRadiusWrap','ModernSceneEarthWrap'].forEach(function(id){
+      var node=newUiEl(id);if(node)node.hidden=model.showModel===2;
+    });
     var radius=el('ModernRadiusKm');
     if(radius){radius.disabled=model.showModel===2;
       if(model.showModel===1)radius.value=String(Number((model.rEarth/1000).toPrecision(12)));}
@@ -447,8 +450,8 @@
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
-    var flatNote=newUiEl('ModernModelFlatRadiusNote');
-    if(flatNote)flatNote.hidden=spec.surface!=='flat';
+    var radiusWrap=newUiEl('ModernModelRadiusWrap');
+    if(radiusWrap)radiusWrap.hidden=spec.surface==='flat';
   }
   function scaleRadiusMetres(raw){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');

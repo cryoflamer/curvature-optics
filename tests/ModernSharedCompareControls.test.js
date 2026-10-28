@@ -228,7 +228,7 @@ test('135.1: flat surface reference radius is distinguished from atmospheric rad
   n.get('ModernCompareTab').dispatch('click');
   n.get('ModernModelTabB').dispatch('click');
   n.get('ModernSettingsSurface').dispatch('click');
-  assert.equal(n.get('ModernModelFlatRadiusNote').hidden,false);
+  assert.equal(n.get('ModernModelRadiusWrap').hidden,true);
   const count=h.getRenderCount();
   const field=n.get('ModernModelRadius');
   field.value='63713';field.dispatch('input');
@@ -240,7 +240,7 @@ test('135.1: flat surface reference radius is distinguished from atmospheric rad
     'changing the flat reference radius is not changing the optical atmosphere');
   assert.equal(h.getRenderCount(),count+2);
   n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
-  assert.equal(n.get('ModernModelFlatRadiusNote').hidden,true);
+  assert.equal(n.get('ModernModelRadiusWrap').hidden,false);
 });
 
 test('135.1: Scene engineered radius is applied only after editing is finished',()=>{
@@ -258,4 +258,31 @@ test('135.1: Scene engineered radius is applied only after editing is finished',
   assert.equal(h.renders.at(-1).options.occlusionRadius,1e7);
   field.dispatch('change');
   assert.equal(h.getRenderCount(),count+1,'Enter followed by change is idempotent');
+});
+
+
+test('135.2: surface radius controls are hidden on flat models without losing their values',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernSettingsSurface').dispatch('click');
+  assert.equal(n.get('ModernModelRadiusWrap').hidden,true);
+  const old=h.app.getCompareConfig().B.radiusKm;
+  n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
+  assert.equal(n.get('ModernModelRadiusWrap').hidden,false);
+  assert.equal(Number(n.get('ModernModelRadius').value),old);
+  const field=n.get('ModernModelRadius');field.value='8000';field.dispatch('change');
+  n.get('ModernModelSurface').value='flat';n.get('ModernModelSurface').dispatch('change');
+  assert.equal(n.get('ModernModelRadiusWrap').hidden,true);
+  assert.equal(h.app.getCompareConfig().B.radiusKm,8000);
+  n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
+  assert.equal(n.get('ModernModelRadiusWrap').hidden,false);
+  assert.equal(Number(n.get('ModernModelRadius').value),8000);
+  n.get('ModernSceneTab').dispatch('click');
+  n.get('ModernFlat').checked=true;n.get('ModernFlat').dispatch('change');
+  for(const id of ['ModernSceneCurvatureWrap','ModernSceneRadiusWrap','ModernSceneEarthWrap'])
+    assert.equal(n.get(id).hidden,true,id+' hidden for exact flat');
+  n.get('ModernFlat').checked=false;n.get('ModernFlat').dispatch('change');
+  for(const id of ['ModernSceneCurvatureWrap','ModernSceneRadiusWrap','ModernSceneEarthWrap'])
+    assert.equal(n.get(id).hidden,false,id+' visible for sphere');
 });

@@ -554,3 +554,10 @@ separate atmospheric Refraction scale radius controls engineered refraction.
 The optical cache already keys `occlusionRadius`, so no cache or physics changes
 were necessary. No numerical time-to-completion guarantee is made for a
 purposefully committed extreme profile. Node regression: 566/566 passed.
+
+### 135.2 — Surface radius controls for flat geometry
+
+- Modern Scene hides curvature slider, surface-radius input and Earth-radius reset when Exact flat is enabled; the flat selector remains available.
+- Modern Compare hides the surface-radius field for the selected flat model and labels it `Surface radius (km)` on spherical models.
+- Underlying surface radii remain stored, including when switching between flat and spherical surfaces, with no changes to experiment serialization or optical physics.
+- Tests include switching both modes and preserving a manually entered sphere radius.
