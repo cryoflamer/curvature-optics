@@ -22,9 +22,9 @@ test('134.3: Modern panels show physics descriptions and hide obsolete choices b
 });
 test('134.3: documentation constants and engineered profiles agree with the integrator',()=>{
   const app=get('src/ui/modern/ModernApp.js');
-  assert.match(app,/0\.000293 × exp\(−h \/ 7350 m\)/);
-  assert.match(app,/n₀ × exp\(h \/ R\)/);
-  assert.match(app,/n₀ × √\(1 \+ \(1\+h\/R\)⁴ − \(1\+h\/R\)²\)/);
+  assert.match(app,/0\.000293 <i>e<\/i><sup>/);
+  assert.match(app,/'exponential-occlusion':.*<sup>/);
+  assert.match(app,/'inverse-spherical':.*√\(/);
   for(const h of [0,500,2000]){
     const standard=ray.atmosphere('standard');
     assert.ok(Math.abs(standard.n(h)-(1+0.000293*Math.exp(-h/7350)))<1e-14);
@@ -37,4 +37,10 @@ test('134.3: historical inverse profile remains valid in Compare and experiment 
   assert.equal(compare.preset('flat-inverse').B.atmosphere,'inverse-spherical');
   assert.match(get('src/ui/modern/ModernExperimentState.js'),/inverse-spherical/);
   assert.equal(typeof ray.atmosphere('inverse-spherical',{occlusionRadius:6371000}).n,'function');
+});
+test('134.3.1: atmosphere equations use superscript and fraction markup',()=>{
+ const app=get('src/ui/modern/ModernApp.js');
+ assert.match(app,/standard:'.*<i>e<\/i><sup>−<span class="math-frac">/);
+ assert.match(app,/'exponential-occlusion':'.*<i>e<\/i><sup><span class="math-frac">/);
+ assert.match(app,/formula\.innerHTML=formulas\[kind\]/);
 });

@@ -146,3 +146,11 @@ button{cursor:pointer}
 .modern-atmosphere-info strong{display:block;color:#244b78;margin-bottom:4px}
 .modern-atmosphere-info .modern-atmosphere-formula{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere;color:#172f4c;background:#fff;border:1px solid #e1eaf3;border-radius:5px;padding:7px;margin:6px 0}
 .modern-atmosphere-info .modern-atmosphere-note{font-size:11px;color:#657d95;margin-top:6px}
+
+/* Typeset fixed atmosphere equations without external rendering dependencies. */
+.modern-atmosphere-formula{font-family:Georgia,"Times New Roman",serif!important;font-size:15px!important;line-height:1.9!important;overflow-wrap:normal!important;overflow-x:auto;white-space:nowrap}
+.modern-atmosphere-formula sup{font-size:.77em;vertical-align:super;line-height:0}
+.modern-atmosphere-formula sub{font-size:.77em}
+.modern-atmosphere-formula .math-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em;line-height:1.15;margin:0 .1em;transform:translateY(-.05em)}
+.modern-atmosphere-formula .math-frac>span:first-child{border-bottom:1px solid currentColor;padding:0 .2em .08em}
+.modern-atmosphere-formula .math-frac>span:last-child{padding:.08em .2em 0}

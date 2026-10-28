@@ -417,7 +417,14 @@
     node.textContent='';
     var title=document.createElement('strong');title.textContent=info[0];node.appendChild(title);
     var formula=document.createElement('div');formula.className='modern-atmosphere-formula';
-    formula.textContent=info[1];node.appendChild(formula);
+    // Fixed, code-owned markup only: no user-supplied text is interpreted as HTML.
+    var formulas={
+      vacuum:'<i>n</i>(<i>h</i>) = 1',
+      standard:'<i>n</i>(<i>h</i>) = 1 + 0.000293 <i>e</i><sup>−<span class="math-frac"><span><i>h</i></span><span>7350 m</span></span></sup>',
+      'exponential-occlusion':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> <i>e</i><sup><span class="math-frac"><span><i>h</i></span><span><i>R</i></span></span></sup>',
+      'inverse-spherical':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> √(1 + (1 + <i>h</i>/<i>R</i>)<sup>4</sup> − (1 + <i>h</i>/<i>R</i>)<sup>2</sup>)'
+    };
+    formula.innerHTML=formulas[kind];node.appendChild(formula);
     var details=document.createElement('div');details.textContent=info[2];node.appendChild(details);
     var note=document.createElement('div');note.className='modern-atmosphere-note';
     note.textContent=info[3];node.appendChild(note);
