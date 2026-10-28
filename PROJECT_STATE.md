@@ -481,3 +481,15 @@ patch 133.2 remain in effect.
 ### Source naming convention (compatpatch 133.3)
 
 Source filenames, module exports, browser globals, classes, and functions are named for their responsibilities, not the patch that introduced them. Patch identifiers remain in Git history, patch artifacts, and historical documentation. Historical test case labels and numbered fixtures may retain their identifiers where they describe a specific regression or oracle version. This cleanup does not change physical calculations or rendering behavior.
+
+### Patch 134 — Modern experiment URL/state
+
+Versioned `ModernExperimentState.js` serializes validated *inputs* from the
+shared Scene and independent Compare A/B into a reproducible, UTF-8 base64url
+`experiment` query parameter. URL configuration supersedes Modern localStorage
+and default presets. Debounced autosave and URL copy/reset controls have been
+added without modifying Legacy `state`/DataX behavior, physical optics, or
+render caches. Explicit incoming share links are not auto-rewritten after
+user edits; Copy experiment URL serializes current state. Named experiment
+library and JSON import/export remain next in 134.1. Source module names must
+continue to follow their purpose, never the compatibility patch number.

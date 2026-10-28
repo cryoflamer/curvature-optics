@@ -284,3 +284,51 @@ unchanged.
 Nick values against the independently implemented perspective camera/painter
 projection, including an off-axis Pan. The scientific scope and limitations
 of the forward-traced first-contact diagnostic remain unchanged.
+
+## Patch 134 — versioned Modern experiment state and URL persistence
+
+A Modern experiment is a validated, allowlisted **version 1** object managed by
+`src/ui/modern/ModernExperimentState.js`. It includes shared observer/camera,
+surface and object-group geometry, scene atmosphere, scene preset and its reset
+reference, independent Compare surface/atmosphere/engineered radii for A and B,
+active model selector, workspace mode and eye-level/horizon display options.
+Numbers are finite and bounded before any mutation; unknown fields or versions
+are rejected. Runtime optical caches, derived rays, canvas pixels, graphical
+result counters and Legacy controls are intentionally excluded.
+
+The Modern URL is `CurvatureApp.html?ui=modern&experiment=<base64url UTF-8 JSON>`.
+The canonical router preserves the query while booting the separate Modern
+HTML shell. Modern has **not** hijacked the historical `state` query parameter:
+Legacy continues to parse its own compact DataX streams in
+`src/app/CurvatureStatePersistence.js`. Old `?state=` links remain usable in
+Legacy; automatic Legacy-to-Modern DataX import is **not** implied. Generating
+an explicit Modern share link removes `state` to prevent two conflicting
+payloads. Other query parameters and the URL fragment are retained.
+
+**Startup priority:** valid explicit `experiment` URL > current browser
+`localStorage` key `curvature-modern-experiment-v1` > initial Modern preset.
+A malformed explicit experiment shows an error and leaves the default scene;
+it does not silently fall back to an unrelated saved local experiment. Legacy
+local settings are neither read nor written. Accepted Modern control edits
+save to local storage with a 550 ms debounce. On a normal Modern entry, edits
+also synchronize the visible URL via `history.replaceState` without creating
+navigation history entries. An **incoming explicit share URL is immutable**
+during further edits; the Copy experiment URL control produces a new link from
+the *current* state, so opening an external experiment cannot silently change
+the original link. Reset experiment clears Modern's saved state and navigates
+to a clean Modern URL to restore defaults.
+
+All sides reuse one shared Physical model/renderer; restoring a state merely
+reassigns validated inputs and calls `model.Update()`. Compare reconstructs
+its A/B clones from that shared model and the saved independent settings.
+There are no serialized or trusted optical results. The saved preset reference
+remains separate from the visible `custom` selection so Reset selected preset
+retains its earlier semantics. JSON file import/export and a named local
+experiment library remain scoped to patch **134.1**.
+
+Tests cover complete codec round trips (including both object groups and
+independent atmospheres), malformed input rejection, canonical URL behavior,
+explicit-URL precedence, local restore, automatic URL updates, manual copying,
+reset behavior and the continuing Legacy parameter namespace. Browser visual
+acceptance remains required, especially for `file://` clipboard permission
+and `history.replaceState` restrictions.

@@ -47,6 +47,7 @@
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCompareModel.js"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
+<script src="src/ui/modern/ModernExperimentState.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -57,8 +58,9 @@
       <button class="modern-tab is-active" id="ModernSceneTab" type="button" aria-pressed="true">Scene</button>
       <button class="modern-tab" id="ModernCompareTab" type="button" aria-pressed="false">Compare</button>
     </nav>
-    <a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a>
+    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
+  <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
   <div class="modern-workspace">
     <aside class="modern-sidebar" aria-label="Scene settings">
       <div class="modern-scene-settings" id="ModernSceneSettings">

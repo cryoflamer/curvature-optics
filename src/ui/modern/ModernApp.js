@@ -11,6 +11,8 @@
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
+  var experiments=root.CurvatureModernExperimentState;
+  var persistence={ready:false,explicitUrl:false,timer:null};
   var model=new root.CurveAppClass();
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
@@ -30,6 +32,117 @@
   function updateStatus(text,isError){
     var node=el('ModernStatus');
     if(node){node.textContent=text;node.classList.toggle('is-error',!!isError);}
+  }
+  function persistenceStatus(message,isError){
+    var node=el('ModernPersistenceStatus');
+    if(node){node.textContent=message||'';node.classList.toggle('is-error',!!isError);}
+  }
+  function experimentSnapshot(){
+    if(!experiments||!compareState)return null;
+    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius);
+    return experiments.capture(model,{
+      atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
+      preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
+      resetPreset:state.preset
+    },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
+      horizon:state.compareHorizon,selected:state.compareSelected});
+  }
+  function storeExperiment(){
+    if(!persistence.ready||!experiments||!root.location)return;
+    var current;
+    try{current=experimentSnapshot();}
+    catch(error){persistenceStatus('Cannot save experiment: '+error.message,true);return;}
+    var errors=[],saved=false;
+    try{
+      if(root.localStorage){root.localStorage.setItem(experiments.STORAGE_KEY,JSON.stringify(current));saved=true;}
+    }catch(error){errors.push('browser storage: '+error.message);}
+    // Do not rewrite an explicitly shared URL: it remains the reproducible
+    // incoming experiment until the user explicitly copies a new link.
+    if(!persistence.explicitUrl&&root.history&&root.location.href){
+      try{
+        var url=new URL(root.location.href);
+        if(!url.searchParams.has('state')){
+          root.history.replaceState(root.history.state,'',experiments.urlWithExperiment(url.href,current));
+        }
+      }catch(error){errors.push('URL: '+error.message);}
+    }
+    if(errors.length)persistenceStatus('Partial save: '+errors.join('; '),true);
+    else if(saved)persistenceStatus('Experiment saved locally');
+  }
+  function scheduleExperimentSave(){
+    if(!persistence.ready||!experiments||!root.location)return;
+    if(persistence.timer!==null)clearTimeout(persistence.timer);
+    persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
+  }
+  function applyExperiment(experiment){
+    var data=experiments.validate(experiment),scene=data.scene;
+    // All values are prevalidated as one transaction before touching CurveApp.
+    Object.keys(scene.camera).forEach(function(key){model[key]=scene.camera[key];});
+    Object.keys(scene.objects).forEach(function(key){model[key]=scene.objects[key].slice();});
+    model.showModel=scene.surface.showModel;model.rEarth=scene.surface.rEarth;
+    model.showGrid=scene.showGrid?1:0;
+    model.DemoText=scene.title;model.Description=scene.description;
+    state.atmosphere=scene.atmosphere;state.occlusionRadius=scene.occlusionRadius;
+    state.preset=scene.resetPreset;
+    state.compareConfig={A:data.compare.A,B:data.compare.B,preset:data.compare.preset};
+    state.compareSelected=data.compare.selected;
+    state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
+    state.mode=data.display.mode;
+    model.Update();
+    var select=el('ModernPreset');if(select)select.value=scene.preset;
+  }
+  function restoreExperiment(){
+    if(!experiments||!root.location)return false;
+    var params=new URLSearchParams(root.location.search||'');
+    persistence.explicitUrl=params.has(experiments.PARAM);
+    var data=null,source='';
+    try{
+      if(persistence.explicitUrl){data=experiments.readUrl(root.location.search);source='URL';}
+      else if(root.localStorage){
+        var saved=root.localStorage.getItem(experiments.STORAGE_KEY);
+        if(saved){data=experiments.validate(JSON.parse(saved));source='local storage';}
+      }
+      if(!data)return false;
+      applyExperiment(data);
+      persistenceStatus('Restored experiment from '+source);
+      return true;
+    }catch(error){
+      // In particular, a broken explicit URL must never load an unrelated
+      // local experiment: the visible scene stays at the documented default.
+      persistenceStatus('Experiment not restored: '+error.message,true);
+      return false;
+    }
+  }
+  function copyExperimentUrl(){
+    if(!experiments||!root.location||!root.location.href)return;
+    try{
+      cancelEdits();
+      var url=experiments.urlWithExperiment(root.location.href,experimentSnapshot());
+      if(root.navigator&&root.navigator.clipboard&&root.navigator.clipboard.writeText){
+        root.navigator.clipboard.writeText(url).then(function(){persistenceStatus('Experiment URL copied');},
+          function(){if(root.prompt)root.prompt('Copy experiment URL',url);
+            persistenceStatus('Clipboard unavailable — use the shown URL');});
+      }else if(root.prompt){root.prompt('Copy experiment URL',url);}
+      else persistenceStatus('Clipboard is unavailable',true);
+    }catch(error){persistenceStatus('Cannot share experiment: '+error.message,true);}
+  }
+  function resetExperiment(){
+    cancelEdits();cancelPending();
+    if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
+    try{if(root.localStorage)root.localStorage.removeItem(experiments.STORAGE_KEY);}
+    catch(error){persistenceStatus('Could not clear saved experiment: '+error.message,true);return;}
+    if(root.location&&root.location.href){
+      var url=new URL(root.location.href);
+      url.searchParams.delete(experiments.PARAM);url.searchParams.delete('state');
+      url.searchParams.set('ui','modern');
+      if(typeof root.location.assign==='function')root.location.assign(url.href);
+      else persistenceStatus('Reload this page to restore the default experiment');
+    }
+  }
+  function bindPersistence(){
+    if(!experiments)return;
+    var copy=el('ModernCopyExperiment');if(copy)copy.addEventListener('click',copyExperimentUrl);
+    var reset=el('ModernResetExperiment');if(reset)reset.addEventListener('click',resetExperiment);
   }
   function refreshLabels(){
     var curvature=root.CurvaturePhysicalCurvature;
@@ -222,7 +335,7 @@
     if(!compareState)return; // 132 compatibility (older isolated test harness)
     ['A','B'].forEach(function(side){
       var tab=el('ModernModelTab'+side);if(tab)tab.addEventListener('click',function(){
-        cancelEdits();state.compareSelected=side;syncCompareEditor();
+        cancelEdits();state.compareSelected=side;syncCompareEditor();scheduleExperimentSave();
       });
     });
     var preset=el('ModernPairPreset');if(preset)preset.addEventListener('change',function(){
@@ -272,6 +385,7 @@
   function redraw(){
     cancelPending();
     model.Update();refreshLabels();
+    scheduleExperimentSave();
     if(state.mode==='compare'){
       if(!prepareCompare())return;
       state.frame=requestAnimationFrame(function(){
@@ -504,6 +618,7 @@
     bindSettingsTabs();
     bindHelp();
     bindCompareEditor();
+    bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
     bindNumber('ModernPan',function(v){adapter?adapter.setCamera(model,'Pan',v):model.Pan=v;},'pan');
@@ -545,8 +660,15 @@
     el('ModernSceneTab').addEventListener('click',function(){setMode('scene');});
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
+    var restored=restoreExperiment();
     syncNumericInputs();
-    redraw();
+    if(restored){
+      // Apply the restored workspace without touching the physics itself.
+      if(state.mode==='compare')setMode('compare');
+      else redraw();
+      syncCompareEditor();
+    }else redraw();
+    persistence.ready=true;
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
