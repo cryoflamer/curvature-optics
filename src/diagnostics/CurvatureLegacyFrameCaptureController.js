@@ -1,4 +1,6 @@
 var geometryDiagnosticsExportRequested = false;
+var performanceProfile118Pending = null;
+var performanceProfile118Busy = false;
 var legacyGeometryPreviewRequested = false;
 var lastGeometryPreviewScene = null;
 function updateLegacyGeometryPreview() {
@@ -9,12 +11,49 @@ function updateLegacyGeometryPreview() {
   document.getElementById('LegacyGeometryPreviewStatus').textContent =
     result.primitives.length + ' world-space primitives (' + view.toUpperCase() + ' wireframe)';
 }
-document.getElementById('GeometryDiagnosticsExportButton').addEventListener('click',function(){
-  geometryDiagnosticsExportRequested=true;
-  legacyGeometryAnalyzeRequested=true;
-  legacyFrameAuditRequested=true;
-  document.getElementById('LegacyFrameCaptureStatus').textContent='Capturing geometry diagnostics ZIP...';
-  graph.Redraw();
+document.getElementById('GeometryDiagnosticsExportButton').addEventListener('click',async function(){
+  if(performanceProfile118Busy)return;
+  performanceProfile118Busy=true;
+  var button=document.getElementById('GeometryDiagnosticsExportButton');
+  var status=document.getElementById('LegacyFrameCaptureStatus');
+  button.disabled=true;
+  performanceProfile118Pending=null;
+  try {
+    var selection=document.getElementById('MainCanvasRenderer');
+    if(selection&&selection.value==='physical'&&window.CurvaturePerformanceProfile118){
+      status.textContent='Profiling Physical Canvas (cold, cached, grid-off, preview and pan)...';
+      // Cancel a pending camera redraw so diagnostics never compete with it.
+      if(typeof physicalCanvasFrameScheduler!=='undefined'&&physicalCanvasFrameScheduler)
+        physicalCanvasFrameScheduler.cancel();
+      var atmosphere=document.getElementById('PhysicalCanvasAtmosphere');
+      var radius=document.getElementById('PhysicalCanvasOcclusionRadius');
+      var opts={atmosphere:atmosphere?atmosphere.value:'vacuum',
+        occlusionRadius:radius?Number(radius.value):6371000};
+      performanceProfile118Pending=await CurvaturePerformanceProfile118.run({
+        model:CurveApp,
+        reset:function(){CurvatureMainCanvasRenderer.resetPhysicalSession();},
+        render:function(model,flags){return CurvatureMainCanvasRenderer.renderPhysical(graph,model,
+          Object.assign({},opts,flags));}
+      });
+    }else {
+      performanceProfile118Pending={profile:{schema:'curvature-performance-profile-v118',
+        unavailable:'Select Physical optics to collect a Physical performance profile'},samples:[]};
+    }
+  }catch(error){
+    performanceProfile118Pending={profile:{schema:'curvature-performance-profile-v118',error:String(error)},samples:[]};
+  }finally{
+    // Export through the original legacy diagnostic path; it restores the
+    // original Canvas, including the renderer selection and live model.
+    geometryDiagnosticsExportRequested=true;
+    legacyGeometryAnalyzeRequested=true;
+    legacyFrameAuditRequested=true;
+    status.textContent='Capturing geometry diagnostics ZIP and performance profile...';
+    try {DrawModelWithOptionalAudit(graph);}finally{
+      performanceProfile118Busy=false;button.disabled=false;
+      // Repaint the selected live mode after the temporary legacy capture.
+      graph.Redraw();
+    }
+  }
 });
 document.getElementById('LegacyGeometryPreviewAxes').addEventListener('change', updateLegacyGeometryPreview);
 document.getElementById('LegacyGeometryPreviewButton').addEventListener('click', function () {
@@ -622,7 +661,29 @@ function DrawModelWithOptionalAudit(g) {
         verticalFactors:scales,notes:['Single captured SceneFrame for all views',
           'Exaggerated views multiply world Z by the reported factor before orthographic projection',
           'Diagnostic images are not equivalent to legacy camera rendering; filled preview uses approximate depth sorting']};
-      var zip=window.GeometryDiagnosticsZip.build([{name:'geometry-audit.json',data:JSON.stringify(diagnostics,null,2)}].concat(images));
+      var zipEntries=[{name:'geometry-audit.json',data:JSON.stringify(diagnostics,null,2)}];
+      if(performanceProfile118Pending){
+        zipEntries.push({name:'performance-profile.json',data:JSON.stringify(performanceProfile118Pending.profile,null,2)});
+        zipEntries.push({name:'performance-samples.json',data:JSON.stringify(performanceProfile118Pending.samples,null,2)});
+        zipEntries.push({name:'browser-info.json',data:JSON.stringify({userAgent:navigator.userAgent,
+          viewport:{width:window.innerWidth,height:window.innerHeight,devicePixelRatio:window.devicePixelRatio},
+          canvas:{width:g.Canvas.width,height:g.Canvas.height}},null,2)});
+        var profiler=performanceProfile118Pending.profile;
+        var details=profiler.scenarios||{};
+        var summary=['Physical Canvas performance profile v118',
+          'Each duration is browser main-thread milliseconds. Painter includes its own sub-stages.',
+          'Legacy geometry audit is separate from Physical profile.',
+          'Scenarios (median / p95 wall ms):'];
+        Object.keys(details).forEach(function(name){
+          summary.push(name+': '+details[name].wall.medianMs+' / '+details[name].wall.p95Ms);
+        });
+        (profiler.failures||[]).forEach(function(f){summary.push('FAILED '+f.scenario+': '+f.error);});
+        if(profiler.unavailable)summary.push('Unavailable: '+profiler.unavailable);
+        if(profiler.error)summary.push('Profile error: '+profiler.error);
+        zipEntries.push({name:'diagnostic-summary.txt',data:summary.join('\n')+'\n'});
+        performanceProfile118Pending=null;
+      }
+      var zip=window.GeometryDiagnosticsZip.build(zipEntries.concat(images));
       var zipUrl=URL.createObjectURL(zip),zipLink=document.createElement('a');
       zipLink.href=zipUrl;zipLink.download='geometry-diagnostics.zip';document.body.appendChild(zipLink);
       zipLink.click();zipLink.remove();setTimeout(function(){URL.revokeObjectURL(zipUrl);},1000);

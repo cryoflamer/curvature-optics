@@ -183,3 +183,7 @@ physical horizon, fills, visibility and the underlying cached RK4 field are
 unchanged. Per-stage frame/Canvas metrics are now visible in Physical status.
 Stress tool: `tools/benchmark-physical-redraw-117.js` (synthetic 78k line
 primitives; no browser FPS claim). Details: `docs/MIGRATION_INTERACTIVE_CANVAS_117.md`.
+
+
+## #118 — Opt-in Physical performance profile in existing geometry ZIP
+The existing Export geometry diagnostics ZIP now runs Physical cold/warm/grid-off/preview/Pan profiling with per-stage raw measurements, median and p95. The normal geometry audit is retained; the profiler does not modify the live model. Details: `docs/MIGRATION_PERFORMANCE_PROFILE_118.md`. No optics, occlusion or painting rules changed.

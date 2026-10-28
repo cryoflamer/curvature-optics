@@ -160,6 +160,7 @@
         (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')+
         (stats.fillUnresolved?' '+stats.fillUnresolved+' unresolved fill triangles omitted.':'')};
   }
-  return {render:render,renderPhysical:renderPhysical,previewComposition:previewComposition,support:support,
+  function resetPhysicalSession(){opticalSession=optical.create();}
+  return {render:render,renderPhysical:renderPhysical,resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,
     supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};
 }));
