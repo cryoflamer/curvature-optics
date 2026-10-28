@@ -390,3 +390,7 @@ ordinary-radius computations and diagnostics remain unchanged. See
 verification cover Earth, 6000370000 m, 1e16 m and exact Flat with Standard
 atmosphere and 85+2 towers. Next: #128 end-to-end convergence, numerical,
 visual and performance verification.
+
+## Patch 130 — Modern UI bootstrap and long-term UI split
+
+The new **Modern visualization UI** is developed in parallel with the existing **Legacy engineering interface**; no Legacy controls are removed. The canonical request `CurvatureApp.html?ui=modern` routes to an isolated Modern document using the same `CurveAppClass`, physical scene, ray tracer and painter, while the default and `?ui=legacy` retain the original application. The Modern shell provides Scene (initial Transmission Line Physical view and basic camera/surface/atmosphere/display controls) plus an explicitly unimplemented Compare tab. Detailed RK4, shooting, audits, Physical sanity check and ZIP exports remain Legacy-only. The complete agreed architecture, risks, compatibility contract and patch 130–134 roadmap are preserved in **`docs/modern-ui-plan.md`**. Before the next patch, obtain a manual browser check of both routes; do not treat URL parsing tests alone as a browser acceptance test.

@@ -25,3 +25,11 @@ runner is also available as `node tools/check-optics.js` (and may take longer).
 
 The pack metadata and `CHATGPT_PACK_USAGE.md` remain at the root intentionally;
 those files are managed by the patch packaging workflow, not by the application.
+
+## Parallel UI entrypoints (patch 130)
+
+Modern UI implementation and the shared-physics contract are specified in
+[`modern-ui-plan.md`](modern-ui-plan.md). `CurvatureApp.html` is still the
+Legacy default; only `?ui=modern` routes to `CurvatureModern.html`. The
+standalone Modern entry loads the **same physics/scene/renderer modules**,
+without starting the old control/animation/diagnostic UI.
