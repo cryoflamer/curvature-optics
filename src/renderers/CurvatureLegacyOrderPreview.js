@@ -16,12 +16,51 @@ function strokePaths(ctx,segments){
  }
  ctx.stroke();return paths;
 }
-function draw(canvas,scene,camera,triangles){var result=build(scene,camera,canvas.width,canvas.height,triangles),ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);ctx.lineJoin='round';ctx.lineCap='butt';
- for(var cmd of result.commands){var style=cmd.style||{};ctx.globalAlpha=style.alpha==null?1:style.alpha;ctx.fillStyle=style.fill||'#a8b8c7';ctx.strokeStyle=style.stroke||'#30435a';ctx.lineWidth=canvasProjection.lineWidth(style.lineWidth,camera);
-  // Use a single fill path to avoid antialiased cracks between adjacent triangles.
-  if(cmd.triangles.length){ctx.beginPath();for(var t of cmd.triangles){var p=t.points;ctx.moveTo(p[0][0],p[0][1]);ctx.lineTo(p[1][0],p[1][1]);ctx.lineTo(p[2][0],p[2][1]);ctx.closePath();}ctx.fill();}
-  if(cmd.segments.length){strokePaths(ctx,cmd.segments);}
+// Adjacent stroke-only commands with identical Canvas styling may be stroked
+// together. Each source command starts a NEW subpath, so coincident endpoints
+// of unrelated guide lines cannot create invented connections. Filled commands
+// are barriers: the existing painter/z-order semantics are preserved.
+function draw(canvas,scene,camera,triangles){
+ var result=build(scene,camera,canvas.width,canvas.height,triangles),ctx=canvas.getContext('2d');
+ ctx.clearRect(0,0,canvas.width,canvas.height);ctx.lineJoin='round';ctx.lineCap='butt';
+ var pending=false,pendingKey=null,pendingSegments=0,strokeCalls=0,batchedCommands=0;
+ var MAX_STROKE_SEGMENTS=512;
+ function flush(){if(pending){ctx.stroke();strokeCalls++;pending=false;pendingKey=null;pendingSegments=0;}}
+ for(var cmd of result.commands){
+  var style=cmd.style||{},alpha=style.alpha==null?1:style.alpha;
+  var stroke=style.stroke||'#30435a',width=canvasProjection.lineWidth(style.lineWidth,camera);
+  if(cmd.triangles.length){
+   flush();ctx.globalAlpha=alpha;ctx.fillStyle=style.fill||'#a8b8c7';
+   ctx.beginPath();for(var t of cmd.triangles){var p=t.points;ctx.moveTo(p[0][0],p[0][1]);ctx.lineTo(p[1][0],p[1][1]);ctx.lineTo(p[2][0],p[2][1]);ctx.closePath();}ctx.fill();
+  }
+  if(!cmd.segments.length)continue;
+  // Fill-and-stroke commands cannot be merged across their fill operation.
+  if(cmd.triangles.length){ctx.globalAlpha=alpha;ctx.strokeStyle=stroke;ctx.lineWidth=width;
+   strokePaths(ctx,cmd.segments);strokeCalls++;continue;}
+  // Scalars are used as a stable style identity; style object references are
+  // not reliable because captured scene commands copy their style objects.
+  var key=JSON.stringify([alpha,stroke,width]);
+  if(pending&&pendingKey!==key)flush();
+  if(!pending){ctx.globalAlpha=alpha;ctx.strokeStyle=stroke;ctx.lineWidth=width;
+   ctx.beginPath();pending=true;pendingKey=key;}
+  batchedCommands++;
+  var previous=null;
+  for(var seg of cmd.segments){var a=seg.points[0],b=seg.points[1];
+   if(pendingSegments>=MAX_STROKE_SEGMENTS){
+    flush();ctx.globalAlpha=alpha;ctx.strokeStyle=stroke;ctx.lineWidth=width;
+    ctx.beginPath();pending=true;pendingKey=key;previous=null;
+   }
+   if(!previous||Math.hypot(a[0]-previous[0],a[1]-previous[1])>1e-6)
+    ctx.moveTo(a[0],a[1]);
+   ctx.lineTo(b[0],b[1]);previous=b;pendingSegments++;
+  }
+  // For consistency with the original command-by-command implementation,
+  // always start another subpath at the next primitive.
  }
- ctx.globalAlpha=1;return result;}
+ flush();ctx.globalAlpha=1;
+ result.statistics.canvasStrokeCalls=strokeCalls;
+ result.statistics.batchedStrokeCommands=batchedCommands;
+ return result;
+}
 return {build,draw,strokePaths};
 });

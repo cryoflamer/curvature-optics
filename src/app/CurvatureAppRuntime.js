@@ -1,5 +1,21 @@
 var CurveApp = new CurveAppClass();
 var UpdateAllRunning = false;
+// This flag affects only temporary ground-guide presentation, never optics or
+// tower visibility. After the last change the complete frame is restored.
+var physicalCanvasInteractive = false;
+var physicalCanvasSettleTimer = null;
+function SchedulePhysicalCanvasFinalFrame(){
+  var selector=document.getElementById('MainCanvasRenderer');
+  if(!selector||selector.value!=='physical')return;
+  physicalCanvasInteractive=true;
+  if(physicalCanvasSettleTimer!==null)clearTimeout(physicalCanvasSettleTimer);
+  physicalCanvasSettleTimer=setTimeout(function(){
+    physicalCanvasSettleTimer=null;
+    physicalCanvasInteractive=false;
+    graph.Redraw();
+  },180);
+}
+
 
 function UpdateAll( stopAnimation ) {
   if (UpdateAllRunning) return;
@@ -15,6 +31,7 @@ function UpdateAll( stopAnimation ) {
     CurveApp.Update();
     if (window.CurvatureOpticsUI) CurvatureOpticsUI.sync();
     ControlPanels.Update();
+    SchedulePhysicalCanvasFinalFrame();
     graph.Redraw();
     if (typeof ScheduleOpticalP4Refresh === 'function') ScheduleOpticalP4Refresh();
   }
@@ -55,7 +72,8 @@ function DrawMainCanvasFrame(g) {
       var radius = document.getElementById('PhysicalCanvasOcclusionRadius');
       result = independent.renderPhysical(g, CurveApp, {
         atmosphere:atmosphere ? atmosphere.value : 'vacuum',
-        occlusionRadius:radius ? Number(radius.value) : 6371000
+        occlusionRadius:radius ? Number(radius.value) : 6371000,
+        interactive:physicalCanvasInteractive
       });
       if (status) {
         var reasons=result.unresolvedReasons||{},samples=result.sampleStatuses||{};
@@ -63,6 +81,9 @@ function DrawMainCanvasFrame(g) {
         var grazingSamples=samples.indeterminate||0;
         var pieces=[];
         pieces.push(result.drawn+' lines (visible outline pieces)');
+        if(result.interactiveGuidePreview)pieces.push('INTERACTIVE PREVIEW: '+
+          result.previewGuidePrimitives+'/'+result.fullGuidePrimitives+
+          ' ground guides (full grid restored after slider settles)');
         if(result.fillTriangles!==undefined){
           pieces.push(result.fillTriangles+' physical fill triangles | '+
             result.fillUnresolved+' uncertain fill triangles omitted');
@@ -81,6 +102,17 @@ function DrawMainCanvasFrame(g) {
         pieces.push(solverFailures+' failed point evaluations | '+
           grazingSamples+' grazing/indeterminate point samples');
         pieces.push(result.cacheReused?'optical geometry cached':'optical geometry '+result.buildMs+' ms');
+        if(result.timings){
+          var t=result.timings;
+          pieces.push('frame '+Math.round(t.totalMs)+' ms ('+
+            'scene '+Math.round(t.composeMs)+' + optics '+Math.round(t.opticsMs)+
+            ' + snapshot '+Math.round(t.frameMs)+
+            ' + painter '+Math.round(t.paintMs)+
+            ' [validation '+Math.round(t.validationMs)+
+            ', fill projection '+Math.round(t.projectionMs)+
+            ', Canvas '+Math.round(t.canvasMs)+'] ms; '+
+            t.strokeCalls+' Canvas strokes)');
+        }
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
         if(result.fieldStats){
           pieces.push(result.fieldStats.solves+' shared exact ray solves'+
@@ -133,6 +165,26 @@ var graph = NewGraphX3D( {
   AutoClear: true,
   AutoScalePix: true
 } );
+
+// Physical camera sliders can emit many changes per refresh interval. Keep
+// GraphX3DX's synchronous legacy Redraw semantics; only Physical opts in to
+// one redraw of the LATEST camera state per browser animation frame.
+var physicalCanvasFrameScheduler = null;
+if (window.CurvatureCanvasFrameScheduler && typeof requestAnimationFrame === 'function' &&
+    typeof cancelAnimationFrame === 'function') {
+  var immediateGraphRedraw=graph.Redraw.bind(graph);
+  physicalCanvasFrameScheduler=CurvatureCanvasFrameScheduler.create(
+    requestAnimationFrame.bind(window),cancelAnimationFrame.bind(window),immediateGraphRedraw);
+  graph.Redraw=function(){
+    var selector=document.getElementById('MainCanvasRenderer');
+    if(selector&&selector.value==='physical')physicalCanvasFrameScheduler.schedule();
+    else {
+      physicalCanvasInteractive=false;
+      if(physicalCanvasSettleTimer!==null){clearTimeout(physicalCanvasSettleTimer);physicalCanvasSettleTimer=null;}
+      physicalCanvasFrameScheduler.cancel();immediateGraphRedraw();
+    }
+  };
+}
 
 function RefreshPhysicalCanvasControls(){
   var selector=document.getElementById('MainCanvasRenderer');

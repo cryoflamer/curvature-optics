@@ -10,12 +10,42 @@
     root.CurvaturePerspectivePreview||(typeof require==='function'?require('../renderers/CurvaturePerspectivePreview'):null),
     root.CurvatureCanvasProjection||(typeof require==='function'?require('../renderers/CurvatureCanvasProjection'):null),
     root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),
-    root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null));
+    root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null),
+    root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract){
   'use strict';
   var opticalSession=optical.create();
+  function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
+  // During high-frequency camera interaction, only the presentation of dense
+  // Globe ground guides is sampled by WHOLE source curves. Never sample
+  // individual segments (which would make dotted guides) or touch tower
+  // geometry, the physical horizon, or the cached optical field.
+  function previewComposition(full){
+    var ranges=full.ranges,primitives=full.scene.primitives;
+    var guides=ranges.filter(function(r){return r.role==='visual-aid';})
+      .reduce(function(n,r){return n+r.count;},0);
+    if(guides<12000)return {composition:full,preview:false};
+    var chosen=[],outputRanges=[],curveIndex=new Map(),nCurves=0;
+    ranges.forEach(function(r){
+      var start=chosen.length;
+      for(var i=r.start;i<r.end;i++){
+        var p=primitives[i],meta=p.metadata||{};
+        if(r.role==='visual-aid'&&meta.kind!=='physical-horizon'){
+          var key=meta.kind+':'+String(meta.angle);
+          if(!curveIndex.has(key))curveIndex.set(key,nCurves++);
+          if(curveIndex.get(key)%12!==0)continue;
+        }
+        chosen.push(Object.assign({},p,{commandIndex:chosen.length}));
+      }
+      outputRanges.push({name:r.name,role:r.role,start:start,end:chosen.length,count:chosen.length-start});
+    });
+    var meta=Object.assign({},full.scene.metadata,{layerRanges:outputRanges});
+    return {composition:{scene:contract.createScene(full.scene.source,chosen,meta),ranges:outputRanges},
+      preview:true,guidePrimitives:guides,drawnGuides:outputRanges.filter(function(r){return r.role==='visual-aid';})
+        .reduce(function(n,r){return n+r.count;},0)};
+  }
   function selectObject(m){
     var index=m.NObjects[0]===0?1:0;
     if(m.NObjects[0]>0&&m.NObjects[1]>0&&m.ObjDist[0]>m.ObjDist[1])index=1;
@@ -78,7 +108,7 @@
     var available=support(m);
     if(!available.supported)throw RangeError(available.reason);
     if(!g||!g.Canvas)throw TypeError('Main graph Canvas required');
-    var camera=configureCamera(g,m),ctx=g.Canvas.getContext('2d');
+    var frameStart=now(),camera=configureCamera(g,m),ctx=g.Canvas.getContext('2d');
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
        typeof ctx.restore!=='function')throw TypeError('Canvas 2D context required');
     // The optical backend transforms the SAME independently authored scene;
@@ -86,8 +116,13 @@
     var globe=m.showModel===1;
     var physicalModel=Object.assign({},m,{geometryRadius:m.rEarth});
     var composed=composition.composeOpticalMain(physicalModel,globe);
+    var composedAt=now();
     var opticalFrame=opticalSession.transform(composed,physicalModel,options);
-    var frame=frames.fromComposition(opticalFrame.composition,camera,g.Canvas.width,g.Canvas.height);
+    var opticalAt=now();
+    var drawSource=options.interactive?previewComposition(opticalFrame.composition):
+      {composition:opticalFrame.composition,preview:false};
+    var frame=frames.fromComposition(drawSource.composition,camera,g.Canvas.width,g.Canvas.height);
+    var frameAt=now();
     var painted;
     ctx.save();
     try {
@@ -95,8 +130,16 @@
       painted=renderer.render(g.Canvas,frame,{mode:'painter'});
       if(decorations)decorations.draw(g.Canvas,m,camera);
     } finally {ctx.restore();}
-    var stats=opticalFrame.stats;
-    return {mode:'physical-scene',drawn:stats.visibleSegments,
+    var finishedAt=now(),stats=opticalFrame.stats;
+    return {interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
+      fullGuidePrimitives:drawSource.guidePrimitives,
+      timings:{totalMs:finishedAt-frameStart,composeMs:composedAt-frameStart,
+      opticsMs:opticalAt-composedAt,frameMs:frameAt-opticalAt,
+      paintMs:painted.timings.totalMs,validationMs:painted.timings.validationMs,
+      projectionMs:painted.timings.fillGeometryMs,canvasMs:painted.timings.canvasPaintMs,
+      decorationsMs:finishedAt-frameAt-painted.timings.totalMs,
+      strokeCalls:painted.statistics.canvasStrokeCalls},
+      mode:'physical-scene',drawn:stats.visibleSegments,
       unresolved:stats.unresolved,buildMs:stats.buildMs,
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
       primitiveCount:frame.scene.primitives.length,
@@ -117,6 +160,6 @@
         (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')+
         (stats.fillUnresolved?' '+stats.fillUnresolved+' unresolved fill triangles omitted.':'')};
   }
-  return {render:render,renderPhysical:renderPhysical,support:support,
+  return {render:render,renderPhysical:renderPhysical,previewComposition:previewComposition,support:support,
     supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};
 }));

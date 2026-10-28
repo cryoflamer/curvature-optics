@@ -14,7 +14,8 @@ const runtime = 'src/app/CurvatureAppRuntime.js';
 
 test('model, capture diagnostics, and bootstrap have explicit script ownership', () => {
   assert.deepEqual(scripts.slice(scripts.indexOf(model), scripts.indexOf(runtime) + 1),
-    [model, diagnostic, 'src/app/CurvatureMainCanvasRenderer.js', runtime]);
+    [model, diagnostic, 'src/app/CurvatureMainCanvasRenderer.js',
+      'src/app/CurvatureCanvasFrameScheduler.js', runtime]);
   assert.match(source(model), /function CurveAppClass\(\)/);
   assert.match(source(model), /CurveAppClass\.prototype\.UpdateObjectInput/);
   assert.match(source(diagnostic), /function DrawModelWithOptionalAudit\(g\)/);

@@ -170,3 +170,16 @@ measured conservative boundary-gap sizes. See
 `docs/MIGRATION_BOUNDARY_CLOSURE_116.md` and
 `tests/PhysicalBoundaryClosure116.test.js`. No general pixel-exact guarantee,
 multiray completeness, or arbitrary 3D mesh z-buffer was introduced.
+
+## Patch 117 — Physical interactive redraw / Canvas painter profiling
+
+`CurvatureCanvasFrameScheduler` coalesces Physical-only redraw requests on
+`requestAnimationFrame`; Legacy/Independent remain synchronous. Adjacent
+stroke-only commands of identical Canvas style now share a **bounded** Canvas
+stroke batch, keeping fills as painter-order barriers. Slider changes get a
+camera-independent, *presentation-only* reduction of dense auxiliary ground
+curves; 180 ms after the last model update the full guides are redrawn. Towers,
+physical horizon, fills, visibility and the underlying cached RK4 field are
+unchanged. Per-stage frame/Canvas metrics are now visible in Physical status.
+Stress tool: `tools/benchmark-physical-redraw-117.js` (synthetic 78k line
+primitives; no browser FPS claim). Details: `docs/MIGRATION_INTERACTIVE_CANVAS_117.md`.
