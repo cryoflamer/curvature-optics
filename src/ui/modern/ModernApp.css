@@ -154,3 +154,7 @@ button{cursor:pointer}
 .modern-atmosphere-formula .math-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em;line-height:1.15;margin:0 .1em;transform:translateY(-.05em)}
 .modern-atmosphere-formula .math-frac>span:first-child{border-bottom:1px solid currentColor;padding:0 .2em .08em}
 .modern-atmosphere-formula .math-frac>span:last-child{padding:.08em .2em 0}
+
+/* 135.1: radius drafts must not be interpreted as committed optical changes. */
+.modern-radius-draft{color:#9a570b;font-weight:650}
+.modern-radius-draft[hidden],#ModernModelFlatRadiusNote[hidden]{display:none!important}

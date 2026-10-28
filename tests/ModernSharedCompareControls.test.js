@@ -46,6 +46,7 @@ function boot(){
   nodes.get('ModernModelTabA').attributes['aria-pressed']='true';
   nodes.get('ModernCompareHorizon').checked=true;
   let renderCount=0;
+  const renders=[];
   function Model(){Object.assign(this,{
     Height:15,FocalLengthField:2000,Pan:0.0464,Nick:0.0121,Roll:0,
     rEarth:6371000,showModel:1,viewcenterHorizon:3,deviceRatio:1.5,showGrid:1,
@@ -60,7 +61,9 @@ function boot(){
     CurvaturePhysicalSceneOptics:{create(){return {}}},
     CurvaturePhysicalCurvature:{modelStep(){return 164},label(){return 'R = 6371 km'},
       resetEarth(m){m.rEarth=6371000;m.showModel=1;},applyStep(m){}},
-    CurvatureMainCanvasRenderer:{renderPhysical(){renderCount++;return {drawn:12,fillTriangles:6,unresolved:0};}},
+    CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renderCount++;
+      renders.push({surface:m.showModel,options:{...options}});
+      return {drawn:12,fillTriangles:6,unresolved:0};}},
     NewGraphX3D(spec){return {UpdateCanvasSize(){},Redraw(){spec.DrawFunc({})}}},
     xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}};
   window.window=window;
@@ -74,7 +77,7 @@ function boot(){
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},
     Redraw(){app.drawCompare(side,{})}});
   callbacks[0]();
-  return {nodes,app,getRenderCount(){return renderCount;}};
+  return {nodes,app,renders,getRenderCount(){return renderCount;}};
 }
 
 test('134.2: one set of Camera, Objects and Display controls; tab panels match mode',()=>{
@@ -188,4 +191,71 @@ test('135: exponential scale radius edits use kilometres in Scene and Compare wh
   n.get('ModernModelOcclusion').value='';
   n.get('ModernModelOcclusion').dispatch('change');
   assert.equal(app.getCompareConfig().B.occlusionRadius,12345250,'invalid edits are rejected');
+});
+
+
+test('135.1: Compare radius drafts never trace intermediate digits and commit to selected physical model',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernSettingsAtmosphere').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernModelAtmosphere').value='exponential-occlusion';
+  n.get('ModernModelAtmosphere').dispatch('change');
+  const count=h.getRenderCount(),prior=h.app.getCompareConfig().B.occlusionRadius;
+  const field=n.get('ModernModelOcclusion');
+  for(const value of ['1','10','100','10000']){
+    field.value=value;field.dispatch('input');
+    assert.equal(h.getRenderCount(),count,'typing '+value+' must not retrace');
+    assert.equal(h.app.getCompareConfig().B.occlusionRadius,prior,'draft not committed');
+    assert.equal(n.get('ModernModelOcclusionDraft').hidden,false);
+  }
+  field.dispatch('keydown',{key:'Enter'});
+  assert.equal(n.get('ModernModelOcclusionDraft').hidden,true);
+  assert.equal(h.app.getCompareConfig().B.occlusionRadius,1e7);
+  assert.equal(h.getRenderCount(),count+2,'Enter commits exactly one A/B redraw');
+  assert.equal(h.renders.at(-1).options.occlusionRadius,1e7,'renderer receives new B optical radius');
+  assert.equal(h.renders.at(-2).options.occlusionRadius,prior,'A retains its old atmospheric radius');
+  field.dispatch('change');
+  assert.equal(h.getRenderCount(),count+2,'native change after Enter must not redraw twice');
+  field.value='8000';field.dispatch('input');field.dispatch('change');
+  assert.equal(h.app.getCompareConfig().B.occlusionRadius,8e6);
+  assert.equal(h.renders.at(-1).options.occlusionRadius,8e6);
+  assert.equal(h.getRenderCount(),count+4,'blur/change also commits');
+});
+
+test('135.1: flat surface reference radius is distinguished from atmospheric radius',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernSettingsSurface').dispatch('click');
+  assert.equal(n.get('ModernModelFlatRadiusNote').hidden,false);
+  const count=h.getRenderCount();
+  const field=n.get('ModernModelRadius');
+  field.value='63713';field.dispatch('input');
+  assert.equal(h.getRenderCount(),count);
+  assert.equal(n.get('ModernModelRadiusDraft').hidden,false);
+  field.dispatch('change');
+  assert.equal(h.app.getCompareConfig().B.radiusKm,63713);
+  assert.equal(h.app.getCompareConfig().B.occlusionRadius,6371000,
+    'changing the flat reference radius is not changing the optical atmosphere');
+  assert.equal(h.getRenderCount(),count+2);
+  n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
+  assert.equal(n.get('ModernModelFlatRadiusNote').hidden,true);
+});
+
+test('135.1: Scene engineered radius is applied only after editing is finished',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernAtmosphere').value='exponential-occlusion';
+  n.get('ModernAtmosphere').dispatch('change');
+  const count=h.getRenderCount();
+  const field=n.get('ModernOcclusion');
+  for(const value of ['1','10','10000']){
+    field.value=value;field.dispatch('input');
+    assert.equal(h.getRenderCount(),count);
+  }
+  field.dispatch('keydown',{key:'Enter'});
+  assert.equal(h.getRenderCount(),count+1);
+  assert.equal(h.renders.at(-1).options.occlusionRadius,1e7);
+  field.dispatch('change');
+  assert.equal(h.getRenderCount(),count+1,'Enter followed by change is idempotent');
 });

@@ -447,12 +447,20 @@
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
+    var flatNote=newUiEl('ModernModelFlatRadiusNote');
+    if(flatNote)flatNote.hidden=spec.surface!=='flat';
   }
   function scaleRadiusMetres(raw){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
     var km=Number(raw);
     if(!Number.isFinite(km)||km<0.001||km>1e13)throw RangeError('Expected radius in [0.001, 1e13] km');
     return km*1000;
+  }
+  // Radius inputs are edited as a draft. A 420 ms typing pause is not a
+  // physical-model commit: typing '10000' must never render at '1' or '10'.
+  function radiusDraft(id,pending){
+    var hint=newUiEl(id+'Draft');
+    if(hint)hint.hidden=!pending;
   }
   function bindCompareEditor(){
     if(!compareState)return; // 132 compatibility (older isolated test harness)
@@ -477,17 +485,25 @@
     [['ModernModelRadius','radiusKm'],['ModernModelOcclusion','occlusionRadius']].forEach(function(row){
       var node=el(row[0]);if(!node)return;
       function commit(){
-        if(state.editTimeouts[row[0]]!==undefined){clearTimeout(state.editTimeouts[row[0]]);delete state.editTimeouts[row[0]];}
-        try{var raw=row[1]==='occlusionRadius'?scaleRadiusMetres(node.value):node.value;
+        radiusDraft(row[0],false);
+        try{
+          var raw=row[1]==='occlusionRadius'?scaleRadiusMetres(node.value):node.value;
+          var current=state.compareConfig[state.compareSelected][row[1]];
+          // Enter followed by a native change event must not retrace twice.
+          if(Number(raw)===current){syncCompareEditor();return;}
           state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,row[1],raw);
-          syncCompareEditor();redraw();}
-        catch(error){updateStatus('Invalid '+row[1]+': '+error.message,true);syncCompareEditor();}
+          syncCompareEditor();redraw();
+        }catch(error){updateStatus('Invalid '+row[1]+': '+error.message,true);syncCompareEditor();}
       }
-      node.addEventListener('input',function(){
-        if(state.editTimeouts[row[0]]!==undefined)clearTimeout(state.editTimeouts[row[0]]);
-        state.editTimeouts[row[0]]=setTimeout(commit,420);
+      node.addEventListener('input',function(){radiusDraft(row[0],true);});
+      node.addEventListener('change',commit); // blur, spinner commit or native Enter
+      node.addEventListener('keydown',function(event){
+        if(event.key==='Enter'){
+          if(event.preventDefault)event.preventDefault();
+          commit();
+          if(typeof node.blur==='function')node.blur();
+        }
       });
-      node.addEventListener('change',commit);
     });
     var eye=el('ModernCompareEyeLevel');if(eye){eye.checked=state.compareEyeLevel;eye.addEventListener('change',function(){
       state.compareEyeLevel=eye.checked;redraw();
@@ -579,11 +595,17 @@
     Object.keys(state.editTimeouts).forEach(function(id){clearTimeout(state.editTimeouts[id]);});
     state.editTimeouts={};
   }
-  function bindNumber(id,action,description){
+  function bindNumber(id,action,description,commitOnly,currentValue){
     var input=el(id);if(!input)return;
     function commit(){
       if(state.editTimeouts[id]!==undefined){clearTimeout(state.editTimeouts[id]);delete state.editTimeouts[id];}
+      radiusDraft(id,false);
       var raw=input.value;
+      // Enter + change should not retrace an unchanged physical radius.
+      if(commitOnly&&typeof currentValue==='function'&&raw.trim()!==''&&
+          Number.isFinite(Number(raw))&&Number(raw)===currentValue()){
+        syncNumericInputs();return;
+      }
       // Use the same validation for immediate and debounced changes.
       if(!adapter){
         var n=Number(raw);
@@ -597,11 +619,19 @@
       if(applyField(action,raw,description||id))syncNumericInputs();
     }
     input.addEventListener('input',function(){
+      if(commitOnly){radiusDraft(id,true);return;}
       if(state.editTimeouts[id]!==undefined)clearTimeout(state.editTimeouts[id]);
-      // Wait for intermediate values such as '-' or '1.'.
+      // Other controls retain the existing short debounce.
       state.editTimeouts[id]=setTimeout(commit,420);
     });
     input.addEventListener('change',commit);
+    if(commitOnly)input.addEventListener('keydown',function(event){
+      if(event.key==='Enter'){
+        if(event.preventDefault)event.preventDefault();
+        commit();
+        if(typeof input.blur==='function')input.blur();
+      }
+    });
   }
   function syncNumericInputs(){
     var pairs={ModernHeight:'Height',ModernFocal:'FocalLengthField',ModernPan:'Pan',
@@ -777,10 +807,11 @@
     bindNumber('ModernNick',function(v){adapter?adapter.setCamera(model,'Nick',v):model.Nick=v;},'nick');
     bindNumber('ModernRoll',function(v){adapter.setCamera(model,'Roll',v);},'roll');
     bindNumber('ModernViewAngle',function(v){adapter.setCamera(model,'ViewAngleField',v);},'field of view');
-    bindNumber('ModernRadiusKm',function(v){adapter.setRadiusKm(model,v);},'radius');
+    bindNumber('ModernRadiusKm',function(v){adapter.setRadiusKm(model,v);},'radius',true,
+      function(){return model.rEarth/1000;});
     bindNumber('ModernOcclusion',function(v){
       state.occlusionRadius=scaleRadiusMetres(v);
-    },'refraction scale radius');
+    },'refraction scale radius',true,function(){return state.occlusionRadius/1000;});
     var aim=el('ModernCameraAim');aim.addEventListener('change',function(){
       if(adapter)applyField(function(v){adapter.setAim(model,v);},this.value,'camera aim');
       else {model.viewcenterHorizon=Number(this.value);redraw();}

@@ -120,7 +120,7 @@
         <input id="ModernCurvature" type="range" min="0" max="1000" step="1" value="164">
         <output id="ModernCurvatureLabel" for="ModernCurvature">R = 6371 km</output>
         <div class="modern-two-fields modern-align-end">
-          <div class="modern-field"><label for="ModernRadiusKm">Radius (km)</label><input id="ModernRadiusKm" type="number" min="100" max="10000000000000" step="any" value="6371"></div>
+          <div class="modern-field"><label for="ModernRadiusKm">Radius (km)</label><input id="ModernRadiusKm" type="number" min="100" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernRadiusKmDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
           <div class="modern-field"><label class="modern-check" for="ModernFlat"><input id="ModernFlat" type="checkbox"> Exact flat (κ = 0)</label></div>
         </div>
         <button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button>
@@ -130,14 +130,16 @@
         <div class="modern-field"><label for="ModernModelSurface">Surface geometry</label>
           <select id="ModernModelSurface"><option value="globe">Spherical surface</option><option value="flat">Exact flat · κ = 0</option></select></div>
         <div class="modern-field"><label for="ModernModelRadius">Surface/reference radius (km)</label>
-          <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000"></div>
+          <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000">
+          <p class="modern-note modern-radius-draft" id="ModernModelRadiusDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p>
+          <p class="modern-note" id="ModernModelFlatRadiusNote" hidden>Exact flat geometry has zero curvature regardless of this reference radius. To change the engineered bending of rays, use Refraction scale radius in Atmosphere.</p></div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
           <option value="standard" selected>Standard atmosphere</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option><option value="exponential-occlusion">Exponential refractive profile · engineered</option>
         </select></div>
-        <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Refraction scale radius (km)</label><input id="ModernOcclusion" type="number" min="0.001" max="10000000000000" step="any" value="6371"></div>
+        <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Refraction scale radius (km)</label><input id="ModernOcclusion" type="number" min="0.001" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
         <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
@@ -149,7 +151,8 @@
             <option value="exponential-occlusion">Exponential refractive profile · engineered</option></select></div>
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
           <label for="ModernModelOcclusion">Refraction scale radius (km)</label>
-          <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any"></div>
+          <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any">
+          <p class="modern-note modern-radius-draft" id="ModernModelOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
         <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>

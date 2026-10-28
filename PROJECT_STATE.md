@@ -531,3 +531,26 @@ is described when loading a historical experiment; it and the two inverse
 pair presets are hidden from the default picker but retained, restorable and
 editable when selected by URL, JSON, or named library. No physics formulas,
 experiment schema version, Legacy behavior, or cache keys were changed.
+
+### Patch 135 — Refraction scale radius in Modern UI
+
+The existing `occlusionRadius` (metres) is exposed as **Refraction scale radius
+(km)** for engineered atmospheric profiles in both Scene and independent A/B
+Compare settings. UI values are converted to metres before reaching the optical
+solver. The experiment URL/JSON/localStorage schema and cache key remain
+unchanged, as does the separate geometry/reference radius.
+
+### Patch 135.1 — Safe radius editing and reference-radius guidance
+
+Radius fields in Scene and Compare now treat `input` as an uncommitted draft.
+Only Enter or the native `change` event (including loss of focus) validates
+and redraws physical optics; the previous 420 ms typing timer no longer
+triggers expensive renders at intermediate values such as `1` or `10` km.
+Committed values are idempotent across Enter + change and retain the independent
+Compare A/B physics and unchanged metre-based optical state. A visible draft
+hint explains how to apply values. For exact flat geometry, the Compare Surface
+tab explicitly notes that the reference radius does not bend rays; the
+separate atmospheric Refraction scale radius controls engineered refraction.
+The optical cache already keys `occlusionRadius`, so no cache or physics changes
+were necessary. No numerical time-to-completion guarantee is made for a
+purposefully committed extreme profile. Node regression: 566/566 passed.
