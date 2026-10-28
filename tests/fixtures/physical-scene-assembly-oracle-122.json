@@ -1,0 +1,46 @@
+[
+  {
+    "geometry": "globe",
+    "atmosphere": "standard",
+    "height": 15,
+    "towers": 85,
+    "hash": "acc40ddec10815a23b16314eb17908391aa4ae9e1e937237c5e383c5826c2e43",
+    "sourceCount": 542,
+    "projectedCount": 82618,
+    "visible": 3684,
+    "unresolved": 0
+  },
+  {
+    "geometry": "globe",
+    "atmosphere": "standard",
+    "height": 15.3,
+    "towers": 85,
+    "hash": "19009bd5c7664585aa070a3a59b4c3048b8904b83fc808eac536a072fba20078",
+    "sourceCount": 542,
+    "projectedCount": 82595,
+    "visible": 3663,
+    "unresolved": 0
+  },
+  {
+    "geometry": "flat",
+    "atmosphere": "vacuum",
+    "height": 15,
+    "towers": 2,
+    "hash": "0fa58c57887c8e3ae36903c9eb9950648a28f69bcc83ab84c375bb3854808490",
+    "sourceCount": 115,
+    "projectedCount": 4857,
+    "visible": 345,
+    "unresolved": 0
+  },
+  {
+    "geometry": "globe",
+    "atmosphere": "vacuum",
+    "height": 15,
+    "towers": 2,
+    "hash": "91e9c1f6ba58e0d5150b7cd317c006835c296b7e339a552637a77e1240afd88d",
+    "sourceCount": 210,
+    "projectedCount": 78451,
+    "visible": 389,
+    "unresolved": 0
+  }
+]

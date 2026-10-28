@@ -113,13 +113,16 @@
       a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));});
     return placed;
   }
-  function assemble(composed,results,geometry,guides){
+  function assemble(composed,results,geometry,guides,timings){
     // Guides remain live presentation data. A pan may rotate the tangent
     // line without invalidating expensive, view-independent optical rays.
     var primitives=[],ranges=[],source=composed.scene.primitives;
     function append(name,role,items){
       var start=primitives.length;
-      items.forEach(function(p){primitives.push(Object.assign({},p,{commandIndex:primitives.length}));});
+      // All returned guide and object primitives were freshly projected and
+      // belong exclusively to this adapter. Pass those references onward;
+      // the shared contract will validate before taking ownership.
+      items.forEach(function(p){primitives.push(p);});
       ranges.push({name:name,role:role,start:start,end:primitives.length,count:primitives.length-start});
     }
     var guideRanges=composed.ranges.filter(function(r){return r.role==='visual-aid';});
@@ -127,11 +130,19 @@
       append(r.name,'visual-aid',i===0?guides:[]);
     });
     append('physically-projected-objects','objects',results);
-    var scene=contract.createScene('legacy',primitives,{
+    // This adapter owns every projected guide/outline/fill and hands off
+    // ownership exactly once. Adopt after the SAME strict point validation,
+    // without deep-cloning tens of thousands of new ground-guide segments.
+    var adoptionStart=clock();
+    var scene=contract.adoptScene('legacy',primitives,{
       generator:'CurvaturePhysicalSceneOptics',composition:'physical-projected-main',
       layerRanges:ranges,globe:geometry==='globe',
       limitations:['Ground grids are sampled through atmospheric optics and bounded by optical horizon; no surface fill',
         'Authored polygon fills are sampled and ground-clipped; mutual 3D mesh occlusion is not supported']});
+    if(timings)timings.sceneAdoptionMs=clock()-adoptionStart;
+    // These are the adapter's owned projected primitives, not source geometry.
+    // The authored originals and their command indices are never modified.
+    scene.primitives.forEach(function(p,i){p.commandIndex=i;});
     return {scene:scene,ranges:ranges};
   }
   function create(){
@@ -197,13 +208,34 @@
       // Ground h=0 and tower h>=0 use the SAME exact RK4 oracle/cache.
       // The radial surface table still limits ground tessellation and never
       // extrapolates a physical horizon from the prism bounds.
-      var groundBefore=field&&field.stats?field.stats():null;
+      // Count NEW target oracles and their shooting trials separately from
+      // cache hits, at the point where work is actually performed. These
+      // counters are nested: evaluations are trial angles *per target solve*,
+      // while RK4 calls are the individual integration steps of those trials.
+      var WORK_FIELDS=['solves','hits','interpolations','fallbacks','shootEvaluations',
+        'shootRK4Calls','predictorAttempts','predictorAccepted','predictorFallbacks',
+        'clearGroundSteps','fullGroundEventSteps','exactSolveMs'];
+      function counters(){return field&&field.stats?field.stats():null;}
+      function workDelta(before,after){
+        if(!before||!after)return null;
+        var difference={};WORK_FIELDS.forEach(function(key){
+          difference[key]=(after[key]||0)-(before[key]||0);
+        });
+        return difference;
+      }
+      function addWork(target,delta){
+        if(!delta)return;
+        WORK_FIELDS.forEach(function(key){target[key]=(target[key]||0)+delta[key];});
+      }
+      var groundBefore=counters();
       var guideProjection=groundGuides.create({model:model,geometry:geometry,
         atmosphere:kind,occlusionRadius:R,step:settings.step,maxDistance:Math.min(100000,model.rEarth*.1),
         sampleGround:kind!=='vacuum'&&field?function(d){return field.exact(d,0);}:null});
       var physicalGuides=guideProjection.transform(guideSource);
       var groundGuidesMs=clock()-startedProfile-fieldSetupMs;
-      var groundAfter=field&&field.stats?field.stats():null;
+      var groundAfter=counters();
+      var phaseWork={ground:workDelta(groundBefore,groundAfter),outlines:{},fills:{}};
+      var workCheckpoint=groundAfter;
       var groundFieldSolves=groundAfter?groundAfter.solves-groundBefore.solves:0;
       var groundCacheHits=groundAfter?groundAfter.hits-groundBefore.hits:0;
       var results=[],stats={sourceObjects:objects.length,visibleSegments:0,
@@ -238,6 +270,9 @@
           angularTolerance:settings.angularTolerance,minimumDepth:settings.minimumDepth,
           maximumDepth:settings.maximumDepth,maxSamples:settings.maxSamples});
         outlinesMs+=clock()-beganOutline;
+        var afterOutline=counters();
+        addWork(phaseWork.outlines,workDelta(workCheckpoint,afterOutline));
+        workCheckpoint=afterOutline;
         var beganFill=clock();
         // Only authored filled polygons participate: tower struts remain
         // strokes, while their foundation polygons regain their actual fill.
@@ -247,6 +282,9 @@
           angularTolerance:settings.angularTolerance,maximumDepth:7,
           maxSamples:settings.maxSamples,layer:r.name});
         fillsMs+=clock()-beganFill;
+        var afterFill=counters();
+        addWork(phaseWork.fills,workDelta(workCheckpoint,afterFill));
+        workCheckpoint=afterFill;
         fills.primitives.forEach(function(p){results.push(p);});
         stats.fillTriangles+=fills.stats.fillTriangles;
         stats.fillUnresolved+=fills.stats.unresolvedTriangles;
@@ -294,6 +332,7 @@
       });
       if(field&&field.stats)fieldStats=field.stats();
       stats.fieldStats=fieldStats;
+      stats.opticalWork=fieldStats?phaseWork:null;
       stats.towerSolves=fieldStats?fieldStats.solves-groundFieldSolves:0;
       stats.budgetExceeded=cutoff;stats.buildMs=Date.now()-began;
       // Cache the camera-independent physical scene INCLUDING its optical
@@ -301,8 +340,9 @@
       // frames and pixel projections on every redraw. A budget-expired
       // preview is partial; never freeze it in the cache.
       var assemblyStarted=clock();
-      var presentation=assemble(composed,results,geometry,physicalGuides);
-      stats.opticalStages={fieldSetupMs:fieldSetupMs,groundGuidesMs:groundGuidesMs,
+      var assemblyDetail={};
+      var presentation=assemble(composed,results,geometry,physicalGuides,assemblyDetail);
+      stats.opticalStages={sceneAdoptionMs:assemblyDetail.sceneAdoptionMs,fieldSetupMs:fieldSetupMs,groundGuidesMs:groundGuidesMs,
         outlinesMs:outlinesMs,fillsMs:fillsMs,assemblyMs:clock()-assemblyStarted,
         exactSolveMs:fieldStats&&fieldStats.exactSolveMs||0};
       if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])

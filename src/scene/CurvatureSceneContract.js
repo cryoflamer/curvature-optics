@@ -34,20 +34,50 @@
     });
     return {version: VERSION, values: values};
   }
-  function scene(source, primitives, metadata) {
+  function scene(source, primitives, metadata, adoptOwned) {
     if (source !== 'legacy' && source !== 'optical-p4') throw new TypeError('Unknown scene source');
     if (!Array.isArray(primitives)) throw new TypeError('Scene primitives must be an array');
-    var result = primitives.map(function (p) {
+    // Both entrypoints validate the same geometry. The default public path
+    // makes a deep defensive copy; the explicit ownership-transfer path is
+    // reserved for a renderer that *just created* its private primitives.
+    var result = adoptOwned ? primitives : [];
+    primitives.forEach(function (p) {
       if (!p || typeof p !== 'object') throw new TypeError('Invalid scene primitive');
       if (p.type !== 'line' && p.type !== 'polygon') throw new TypeError('Unknown primitive type');
-      if (!Array.isArray(p.points) || p.points.length < (p.type === 'line' ? 2 : 3) ||
-          !p.points.every(vec3)) throw new TypeError('Invalid 3D primitive points');
+      if (!Array.isArray(p.points) || p.points.length < (p.type === 'line' ? 2 : 3))
+        throw new TypeError('Invalid 3D primitive points');
       if (p.type === 'line' && p.points.length !== 2) throw new TypeError('Line needs two points');
       if (p.mode !== undefined && !Number.isInteger(p.mode)) throw new TypeError('Invalid draw mode');
       if (p.visible !== undefined && typeof p.visible !== 'boolean') throw new TypeError('Invalid visibility');
-      return copy(p);
+      // Trusted adapters can hand over sole ownership of freshly generated
+      // projected primitives. Validate the same geometry either way; only
+      // the public defensive-copy entrypoint duplicates all nested arrays.
+      var points = adoptOwned ? null : new Array(p.points.length);
+      for (var i = 0; i < p.points.length; i++) {
+        var point = p.points[i];
+        if (!vec3(point)) throw new TypeError('Invalid 3D primitive points');
+        if (!adoptOwned) points[i] = point.slice();
+      }
+      if (!adoptOwned) {
+        var cloned = {};
+        Object.keys(p).forEach(function (key) {
+          cloned[key] = key === 'points' ? points : copy(p[key]);
+        });
+        result.push(cloned);
+      }
     });
     return {version: VERSION, source: source, primitives: result, metadata: copy(metadata || {})};
   }
-  return {VERSION: VERSION, STATE_FIELDS: STATE_FIELDS.slice(), captureState: state, createScene: scene};
+  // Only for adapters that create and exclusively own all primitive objects,
+  // point arrays, styles and metadata. The caller MUST NOT retain or mutate
+  // those objects after adoption. External callers use createScene(), which
+  // keeps its historical deep-copy isolation and identical validation.
+  function createScene(source, primitives, metadata) {
+    return scene(source, primitives, metadata, false);
+  }
+  function adoptScene(source, ownedPrimitives, metadata) {
+    return scene(source, ownedPrimitives, metadata, true);
+  }
+  return {VERSION: VERSION, STATE_FIELDS: STATE_FIELDS.slice(), captureState: state,
+    createScene: createScene, adoptScene: adoptScene};
 }));

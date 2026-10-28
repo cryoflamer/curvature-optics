@@ -248,3 +248,21 @@ reports predictor and ground step statistics. See
 `docs/MIGRATION_SHOOTING_REDUCTION_121.md`,
 `tests/OpticalShootingReduction121.test.js` and
 `tools/benchmark-shooting-reduction-121.js`.
+
+## Compatpatch 122 — owned physical assembly and exact-work attribution
+
+Browser diagnostics #121 isolated ~97 ms `assemblyMs` per cold scene with
+~82k ground+object primitives; the scene contract's deep defensive clone
+accounted for most of it. Physical-only newly projected ground guides,
+strokes and fills now transfer exclusive ownership through the new validated
+`CurvatureSceneContract.adoptScene` API instead of cloning. External callers'
+`createScene` preserves its deep-copy semantics. Reference hashes of all
+physical output primitives/ranges match #121 **byte for byte** on four
+Globe/Flat and Standard/vacuum scenes; physical equations are unchanged.
+The ZIP profiler now also records per-ground/outline/fill increments of exact
+target solves, cache hits, shooting trials and RK4 steps. A Node benchmark
+observed assembly decrease from ~107–160 to ~13–19 ms on repeated warm
+runs; browser timing needs confirmation. See
+`docs/MIGRATION_PHYSICAL_SCENE_ASSEMBLY_122.md`,
+`tests/PhysicalAssemblyAndSolverAudit122.test.js` and
+`tools/benchmark-scene-assembly-122.js`.

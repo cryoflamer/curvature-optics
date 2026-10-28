@@ -34,6 +34,7 @@
       fullGroundEventSteps:result.fieldStats&&result.fieldStats.fullGroundEventSteps,
       exactSolveMs:result.fieldStats&&result.fieldStats.exactSolveMs,
       opticalStages:result.cacheReused?null:(result.opticalStages||null),
+      opticalWork:result.cacheReused?null:(result.opticalWork||null),
       unresolved:result.unresolved};
   }
   // Optional dependencies permit isolated Node tests with injected renderer.
@@ -97,7 +98,24 @@
         exactSolver:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.exactSolveMs;}).filter(Number.isFinite)),
         groundGuides:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.groundGuidesMs;}).filter(Number.isFinite)),
         outlines:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.outlinesMs;}).filter(Number.isFinite)),
-        fills:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.fillsMs;}).filter(Number.isFinite))};
+        fills:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.fillsMs;}).filter(Number.isFinite)),
+        assembly:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.assemblyMs;}).filter(Number.isFinite)),
+        sceneAdoption:summarize(group.map(function(r){return r.opticalStages&&r.opticalStages.sceneAdoptionMs;}).filter(Number.isFinite)),
+        // Counter medians do NOT have millisecond units. This breakdown is
+        // a disjoint partition of the exact solver's cold-build work, not
+        // separate/extra solve counts to add onto the scene total.
+        opticalWorkByPhase:(function(){
+          var out={};['ground','outlines','fills'].forEach(function(phase){
+            var metrics={};['solves','hits','interpolations','fallbacks',
+              'shootEvaluations','shootRK4Calls','exactSolveMs'].forEach(function(key){
+              var values=group.map(function(r){return r.opticalWork&&r.opticalWork[phase]&&
+                r.opticalWork[phase][key];}).filter(Number.isFinite);
+              if(values.length){var sorted=values.sort(function(a,b){return a-b;});
+                metrics[key]={count:values.length,median:sorted[Math.floor(sorted.length/2)],
+                  min:sorted[0],max:sorted[sorted.length-1]};}
+            });out[phase]=metrics;
+          });return out;
+        }())};
     });
     return {profile:{schema:'curvature-performance-profile-v118',timestamp:new Date().toISOString(),
       scenarios:groups,failures:failures,limitations:[
@@ -108,7 +126,9 @@
         'Warm and cold samples are order-dependent; compare medians and raw samples',
         'The legacy geometry ZIP capture is separate from these Physical samples',
         'Height-change samples represent separate fully updated models; no approximate rays are displayed',
-        'Exact-solver time is contained within ground/outlines/fills; do not sum it again']},samples:records};
+        'Exact-solver time is contained within ground/outlines/fills; do not sum it again',
+        'opticalWorkByPhase counts are per-stage *new* exact target solves and their nested shooting trials, not independent scene totals',
+        'sceneAdoption is contained within assembly; validation does not mean the scene is copied']},samples:records};
   }
   return {run:run,summarize:summarize,sample:sample};
 }));

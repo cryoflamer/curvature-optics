@@ -692,6 +692,16 @@ function DrawModelWithOptionalAudit(g) {
             '  height optical median: '+d.optics.medianMs+
             ' ms; exact solver median: '+d.exactSolver.medianMs+
             ' ms (included in outlines/fills/ground)');
+          if(name==='height-change-cold'&&d.assembly){
+            summary.push('  scene assembly median: '+d.assembly.medianMs+
+              ' ms (adoption/validation median '+d.sceneAdoption.medianMs+' ms)');
+            ['ground','outlines','fills'].forEach(function(phase){
+              var w=d.opticalWorkByPhase&&d.opticalWorkByPhase[phase];
+              if(w&&w.solves)summary.push('  '+phase+': '+w.solves.median+
+                ' new exact targets, '+w.shootEvaluations.median+
+                ' shooting angle trials, '+w.hits.median+' cached targets');
+            });
+          }
         });
         (profiler.failures||[]).forEach(function(f){summary.push('FAILED '+f.scenario+': '+f.error);});
         if(profiler.unavailable)summary.push('Unavailable: '+profiler.unavailable);
