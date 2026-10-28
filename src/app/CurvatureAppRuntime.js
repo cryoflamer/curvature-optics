@@ -57,6 +57,7 @@ function UpdateAll( stopAnimation ) {
     CurveApp.Update();
     if (window.CurvatureOpticsUI) CurvatureOpticsUI.sync();
     ControlPanels.Update();
+    if(typeof SyncPhysicalCurvatureControl127==='function')SyncPhysicalCurvatureControl127();
     var currentHeight=CurveApp.Height;
     var changedHeight=physicalCanvasPreviousHeight!==null&&
       currentHeight!==physicalCanvasPreviousHeight;
@@ -247,6 +248,49 @@ if (window.CurvatureCanvasFrameScheduler && typeof requestAnimationFrame === 'fu
   };
 }
 
+function SyncPhysicalCurvatureControl127(){
+  var api=window.CurvaturePhysicalCurvature127;
+  if(!api)return;
+  var slider=document.getElementById('PhysicalCanvasCurvature');
+  var label=document.getElementById('PhysicalCanvasCurvatureLabel');
+  if(!slider||!label)return;
+  var step=api.modelStep(CurveApp);
+  if(step!==null)slider.value=String(step);
+  label.textContent=api.label(CurveApp);
+  // The slider is a *physical-only* control. Legacy radio selectors keep
+  // ownership of the separate Globe+FE comparison mode.
+  slider.disabled=CurveApp.showModel===3;
+}
+function WirePhysicalCurvature127(){
+  var api=window.CurvaturePhysicalCurvature127;
+  if(!api)return;
+  var slider=document.getElementById('PhysicalCanvasCurvature');
+  var earth=document.getElementById('PhysicalCanvasEarthRadius');
+  if(!slider)return;
+  var delayed=null;
+  function commit(){
+    if(delayed!==null){clearTimeout(delayed);delayed=null;}
+    UpdateAll();
+  }
+  slider.addEventListener('input',function(){
+    if(delayed!==null)clearTimeout(delayed);
+    if(physicalCanvasFrameScheduler)physicalCanvasFrameScheduler.cancel();
+    api.applyStep(CurveApp,Number(slider.value));
+    CurveApp.Update();
+    ControlPanels.Update();
+    SyncPhysicalCurvatureControl127();
+    var status=document.getElementById('MainCanvasRendererStatus');
+    if(status)status.textContent='CURVATURE CHANGING: exact Physical optics pending; the previous image is retained until the slider settles.';
+    // Unlike pan/nick, a curvature change invalidates the entire optical
+    // field. Never launch an expensive exact solve for every pointer event.
+    delayed=setTimeout(commit,250);
+  });
+  slider.addEventListener('change',commit);
+  if(earth)earth.addEventListener('click',function(){
+    api.resetEarth(CurveApp);commit();
+  });
+  SyncPhysicalCurvatureControl127();
+}
 function RefreshPhysicalCanvasControls(){
   var selector=document.getElementById('MainCanvasRenderer');
   var physical=selector&&selector.value==='physical';
@@ -263,6 +307,7 @@ function RefreshPhysicalCanvasControls(){
     'Flat engineered profile: R controls the comparison horizon, not the Globe radius.';
 }
 RefreshPhysicalCanvasControls();
+WirePhysicalCurvature127();
 ['PhysicalCanvasAtmosphere','PhysicalCanvasOcclusionRadius'].forEach(function(id){
   var control=document.getElementById(id);
   if(control)control.addEventListener('change',function(){RefreshPhysicalCanvasControls();graph.Redraw();});

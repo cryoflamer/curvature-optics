@@ -26,10 +26,12 @@ test('legacy drawing declarations load before application boot and diagnostics',
   const diagnostics = scripts.indexOf('src/diagnostics/CurvatureLegacyFrameCaptureController.js');
   assert.ok(drawing >= 0 && model === drawing + 1);
   assert.equal(diagnostics, model + 1);
-  assert.equal(scripts[diagnostics + 1], 'src/app/CurvatureMainCanvasRenderer.js');
-  assert.equal(scripts[diagnostics + 2], 'src/app/CurvatureCanvasFrameScheduler.js');
-  assert.equal(scripts[diagnostics + 3], 'src/app/CurvatureHeightChangeScheduler120.js');
-  assert.equal(bootstrap, diagnostics + 4);
+  assert.equal(scripts[diagnostics + 1], 'src/app/CurvaturePhysicalCamera127.js');
+  assert.equal(scripts[diagnostics + 2], 'src/app/CurvaturePhysicalCurvature127.js');
+  assert.equal(scripts[diagnostics + 3], 'src/app/CurvatureMainCanvasRenderer.js');
+  assert.equal(scripts[diagnostics + 4], 'src/app/CurvatureCanvasFrameScheduler.js');
+  assert.equal(scripts[diagnostics + 5], 'src/app/CurvatureHeightChangeScheduler120.js');
+  assert.equal(bootstrap, diagnostics + 6);
   assert.match(read('src/legacy/CurvatureLegacyDrawing.js'), /function DrawModel\( g \)/);
   assert.match(read('src/legacy/CurvatureLegacyDrawing.js'), /function DrawShape\( objIx, g, m \)/);
   assert.match(read('src/app/CurvatureAppRuntime.js'), /DrawFunc: DrawMainCanvasFrame/);
@@ -55,7 +57,7 @@ test('parser-time panel creation remains synchronous at its original DOM locatio
 
 test('all extracted classic scripts parse independently', () => {
   const extracted = scripts.filter(name => /^(?:src\/(?:app|animation)|src\/ui\/|src\/legacy\/CurvatureLegacyDrawing\.js|src\/diagnostics\/CurvatureLegacyFrameCaptureController\.js)/.test(name) && !['src/ui/ControlPanelX.js', 'src/ui/ModelAnimationX.js'].includes(name));
-  assert.equal(extracted.length, 28);
+  assert.equal(extracted.length, 30);
   for (const file of extracted) assert.doesNotThrow(() => new vm.Script(read(file), {filename:file}), file);
 });
 

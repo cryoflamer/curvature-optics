@@ -403,17 +403,33 @@ CurveAppClass.prototype.Update = function() {
     ? this.rEarth : this.refractionRadius;
 
   // compute diverse values
-  this.aDip = Math.acos( this.geometryRadius / (this.geometryRadius + this.Height) );
+  // At extremely large radii acos(R/(R+H)) rounds to zero and the old
+  // difference R - R*cos(dip) loses the eye height. The physical renderer
+  // uses an observer-fixed camera; nevertheless keep these legacy derived
+  // fields finite when a Physical radius slider explores the flat limit.
+  // Ordinary legacy Earth values retain their historical exact arithmetic.
+  if (this.geometryRadius > 1e12) {
+    var q = this.Height / this.geometryRadius;
+    this.aDip = Math.atan(Math.sqrt(q) * Math.sqrt(2+q));
+    this.rDisk = this.geometryRadius * Math.sin(this.aDip);
+    this.dHorizon = this.geometryRadius * this.aDip;
+    this.hDip = this.Height / (1+q);
+    this.hDisk = this.geometryRadius - this.hDip;
+    this.dView = Math.sqrt(this.Height) * Math.sqrt(this.geometryRadius) * Math.sqrt(2+q);
+  } else {
+    this.aDip = Math.acos( this.geometryRadius / (this.geometryRadius + this.Height) );
+    this.rDisk = this.geometryRadius * Math.sin( this.aDip );
+    this.dHorizon = this.geometryRadius * this.aDip;
+    this.hDisk = this.geometryRadius * Math.cos( this.aDip );
+    this.hDip = this.geometryRadius - this.hDisk;
+    this.dView = ( this.Height + this.geometryRadius ) * Math.sin( this.aDip );
+  }
   this.aEarth = Math.PI - 2 * this.aDip;
-  this.rDisk = this.geometryRadius * Math.sin( this.aDip );
-  this.dHorizon = this.geometryRadius * this.aDip;
-  this.hDisk = this.geometryRadius * Math.cos( this.aDip );
-  this.hDip = this.geometryRadius - this.hDisk;
-  this.dView = ( this.Height + this.geometryRadius ) * Math.sin( this.aDip );
   this.aDelta = this.aDip / this.nLines;
   this.dDelta = this.showModel & 1 ? this.aDelta * this.geometryRadius : 0;
   this.posEarth = [ 0, 0, -(this.geometryRadius + this.Height) ];
-  this.zDisk = (this.geometryRadius + this.Height) - ( this.geometryRadius * Math.cos( this.aDip ) );
+  this.zDisk = this.geometryRadius>1e12?this.Height+this.hDip:
+    (this.geometryRadius + this.Height) - ( this.geometryRadius * Math.cos( this.aDip ) );
 
   // Nick and Pan slider synchronization
   if (this.Nick != this.LastNick) {

@@ -114,7 +114,8 @@ test('108: opt-in physical mode calls shared painter, not dedicated tower Canvas
     SetCameraClipping(n){this.CameraClipPlaneDist=n},SetWindowToCameraScreen(){},
     SetCamera(c){this.Camera={...c,ScreenSize:1,ObjectZExtend:0,Zoom:1}},
     SetCameraZoom(n){this.Camera.Zoom=n}};
-  const result=main.renderPhysical(g,model({showModel:2,NObjects:[1,1],showGrid:0}),{atmosphere:'vacuum'});
+  const result=main.renderPhysical(g,{...model({showModel:2,NObjects:[1,1],showGrid:0}),
+    camViewAngle:1*Math.PI/180,deviceRatio:1.5,Pan:0,Nick:0,Roll:0,viewcenterHorizon:3},{atmosphere:'vacuum'});
   assert.equal(result.mode,'physical-scene');
   assert.ok(result.drawn>0);
   assert.ok(result.layerCounts.some(x=>x.name==='surface-guides'));

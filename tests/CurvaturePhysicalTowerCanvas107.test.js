@@ -143,7 +143,8 @@ test('108: physical main Canvas shares painter and restores the scaled GraphX co
     SetWindowToCameraScreen(){},SetCamera(c){this.Camera={...c,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
   const m={...base,NObjects:[0,0],rFEarth:10007543,showGrid:0,camPos:[0,0,0],camViewCenter:[0,1,0],
-    camUp:[0,0,1],camSceneSize:1};
+    camUp:[0,0,1],camSceneSize:1,camViewAngle:1*Math.PI/180,
+    deviceRatio:1.5,Pan:0,Nick:0,Roll:0,viewcenterHorizon:3};
   const r=main.renderPhysical(g,m,{atmosphere:'vacuum'});
   assert.equal(r.mode,'physical-scene');
   assert.equal(r.drawn,0);assert.equal(r.unresolved,0);

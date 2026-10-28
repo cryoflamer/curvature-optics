@@ -12,10 +12,11 @@
     root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),
     root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null),
     root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
-    root.CurvatureScreenSpaceGuides119||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides119'):null));
+    root.CurvatureScreenSpaceGuides119||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides119'):null),
+    root.CurvaturePhysicalCamera127||(typeof require==='function'?require('./CurvaturePhysicalCamera127'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera){
   'use strict';
   var opticalSession=optical.create();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
@@ -61,15 +62,17 @@
     }
     return {supported:true,reason:''};
   }
-  function configureCamera(g,m){
+  function configureCamera(g,m,physical){
     // Match the reference camera bootstrap without painting any legacy geometry.
     // GraphX3DX is retained solely as the main Canvas/viewport owner.
     g.SetViewport(0,1,-0.5,-2);
     g.SetGraphClipping(true,'',0);
     g.SetCameraClipping(0.001);
     g.SetWindowToCameraScreen();
-    g.SetCamera({SceneSize:m.camSceneSize,CamPos:m.camPos,
-      CamUp:m.camUp,CamViewCenter:m.camViewCenter});
+    var view=physical?physicalCamera.create(m):{sceneSize:m.camSceneSize,pos:m.camPos,
+      up:m.camUp,center:m.camViewCenter};
+    g.SetCamera({SceneSize:view.sceneSize,CamPos:view.pos,
+      CamUp:view.up,CamViewCenter:view.center});
     g.SetCameraZoom(1);
     var camera=perspective.snapshot(g.Camera);
     camera.near=g.CameraClipPlaneDist>0?g.CameraClipPlaneDist:1e-6;
@@ -109,7 +112,7 @@
     var available=support(m);
     if(!available.supported)throw RangeError(available.reason);
     if(!g||!g.Canvas)throw TypeError('Main graph Canvas required');
-    var frameStart=now(),camera=configureCamera(g,m),ctx=g.Canvas.getContext('2d');
+    var frameStart=now(),camera=configureCamera(g,m,true),ctx=g.Canvas.getContext('2d');
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
        typeof ctx.restore!=='function')throw TypeError('Canvas 2D context required');
     // The optical backend transforms the SAME independently authored scene;

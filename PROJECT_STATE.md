@@ -354,3 +354,23 @@ boundary and camera decoupling are reserved for #127. See
 `docs/MIGRATION_PHYSICAL_METRIC_WORLD_126.md` and
 `tests/PhysicalMetricWorld126.test.js`. Real browser grid appearance and
 end-to-end profiling require a fresh user Diagnostics ZIP after application.
+
+## Patch 127 — Physical observer-fixed camera and curvature slider (2026-10-28)
+
+`src/app/CurvaturePhysicalCamera127.js` supplies a finite observer-fixed
+camera for the **Physical** main Canvas: fixed 1000 m view reference, direct
+FOV, pan/nick/roll and aspect ratio, stable geometric dip in Horizon mode.
+`Eye-Lvl` is independent of the surface curvature. The legacy and Independent
+camera are unchanged. The Physical toolbar now contains a logarithmic radius
+slider (100 km to 10^13 km), exact flat endpoint (`showModel=2`, k=0), and
+`Earth R` reset. The existing `rEarth`/`showModel` state retains Save/Restore
+compatibility; only the radius slider adds a visual control. Drag changes
+coalesce before a new optical solve; no per-pointer heavy RK4 work.
+
+The huge-radius model reference dip is stabilized above 1e12 m; legacy
+ordinary-radius computations and diagnostics remain unchanged. See
+`docs/MIGRATION_PHYSICAL_CAMERA_CURVATURE_127.md` and
+`tests/PhysicalCurvatureCamera127.test.js`. Full regression and browser smoke
+verification cover Earth, 6000370000 m, 1e16 m and exact Flat with Standard
+atmosphere and 85+2 towers. Next: #128 end-to-end convergence, numerical,
+visual and performance verification.

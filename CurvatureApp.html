@@ -120,6 +120,11 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
       <option value="inverse-spherical">Inverse spherical</option>
     </select></label>
     <label id="PhysicalCanvasOcclusionWrap" style="display:none;">Comparison R (m) <input id="PhysicalCanvasOcclusionRadius" type="number" min="1" step="1000" value="6371000" style="width:8em"></label>
+    <label style="display:flex;align-items:center;gap:0.35em;flex-wrap:wrap;">Surface curvature
+      <input id="PhysicalCanvasCurvature" type="range" min="0" max="1000" step="1" value="164" aria-label="Globe radius to exact flat surface" style="width:15em;">
+      <output id="PhysicalCanvasCurvatureLabel" for="PhysicalCanvasCurvature" style="font:12px monospace;min-width:21em;">R = 6371 km</output>
+      <button type="button" id="PhysicalCanvasEarthRadius">Earth R</button>
+    </label>
     <span id="PhysicalCanvasProfileHelp" style="font-size:0.85em;color:#555;">Straight rays; no atmospheric refraction.</span>
   </div>
   <div id="MainCanvasRendererStatus" role="status" aria-live="polite" style="margin-top:0.4em;font-size:0.88em;line-height:1.5;"></div>
@@ -249,6 +254,8 @@ Click a Button to Start a Demo. Click again to skip one step. Click the Animatio
 <script src="src/legacy/CurvatureLegacyDrawing.js"></script>
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/diagnostics/CurvatureLegacyFrameCaptureController.js"></script>
+<script src="src/app/CurvaturePhysicalCamera127.js"></script>
+<script src="src/app/CurvaturePhysicalCurvature127.js"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js"></script>
 <script src="src/app/CurvatureCanvasFrameScheduler.js"></script>
 <script src="src/app/CurvatureHeightChangeScheduler120.js"></script>
