@@ -106,12 +106,22 @@ function DrawMainCanvasFrame(g) {
           var t=result.timings;
           pieces.push('frame '+Math.round(t.totalMs)+' ms ('+
             'scene '+Math.round(t.composeMs)+' + optics '+Math.round(t.opticsMs)+
-            ' + snapshot '+Math.round(t.frameMs)+
+            ' + screen LOD '+Math.round(t.screenLodMs||0)+
+            ' + snapshot '+Math.round(t.snapshotOnlyMs===undefined?t.frameMs:t.snapshotOnlyMs)+
             ' + painter '+Math.round(t.paintMs)+
             ' [validation '+Math.round(t.validationMs)+
             ', fill projection '+Math.round(t.projectionMs)+
             ', Canvas '+Math.round(t.canvasMs)+'] ms; '+
             t.strokeCalls+' Canvas strokes)');
+        }
+        if(result.guideScreenLod){
+          var l=result.guideScreenLod;
+          pieces.push('screen grid <= '+l.tolerancePixels+' px: '+
+            l.inputGroundSegments+' source -> '+
+            (l.inputGroundSegments-l.removedBySimplification-l.removedOffscreen)+
+            ' displayed ('+l.removedOffscreen+' offscreen/behind, '+
+            l.removedBySimplification+' simplified, '+l.unsafeNearPlane+
+            ' near-plane preserved)');
         }
         if(result.step)pieces.push('RK4 step '+Math.round(result.step)+' m');
         if(result.fieldStats){

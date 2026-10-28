@@ -18,7 +18,8 @@
   function sample(label,result,wallMs){
     var t=result.timings||{};
     return {scenario:label,wallMs:wallMs,composeMs:t.composeMs,opticsMs:t.opticsMs,
-      snapshotMs:t.frameMs,painterMs:t.paintMs,validationMs:t.validationMs,
+      snapshotMs:t.frameMs,screenLodMs:t.screenLodMs,snapshotOnlyMs:t.snapshotOnlyMs,
+      screenLodStats:result.guideScreenLod||null,painterMs:t.paintMs,validationMs:t.validationMs,
       fillGeometryMs:t.projectionMs,canvasPaintMs:t.canvasMs,
       decorationsMs:t.decorationsMs,strokeCalls:t.strokeCalls,
       opticalCacheReused:!!result.cacheReused,guidePrimitives:result.primitiveCount,
@@ -63,6 +64,8 @@
         compose:summarize(group.map(function(r){return r.composeMs;})),
         optics:summarize(group.map(function(r){return r.opticsMs;})),
         snapshot:summarize(group.map(function(r){return r.snapshotMs;})),
+        screenLod:summarize(group.map(function(r){return r.screenLodMs;}).filter(Number.isFinite)),
+        snapshotOnly:summarize(group.map(function(r){return r.snapshotOnlyMs;}).filter(Number.isFinite)),
         painter:summarize(group.map(function(r){return r.painterMs;})),
         canvas:summarize(group.map(function(r){return r.canvasPaintMs;}))};
     });

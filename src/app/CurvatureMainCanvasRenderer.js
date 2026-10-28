@@ -11,10 +11,11 @@
     root.CurvatureCanvasProjection||(typeof require==='function'?require('../renderers/CurvatureCanvasProjection'):null),
     root.CurvatureFullSceneDecorations||(typeof require==='function'?require('../scene/CurvatureFullSceneDecorations'):null),
     root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null),
-    root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null));
+    root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
+    root.CurvatureScreenSpaceGuides119||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides119'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides){
   'use strict';
   var opticalSession=optical.create();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
@@ -121,7 +122,12 @@
     var opticalAt=now();
     var drawSource=options.interactive?previewComposition(opticalFrame.composition):
       {composition:opticalFrame.composition,preview:false};
-    var frame=frames.fromComposition(drawSource.composition,camera,g.Canvas.width,g.Canvas.height);
+    var lodStarted=now();
+    var guideLod=!options.interactive?screenGuides.simplify(drawSource.composition,
+      camera,g.Canvas.width,g.Canvas.height,{tolerancePixels:0.5}):null;
+    var drawComposition=guideLod?guideLod.composition:drawSource.composition;
+    var lodFinished=now();
+    var frame=frames.fromComposition(drawComposition,camera,g.Canvas.width,g.Canvas.height);
     var frameAt=now();
     var painted;
     ctx.save();
@@ -133,8 +139,10 @@
     var finishedAt=now(),stats=opticalFrame.stats;
     return {interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
       fullGuidePrimitives:drawSource.guidePrimitives,
+      guideScreenLod:guideLod?guideLod.stats:null,
       timings:{totalMs:finishedAt-frameStart,composeMs:composedAt-frameStart,
       opticsMs:opticalAt-composedAt,frameMs:frameAt-opticalAt,
+      screenLodMs:lodFinished-lodStarted,snapshotOnlyMs:frameAt-lodFinished,
       paintMs:painted.timings.totalMs,validationMs:painted.timings.validationMs,
       projectionMs:painted.timings.fillGeometryMs,canvasMs:painted.timings.canvasPaintMs,
       decorationsMs:finishedAt-frameAt-painted.timings.totalMs,

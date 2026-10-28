@@ -187,3 +187,23 @@ primitives; no browser FPS claim). Details: `docs/MIGRATION_INTERACTIVE_CANVAS_1
 
 ## #118 — Opt-in Physical performance profile in existing geometry ZIP
 The existing Export geometry diagnostics ZIP now runs Physical cold/warm/grid-off/preview/Pan profiling with per-stage raw measurements, median and p95. The normal geometry audit is retained; the profiler does not modify the live model. Details: `docs/MIGRATION_PERFORMANCE_PROFILE_118.md`. No optics, occlusion or painting rules changed.
+
+## Patch 119 — camera-aware screen-space ground guide LOD
+
+The browser ZIP profile from #118 isolated ground guides as the primary
+redraw cost (~434 ms cached full scene versus ~31 ms without guides; user
+hardware). `CurvatureScreenSpaceGuides119` now indexes continuous, already
+optically projected ground curves and reduces them under 0.5 **backing-store**
+pixel sampled-polyline error *before* frame snapshot cloning/validation and
+Canvas projection. Whole viewport-outside/near-plane-behind portions are
+safely culled, but near-plane crossings and physical horizon remain exact;
+missing visibility spans are never connected. Every tower outline/fill and
+physical optics cache is unchanged. Original full physical composition is
+retained for camera changes. The existing #117 slider preview stays in force;
+settled frames use the new LOD path. Timing diagnostics separate LOD and
+snapshot; #118 ZIP profiling carries raw `screenLodMs` and selection counters.
+A reproducible synthetic 77,600-line benchmark and regression tests accompany
+the change. **Browser performance must be measured on real user hardware**;
+0.5 px is a bound on sampled vertices relative to the prior polyline, not a
+proof against the original continuous optical curve. See
+`docs/MIGRATION_SCREEN_GUIDE_LOD_119.md`.
