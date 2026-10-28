@@ -68,7 +68,7 @@ test('133: invalid inputs fail atomically and do not change pair state',()=>{
 test('133: Modern document offers A/B input, explicit engineered physics and no legacy loaders',()=>{
   const html=source('CurvatureModern.html');
   assert.match(html,/ModernCompareState.js/);
-  for(const id of ['ModernPairPreset','ModernModelTabA','ModernModelTabB','ModernModelSurface',
+  for(const id of ['ModernPairPreset','ModernModelTabA','ModernModelTabB','ModernModelCurvature',
     'ModernModelRadius','ModernModelAtmosphere','ModernModelOcclusion','ModernRecalculateCompare'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.match(html,/Inverse spherical|inverse-spherical/);
@@ -84,7 +84,7 @@ test('133: real compare UI reuses independent optical caches and updates only se
     'ModernObjectFields1','ModernSceneTitle','ModernSceneDescription','ModernCompareLabelA',
     'ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB',
     'ModernSceneSettings','ModernCompareSettings','ModernPairPreset','ModernModelTabA',
-    'ModernModelTabB','ModernModelSurface','ModernModelRadius','ModernModelAtmosphere',
+    'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelEarth','ModernModelFlat','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
     'ModernCompareEyeLevel','ModernCompareHorizon'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
@@ -98,7 +98,7 @@ test('133: real compare UI reuses independent optical caches and updates only se
     CurvaturePhysicalSceneOptics:{create(){const value={id:sessions.length+1};sessions.push(value);return value;}},
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renders.push({g,m,options});
       return {drawn:20,fillTriangles:10,unresolved:0,cacheReused:false};}},
-    CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
+    CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'scene'});}};},
     xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}},
     document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
@@ -130,8 +130,7 @@ test('133: real compare UI reuses independent optical caches and updates only se
   assert.equal(app.getCompareConfig().A.occlusionRadius,6371000);
   assert.equal(renders.at(-1).options.occlusionRadius,8000000);
   assert.equal(nodes.get('ModernPairPreset').value,'custom');
-  nodes.get('ModernModelSurface').value='globe';
-  nodes.get('ModernModelSurface').listeners.change();
+  nodes.get('ModernModelEarth').listeners.click();
   assert.equal(renders.at(-1).m.showModel,1);
   const original=JSON.parse(sourceBefore),current=JSON.parse(JSON.stringify(app.getModel()));
   delete original.updated;delete current.updated;

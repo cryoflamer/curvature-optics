@@ -213,7 +213,7 @@
     var slider=el('ModernCurvature');
     if(slider)slider.value=String(curvature.modelStep(model));
     var flat=el('ModernFlat');if(flat)flat.checked=model.showModel===2;
-    ['ModernSceneCurvatureWrap','ModernSceneRadiusWrap','ModernSceneEarthWrap'].forEach(function(id){
+    ['ModernSceneRadiusWrap','ModernSceneEarthWrap'].forEach(function(id){
       var node=newUiEl(id);if(node)node.hidden=model.showModel===2;
     });
     var radius=el('ModernRadiusKm');
@@ -444,14 +444,21 @@
     var pairPreset=el('ModernPairPreset');if(pairPreset){showLegacyOption('ModernPairPreset',state.compareConfig.preset);pairPreset.value=state.compareConfig.preset;}
     showLegacyOption('ModernModelAtmosphere',spec.atmosphere);
     renderAtmosphereDescription('ModernModelAtmosphereInfo',spec.atmosphere);
-    var fields={ModernModelSurface:'surface',ModernModelRadius:'radiusKm',
-      ModernModelAtmosphere:'atmosphere'};
+    var fields={ModernModelRadius:'radiusKm',ModernModelAtmosphere:'atmosphere'};
     Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
     var radiusWrap=newUiEl('ModernModelRadiusWrap');
     if(radiusWrap)radiusWrap.hidden=spec.surface==='flat';
+    var curvature=root.CurvaturePhysicalCurvature;
+    var slider=el('ModernModelCurvature');
+    var label=el('ModernModelCurvatureLabel');
+    if(curvature){
+      var geometry={showModel:spec.surface==='flat'?2:1,rEarth:spec.radiusKm*1000};
+      if(slider)slider.value=String(curvature.modelStep(geometry));
+      if(label)label.textContent=curvature.label(geometry);
+    }
   }
   function scaleRadiusMetres(raw){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
@@ -477,13 +484,39 @@
       try{cancelEdits();state.compareConfig=compareState.preset(this.value);syncCompareEditor();redraw();}
       catch(error){updateStatus(error.message,true);syncCompareEditor();}
     });
-    [['ModernModelSurface','surface'],['ModernModelAtmosphere','atmosphere']].forEach(function(row){
+    [['ModernModelAtmosphere','atmosphere']].forEach(function(row){
       var node=el(row[0]);if(!node)return;
       node.addEventListener('change',function(){
         try{state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,row[1],node.value);
           syncCompareEditor();redraw();}
         catch(error){updateStatus(error.message,true);syncCompareEditor();}
       });
+    });
+    var curvature=root.CurvaturePhysicalCurvature;
+    var slider=el('ModernModelCurvature');
+    function applyCompareCurvature(step){
+      var selected=state.compareSelected;
+      var spec=state.compareConfig[selected];
+      var geometry={showModel:spec.surface==='flat'?2:1,rEarth:spec.radiusKm*1000};
+      var result=curvature.applyStep(geometry,step);
+      var config=compareState.update(state.compareConfig,selected,'surface',result.showModel===2?'flat':'globe');
+      if(result.showModel===1)config=compareState.update(config,selected,'radiusKm',result.radius/1000);
+      state.compareConfig=config;
+      syncCompareEditor();
+      scheduleExperimentSave();
+    }
+    if(slider&&curvature){
+      slider.addEventListener('input',function(){applyCompareCurvature(Number(slider.value));});
+      slider.addEventListener('change',function(){redraw();});
+    }
+    var flatButton=el('ModernModelFlat');if(flatButton)flatButton.addEventListener('click',function(){
+      applyCompareCurvature(1000);redraw();
+    });
+    var earthButton=el('ModernModelEarth');if(earthButton)earthButton.addEventListener('click',function(){
+      var selected=state.compareSelected;
+      var config=compareState.update(state.compareConfig,selected,'surface','globe');
+      state.compareConfig=compareState.update(config,selected,'radiusKm',6371);
+      syncCompareEditor();redraw();
     });
     [['ModernModelRadius','radiusKm'],['ModernModelOcclusion','occlusionRadius']].forEach(function(row){
       var node=el(row[0]);if(!node)return;

@@ -561,3 +561,17 @@ purposefully committed extreme profile. Node regression: 566/566 passed.
 - Modern Compare hides the surface-radius field for the selected flat model and labels it `Surface radius (km)` on spherical models.
 - Underlying surface radii remain stored, including when switching between flat and spherical surfaces, with no changes to experiment serialization or optical physics.
 - Tests include switching both modes and preserving a manually entered sphere radius.
+
+### 135.3 — Legacy-style surface curvature slider
+
+- Compare Surface now uses the existing `CurvaturePhysicalCurvature` logarithmic
+  step-to-radius mapping (0–999, from 100 km to 1e13 km), with step 1000
+  representing exact flat geometry. The former geometry dropdown is removed.
+- `Flat` and `Earth R` actions are provided; a precise radius field is available
+  for spherical geometry. Slider input changes only the selected A/B configuration,
+  and the expensive optical redraw is deferred until slider change/release.
+- The Scene curvature slider stays visible at exact flat so that the user can
+  leave the exact-zero endpoint without first using a separate geometry toggle.
+- The existing compare schema (`surface`, `radiusKm`) and the physical solver are
+  unchanged. Flat models retain their previous finite reference radius.
+- Node regression: 568/568 passed.

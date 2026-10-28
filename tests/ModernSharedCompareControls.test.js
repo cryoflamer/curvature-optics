@@ -10,6 +10,7 @@ const html=read('CurvatureModern.html');
 const adapter=require('../src/ui/modern/ModernSceneState');
 const physics=require('../src/ui/modern/ModernCompareState');
 const clone=require('../src/ui/modern/ModernCompareModel');
+const curvature=require('../src/app/CurvaturePhysicalCurvature');
 
 function boot(){
   const nodes=new Map();
@@ -59,8 +60,7 @@ function boot(){
   const window={CurveAppClass:Model,CurvatureModernSceneState:adapter,
     CurvatureModernCompareState:physics,CurvatureModernCompareModel:clone,
     CurvaturePhysicalSceneOptics:{create(){return {}}},
-    CurvaturePhysicalCurvature:{modelStep(){return 164},label(){return 'R = 6371 km'},
-      resetEarth(m){m.rEarth=6371000;m.showModel=1;},applyStep(m){}},
+    CurvaturePhysicalCurvature:curvature,
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renderCount++;
       renders.push({surface:m.showModel,options:{...options}});
       return {drawn:12,fillTriangles:6,unresolved:0};}},
@@ -239,7 +239,7 @@ test('135.1: flat surface reference radius is distinguished from atmospheric rad
   assert.equal(h.app.getCompareConfig().B.occlusionRadius,6371000,
     'changing the flat reference radius is not changing the optical atmosphere');
   assert.equal(h.getRenderCount(),count+2);
-  n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
+  n.get('ModernModelEarth').dispatch('click');
   assert.equal(n.get('ModernModelRadiusWrap').hidden,false);
 });
 
@@ -268,21 +268,50 @@ test('135.2: surface radius controls are hidden on flat models without losing th
   n.get('ModernSettingsSurface').dispatch('click');
   assert.equal(n.get('ModernModelRadiusWrap').hidden,true);
   const old=h.app.getCompareConfig().B.radiusKm;
-  n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
+  n.get('ModernModelEarth').dispatch('click');
   assert.equal(n.get('ModernModelRadiusWrap').hidden,false);
   assert.equal(Number(n.get('ModernModelRadius').value),old);
   const field=n.get('ModernModelRadius');field.value='8000';field.dispatch('change');
-  n.get('ModernModelSurface').value='flat';n.get('ModernModelSurface').dispatch('change');
+  n.get('ModernModelFlat').dispatch('click');
   assert.equal(n.get('ModernModelRadiusWrap').hidden,true);
   assert.equal(h.app.getCompareConfig().B.radiusKm,8000);
-  n.get('ModernModelSurface').value='globe';n.get('ModernModelSurface').dispatch('change');
+  n.get('ModernModelEarth').dispatch('click');
   assert.equal(n.get('ModernModelRadiusWrap').hidden,false);
-  assert.equal(Number(n.get('ModernModelRadius').value),8000);
+  assert.equal(Number(n.get('ModernModelRadius').value),6371,'Earth R resets the radius');
   n.get('ModernSceneTab').dispatch('click');
   n.get('ModernFlat').checked=true;n.get('ModernFlat').dispatch('change');
-  for(const id of ['ModernSceneCurvatureWrap','ModernSceneRadiusWrap','ModernSceneEarthWrap'])
+  for(const id of ['ModernSceneRadiusWrap','ModernSceneEarthWrap'])
     assert.equal(n.get(id).hidden,true,id+' hidden for exact flat');
+  assert.equal(n.get('ModernSceneCurvatureWrap').hidden,false,'curvature slider remains available on flat');
   n.get('ModernFlat').checked=false;n.get('ModernFlat').dispatch('change');
   for(const id of ['ModernSceneCurvatureWrap','ModernSceneRadiusWrap','ModernSceneEarthWrap'])
     assert.equal(n.get(id).hidden,false,id+' visible for sphere');
+});
+
+test('135.3: logarithmic Compare curvature slider keeps exact flat endpoint and independent A/B',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernSettingsSurface').dispatch('click');
+  assert.equal(Number(n.get('ModernModelCurvature').value),1000);
+  assert.match(n.get('ModernModelCurvatureLabel').textContent,/Flat/);
+  const before=h.getRenderCount();
+  const slider=n.get('ModernModelCurvature');
+  slider.value='500';slider.dispatch('input');
+  assert.equal(h.getRenderCount(),before,'dragging should not trigger optical tracing');
+  assert.equal(h.app.getCompareConfig().B.surface,'globe');
+  assert.equal(h.app.getCompareConfig().A.radiusKm,6371);
+  const radius=h.app.getCompareConfig().B.radiusKm;
+  assert.ok(radius>100&&radius<1e13);
+  slider.dispatch('change');
+  assert.equal(h.getRenderCount(),before+2);
+  assert.equal(Number(n.get('ModernModelRadius').value),radius);
+  n.get('ModernModelFlat').dispatch('click');
+  assert.equal(h.app.getCompareConfig().B.surface,'flat');
+  assert.equal(h.app.getCompareConfig().B.radiusKm,radius,'flat preserves previous spherical radius');
+  assert.equal(Number(slider.value),1000);
+  n.get('ModernModelEarth').dispatch('click');
+  assert.equal(h.app.getCompareConfig().B.surface,'globe');
+  assert.equal(h.app.getCompareConfig().B.radiusKm,6371);
+  assert.equal(h.app.getCompareConfig().A.surface,'globe');
 });

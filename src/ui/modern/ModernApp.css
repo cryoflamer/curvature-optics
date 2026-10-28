@@ -158,3 +158,7 @@ button{cursor:pointer}
 /* 135.1: radius drafts must not be interpreted as committed optical changes. */
 .modern-radius-draft{color:#9a570b;font-weight:650}
 .modern-radius-draft[hidden],#ModernModelFlatRadiusNote[hidden]{display:none!important}
+
+/* The Compare curvature slider uses the same logarithmic 0–1000 mapping as Legacy. */
+.modern-surface-actions{display:flex;gap:6px;align-items:end;flex-wrap:wrap}
+.modern-surface-actions .modern-ghost-button{flex:1;min-width:55px;margin-top:0}

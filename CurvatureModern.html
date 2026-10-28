@@ -127,11 +127,19 @@
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface · selected model</h2>
-        <div class="modern-field"><label for="ModernModelSurface">Surface geometry</label>
-          <select id="ModernModelSurface"><option value="globe">Spherical surface</option><option value="flat">Exact flat · κ = 0</option></select></div>
-        <div class="modern-field" id="ModernModelRadiusWrap"><label for="ModernModelRadius">Surface radius (km)</label>
-          <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000">
-          <p class="modern-note modern-radius-draft" id="ModernModelRadiusDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p>
+        <div class="modern-field"><label for="ModernModelCurvature">Surface curvature</label>
+          <input id="ModernModelCurvature" type="range" min="0" max="1000" step="1" value="164">
+          <output id="ModernModelCurvatureLabel" for="ModernModelCurvature">R = 6371 km</output>
+        </div>
+        <div class="modern-two-fields modern-align-end">
+          <div class="modern-field" id="ModernModelRadiusWrap"><label for="ModernModelRadius">Surface radius (km)</label>
+            <input id="ModernModelRadius" type="number" step="any" min="100" max="10000000000000">
+            <p class="modern-note modern-radius-draft" id="ModernModelRadiusDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p>
+          </div>
+          <div class="modern-field modern-surface-actions">
+            <button type="button" class="modern-ghost-button" id="ModernModelFlat">Flat</button>
+            <button type="button" class="modern-ghost-button" id="ModernModelEarth">Earth R</button>
+          </div>
         </div>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>

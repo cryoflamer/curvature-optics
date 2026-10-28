@@ -129,7 +129,7 @@ function boot(href,saved){
     'ModernObjectFields1','ModernSceneTitle','ModernSceneDescription','ModernCompareLabelA',
     'ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB',
     'ModernSceneSettings','ModernCompareSettings','ModernPairPreset','ModernModelTabA',
-    'ModernModelTabB','ModernModelSurface','ModernModelRadius','ModernModelAtmosphere',
+    'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelFlat','ModernModelEarth','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
     'ModernCompareEyeLevel','ModernCompareHorizon','ModernCopyExperiment','ModernResetExperiment',
     'ModernPersistenceStatus','ModernHorizonStatusA','ModernHorizonStatusB'];

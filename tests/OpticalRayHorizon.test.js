@@ -89,7 +89,7 @@ test('133.2: Compare horizon is cached independently per side and never recomput
     'ModernObjectFields1','ModernSceneTitle','ModernSceneDescription','ModernCompareLabelA',
     'ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB',
     'ModernSceneSettings','ModernCompareSettings','ModernPairPreset','ModernModelTabA',
-    'ModernModelTabB','ModernModelSurface','ModernModelRadius','ModernModelAtmosphere',
+    'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelFlat','ModernModelEarth','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
     'ModernCompareEyeLevel','ModernCompareHorizon','ModernHorizonStatusA','ModernHorizonStatusB'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
