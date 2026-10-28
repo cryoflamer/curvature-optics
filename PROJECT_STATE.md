@@ -493,3 +493,15 @@ render caches. Explicit incoming share links are not auto-rewritten after
 user edits; Copy experiment URL serializes current state. Named experiment
 library and JSON import/export remain next in 134.1. Source module names must
 continue to follow their purpose, never the compatibility patch number.
+
+### Patch 134.1 — Named Modern experiment library and JSON exchange
+
+Modern `ModernExperimentLibrary.js` stores up to 50 named, validated experiments
+under a dedicated localStorage key. Names are unique case-insensitively and
+replacements and deletions require confirmation in the browser UI. A separate
+library panel supports save/load/delete and import/export of JSON. The JSON
+format is exactly the versioned input-only `ModernExperimentState` schema used
+by Modern URLs; imports are validated before applying and do not silently
+overwrite named entries. Library persistence is separate from the automatic
+last-session state. Legacy URL/state and the physical optical engine remain
+unchanged. Source names continue to be responsibility-based.

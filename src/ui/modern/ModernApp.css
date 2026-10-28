@@ -110,3 +110,14 @@ button{cursor:pointer}
 .modern-persistence-status{min-height:0;padding:0 18px;font-size:12px;color:#667486}
 .modern-persistence-status:not(:empty){padding-top:6px;padding-bottom:6px}
 .modern-persistence-status.is-error{color:#b43626}
+
+/* Named experiment library: separate from the physical scene editor. */
+.modern-library{padding:16px 22px;background:#fff;border-bottom:1px solid #d4e0eb;box-shadow:0 4px 14px #1d355016}
+.modern-library[hidden]{display:none!important}
+.modern-library-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;color:#17314e}
+.modern-library-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:9px 0}
+.modern-library-row label{width:175px;font-size:12px;color:#506883}
+.modern-library-row input,.modern-library-row select{min-width:220px;max-width:440px;flex:1;padding:9px;border:1px solid #cbd9e8;border-radius:7px;background:#fafdff;color:#203851}
+.modern-library-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+.modern-library-buttons button,.modern-library-top button{padding:9px 12px;border:1px solid #b8cde5;background:#f3f8ff;color:#235f9d;border-radius:7px;cursor:pointer}
+.modern-library-status{font-size:12px;color:#506883;margin:10px 0 0}.modern-library-status.is-error{color:#b43626}

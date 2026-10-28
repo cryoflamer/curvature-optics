@@ -48,6 +48,7 @@
 <script src="src/ui/modern/ModernCompareModel.js"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
+<script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -58,8 +59,15 @@
       <button class="modern-tab is-active" id="ModernSceneTab" type="button" aria-pressed="true">Scene</button>
       <button class="modern-tab" id="ModernCompareTab" type="button" aria-pressed="false">Compare</button>
     </nav>
-    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
+    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernLibraryToggle" aria-expanded="false" aria-controls="ModernExperimentLibraryPanel">Experiment library</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
+  <section id="ModernExperimentLibraryPanel" class="modern-library" aria-label="Experiment library" hidden>
+    <div class="modern-library-top"><strong>Saved experiments</strong><button type="button" class="modern-ghost-button" id="ModernLibraryClose">Close</button></div>
+    <div class="modern-library-row"><label for="ModernLibrarySelect">Choose an experiment</label><select id="ModernLibrarySelect"><option value="">No saved experiments</option></select></div>
+    <div class="modern-library-row"><label for="ModernLibraryName">Name</label><input id="ModernLibraryName" type="text" maxlength="100" placeholder="e.g. Lake Pontchartrain — inverse optics"></div>
+    <div class="modern-library-buttons"><button type="button" id="ModernLibrarySave">Save current</button><button type="button" id="ModernLibraryLoad">Load selected</button><button type="button" id="ModernLibraryDelete">Delete selected</button><button type="button" id="ModernLibraryExport">Export current JSON</button><button type="button" id="ModernLibraryImport">Import JSON</button><input type="file" id="ModernLibraryFile" accept=".json,application/json" hidden></div>
+    <p id="ModernLibraryStatus" class="modern-library-status" role="status" aria-live="polite"></p>
+  </section>
   <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
   <div class="modern-workspace">
     <aside class="modern-sidebar" aria-label="Scene settings">
