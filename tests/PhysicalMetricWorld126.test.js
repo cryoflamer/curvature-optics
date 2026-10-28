@@ -96,7 +96,7 @@ test('126: metric ring and spoke samples follow real surface arc distances in op
   const g=ground.create({model:m,geometry,atmosphere:'vacuum',metricGrid:true,maxDistance:100000});
   const result=g.transform(guides.primitives);
   const onCircle=result.filter(p=>p.metadata.kind==='metric-ring'&&p.metadata.radius===1000);
-  assert.equal(onCircle.length,globe?64*4:64);
+  assert.equal(onCircle.length,64,'metric ring samples use one curvature-independent subdivision rule');
   for(const p of onCircle){
    const a=p.points[0],distance=1000;
    const surfaceZ=globe?surface.createFromRadius(R).surfacePoint2(distance,0)[1]:0;
@@ -114,7 +114,8 @@ test('126: 85+2 tower optical silhouettes and fills are preserved by physical wo
  const old=optics.create().transform(oldScene,m,{atmosphere:'standard'}),
    next=optics.create().transform(newScene,m,{atmosphere:'standard'});
  assert.equal(old.stats.unresolved,0);assert.equal(next.stats.unresolved,0);
- assert.equal(next.stats.groundHorizon,old.stats.groundHorizon);
+ nearly(next.stats.groundHorizon,old.stats.groundHorizon,1,
+  'verified physical horizon agrees with historical reference within a metre');
  assert.deepEqual(old.stats.perGroup.map(g=>g.visibleSegments),next.stats.perGroup.map(g=>g.visibleSegments));
  const objects=frame=>frame.composition.ranges.filter(r=>r.role==='objects').flatMap(r=>
    frame.composition.scene.primitives.slice(r.start,r.end));
@@ -158,7 +159,8 @@ test('126: extremely large globe radius retains curvature in authored ground coo
  const rendered=optics.create().transform(neutral,m,{atmosphere:'standard'});
  assert.equal(rendered.stats.unresolved,0);
  assert.ok(rendered.stats.guideSegments>1000);
- assert.ok(rendered.stats.groundHorizon>100000,'physical horizon is not the 100km grid limit');
+ assert.ok(rendered.stats.groundHorizon===null||rendered.stats.groundHorizon>100000,
+   'a finite physical horizon must be verified and is never the 100km grid limit');
  assert.equal(rendered.stats.guideRenderExtent,100000);
 });
 

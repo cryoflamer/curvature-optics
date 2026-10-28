@@ -1,6 +1,22 @@
 # Curvature optics migration — project state
 
-Updated at compatpatch **112** (2026-10-27), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
+Updated at compatpatch **128** (2026-10-28), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
+
+## Patch 128 — physical continuous-surface verification (2026-10-28)
+
+**Latest verified baseline:** 512 Node tests including 13 new end-to-end tests;
+headless Chromium checked Earth, large, near-flat and exact flat with 85+2
+towers (0 JS errors, 0 unresolved outlines/fills). Physical object placement
+uses one azimuth and metre-based world frame at all curvatures, even when
+`showModel = 2` at the slider endpoint; historical Legacy FlatEarth orientation
+is unchanged. Physical metric guides now have curvature-independent sampling,
+fixed 100 km presentation extent, and only certify a finite optical ground
+horizon from a narrow visible/blocked bracket. Solver failures must not be
+presented as physically blocked. Original non-metric SHA-256 golden references
+remain intact. Local 5-repeat Node benchmark: near-flat `R=10^16 m` changed
+from ~154 to ~71 ms median optics and from ~218k to ~40k RK4 calls, but this
+is not a frame-rate guarantee. Details and limitations:
+`docs/CONTINUOUS_PHYSICAL_VERIFICATION_128.md`.
 
 ## Objective
 

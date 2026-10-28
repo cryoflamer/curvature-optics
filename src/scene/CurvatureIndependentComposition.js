@@ -156,6 +156,7 @@
     // refraction radius. The physical atmosphere modifies ray directions,
     // never the underlying Earth radius or the vacuum tangent geometry.
     var physical=options.physicalWorld===true;
+    var physicalCurvature=physical?(model.showModel===2?0:1/model.rEarth):null;
     var guideModel=model;
     if(globe&&!physical){
       var R=model.geometryRadius,H=model.Height,ratio=R/(R+H);
@@ -165,10 +166,10 @@
       });
     }
     if(physical&&!physicalWorld)throw Error('Physical world geometry required');
-    var surface=physical?physicalWorld.metricGuides({curvature:globe?1/model.rEarth:0,
+    var surface=physical?physicalWorld.metricGuides({curvature:physicalCurvature,
       observerHeight:model.Height,showGrid:model.showGrid,
-      maxDistance:Math.min(100000,model.rEarth*.1),
-      stroke:globe?model.GlobeGridCol:model.FEGridCol}):
+      maxDistance:100000,
+      stroke:model.GlobeGridCol||model.FEGridCol}):
       globe?engine.globeSurfaceGuides(guideModel):engine.flatSurfaceGuides(model,
         Object.assign({segments:128},options));
     var horizon=physical?null:globe?engine.globeHorizonGuides(guideModel,options):null;
@@ -176,7 +177,8 @@
     if(horizon)layers.push({name:'horizon-guides',role:'visual-aid',scene:horizon});
     order.forEach(function(i){
       layers.push({name:'objects-'+i,role:'objects',
-        scene:engine.createObjectSequenceScene(model,i,globe,physical?{physicalSurface:true}:undefined)});
+        scene:engine.createObjectSequenceScene(model,i,globe,physical?
+          {physicalSurface:true,curvature:physicalCurvature}:undefined)});
     });
     var primitives=[],ranges=[];
     layers.forEach(function(layer){

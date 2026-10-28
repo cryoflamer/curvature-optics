@@ -58,7 +58,8 @@
       for(var i=0;i<28;i++){
         var probe=shoot(lower);
         if(probe.status==='visible')lastVisible=lower;
-        else {firstHidden=lower;break;}
+        else if(!metricGrid||probe.status==='blocked'){firstHidden=lower;break;}
+        else break; // Physical metric scene: shooting failure is NOT an optical horizon.
         lower*=1.55;
         if(lower>upper)break;
       }
@@ -66,11 +67,17 @@
         for(var j=0;j<24;j++){
           var mid=(lastVisible+firstHidden)/2,s=shoot(mid);
           if(s.status==='visible')lastVisible=mid;
-          else firstHidden=mid;
+          else if(!metricGrid||s.status==='blocked')firstHidden=mid;
+          else break; // Keep the confirmed visible/blocked bracket; do not guess a side.
         }
       }
     }
-    var horizon=firstHidden!==null?(lastVisible+firstHidden)/2:null;
+    // In the new metric Physical scene report a horizon only when both sides
+    // were classified and the bracket is tight. Preserve the historical
+    // non-metric reference path byte-for-byte for Legacy comparison tests.
+    var horizon=firstHidden!==null&&(!metricGrid||
+      firstHidden-lastVisible<=Math.max(5,firstHidden*1e-4))?
+      (lastVisible+firstHidden)/2:null;
     // A null horizon here is NOT a proof that an arbitrary Flat profile has no horizon.
     var maxRadius=horizon===null?guideExtent:horizon;
     var radial=[],N=32;
@@ -164,11 +171,12 @@
           ranges.forEach(function(interval){
             var length=Math.hypot((to[0]-from[0])*(interval[1]-interval[0]),
               (to[1]-from[1])*(interval[1]-interval[0]));
-            // Retain the original Globe subdivision. On Flat, use few
-            // segments for small, nearly straight screen-space guides; bound
-            // refinement to avoid tens of thousands of identical ray queries.
+            // Physical metric guides must use the SAME sampling rule at the
+            // exact flat endpoint. Otherwise a mere k=0 switch changes the
+            // guide topology even when its projected rays have converged.
+            // Preserve historical subdivisions for non-metric Legacy guides.
             var pieces=p.metadata&&p.metadata.metricSurface?
-              (globe?4:Math.max(1,Math.min(4,Math.ceil(length/3000)))):
+              Math.max(1,Math.min(4,Math.ceil(length/3000))):
               (globe?6:Math.max(1,Math.min(6,Math.ceil(length/3000))));
             var prev=null;
             for(var j=0;j<=pieces;j++){

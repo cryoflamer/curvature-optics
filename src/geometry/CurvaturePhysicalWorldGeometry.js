@@ -68,21 +68,30 @@
     if(!params||!Number.isFinite(params.geometryRadius)||params.geometryRadius<=0||
         !['height','objectSize','longitude','latitude','verticalScale','horizontalScale'].every(function(key){return Number.isFinite(params[key]);}))
       throw TypeError('Finite physical placement parameters required');
-    var k=params.globe?1/params.geometryRadius:0,
+    // Physical scenes author surface coordinates in metres. The historical
+    // FlatEarth drawing reverses the horizontal basis, but the continuous
+    // physical limit must retain the SAME east/north axes and object azimuth.
+    // Curvature is independent of that legacy drawing-mode switch.
+    var k=params.curvature===undefined?(params.globe?1/params.geometryRadius:0):params.curvature,
       s=valid(k,params.height),R=params.geometryRadius,
-      os=params.objectSize,lat=params.latitude,lng=params.longitude,
+      os=params.objectSize,lat=params.latitude*R*k,lng=params.longitude*R*k,
       side=params.planeOffset||0,alt=params.altitude||0;
     if(!Number.isFinite(side)||!Number.isFinite(alt))throw TypeError('Finite offsets required');
     if(!params.globe){
-      return {origin:world(s,-lat*R-os*side,lng*R,alt,params.height),
+      return {origin:world(s,-params.latitude*R-os*side,params.longitude*R,alt,params.height),
         xAxis:[-os*params.horizontalScale,0,0],
+        yAxis:[0,0,os*params.verticalScale]};
+    }
+    if(k===0){
+      return {origin:world(s,params.latitude*R+os*side,params.longitude*R,alt,params.height),
+        xAxis:[os*params.horizontalScale,0,0],
         yAxis:[0,0,os*params.verticalScale]};
     }
     var sl=Math.sin(lat),cl=Math.cos(lat),
       sg=Math.sin(lng),cg=Math.cos(lng);
     var radial=Math.hypot(sl,cl*sg),central=Math.atan2(radial,cl*cg);
-    var distance=R*central,ratio=radial?central/radial:1;
-    var east=R*sl*ratio,north=R*cl*sg*ratio;
+    var ratio=radial?central/radial:1;
+    var east=sl*ratio/k,north=cl*sg*ratio/k;
     var base=world(s,east,north,alt,params.height);
     var horizontal=[cl,-sl*sg,-sl*cg],vertical=[sl,cl*sg,cl*cg];
     var origin=base.map(function(v,i){return v+os*side*horizontal[i];});

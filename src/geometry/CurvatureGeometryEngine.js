@@ -220,7 +220,7 @@
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
-    if(n&&first+(n-1)*delta>Math.PI){
+    if(n&&(!physical||options.curvature!==0)&&first+(n-1)*delta>Math.PI){
       max=Math.max(0,Math.min(n,Math.floor(Math.PI/delta)));
     }
     var entries=[];
@@ -260,7 +260,9 @@
       if(sideType===1&&Math.abs(positions[0])<Math.abs(positions[1]))positions.reverse();
       positions.forEach(function(lat,col){
         var params={geometryRadius:r,height:model.Height,objectSize:model.ObjSize[objIx],
-          longitude:lng,latitude:lat,globe:!!globe,verticalScale:size,horizontalScale:sizeHor,
+          longitude:lng,latitude:lat,globe:physical?true:!!globe,
+          curvature:physical?options.curvature:undefined,
+          verticalScale:size,horizontalScale:sizeHor,
           // Legacy SetPlane uses [side,0,0] for cosine/sine side modes.
           planeOffset:(sideType===3||sideType===4)?side:0,
           physicalSurface:physical};
