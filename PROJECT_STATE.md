@@ -466,3 +466,14 @@ readout explicitly says so; no horizon is inferred from clipping, failed
 shooting or exhausted integration distance. Camera Roll currently suppresses
 the horizontal horizon overlay. See `docs/modern-ui-plan.md` and
 `tests/OpticalRayHorizon1332.test.js`.
+
+
+### Compatibility patch 133.2.1 — angular guide projection corrected
+
+Corrected the signed-angle-to-Canvas-y mapping in Modern Compare. Negative
+optical horizon elevation is now drawn below the 0° Eye-level line, and the
+marker matches the actual Physical perspective projection across camera
+Nick values (and shared off-axis Pan). No optical or numerical horizon
+algorithm was changed. Regression tests include
+`tests/ModernAngularGuide13321.test.js`; the limitations stated for
+patch 133.2 remain in effect.

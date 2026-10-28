@@ -264,3 +264,23 @@ the diagnostic implementation.
 
 Full Modern and Legacy integration are still based on the shared optics
 engine. Versioned experiment saving remains scoped to patch 134.
+
+## Patch 133.2.1 — Compare angular-guide sign correction
+
+The traced first-contact horizon angle was correctly measured in patch 133.2,
+but its orange screen-space guide previously reflected the sign of its signed
+elevation: negative angles were plotted **above** the green 0° eye-level.
+This was a presentation error, not an RK4 horizon-search or optics error.
+
+`compareAngleY` now projects an arrival direction's signed elevation relative
+to the physical camera's actual optical-axis elevation `Nick - aimDip`.
+Canvas y increases downward, so a negative elevation plots below eye-level,
+and a positive one above. The existing eye-level guide is unchanged. Both
+markers still share the same camera/FOV and remain overlay-only, without any
+additional ray tracing. Nonzero Roll suppression for the orange marker is
+unchanged.
+
+`tests/ModernAngularGuide13321.test.js` checks both signs and several camera
+Nick values against the independently implemented perspective camera/painter
+projection, including an off-axis Pan. The scientific scope and limitations
+of the forward-traced first-contact diagnostic remain unchanged.

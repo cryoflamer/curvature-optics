@@ -173,7 +173,11 @@
     var verticalHalfTan=Math.tan(diagonalFov/2)/Math.sqrt(1+aspect*aspect);
     var tilt=Number(m.Nick)*Math.PI/180;
     var aim=m.viewcenterHorizon===3?0:root.CurvaturePhysicalCamera127.create(m).aimDip;
-    var relative=aim-tilt-elevationDegrees*Math.PI/180;
+    // PhysicalCamera127 aims at elevation (Nick - aimDip). Positive ray
+    // elevation projects UP in the painter, while Canvas y increases DOWN.
+    // Thus a negative horizon elevation must land BELOW the 0° eye-level.
+    var cameraElevation=tilt-aim;
+    var relative=elevationDegrees*Math.PI/180-cameraElevation;
     var y=canvas.height/2-canvas.height*Math.tan(relative)/(2*verticalHalfTan);
     return Number.isFinite(y)&&y>=0&&y<=canvas.height?y:null;
   }
