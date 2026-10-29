@@ -164,9 +164,9 @@ button{cursor:pointer}
 .modern-surface-actions .modern-ghost-button{flex:1;min-width:55px;margin-top:0}
 
 /* 137.2.2: raster hand cursors avoid Opera native grab glyph fallback. */
-.modern-camera-draggable{cursor:url("./cursors/hand-open.png") 11 5,grab!important;touch-action:none;user-select:none}
-.modern-camera-draggable.is-camera-dragging{cursor:url("./cursors/hand-closed.png") 15 13,grabbing!important}
-.modern-camera-dragging-global,.modern-camera-dragging-global *{cursor:url("./cursors/hand-closed.png") 15 13,grabbing!important;user-select:none!important}
+.modern-camera-draggable{cursor:url("./cursors/hand-open.png") 10 5,grab!important;touch-action:none;user-select:none}
+.modern-camera-draggable.is-camera-dragging{cursor:url("./cursors/hand-closed.png") 12 9,grabbing!important}
+.modern-camera-dragging-global,.modern-camera-dragging-global *{cursor:url("./cursors/hand-closed.png") 12 9,grabbing!important;user-select:none!important}
 .modern-graph-host .JsGraph-ClippingBox{background:#fff}
 .modern-camera-drag-hud{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
   z-index:5;pointer-events:none;background:#132d45e8;color:#f5fbff;border:1px solid #7895b1;

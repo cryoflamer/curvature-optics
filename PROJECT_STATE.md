@@ -1,3 +1,9 @@
+## Patch 137.2.4 — Compact hand cursors (2026-10-29)
+
+- Open/closed cursor PNG canvases were reduced to 24×24 pixels with the visible hand bounded to approximately 18×20 pixels.
+- CSS and JS hotspots were adjusted to (10, 5) and (12, 9); both resource URLs were cache-busted to 137.2.4.
+- The shared camera drag, raster preview and optical renderer were not changed.
+
 ## Patch 137.2.3 — Smaller camera drag cursors (2026-10-29)
 
 - Both custom hand PNGs were reduced from 48×48 to 32×32 pixels with alpha preserved.
