@@ -13,8 +13,8 @@
   // grab/grabbing with a generic four-way scroll glyph. The last keyword is
   // a native fallback if an image fails to load.
   var cameraCursors=Object.freeze({
-    grab:'url("src/ui/modern/cursors/hand-open.png") 16 8, grab',
-    grabbing:'url("src/ui/modern/cursors/hand-closed.png") 23 20, grabbing'
+    grab:'url("src/ui/modern/cursors/hand-open.png") 11 5, grab',
+    grabbing:'url("src/ui/modern/cursors/hand-closed.png") 15 13, grabbing'
   });
   function cursorValue(value){return cameraCursors[value]||value;}
   // Apply cursor state directly as well as via CSS. Older stylesheet responses

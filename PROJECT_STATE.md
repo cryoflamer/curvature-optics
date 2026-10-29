@@ -1,3 +1,10 @@
+## Patch 137.2.3 — Smaller camera drag cursors (2026-10-29)
+
+- Both custom hand PNGs were reduced from 48×48 to 32×32 pixels with alpha preserved.
+- CSS and JavaScript hotspots were scaled to (11, 5) and (15, 13) respectively.
+- Cursor stylesheet/script cache versions were advanced to 137.2.3.
+- Camera gesture, preview and physics behavior remain unchanged.
+
 # Curvature optics migration — project state
 
 Updated at compatpatch **128** (2026-10-28), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
