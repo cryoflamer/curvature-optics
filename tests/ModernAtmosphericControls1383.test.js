@@ -79,9 +79,11 @@ function boot(){
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},
     Redraw(){app.drawCompare(side,{Canvas:{}});}});
   registered[0]();
-  function flush(){const batch=[...frameTasks.values()];frameTasks.clear();batch.forEach(fn=>fn(1000+counter*16));}
+  function flushAt(timestamp){const batch=[...frameTasks.values()];frameTasks.clear();
+    batch.forEach(fn=>fn(timestamp));}
+  function flush(){flushAt(1000+counter*16);}
   flush();
-  return {nodes,app,presentation,flush,
+  return {nodes,app,presentation,flush,flushAt,
     get physics(){return physics;},get shimmerFrames(){return shimmerFrames;},
     get pendingFrames(){return frameTasks.size;}};
 }
@@ -202,4 +204,53 @@ test('138.3: independent shader uniforms, resumable phase, no texture uploads on
   assert.equal(b.calls.filter(call=>call[0]==='texImage2D').length,1);
   assert.deepEqual(effect.getSettings(),{intensity:3,scale:54,drift:18,seed:0});
   assert.throws(()=>effect.configure({intensity:4},'C'),/Unknown shimmer viewport/);
+});
+
+
+test('138.4: static settings stop GPU animation; changing settings previews once and resumes',()=>{
+  const t=boot(),n=t.nodes;
+  n.get('ModernShimmerSceneEnabled').checked=true;
+  n.get('ModernShimmerSceneEnabled').dispatch('change');t.flush();
+  assert.equal(t.pendingFrames,1,'an animated viewport requests one next RAF');
+  const intensity=n.get('ModernShimmerSceneIntensity');
+  intensity.value='0';intensity.dispatch('input');
+  assert.equal(t.pendingFrames,0,'zero strength must cancel the ongoing loop');
+  const staticFrames=t.shimmerFrames;
+  t.flush();assert.equal(t.shimmerFrames,staticFrames);
+  intensity.value='8';intensity.dispatch('input');
+  assert.equal(t.pendingFrames,1,'nonzero intensity restarts the animation');
+  t.flush();assert.ok(t.shimmerFrames>staticFrames);
+  const drift=n.get('ModernShimmerSceneDrift');
+  drift.value='0';drift.dispatch('input');
+  assert.equal(t.pendingFrames,0,'frozen drift requires no repeated GPU work');
+  const frozenFrames=t.shimmerFrames;
+  t.flush();assert.equal(t.shimmerFrames,frozenFrames);
+  drift.value='20';drift.dispatch('input');
+  assert.equal(t.pendingFrames,1);
+  t.flush();assert.ok(t.shimmerFrames>frozenFrames);
+});
+
+test('138.4: Scene 60Hz and Compare 30Hz GPU draw caps leave physical optics unchanged',()=>{
+  const t=boot(),n=t.nodes;
+  n.get('ModernShimmerSceneEnabled').checked=true;
+  n.get('ModernShimmerSceneEnabled').dispatch('change');t.flushAt(1000);
+  t.flushAt(1008); // the first frame after physical capture initializes the cadence
+  const sceneBase=t.shimmerFrames;
+  t.flushAt(1016);assert.equal(t.shimmerFrames,sceneBase,'8ms is faster than 60Hz');
+  t.flushAt(1025);assert.equal(t.shimmerFrames,sceneBase+1,'17ms allows next scene frame');
+  n.get('ModernCompareTab').dispatch('click');t.flushAt(2000);
+  n.get('ModernShimmerCompareEnabled').checked=true;
+  n.get('ModernShimmerCompareEnabled').dispatch('change');t.flushAt(2016);
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernShimmerCompareEnabled').checked=true;
+  n.get('ModernShimmerCompareEnabled').dispatch('change');t.flushAt(2032);
+  const optics=t.physics;
+  const before=t.shimmerFrames;
+  t.flushAt(3000);
+  assert.equal(t.shimmerFrames,before+2,'both views draw on the first eligible Compare frame');
+  t.flushAt(3016);
+  assert.equal(t.shimmerFrames,before+2,'two GPU draws are skipped on a 16ms interval');
+  t.flushAt(3033);
+  assert.equal(t.shimmerFrames,before+4,'both draw again at 33ms');
+  assert.equal(t.physics,optics,'the GPU scheduler never retraces physical rays');
 });

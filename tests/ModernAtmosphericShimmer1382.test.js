@@ -130,3 +130,30 @@ test('138.2: shader script precedes runtime and RAF uses presentation.frame only
   assert.match(app,/getAtmosphericShimmer:function/);
   assert.match(app,/stopShimmerFrame\(\);atmosphericPresentation\.suspend\(\)/);
 });
+
+
+test('138.4: lost WebGL contexts recover from cached source without re-tracing',()=>{
+  const mock=fakeWebGL(),target=canvasWith(mock),source={width:800,height:400,offsetWidth:400};
+  const events=[];
+  const effect=shimmer.create({onContextLost:name=>events.push('lost:'+name),
+    onContextRestored:name=>events.push('restored:'+name)});
+  assert.equal(effect.present(source,target,'Scene',{capture:true,timeMs:1000}),true);
+  let prevented=false;
+  target.webglcontextlost({preventDefault(){prevented=true;}});
+  assert.equal(prevented,true,'WebGL restoration must be explicitly enabled');
+  assert.equal(effect.getError('Scene'),'Atmospheric shimmer WebGL context was lost');
+  const drawsBefore=mock.calls.filter(call=>call[0]==='drawArrays').length;
+  assert.equal(effect.present(source,target,'Scene',{capture:false,timeMs:2000}),false);
+  assert.equal(mock.calls.filter(call=>call[0]==='drawArrays').length,drawsBefore,
+    'GPU work stops while context is lost');
+  target.webglcontextrestored();
+  assert.deepEqual(events,['lost:Scene','restored:Scene']);
+  assert.equal(effect.present(source,target,'Scene',{capture:false,timeMs:2016}),true);
+  assert.equal(mock.calls.filter(call=>call[0]==='texImage2D').length,2,
+    'one cached Canvas upload restores a new GPU texture');
+  assert.equal(mock.calls.filter(call=>call[0]==='drawArrays').length,drawsBefore+1);
+  assert.equal(effect.getError('Scene'),null);
+  // Reinitializing on the same DOM canvas must not register duplicate handlers.
+  target.webglcontextlost({preventDefault(){}});
+  assert.deepEqual(events,['lost:Scene','restored:Scene','lost:Scene']);
+});

@@ -737,3 +737,10 @@ PNG-backed open/closed hand cursors now replace browser-native `grab` and
 cursor keywords retained as fallbacks. See
 `docs/MODERN_CAMERA_CURSOR_137_2_2.md`. Camera interaction, physics and
 preview transforms are unchanged; Opera appearance requires manual verification.
+
+### 138.4 — Atmospheric shimmer stability and frame budgeting
+
+- A nonmoving shimmer (`Intensity = 0` or `Drift = 0`) now stops its continuous RAF/GPU cycle after an immediate single-frame update. Scene GPU presentation is capped at 60 Hz and the two Compare views at 30 Hz each; physical ray tracing and turbulence displacement math are unchanged.
+- Camera-drag resumption resets the shimmer phase clock; background-tab time is not accumulated into the next frame.
+- Recoverable WebGL context loss exposes the original physical Canvas and leaves undistorted annotations visible. The restored GPU program uploads the **cached physical Canvas** and resumes without rerunning the optical solver.
+- Browser script URLs were version-bumped for deterministic cache invalidation. Test procedures and caveats: `docs/ATMOSPHERIC_TURBULENCE_PERFORMANCE_138_4.md`.

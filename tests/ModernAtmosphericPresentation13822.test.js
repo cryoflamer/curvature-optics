@@ -81,7 +81,8 @@ test('138.2.2: no repeated feedback; shader uses smooth bounded displacement',()
   assert.match(shimmer.fragmentSource,/if\(uStrength==0\.0\)/);
   const src=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernAtmosphericShimmer.js'),'utf8');
   assert.match(src,/Math\.min\(current\.intensity,0\.16\*current\.scale\)/);
-  assert.match(src,/if\(meta\.capture===true\)[\s\S]*?gl\.texImage2D/);
+  assert.match(src,/if\(meta\.capture===true\|\|!resource\.uploaded\)[\s\S]*?gl\.texImage2D/,
+    'textures upload only for physical captures or initial GPU restoration');
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   assert.match(app,/atmosphericPresentation\.frame\(name,timestamp\)/);
   assert.match(app,/deferDecorations:separateDecorations/);

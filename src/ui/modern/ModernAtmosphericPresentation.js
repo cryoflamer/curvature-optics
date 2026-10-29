@@ -23,7 +23,7 @@
     };
     var slots=Object.create(null);
     names.forEach(function(name){slots[name]={enabled:false,source:null,host:null,
-      image:null,guides:null,oldOpacity:null,suspended:false};});
+      image:null,guides:null,oldOpacity:null,suspended:false,gpuLost:false};});
     function slot(name){
       if(!Object.prototype.hasOwnProperty.call(slots,name))throw RangeError('Unknown presentation viewport: '+name);
       return slots[name];
@@ -34,7 +34,7 @@
       [s.image,s.guides].forEach(function(canvas){
         if(canvas&&canvas.parentNode)canvas.parentNode.removeChild(canvas);
       });
-      s.source=null;s.host=null;s.image=null;s.guides=null;s.oldOpacity=null;s.suspended=false;
+      s.source=null;s.host=null;s.image=null;s.guides=null;s.oldOpacity=null;s.suspended=false;s.gpuLost=false;
     }
     function setEnabled(name,value){
       var s=slot(name),enabled=!!value;
@@ -87,10 +87,10 @@
         align(s);
         // Presentation strategy is injectable: the 138.2 WebGL path can reuse
         // the clean source Canvas without ever running optical calculations.
-        present(source,s.image,name,{capture:true});
-        s.suspended=false;
-        s.image.style.display='';s.guides.style.display='';
-        source.style.opacity='0';
+        var painted=present(source,s.image,name,{capture:true});
+        s.suspended=false;s.gpuLost=painted===false;
+        s.image.style.display=s.gpuLost?'none':'';s.guides.style.display='';
+        source.style.opacity=s.gpuLost?s.oldOpacity:'0';
         return Object.assign(Object.create(graph),{Canvas:s.guides});
       }catch(error){
         // Never hide an unpainted scene or lose the guides after failure.
@@ -100,9 +100,37 @@
     }
     function frame(name,timeMs){
       var s=slot(name);
-      if(!s.enabled||!s.source||!s.image||s.suspended)return false;
-      try{present(s.source,s.image,name,{capture:false,timeMs:timeMs});return true;}
+      if(!s.enabled||!s.source||!s.image||s.suspended||s.gpuLost)return false;
+      try{
+        if(present(s.source,s.image,name,{capture:false,timeMs:timeMs})===false){
+          contextLost(name);return false;
+        }
+        return true;
+      }
       catch(error){s.enabled=false;remove(s);return false;}
+    }
+    function contextLost(name){
+      var s=slot(name);
+      if(!s.source||!s.image)return;
+      s.gpuLost=true;
+      // Keep the physical Canvas and its sharp guide overlay visible while
+      // Chromium recreates WebGL, rather than displaying an empty GPU layer.
+      s.image.style.display='none';
+      s.source.style.opacity=s.oldOpacity;
+    }
+    function contextRestored(name){
+      var s=slot(name);
+      if(!s.enabled||!s.source||!s.image)return false;
+      try{
+        // The original Canvas still holds the latest physical frame. A new
+        // WebGL texture can be uploaded from it without retracing optics.
+        if(present(s.source,s.image,name,{capture:false})===false){
+          contextLost(name);return false;
+        }
+        s.gpuLost=false;
+        if(!s.suspended){s.image.style.display='';s.source.style.opacity='0';}
+        return true;
+      }catch(error){s.enabled=false;remove(s);return false;}
     }
     function suspend(){
       // Camera-preview CSS transform operates on the original Canvas. Expose
@@ -120,16 +148,16 @@
         var s=slots[name];
         if(!s.suspended)return;
         s.suspended=false;
-        s.image.style.display='';s.guides.style.display='';
-        s.source.style.opacity='0';
+        s.image.style.display=s.gpuLost?'none':'';s.guides.style.display='';
+        s.source.style.opacity=s.gpuLost?s.oldOpacity:'0';
       });
     }
     return Object.freeze({setEnabled:setEnabled,capture:capture,frame:frame,suspend:suspend,
-      resume:resume,enabled:function(name){return slot(name).enabled;},
+      resume:resume,contextLost:contextLost,contextRestored:contextRestored,enabled:function(name){return slot(name).enabled;},
       // The next patch may replace the identity presenter with WebGL;
       // Scene/Compare callers need no further physics-renderer changes.
       getCanvas:function(name){return slot(name).image;},
-      ready:function(name){var s=slot(name);return !!(s.enabled&&s.image&&!s.suspended);},
+      ready:function(name){var s=slot(name);return !!(s.enabled&&s.image&&!s.suspended&&!s.gpuLost);},
       destroy:function(){names.forEach(function(name){slots[name].enabled=false;remove(slots[name]);});}});
   }
   return Object.freeze({create:create});

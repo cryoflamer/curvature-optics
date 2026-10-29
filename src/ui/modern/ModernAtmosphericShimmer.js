@@ -1,6 +1,7 @@
 /* 138.2: visual (not yet C_n^2-calibrated) atmospheric shimmer.
  * A WebGL fragment shader warps a *cached* physical Canvas. The Canvas upload
- * happens only at capture(), not on animation frames; no rays are retraced.
+ * happens on capture() or one context-recovery frame, never on ordinary
+ * animation frames; no rays are retraced.
  * All distances below are screen-space CSS pixels, not metres in the air.
  */
 (function(root,factory){
@@ -119,6 +120,7 @@
   function create(options){
     options=options||{};
     var setting=settingsFor(options.settings),viewSettings=Object.create(null),resources=new WeakMap();
+    var listening=new WeakSet();
     var clocks=Object.create(null);
     var stats=Object.create(null);
     var errors=Object.create(null);
@@ -136,6 +138,23 @@
       clock.lastMs=meta.timeMs;
       return clock.elapsedMs/1000;
     }
+    function observeContext(target,name){
+      if(listening.has(target)||!target.addEventListener)return;
+      listening.add(target);
+      target.addEventListener('webglcontextlost',function(event){
+        if(event.preventDefault)event.preventDefault();
+        var current=resources.get(target);
+        if(current)current.lost=true;
+        errors[name]='Atmospheric shimmer WebGL context was lost';
+        if(typeof options.onContextLost==='function')options.onContextLost(name);
+      });
+      target.addEventListener('webglcontextrestored',function(){
+        // Old buffers/programs/textures are invalid. Reinitialize lazily on
+        // the next frame and upload the *cached* source Canvas, not new rays.
+        resources.delete(target);
+        if(typeof options.onContextRestored==='function')options.onContextRestored(name);
+      });
+    }
     function present(source,target,name,meta){
       meta=meta||{};
       var current=viewSetting(name);
@@ -143,15 +162,15 @@
       if(!resource){
         resource=initialize(target);
         resources.set(target,resource);
-        if(target.addEventListener)target.addEventListener('webglcontextlost',function(event){
-          if(event.preventDefault)event.preventDefault();
-          resource.lost=true;
-        });
+        observeContext(target,name);
       }
-      if(resource.lost)throw Error('Atmospheric shimmer WebGL context was lost');
+      // Context loss is recoverable: do not tear down the physical scene or
+      // permanently disable the overlay while Chromium restores the GPU.
+      if(resource.lost)return false;
       var gl=resource.gl;
-      // upload ONLY on a new physical capture. Never upload on frame().
-      if(meta.capture===true){
+      // Upload on a new physical capture, or once after context restoration.
+      // Ordinary animation frames reuse the same texture.
+      if(meta.capture===true||!resource.uploaded){
         gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,resource.texture);
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
         var err=gl.getError();if(err!==gl.NO_ERROR)

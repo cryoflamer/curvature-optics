@@ -28,7 +28,16 @@
   // 138.2: the shimmer is a screen-space visual approximation, NOT an
   // atmosphere-derived C_n^2 prediction. Disabled means no extra RAF or GPU.
   var atmosphericShimmer=root.CurvatureModernAtmosphericShimmer?
-    root.CurvatureModernAtmosphericShimmer.create():null;
+    root.CurvatureModernAtmosphericShimmer.create({
+      onContextLost:function(name){
+        if(atmosphericPresentation)atmosphericPresentation.contextLost(name);
+        stopShimmerFrame();
+      },
+      onContextRestored:function(name){
+        if(atmosphericPresentation)atmosphericPresentation.contextRestored(name);
+        atmosphericShimmer.resetClock(name);scheduleShimmerFrame();
+      }
+    }):null;
   var atmosphericPresentation=root.CurvatureModernAtmosphericPresentation?
     root.CurvatureModernAtmosphericPresentation.create({document:document,
       present:atmosphericShimmer?function(source,target,name,meta){
@@ -37,21 +46,36 @@
       }:undefined,
       onRemove:atmosphericShimmer?atmosphericShimmer.dispose:undefined}):null;
   var shimmerFrame=null;
+  var shimmerLastFrameMs=null;
   var shimmerPaused={Scene:false,A:false,B:false};
-  function shimmerAnimating(name){return !shimmerPaused[name]&&atmosphericPresentation.ready(name);}
+  function shimmerAnimating(name){
+    if(!atmosphericPresentation||shimmerPaused[name]||!atmosphericPresentation.ready(name))return false;
+    var settings=atmosphericShimmer.getSettings(name);
+    // Zero strength renders the unwarped capture; zero drift is a frozen field.
+    // Neither needs continuous GPU work until a control or capture changes.
+    return settings.intensity>0&&settings.drift>0;
+  }
   function shimmerViews(){return state.mode==='compare'?['A','B']:['Scene'];}
   function scheduleShimmerFrame(){
     if(shimmerFrame!==null||!atmosphericShimmer||!atmosphericPresentation||document.hidden)return;
     if(!shimmerViews().some(shimmerAnimating))return;
     shimmerFrame=requestAnimationFrame(function(timestamp){
       shimmerFrame=null;
-      shimmerViews().forEach(function(name){if(shimmerAnimating(name))
-        atmosphericPresentation.frame(name,timestamp);});
+      // One full-screen procedural shader is substantial GPU work; Compare
+      // presents two. Cap Scene at 60 Hz and Compare at 30 Hz, independent
+      // of high-refresh-rate monitors, without slowing the optical renderer.
+      var minimumMs=1000/(state.mode==='compare'?30:60);
+      if(shimmerLastFrameMs===null||timestamp-shimmerLastFrameMs>=minimumMs-1.75){
+        shimmerLastFrameMs=timestamp;
+        shimmerViews().forEach(function(name){if(shimmerAnimating(name))
+          atmosphericPresentation.frame(name,timestamp);});
+      }
       scheduleShimmerFrame();
     });
   }
   function stopShimmerFrame(){
     if(shimmerFrame!==null){cancelAnimationFrame(shimmerFrame);shimmerFrame=null;}
+    shimmerLastFrameMs=null;
   }
   if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',function(){
     if(document.hidden){stopShimmerFrame();if(atmosphericShimmer)atmosphericShimmer.resetClock();}
@@ -102,9 +126,10 @@
           try{
             var change={};change[row[1]]=value;
             atmosphericShimmer.configure(change,name);
-            // A paused viewport can preview a setting change without advancing time.
+            atmosphericShimmer.resetClock(name);
+            // A paused or static viewport can preview a setting change once.
             if(atmosphericPresentation.ready(name))atmosphericPresentation.frame(name);
-            syncShimmerControls();scheduleShimmerFrame();
+            stopShimmerFrame();syncShimmerControls();scheduleShimmerFrame();
           }catch(error){updateStatus('Invalid shimmer '+row[1]+': '+error.message,true);}
         });
       });
@@ -770,7 +795,9 @@
       else cameraPreview.clear();
     }
     if(keepPreview!==true&&atmosphericPresentation){
-      atmosphericPresentation.resume();scheduleShimmerFrame();
+      atmosphericPresentation.resume();
+      if(atmosphericShimmer)atmosphericShimmer.resetClock();
+      scheduleShimmerFrame();
     }
     if(!active)return;
     if(active.hud)active.hud.hidden=true;

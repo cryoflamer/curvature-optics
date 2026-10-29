@@ -132,3 +132,29 @@ test('138.1: an injectable GPU presenter receives the cached physical Canvas, no
   assert.strictEqual(calls[1].target,calls[0].target);
   assert.equal(calls[1].name,'Scene');
 });
+
+
+test('138.4: GPU loss displays physical fallback and sharp guides until recovered',()=>{
+  const h=fakeDom();let available=true,draws=0;
+  const p=presentation.create({document:h.doc,
+    present(){draws++;return available;}}),g=h.graph();
+  p.setEnabled('Scene',true);
+  const overlay=p.capture('Scene',g),image=p.getCanvas('Scene');
+  assert.equal(g.Canvas.style.opacity,'0');
+  assert.ok(p.ready('Scene'));
+  available=false;
+  p.contextLost('Scene');
+  assert.equal(g.Canvas.style.opacity,'','original physical scene becomes visible');
+  assert.equal(image.style.display,'none','blank WebGL output is hidden');
+  assert.equal(overlay.Canvas.style.display,'','sharp guides remain visible');
+  assert.equal(p.ready('Scene'),false);
+  assert.equal(p.frame('Scene',1000),false,'lost GPU does no work');
+  available=true;
+  assert.equal(p.contextRestored('Scene'),true,'restore reuses cached source');
+  assert.strictEqual(p.getCanvas('Scene'),image,'no new presentation nodes');
+  assert.equal(g.Canvas.style.opacity,'0');
+  assert.equal(image.style.display,'');
+  assert.ok(p.ready('Scene'));
+  assert.equal(p.frame('Scene',1016),true);
+  assert.equal(draws,3,'capture, restore and next frame only');
+});
