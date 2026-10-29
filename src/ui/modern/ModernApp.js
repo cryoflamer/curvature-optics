@@ -13,8 +13,7 @@
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
   var experiments=root.CurvatureModernExperimentState;
-  // Camera interaction is a shared pointer-agnostic contract (137); pointer
-  // binding and orientation updates are deliberately deferred to 137.1.
+  // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
   var renderProfiler=root.CurvatureModernRenderProfiler?
@@ -624,6 +623,103 @@
     if(state.timer!==null){clearTimeout(state.timer);state.timer=null;}
     if(state.frame!==null){cancelAnimationFrame(state.frame);state.frame=null;}
   }
+  // 137.1: final-frame drag. No physical redraw runs during pointermove;
+  // 137.2 will reuse this contract for a cheap, image-based live preview.
+  var activeCameraPointer=null;
+  function cameraViewport(view){
+    if(view==='Scene')return graph;
+    return state.compareGraphs[view];
+  }
+  function cameraDragHud(canvas){
+    if(!canvas||!canvas.parentNode||typeof document.createElement!=='function')return null;
+    var host=canvas.parentNode;
+    if(typeof host.querySelector==='function'){
+      var existing=host.querySelector('.modern-camera-drag-hud');
+      if(existing)return existing;
+    }
+    var node=document.createElement('div');
+    node.className='modern-camera-drag-hud';node.hidden=true;
+    node.setAttribute('aria-hidden','true');
+    host.appendChild(node);
+    return node;
+  }
+  function cancelCameraDrag(){
+    if(!activeCameraPointer)return;
+    var active=activeCameraPointer;
+    activeCameraPointer=null;
+    if(cameraInteraction)cameraInteraction.cancel();
+    if(active.hud)active.hud.hidden=true;
+    if(active.canvas&&typeof active.canvas.releasePointerCapture==='function'){
+      try{if(!active.canvas.hasPointerCapture||active.canvas.hasPointerCapture(active.id))
+        active.canvas.releasePointerCapture(active.id);}catch(ignore){}
+    }
+  }
+  function bindCameraViewport(view){
+    var g=cameraViewport(view),canvas=g&&g.Canvas;
+    if(!cameraInteraction||!canvas||typeof canvas.addEventListener!=='function')return;
+    var hud=cameraDragHud(canvas);
+    canvas.classList&&canvas.classList.add('modern-camera-draggable');
+    canvas.addEventListener('pointerdown',function(event){
+      if(activeCameraPointer||event.button!==0||event.isPrimary===false||
+        (view==='Scene'&&state.mode!=='scene')||
+        (view!=='Scene'&&state.mode!=='compare'))return;
+      var rect=canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
+      if(!rect||!(rect.width>0&&rect.height>0))return;
+      try{
+        cameraInteraction.begin({viewport:view,x:event.clientX,y:event.clientY,
+          width:rect.width,height:rect.height,
+          camera:{Pan:model.Pan,Nick:model.Nick,Roll:model.Roll},
+          fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
+        activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud};
+        if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
+        if(event.preventDefault)event.preventDefault();
+      }catch(error){cancelCameraDrag();updateStatus('Camera drag: '+error.message,true);}
+    });
+    canvas.addEventListener('pointermove',function(event){
+      var active=activeCameraPointer;
+      if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
+      var sample=cameraInteraction.move({x:event.clientX,y:event.clientY});
+      if(Math.hypot(sample.dx,sample.dy)<2)return;
+      if(hud){
+        var target=root.CurvatureModernCameraInteraction.angles(sample);
+        hud.textContent='Pan '+target.Pan.toFixed(4)+'°  ·  Nick '+target.Nick.toFixed(4)+'°';
+        hud.hidden=false;
+      }
+      if(event.preventDefault)event.preventDefault();
+    });
+    canvas.addEventListener('pointerup',function(event){
+      var active=activeCameraPointer;
+      if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
+      var sample=cameraInteraction.end({x:event.clientX,y:event.clientY});
+      var changed=sample&&Math.hypot(sample.dx,sample.dy)>=2;
+      cancelCameraDrag();
+      if(!changed)return;
+      try{
+        var next=root.CurvatureModernCameraInteraction.angles(sample);
+        if(next.Pan===model.Pan&&next.Nick===model.Nick)return;
+        cancelEdits();
+        if(adapter){adapter.setCamera(model,'Pan',next.Pan);adapter.setCamera(model,'Nick',next.Nick);}
+        else{model.Pan=next.Pan;model.Nick=next.Nick;}
+        markCustom();syncNumericInputs();redraw();
+      }catch(error){updateStatus('Camera drag: '+error.message,true);}
+      if(event.preventDefault)event.preventDefault();
+    });
+    canvas.addEventListener('pointercancel',function(event){
+      if(activeCameraPointer&&activeCameraPointer.canvas===canvas&&
+        activeCameraPointer.id===event.pointerId)cancelCameraDrag();
+    });
+    canvas.addEventListener('lostpointercapture',function(event){
+      if(activeCameraPointer&&activeCameraPointer.canvas===canvas&&
+        activeCameraPointer.id===event.pointerId)cancelCameraDrag();
+    });
+  }
+  function bindCameraDrag(){
+    ['Scene','A','B'].forEach(bindCameraViewport);
+    if(root.addEventListener)root.addEventListener('blur',cancelCameraDrag);
+    if(document.addEventListener)document.addEventListener('visibilitychange',function(){
+      if(document.hidden)cancelCameraDrag();
+    });
+  }
   function measuredGraphRedraw(view){
     if(!view)return {};
     var start=profileNow();
@@ -672,7 +768,7 @@
   }
   function setMode(mode){
     if(mode!=='scene'&&mode!=='compare')throw RangeError('Invalid Modern UI mode');
-    cancelEdits();state.mode=mode;
+    cancelCameraDrag();cancelEdits();state.mode=mode;
     el('ModernSceneTab').classList.toggle('is-active',mode==='scene');
     el('ModernCompareTab').classList.toggle('is-active',mode==='compare');
     el('ModernSceneTab').setAttribute('aria-pressed',String(mode==='scene'));
@@ -925,6 +1021,7 @@
     });
   }
   function bind(){
+    bindCameraDrag();
     bindObjectFields();
     bindSettingsTabs();
     bindHelp();
@@ -993,6 +1090,5 @@
     getCompareConfig:function(){return state.compareConfig;},
     getRenderProfile:function(){return renderProfiler?renderProfiler.summary():null;},
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
-    // Exposed for future pointer wiring; no DOM handlers are installed in 137.
     getCameraInteraction:function(){return cameraInteraction;}};
 }(window));

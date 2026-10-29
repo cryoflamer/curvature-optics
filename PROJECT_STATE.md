@@ -2,6 +2,17 @@
 
 Updated at compatpatch **128** (2026-10-28), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
+## Patch 137.1 — Shared final-frame camera drag (2026-10-29)
+
+Primary-pointer drag on the Canvas now controls shared Pan and Nick in Scene and
+Compare. The gesture uses the physical diagonal FOV and initiating viewport's
+CSS dimensions. Compare A/B always commit one camera and redraw both models.
+Only a light Pan/Nick HUD updates while the pointer moves; an authoritative
+full redraw occurs **once on release**, not every pointermove. No live image
+preview yet (planned for 137.2). Camera aim, optics, compare physics, and save
+format are unchanged. See `docs/MODERN_CAMERA_DRAG_137_1.md` for mapping,
+cancellation semantics, limits and test procedure.
+
 ## Patch 137 — Modern camera interaction groundwork (2026-10-29)
 
 A shared, pointer-independent camera-gesture controller now exists for Scene and

@@ -1,7 +1,7 @@
 /* Pointer-independent drag transaction for Modern Scene and Compare.
  * The same interaction represents a shared camera regardless of which
  * viewport originated the gesture. No DOM, geometry or optical side effects.
- * Pointer event wiring and camera-angle mapping belong to patch 137.1.
+ * Pointer event wiring belongs to ModernApp; angle mapping is shared here.
  */
 (function(root,factory){
   var api=factory();
@@ -24,9 +24,33 @@
     if(width<=0||height<=0)throw RangeError('Drag viewport must have positive dimensions');
     var camera=spec.camera;
     if(!camera)throw TypeError('Drag camera required');
+    var fov=spec.fovRadians,aspect=spec.aspectRatio;
+    if(fov!==undefined&&!(finite(fov,'field of view')>0&&fov<Math.PI))
+      throw RangeError('Invalid drag field of view');
+    if(aspect!==undefined&&!(finite(aspect,'aspect ratio')>0))
+      throw RangeError('Invalid drag aspect ratio');
     return {viewport:spec.viewport,width:width,height:height,origin:origin,
+      fovRadians:fov,aspectRatio:aspect,
       camera:{Pan:finite(camera.Pan,'Pan'),Nick:finite(camera.Nick,'Nick'),
         Roll:finite(camera.Roll,'Roll')}};
+  }
+  // Grab-the-picture convention: dragging right looks left, dragging down
+  // looks up. PhysicalCamera's diagonal FOV and deviceRatio set the *true*
+  // angular scale; client pixels (not HiDPI backing pixels) set the gesture.
+  // Tangent mapping is accurate at the centre and well-behaved for large drags;
+  // final image rendering always uses the authoritative camera model.
+  function angles(sample){
+    if(!sample||!(sample.width>0&&sample.height>0)||
+       !(sample.fovRadians>0&&sample.fovRadians<Math.PI)||
+       !(sample.aspectRatio>0))throw RangeError('Missing drag angular calibration');
+    var halfTangent=Math.tan(sample.fovRadians/2)/Math.hypot(1,sample.aspectRatio);
+    var h=Math.atan(2*halfTangent*sample.aspectRatio*sample.dx/sample.width)*180/Math.PI;
+    var v=Math.atan(2*halfTangent*sample.dy/sample.height)*180/Math.PI;
+    var roll=sample.camera.Roll*Math.PI/180,co=Math.cos(roll),si=Math.sin(roll);
+    var pan=sample.camera.Pan-h*co+v*si;
+    var nick=sample.camera.Nick+h*si+v*co;
+    return Object.freeze({Pan:Math.max(-360,Math.min(360,pan)),
+      Nick:Math.max(-90,Math.min(90,nick)),Roll:sample.camera.Roll});
   }
   function create(handlers){
     handlers=handlers||{};
@@ -36,6 +60,7 @@
       return Object.freeze({viewport:active.viewport,width:active.width,height:active.height,
         origin:Object.freeze({x:origin.x,y:origin.y}),
         pointer:Object.freeze(p),dx:p.x-origin.x,dy:p.y-origin.y,
+        fovRadians:active.fovRadians,aspectRatio:active.aspectRatio,
         camera:Object.freeze(Object.assign({},active.camera))});
     }
     return Object.freeze({
@@ -71,5 +96,5 @@
       snapshot:function(){return latest;}
     });
   }
-  return Object.freeze({create:create});
+  return Object.freeze({create:create,angles:angles});
 }));

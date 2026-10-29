@@ -162,3 +162,11 @@ button{cursor:pointer}
 /* The Compare curvature slider uses the same logarithmic 0–1000 mapping as Legacy. */
 .modern-surface-actions{display:flex;gap:6px;align-items:end;flex-wrap:wrap}
 .modern-surface-actions .modern-ghost-button{flex:1;min-width:55px;margin-top:0}
+
+/* 137.1: final-frame two-axis camera drag (137.2 adds image preview). */
+.modern-camera-draggable{cursor:grab;touch-action:none;user-select:none}
+.modern-camera-draggable:active{cursor:grabbing}
+.modern-camera-drag-hud{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  z-index:5;pointer-events:none;background:#132d45e8;color:#f5fbff;border:1px solid #7895b1;
+  padding:5px 9px;border-radius:6px;font:600 11px Arial,sans-serif;white-space:nowrap}
+.modern-camera-drag-hud[hidden]{display:none}
