@@ -37,13 +37,15 @@
       }:undefined,
       onRemove:atmosphericShimmer?atmosphericShimmer.dispose:undefined}):null;
   var shimmerFrame=null;
+  var shimmerPaused={Scene:false,A:false,B:false};
+  function shimmerAnimating(name){return !shimmerPaused[name]&&atmosphericPresentation.ready(name);}
   function shimmerViews(){return state.mode==='compare'?['A','B']:['Scene'];}
   function scheduleShimmerFrame(){
     if(shimmerFrame!==null||!atmosphericShimmer||!atmosphericPresentation||document.hidden)return;
-    if(!shimmerViews().some(function(name){return atmosphericPresentation.ready(name);}))return;
+    if(!shimmerViews().some(shimmerAnimating))return;
     shimmerFrame=requestAnimationFrame(function(timestamp){
       shimmerFrame=null;
-      shimmerViews().forEach(function(name){if(atmosphericPresentation.ready(name))
+      shimmerViews().forEach(function(name){if(shimmerAnimating(name))
         atmosphericPresentation.frame(name,timestamp);});
       scheduleShimmerFrame();
     });
@@ -52,8 +54,71 @@
     if(shimmerFrame!==null){cancelAnimationFrame(shimmerFrame);shimmerFrame=null;}
   }
   if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',function(){
-    if(document.hidden)stopShimmerFrame();else scheduleShimmerFrame();
+    if(document.hidden){stopShimmerFrame();if(atmosphericShimmer)atmosphericShimmer.resetClock();}
+    else scheduleShimmerFrame();
   });
+  // 138.3: UI-only settings. A/B independently select their own shader settings;
+  // range edits and pause never schedule physical optics or upload a texture.
+  function shimmerTarget(group){return group==='Scene'?'Scene':state.compareSelected;}
+  function shimmerUi(id){return newUiEl('ModernShimmer'+id);}
+  function syncShimmerControls(){
+    if(!atmosphericShimmer||!atmosphericPresentation)return;
+    ['Scene','Compare'].forEach(function(group){
+      var enabled=shimmerUi(group+'Enabled'),options=shimmerUi(group+'Options');
+      if(!enabled||!options)return;
+      var name=shimmerTarget(group),active=atmosphericPresentation.enabled(name);
+      var settings=atmosphericShimmer.getSettings(name);
+      enabled.checked=active;options.hidden=!active;
+      var targetLabel=shimmerUi('CompareTarget');
+      if(group==='Compare'&&targetLabel)targetLabel.textContent='model '+name;
+      [['Intensity','intensity',' px'],['Scale','scale',' px'],['Drift','drift',' px/s']].forEach(function(row){
+        var input=shimmerUi(group+row[0]),output=shimmerUi(group+row[0]+'Value');
+        if(input)input.value=String(settings[row[1]]);
+        if(output)output.textContent=settings[row[1]]+row[2];
+      });
+      var pause=shimmerUi(group+'Pause');
+      if(pause){pause.disabled=!active;pause.textContent=shimmerPaused[name]?'Resume animation':'Pause animation';
+        pause.setAttribute('aria-pressed',String(shimmerPaused[name]));}
+    });
+  }
+  function bindShimmerControls(){
+    if(!atmosphericShimmer||!atmosphericPresentation)return;
+    ['Scene','Compare'].forEach(function(group){
+      var toggle=shimmerUi(group+'Enabled');if(!toggle)return;
+      toggle.addEventListener('change',function(){
+        var name=shimmerTarget(group),enabled=!!toggle.checked;
+        if(!atmosphericPresentation.setEnabled(name,enabled))return;
+        atmosphericShimmer.resetClock(name);
+        if(!enabled)shimmerPaused[name]=false;
+        stopShimmerFrame();syncShimmerControls();
+        // Only ON/OFF needs a cached physical repaint: this separates source
+        // decorations from the GPU texture and restores them on disable.
+        redraw();
+      });
+      [['Intensity','intensity'],['Scale','scale'],['Drift','drift']].forEach(function(row){
+        var control=shimmerUi(group+row[0]);if(!control)return;
+        control.addEventListener('input',function(){
+          var name=shimmerTarget(group),value=Number(control.value);
+          try{
+            var change={};change[row[1]]=value;
+            atmosphericShimmer.configure(change,name);
+            // A paused viewport can preview a setting change without advancing time.
+            if(atmosphericPresentation.ready(name))atmosphericPresentation.frame(name);
+            syncShimmerControls();scheduleShimmerFrame();
+          }catch(error){updateStatus('Invalid shimmer '+row[1]+': '+error.message,true);}
+        });
+      });
+      var pause=shimmerUi(group+'Pause');if(!pause)return;
+      pause.addEventListener('click',function(){
+        var name=shimmerTarget(group);
+        if(!atmosphericPresentation.enabled(name))return;
+        shimmerPaused[name]=!shimmerPaused[name];
+        atmosphericShimmer.resetClock(name);
+        stopShimmerFrame();syncShimmerControls();scheduleShimmerFrame();
+      });
+    });
+    syncShimmerControls();
+  }
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
     root.performance.now():Date.now();}
   var persistence={ready:false,explicitUrl:false,timer:null};
@@ -524,6 +589,7 @@
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
+    syncShimmerControls();
     var radiusWrap=newUiEl('ModernModelRadiusWrap');
     if(radiusWrap)radiusWrap.hidden=spec.surface==='flat';
     var curvature=root.CurvaturePhysicalCurvature;
@@ -874,7 +940,9 @@
   }
   function setMode(mode){
     if(mode!=='scene'&&mode!=='compare')throw RangeError('Invalid Modern UI mode');
-    cancelCameraDrag();cancelEdits();state.mode=mode;
+    cancelCameraDrag();cancelEdits();stopShimmerFrame();
+    if(atmosphericShimmer)atmosphericShimmer.resetClock();
+    state.mode=mode;
     el('ModernSceneTab').classList.toggle('is-active',mode==='scene');
     el('ModernCompareTab').classList.toggle('is-active',mode==='compare');
     el('ModernSceneTab').setAttribute('aria-pressed',String(mode==='scene'));
@@ -910,7 +978,7 @@
     var views=el('ModernCompareViews');
     if(views){views.classList.toggle('is-active',mode==='compare');
       views.setAttribute('aria-hidden',String(mode!=='compare'));}
-    refreshLabels();
+    refreshLabels();syncShimmerControls();
     redraw();
   }
   function markCustom(){
@@ -1132,6 +1200,7 @@
     bindSettingsTabs();
     bindHelp();
     bindCompareEditor();
+    bindShimmerControls();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
@@ -1197,8 +1266,8 @@
     getRenderProfile:function(){return renderProfiler?renderProfiler.summary():null;},
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
     getCameraInteraction:function(){return cameraInteraction;},
-    // Internal 138.1 integration seam; UI controls arrive in 138.3.
+    // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
-    // Developer-console controls for the 138.2 prototype; UI arrives in 138.3.
+    // DevTools API remains available alongside the 138.3 Atmosphere controls.
     getAtmosphericShimmer:function(){return atmosphericShimmer;}};
 }(window));

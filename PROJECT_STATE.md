@@ -1,3 +1,14 @@
+## Patch 138.3 — UI controls for atmospheric turbulence (2026-10-29)
+
+Added visual-only Atmospheric Turbulence switches, Intensity/Eddy scale/Drift
+sliders and Pause/Resume to Scene and selected Compare A/B atmosphere panels.
+Scene/A/B have independent shader parameters and freeze states; only toggling
+On/Off causes a cached physical repaint to separate/restore canvas captions.
+Parameter edits and pause/resume do not retrace rays or upload scene textures.
+A per-view elapsed-time clock prevents a pause/resume phase jump. Shimmer is
+OFF by default and not serialized with physical experiment state. See
+`docs/MODERN_ATMOSPHERIC_UI_138_3.md` for browser checks and limitations.
+
 ## Patch 138.1 — optional atmospheric presentation boundary (2026-10-29)
 
 Added disabled-by-default Scene/A/B presentation slots, capturing physical

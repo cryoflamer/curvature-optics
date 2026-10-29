@@ -118,11 +118,27 @@
   }
   function create(options){
     options=options||{};
-    var setting=settingsFor(options.settings),resources=new WeakMap();
+    var setting=settingsFor(options.settings),viewSettings=Object.create(null),resources=new WeakMap();
+    var clocks=Object.create(null);
     var stats=Object.create(null);
     var errors=Object.create(null);
+    function viewSetting(name){return name&&viewSettings[name]||setting;}
+    function resetClock(name){
+      // A paused/hidden viewport keeps its phase; its first resumed frame does
+      // not advance by the time elapsed off screen.
+      if(name) {if(clocks[name])clocks[name].lastMs=null;}
+      else Object.keys(clocks).forEach(function(key){clocks[key].lastMs=null;});
+    }
+    function phaseTime(name,meta){
+      var clock=clocks[name]||(clocks[name]={elapsedMs:0,lastMs:null});
+      if(meta.capture===true||!Number.isFinite(meta.timeMs))return clock.elapsedMs/1000;
+      if(clock.lastMs!==null)clock.elapsedMs+=Math.max(0,Math.min(100,meta.timeMs-clock.lastMs));
+      clock.lastMs=meta.timeMs;
+      return clock.elapsedMs/1000;
+    }
     function present(source,target,name,meta){
       meta=meta||{};
+      var current=viewSetting(name);
       var resource=resources.get(target);
       if(!resource){
         resource=initialize(target);
@@ -151,15 +167,15 @@
       gl.bindBuffer(gl.ARRAY_BUFFER,resource.buffer);
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,resource.texture);
       gl.uniform2f(resource.resolution,width,height);
-      gl.uniform1f(resource.time,(meta.timeMs===undefined?0:meta.timeMs)/1000);
+      gl.uniform1f(resource.time,phaseTime(name,meta));
       // Max derivative per value-noise component is 1.5/scale;
       // with 0.25 * 2.2 octave the 2D Jacobian norm is bounded by
       // 4.65 * strength/scale. Keep it < 0.75 to avoid local image folding.
-      var effectiveIntensity=Math.min(setting.intensity,0.16*setting.scale);
+      var effectiveIntensity=Math.min(current.intensity,0.16*current.scale);
       gl.uniform1f(resource.strength,effectiveIntensity*pixelRatio);
-      gl.uniform1f(resource.scale,setting.scale*pixelRatio);
-      gl.uniform1f(resource.drift,setting.drift*pixelRatio);
-      gl.uniform1f(resource.seed,setting.seed);
+      gl.uniform1f(resource.scale,current.scale*pixelRatio);
+      gl.uniform1f(resource.drift,current.drift*pixelRatio);
+      gl.uniform1f(resource.seed,current.seed);
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
       resource.frames++;
       stats[name]={uploads:resource.uploads,frames:resource.frames,width:width,height:height,
@@ -174,8 +190,16 @@
       resources.delete(target);
     }
     return Object.freeze({present:present,dispose:dispose,
-      configure:function(next){setting=settingsFor(next,setting);return Object.assign({},setting);},
-      getSettings:function(){return Object.assign({},setting);},
+      // With no viewport, configure remains the legacy DevTools global default;
+      // Scene, A and B can each override only their own visual parameters.
+      configure:function(next,name){
+        if(name){if(!['Scene','A','B'].includes(name))throw RangeError('Unknown shimmer viewport: '+name);
+          viewSettings[name]=settingsFor(next,viewSetting(name));
+          return Object.assign({},viewSettings[name]);}
+        setting=settingsFor(next,setting);return Object.assign({},setting);
+      },
+      getSettings:function(name){return Object.assign({},viewSetting(name));},
+      resetClock:resetClock,
       getStats:function(name){return stats[name]?Object.assign({},stats[name]):null;},
       getError:function(name){return errors[name]||null;},
       // The WebGL failure is reported but never takes the physical Canvas away.

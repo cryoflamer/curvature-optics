@@ -180,3 +180,25 @@ button{cursor:pointer}
    undistorted annotations. Without it, absolute overlays drift on the page. */
 .modern-graph-host .JsGraph-ClippingBox{position:relative}
 .modern-graph-host canvas.modern-atmospheric-image{background:#fff}
+
+/* 138.3: presentational heat shimmer controls, independent of optical inputs. */
+.modern-shimmer{border-top:1px solid #d7e4ef;margin-top:17px;padding-top:15px}
+.modern-shimmer-header{display:flex;justify-content:space-between;align-items:center;gap:7px;
+  font-size:12px;color:#244b78}
+.modern-shimmer-switch{display:inline-flex!important;align-items:center;gap:5px;
+  white-space:nowrap;cursor:pointer}
+.modern-section .modern-shimmer-switch input[type=checkbox],
+.modern-compare-panel .modern-shimmer-switch input[type=checkbox]{width:16px;height:16px;
+  padding:0;margin:0;accent-color:#236ab4;flex:0 0 auto}
+.modern-shimmer-options[hidden]{display:none!important}
+.modern-shimmer-options{margin-top:13px}
+.modern-shimmer-field{margin:10px 0 12px}
+.modern-shimmer-field>label,.modern-compare-panel .modern-shimmer-field>label{display:flex;
+  justify-content:space-between;align-items:center;gap:6px;font-size:12px;color:#4c607a}
+.modern-shimmer-field output,.modern-compare-panel .modern-shimmer-field output{min-height:0;
+  display:inline;color:#1f5d9b;font-variant-numeric:tabular-nums;white-space:nowrap}
+.modern-section .modern-shimmer-field input[type=range],
+.modern-compare-panel .modern-shimmer-field input[type=range]{width:100%;height:auto;
+  padding:0;margin:5px 0 0;accent-color:#2576c9}
+.modern-shimmer-pause{width:100%;margin-top:4px}
+.modern-shimmer-pause[aria-pressed=true]{background:#e9f2ff;border-color:#85afd8}
