@@ -13,6 +13,14 @@
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
   var experiments=root.CurvatureModernExperimentState;
+  // Camera interaction is a shared pointer-agnostic contract (137); pointer
+  // binding and orientation updates are deliberately deferred to 137.1.
+  var cameraInteraction=root.CurvatureModernCameraInteraction?
+    root.CurvatureModernCameraInteraction.create():null;
+  var renderProfiler=root.CurvatureModernRenderProfiler?
+    root.CurvatureModernRenderProfiler.create():null;
+  function profileNow(){return root.performance&&typeof root.performance.now==='function'?
+    root.performance.now():Date.now();}
   var persistence={ready:false,explicitUrl:false,timer:null};
   var model=new root.CurveAppClass();
   Object.assign(model,{
@@ -234,13 +242,19 @@
   function draw(g){
     if(state.mode!=='scene')return;
     try{
+      var startedAt=profileNow();
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
       });
+      var renderedAt=profileNow();
       state.last=result;
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
       if(state.compareEyeLevel&&g&&g.Canvas)drawCompareEyeLevel(g,model);
       if(state.compareHorizon)drawCompareHorizon('Scene',g,model,sceneOptions);
+      var finishedAt=profileNow();
+      if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
+        totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
+        overlayMs:finishedAt-renderedAt,stages:result.timings,cacheReused:result.cacheReused});
       var fullStatus=(result.cacheReused?'Cached optics':'Physical optics')+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
         ' fill triangles · '+result.unresolved+' unresolved'+
@@ -257,6 +271,7 @@
     var m=state.comparePair[side];
     if(!m)return;
     try{
+      var startedAt=profileNow();
       // A and B invoke the actual Physical renderer separately, not copied pixels.
       var spec=state.compareConfig&&state.compareConfig[side];
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
@@ -265,10 +280,15 @@
       // keyed ray fields as two viewports are rendered in succession.
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
+      var renderedAt=profileNow();
       state.compareLast[side]=result;
       if(state.compareEyeLevel&&g&&g.Canvas)drawCompareEyeLevel(g,m);
       if(state.compareHorizon)drawCompareHorizon(side,g,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
+      var finishedAt=profileNow();
+      if(renderProfiler)renderProfiler.recordRender({viewport:side,
+        totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
+        overlayMs:finishedAt-renderedAt,stages:result.timings,cacheReused:result.cacheReused});
       var node=el('ModernCompareStatus'+side);
       if(node){
         node.textContent=(result.cacheReused?'Repainted (cached rays)':'Computed optics')+' · '+result.drawn+
@@ -604,7 +624,18 @@
     if(state.timer!==null){clearTimeout(state.timer);state.timer=null;}
     if(state.frame!==null){cancelAnimationFrame(state.frame);state.frame=null;}
   }
+  function measuredGraphRedraw(view){
+    if(!view)return {};
+    var start=profileNow();
+    resizeGraph(view);
+    var resized=profileNow();
+    view.Redraw();
+    var finished=profileNow();
+    return {totalMs:finished-start,resizeMs:resized-start,
+      redrawMs:finished-resized};
+  }
   function redraw(){
+    var setupStartedAt=profileNow();
     cancelPending();
     model.Update();refreshLabels();
     scheduleExperimentSave();
@@ -614,15 +645,24 @@
         var status=el('ModernCompareStatus'+side);
         if(status)status.textContent='Rendering current model '+side+'…';
       });
+      var scheduledAt=profileNow();
       state.frame=requestAnimationFrame(function(){
         state.frame=null;
-        ['A','B'].forEach(function(side){
-          var view=state.compareGraphs[side];
-          if(view){resizeGraph(view);view.Redraw();}
-        });
+        var startedAt=profileNow();
+        var a=measuredGraphRedraw(state.compareGraphs.A);
+        var b=measuredGraphRedraw(state.compareGraphs.B);
+        if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
+          setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:profileNow()-startedAt,A:a,B:b});
       });
     }else{
-      state.frame=requestAnimationFrame(function(){state.frame=null;resizeGraph(graph);graph.Redraw();});
+      var sceneScheduledAt=profileNow();
+      state.frame=requestAnimationFrame(function(){
+        state.frame=null;
+        var startedAt=profileNow();
+        var metrics=measuredGraphRedraw(graph);
+        if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
+          setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
+      });
     }
   }
   function scheduleRedraw(){
@@ -950,5 +990,9 @@
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
     getCompareModels:function(){return state.comparePair;},
     getCompareLast:function(){return state.compareLast;},
-    getCompareConfig:function(){return state.compareConfig;}};
+    getCompareConfig:function(){return state.compareConfig;},
+    getRenderProfile:function(){return renderProfiler?renderProfiler.summary():null;},
+    resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
+    // Exposed for future pointer wiring; no DOM handlers are installed in 137.
+    getCameraInteraction:function(){return cameraInteraction;}};
 }(window));

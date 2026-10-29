@@ -93,7 +93,10 @@ test('133: real compare UI reuses independent optical caches and updates only se
   const renders=[],callbacks=[],sessions=[];
   function Model(){Object.assign(this,model());}
   const ctx={window:{CurveAppClass:Model,
-    CurvatureModernSceneState:null,CurvatureModernCompareModel:compare132,
+    CurvatureModernSceneState:null,
+    CurvatureModernCameraInteraction:require('../src/ui/modern/ModernCameraInteraction'),
+    CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
+    CurvatureModernCompareModel:compare132,
     CurvatureModernCompareState:compare133,
     CurvaturePhysicalSceneOptics:{create(){const value={id:sessions.length+1};sessions.push(value);return value;}},
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){renders.push({g,m,options});
@@ -113,6 +116,13 @@ test('133: real compare UI reuses independent optical caches and updates only se
   const sourceBefore=JSON.stringify(app.getModel());
   nodes.get('ModernCompareTab').listeners.click();
   assert.equal(renders.length,3);
+  const initialProfile=app.getRenderProfile();
+  assert.equal(initialProfile.renders.Scene.count,1);
+  assert.equal(initialProfile.renders.A.count,1);
+  assert.equal(initialProfile.renders.B.count,1);
+  assert.equal(initialProfile.batches.scene.count,1);
+  assert.equal(initialProfile.batches.compare.count,1);
+  assert.equal(app.getCameraInteraction().isActive(),false);
   assert.equal(sessions.length,2);
   assert.strictEqual(renders[1].options.cacheSession,sessions[0]);
   assert.strictEqual(renders[2].options.cacheSession,sessions[1]);
@@ -139,4 +149,11 @@ test('133: real compare UI reuses independent optical caches and updates only se
   nodes.get('ModernCompareTab').listeners.click();
   assert.equal(app.getCompareConfig().B.surface,'globe','config persists across mode switches');
   assert.strictEqual(renders.at(-1).options.cacheSession,sessions[1]);
+  const profile=app.getRenderProfile();
+  assert.equal(profile.renders.A.count,profile.renders.B.count,
+    'both Compare viewports are profiled per redraw');
+  assert.ok(profile.batches.compare.latest.A);
+  assert.ok(profile.batches.compare.latest.B);
+  app.resetRenderProfile();
+  assert.equal(app.getRenderProfile().renders.Scene.count,0);
 });

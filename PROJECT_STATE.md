@@ -2,6 +2,17 @@
 
 Updated at compatpatch **128** (2026-10-28), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
+## Patch 137 — Modern camera interaction groundwork (2026-10-29)
+
+A shared, pointer-independent camera-gesture controller now exists for Scene and
+Compare A/B, and the Modern UI collects bounded renderer-stage and redraw-batch
+profiling separately for Scene, A and B. **No drag handlers or fast-preview
+rendering are enabled in 137**; existing physical rays and saved experiment
+formats are unchanged. Inspect measurements with
+`CurvatureModernApp.getRenderProfile()`; see
+`docs/MODERN_CAMERA_INTERACTION_BASELINE_137.md` for the contract, timing
+limitations, browser measurement procedure and 137.1–137.4 plan.
+
 ## Patch 128 — physical continuous-surface verification (2026-10-28)
 
 **Latest verified baseline:** 512 Node tests including 13 new end-to-end tests;
