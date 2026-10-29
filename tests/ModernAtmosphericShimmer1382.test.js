@@ -28,7 +28,8 @@ function fakeWebGL(){
 }
 function canvasWith(fake){return {width:800,height:400,offsetWidth:400,offsetHeight:200,
   style:{opacity:''},parentNode:null,addEventListener(type,fn){this[type]=fn;},
-  getContext(type,attrs){assert.equal(type,'webgl');assert.equal(attrs.alpha,false);return fake.gl;}};}
+  getContext(type,attrs){assert.equal(type,'webgl');assert.equal(attrs.alpha,true);
+    assert.equal(attrs.premultipliedAlpha,false);return fake.gl;}};}
 
 test('138.2: finite bounded manual shimmer settings; physical C_n^2 is not faked',()=>{
   assert.deepEqual(shimmer.settingsFor({intensity:0,drift:0}),
@@ -66,6 +67,20 @@ test('138.2: physics frame uploaded exactly once; animation draws without upload
   effect.dispose(target);
   assert.equal(mock.calls.filter(x=>x[0]==='deleteTexture').length,1);
   assert.equal(mock.calls.filter(x=>x[0]==='deleteProgram').length,1);
+});
+
+test('138.2.1: transparent source pixels remain transparent in WebGL output',()=>{
+  const mock=fakeWebGL(),target=canvasWith(mock);
+  const effect=shimmer.create({settings:{intensity:0}});
+  effect.present({width:100,height:50,offsetWidth:100},target,'Scene',
+    {capture:true,timeMs:0});
+  assert.ok(mock.calls.some(call=>call[0]==='uniform1f'&&call[1]==='uStrength'&&call[2]===0));
+  assert.match(shimmer.fragmentSource,/gl_FragColor=texture2D\(uImage,uv\)/,
+    'shader must forward source RGBA, not replace alpha with opaque black');
+  const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  assert.match(css,/canvas\.modern-atmospheric-image\{background:#fff\}/,
+    'transparent output must composite against the same white canvas backdrop');
+  assert.equal(effect.getStats('Scene').uploads,1);
 });
 
 test('138.2: Scene and Compare targets get independent GPU textures',()=>{

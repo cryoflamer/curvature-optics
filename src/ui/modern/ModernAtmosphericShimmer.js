@@ -68,7 +68,10 @@
     return shader;
   }
   function initialize(target){
-    var gl=target.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:false,
+    // The physical Canvas has transparent pixels over a white CSS backdrop.
+    // An opaque WebGL drawing buffer turns them into solid black regardless
+    // of shimmer strength. Preserve the source alpha for browser compositing.
+    var gl=target.getContext('webgl',{alpha:true,antialias:false,preserveDrawingBuffer:false,
       depth:false,stencil:false,premultipliedAlpha:false});
     if(!gl)throw Error('WebGL is unavailable for atmospheric shimmer');
     var vertex=null,fragment=null,program=null,buffer=null,texture=null;

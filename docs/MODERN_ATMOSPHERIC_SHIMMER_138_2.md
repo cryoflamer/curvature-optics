@@ -98,3 +98,24 @@ work (138.4 / 139+).
 node --test tests/ModernAtmosphericPresentation1381.test.js tests/ModernAtmosphericShimmer1382.test.js
 node --test tests/*.test.js
 ```
+
+## 138.2.1 — transparent Canvas compositing correction
+
+The ordinary physical GraphX3DX Canvas contains transparent sky pixels and
+uses a white CSS backdrop. The 138.2 WebGL presentation requested an opaque
+(`alpha: false`) drawing buffer, which converted those source pixels to black
+**even with** `intensity: 0`. This was a presentation bug, not an optical
+or noise-field result.
+
+The WebGL context now retains the uploaded source's alpha channel
+(`alpha: true`, `premultipliedAlpha: false`). The fragment shader continues
+to return the entire RGBA texel unchanged apart from its sampling location.
+The existing white CSS background of the presentation Canvas therefore shows
+through transparent sky areas, like the original physical Canvas.
+
+To verify in the browser, enable shimmer with `intensity: 0`: the sky should
+remain white, and the image should be visually identical to the physical
+view. Then increase intensity and check that only local image distortions
+change, not the sky color. Switch the layer off and on to confirm consistent
+compositing. Automated regression checks cover the WebGL alpha-context
+contract, unmodified shader alpha, CSS background, and zero-strength frame.
