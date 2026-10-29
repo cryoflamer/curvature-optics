@@ -1,3 +1,16 @@
+## Patch 140.4 — Opt-in engineered shooting qualification (2026-10-29)
+
+Diagnosed why #140.3 reports zero predictor/warm-start attempts for engineered
+atmospheres: these shortcuts are intentionally limited to the standard model.
+An offline-only opt-in `shootingOptimization: 'engineered-experimental'` now
+allows the existing integrated/verified CPU predictor and same-distance warm
+starts to be tested for the built-in exponential and inverse-spherical models;
+ordinary physical scene rendering remains bracket-first, unchanged. Added
+paired full-scene benchmark with topology/visibility/coordinate comparisons,
+near-grazing numerical regression tests, and an explicit no-default-promotion
+decision gate. This is **not** GPU compute or production certification. See
+`docs/ENGINEERED_OPTICAL_SHOOTING_140_4.md`.
+
 ## Patch 140.3 — Cold/Warm optical profiling (2026-10-29)
 
 Added explicit cold and warm optical benchmark redraws to the Modern Display

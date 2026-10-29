@@ -68,11 +68,17 @@
     delete solverOptions.shootingOptimization;
     if (solverOptions.profileOptions)
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
-    // Only the bounded, smooth standard atmosphere opts into the guarded
-    // predictor. A user-provided profile and engineered grazing atmospheres
-    // retain the original bracket-first solver.
-    if(options.atmosphere==='standard' && options.profile===undefined &&
-        options.shootingOptimization!==false)
+    // #140.4: engineered profiles may be measured with the existing guarded
+    // predictor and warm starts, but ONLY behind this explicit opt-in. Their
+    // grazing rays can be branch-sensitive, so the shipped Scene/Compare
+    // defaults retain the original bracket-first solver. A custom profile
+    // must never be included in this narrowly-scoped experiment.
+    var engineeredExperiment=options.shootingOptimization==='engineered-experimental' &&
+      options.profile===undefined &&
+      (options.atmosphere==='exponential-occlusion'||options.atmosphere==='inverse-spherical');
+    if(options.profile===undefined&&(
+        (options.atmosphere==='standard'&&options.shootingOptimization!==false)||
+        engineeredExperiment))
       solverOptions.shootingPredictor=true;
     // Cache lifetime is the returned field: changing atmosphere, camera height,
     // or R means constructing a new field. No hidden cross-configuration cache.
@@ -100,8 +106,8 @@
           surface.surfacePoint2(d,h)};
       // Two already integrated angles at effectively one distance supply a local
       // height/angle secant. Restrict to distant rays: nearby steep angles
-      // are substantially nonlinear in height. Only the standard-profile
-      // guarded predictor path is allowed to consume the seed.
+      // are substantially nonlinear in height. Engineered seeds are ONLY
+      // consumed by the explicit benchmark opt-in above.
       var seedKey=Math.round(d*10000);
       var seeds=d>=5000&&solverOptions.shootingPredictor===true&&
         options.shootingWarmStart!==false?
