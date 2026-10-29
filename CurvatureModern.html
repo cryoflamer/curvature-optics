@@ -44,13 +44,13 @@
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
-<script src="src/app/CurvatureMainCanvasRenderer.js?v=140.2"></script>
+<script src="src/app/CurvatureMainCanvasRenderer.js?v=140.3"></script>
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js"></script>
 <script src="src/ui/modern/ModernCameraPerspectiveWarp.js"></script>
 <script src="src/ui/modern/ModernCameraDragPreview.js?v=137.4"></script>
-<script src="src/ui/modern/ModernRenderProfiler.js?v=140.2"></script>
-<script src="src/ui/modern/ModernPerformanceReport.js?v=140.2"></script>
+<script src="src/ui/modern/ModernRenderProfiler.js?v=140.3"></script>
+<script src="src/ui/modern/ModernPerformanceReport.js?v=140.3"></script>
 <script src="src/ui/modern/ModernGpuCapabilities.js?v=140.0"></script>
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
@@ -233,10 +233,13 @@
           <div class="modern-performance-actions">
             <button type="button" class="modern-ghost-button" id="ModernPerfRecord" aria-pressed="false">Start recording</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfStop" disabled>Stop recording</button>
+            <button type="button" class="modern-ghost-button" id="ModernPerfCold">Cold optical sample</button>
+            <button type="button" class="modern-ghost-button" id="ModernPerfWarm">Warm optical sample</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfSnapshot">Refresh report</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfReset">Clear</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfExport">Export JSON</button>
           </div>
+          <p class="modern-note">Cold clears only the chosen viewport's optical projection cache before one redraw; Warm redraws without clearing it. In Compare, both A and B are sampled independently. Warm cache misses are reported, not silently counted as hits. Start recording first; neither action changes the atmosphere or model.</p>
           <p class="modern-note" id="ModernPerfStatus" role="status" aria-live="polite">Status: idle. Previous CPU redraws may be in memory. Start recording for a clean run.</p>
           <pre class="modern-performance-results" id="ModernPerfResults" aria-label="Render timing summary">Press Refresh report to inspect the latest samples.</pre>
           <p class="modern-note">For a fair comparison, record several runs with unchanged dimensions and settings. GPU draw time is reported only if the timer-query extension is available; WebGL call time is <em>not</em> GPU execution time.</p>
@@ -265,7 +268,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.2"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.3"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>

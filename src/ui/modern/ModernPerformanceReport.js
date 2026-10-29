@@ -33,6 +33,42 @@
       });
       out.push('');
     });
+    out.push('Cold / Warm optical sampling (explicit sample buttons only):');
+    ['Scene','A','B'].forEach(function(name){
+      var samples=summary.opticalSamples&&summary.opticalSamples[name];
+      if(!samples)return;
+      var cold=samples.cold,warm=samples.warm;
+      if(!(cold.count||warm.count||samples.warmCacheMisses||samples.coldUnexpectedHits))return;
+      out.push(name+' · cold '+cold.count+' · warm cache hits '+warm.count+
+        ' · warm misses '+samples.warmCacheMisses+
+        ' · unexpected cold hits '+samples.coldUnexpectedHits);
+      [['cold',cold],['warm',warm]].forEach(function(pair){
+        var label=pair[0],group=pair[1];
+        if(!group.count)return;
+        [['totalMs','UI redraw'],['opticsMs',null]].forEach(function(m){
+          var target=m[1]===null?group.stages:group;
+          var line=metric(target,m[0],label+(m[1]===null?' optical transform':' total'));
+          if(line)out.push(line);
+        });
+      });
+      if(cold.count){
+        [['fieldSetupMs','field setup'],['groundGuidesMs','ground guides'],
+          ['outlinesMs','outlines'],['fillsMs','fills'],
+          ['assemblyMs','scene assembly'],['sceneAdoptionMs','scene adoption (inside assembly)'],
+          ['exactSolveMs','exact solves (inside the projection stages)']].forEach(function(m){
+          var line=metric(cold.opticalStages,m[0],'cold '+m[1]);if(line)out.push(line);
+        });
+        ['ground','outlines','fills'].forEach(function(phase){
+          var groupWork=cold.opticalWork&&cold.opticalWork[phase];
+          if(!groupWork||!groupWork.count)return;
+          out.push('  '+phase+' · median new solves '+value(groupWork.median.solves)+
+            ', RK4 steps '+value(groupWork.median.shootRK4Calls)+
+            ', shooting evaluations '+value(groupWork.median.shootEvaluations));
+        });
+      }
+    });
+    out.push('  Warm misses excluded from warm medians. Cold clears only the optical scene cache.',
+      '  Optical exact-solver time is nested within ground/outlines/fills; never sum it twice.','');
     ['scene','compare'].forEach(function(name){
       var b=summary.batches&&summary.batches[name];
       if(!b||!b.count)return;

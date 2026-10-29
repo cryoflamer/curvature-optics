@@ -87,7 +87,8 @@ test('133: real compare UI reuses independent optical caches and updates only se
     'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelEarth','ModernModelFlat','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
     'ModernCompareEyeLevel','ModernCompareHorizon',
-    'ModernPerfRecord','ModernPerfStop','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport',
+    'ModernPerfRecord','ModernPerfStop','ModernPerfCold','ModernPerfWarm',
+    'ModernPerfSnapshot','ModernPerfReset','ModernPerfExport',
     'ModernPerfResults','ModernPerfStatus'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
@@ -185,5 +186,21 @@ test('133: real compare UI reuses independent optical caches and updates only se
   assert.equal(exports.length,1,'a standalone JSON snapshot is exported');
   nodes.get('ModernPerfReset').listeners.click();
   assert.equal(app.getRenderProfile().renders.Scene.count,0);
+  // 140.3: explicit cold/warm requests pass through both Compare sessions;
+  // warm requests are not counted as hits when the real cache misses.
+  record.listeners.click();
+  nodes.get('ModernPerfCold').listeners.click();
+  assert.equal(renders.at(-2).options.forceColdOptics,true);
+  assert.equal(renders.at(-1).options.forceColdOptics,true);
+  nodes.get('ModernPerfWarm').listeners.click();
+  assert.equal(renders.at(-2).options.forceColdOptics,false);
+  assert.equal(renders.at(-1).options.forceColdOptics,false);
+  const optical=app.getRenderProfile().opticalSamples;
+  assert.equal(optical.A.cold.count,1);
+  assert.equal(optical.B.cold.count,1);
+  assert.equal(optical.A.warm.count,0);
+  assert.equal(optical.B.warmCacheMisses,1);
+  assert.equal(optical.A.warmCacheMisses,1);
+  nodes.get('ModernPerfStop').listeners.click();
 
 });

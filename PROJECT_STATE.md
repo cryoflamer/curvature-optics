@@ -1,3 +1,14 @@
+## Patch 140.3 — Cold/Warm optical profiling (2026-10-29)
+
+Added explicit cold and warm optical benchmark redraws to the Modern Display
+profiler. Cold invalidates **only** the affected optical projection cache
+(Scene or independent Compare A/B session) immediately before transformation;
+warm requests preserve caches. The profile separates *actual* fresh builds and
+warm hits, excludes misses, and exports existing field/ground/outline/fill
+stage times, target solves, shooting evaluations and RK4 steps. Normal redraws,
+model state, tracing numerics and visual backends remain unchanged. See
+`docs/MODERN_OPTICAL_PROFILING_140_3.md` for the test protocol and caveats.
+
 ## Patch 140.1.2 — Render profiler API compatibility and cache refresh (2026-10-29)
 
 The browser error `renderProfiler.setEnabled is not a function` is consistent with a

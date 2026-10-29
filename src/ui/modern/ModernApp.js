@@ -8,7 +8,7 @@
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    geometryBackend:'canvas',compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
+    geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -82,7 +82,7 @@
   // WebGL timing is opt-in; CPU command submission != GPU execution.
   var profilingRecording=false;
   function performanceSnapshot(){
-    return {version:'140.2',mode:state.mode,backend:state.geometryBackend==='webgl2'?'WebGL2 experimental':'Canvas 2D',
+    return {version:'140.3',mode:state.mode,backend:state.geometryBackend==='webgl2'?'WebGL2 experimental':'Canvas 2D',
       recordedAt:new Date().toISOString(),recording:profilingRecording,
       gpuCapabilities:gpuSnapshot,profile:renderProfiler?renderProfiler.summary():null};
   }
@@ -133,6 +133,20 @@
     }
     record.addEventListener('click',function(){setRecording(true);});
     if(stop)stop.addEventListener('click',function(){setRecording(false);});
+    // Both actions perform exactly ONE ordinary scene/Compare redraw.
+    // Cold invalidates the targeted optical session at its transform boundary;
+    // Warm leaves it alone and reports whether the cache was truly reused.
+    ['cold','warm'].forEach(function(kind){
+      var button=document.getElementById(kind==='cold'?'ModernPerfCold':'ModernPerfWarm');
+      if(button)button.addEventListener('click',function(){
+        if(!profilingRecording){
+          refreshPerformanceReport('Start recording before taking optical samples.');return;
+        }
+        refreshPerformanceReport('Status: recording · '+kind+' optical sample scheduled for '+
+          (state.mode==='scene'?'Scene':'Compare A/B')+'.');
+        redraw(kind);
+      });
+    });
     var snapshot=document.getElementById('ModernPerfSnapshot');
     if(snapshot)snapshot.addEventListener('click',function(){
       refreshPerformanceReport('Report refreshed. Median/p95 use only collected samples.');
@@ -148,7 +162,7 @@
       }
       var blob=new root.Blob([JSON.stringify(performanceSnapshot(),null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download='curvature-render-profile-140.1.json';
+      link.href=url;link.download='curvature-optical-profile-140.3.json';
       try{link.click();}finally{
         // Keep the blob URL alive until the browser has dispatched the click.
         if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
@@ -510,7 +524,8 @@
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false,
-        deferDecorations:separateDecorations,geometryBackend:state.geometryBackend
+        deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
+        forceColdOptics:state.opticalSample==='cold'
       });
       var renderedAt=profileNow();
       var guideGraph=atmosphericPresentation?atmosphericPresentation.capture('Scene',g):g;
@@ -529,7 +544,9 @@
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
         overlayMs:finishedAt-renderedAt,stages:result.timings,
-        backend:result.geometryBackend,cacheReused:result.cacheReused});
+        backend:result.geometryBackend,cacheReused:result.cacheReused,
+        opticalSample:state.opticalSample,opticalStages:result.opticalStages,
+        opticalWork:result.opticalWork,fieldStats:result.fieldStats});
       var fullStatus=(result.cacheReused?'Cached optics':'Physical optics')+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
         ' fill triangles · '+result.unresolved+' unresolved · '+(result.geometryBackend||'Canvas 2D')+
@@ -552,7 +569,7 @@
       var spec=state.compareConfig&&state.compareConfig[side];
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
         occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,interactive:false,
-        geometryBackend:state.geometryBackend};
+        geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
@@ -574,7 +591,9 @@
       if(renderProfiler)renderProfiler.recordRender({viewport:side,
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
         overlayMs:finishedAt-renderedAt,stages:result.timings,
-        backend:result.geometryBackend,cacheReused:result.cacheReused});
+        backend:result.geometryBackend,cacheReused:result.cacheReused,
+        opticalSample:state.opticalSample,opticalStages:result.opticalStages,
+        opticalWork:result.opticalWork,fieldStats:result.fieldStats});
       var node=el('ModernCompareStatus'+side);
       if(node){
         node.textContent=(result.cacheReused?'Repainted (cached rays)':'Computed optics')+' · '+result.drawn+
@@ -1069,14 +1088,18 @@
     return {totalMs:finished-start,resizeMs:resized-start,
       redrawMs:finished-resized};
   }
-  function redraw(){
+  function redraw(opticalSampleMode){
+    // Ignore DOM events passed by ordinary change handlers: only the explicit
+    // profiling actions can request a forced cold optical recomputation.
+    state.opticalSample=opticalSampleMode==='cold'||opticalSampleMode==='warm'?
+      opticalSampleMode:null;
     if(activeCameraPointer)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
     model.Update();refreshLabels();
     scheduleExperimentSave();
     if(state.mode==='compare'){
-      if(!prepareCompare()){if(cameraPreview)cameraPreview.clear();return;}
+      if(!prepareCompare()){state.opticalSample=null;if(cameraPreview)cameraPreview.clear();return;}
       ['A','B'].forEach(function(side){
         var status=el('ModernCompareStatus'+side);
         if(status)status.textContent='Rendering current model '+side+'…';
@@ -1090,7 +1113,15 @@
           var b=measuredGraphRedraw(state.compareGraphs.B);
           if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
             setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:profileNow()-startedAt,A:a,B:b});
-        }finally{if(cameraPreview)cameraPreview.clear();}
+        }finally{
+          if(state.opticalSample){
+            var kind=state.opticalSample;
+            refreshPerformanceReport('Status: recording · '+kind+' sample completed. '+
+              'Check cold/warm groups below for actual cache hits or misses.');
+          }
+          state.opticalSample=null;
+          if(cameraPreview)cameraPreview.clear();
+        }
       });
     }else{
       var sceneScheduledAt=profileNow();
@@ -1101,7 +1132,15 @@
           var metrics=measuredGraphRedraw(graph);
           if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
             setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
-        }finally{if(cameraPreview)cameraPreview.clear();}
+        }finally{
+          if(state.opticalSample){
+            var kind=state.opticalSample;
+            refreshPerformanceReport('Status: recording · '+kind+' sample completed. '+
+              'Check cold/warm groups below for actual cache hits or misses.');
+          }
+          state.opticalSample=null;
+          if(cameraPreview)cameraPreview.clear();
+        }
       });
     }
   }

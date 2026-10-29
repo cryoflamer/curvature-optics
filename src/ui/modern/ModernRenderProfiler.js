@@ -13,6 +13,15 @@
     'paintMs','validationMs','projectionMs','canvasMs','decorationsMs','totalMs'];
   var MEASURES=['totalMs','rendererMs','overlayMs','queueMs','setupMs','resizeMs','redrawMs'];
   var PRESENTATION=['cpuTotalMs','cpuUploadMs','cpuSubmitMs'];
+  // These are already collected by CurvaturePhysicalSceneOptics on a fresh
+  // solve; no new ray tracing or additional solver work is performed here.
+  var OPTICAL_STAGES=['fieldSetupMs','groundGuidesMs','outlinesMs','fillsMs',
+    'assemblyMs','sceneAdoptionMs','exactSolveMs'];
+  var OPTICAL_COUNTS=['solves','hits','interpolations','fallbacks',
+    'shootEvaluations','shootRK4Calls','predictorAttempts','predictorAccepted',
+    'predictorFallbacks','warmStartAttempts','warmStartAccepted',
+    'warmStartMisses','clearGroundSteps','fullGroundEventSteps','exactSolveMs'];
+  var FIELD_COUNTS=OPTICAL_COUNTS.concat(['cells','roots','points']);
   function finiteNonnegative(value){return typeof value==='number'&&Number.isFinite(value)&&value>=0;}
   function numeric(source,fields){
     var output={};
@@ -36,7 +45,8 @@
       max[key]=sorted[sorted.length-1];
     });
     var result={count:records.length,latest:Object.assign({},latest),median:median,p95:p95,max:max};
-    ['stages','Scene','A','B'].forEach(function(key){
+    ['stages','Scene','A','B','opticalStages','opticalWork','fieldStats',
+      'ground','outlines','fills'].forEach(function(key){
       var nested=records.map(function(r){return r[key];}).filter(function(r){return r&&typeof r==='object';});
       if(nested.length)result[key]=aggregate(nested);
       if(result.latest[key])result.latest[key]=Object.assign({},result.latest[key]);
@@ -61,6 +71,19 @@
         var stages=numeric(input.stages,STAGES);
         if(Object.keys(stages).length)entry.stages=stages;
         entry.cacheReused=!!input.cacheReused;
+        entry.opticalSample=input.opticalSample==='cold'||input.opticalSample==='warm'?
+          input.opticalSample:'normal';
+        if(!entry.cacheReused){
+          var phases=numeric(input.opticalStages,OPTICAL_STAGES);
+          if(Object.keys(phases).length)entry.opticalStages=phases;
+          var work={};['ground','outlines','fills'].forEach(function(phase){
+            var counts=numeric(input.opticalWork&&input.opticalWork[phase],OPTICAL_COUNTS);
+            if(Object.keys(counts).length)work[phase]=counts;
+          });
+          if(Object.keys(work).length)entry.opticalWork=work;
+          var field=numeric(input.fieldStats,FIELD_COUNTS);
+          if(Object.keys(field).length)entry.fieldStats=field;
+        }
         if(input.backend==='WebGL2'||input.backend==='Canvas 2D')entry.backend=input.backend;
         keep(renders[input.viewport],entry);
         return Object.assign({},entry);
@@ -98,7 +121,20 @@
       setEnabled:function(value){enabled=!!value;},
       isEnabled:function(){return enabled;},
       summary:function(){
-        return {capacity:capacity,enabled:enabled,
+        // Partition requested cold/warm samples by what ACTUALLY happened;
+        // a warm request that missed the cache must never contaminate warm
+        // medians or be misrepresented as a successful cache hit.
+        var opticalSamples={};
+        Object.keys(renders).forEach(function(name){
+          var queue=renders[name];
+          opticalSamples[name]={
+            cold:aggregate(queue.filter(function(r){return r.opticalSample==='cold'&&!r.cacheReused;})),
+            warm:aggregate(queue.filter(function(r){return r.opticalSample==='warm'&&r.cacheReused;})),
+            coldUnexpectedHits:queue.filter(function(r){return r.opticalSample==='cold'&&r.cacheReused;}).length,
+            warmCacheMisses:queue.filter(function(r){return r.opticalSample==='warm'&&!r.cacheReused;}).length
+          };
+        });
+        return {capacity:capacity,enabled:enabled,opticalSamples:opticalSamples,
           presentations:{Scene:aggregate(presentations.Scene),A:aggregate(presentations.A),B:aggregate(presentations.B)},
           gpuDraws:{Scene:aggregate(gpuDraws.Scene),A:aggregate(gpuDraws.A),B:aggregate(gpuDraws.B)},
           renders:{Scene:aggregate(renders.Scene),A:aggregate(renders.A),B:aggregate(renders.B)},

@@ -122,7 +122,15 @@
     var physicalModel=Object.assign({},m,{geometryRadius:m.rEarth});
     var composed=composition.composeOpticalMain(physicalModel,globe,{physicalWorld:true});
     var composedAt=now();
-    var opticalFrame=(options.cacheSession||opticalSession).transform(composed,physicalModel,options);
+    // Explicit cold optical benchmark: discard only the camera-independent
+    // ray/composition cache for THIS viewport. No physical parameters change.
+    var session=options.cacheSession||opticalSession;
+    if(options.forceColdOptics){
+      if(!session||typeof session.clearCache!=='function')
+        throw new TypeError('Cold optical sampling requires a clearable session');
+      session.clearCache();
+    }
+    var opticalFrame=session.transform(composed,physicalModel,options);
     var opticalAt=now();
     var drawSource=options.interactive?previewComposition(opticalFrame.composition):
       {composition:opticalFrame.composition,preview:false};
