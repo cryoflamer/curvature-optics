@@ -744,3 +744,15 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Camera-drag resumption resets the shimmer phase clock; background-tab time is not accumulated into the next frame.
 - Recoverable WebGL context loss exposes the original physical Canvas and leaves undistorted annotations visible. The restored GPU program uploads the **cached physical Canvas** and resumes without rerunning the optical solver.
 - Browser script URLs were version-bumped for deterministic cache invalidation. Test procedures and caveats: `docs/ATMOSPHERIC_TURBULENCE_PERFORMANCE_138_4.md`.
+
+## #140.0 GPU Capability Diagnostics
+
+- Opt-in **Display → GPU capabilities → Check GPU** probe, implemented in
+  `src/ui/modern/ModernGpuCapabilities.js` with a thin UI bridge in ModernApp.
+- Reports WebGL/WebGL2/WebGPU availability, optional renderer information,
+  float-texture extension status, and conservative software-renderer hints.
+  Hardware acceleration is not claimed as confirmed by context creation.
+- Uses temporary canvases only and does not alter Canvas 2D physical rendering,
+  atmospheric shimmer, Scene/Compare state, or saved experiments.
+- See `docs/gpu-capability-diagnostics-1400.md` for browser verification and
+  interpretation. Automatic backend selection is intentionally not included.

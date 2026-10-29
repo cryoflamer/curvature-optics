@@ -23,6 +23,35 @@
       cursorHost:document.documentElement,
       perspective:root.CurvatureModernCameraPerspectiveWarp,
       angleMapping:root.CurvatureModernCameraInteraction.angles}):null;
+  // 140.0: diagnostics are opt-in and never select a rendering backend.
+  var gpuCapabilities=root.CurvatureModernGpuCapabilities;
+  var gpuSnapshot=null;
+  var gpuProbePending=false;
+  function bindGpuDiagnostics(){
+    if(!gpuCapabilities)return;
+    var button=document.getElementById('ModernGpuCheck');
+    if(!button)return;
+    button.addEventListener('click',function(){
+      if(gpuProbePending)return;
+      gpuProbePending=true;button.disabled=true;
+      var note=document.getElementById('ModernGpuNote');
+      if(note)note.textContent='Checking browser GPU capabilities…';
+      Promise.resolve().then(function(){return gpuCapabilities.probe({document:document,navigator:root.navigator});})
+        .then(function(report){
+          gpuSnapshot=report;
+          function show(id,value){var node=document.getElementById(id);if(node)node.textContent=String(value);}
+          show('ModernGpuWebGL',report.webgl.status);
+          show('ModernGpuWebGL2',report.webgl2.status);
+          show('ModernGpuWebGPU',report.webgpu.status);
+          var gl=report.webgl2.status==='available'?report.webgl2:report.webgl;
+          show('ModernGpuRenderer',gl.renderer||'Not disclosed');
+          show('ModernGpuFloat',gl.floatTexture||'Not checked');
+          show('ModernGpuHardware',report.hardwareAcceleration);
+          if(note)note.textContent=report.guidance;
+        }).catch(function(err){if(note)note.textContent='GPU probe failed: '+String(err&&err.message||err);})
+        .then(function(){gpuProbePending=false;button.disabled=false;});
+    });
+  }
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
   // 138.2: the shimmer is a screen-space visual approximation, NOT an
@@ -1228,6 +1257,7 @@
     bindHelp();
     bindCompareEditor();
     bindShimmerControls();
+    bindGpuDiagnostics();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
@@ -1296,5 +1326,6 @@
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
     // DevTools API remains available alongside the 138.3 Atmosphere controls.
-    getAtmosphericShimmer:function(){return atmosphericShimmer;}};
+    getAtmosphericShimmer:function(){return atmosphericShimmer;},
+    getGpuCapabilities:function(){return gpuSnapshot;}};
 }(window));

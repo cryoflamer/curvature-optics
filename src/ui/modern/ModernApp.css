@@ -202,3 +202,10 @@ button{cursor:pointer}
   padding:0;margin:5px 0 0;accent-color:#2576c9}
 .modern-shimmer-pause{width:100%;margin-top:4px}
 .modern-shimmer-pause[aria-pressed=true]{background:#e9f2ff;border-color:#85afd8}
+
+/* 140.0: read-only capability diagnostics, never alters the scene backend. */
+.modern-gpu-diagnostics{border-top:1px solid #d7e4ef;margin-top:16px;padding-top:14px}
+.modern-gpu-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#244b78;font-size:12px}
+.modern-gpu-heading button{margin:0}
+.modern-gpu-results{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:7px 9px;font-size:11px;overflow-wrap:anywhere}
+.modern-gpu-results dt{color:#536a80}.modern-gpu-results dd{margin:0;color:#173b5d;font-weight:600}

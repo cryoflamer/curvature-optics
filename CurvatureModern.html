@@ -49,6 +49,7 @@
 <script src="src/ui/modern/ModernCameraPerspectiveWarp.js"></script>
 <script src="src/ui/modern/ModernCameraDragPreview.js?v=137.4"></script>
 <script src="src/ui/modern/ModernRenderProfiler.js"></script>
+<script src="src/ui/modern/ModernGpuCapabilities.js?v=140.0"></script>
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=138.4"></script>
 <script src="src/ui/modern/ModernCompareModel.js"></script>
@@ -201,6 +202,20 @@
         <div id="ModernCompareDisplayOptions">
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
+        </div>
+        <div class="modern-gpu-diagnostics" aria-label="GPU capability diagnostics">
+          <div class="modern-gpu-heading"><strong>GPU capabilities</strong><button type="button" class="modern-ghost-button" id="ModernGpuCheck">Check GPU</button></div>
+          <p class="modern-note">Optional capability probe; no rendering backend is changed. Software/hardware classification may be unavailable.</p>
+          <dl class="modern-gpu-results" id="ModernGpuResults" aria-live="polite">
+            <dt>WebGL</dt><dd id="ModernGpuWebGL">Not checked</dd>
+            <dt>WebGL2</dt><dd id="ModernGpuWebGL2">Not checked</dd>
+            <dt>WebGPU</dt><dd id="ModernGpuWebGPU">Not checked</dd>
+            <dt>Renderer</dt><dd id="ModernGpuRenderer">Not checked</dd>
+            <dt>Float textures</dt><dd id="ModernGpuFloat">Not checked</dd>
+            <dt>Hardware acceleration</dt><dd id="ModernGpuHardware">Unverified</dd>
+            <dt>Active scene backend</dt><dd>Canvas 2D</dd>
+          </dl>
+          <p id="ModernGpuNote" class="modern-note" role="status"></p>
         </div>
       </section>
       <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
