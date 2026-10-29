@@ -1,0 +1,96 @@
+/* Cheap raster preview for the shared Scene/Compare camera gesture.
+ * Existing Canvas backing stores are already cached pixels: translate them
+ * with CSS while dragging, rather than copying or re-rendering the scene.
+ * The authoritative physical renderer replaces this approximation on release.
+ */
+(function(root,factory){
+  var api=factory();
+  if(typeof module==='object'&&module.exports)module.exports=api;
+  root.CurvatureModernCameraDragPreview=api;
+}(typeof globalThis!=='undefined'?globalThis:this,function(){
+  'use strict';
+  function create(options){
+    options=options||{};
+    var request=options.requestFrame||function(fn){return requestAnimationFrame(fn);};
+    var cancel=options.cancelFrame||function(id){cancelAnimationFrame(id);};
+    var cursorHost=options.cursorHost||null;
+    var entries=null,source=null,dx=0,dy=0,queued=false,frame=null,holding=false;
+    function cursor(on){
+      var classes=cursorHost&&cursorHost.classList;
+      if(!classes)return;
+      if(on)classes.add('modern-camera-dragging-global');
+      else classes.remove('modern-camera-dragging-global');
+    }
+    function stopFrame(){
+      if(queued){cancel(frame);queued=false;frame=null;}
+    }
+    function reset(){
+      stopFrame();cursor(false);
+      if(entries)entries.forEach(function(entry){
+        entry.canvas.style.transform=entry.transform;
+        entry.canvas.style.willChange=entry.willChange;
+        var classes=entry.canvas.classList;
+        if(classes)classes.remove('is-camera-dragging');
+      });
+      entries=null;source=null;dx=dy=0;holding=false;
+    }
+    function paint(){
+      if(!entries)return;
+      entries.forEach(function(entry){
+        // A/B may have different CSS widths. Preserve the same *fraction* of
+        // the viewport displacement so the two camera directions stay aligned.
+        var x=dx*entry.width/source.width,y=dy*entry.height/source.height;
+        entry.canvas.style.transform='translate3d('+x+'px, '+y+'px, 0)';
+      });
+    }
+    function schedule(){
+      if(queued)return;
+      queued=true;
+      frame=request(function(){queued=false;frame=null;paint();});
+    }
+    return Object.freeze({
+      begin:function(spec){
+        reset();
+        if(!spec||!Array.isArray(spec.viewports)||!spec.viewports.length)
+          throw TypeError('Camera preview viewports required');
+        var prepared=spec.viewports.map(function(view){
+          var canvas=view&&view.canvas,rect=canvas&&canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
+          if(!canvas||!canvas.style||!rect||!(rect.width>0&&rect.height>0))
+            throw RangeError('Camera preview requires visible Canvas dimensions');
+          return {name:view.name,canvas:canvas,width:rect.width,height:rect.height,
+            transform:canvas.style.transform||'',willChange:canvas.style.willChange||''};
+        });
+        var initial=prepared.find(function(view){return view.name===spec.source;});
+        if(!initial)throw RangeError('Camera preview source is not visible');
+        entries=prepared;source=initial;
+        entries.forEach(function(entry){
+          entry.canvas.style.willChange='transform';
+          if(entry.canvas.classList)entry.canvas.classList.add('is-camera-dragging');
+        });
+        cursor(true);
+      },
+      move:function(sample){
+        if(!entries||holding)return;
+        if(!sample||!Number.isFinite(sample.dx)||!Number.isFinite(sample.dy))
+          throw RangeError('Camera preview displacement must be finite');
+        dx=sample.dx;dy=sample.dy;
+        schedule();
+      },
+      // After pointerup, keep the last preview pixels visible until the
+      // authoritative Canvas draws are finished in the following RAF.
+      hold:function(sample){
+        if(!entries)return;
+        if(sample)this.move(sample);
+        stopFrame();paint();holding=true;
+        cursor(false);
+        entries.forEach(function(entry){
+          if(entry.canvas.classList)entry.canvas.classList.remove('is-camera-dragging');
+        });
+      },
+      clear:reset,
+      isActive:function(){return entries!==null;},
+      isHolding:function(){return holding;}
+    });
+  }
+  return Object.freeze({create:create});
+}));

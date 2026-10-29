@@ -46,7 +46,7 @@ test('137.1: roll is preserved, screen motion rotates with the camera, limits ar
     camera,fovRadians:Math.PI}),RangeError);
   assert.equal(drag.isActive(),false);
 });
-function harness(){
+function harness(options={}){
   const names=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill',
     'ModernOcclusionWrap','ModernSceneTab','ModernCompareTab','ModernCompareMessage',
     'ModernGraphHost','ModernCompareViews','ModernBackToScene','ModernHeight','ModernFocal',
@@ -64,9 +64,15 @@ function harness(){
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
   const draws=[],onloads=[],canvases={},graphs={};
+  const frames=new Map();let frameId=0;
+  function classes(){const set=new Set();return {add:value=>set.add(value),
+    remove:value=>set.delete(value),contains:value=>set.has(value)};}
+  function requestFrame(fn){const id=++frameId;
+    if(options.deferred)frames.set(id,fn);else fn();return id;}
+  function cancelFrame(id){frames.delete(id);}
   function makeCanvas(name,width=500,height=320){
     const host={appendChild(node){this.child=node;node.parentNode=this;}};
-    const canvas={name,parentNode:host,listeners:{},classList:{add(){}},captures:new Set(),
+    const canvas={name,parentNode:host,listeners:{},classList:classes(),style:{transform:'',willChange:''},captures:new Set(),
       getBoundingClientRect(){return {width,height};},
       addEventListener(type,fn){this.listeners[type]=fn;},
       setPointerCapture(id){this.captures.add(id);},releasePointerCapture(id){this.captures.delete(id);},
@@ -85,6 +91,7 @@ function harness(){
   const window={CurveAppClass:Model,
     CurvatureModernSceneState:require('../src/ui/modern/ModernSceneState'),
     CurvatureModernCameraInteraction:interaction,
+    CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
@@ -93,9 +100,9 @@ function harness(){
     NewGraphX3D(params){const graph={Canvas:makeCanvas('Scene'),UpdateCanvasSize(){},
       Redraw(){params.DrawFunc({Canvas:graph.Canvas});}};graphs.Scene=graph;return graph;},
     xOnLoad(fn){onloads.push(fn);},console:{error(e){throw e;}}};
-  const document={getElementById(id){return nodes.get(id)||null;},
+  const document={documentElement:{classList:classes()},getElementById(id){return nodes.get(id)||null;},
     createElement(){return {className:'',hidden:false,textContent:'',setAttribute(){}};}};
-  const ctx={window,document,requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
+  const ctx={window,document,requestAnimationFrame:requestFrame,cancelAnimationFrame:cancelFrame,
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   window.window=window;
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),ctx);
@@ -106,7 +113,9 @@ function harness(){
     graphs[name]=graph;app.registerCompareGraph(name,graph);
   }
   onloads[0]();
-  return {app,window,nodes,draws,canvases,graphs};
+  return {app,window,nodes,draws,canvases,graphs,document,
+    flush(){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn());},
+    get queuedFrames(){return frames.size;}};
 }
 test('137.1: Scene drag commits both axes once; no physical redraw on pointermove',()=>{
   const h=harness(),c=h.canvases.Scene,model=h.app.getModel();
@@ -159,4 +168,68 @@ test('137.1: cancel, wrong pointer, small click, mode change and hidden canvas d
   initial=h.draws.length;
   a.emit('pointerup',{clientX:120,clientY:120});
   assert.equal(h.draws.length,initial);
+});
+
+test('137.2: Scene preview follows both axes without a redraw, then stays until final paint',()=>{
+  const h=harness({deferred:true}),c=h.canvases.Scene;
+  h.flush();const before=h.draws.length,pan=h.app.getModel().Pan;
+  assert.equal(c.classList.contains('modern-camera-draggable'),true);
+  c.emit('pointerdown');
+  assert.equal(c.classList.contains('is-camera-dragging'),true);
+  assert.equal(h.document.documentElement.classList.contains('modern-camera-dragging-global'),true);
+  c.emit('pointermove',{clientX:100,clientY:105});
+  assert.equal(h.draws.length,before);assert.equal(h.app.getModel().Pan,pan);
+  h.flush();
+  assert.equal(c.style.transform,'translate3d(60px, 35px, 0)');
+  c.emit('pointerup',{clientX:110,clientY:110});
+  assert.equal(c.style.transform,'translate3d(70px, 40px, 0)',
+    'old image remains positioned until physical renderer completes');
+  assert.equal(h.document.documentElement.classList.contains('modern-camera-dragging-global'),false);
+  assert.equal(h.draws.length,before);
+  h.flush();assert.equal(h.draws.length,before+1);
+  assert.equal(c.style.transform,'');
+  assert.equal(c.classList.contains('is-camera-dragging'),false);
+});
+test('137.2: Compare drag from B moves both canvases with shared normalized displacement',()=>{
+  const h=harness({deferred:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const a=h.canvases.A,b=h.canvases.B;
+  const before=h.draws.length;
+  b.emit('pointerdown');b.emit('pointermove',{clientX:90,clientY:100});
+  h.flush();
+  assert.equal(a.style.transform,'translate3d(50px, 30px, 0)');
+  assert.equal(b.style.transform,'translate3d(50px, 30px, 0)');
+  assert.equal(h.draws.length,before);
+  b.emit('pointerup',{clientX:90,clientY:100});
+  assert.equal(b.style.transform,'translate3d(50px, 30px, 0)');
+  h.flush();
+  assert.equal(h.draws.length,before+2);
+  assert.equal(a.style.transform,'');assert.equal(b.style.transform,'');
+  assert.equal(h.draws.at(-1).m.Pan,h.draws.at(-2).m.Pan);
+  assert.equal(h.draws.at(-1).m.Nick,h.draws.at(-2).m.Nick);
+});
+test('137.2: cancelled drag and mode changes restore pixels and cursor without commit',()=>{
+  const h=harness({deferred:true});h.flush();
+  const c=h.canvases.Scene,initial=h.draws.length;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:90,clientY:90});h.flush();
+  c.emit('pointercancel');
+  assert.equal(c.style.transform,'');
+  assert.equal(h.document.documentElement.classList.contains('modern-camera-dragging-global'),false);
+  assert.equal(h.draws.length,initial);
+  c.emit('pointerdown');c.emit('pointermove',{clientX:100});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();
+  assert.equal(c.style.transform,'');assert.equal(h.app.getCameraInteraction().isActive(),false);
+  h.flush();
+});
+
+test('137.2: an unpainted committed frame is not cancelled by another immediate pointerdown',()=>{
+  const h=harness({deferred:true}),c=h.canvases.Scene;h.flush();
+  c.emit('pointerdown');c.emit('pointerup',{clientX:65,clientY:90});
+  assert.equal(h.app.getCameraInteraction().isActive(),false);
+  assert.match(c.style.transform,/translate3d/);
+  c.emit('pointerdown');
+  assert.equal(h.app.getCameraInteraction().isActive(),false,'a final frame must be allowed to paint first');
+  h.flush();assert.equal(c.style.transform,'');
+  c.emit('pointerdown');assert.equal(h.app.getCameraInteraction().isActive(),true);
+  c.emit('pointercancel');
 });

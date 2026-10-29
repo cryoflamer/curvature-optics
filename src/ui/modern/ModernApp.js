@@ -16,6 +16,11 @@
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
+  var cameraPreview=root.CurvatureModernCameraDragPreview?
+    root.CurvatureModernCameraDragPreview.create({
+      requestFrame:function(fn){return requestAnimationFrame(fn);},
+      cancelFrame:function(id){cancelAnimationFrame(id);},
+      cursorHost:document.documentElement}):null;
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
@@ -623,8 +628,8 @@
     if(state.timer!==null){clearTimeout(state.timer);state.timer=null;}
     if(state.frame!==null){cancelAnimationFrame(state.frame);state.frame=null;}
   }
-  // 137.1: final-frame drag. No physical redraw runs during pointermove;
-  // 137.2 will reuse this contract for a cheap, image-based live preview.
+  // 137.2: the existing raster Canvas is compositor-translated during drag.
+  // The shared physical model remains untouched until the final pointerup.
   var activeCameraPointer=null;
   function cameraViewport(view){
     if(view==='Scene')return graph;
@@ -643,11 +648,15 @@
     host.appendChild(node);
     return node;
   }
-  function cancelCameraDrag(){
-    if(!activeCameraPointer)return;
+  function cancelCameraDrag(keepPreview,sample){
     var active=activeCameraPointer;
     activeCameraPointer=null;
     if(cameraInteraction)cameraInteraction.cancel();
+    if(cameraPreview){
+      if(keepPreview===true)cameraPreview.hold(sample);
+      else cameraPreview.clear();
+    }
+    if(!active)return;
     if(active.hud)active.hud.hidden=true;
     if(active.canvas&&typeof active.canvas.releasePointerCapture==='function'){
       try{if(!active.canvas.hasPointerCapture||active.canvas.hasPointerCapture(active.id))
@@ -660,7 +669,8 @@
     var hud=cameraDragHud(canvas);
     canvas.classList&&canvas.classList.add('modern-camera-draggable');
     canvas.addEventListener('pointerdown',function(event){
-      if(activeCameraPointer||event.button!==0||event.isPrimary===false||
+      if(activeCameraPointer||(cameraPreview&&cameraPreview.isHolding())||
+        event.button!==0||event.isPrimary===false||
         (view==='Scene'&&state.mode!=='scene')||
         (view!=='Scene'&&state.mode!=='compare'))return;
       var rect=canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
@@ -670,6 +680,13 @@
           width:rect.width,height:rect.height,
           camera:{Pan:model.Pan,Nick:model.Nick,Roll:model.Roll},
           fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
+        if(cameraPreview){
+          var sides=state.mode==='compare'?['A','B']:['Scene'];
+          cameraPreview.begin({source:view,viewports:sides.map(function(side){
+            var graph=cameraViewport(side);
+            return {name:side,canvas:graph&&graph.Canvas};
+          })});
+        }
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud};
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
@@ -680,6 +697,7 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.move({x:event.clientX,y:event.clientY});
       if(Math.hypot(sample.dx,sample.dy)<2)return;
+      if(cameraPreview)cameraPreview.move(sample);
       if(hud){
         var target=root.CurvatureModernCameraInteraction.angles(sample);
         hud.textContent='Pan '+target.Pan.toFixed(4)+'°  ·  Nick '+target.Nick.toFixed(4)+'°';
@@ -692,16 +710,19 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.end({x:event.clientX,y:event.clientY});
       var changed=sample&&Math.hypot(sample.dx,sample.dy)>=2;
-      cancelCameraDrag();
+      cancelCameraDrag(changed,sample);
       if(!changed)return;
       try{
         var next=root.CurvatureModernCameraInteraction.angles(sample);
-        if(next.Pan===model.Pan&&next.Nick===model.Nick)return;
+        if(next.Pan===model.Pan&&next.Nick===model.Nick){
+          if(cameraPreview)cameraPreview.clear();
+          return;
+        }
         cancelEdits();
         if(adapter){adapter.setCamera(model,'Pan',next.Pan);adapter.setCamera(model,'Nick',next.Nick);}
         else{model.Pan=next.Pan;model.Nick=next.Nick;}
         markCustom();syncNumericInputs();redraw();
-      }catch(error){updateStatus('Camera drag: '+error.message,true);}
+      }catch(error){if(cameraPreview)cameraPreview.clear();updateStatus('Camera drag: '+error.message,true);}
       if(event.preventDefault)event.preventDefault();
     });
     canvas.addEventListener('pointercancel',function(event){
@@ -731,12 +752,13 @@
       redrawMs:finished-resized};
   }
   function redraw(){
+    if(activeCameraPointer)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
     model.Update();refreshLabels();
     scheduleExperimentSave();
     if(state.mode==='compare'){
-      if(!prepareCompare())return;
+      if(!prepareCompare()){if(cameraPreview)cameraPreview.clear();return;}
       ['A','B'].forEach(function(side){
         var status=el('ModernCompareStatus'+side);
         if(status)status.textContent='Rendering current model '+side+'…';
@@ -745,19 +767,23 @@
       state.frame=requestAnimationFrame(function(){
         state.frame=null;
         var startedAt=profileNow();
-        var a=measuredGraphRedraw(state.compareGraphs.A);
-        var b=measuredGraphRedraw(state.compareGraphs.B);
-        if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
-          setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:profileNow()-startedAt,A:a,B:b});
+        try{
+          var a=measuredGraphRedraw(state.compareGraphs.A);
+          var b=measuredGraphRedraw(state.compareGraphs.B);
+          if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
+            setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:profileNow()-startedAt,A:a,B:b});
+        }finally{if(cameraPreview)cameraPreview.clear();}
       });
     }else{
       var sceneScheduledAt=profileNow();
       state.frame=requestAnimationFrame(function(){
         state.frame=null;
         var startedAt=profileNow();
-        var metrics=measuredGraphRedraw(graph);
-        if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
-          setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
+        try{
+          var metrics=measuredGraphRedraw(graph);
+          if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
+            setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
+        }finally{if(cameraPreview)cameraPreview.clear();}
       });
     }
   }

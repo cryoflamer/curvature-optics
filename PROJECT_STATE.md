@@ -2,6 +2,18 @@
 
 Updated at compatpatch **128** (2026-10-28), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
+## Patch 137.2 — Cheap Scene/Compare camera drag preview (2026-10-29)
+
+Shared camera drag now moves already-rasterized Canvas pixels via RAF-coalesced
+CSS `translate3d` during pointermove; no geometry reconstruction, physical
+tracing, or full Canvas redraw occurs until release. Both Compare viewports
+move together with normalized displacement, independent of the initiating
+viewport. Cursor states are `grab` on hover and `grabbing` during a gesture.
+The preview is retained until the authoritative final redraw completes, then
+restored in `finally`; cancellation and mode changes restore it immediately.
+This is an approximate screen-space preview, not exact perspective remapping.
+See `docs/MODERN_CAMERA_DRAG_PREVIEW_137_2.md` for limitations and browser checks.
+
 ## Patch 137.1 — Shared final-frame camera drag (2026-10-29)
 
 Primary-pointer drag on the Canvas now controls shared Pan and Nick in Scene and
