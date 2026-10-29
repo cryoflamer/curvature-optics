@@ -15,19 +15,20 @@
   function format(summary){
     if(!summary)return 'Render profiler is unavailable.';
     var out=['CPU wall-clock timings · median / p95 (ms)',
-      'Measurements are synchronous JavaScript/Canvas times; not GPU completion times.',
+      'Measurements are JavaScript wall times, not GPU completion times; WebGL calls only submit commands.',
       'Cached optics and fresh optics must be compared in separate recordings.',''];
     ['Scene','A','B'].forEach(function(name){
       var r=summary.renders&&summary.renders[name];
       if(!r||!r.count)return;
-      out.push(name+' · '+r.count+' physical redraw(s) · latest rays '+(r.latest.cacheReused?'cached':'computed'));
+      out.push(name+' · '+r.count+' physical redraw(s) · latest rays '+
+        (r.latest.cacheReused?'cached':'computed')+' · backend '+(r.latest.backend||'Canvas 2D'));
       [['totalMs','UI total'],['rendererMs','Physical renderer'],['overlayMs','Post-render overlays']].forEach(function(pair){
         var line=metric(r,pair[0],pair[1]);if(line)out.push(line);
       });
       var stages=r.stages;
       [['composeMs','Scene composition'],['opticsMs','Optical transform'],
         ['frameMs','Frame / screen LOD'],['projectionMs','Geometry projection'],
-        ['canvasMs','Canvas 2D painting'],['decorationsMs','Canvas decorations']].forEach(function(pair){
+        ['canvasMs','Raster + Canvas presentation (CPU wall)'],['decorationsMs','Canvas decorations']].forEach(function(pair){
         var line=metric(stages,pair[0],pair[1]);if(line)out.push(line);
       });
       out.push('');

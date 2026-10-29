@@ -29,7 +29,8 @@
 <script src="src/renderers/CurvatureLegacyOrderPreview.js"></script>
 <script src="src/scene/CurvatureIndependentComposition.js"></script>
 <script src="src/geometry/CurvatureEarClip.js"></script>
-<script src="src/renderers/CurvatureFrameRenderer.js"></script>
+<script src="src/renderers/CurvatureWebGLGeometryRenderer.js?v=140.2"></script>
+<script src="src/renderers/CurvatureFrameRenderer.js?v=140.2"></script>
 <script src="src/renderers/CurvatureScreenSpaceGuides.js"></script>
 <script src="src/scene/CurvatureFullSceneDecorations.js"></script>
 <script src="src/optics/OpticalRayTracer.js"></script>
@@ -43,13 +44,13 @@
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
-<script src="src/app/CurvatureMainCanvasRenderer.js"></script>
+<script src="src/app/CurvatureMainCanvasRenderer.js?v=140.2"></script>
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js"></script>
 <script src="src/ui/modern/ModernCameraPerspectiveWarp.js"></script>
 <script src="src/ui/modern/ModernCameraDragPreview.js?v=137.4"></script>
-<script src="src/ui/modern/ModernRenderProfiler.js?v=140.1.2"></script>
-<script src="src/ui/modern/ModernPerformanceReport.js?v=140.1"></script>
+<script src="src/ui/modern/ModernRenderProfiler.js?v=140.2"></script>
+<script src="src/ui/modern/ModernPerformanceReport.js?v=140.2"></script>
 <script src="src/ui/modern/ModernGpuCapabilities.js?v=140.0"></script>
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
@@ -204,6 +205,14 @@
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
         </div>
+        <div class="modern-gpu-diagnostics" aria-label="Experimental geometry renderer">
+          <div class="modern-gpu-heading"><strong>Geometry renderer · experimental</strong></div>
+          <div class="modern-field"><label for="ModernGeometryBackend">Rendering backend</label>
+            <select id="ModernGeometryBackend"><option value="canvas">Canvas 2D · reference</option>
+              <option value="webgl2">WebGL2 · experimental</option></select></div>
+          <p class="modern-note">Optical rays and geometry are unchanged. WebGL2 rasterizes projected triangles and approximate 1px-style line quads, then copies the result into the current Canvas for annotations and shimmer. Some line joints and antialiasing may differ. No automatic performance win is assumed.</p>
+          <p id="ModernGeometryBackendStatus" class="modern-note" role="status" aria-live="polite">Active: Canvas 2D</p>
+        </div>
         <div class="modern-gpu-diagnostics" aria-label="GPU capability diagnostics">
           <div class="modern-gpu-heading"><strong>GPU capabilities</strong><button type="button" class="modern-ghost-button" id="ModernGpuCheck">Check GPU</button></div>
           <p class="modern-note">Optional capability probe; no rendering backend is changed. Software/hardware classification may be unavailable.</p>
@@ -214,7 +223,7 @@
             <dt>Renderer</dt><dd id="ModernGpuRenderer">Not checked</dd>
             <dt>Float textures</dt><dd id="ModernGpuFloat">Not checked</dd>
             <dt>Hardware acceleration</dt><dd id="ModernGpuHardware">Unverified</dd>
-            <dt>Active scene backend</dt><dd>Canvas 2D</dd>
+            <dt>Selected scene backend</dt><dd id="ModernGpuActiveBackend">Canvas 2D</dd>
           </dl>
           <p id="ModernGpuNote" class="modern-note" role="status"></p>
         </div>
@@ -256,7 +265,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.1.2"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.2"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>

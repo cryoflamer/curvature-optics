@@ -36,5 +36,5 @@ test('opt-in Display controls and standalone module are wired without replacing 
   assert.ok(html.includes('ModernGpuCapabilities.js'));
   assert.ok(app.includes('bindGpuDiagnostics();'));
   assert.ok(app.includes('getGpuCapabilities:function()'));
-  assert.ok(html.includes('Active scene backend'));
+  assert.ok(html.includes('Selected scene backend'));
 });

@@ -27,7 +27,7 @@ test('painter and zbuffer consume the same world frame through one API',()=>{
  assert.equal(painter.layerCounts[0].count,2);
  assert.equal(depth.layerCounts[0].name,'geometry');
  assert.equal(JSON.stringify(frame),original);
- assert.deepEqual(renderer.MODES,['painter','zbuffer']);
+ assert.deepEqual(renderer.MODES,['painter','zbuffer','gpu-painter']);
 });
 
 test('invalid mode, viewport, or modified frame fails before rendering',()=>{

@@ -61,6 +61,7 @@
         var stages=numeric(input.stages,STAGES);
         if(Object.keys(stages).length)entry.stages=stages;
         entry.cacheReused=!!input.cacheReused;
+        if(input.backend==='WebGL2'||input.backend==='Canvas 2D')entry.backend=input.backend;
         keep(renders[input.viewport],entry);
         return Object.assign({},entry);
       },

@@ -124,12 +124,14 @@ function buildRuntime(){
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opts){
       draws.push({height:m.Height,roll:m.Roll,viewAngle:m.ViewAngle,
         radius:m.rEarth,showModel:m.showModel,atmosphere:opts.atmosphere,
+        geometryBackend:opts.geometryBackend,
         count:[...m.NObjects],lateral:[...m.ObjSidePos]});
       return {drawn:42,fillTriangles:10,unresolved:0,timings:{totalMs:5}};
     }},
     NewGraphX3D(options){return {Redraw(){options.DrawFunc({});}};},
     xOnLoad(fn){callbacks.push(fn);},console};
-  const sandbox={window:win,document:{getElementById(id){return nodes.get(id)||null;}},
+  const sandbox={window:win,document:{getElementById(id){return nodes.get(id)||null;},
+    querySelector(selector){return selector.startsWith('#')?nodes.get(selector.slice(1))||null:null;}},
     requestAnimationFrame(fn){fn();return ++sequence;},cancelAnimationFrame(){},
     setTimeout(fn){const id=++sequence;timers.set(id,fn);return id;},
     clearTimeout(id){timers.delete(id);},console};
@@ -222,4 +224,15 @@ test('131 sample presets produce physical scenes using the real shared renderer'
     assert.ok(Number.isFinite(output.drawn));
     assert.ok(Number.isFinite(output.unresolved));
   }
+});
+
+test('140.2: Display selects experimental GPU for redraw and returns to Canvas on demand',()=>{
+  const r=buildRuntime(),app=r.win.CurvatureModernApp;
+  assert.equal(app.getGeometryBackend(),'canvas');
+  assert.equal(r.draws.at(-1).geometryBackend,'canvas');
+  r.fire('ModernGeometryBackend','change','webgl2');
+  assert.equal(app.getGeometryBackend(),'webgl2');
+  assert.equal(r.draws.at(-1).geometryBackend,'webgl2');
+  r.fire('ModernGeometryBackend','change','canvas');
+  assert.equal(r.draws.at(-1).geometryBackend,'canvas');
 });

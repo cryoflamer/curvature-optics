@@ -46,7 +46,7 @@ test('140.1: report clearly distinguishes CPU, Canvas, GPU timer and RAF wait',(
   p.recordGpuDraw({viewport:'Scene',gpuDrawMs:.75});
   const output=report.format(p.summary());
   for(const expected of ['Scene · 1 physical redraw','latest rays cached',
-    'Optical transform: 4.00 / 4.00 ms','Canvas 2D painting: 5.00',
+    'Optical transform: 4.00 / 4.00 ms','Raster + Canvas presentation (CPU wall): 5.00',
     'RAF wait (not rendering): 8.00','Canvas→texture upload call',
     'GPU draw execution (timer extension): 0.75','not GPU completion times'])
     assert.ok(output.includes(expected),expected);
@@ -127,7 +127,7 @@ test('140.1: disjoint GPU results and stale recording-generation queries are exc
   assert.equal(absent.length,0,'unsupported timer means unknown GPU time, never zero');
 });
 
-test('140.1: profiler controls and documentation are present without changing backend',()=>{
+test('140.1: profiler controls and documentation remain available with optional GPU backend',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   for(const id of ['ModernPerfRecord','ModernPerfStop','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport','ModernPerfResults'])
@@ -135,15 +135,16 @@ test('140.1: profiler controls and documentation are present without changing ba
   assert.match(html,/ModernPerformanceReport\.js/);
   assert.match(app,/bindPerformanceDiagnostics\(\);/);
   assert.match(app,/getPerformanceSnapshot:performanceSnapshot/);
-  assert.match(html,/Active scene backend<\/dt><dd>Canvas 2D/);
+  assert.match(html,/id="ModernGpuActiveBackend"/);
+  assert.match(html,/Canvas 2D · reference/);
 });
 
 
 test('140.1.2: profiler and app use matching cache-busted module versions',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/ModernRenderProfiler\.js\?v=140\.1\.2/);
-  assert.match(html,/ModernApp\.js\?v=140\.1\.2/);
+  assert.match(html,/ModernRenderProfiler\.js\?v=140\.2/);
+  assert.match(html,/ModernApp\.js\?v=140\.2/);
   assert.match(app,/typeof renderProfiler\.setEnabled!==['"]function['"]/);
   assert.match(app,/Profiler API mismatch/);
   const actual=profiler.create();

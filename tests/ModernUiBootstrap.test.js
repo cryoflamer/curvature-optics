@@ -40,7 +40,8 @@ test('Modern document is isolated from legacy control/runtime scripts and uses a
   const htmlSrcs=[...modern.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1]);
   for(const p of htmlSrcs)assert.ok(fs.existsSync(path.join(root,p.split('?')[0])),p+' missing');
   assert.ok(htmlSrcs.indexOf('src/geometry/CurvatureSurfaceGeometry.js')<htmlSrcs.indexOf('src/optics/OpticalRayTracer.js'));
-  assert.ok(htmlSrcs.indexOf('src/optics/CurvaturePhysicalSceneOptics.js')<htmlSrcs.indexOf('src/app/CurvatureMainCanvasRenderer.js'));
+  assert.ok(htmlSrcs.map(p=>p.split('?')[0]).indexOf('src/optics/CurvaturePhysicalSceneOptics.js')<
+    htmlSrcs.map(p=>p.split('?')[0]).indexOf('src/app/CurvatureMainCanvasRenderer.js'));
   assert.match(modern,/id="ModernCompareMessage" hidden/);
   assert.match(modern,/<base href="\.\/">/);
   assert.match(source('docs/modern-ui-plan.md'),/132/);

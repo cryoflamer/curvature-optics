@@ -136,7 +136,7 @@
     try {
       ctx.setTransform(1,0,0,1,0,0);
       painted=renderer.renderComposition(g.Canvas,drawComposition,camera,
-        g.Canvas.width,g.Canvas.height,{mode:'painter'});
+        g.Canvas.width,g.Canvas.height,{mode:options.geometryBackend==='webgl2'?'gpu-painter':'painter'});
       // The physical texture must not contain screen-only captions or frames:
       // those belong above the animated atmospheric presentation layer.
       if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera);
@@ -146,7 +146,9 @@
     // and snapshot construction; paintMs excludes that snapshot construction.
     var frameAt=lodFinished+painted.timings.snapshotMs;
     var paintOnlyMs=painted.timings.totalMs-painted.timings.snapshotMs;
-    return {decorationCamera:options.deferDecorations?camera:null,
+    return {geometryBackend:painted.mode==='gpu-painter'?'WebGL2':'Canvas 2D',
+      geometryFallback:painted.gpuFallback||null,
+      decorationCamera:options.deferDecorations?camera:null,
       interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
       fullGuidePrimitives:drawSource.guidePrimitives,
       guideScreenLod:guideLod?guideLod.stats:null,

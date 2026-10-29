@@ -8,7 +8,7 @@
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
+    geometryBackend:'canvas',compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -52,13 +52,37 @@
         .then(function(){gpuProbePending=false;button.disabled=false;});
     });
   }
+  // #140.2 is opt-in only: keep Canvas as reference and avoid changing
+  // experiments/URLs. An unavailable or lost WebGL2 context falls back per frame.
+  function geometryUi(id){
+    // Older test/embedded hosts may not include optional #140.2 controls.
+    return typeof document.querySelector==='function'?document.querySelector('#'+id):null;
+  }
+  function updateGeometryBackendStatus(result){
+    var status=geometryUi('ModernGeometryBackendStatus');
+    var active=geometryUi('ModernGpuActiveBackend');
+    var backend=result&&result.geometryBackend||'Canvas 2D';
+    if(status)status.textContent='Active: '+backend+
+      (result&&result.geometryFallback?' · fallback: '+result.geometryFallback:'');
+    if(active)active.textContent=backend;
+  }
+  function bindGeometryBackend(){
+    var select=geometryUi('ModernGeometryBackend');
+    if(!select)return;
+    select.value=state.geometryBackend;
+    select.addEventListener('change',function(){
+      state.geometryBackend=select.value==='webgl2'?'webgl2':'canvas';
+      updateGeometryBackendStatus(null);
+      redraw();
+    });
+  }
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
   // #140.1 exposes the already present physical stage profiler in Display.
   // WebGL timing is opt-in; CPU command submission != GPU execution.
   var profilingRecording=false;
   function performanceSnapshot(){
-    return {version:'140.1',mode:state.mode,backend:'Canvas 2D',
+    return {version:'140.2',mode:state.mode,backend:state.geometryBackend==='webgl2'?'WebGL2 experimental':'Canvas 2D',
       recordedAt:new Date().toISOString(),recording:profilingRecording,
       gpuCapabilities:gpuSnapshot,profile:renderProfiler?renderProfiler.summary():null};
   }
@@ -486,7 +510,7 @@
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false,
-        deferDecorations:separateDecorations
+        deferDecorations:separateDecorations,geometryBackend:state.geometryBackend
       });
       var renderedAt=profileNow();
       var guideGraph=atmosphericPresentation?atmosphericPresentation.capture('Scene',g):g;
@@ -496,6 +520,7 @@
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
           guideGraph.Canvas,model,result.decorationCamera);
       state.last=result;
+      updateGeometryBackendStatus(result);
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
       if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
@@ -503,10 +528,12 @@
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
-        overlayMs:finishedAt-renderedAt,stages:result.timings,cacheReused:result.cacheReused});
+        overlayMs:finishedAt-renderedAt,stages:result.timings,
+        backend:result.geometryBackend,cacheReused:result.cacheReused});
       var fullStatus=(result.cacheReused?'Cached optics':'Physical optics')+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
-        ' fill triangles · '+result.unresolved+' unresolved'+
+        ' fill triangles · '+result.unresolved+' unresolved · '+(result.geometryBackend||'Canvas 2D')+
+        (result.geometryFallback?' (GPU fallback: '+result.geometryFallback+')':'')+
         (result.timings?' · '+Math.round(result.timings.totalMs)+' ms':'');
       var statusNode=el('ModernStatus');if(statusNode)statusNode.title=fullStatus;
       updateStatus(fullStatus,result.unresolved>0);
@@ -524,7 +551,8 @@
       // A and B invoke the actual Physical renderer separately, not copied pixels.
       var spec=state.compareConfig&&state.compareConfig[side];
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
-        occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,interactive:false};
+        occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,interactive:false,
+        geometryBackend:state.geometryBackend};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
@@ -537,6 +565,7 @@
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
           guideGraph.Canvas,m,result.decorationCamera);
       state.compareLast[side]=result;
+      updateGeometryBackendStatus(result);
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
       if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
@@ -544,7 +573,8 @@
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:side,
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
-        overlayMs:finishedAt-renderedAt,stages:result.timings,cacheReused:result.cacheReused});
+        overlayMs:finishedAt-renderedAt,stages:result.timings,
+        backend:result.geometryBackend,cacheReused:result.cacheReused});
       var node=el('ModernCompareStatus'+side);
       if(node){
         node.textContent=(result.cacheReused?'Repainted (cached rays)':'Computed optics')+' · '+result.drawn+
@@ -1345,6 +1375,7 @@
     bindShimmerControls();
     bindGpuDiagnostics();
     bindPerformanceDiagnostics();
+    bindGeometryBackend();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
@@ -1415,5 +1446,6 @@
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
     // DevTools API remains available alongside the 138.3 Atmosphere controls.
     getAtmosphericShimmer:function(){return atmosphericShimmer;},
-    getGpuCapabilities:function(){return gpuSnapshot;}};
+    getGpuCapabilities:function(){return gpuSnapshot;},
+    getGeometryBackend:function(){return state.geometryBackend;}};
 }(window));

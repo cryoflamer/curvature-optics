@@ -783,3 +783,21 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   atmospheric shimmer, Scene/Compare state, or saved experiments.
 - See `docs/gpu-capability-diagnostics-1400.md` for browser verification and
   interpretation. Automatic backend selection is intentionally not included.
+
+## #140.2 — Experimental WebGL2 projected-geometry renderer
+
+- Display now selects **Canvas 2D (reference)** or **WebGL2 (experimental)**
+  manually for Scene and Compare A/B. Default remains Canvas 2D. Selection is
+  in-memory only; URLs, saved experiments and physical math are unchanged.
+- A separate WebGL2 painter consumes **the same** CPU-projected triangles and
+  stroke segments as the existing ordered painter. Lines are approximated by
+  screen-space rectangular quads; minor antialiasing/join differences are
+  expected, and there is no new optical or Z-buffer solver.
+- WebGL draws into a dedicated offscreen canvas, composited with `drawImage`
+  to the existing GraphX3DX Canvas. A true zero-copy presentation is deferred.
+  GPU errors, lost contexts and unsupported color styles fall back atomically
+  to the original Canvas painter; the UI reports the actual backend and reason.
+- Profiling now records the backend of each physical redraw and labels painting
+  as **CPU wall-clock raster/presentation time** rather than GPU execution.
+  GPU timer queries in #140.1 continue to time shimmer only.
+- Details and Opera acceptance checklist: `docs/MODERN_GPU_GEOMETRY_140_2.md`.

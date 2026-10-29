@@ -8,13 +8,14 @@
     root.CurvatureRenderFrame||(typeof require==='function'?require('../scene/CurvatureRenderFrame'):null),
     root.CurvatureZBufferPreview||(typeof require==='function'?require('./CurvatureZBufferPreview'):null),
     root.CurvatureLegacyOrderPreview||(typeof require==='function'?require('./CurvatureLegacyOrderPreview'):null),
-    root.CurvatureEarClip||(typeof require==='function'?require('../geometry/CurvatureEarClip'):null));
+    root.CurvatureEarClip||(typeof require==='function'?require('../geometry/CurvatureEarClip'):null),
+    root.CurvatureWebGLGeometryRenderer||(typeof require==='function'?require('./CurvatureWebGLGeometryRenderer'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureFrameRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(frames,zbuffer,painter,earClip){
+}(typeof globalThis!=='undefined'?globalThis:this,function(frames,zbuffer,painter,earClip,gpuPainter){
   'use strict';
   if(!frames||!zbuffer||!painter||!earClip)throw new Error('World frame and independent renderers required');
-  var MODES=['painter','zbuffer'];
+  var MODES=['painter','zbuffer','gpu-painter'];
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
   function modeFrom(options){
     var mode=(options&&options.mode)||'painter';
@@ -27,15 +28,26 @@
       throw new RangeError('Canvas viewport does not match scene frame');
     if(typeof earClip.triangulate!=='function')throw new TypeError('Ear clipping triangulator required');
     var result,geometry,built=validated;
-    if(mode==='painter'){
+    if(mode==='painter'||mode==='gpu-painter'){
       geometry=zbuffer.build(snapshot.scene,snapshot.camera,width,height,earClip.triangulate);
       built=now();
-      result=painter.draw(canvas,snapshot.scene,snapshot.camera,geometry.triangles);
+      if(mode==='gpu-painter'){
+        try {
+          if(!gpuPainter||typeof gpuPainter.draw!=='function')throw Error('GPU painter module unavailable');
+          result=gpuPainter.draw(canvas,snapshot.scene,snapshot.camera,geometry.triangles);
+        } catch(error) {
+          // Never leave the physical canvas blank if GPU is unavailable/lost.
+          result=painter.draw(canvas,snapshot.scene,snapshot.camera,geometry.triangles);
+          result.gpuFallback=String(error&&error.message||error);
+        }
+      } else result=painter.draw(canvas,snapshot.scene,snapshot.camera,geometry.triangles);
     }else{
       result=zbuffer.draw(canvas,snapshot.scene,snapshot.camera,earClip.triangulate);
     }
     var finished=now();
-    return {mode:mode,statistics:result.statistics,geometryStatistics:geometry?geometry.statistics:result.statistics,
+    return {mode:mode==='gpu-painter'&&!result.gpuFallback?'gpu-painter':
+        mode==='gpu-painter'?'painter':mode,
+      requestedMode:mode,gpuFallback:result.gpuFallback||null,statistics:result.statistics,geometryStatistics:geometry?geometry.statistics:result.statistics,
       timings:{validationMs:validated-start,snapshotMs:validated-start,
         fillGeometryMs:built-validated,canvasPaintMs:finished-built,totalMs:finished-start},
       layerCounts:snapshot.layers.map(function(layer){return {name:layer.name,role:layer.role,count:layer.count};})};
