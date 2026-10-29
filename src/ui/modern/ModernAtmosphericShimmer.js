@@ -25,19 +25,21 @@
     'uniform float uDrift;',
     'uniform float uSeed;',
     'float hash12(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}',
-    // Analytic gradient of smooth value noise: continuously varying *local*
-    // image displacement, not independent random offsets per pixel/frame.
-    'vec2 gradNoise(vec2 p){',
-    '  vec2 i=floor(p);vec2 f=fract(p);',
-    '  vec2 u=f*f*(3.0-2.0*f);vec2 du=6.0*f*(1.0-f);',
+    // Smooth displacement (rather than a gradient-of-noise displacement):
+    // high-curvature gradient noise folded the image into multiple outlines.
+    'float valueNoise(vec2 p){',
+    '  vec2 i=floor(p);vec2 f=fract(p);vec2 u=f*f*(3.0-2.0*f);',
     '  float a=hash12(i);float b=hash12(i+vec2(1.0,0.0));',
     '  float c=hash12(i+vec2(0.0,1.0));float d=hash12(i+vec2(1.0,1.0));',
-    '  return vec2(mix(b-a,d-c,u.y)*du.x,mix(c-a,d-b,u.x)*du.y);',
+    '  return mix(mix(a,b,u.x),mix(c,d,u.x),u.y)-0.5;',
     '}',
     'void main(){',
+    '  if(uStrength==0.0){gl_FragColor=texture2D(uImage,vUv);return;}',
     '  vec2 p=(gl_FragCoord.xy-vec2(uDrift,0.23*uDrift)*uTime)/uScale;',
     '  p+=vec2(uSeed,0.41*uSeed);',
-    '  vec2 wiggle=gradNoise(p)+0.30*gradNoise(2.3*p+vec2(13.7,4.2));',
+    '  vec2 wiggle=vec2(',
+    '    valueNoise(p+vec2(17.2,3.9))+0.25*valueNoise(2.2*p+vec2(5.3,31.6)),',
+    '    valueNoise(p+vec2(8.7,23.1))+0.25*valueNoise(2.2*p+vec2(41.4,2.1)));',
     '  vec2 shift=uStrength*wiggle/uResolution;',
     '  vec2 uv=clamp(vUv+shift,0.5/uResolution,1.0-0.5/uResolution);',
     '  gl_FragColor=texture2D(uImage,uv);',
@@ -150,13 +152,18 @@
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,resource.texture);
       gl.uniform2f(resource.resolution,width,height);
       gl.uniform1f(resource.time,(meta.timeMs===undefined?0:meta.timeMs)/1000);
-      gl.uniform1f(resource.strength,setting.intensity*pixelRatio);
+      // Max derivative per value-noise component is 1.5/scale;
+      // with 0.25 * 2.2 octave the 2D Jacobian norm is bounded by
+      // 4.65 * strength/scale. Keep it < 0.75 to avoid local image folding.
+      var effectiveIntensity=Math.min(setting.intensity,0.16*setting.scale);
+      gl.uniform1f(resource.strength,effectiveIntensity*pixelRatio);
       gl.uniform1f(resource.scale,setting.scale*pixelRatio);
       gl.uniform1f(resource.drift,setting.drift*pixelRatio);
       gl.uniform1f(resource.seed,setting.seed);
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
       resource.frames++;
-      stats[name]={uploads:resource.uploads,frames:resource.frames,width:width,height:height};
+      stats[name]={uploads:resource.uploads,frames:resource.frames,width:width,height:height,
+        effectiveIntensity:effectiveIntensity};
       delete errors[name];
       return true;
     }

@@ -38,8 +38,10 @@ test('138.2: finite bounded manual shimmer settings; physical C_n^2 is not faked
   assert.throws(()=>shimmer.settingsFor({scale:0}),/Invalid/);
   assert.throws(()=>shimmer.settingsFor({intensity:NaN}),/Invalid/);
   assert.throws(()=>shimmer.settingsFor({cn2:1e-14}),/Unknown/);
-  assert.match(shimmer.fragmentSource,/gradNoise/);
+  assert.match(shimmer.fragmentSource,/valueNoise/);
   assert.match(shimmer.fragmentSource,/uTime/);
+  assert.match(shimmer.fragmentSource,/if\(uStrength==0\.0\)/,
+    'zero strength must sample the original source coordinates exactly');
 });
 
 test('138.2: physics frame uploaded exactly once; animation draws without upload',()=>{
@@ -58,7 +60,9 @@ test('138.2: physics frame uploaded exactly once; animation draws without upload
   effect.configure({intensity:7,scale:20,drift:25});
   assert.equal(before.intensity,3,'getSettings returns independent copy');
   effect.present(source,target,'Scene',{capture:false,timeMs:1048});
-  assert.ok(mock.calls.some(x=>x[0]==='uniform1f'&&x[1]==='uStrength'&&x[2]===14));
+  assert.ok(mock.calls.some(x=>x[0]==='uniform1f'&&x[1]==='uStrength'&&Math.abs(x[2]-6.4)<1e-8),
+    'effective strength is bounded to avoid fold-over at small scale');
+  assert.equal(effect.getStats('Scene').effectiveIntensity,3.2);
   assert.equal(mock.calls.filter(x=>x[0]==='texImage2D').length,1);
   target.width=600;target.height=300;source.width=600;source.height=300;
   effect.present(source,target,'Scene',{capture:true,timeMs:1064});

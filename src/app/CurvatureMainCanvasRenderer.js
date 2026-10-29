@@ -137,14 +137,17 @@
       ctx.setTransform(1,0,0,1,0,0);
       painted=renderer.renderComposition(g.Canvas,drawComposition,camera,
         g.Canvas.width,g.Canvas.height,{mode:'painter'});
-      if(decorations)decorations.draw(g.Canvas,m,camera);
+      // The physical texture must not contain screen-only captions or frames:
+      // those belong above the animated atmospheric presentation layer.
+      if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera);
     } finally {ctx.restore();}
     var finishedAt=now(),stats=opticalFrame.stats;
     // Keep the old non-overlapping stage meanings: frameMs includes screen LOD
     // and snapshot construction; paintMs excludes that snapshot construction.
     var frameAt=lodFinished+painted.timings.snapshotMs;
     var paintOnlyMs=painted.timings.totalMs-painted.timings.snapshotMs;
-    return {interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
+    return {decorationCamera:options.deferDecorations?camera:null,
+      interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
       fullGuidePrimitives:drawSource.guidePrimitives,
       guideScreenLod:guideLod?guideLod.stats:null,
       timings:{totalMs:finishedAt-frameStart,composeMs:composedAt-frameStart,
@@ -177,7 +180,17 @@
         (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')+
         (stats.fillUnresolved?' '+stats.fillUnresolved+' unresolved fill triangles omitted.':'')};
   }
+  function drawPresentationDecorations(canvas,model,camera){
+    if(!decorations||!camera||!canvas)return;
+    var ctx=canvas.getContext('2d');
+    if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
+       typeof ctx.restore!=='function')throw new TypeError('Canvas 2D context required');
+    ctx.save();
+    try{ctx.setTransform(1,0,0,1,0,0);decorations.draw(canvas,model,camera);}
+    finally{ctx.restore();}
+  }
   function resetPhysicalSession(){opticalSession=optical.create();}
-  return {render:render,renderPhysical:renderPhysical,resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,
+  return {render:render,renderPhysical:renderPhysical,drawPresentationDecorations:drawPresentationDecorations,
+    resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,
     supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};
 }));

@@ -278,11 +278,18 @@
     if(state.mode!=='scene')return;
     try{
       var startedAt=profileNow();
+      var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
-        atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
+        atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false,
+        deferDecorations:separateDecorations
       });
       var renderedAt=profileNow();
       var guideGraph=atmosphericPresentation?atmosphericPresentation.capture('Scene',g):g;
+      // drawPresentationDecorations also handles WebGL-unavailable fallback:
+      // if capture failed, the original Canvas receives its captions again.
+      if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
+        root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
+          guideGraph.Canvas,model,result.decorationCamera);
       state.last=result;
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
@@ -316,9 +323,14 @@
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
+      var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled(side));
+      if(separateDecorations)options.deferDecorations=true;
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
       var renderedAt=profileNow();
       var guideGraph=atmosphericPresentation?atmosphericPresentation.capture(side,g):g;
+      if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
+        root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
+          guideGraph.Canvas,m,result.decorationCamera);
       state.compareLast[side]=result;
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
       if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);

@@ -119,3 +119,51 @@ view. Then increase intensity and check that only local image distortions
 change, not the sky color. Switch the layer off and on to confirm consistent
 compositing. Automated regression checks cover the WebGL alpha-context
 contract, unmodified shader alpha, CSS background, and zero-strength frame.
+
+## 138.2.2 — captions, camera frame and strong-distortion correction
+
+**Root cause:** `CurvatureFullSceneDecorations.draw()` previously painted the
+scene title, descriptive caption and camera-aligned frame **onto the same
+physical Canvas before it was uploaded to WebGL**. Shimmer therefore distorted
+those *presentation-only* items exactly like geometry. This is not a DOM
+capture bug, and the animation does **not** re-upload its previously distorted
+output: only `meta.capture` updates the cached texture.
+
+When the atmospheric presentation is enabled, `renderPhysical` now accepts
+`deferDecorations: true` and returns the camera snapshot needed for decorating.
+After `capture()`, `drawPresentationDecorations` paints the captions and frame
+onto the **sharp transparent guides Canvas** (with identity pixel transform).
+If WebGL setup fails and capture falls back to the original Canvas, deferred
+decorations are instead painted on that source, preserving normal behavior.
+With shimmer disabled, `renderPhysical` behaves as before.
+
+The fragment shader now uses two smooth, independent, animated value-noise
+displacement channels instead of the high-curvature **gradient** of value noise.
+To avoid fold-over/multiple apparent outlines at aggressive settings, the
+*effective* visual intensity in CSS px is capped at
+`min(configuredIntensity, 0.16 * configuredScale)`. The smoothstep value noise
+has a component derivative bound of `1.5/scale`. Adding the 0.25-strength
+2.2x octave gives a conservative two-dimensional Jacobian bound of
+`4.65 * effectiveIntensity / configuredScale <= 0.744`; this prevents local
+fold-over of the UV map before edge clamping. `getStats('Scene')` exposes
+`effectiveIntensity` for debugging. These are **visual controls**, not an
+atmospheric `C_n^2` calibration.
+
+The blue ground grid and physical horizon strokes are part of the physical
+optics image and still warp: only the title, caption, camera frame and optional
+screen-space diagnostic overlays are deliberately kept sharp.
+
+### Browser check
+
+1. Apply 138.2.2 on top of 138.2.1 and reload Modern UI with `Ctrl+F5`.
+2. Enable the layer as in 138.2 with `intensity: 0`. The source scene, title,
+   description and frame should match the disabled effect.
+3. Change to `{intensity: 12, scale: 35, drift: 25}`. Tower silhouettes and
+   blue physical ground guides should shimmer, but **text and the camera frame
+   should remain straight and readable**. There should be no violent looping
+   or multiple apparent contours around narrow tower parts.
+4. `getStats('Scene')` should show increasing `frames` with a stable `uploads`
+   count between physical redraws, and an `effectiveIntensity` of `5.6` CSS px
+   at these settings. The shader redraw must not trigger the physics renderer.
+5. Disable the layer and recalculate. The original renderer should look the
+   same as before, including captions and white sky.
