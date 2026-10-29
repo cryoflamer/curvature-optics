@@ -233,3 +233,22 @@ test('137.2: an unpainted committed frame is not cancelled by another immediate 
   c.emit('pointerdown');assert.equal(h.app.getCameraInteraction().isActive(),true);
   c.emit('pointercancel');
 });
+
+test('137.2.1: a middle click is suppressed on each camera Canvas without starting a gesture',()=>{
+  const h=harness();
+  for(const name of ['Scene','A','B']){
+    const c=h.canvases[name];
+    assert.equal(c.style.cursor,'grab',name+' has a discoverable cursor without CSS');
+    assert.equal(c.emit('mousedown',{button:1}).prevented,true);
+    assert.equal(c.emit('pointerdown',{button:1}).prevented,true);
+    assert.equal(c.emit('auxclick',{button:1}).prevented,true);
+    assert.equal(c.emit('dragstart').prevented,true);
+    assert.equal(c.emit('mousedown',{button:0}).prevented,undefined);
+    assert.equal(h.app.getCameraInteraction().isActive(),false);
+  }
+  const scene=h.canvases.Scene;
+  scene.emit('pointerdown');
+  assert.equal(scene.style.cursor,'grabbing');
+  scene.emit('pointercancel');
+  assert.equal(scene.style.cursor,'grab');
+});

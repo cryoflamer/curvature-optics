@@ -2,6 +2,19 @@
 
 Updated at compatpatch **128** (2026-10-28), after the first explicit event/visibility contract. Refresh after approximately every 5–10 patches **and** after major architectural decisions. This file is a compact handoff, not a substitute for focused patch documentation.
 
+## Patch 137.2.1 — Camera drag cursor and autoscroll protection (2026-10-29)
+
+- Camera cursors are now applied explicitly to all three canvases as well as
+  through the existing CSS classes: `grab` while idle and `grabbing` during
+  a gesture, with cursor-host cleanup and previous style restoration.
+- The Modern stylesheet URL has a version suffix to avoid stale CSS.
+- Middle-click autoscroll is prevented over the camera canvases. The circular
+  four-way-arrow cursor observed in Opera may have been Chromium autoscroll;
+  this is a strong hypothesis, **not** confirmed by a browser UI test. An
+  already active autoscroll mode must be dismissed manually with Esc.
+- Gesture preview, physics, persistence, and camera math are unchanged.
+- See `docs/MODERN_CAMERA_CURSOR_137_2_1.md`.
+
 ## Patch 137.2 — Cheap Scene/Compare camera drag preview (2026-10-29)
 
 Shared camera drag now moves already-rasterized Canvas pixels via RAF-coalesced

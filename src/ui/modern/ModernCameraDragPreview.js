@@ -9,17 +9,45 @@
   root.CurvatureModernCameraDragPreview=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  // Apply cursor state directly as well as via CSS. Older stylesheet responses
+  // can be cached independently of the Modern script in local dev servers.
+  function setCursor(target,value){
+    var style=target&&target.style;
+    if(!style)return;
+    if(typeof style.setProperty==='function')style.setProperty('cursor',value,'important');
+    else style.cursor=value;
+  }
+  function restoreCursor(target,value,priority){
+    var style=target&&target.style;
+    if(!style)return;
+    if(typeof style.removeProperty==='function'&&!value)style.removeProperty('cursor');
+    else if(typeof style.setProperty==='function')style.setProperty('cursor',value,priority||'');
+    else style.cursor=value||'';
+  }
   function create(options){
     options=options||{};
     var request=options.requestFrame||function(fn){return requestAnimationFrame(fn);};
     var cancel=options.cancelFrame||function(id){cancelAnimationFrame(id);};
     var cursorHost=options.cursorHost||null;
     var entries=null,source=null,dx=0,dy=0,queued=false,frame=null,holding=false;
+    var hostCursor=null;
     function cursor(on){
       var classes=cursorHost&&cursorHost.classList;
-      if(!classes)return;
-      if(on)classes.add('modern-camera-dragging-global');
-      else classes.remove('modern-camera-dragging-global');
+      if(on){
+        if(classes)classes.add('modern-camera-dragging-global');
+        if(cursorHost&&cursorHost.style){
+          var style=cursorHost.style;
+          hostCursor={value:style.getPropertyValue?style.getPropertyValue('cursor'):style.cursor||'',
+            priority:style.getPropertyPriority?style.getPropertyPriority('cursor'):''};
+          setCursor(cursorHost,'grabbing');
+        }
+      }else{
+        if(classes)classes.remove('modern-camera-dragging-global');
+        if(hostCursor){
+          restoreCursor(cursorHost,hostCursor.value,hostCursor.priority);
+          hostCursor=null;
+        }
+      }
     }
     function stopFrame(){
       if(queued){cancel(frame);queued=false;frame=null;}
@@ -29,6 +57,7 @@
       if(entries)entries.forEach(function(entry){
         entry.canvas.style.transform=entry.transform;
         entry.canvas.style.willChange=entry.willChange;
+        setCursor(entry.canvas,'grab');
         var classes=entry.canvas.classList;
         if(classes)classes.remove('is-camera-dragging');
       });
@@ -65,6 +94,7 @@
         entries=prepared;source=initial;
         entries.forEach(function(entry){
           entry.canvas.style.willChange='transform';
+          setCursor(entry.canvas,'grabbing');
           if(entry.canvas.classList)entry.canvas.classList.add('is-camera-dragging');
         });
         cursor(true);
@@ -85,6 +115,7 @@
         cursor(false);
         entries.forEach(function(entry){
           if(entry.canvas.classList)entry.canvas.classList.remove('is-camera-dragging');
+          setCursor(entry.canvas,'grab');
         });
       },
       clear:reset,
@@ -92,5 +123,5 @@
       isHolding:function(){return holding;}
     });
   }
-  return Object.freeze({create:create});
+  return Object.freeze({create:create,setCursor:setCursor});
 }));

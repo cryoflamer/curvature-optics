@@ -668,7 +668,23 @@
     if(!cameraInteraction||!canvas||typeof canvas.addEventListener!=='function')return;
     var hud=cameraDragHud(canvas);
     canvas.classList&&canvas.classList.add('modern-camera-draggable');
+    // The CSS link may be stale in a long-running local session. Make the
+    // effective pointer affordance explicit on each real Canvas as well.
+    if(root.CurvatureModernCameraDragPreview&&root.CurvatureModernCameraDragPreview.setCursor)
+      root.CurvatureModernCameraDragPreview.setCursor(canvas,'grab');
+    // Middle-click normally starts Chromium/Opera autoscroll (the circle with
+    // four arrows), which is not a camera-drag cursor and ignores CSS changes.
+    // Prevent it only over the interactive camera viewport.
+    function suppressMiddleClick(event){
+      if(event.button===1&&event.preventDefault)event.preventDefault();
+    }
+    canvas.addEventListener('mousedown',suppressMiddleClick);
+    canvas.addEventListener('auxclick',suppressMiddleClick);
+    canvas.addEventListener('dragstart',function(event){
+      if(event.preventDefault)event.preventDefault();
+    });
     canvas.addEventListener('pointerdown',function(event){
+      if(event.button===1){if(event.preventDefault)event.preventDefault();return;}
       if(activeCameraPointer||(cameraPreview&&cameraPreview.isHolding())||
         event.button!==0||event.isPrimary===false||
         (view==='Scene'&&state.mode!=='scene')||
