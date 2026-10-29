@@ -92,6 +92,7 @@ function harness(options={}){
     CurvatureModernSceneState:require('../src/ui/modern/ModernSceneState'),
     CurvatureModernCameraInteraction:interaction,
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
+    CurvatureModernCameraPerspectiveWarp:options.perspective?require('../src/ui/modern/ModernCameraPerspectiveWarp'):null,
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
@@ -251,4 +252,34 @@ test('137.2.1: a middle click is suppressed on each camera Canvas without starti
   assert.match(scene.style.cursor,/hand-closed\.png/);
   scene.emit('pointercancel');
   assert.match(scene.style.cursor,/hand-open\.png/);
+});
+
+
+test('137.4: real ModernApp wiring perspective-warps both Compare images without optical redraw',()=>{
+  const h=harness({deferred:true,perspective:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const a=h.canvases.A,b=h.canvases.B,before=h.draws.length;
+  a.emit('pointerdown');a.emit('pointermove',{clientX:90,clientY:100});
+  h.flush();
+  assert.match(a.style.transform,/^matrix3d\(/);
+  assert.match(b.style.transform,/^matrix3d\(/);
+  assert.equal(a.style.transformOrigin,'0 0');
+  assert.equal(h.draws.length,before);
+  a.emit('pointerup',{clientX:90,clientY:100});
+  assert.match(a.style.transform,/^matrix3d\(/);
+  h.flush();
+  assert.equal(h.draws.length,before+2);
+  assert.equal(a.style.transform,'');assert.equal(b.style.transform,'');
+  assert.equal(h.draws.at(-1).m.Pan,h.draws.at(-2).m.Pan);
+  assert.equal(h.draws.at(-1).m.Nick,h.draws.at(-2).m.Nick);
+});
+test('137.4: Scene preview with roll restores prior raster orientation on pointercancel',()=>{
+  const h=harness({deferred:true,perspective:true});h.flush();
+  h.app.getModel().Roll=25;
+  const c=h.canvases.Scene,before=h.draws.length;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:90,clientY:100});h.flush();
+  assert.match(c.style.transform,/^matrix3d\(/);
+  c.emit('pointercancel');
+  assert.equal(c.style.transform,'');assert.equal(c.style.transformOrigin,'');
+  assert.equal(h.draws.length,before);
 });

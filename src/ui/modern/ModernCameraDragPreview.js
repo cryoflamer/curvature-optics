@@ -37,6 +37,8 @@
     var request=options.requestFrame||function(fn){return requestAnimationFrame(fn);};
     var cancel=options.cancelFrame||function(id){cancelAnimationFrame(id);};
     var cursorHost=options.cursorHost||null;
+    var perspective=options.perspective||null,angleMapping=options.angleMapping||null;
+    var latestSample=null;
     var entries=null,source=null,dx=0,dy=0,queued=false,frame=null,holding=false;
     var hostCursor=null;
     function cursor(on){
@@ -64,16 +66,29 @@
       stopFrame();cursor(false);
       if(entries)entries.forEach(function(entry){
         entry.canvas.style.transform=entry.transform;
+        entry.canvas.style.transformOrigin=entry.transformOrigin;
         entry.canvas.style.willChange=entry.willChange;
         setCursor(entry.canvas,'grab');
         var classes=entry.canvas.classList;
         if(classes)classes.remove('is-camera-dragging');
       });
-      entries=null;source=null;dx=dy=0;holding=false;
+      entries=null;source=null;dx=dy=0;holding=false;latestSample=null;
     }
     function paint(){
       if(!entries)return;
+      var target=null;
+      if(perspective&&angleMapping&&latestSample){
+        try{target=angleMapping(latestSample);}catch(ignore){target=null;}
+      }
       entries.forEach(function(entry){
+        if(target&&entry.camera){
+          var projected=perspective.transform(entry,target);
+          if(projected){
+            entry.canvas.style.transformOrigin='0 0';
+            entry.canvas.style.transform=projected.css;
+            return;
+          }
+        }
         // A/B may have different CSS widths. Preserve the same *fraction* of
         // the viewport displacement so the two camera directions stay aligned.
         var x=dx*entry.width/source.width,y=dy*entry.height/source.height;
@@ -95,7 +110,10 @@
           if(!canvas||!canvas.style||!rect||!(rect.width>0&&rect.height>0))
             throw RangeError('Camera preview requires visible Canvas dimensions');
           return {name:view.name,canvas:canvas,width:rect.width,height:rect.height,
-            transform:canvas.style.transform||'',willChange:canvas.style.willChange||''};
+            transform:canvas.style.transform||'',willChange:canvas.style.willChange||'',
+          transformOrigin:canvas.style.transformOrigin||'',
+          camera:view.camera||null,fovRadians:view.fovRadians,aspectRatio:view.aspectRatio,
+          aimRadians:view.aimRadians||0};
         });
         var initial=prepared.find(function(view){return view.name===spec.source;});
         if(!initial)throw RangeError('Camera preview source is not visible');
@@ -111,7 +129,7 @@
         if(!entries||holding)return;
         if(!sample||!Number.isFinite(sample.dx)||!Number.isFinite(sample.dy))
           throw RangeError('Camera preview displacement must be finite');
-        dx=sample.dx;dy=sample.dy;
+        dx=sample.dx;dy=sample.dy;latestSample=sample;
         schedule();
       },
       // After pointerup, keep the last preview pixels visible until the

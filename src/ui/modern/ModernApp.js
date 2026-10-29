@@ -20,7 +20,9 @@
     root.CurvatureModernCameraDragPreview.create({
       requestFrame:function(fn){return requestAnimationFrame(fn);},
       cancelFrame:function(id){cancelAnimationFrame(id);},
-      cursorHost:document.documentElement}):null;
+      cursorHost:document.documentElement,
+      perspective:root.CurvatureModernCameraPerspectiveWarp,
+      angleMapping:root.CurvatureModernCameraInteraction.angles}):null;
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
@@ -700,7 +702,15 @@
           var sides=state.mode==='compare'?['A','B']:['Scene'];
           cameraPreview.begin({source:view,viewports:sides.map(function(side){
             var graph=cameraViewport(side);
-            return {name:side,canvas:graph&&graph.Canvas};
+            var physical=side==='Scene'?model:state.comparePair&&state.comparePair[side];
+            var aim=0;
+            if(physical&&root.CurvaturePhysicalCamera&&
+              typeof root.CurvaturePhysicalCamera.create==='function')
+              aim=root.CurvaturePhysicalCamera.create(physical).aimDip;
+            return {name:side,canvas:graph&&graph.Canvas,
+              camera:physical?{Pan:physical.Pan,Nick:physical.Nick,Roll:physical.Roll}:null,
+              fovRadians:physical&&physical.camViewAngle,
+              aspectRatio:physical&&physical.deviceRatio,aimRadians:aim};
           })});
         }
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud};

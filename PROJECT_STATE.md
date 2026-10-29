@@ -1,3 +1,16 @@
+## Patch 137.4 — Perspective-correct cached raster preview (2026-10-29)
+
+During Scene or Compare camera dragging, an observer-fixed projective homography
+now maps the existing Canvas pixels to the shared target Pan/Nick, including
+Roll and Scene's aim offset. The shared controller applies CSS `matrix3d`
+without re-rendering physical geometry or optics on pointermove; Compare A/B
+share the same target angle but use their own viewport dimensions. Large
+rotations behind the camera safely fall back to translation. Authoritative
+redraw on pointerup, pending-frame guard, compact PNG hand cursors, experiment
+serialization and separate A/B optical caches are unchanged. See
+`docs/MODERN_CAMERA_PERSPECTIVE_PREVIEW_137_4.md` for equations, limitations
+and browser checks.
+
 ## Patch 137.3 — Single-validated frame handoff (2026-10-29)
 
 The Modern physical Scene and Compare render paths now use an atomic

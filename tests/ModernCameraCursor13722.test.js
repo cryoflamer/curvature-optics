@@ -28,8 +28,10 @@ test('137.2.4: both raster hand cursors exist, are valid 24x24 PNGs with alpha',
   }
 });
 
-test('137.2.4: stylesheet and JS are cache-busted together',()=>{
+test('137.4: cursor stylesheet remains versioned and perspective preview JS is refreshed',()=>{
   const html=read('CurvatureModern.html');
   assert.match(html,/ModernApp\.css\?v=137\.2\.4/);
-  assert.match(html,/ModernCameraDragPreview\.js\?v=137\.2\.4/);
+  assert.match(html,/ModernCameraDragPreview\.js\?v=137\.4/);
+  assert.match(html,/ModernCameraPerspectiveWarp\.js/);
+  assert.ok(html.indexOf('ModernCameraPerspectiveWarp.js')<html.indexOf('ModernCameraDragPreview.js'));
 });
