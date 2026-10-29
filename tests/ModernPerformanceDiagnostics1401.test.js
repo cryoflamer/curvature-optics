@@ -130,7 +130,7 @@ test('140.1: disjoint GPU results and stale recording-generation queries are exc
 test('140.1: profiler controls and documentation are present without changing backend',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
-  for(const id of ['ModernPerfRecord','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport','ModernPerfResults'])
+  for(const id of ['ModernPerfRecord','ModernPerfStop','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport','ModernPerfResults'])
     assert.ok(html.includes('id="'+id+'"'),id);
   assert.match(html,/ModernPerformanceReport\.js/);
   assert.match(app,/bindPerformanceDiagnostics\(\);/);

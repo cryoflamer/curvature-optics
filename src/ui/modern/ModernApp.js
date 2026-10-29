@@ -73,31 +73,39 @@
   function bindPerformanceDiagnostics(){
     if(!root.CurvatureModernPerformanceReport)return;
     var record=document.getElementById('ModernPerfRecord');
+    var stop=document.getElementById('ModernPerfStop');
     if(!record||!renderProfiler)return;
+    if(record.__curvaturePerfBound)return;
+    record.__curvaturePerfBound=true;
     function updateRecordButton(){
-      record.textContent=profilingRecording?'Stop recording':'Start recording';
+      record.textContent='Start recording';
+      record.disabled=profilingRecording;
       record.setAttribute('aria-pressed',String(profilingRecording));
+      if(stop)stop.disabled=!profilingRecording;
     }
-    record.addEventListener('click',function(){
-      if(!profilingRecording){
+    function setRecording(active){
+      if(active===profilingRecording)return;
+      if(active){
         renderProfiler.clear();renderProfiler.setEnabled(true);
         profilingRecording=true;
         if(atmosphericShimmer)atmosphericShimmer.setProfiling(true);
-        refreshPerformanceReport('Recording. Recalculate several times, then Stop recording.');
+        refreshPerformanceReport('Status: recording. Recalculate several times, then Stop recording.');
       }else{
         if(atmosphericShimmer)atmosphericShimmer.setProfiling(false);
         renderProfiler.setEnabled(false);profilingRecording=false;
-        refreshPerformanceReport('Recording stopped. Samples are frozen until you start again.');
+        refreshPerformanceReport('Status: stopped. Samples are frozen until you start again.');
       }
       updateRecordButton();
-    });
+    }
+    record.addEventListener('click',function(){setRecording(true);});
+    if(stop)stop.addEventListener('click',function(){setRecording(false);});
     var snapshot=document.getElementById('ModernPerfSnapshot');
     if(snapshot)snapshot.addEventListener('click',function(){
       refreshPerformanceReport('Report refreshed. Median/p95 use only collected samples.');
     });
     var clear=document.getElementById('ModernPerfReset');
     if(clear)clear.addEventListener('click',function(){
-      renderProfiler.clear();refreshPerformanceReport('Samples cleared.');
+      renderProfiler.clear();refreshPerformanceReport('Status: '+(profilingRecording?'recording':'stopped')+'. Samples cleared.');
     });
     var exportButton=document.getElementById('ModernPerfExport');
     if(exportButton)exportButton.addEventListener('click',function(){

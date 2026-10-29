@@ -1,3 +1,10 @@
+## Patch 140.1.1 — Profiler recording controls (2026-10-29)
+
+Separate Start recording and Stop recording controls were provided in Display.
+The recording status is displayed explicitly, and the Stop control is enabled only while recording.
+The modern script query version was incremented to prevent stale cached event handlers.
+No optics, scene rendering backend, or GPU processing behavior was changed.
+
 ## Patch 140.1 — Scene, Canvas and WebGL render profiling (2026-10-29)
 
 The existing bounded CPU physical-stage and Scene/Compare redraw profiler is

@@ -223,11 +223,12 @@
           <p class="modern-note">Measures CPU scene composition, ray optics, projection and Canvas 2D painting. Optional WebGL measurements require Atmospheric Turbulence to be ON. No renderer is changed.</p>
           <div class="modern-performance-actions">
             <button type="button" class="modern-ghost-button" id="ModernPerfRecord" aria-pressed="false">Start recording</button>
+            <button type="button" class="modern-ghost-button" id="ModernPerfStop" disabled>Stop recording</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfSnapshot">Refresh report</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfReset">Clear</button>
             <button type="button" class="modern-ghost-button" id="ModernPerfExport">Export JSON</button>
           </div>
-          <p class="modern-note" id="ModernPerfStatus" role="status">Previous CPU redraws may be in memory. Start recording for a clean run.</p>
+          <p class="modern-note" id="ModernPerfStatus" role="status" aria-live="polite">Status: idle. Previous CPU redraws may be in memory. Start recording for a clean run.</p>
           <pre class="modern-performance-results" id="ModernPerfResults" aria-label="Render timing summary">Press Refresh report to inspect the latest samples.</pre>
           <p class="modern-note">For a fair comparison, record several runs with unchanged dimensions and settings. GPU draw time is reported only if the timer-query extension is available; WebGL call time is <em>not</em> GPU execution time.</p>
         </div>
@@ -255,7 +256,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.1.1"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>

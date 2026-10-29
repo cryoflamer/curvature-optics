@@ -87,7 +87,7 @@ test('133: real compare UI reuses independent optical caches and updates only se
     'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelEarth','ModernModelFlat','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
     'ModernCompareEyeLevel','ModernCompareHorizon',
-    'ModernPerfRecord','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport',
+    'ModernPerfRecord','ModernPerfStop','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport',
     'ModernPerfResults','ModernPerfStatus'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
@@ -166,10 +166,15 @@ test('133: real compare UI reuses independent optical caches and updates only se
   const record=nodes.get('ModernPerfRecord');
   assert.equal(record.textContent,'Start recording');
   record.listeners.click();
-  assert.equal(record.textContent,'Stop recording');
+  assert.equal(record.disabled,true);
+  assert.equal(nodes.get('ModernPerfStop').disabled,false);
+  assert.match(nodes.get('ModernPerfStatus').textContent,/Status: recording/);
   assert.equal(app.getRenderProfile().renders.Scene.count,0,'new recording starts empty');
   nodes.get('ModernRender').listeners.click();
-  record.listeners.click();
+  nodes.get('ModernPerfStop').listeners.click();
+  assert.equal(record.disabled,false);
+  assert.equal(nodes.get('ModernPerfStop').disabled,true);
+  assert.match(nodes.get('ModernPerfStatus').textContent,/Status: stopped/);
   assert.equal(app.getRenderProfile().enabled,false);
   assert.equal(app.getRenderProfile().renders.A.count,1);
   assert.equal(app.getRenderProfile().renders.B.count,1);
