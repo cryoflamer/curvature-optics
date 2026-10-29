@@ -1,3 +1,14 @@
+## Patch 137.3 — Single-validated frame handoff (2026-10-29)
+
+The Modern physical Scene and Compare render paths now use an atomic
+`renderComposition()` call: one isolated, strictly validated frame snapshot is
+passed directly to the shared painter. The public `render(frame)` still fully
+revalidates untrusted/modified frames. No physical ray, guide, camera drag or
+ordering logic was changed. Paired *synthetic Node* median handoff savings
+were ~29–35% for 3653–10000 lines, **not an Opera FPS claim**. See
+`docs/MODERN_CAMERA_REDRAW_OPTIMIZATION_137_3.md` for stage semantics,
+benchmarks and browser acceptance.
+
 ## Patch 137.2.4 — Compact hand cursors (2026-10-29)
 
 - Open/closed cursor PNG canvases were reduced to 24×24 pixels with the visible hand bounded to approximately 18×20 pixels.

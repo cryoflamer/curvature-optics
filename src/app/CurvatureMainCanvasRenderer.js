@@ -131,31 +131,34 @@
       camera,g.Canvas.width,g.Canvas.height,{tolerancePixels:0.5}):null;
     var drawComposition=guideLod?guideLod.composition:drawSource.composition;
     var lodFinished=now();
-    var frame=frames.fromComposition(drawComposition,camera,g.Canvas.width,g.Canvas.height);
-    var frameAt=now();
     var painted;
     ctx.save();
     try {
       ctx.setTransform(1,0,0,1,0,0);
-      painted=renderer.render(g.Canvas,frame,{mode:'painter'});
+      painted=renderer.renderComposition(g.Canvas,drawComposition,camera,
+        g.Canvas.width,g.Canvas.height,{mode:'painter'});
       if(decorations)decorations.draw(g.Canvas,m,camera);
     } finally {ctx.restore();}
     var finishedAt=now(),stats=opticalFrame.stats;
+    // Keep the old non-overlapping stage meanings: frameMs includes screen LOD
+    // and snapshot construction; paintMs excludes that snapshot construction.
+    var frameAt=lodFinished+painted.timings.snapshotMs;
+    var paintOnlyMs=painted.timings.totalMs-painted.timings.snapshotMs;
     return {interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
       fullGuidePrimitives:drawSource.guidePrimitives,
       guideScreenLod:guideLod?guideLod.stats:null,
       timings:{totalMs:finishedAt-frameStart,composeMs:composedAt-frameStart,
       opticsMs:opticalAt-composedAt,frameMs:frameAt-opticalAt,
       screenLodMs:lodFinished-lodStarted,snapshotOnlyMs:frameAt-lodFinished,
-      paintMs:painted.timings.totalMs,validationMs:painted.timings.validationMs,
+      paintMs:paintOnlyMs,validationMs:painted.timings.validationMs,
       projectionMs:painted.timings.fillGeometryMs,canvasMs:painted.timings.canvasPaintMs,
-      decorationsMs:finishedAt-frameAt-painted.timings.totalMs,
+      decorationsMs:finishedAt-lodFinished-painted.timings.totalMs,
       strokeCalls:painted.statistics.canvasStrokeCalls},
       mode:'physical-scene',drawn:stats.visibleSegments,
       unresolved:stats.unresolved,buildMs:stats.buildMs,
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
       physicalMetricWorld:stats.physicalMetricWorld,
-      primitiveCount:frame.scene.primitives.length,
+      primitiveCount:drawComposition.scene.primitives.length,
       layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,fieldPrism:stats.fieldPrism,
       opticalStages:stats.opticalStages,opticalWork:stats.opticalWork,
       unresolvedReasons:stats.unresolvedReasons,sampleStatuses:stats.sampleStatuses,

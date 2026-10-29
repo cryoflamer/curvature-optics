@@ -79,7 +79,11 @@
       throw new RangeError('Invalid frame viewport');
     // Strictly validate every serialized value, including style and metadata.
     var safe=clone(scene);
-    var world=contract.createScene(safe.source,safe.primitives,safe.metadata);
+    // `safe` already owns a strict deep copy of the caller's scene. Transfer
+    // that private copy to the scene contract rather than cloning every point,
+    // style and metadata a second time. adoptScene performs the SAME geometry
+    // validation as createScene; no caller-owned object is adopted.
+    var world=contract.adoptScene(safe.source,safe.primitives,safe.metadata);
     world.primitives.forEach(function(p,i){
       if(p.commandIndex!==i)throw new TypeError('Non-contiguous primitive command indices');
     });

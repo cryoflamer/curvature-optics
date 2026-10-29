@@ -16,13 +16,13 @@
   if(!frames||!zbuffer||!painter||!earClip)throw new Error('World frame and independent renderers required');
   var MODES=['painter','zbuffer'];
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
-  function render(canvas,frame,options){
-    options=options||{};
-    var mode=options.mode||'painter';
+  function modeFrom(options){
+    var mode=(options&&options.mode)||'painter';
     if(!MODES.includes(mode))throw new RangeError('Unknown world-frame renderer mode');
-    // Validate and copy before any Canvas call to prevent partial drawing of
-    // malformed data or subsequent mutation of the caller's input frame.
-    var start=now(),snapshot=frames.validate(frame),validated=now(),width=snapshot.viewport.width,height=snapshot.viewport.height;
+    return mode;
+  }
+  function paintValidated(canvas,snapshot,mode,start,validated){
+    var width=snapshot.viewport.width,height=snapshot.viewport.height;
     if(!canvas||typeof canvas.getContext!=='function'||canvas.width!==width||canvas.height!==height)
       throw new RangeError('Canvas viewport does not match scene frame');
     if(typeof earClip.triangulate!=='function')throw new TypeError('Ear clipping triangulator required');
@@ -36,8 +36,26 @@
     }
     var finished=now();
     return {mode:mode,statistics:result.statistics,geometryStatistics:geometry?geometry.statistics:result.statistics,
-      timings:{validationMs:validated-start,fillGeometryMs:built-validated,canvasPaintMs:finished-built,totalMs:finished-start},
+      timings:{validationMs:validated-start,snapshotMs:validated-start,
+        fillGeometryMs:built-validated,canvasPaintMs:finished-built,totalMs:finished-start},
       layerCounts:snapshot.layers.map(function(layer){return {name:layer.name,role:layer.role,count:layer.count};})};
   }
-  return {MODES:MODES.slice(),render:render};
+  function render(canvas,frame,options){
+    // Public frame entrypoint retains full defensive validation, including for
+    // callers who mutate an otherwise valid frame after constructing it.
+    var mode=modeFrom(options),start=now(),snapshot=frames.validate(frame);
+    return paintValidated(canvas,snapshot,mode,start,now());
+  }
+  function renderComposition(canvas,composed,camera,width,height,options){
+    // Atomic composition-to-Canvas entrypoint: fromComposition creates and
+    // validates an owned snapshot, which cannot be modified by a caller
+    // between its creation and painting. Avoid the redundant second frame
+    // serialization while retaining public render(frame) validation.
+    var mode=modeFrom(options),start=now();
+    if(!canvas||typeof canvas.getContext!=='function'||canvas.width!==width||canvas.height!==height)
+      throw new RangeError('Canvas viewport does not match scene frame');
+    var snapshot=frames.fromComposition(composed,camera,width,height);
+    return paintValidated(canvas,snapshot,mode,start,now());
+  }
+  return {MODES:MODES.slice(),render:render,renderComposition:renderComposition};
 }));

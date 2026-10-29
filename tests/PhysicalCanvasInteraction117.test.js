@@ -81,7 +81,8 @@ test('117: browser wiring coalesces only Physical and reports stage timings',()=
  assert.match(runtime,/selector\.value==='physical'\)physicalCanvasFrameScheduler\.schedule\(\)/);
  assert.match(runtime,/physicalCanvasFrameScheduler\.cancel\(\);immediateGraphRedraw\(\)/);
  assert.match(runtime,/t\.canvasMs/);
- assert.match(main,/paintMs:painted\.timings\.totalMs/);
+ assert.match(main,/paintMs:paintOnlyMs/);
+ assert.match(main,/renderer\.renderComposition\(g\.Canvas/);
 });
 
 const app=require('../src/app/CurvatureMainCanvasRenderer');
