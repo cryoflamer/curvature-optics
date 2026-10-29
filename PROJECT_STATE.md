@@ -1,3 +1,12 @@
+## Patch 138.1 — optional atmospheric presentation boundary (2026-10-29)
+
+Added disabled-by-default Scene/A/B presentation slots, capturing physical
+Canvas pixels before eye-level/horizon annotations; diagnostic overlays remain
+separate and sharp when the optional identity compositor is enabled. Camera
+CSS preview temporarily exposes the source Canvas; ray tracing and the OFF
+path remain unchanged. No shader, physical turbulence model or UI controls yet.
+See `docs/MODERN_ATMOSPHERIC_PRESENTATION_138_1.md`.
+
 ## Patch 137.4 — Perspective-correct cached raster preview (2026-10-29)
 
 During Scene or Compare camera dragging, an observer-fixed projective homography

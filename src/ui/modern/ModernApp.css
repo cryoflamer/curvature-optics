@@ -172,3 +172,7 @@ button{cursor:pointer}
   z-index:5;pointer-events:none;background:#132d45e8;color:#f5fbff;border:1px solid #7895b1;
   padding:5px 9px;border-radius:6px;font:600 11px Arial,sans-serif;white-space:nowrap}
 .modern-camera-drag-hud[hidden]{display:none}
+
+/* 138.1: reference labels must remain transparent above the scene image.
+   The general viewport Canvas background is opaque white by default. */
+.modern-graph-host canvas.modern-atmospheric-guides{background:transparent}

@@ -25,6 +25,9 @@
       angleMapping:root.CurvatureModernCameraInteraction.angles}):null;
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
+  // 138.1: disabled-by-default image presentation. No physics or UI settings change.
+  var atmosphericPresentation=root.CurvatureModernAtmosphericPresentation?
+    root.CurvatureModernAtmosphericPresentation.create({document:document}):null;
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
     root.performance.now():Date.now();}
   var persistence={ready:false,explicitUrl:false,timer:null};
@@ -253,10 +256,11 @@
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false
       });
       var renderedAt=profileNow();
+      var guideGraph=atmosphericPresentation?atmosphericPresentation.capture('Scene',g):g;
       state.last=result;
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
-      if(state.compareEyeLevel&&g&&g.Canvas)drawCompareEyeLevel(g,model);
-      if(state.compareHorizon)drawCompareHorizon('Scene',g,model,sceneOptions);
+      if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
+      if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
@@ -287,9 +291,10 @@
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
       var renderedAt=profileNow();
+      var guideGraph=atmosphericPresentation?atmosphericPresentation.capture(side,g):g;
       state.compareLast[side]=result;
-      if(state.compareEyeLevel&&g&&g.Canvas)drawCompareEyeLevel(g,m);
-      if(state.compareHorizon)drawCompareHorizon(side,g,m,options);
+      if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
+      if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:side,
@@ -658,6 +663,7 @@
       if(keepPreview===true)cameraPreview.hold(sample);
       else cameraPreview.clear();
     }
+    if(keepPreview!==true&&atmosphericPresentation)atmosphericPresentation.resume();
     if(!active)return;
     if(active.hud)active.hud.hidden=true;
     if(active.canvas&&typeof active.canvas.releasePointerCapture==='function'){
@@ -713,6 +719,7 @@
               aspectRatio:physical&&physical.deviceRatio,aimRadians:aim};
           })});
         }
+        if(atmosphericPresentation)atmosphericPresentation.suspend();
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud};
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
@@ -742,13 +749,18 @@
         var next=root.CurvatureModernCameraInteraction.angles(sample);
         if(next.Pan===model.Pan&&next.Nick===model.Nick){
           if(cameraPreview)cameraPreview.clear();
+          if(atmosphericPresentation)atmosphericPresentation.resume();
           return;
         }
         cancelEdits();
         if(adapter){adapter.setCamera(model,'Pan',next.Pan);adapter.setCamera(model,'Nick',next.Nick);}
         else{model.Pan=next.Pan;model.Nick=next.Nick;}
         markCustom();syncNumericInputs();redraw();
-      }catch(error){if(cameraPreview)cameraPreview.clear();updateStatus('Camera drag: '+error.message,true);}
+      }catch(error){
+        if(cameraPreview)cameraPreview.clear();
+        if(atmosphericPresentation)atmosphericPresentation.resume();
+        updateStatus('Camera drag: '+error.message,true);
+      }
       if(event.preventDefault)event.preventDefault();
     });
     canvas.addEventListener('pointercancel',function(event){
@@ -1142,5 +1154,7 @@
     getCompareConfig:function(){return state.compareConfig;},
     getRenderProfile:function(){return renderProfiler?renderProfiler.summary():null;},
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
-    getCameraInteraction:function(){return cameraInteraction;}};
+    getCameraInteraction:function(){return cameraInteraction;},
+    // Internal 138.1 integration seam; UI controls arrive in 138.3.
+    getAtmosphericPresentation:function(){return atmosphericPresentation;}};
 }(window));
