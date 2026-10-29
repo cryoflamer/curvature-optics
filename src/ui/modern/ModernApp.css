@@ -176,3 +176,7 @@ button{cursor:pointer}
 /* 138.1: reference labels must remain transparent above the scene image.
    The general viewport Canvas background is opaque white by default. */
 .modern-graph-host canvas.modern-atmospheric-guides{background:transparent}
+/* 138.2: a clipping box is the containing block for both GPU image and
+   undistorted annotations. Without it, absolute overlays drift on the page. */
+.modern-graph-host .JsGraph-ClippingBox{position:relative}
+.modern-graph-host canvas.modern-atmospheric-image{background:#fff}

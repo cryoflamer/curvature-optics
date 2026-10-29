@@ -25,9 +25,35 @@
       angleMapping:root.CurvatureModernCameraInteraction.angles}):null;
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
-  // 138.1: disabled-by-default image presentation. No physics or UI settings change.
+  // 138.2: the shimmer is a screen-space visual approximation, NOT an
+  // atmosphere-derived C_n^2 prediction. Disabled means no extra RAF or GPU.
+  var atmosphericShimmer=root.CurvatureModernAtmosphericShimmer?
+    root.CurvatureModernAtmosphericShimmer.create():null;
   var atmosphericPresentation=root.CurvatureModernAtmosphericPresentation?
-    root.CurvatureModernAtmosphericPresentation.create({document:document}):null;
+    root.CurvatureModernAtmosphericPresentation.create({document:document,
+      present:atmosphericShimmer?function(source,target,name,meta){
+        try{return atmosphericShimmer.present(source,target,name,meta);}
+        catch(error){atmosphericShimmer.noteError(name,error);throw error;}
+      }:undefined,
+      onRemove:atmosphericShimmer?atmosphericShimmer.dispose:undefined}):null;
+  var shimmerFrame=null;
+  function shimmerViews(){return state.mode==='compare'?['A','B']:['Scene'];}
+  function scheduleShimmerFrame(){
+    if(shimmerFrame!==null||!atmosphericShimmer||!atmosphericPresentation||document.hidden)return;
+    if(!shimmerViews().some(function(name){return atmosphericPresentation.ready(name);}))return;
+    shimmerFrame=requestAnimationFrame(function(timestamp){
+      shimmerFrame=null;
+      shimmerViews().forEach(function(name){if(atmosphericPresentation.ready(name))
+        atmosphericPresentation.frame(name,timestamp);});
+      scheduleShimmerFrame();
+    });
+  }
+  function stopShimmerFrame(){
+    if(shimmerFrame!==null){cancelAnimationFrame(shimmerFrame);shimmerFrame=null;}
+  }
+  if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',function(){
+    if(document.hidden)stopShimmerFrame();else scheduleShimmerFrame();
+  });
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
     root.performance.now():Date.now();}
   var persistence={ready:false,explicitUrl:false,timer:null};
@@ -261,6 +287,7 @@
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
       if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
+      scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
@@ -296,6 +323,7 @@
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
       if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
+      scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:side,
         totalMs:finishedAt-startedAt,rendererMs:renderedAt-startedAt,
@@ -663,7 +691,9 @@
       if(keepPreview===true)cameraPreview.hold(sample);
       else cameraPreview.clear();
     }
-    if(keepPreview!==true&&atmosphericPresentation)atmosphericPresentation.resume();
+    if(keepPreview!==true&&atmosphericPresentation){
+      atmosphericPresentation.resume();scheduleShimmerFrame();
+    }
     if(!active)return;
     if(active.hud)active.hud.hidden=true;
     if(active.canvas&&typeof active.canvas.releasePointerCapture==='function'){
@@ -719,7 +749,7 @@
               aspectRatio:physical&&physical.deviceRatio,aimRadians:aim};
           })});
         }
-        if(atmosphericPresentation)atmosphericPresentation.suspend();
+        if(atmosphericPresentation){stopShimmerFrame();atmosphericPresentation.suspend();}
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud};
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
@@ -749,7 +779,7 @@
         var next=root.CurvatureModernCameraInteraction.angles(sample);
         if(next.Pan===model.Pan&&next.Nick===model.Nick){
           if(cameraPreview)cameraPreview.clear();
-          if(atmosphericPresentation)atmosphericPresentation.resume();
+          if(atmosphericPresentation){atmosphericPresentation.resume();scheduleShimmerFrame();}
           return;
         }
         cancelEdits();
@@ -758,7 +788,7 @@
         markCustom();syncNumericInputs();redraw();
       }catch(error){
         if(cameraPreview)cameraPreview.clear();
-        if(atmosphericPresentation)atmosphericPresentation.resume();
+        if(atmosphericPresentation){atmosphericPresentation.resume();scheduleShimmerFrame();}
         updateStatus('Camera drag: '+error.message,true);
       }
       if(event.preventDefault)event.preventDefault();
@@ -1156,5 +1186,7 @@
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
     getCameraInteraction:function(){return cameraInteraction;},
     // Internal 138.1 integration seam; UI controls arrive in 138.3.
-    getAtmosphericPresentation:function(){return atmosphericPresentation;}};
+    getAtmosphericPresentation:function(){return atmosphericPresentation;},
+    // Developer-console controls for the 138.2 prototype; UI arrives in 138.3.
+    getAtmosphericShimmer:function(){return atmosphericShimmer;}};
 }(window));

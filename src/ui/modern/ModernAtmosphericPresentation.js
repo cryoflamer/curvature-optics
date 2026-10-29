@@ -14,6 +14,7 @@
   function create(options){
     options=options||{};
     var doc=options.document||(typeof document!=='undefined'?document:null);
+    var onRemove=options.onRemove||function(){};
     var present=options.present||function(source,target){
       var ctx=target.getContext('2d');
       if(!ctx)throw TypeError('Presentation Canvas 2D context unavailable');
@@ -29,6 +30,7 @@
     }
     function remove(s){
       if(s.source&&s.source.style&&s.oldOpacity!==null)s.source.style.opacity=s.oldOpacity;
+      if(s.image)onRemove(s.image);
       [s.image,s.guides].forEach(function(canvas){
         if(canvas&&canvas.parentNode)canvas.parentNode.removeChild(canvas);
       });
@@ -85,7 +87,7 @@
         align(s);
         // Presentation strategy is injectable: the 138.2 WebGL path can reuse
         // the clean source Canvas without ever running optical calculations.
-        present(source,s.image,name);
+        present(source,s.image,name,{capture:true});
         s.suspended=false;
         s.image.style.display='';s.guides.style.display='';
         source.style.opacity='0';
@@ -96,11 +98,11 @@
         return graph;
       }
     }
-    function frame(name){
+    function frame(name,timeMs){
       var s=slot(name);
       if(!s.enabled||!s.source||!s.image||s.suspended)return false;
-      present(s.source,s.image,name);
-      return true;
+      try{present(s.source,s.image,name,{capture:false,timeMs:timeMs});return true;}
+      catch(error){s.enabled=false;remove(s);return false;}
     }
     function suspend(){
       // Camera-preview CSS transform operates on the original Canvas. Expose
@@ -127,6 +129,7 @@
       // The next patch may replace the identity presenter with WebGL;
       // Scene/Compare callers need no further physics-renderer changes.
       getCanvas:function(name){return slot(name).image;},
+      ready:function(name){var s=slot(name);return !!(s.enabled&&s.image&&!s.suspended);},
       destroy:function(){names.forEach(function(name){slots[name].enabled=false;remove(slots[name]);});}});
   }
   return Object.freeze({create:create});
