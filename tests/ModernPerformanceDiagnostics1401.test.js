@@ -137,3 +137,19 @@ test('140.1: profiler controls and documentation are present without changing ba
   assert.match(app,/getPerformanceSnapshot:performanceSnapshot/);
   assert.match(html,/Active scene backend<\/dt><dd>Canvas 2D/);
 });
+
+
+test('140.1.2: profiler and app use matching cache-busted module versions',()=>{
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(html,/ModernRenderProfiler\.js\?v=140\.1\.2/);
+  assert.match(html,/ModernApp\.js\?v=140\.1\.2/);
+  assert.match(app,/typeof renderProfiler\.setEnabled!==['"]function['"]/);
+  assert.match(app,/Profiler API mismatch/);
+  const actual=profiler.create();
+  assert.equal(typeof actual.setEnabled,'function');
+  actual.setEnabled(false);
+  assert.equal(actual.summary().enabled,false);
+  actual.setEnabled(true);
+  assert.equal(actual.summary().enabled,true);
+});

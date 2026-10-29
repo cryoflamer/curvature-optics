@@ -1,3 +1,12 @@
+## Patch 140.1.2 — Render profiler API compatibility and cache refresh (2026-10-29)
+
+The browser error `renderProfiler.setEnabled is not a function` is consistent with a
+stale `ModernRenderProfiler.js` resource: unlike `ModernApp.js`, it lacked a
+versioned URL. Both entry points now carry `?v=140.1.2`. The UI checks the
+required profiler API before binding controls and shows a reload instruction
+instead of throwing if an incompatible script is still loaded. No physics,
+Canvas or GPU backend behavior was changed.
+
 ## Patch 140.1.1 — Profiler recording controls (2026-10-29)
 
 Separate Start recording and Stop recording controls were provided in Display.

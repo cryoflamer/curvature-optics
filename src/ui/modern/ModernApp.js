@@ -76,6 +76,16 @@
     var stop=document.getElementById('ModernPerfStop');
     if(!record||!renderProfiler)return;
     if(record.__curvaturePerfBound)return;
+    // App and profiler must expose the same API; a stale cached module must not
+    // cause an uncaught TypeError or pretend recording was started.
+    if(typeof renderProfiler.setEnabled!=='function'||
+       typeof renderProfiler.clear!=='function'||
+       typeof renderProfiler.summary!=='function'){
+      record.disabled=true;
+      if(stop)stop.disabled=true;
+      refreshPerformanceReport('Profiler API mismatch. Reload the page with Ctrl+F5; check ModernRenderProfiler.js?v=140.1.2.');
+      return;
+    }
     record.__curvaturePerfBound=true;
     function updateRecordButton(){
       record.textContent='Start recording';
