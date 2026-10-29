@@ -672,3 +672,11 @@ lapse-rate and ~13 s linear instability e-folding estimates with their
 assumptions; and scopes a later temperature/gradient visualization. This
 patch changes **documentation only**; no atmospheric solver or UI has been
 implemented. For Vacuum, thermodynamic diagnostics are not applicable.
+
+### Camera drag cursor portability — patch 137.2.2
+
+PNG-backed open/closed hand cursors now replace browser-native `grab` and
+`grabbing` glyphs in the Modern Scene and Compare viewports, with native
+cursor keywords retained as fallbacks. See
+`docs/MODERN_CAMERA_CURSOR_137_2_2.md`. Camera interaction, physics and
+preview transforms are unchanged; Opera appearance requires manual verification.

@@ -238,7 +238,7 @@ test('137.2.1: a middle click is suppressed on each camera Canvas without starti
   const h=harness();
   for(const name of ['Scene','A','B']){
     const c=h.canvases[name];
-    assert.equal(c.style.cursor,'grab',name+' has a discoverable cursor without CSS');
+    assert.match(c.style.cursor,/hand-open\.png/,name+' has a custom idle cursor without CSS');
     assert.equal(c.emit('mousedown',{button:1}).prevented,true);
     assert.equal(c.emit('pointerdown',{button:1}).prevented,true);
     assert.equal(c.emit('auxclick',{button:1}).prevented,true);
@@ -248,7 +248,7 @@ test('137.2.1: a middle click is suppressed on each camera Canvas without starti
   }
   const scene=h.canvases.Scene;
   scene.emit('pointerdown');
-  assert.equal(scene.style.cursor,'grabbing');
+  assert.match(scene.style.cursor,/hand-closed\.png/);
   scene.emit('pointercancel');
-  assert.equal(scene.style.cursor,'grab');
+  assert.match(scene.style.cursor,/hand-open\.png/);
 });

@@ -38,7 +38,7 @@ test('Modern document is isolated from legacy control/runtime scripts and uses a
   assert.match(modern,/src\/ui\/modern\/ModernApp\.js/);
   assert.doesNotMatch(modern,/src\/ui\/ControlPanelX\.js|src\/app\/CurvatureAppRuntime\.js|src\/animation\/CurvatureDemos\.js|src\/legacy\/CurvatureLegacyDrawing\.js/);
   const htmlSrcs=[...modern.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1]);
-  for(const p of htmlSrcs)assert.ok(fs.existsSync(path.join(root,p)),p+' missing');
+  for(const p of htmlSrcs)assert.ok(fs.existsSync(path.join(root,p.split('?')[0])),p+' missing');
   assert.ok(htmlSrcs.indexOf('src/geometry/CurvatureSurfaceGeometry.js')<htmlSrcs.indexOf('src/optics/OpticalRayTracer.js'));
   assert.ok(htmlSrcs.indexOf('src/optics/CurvaturePhysicalSceneOptics.js')<htmlSrcs.indexOf('src/app/CurvatureMainCanvasRenderer.js'));
   assert.match(modern,/id="ModernCompareMessage" hidden/);

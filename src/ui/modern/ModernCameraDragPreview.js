@@ -9,13 +9,21 @@
   root.CurvatureModernCameraDragPreview=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  // Use PNG cursors because some Opera/Windows installations render native
+  // grab/grabbing with a generic four-way scroll glyph. The last keyword is
+  // a native fallback if an image fails to load.
+  var cameraCursors=Object.freeze({
+    grab:'url("src/ui/modern/cursors/hand-open.png") 16 8, grab',
+    grabbing:'url("src/ui/modern/cursors/hand-closed.png") 23 20, grabbing'
+  });
+  function cursorValue(value){return cameraCursors[value]||value;}
   // Apply cursor state directly as well as via CSS. Older stylesheet responses
   // can be cached independently of the Modern script in local dev servers.
   function setCursor(target,value){
     var style=target&&target.style;
     if(!style)return;
-    if(typeof style.setProperty==='function')style.setProperty('cursor',value,'important');
-    else style.cursor=value;
+    if(typeof style.setProperty==='function')style.setProperty('cursor',cursorValue(value),'important');
+    else style.cursor=cursorValue(value);
   }
   function restoreCursor(target,value,priority){
     var style=target&&target.style;
@@ -123,5 +131,5 @@
       isHolding:function(){return holding;}
     });
   }
-  return Object.freeze({create:create,setCursor:setCursor});
+  return Object.freeze({create:create,setCursor:setCursor,cursorValue:cursorValue});
 }));

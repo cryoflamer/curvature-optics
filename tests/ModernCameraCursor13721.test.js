@@ -23,14 +23,14 @@ function viewport(name){return {name,canvas:{style:style(),classList:classes(),
 test('137.2.1: cursor is assigned directly with important priority, even if CSS is stale',()=>{
   const canvas={style:style('auto')};
   preview.setCursor(canvas,'grab');
-  assert.equal(canvas.style.cursor,'grab');
+  assert.equal(canvas.style.cursor,preview.cursorValue('grab'));
   assert.equal(canvas.style.getPropertyPriority('cursor'),'important');
   preview.setCursor(canvas,'grabbing');
-  assert.equal(canvas.style.cursor,'grabbing');
+  assert.equal(canvas.style.cursor,preview.cursorValue('grabbing'));
   assert.equal(canvas.style.getPropertyPriority('cursor'),'important');
   const oldShim={style:{}};
   preview.setCursor(oldShim,'grab');
-  assert.equal(oldShim.style.cursor,'grab');
+  assert.equal(oldShim.style.cursor,preview.cursorValue('grab'));
 });
 test('137.2.1: Scene and Compare cursors follow begin/hold/cancel and host style is restored',()=>{
   const host={style:style('crosshair','important'),classList:classes()};
@@ -38,16 +38,16 @@ test('137.2.1: Scene and Compare cursors follow begin/hold/cancel and host style
   const handler=preview.create({cursorHost:host,requestFrame:fn=>{fn();return 1;},cancelFrame(){}});
   handler.begin({source:'B',viewports:[a,b]});
   for(const view of [a,b]){
-    assert.equal(view.canvas.style.cursor,'grabbing');
+    assert.equal(view.canvas.style.cursor,preview.cursorValue('grabbing'));
     assert.equal(view.canvas.style.getPropertyPriority('cursor'),'important');
   }
-  assert.equal(host.style.cursor,'grabbing');
+  assert.equal(host.style.cursor,preview.cursorValue('grabbing'));
   handler.hold({dx:20,dy:10});
-  for(const view of [a,b])assert.equal(view.canvas.style.cursor,'grab');
+  for(const view of [a,b])assert.equal(view.canvas.style.cursor,preview.cursorValue('grab'));
   assert.equal(host.style.cursor,'crosshair');
   assert.equal(host.style.getPropertyPriority('cursor'),'important');
   handler.clear();
-  for(const view of [a,b])assert.equal(view.canvas.style.cursor,'grab');
+  for(const view of [a,b])assert.equal(view.canvas.style.cursor,preview.cursorValue('grab'));
   handler.begin({source:'A',viewports:[a,b]});
   handler.clear();
   assert.equal(host.style.cursor,'crosshair');
@@ -57,14 +57,14 @@ test('137.2.1: absent host cursor is restored without leaving an inline override
   const host={style:style(),classList:classes()},scene=viewport('Scene');
   const handler=preview.create({cursorHost:host});
   handler.begin({source:'Scene',viewports:[scene]});
-  assert.equal(host.style.cursor,'grabbing');
+  assert.equal(host.style.cursor,preview.cursorValue('grabbing'));
   handler.clear();
   assert.equal(host.style.cursor,'');
   assert.equal(host.style.getPropertyPriority('cursor'),'');
 });
 test('137.2.1: Modern stylesheet is cache-busted and declares both camera cursor states',()=>{
-  assert.match(read('CurvatureModern.html'),/ModernApp\.css\?v=137\.2\.1/);
+  assert.match(read('CurvatureModern.html'),/ModernApp\.css\?v=137\.2\.2/);
   const css=read('src/ui/modern/ModernApp.css');
-  assert.match(css,/\.modern-camera-draggable\s*\{cursor:grab!important/);
-  assert.match(css,/\.modern-camera-draggable\.is-camera-dragging\s*\{cursor:grabbing!important/);
+  assert.match(css,/\.modern-camera-draggable\s*\{cursor:url\(/);
+  assert.match(css,/\.modern-camera-draggable\.is-camera-dragging\s*\{cursor:url\(/);
 });
