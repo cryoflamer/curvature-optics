@@ -96,7 +96,7 @@ test('138.3: separate accessible Atmosphere controls for Scene and selected Comp
   }
   assert.match(html,/visual approximation, not Cₙ²-calibrated/);
   assert.match(read('src/ui/modern/ModernApp.css'),/modern-shimmer-switch input\[type=checkbox\]/);
-  assert.match(html,/ModernApp\.css\?v=138\.3/);
+  assert.match(html,/ModernApp\.css\?v=(?:138\.3|140\.1)/);
 });
 
 test('138.3: toggling captures once; range updates and Pause/Resume never rerender physics',()=>{

@@ -54,10 +54,78 @@
   }
   var renderProfiler=root.CurvatureModernRenderProfiler?
     root.CurvatureModernRenderProfiler.create():null;
+  // #140.1 exposes the already present physical stage profiler in Display.
+  // WebGL timing is opt-in; CPU command submission != GPU execution.
+  var profilingRecording=false;
+  function performanceSnapshot(){
+    return {version:'140.1',mode:state.mode,backend:'Canvas 2D',
+      recordedAt:new Date().toISOString(),recording:profilingRecording,
+      gpuCapabilities:gpuSnapshot,profile:renderProfiler?renderProfiler.summary():null};
+  }
+  function refreshPerformanceReport(note){
+    var report=root.CurvatureModernPerformanceReport;
+    var target=document.getElementById('ModernPerfResults');
+    if(target)target.textContent=report&&renderProfiler?
+      report.format(renderProfiler.summary()):'Render performance diagnostics unavailable.';
+    var status=document.getElementById('ModernPerfStatus');
+    if(status&&note)status.textContent=note;
+  }
+  function bindPerformanceDiagnostics(){
+    if(!root.CurvatureModernPerformanceReport)return;
+    var record=document.getElementById('ModernPerfRecord');
+    if(!record||!renderProfiler)return;
+    function updateRecordButton(){
+      record.textContent=profilingRecording?'Stop recording':'Start recording';
+      record.setAttribute('aria-pressed',String(profilingRecording));
+    }
+    record.addEventListener('click',function(){
+      if(!profilingRecording){
+        renderProfiler.clear();renderProfiler.setEnabled(true);
+        profilingRecording=true;
+        if(atmosphericShimmer)atmosphericShimmer.setProfiling(true);
+        refreshPerformanceReport('Recording. Recalculate several times, then Stop recording.');
+      }else{
+        if(atmosphericShimmer)atmosphericShimmer.setProfiling(false);
+        renderProfiler.setEnabled(false);profilingRecording=false;
+        refreshPerformanceReport('Recording stopped. Samples are frozen until you start again.');
+      }
+      updateRecordButton();
+    });
+    var snapshot=document.getElementById('ModernPerfSnapshot');
+    if(snapshot)snapshot.addEventListener('click',function(){
+      refreshPerformanceReport('Report refreshed. Median/p95 use only collected samples.');
+    });
+    var clear=document.getElementById('ModernPerfReset');
+    if(clear)clear.addEventListener('click',function(){
+      renderProfiler.clear();refreshPerformanceReport('Samples cleared.');
+    });
+    var exportButton=document.getElementById('ModernPerfExport');
+    if(exportButton)exportButton.addEventListener('click',function(){
+      if(!root.Blob||!root.URL||!root.URL.createObjectURL){
+        refreshPerformanceReport('JSON export is unavailable in this browser.');return;
+      }
+      var blob=new root.Blob([JSON.stringify(performanceSnapshot(),null,2)],{type:'application/json'});
+      var url=root.URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download='curvature-render-profile-140.1.json';
+      try{link.click();}finally{
+        // Keep the blob URL alive until the browser has dispatched the click.
+        if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);
+      }
+    });
+    updateRecordButton();
+  }
+
   // 138.2: the shimmer is a screen-space visual approximation, NOT an
   // atmosphere-derived C_n^2 prediction. Disabled means no extra RAF or GPU.
   var atmosphericShimmer=root.CurvatureModernAtmosphericShimmer?
     root.CurvatureModernAtmosphericShimmer.create({
+      onProfile:function(name,entry){
+        if(renderProfiler)renderProfiler.recordPresentation(Object.assign({viewport:name},entry));
+      },
+      onGpuTime:function(name,entry){
+        if(renderProfiler)renderProfiler.recordGpuDraw(Object.assign({viewport:name},entry));
+      },
       onContextLost:function(name){
         if(atmosphericPresentation)atmosphericPresentation.contextLost(name);
         stopShimmerFrame();
@@ -1258,6 +1326,7 @@
     bindCompareEditor();
     bindShimmerControls();
     bindGpuDiagnostics();
+    bindPerformanceDiagnostics();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
@@ -1322,6 +1391,7 @@
     getCompareConfig:function(){return state.compareConfig;},
     getRenderProfile:function(){return renderProfiler?renderProfiler.summary():null;},
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
+    getPerformanceSnapshot:performanceSnapshot,
     getCameraInteraction:function(){return cameraInteraction;},
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},

@@ -86,16 +86,21 @@ test('133: real compare UI reuses independent optical caches and updates only se
     'ModernSceneSettings','ModernCompareSettings','ModernPairPreset','ModernModelTabA',
     'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelEarth','ModernModelFlat','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
-    'ModernCompareEyeLevel','ModernCompareHorizon'];
+    'ModernCompareEyeLevel','ModernCompareHorizon',
+    'ModernPerfRecord','ModernPerfSnapshot','ModernPerfReset','ModernPerfExport',
+    'ModernPerfResults','ModernPerfStatus'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
-  const renders=[],callbacks=[],sessions=[];
+  const renders=[],callbacks=[],sessions=[],exports=[];
   function Model(){Object.assign(this,model());}
   const ctx={window:{CurveAppClass:Model,
     CurvatureModernSceneState:null,
     CurvatureModernCameraInteraction:require('../src/ui/modern/ModernCameraInteraction'),
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
+    CurvatureModernPerformanceReport:require('../src/ui/modern/ModernPerformanceReport'),
+    Blob:globalThis.Blob,URL:{createObjectURL(blob){exports.push(blob);return 'blob:test';},
+      revokeObjectURL(){}},
     CurvatureModernCompareModel:compare132,
     CurvatureModernCompareState:compare133,
     CurvaturePhysicalSceneOptics:{create(){const value={id:sessions.length+1};sessions.push(value);return value;}},
@@ -104,7 +109,8 @@ test('133: real compare UI reuses independent optical caches and updates only se
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'scene'});}};},
     xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}},
-    document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
+    document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);},
+      createElement(name){assert.equal(name,'a');return {click(){this.clicked=true;}};}},
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   ctx.window.window=ctx.window;
@@ -156,4 +162,23 @@ test('133: real compare UI reuses independent optical caches and updates only se
   assert.ok(profile.batches.compare.latest.B);
   app.resetRenderProfile();
   assert.equal(app.getRenderProfile().renders.Scene.count,0);
+  // 140.1: UI measurement is opt-in, bounded and independent of the model.
+  const record=nodes.get('ModernPerfRecord');
+  assert.equal(record.textContent,'Start recording');
+  record.listeners.click();
+  assert.equal(record.textContent,'Stop recording');
+  assert.equal(app.getRenderProfile().renders.Scene.count,0,'new recording starts empty');
+  nodes.get('ModernRender').listeners.click();
+  record.listeners.click();
+  assert.equal(app.getRenderProfile().enabled,false);
+  assert.equal(app.getRenderProfile().renders.A.count,1);
+  assert.equal(app.getRenderProfile().renders.B.count,1);
+  nodes.get('ModernPerfSnapshot').listeners.click();
+  assert.match(nodes.get('ModernPerfResults').textContent,/A · 1 physical redraw/);
+  assert.match(nodes.get('ModernPerfResults').textContent,/not GPU completion times/);
+  nodes.get('ModernPerfExport').listeners.click();
+  assert.equal(exports.length,1,'a standalone JSON snapshot is exported');
+  nodes.get('ModernPerfReset').listeners.click();
+  assert.equal(app.getRenderProfile().renders.Scene.count,0);
+
 });

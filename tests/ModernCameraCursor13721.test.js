@@ -63,7 +63,7 @@ test('137.2.1: absent host cursor is restored without leaving an inline override
   assert.equal(host.style.getPropertyPriority('cursor'),'');
 });
 test('137.2.1: Modern stylesheet is cache-busted and declares both camera cursor states',()=>{
-  assert.match(read('CurvatureModern.html'),/ModernApp\.css\?v=(?:137\.2\.4|138\.3)/);
+  assert.match(read('CurvatureModern.html'),/ModernApp\.css\?v=(?:137\.2\.4|138\.3|140\.1)/);
   const css=read('src/ui/modern/ModernApp.css');
   assert.match(css,/\.modern-camera-draggable\s*\{cursor:url\(/);
   assert.match(css,/\.modern-camera-draggable\.is-camera-dragging\s*\{cursor:url\(/);

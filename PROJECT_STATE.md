@@ -1,3 +1,14 @@
+## Patch 140.1 — Scene, Canvas and WebGL render profiling (2026-10-29)
+
+The existing bounded CPU physical-stage and Scene/Compare redraw profiler is
+now exposed in Display with Start/Stop recording, a median/p95 summary, Clear,
+and JSON export. Opt-in Atmospheric Shimmer instrumentation records JavaScript
+texture-upload/command-submission wall time, and, *only* when supported, nonblocking
+`EXT_disjoint_timer_query` WebGL GPU draw execution. Stale-generation/disjoint
+queries are excluded; absent GPU timings are reported as unknown. The scene
+backend remains Canvas 2D and optics/painter output is unchanged. See
+`docs/MODERN_RENDER_PERFORMANCE_140_1.md` for browser protocol and caveats.
+
 ## Patch 138.3 — UI controls for atmospheric turbulence (2026-10-29)
 
 Added visual-only Atmospheric Turbulence switches, Intensity/Eddy scale/Drift

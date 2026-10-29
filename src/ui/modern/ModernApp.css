@@ -209,3 +209,11 @@ button{cursor:pointer}
 .modern-gpu-heading button{margin:0}
 .modern-gpu-results{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:7px 9px;font-size:11px;overflow-wrap:anywhere}
 .modern-gpu-results dt{color:#536a80}.modern-gpu-results dd{margin:0;color:#173b5d;font-weight:600}
+
+/* 140.1: readable, exportable profiler; no rendering backend selection. */
+.modern-performance-actions{display:flex;flex-wrap:wrap;gap:6px;margin:11px 0}
+.modern-performance-actions button{margin:0;font-size:11px;padding:7px 9px}
+.modern-performance-actions button[aria-pressed=true]{border-color:#4794d4;background:#e7f3ff}
+.modern-performance-results{font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;
+  white-space:pre;overflow:auto;max-height:360px;max-width:100%;padding:10px;
+  border:1px solid #d7e4ef;border-radius:7px;background:#f7faff;color:#29415e}

@@ -47,6 +47,7 @@
     '}'
   ].join('\n');
   var DEFAULTS=Object.freeze({intensity:3,scale:54,drift:18,seed:0});
+  function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
   function settingsFor(input,current){
     var next=Object.assign({},current||DEFAULTS);
     if(!input)return next;
@@ -106,7 +107,8 @@
         scale:gl.getUniformLocation(program,'uScale'),
         drift:gl.getUniformLocation(program,'uDrift'),
         seed:gl.getUniformLocation(program,'uSeed'),
-        uploaded:false,lost:false,uploads:0,frames:0};
+        uploaded:false,lost:false,uploads:0,frames:0,
+        timerChecked:false,timerExtension:null,pendingGpuQuery:null};
     }catch(error){
       if(texture)gl.deleteTexture(texture);
       if(buffer)gl.deleteBuffer(buffer);
@@ -124,6 +126,51 @@
     var clocks=Object.create(null);
     var stats=Object.create(null);
     var errors=Object.create(null);
+    // Only explicit diagnostics turn on JavaScript timing and GPU timer queries.
+    // No gl.finish/readPixels: queries are polled asynchronously on future frames.
+    var profiling=false,profileGeneration=0;
+    function emit(kind,name,entry){
+      var callback=kind==='gpu'?options.onGpuTime:options.onProfile;
+      if(typeof callback==='function')try{callback(name,entry);}catch(_error){}
+    }
+    function gpuTimer(resource,name){
+      if(!profiling)return null;
+      if(!resource.timerChecked){
+        resource.timerChecked=true;
+        try{resource.timerExtension=resource.gl.getExtension&&
+          resource.gl.getExtension('EXT_disjoint_timer_query');}catch(_error){}
+      }
+      var ext=resource.timerExtension;
+      if(!ext)return null;
+      var pending=resource.pendingGpuQuery,gl=resource.gl;
+      if(pending){
+        try{
+          var available=ext.getQueryObjectEXT(pending,ext.QUERY_RESULT_AVAILABLE_EXT);
+          if(available){
+            var disjoint=gl.getParameter(ext.GPU_DISJOINT_EXT);
+            if(!disjoint&&resource.pendingGeneration===profileGeneration){
+              var ns=ext.getQueryObjectEXT(pending,ext.QUERY_RESULT_EXT);
+              if(Number.isFinite(ns)&&ns>=0)emit('gpu',name,{gpuDrawMs:ns/1e6});
+            }
+            ext.deleteQueryEXT(pending);resource.pendingGpuQuery=null;
+          }
+        }catch(_error){releaseQuery(resource);resource.timerExtension=null;return null;}
+      }
+      if(resource.pendingGpuQuery)return null;
+      try{
+        var query=ext.createQueryEXT();
+        if(!query)return null;
+        ext.beginQueryEXT(ext.TIME_ELAPSED_EXT,query);
+        resource.pendingGpuQuery=query;resource.pendingGeneration=profileGeneration;
+        return ext;
+      }catch(_error){releaseQuery(resource);resource.timerExtension=null;return null;}
+    }
+    function releaseQuery(resource){
+      if(resource.pendingGpuQuery&&resource.timerExtension){
+        try{resource.timerExtension.deleteQueryEXT(resource.pendingGpuQuery);}catch(_error){}
+      }
+      resource.pendingGpuQuery=null;
+    }
     function viewSetting(name){return name&&viewSettings[name]||setting;}
     function resetClock(name){
       // A paused/hidden viewport keeps its phase; its first resumed frame does
@@ -167,7 +214,7 @@
       // Context loss is recoverable: do not tear down the physical scene or
       // permanently disable the overlay while Chromium restores the GPU.
       if(resource.lost)return false;
-      var gl=resource.gl;
+      var gl=resource.gl,startedAt=profiling?now():0,uploaded=false,uploadedAt=startedAt;
       // Upload on a new physical capture, or once after context restoration.
       // Ordinary animation frames reuse the same texture.
       if(meta.capture===true||!resource.uploaded){
@@ -175,7 +222,8 @@
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
         var err=gl.getError();if(err!==gl.NO_ERROR)
           throw Error('Shimmer Canvas texture upload failed (WebGL '+err+')');
-        resource.uploaded=true;resource.uploads++;
+        resource.uploaded=true;resource.uploads++;uploaded=true;
+        if(profiling)uploadedAt=now();
       }
       if(!resource.uploaded)return false;
       var width=target.width,height=target.height;
@@ -195,7 +243,16 @@
       gl.uniform1f(resource.scale,current.scale*pixelRatio);
       gl.uniform1f(resource.drift,current.drift*pixelRatio);
       gl.uniform1f(resource.seed,current.seed);
+      var activeQuery=gpuTimer(resource,name);
+      // These wall-clock values measure JS/WebGL command submission; only
+      // the optional EXT query can measure GPU-side draw execution.
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+      if(activeQuery)try{activeQuery.endQueryEXT(activeQuery.TIME_ELAPSED_EXT);}
+        catch(_error){releaseQuery(resource);resource.timerExtension=null;}
+      if(profiling){var finishedAt=now();
+        emit('cpu',name,{cpuTotalMs:finishedAt-startedAt,
+          cpuUploadMs:uploaded?uploadedAt-startedAt:undefined,
+          cpuSubmitMs:finishedAt-(uploaded?uploadedAt:startedAt),uploaded:uploaded});}
       resource.frames++;
       stats[name]={uploads:resource.uploads,frames:resource.frames,width:width,height:height,
         effectiveIntensity:effectiveIntensity};
@@ -205,10 +262,14 @@
     function dispose(target){
       var r=target&&resources.get(target);
       if(!r)return;
-      if(!r.lost){r.gl.deleteTexture(r.texture);r.gl.deleteBuffer(r.buffer);r.gl.deleteProgram(r.program);}
+      if(!r.lost){releaseQuery(r);r.gl.deleteTexture(r.texture);r.gl.deleteBuffer(r.buffer);r.gl.deleteProgram(r.program);}
       resources.delete(target);
     }
     return Object.freeze({present:present,dispose:dispose,
+      setProfiling:function(value){
+        var next=!!value;if(next&&!profiling)profileGeneration++;profiling=next;
+      },
+      isProfiling:function(){return profiling;},
       // With no viewport, configure remains the legacy DevTools global default;
       // Scene, A and B can each override only their own visual parameters.
       configure:function(next,name){
