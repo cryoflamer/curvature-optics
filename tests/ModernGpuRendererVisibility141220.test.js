@@ -97,8 +97,8 @@ test('140.12.20: invalid source fields and target response order are rejected',(
 test('140.12.20: UI runs real GPU B renderer capture and independent CPU batch without fallback or frame substitution',()=>{
   const html=src('CurvatureModern.html'),app=src('src/ui/modern/ModernApp.js'),
     model=src('src/ui/modern/ModernCompareModel.js');
-  assert.match(html,/ModernApp\.js\?v=140\.12\.22/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.22/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.23/);
+  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.23/);
   assert.match(html,/id="ModernGpuRendererVisibilityRun"/);
   assert.match(app,/addEventListener\('click',runCompareRendererVisibility141220\)/);
   assert.match(app,/curvature-compare-140\.12\.20-renderer-visibility\.json/);

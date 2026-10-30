@@ -2375,6 +2375,70 @@
       buttons.forEach(function(b){if(b)b.disabled=false;});
     }
   }
+  // #140.12.23: compare predictor and independently bracketed GPU roots.
+  async function runGpuRootAudit141223(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      audit=root.CurvatureGpuRootConvergence141223,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A,
+      config=state.compareConfig&&state.compareConfig.A;
+    if(!gpu||!contract||!precision||!audit||!surfaces||!model||!config||
+       config.atmosphere!=='standard'||!root.navigator||!root.navigator.gpu){
+      probeStatus('GPU root audit requires WebGPU and standard atmosphere in A.');return;
+    }
+    var generation=state.probeGeneration,sessions=[],ids=[
+      'ModernGpuRootAuditRun','ModernGpuPrecisionAuditRun','ModernGpuProbeRun',
+      'ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,
+        geometry:model.showModel===2?'flat':'globe',radius:model.rEarth,
+        observerHeight:model.Height},surfaces),base=ladder.request,
+        strict=Object.assign({},base,{controls:Object.assign({},base.controls,
+          {targetTolerance:0.0001})}),
+        jobs=[['predictor5mm','predictor','residual-stop',base],
+          ['predictorStrict','predictor','residual-stop',strict],
+          ['sweepStrict','sweep','residual-stop',strict],
+          ['bracketStrict','sweep','angle-bracket',strict]],batches={},timings={};
+      for(var job of jobs){
+        gpu.checked(job[3]);
+        probeStatus('GPU root convergence: '+job[0]+'…');
+        var session=await gpu.createSession(ladder.targetsCount,null,
+          {algorithm:job[1],refinement:job[2]});
+        sessions.push(session);
+        if(cancelled())return;
+        var started=profileNow(),batch=await session.solve(job[3],{warmRepeats:0});
+        if(cancelled())return;
+        batches[job[0]]=batch;
+        timings[job[0]]={wallMs:profileNow()-started,
+          uploadToReadbackMs:batch.timing.gpuUploadToReadbackMs,
+          setupMs:session.setupMs};
+      }
+      probeStatus('GPU root convergence: independent CPU f64 oracle…');
+      var cpuRequest=Object.assign({},base,{controls:{step:2000,
+        targetTolerance:0.000001,eventSubsteps:8}});
+      var cpu=await contract.solveCpuBatch(cpuRequest);
+      if(cancelled())return;
+      var report=audit.summarize(ladder,batches,cpu);
+      report.gpuRuns=timings;report.gpuArithmetic='f32, compensated RK4';
+      report.gpuStepMetres=500;report.cpuF64TargetStepMetres=2000;
+      state.probeFrameLast=report;
+      var line=probeUi('ModernGpuFrameMetrics');
+      if(line)line.textContent='GPU root audit: '+Object.keys(report.variants).map(function(k){
+        return k+' '+report.variants[k].statusMismatches+' mismatches / '+
+          report.variants[k].solverFailed+' failed';}).join(' · ')+' · Export JSON';
+      probeStatus('GPU root convergence measured · Export JSON · no frame changes');
+    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+      probeStatus('GPU root audit failed: '+String(error&&error.message||error));}}
+    finally{sessions.forEach(function(session){session.close();});
+      state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2421,6 +2485,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var rootAuditButton=probeUi('ModernGpuRootAuditRun');
+    if(rootAuditButton)rootAuditButton.addEventListener('click',runGpuRootAudit141223);
     var precisionButton=probeUi('ModernGpuPrecisionAuditRun');
     if(precisionButton)precisionButton.addEventListener('click',runGpuPrecisionAudit141222);
     var qualificationButton=probeUi('ModernGpuStatusQualificationRun');
@@ -2432,7 +2498,7 @@
     ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
       'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
       'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
-      'ModernGpuPrecisionAuditRun'].forEach(function(id){
+      'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2451,7 +2517,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.22'?
+      link.href=url;link.download=exportVersion==='140.12.23'?
+        'curvature-compare-140.12.23-gpu-root-convergence.json':
+        exportVersion==='140.12.22'?
         'curvature-compare-140.12.22-gpu-f32-precision.json':
         exportVersion==='140.12.21'?
         'curvature-compare-140.12.21-gpu-status-qualification.json':
