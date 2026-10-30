@@ -1,3 +1,16 @@
+## Patch 140.6 — Short-range shooting bracket and branch diagnostics (2026-10-30)
+
+Diagnosed all 16 near-observer `solver_failed` baseline cases from #140.5 as
+oversized first bracket probes crossing the forward-x angle bound. An offline
+short-range diagnostic reuses the unchanged bracket-first solver with a bounded
+`initialSpan`, checks RK4-step convergence and predictor agreement, and compares
+Flat trajectories against an independent Snell invariant (closed-form for the
+exponential atmosphere; quadrature for inverse-spherical). All 16 cases were
+locally recovered and 56/56 near-eye cases passed these local checks, but
+no Globe analytic branch oracle or global multipath certification is claimed.
+**No production solver defaults or rendering are changed.**
+See `docs/ENGINEERED_SHORT_RANGE_BRANCH_140_6.md`.
+
 ## Patch 140.5 — Expanded engineered-shooting numerical qualification (2026-10-30)
 
 Added offline near-horizon/near-eye target grids, reduced-step numerical
