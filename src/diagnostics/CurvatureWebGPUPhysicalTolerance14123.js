@@ -301,8 +301,113 @@
           'Near-boundary candidates flag possible visually minor cases for frame inspection, never automatic passes',
           'Viewport/FOV, near-ground and endpoint parameters are scenarios, not production camera settings or safety thresholds']:[])]};
   }
+  // #140.12.5: actual GPU shooting scaling, not a full-frame renderer test.
+  // Expanded batches replicate real fixture targets exactly; identical prefix
+  // rays can therefore be checked across dispatch sizes without changing the
+  // physical scene. This deliberately does not invent a new camera/scene.
+  function performanceOptions(options){
+    options=options||{};
+    var maxRays=options.maxRays===undefined?1024:options.maxRays;
+    var warmRepeats=options.warmRepeats===undefined?2:options.warmRepeats;
+    if(![256,512,1024].includes(maxRays)||![1,2,3].includes(warmRepeats))
+      throw RangeError('Performance scaling supports maxRays 256/512/1024 and 1–3 warm repeats');
+    return {maxRays:maxRays,warmRepeats:warmRepeats,
+      visual:screenProxyOptions(Object.assign({pixelBudgetPx:1},options.visual||{}))};
+  }
+  function replicatedRequest(base,count){
+    gpu.checked(base);
+    if(!Number.isInteger(count)||count<base.targets.length||count>1024||
+        count%base.targets.length!==0)
+      throw RangeError('Scaling count must be an integral fixture replication up to 1024');
+    var targets=Array.from({length:count},function(_,i){return base.targets[i%base.targets.length].slice();});
+    return Object.assign({},base,{targets:targets});
+  }
+  function compactVisualComparison(visual,physical){
+    return {kind:visual.kind,view:visual.view,counts:visual.counts,
+      maxLaunchAngleProxyShiftPx:visual.maxLaunchAngleProxyShiftPx,
+      frameReviewTargetIndices:visual.targets.filter(function(t){return t.requiresActualFrameReview;})
+        .map(function(t){return t.targetIndex;}),
+      cpuReplayResidualExceeded:physical.counts.gpuReplayResidualExceeded,
+      actualRenderedImageCompared:false,visualEquivalenceProven:false};
+  }
+  async function runPerformance(fixture,deps,options){
+    options=options||{};
+    var settings=performanceOptions(options),solver=options.solver||gpu;
+    var entries=gpu.fixtureRequests(fixture),reports=[];
+    // Report workgroup counts as information about dispatch, NOT GPU occupancy.
+    for(var entry of entries){
+      var session=null,steps=[],baseline=null,quality=null,device=null;
+      try{
+        session=await solver.createSession(settings.maxRays,deps,{refinement:'residual-stop'});
+        for(var count=entry.request.targets.length;count<=settings.maxRays;count*=2){
+          var req=replicatedRequest(entry.request,count),began=now();
+          var cpu=await contract.solveCpuBatch(req),cpuMs=now()-began;
+          var measured=await session.solve(req,{warmRepeats:settings.warmRepeats});
+          device=measured.device;
+          var timing=measured.timing,warm=timing.gpuWarmMedianMs;
+          if(!Number.isFinite(warm)||warm<=0||!Number.isFinite(cpuMs))
+            throw Error('Invalid measured scaling timings');
+          var prefix=measured.response.results.slice(0,entry.request.targets.length);
+          // The prefix must not change merely because dispatch size changed.
+          var prefixStable=baseline===null?true:JSON.stringify(prefix)===JSON.stringify(baseline);
+          if(baseline===null){
+            baseline=prefix;
+            var physical=physicalComparison(req,cpu,measured.response);
+            quality=compactVisualComparison(visualComparison(req,cpu,measured.response,
+              settings.visual,physical),physical);
+          }
+          var byStatus=measured.response.results.reduce(function(acc,result){
+            acc[result.status]=(acc[result.status]||0)+1;return acc;
+          },{});
+          steps.push({rays:count,replicatedFixture:count/entry.request.targets.length,
+            cpuMs:cpuMs,gpuFirstBatchMs:timing.gpuUploadToReadbackMs,
+            gpuWarmMedianMs:warm,gpuWarmRunsMs:timing.warmRunMs,
+            gpuCpuWarmSpeedup:cpuMs/warm,
+            gpuWarmRaysPerSecond:1000*count/warm,
+            gpuWorkgroups:{sweep:Math.ceil(count*33/64),refine:Math.ceil(count/64)},
+            gpuWallClockPhases:timing.wallClockPhases,
+            gpuOutputBitwiseStable:timing.warmOutputBitwiseStable,
+            identicalFixturePrefixStable:prefixStable,gpuStatusCounts:byStatus});
+          if(typeof options.onProgress==='function')options.onProgress(entry.id,count,settings.maxRays);
+        }
+        reports.push({id:entry.id,status:'measured',baseTargets:entry.request.targets.length,
+          setupMs:session.setupMs,sessionCapacity:settings.maxRays,
+          sessionReusesDevicePipelinesBuffers:true,device:device,
+          baselineVisualProxy:quality,scaling:steps});
+      }catch(error){reports.push({id:entry.id,status:'unavailable',
+        reason:String(error.message||error),scaling:steps});}
+      finally{if(session)session.close();}
+    }
+    var measuredAll=reports.every(function(r){return r.status==='measured';});
+    var stable=measuredAll&&reports.every(function(r){return r.scaling.every(function(s){
+      return s.gpuOutputBitwiseStable&&s.identicalFixturePrefixStable;
+    });});
+    return {version:'140.12.5',status:measuredAll?'finished':'incomplete',
+      experiment:'Performance-first GPU shooting scaling with one reusable session per geometry',
+      measurement:{batchSizes:'64, 128, 256, 512, 1024 (up to selected max)',
+        batchConstruction:'Exact deterministic replication of the same 64 12-tower targets; not independent scene complexity',
+        gpuPolicy:'residual-stop',warmRepeats:settings.warmRepeats,
+        deviceSession:'One adapter/device, two pipelines and fixed-capacity buffers per scene',
+        timings:'CPU f64 shooting separately; GPU total/upload/encode-submit/wait-readback browser wall-clock, not GPU timestamp queries',
+        screenProxy:'Illustrative launch-angle projection, 1 px default, evaluated only for original 64 fixture targets'},
+      scenes:reports,decision:{verdict:!measuredAll?'INCONCLUSIVE':!stable?
+        'SCALING_STABILITY_REVIEW':'PERFORMANCE_PROFILE_ONLY',productionAuthorized:false,
+        visualEquivalenceProven:false,requiresFullFrameComparison:true,
+        nextAction:!measuredAll?'Check unavailable hardware/measurements; retain CPU':
+          !stable?'Investigate output changes across repeats or dispatch sizes; retain CPU':
+          'Use measured warm throughput to choose next GPU optimization; confirm actual silhouette/frame parity and whole-frame costs'},
+      limitations:[
+        'Not a rendered frame, image diff, production camera projection or FPS benchmark',
+        '1 px illustrative angular budget is a prioritization target, not an occlusion/silhouette equivalence proof',
+        'Scaled batches reuse identical fixture targets and may have different cache/load behavior from real dense scenes',
+        'Each CPU size has one wall-clock sample; warm GPU samples include upload, dispatch, fence and readback',
+        'Wall-clock phase splits are not GPU execution timestamps; wait/readback can include queued kernel execution',
+        'CPU replay and ground checks occur only for the 64 original fixture targets, outside all timed GPU runs',
+        'GPU execution is experimental and does not authorize replacing the production solver or renderer']};
+  }
   return Object.freeze({tolerance:tolerance,cpuReplay:cpuReplay,
     physicalComparison:physicalComparison,screenProxyOptions:screenProxyOptions,
     perspectiveY:perspectiveY,groundReplay:groundReplay,visualComparison:visualComparison,
-    decide:decide,decideVisual:decideVisual,run:run});
+    decide:decide,decideVisual:decideVisual,run:run,
+    performanceOptions:performanceOptions,replicatedRequest:replicatedRequest,runPerformance:runPerformance});
 }));

@@ -15,7 +15,7 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(benchmark,contract,sceneSpike){
   'use strict';
   if(!benchmark||!contract||!sceneSpike)throw Error('#140.12 dependencies missing');
-  var SAMPLES=33, MAX_TARGETS=256,MAX_STEPS=8192,MAX_DISTANCE=100000;
+  var SAMPLES=33, MAX_TARGETS=1024,MAX_STEPS=8192,MAX_DISTANCE=100000;
   var stagePrelude=benchmark.WGSL_COMPENSATED;
   var integrator=stagePrelude.slice(stagePrelude.indexOf('fn derivative'),
     stagePrelude.indexOf('@compute @workgroup_size(64)'));
@@ -292,24 +292,29 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         rawGroundContactCode:data[offset+5]};
     });
   }
-  // #140.12.1: optional diagnostic-only repeat measurements re-use the SAME
-  // device, pipelines and buffers. Default remains the original single run.
-  async function solveBatch(request,deps,options){
-    checked(request);deps=deps||{};options=options||{};
-    var warmRepeats=options.warmRepeats===undefined?0:options.warmRepeats;
+  // #140.12.5: one research GPU session can run several bounded batch sizes.
+  // Pipelines and maximum-sized storage/readback buffers are allocated once.
+  // No CPU oracle, replay or renderer is run inside the timed GPU workload.
+  async function createSession(capacity,deps,options){
+    deps=deps||{};options=options||{};
+    if(!Number.isInteger(capacity)||capacity<1||capacity>MAX_TARGETS)
+      throw RangeError('GPU session capacity must be 1–'+MAX_TARGETS+' targets');
     var refinement=options.refinement===undefined?'residual-stop':options.refinement;
     if(!['residual-stop','angle-bracket'].includes(refinement))
       throw RangeError('Unsupported GPU root refinement policy');
-    if(!Number.isInteger(warmRepeats)||warmRepeats<0||warmRepeats>5)
-      throw RangeError('Diagnostic repeat count must be an integer from 0 to 5');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
     if(!nav||!nav.gpu||!nav.gpu.requestAdapter)throw Error('WebGPU unavailable');
     var usage=deps.GPUBufferUsage||((typeof GPUBufferUsage!=='undefined')?GPUBufferUsage:null);
     var mapMode=deps.GPUMapMode||((typeof GPUMapMode!=='undefined')?GPUMapMode:null);
     if(!usage||!mapMode)throw Error('GPU buffer constants unavailable');
-    var prepared=pack(request),start=now(),adapter=await nav.gpu.requestAdapter();
+    var started=now(),adapter=await nav.gpu.requestAdapter();
     if(!adapter)throw Error('No WebGPU adapter');
-    var device=await adapter.requestDevice(),buffers=[];
+    var device=await adapter.requestDevice(),buffers=[],closed=false,busy=false;
+    function close(){
+      if(closed)return;
+      closed=true;buffers.forEach(function(b){b.destroy();});
+      if(device.destroy)device.destroy();
+    }
     function alloc(size,flags){
       var result=device.createBuffer({size:size,usage:flags});buffers.push(result);return result;
     }
@@ -323,14 +328,13 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         }
       }
       var pipelines=[];
-      for(var shaderModule of modules)pipelines.push(await device.createComputePipelineAsync({layout:'auto',compute:{module:shaderModule,entryPoint:'main'}}));
-      var setupMs=now()-start;
-      var inputSize=prepared.input.byteLength,scanSize=request.targets.length*SAMPLES*16,
-        outputSize=request.targets.length*3*16;
+      for(var shaderModule of modules)
+        pipelines.push(await device.createComputePipelineAsync({layout:'auto',compute:{module:shaderModule,entryPoint:'main'}}));
+      var inputSize=capacity*16,scanSize=capacity*SAMPLES*16,outputSize=capacity*3*16;
       if([inputSize,scanSize,outputSize].some(function(v){return v>device.limits.maxStorageBufferBindingSize;}))
         throw Error('WebGPU storage binding limit exceeded');
       var seeds=alloc(inputSize,usage.STORAGE|usage.COPY_DST),
-        config=alloc(prepared.config.byteLength,usage.STORAGE|usage.COPY_DST),
+        config=alloc(64,usage.STORAGE|usage.COPY_DST),
         scan=alloc(scanSize,usage.STORAGE|usage.COPY_SRC),
         output=alloc(outputSize,usage.STORAGE|usage.COPY_SRC),
         read=alloc(outputSize,usage.COPY_DST|usage.MAP_READ);
@@ -341,42 +345,71 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         device.createBindGroup({layout:pipelines[1].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
           {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}]})];
-      var firstRaw=null,firstMs=null,warmMs=[],warmStable=true;
-      for(var repeat=0;repeat<=warmRepeats;repeat++){
-        var began=now();
-        device.queue.writeBuffer(seeds,0,prepared.input);
-        device.queue.writeBuffer(config,0,prepared.config);
-        var encoder=device.createCommandEncoder();
-        for(var i=0;i<2;i++){
-          var pass=encoder.beginComputePass();pass.setPipeline(pipelines[i]);pass.setBindGroup(0,bindings[i]);
-          pass.dispatchWorkgroups(Math.ceil(request.targets.length*(i===0?SAMPLES:1)/64));pass.end();
-        }
-        encoder.copyBufferToBuffer(output,0,read,0,outputSize);
-        device.queue.submit([encoder.finish()]);
-        await read.mapAsync(mapMode.READ);
-        var current=new Float32Array(read.getMappedRange().slice(0));read.unmap();
-        var elapsed=now()-began;
-        if(repeat===0){firstRaw=current;firstMs=elapsed;}
-        else{
-          warmMs.push(elapsed);
-          var aBytes=new Uint32Array(firstRaw.buffer),bBytes=new Uint32Array(current.buffer);
-          for(var index=0;index<aBytes.length;index++){
-            if(aBytes[index]!==bBytes[index]){warmStable=false;break;}
+      var setupMs=now()-started;
+      async function solve(request,runOptions){
+        if(closed)throw Error('GPU session is closed');
+        if(busy)throw Error('GPU session cannot run overlapping batches');
+        checked(request);runOptions=runOptions||{};
+        if(request.targets.length>capacity)throw RangeError('GPU batch exceeds preallocated session capacity');
+        var warmRepeats=runOptions.warmRepeats===undefined?0:runOptions.warmRepeats;
+        if(!Number.isInteger(warmRepeats)||warmRepeats<0||warmRepeats>5)
+          throw RangeError('Diagnostic repeat count must be an integer from 0 to 5');
+        var prepared=pack(request),bytes=request.targets.length*3*16;
+        busy=true;
+        try{
+          var raw=null,samples=[],stable=true;
+          for(var repeat=0;repeat<=warmRepeats;repeat++){
+            var began=now();
+            device.queue.writeBuffer(seeds,0,prepared.input);
+            device.queue.writeBuffer(config,0,prepared.config);
+            var afterUpload=now();
+            var encoder=device.createCommandEncoder();
+            for(var i=0;i<2;i++){
+              var pass=encoder.beginComputePass();pass.setPipeline(pipelines[i]);pass.setBindGroup(0,bindings[i]);
+              pass.dispatchWorkgroups(Math.ceil(request.targets.length*(i===0?SAMPLES:1)/64));pass.end();
+            }
+            encoder.copyBufferToBuffer(output,0,read,0,bytes);
+            device.queue.submit([encoder.finish()]);
+            var afterSubmit=now();
+            await read.mapAsync(mapMode.READ);
+            // The preallocated readback may be larger than the active batch.
+            // Read only the current output; old tail bytes must never leak.
+            var current=new Float32Array(read.getMappedRange(0,bytes).slice(0));read.unmap();
+            var finished=now();
+            samples.push({totalMs:finished-began,uploadMs:afterUpload-began,
+              encodeSubmitMs:afterSubmit-afterUpload,waitReadbackMs:finished-afterSubmit});
+            if(repeat===0)raw=current;
+            else{
+              var aBytes=new Uint32Array(raw.buffer),bBytes=new Uint32Array(current.buffer);
+              for(var index=0;index<aBytes.length;index++){
+                if(aBytes[index]!==bBytes[index]){stable=false;break;}
+              }
+            }
           }
-        }
+          var warmMs=samples.slice(1).map(function(x){return x.totalMs;});
+          var sorted=warmMs.slice().sort(function(a,b){return a-b;});
+          var middle=Math.floor(sorted.length/2);
+          var median=!sorted.length?null:sorted.length%2?sorted[middle]:
+            (sorted[middle-1]+sorted[middle])/2;
+          return {response:decode(request,raw),telemetry:decodeTelemetry(request,raw),
+            timing:{gpuSetupMs:setupMs,gpuUploadToReadbackMs:samples[0].totalMs,
+              gpuColdMs:setupMs+samples[0].totalMs,warmRunMs:warmMs,
+              gpuWarmMedianMs:median,warmOutputBitwiseStable:stable,
+              // Wall-clock phases, NOT distinct GPU timestamps or kernel-only times.
+              wallClockPhases:samples},
+            algorithm:{sampleAngles:SAMPLES,refineIterations:28,refinement:refinement,
+              branch:contract.BRANCH,productionAuthorized:false},
+            device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',architecture:adapter.info.architecture||''}:null}};
+        }finally{busy=false;}
       }
-      var sorted=warmMs.slice().sort(function(a,b){return a-b;});
-      var middle=Math.floor(sorted.length/2);
-      var median=!sorted.length?null:sorted.length%2?sorted[middle]:
-        (sorted[middle-1]+sorted[middle])/2;
-      return {response:decode(request,firstRaw),telemetry:decodeTelemetry(request,firstRaw),
-        timing:{gpuSetupMs:setupMs,gpuUploadToReadbackMs:firstMs,
-          gpuColdMs:setupMs+firstMs,warmRunMs:warmMs,
-          gpuWarmMedianMs:median,warmOutputBitwiseStable:warmStable},
-        algorithm:{sampleAngles:SAMPLES,refineIterations:28,refinement:refinement,
-          branch:contract.BRANCH,productionAuthorized:false},
-        device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',architecture:adapter.info.architecture||''}:null}};
-    }finally{buffers.forEach(function(b){b.destroy();});if(device.destroy)device.destroy();}
+      return Object.freeze({capacity:capacity,setupMs:setupMs,solve:solve,close:close});
+    }catch(error){close();throw error;}
+  }
+  // Historical one-shot API retains setup-inclusive cold timing and cleanup.
+  async function solveBatch(request,deps,options){
+    checked(request);options=options||{};
+    var session=await createSession(request.targets.length,deps,options);
+    try{return await session.solve(request,options);}finally{session.close();}
   }
   function decision(reports){
     if(!reports||!reports.length||reports.some(function(r){return !r||r.status!=='measured';}))
@@ -423,6 +456,6 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   }
   return Object.freeze({WGSL_SWEEP:WGSL_SWEEP,WGSL_REFINE:WGSL_REFINE,
     WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE_ANGLE_BRACKET,
-    checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,solveBatch:solveBatch,
+    checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,createSession:createSession,solveBatch:solveBatch,
     fixtureRequests:fixtureRequests,decision:decision,run:run});
 }));

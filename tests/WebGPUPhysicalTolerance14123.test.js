@@ -162,7 +162,7 @@ test('140.12.3: single canonical diagnostics HTML and physical gate controls',()
  assert.match(html,/value="7"/);
  assert.match(html,/CurvatureWebGPUPhysicalTolerance14123\.run/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.3-physical-tolerance\.json/);
- assert.match(html,/for\(var i=0;i<9;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<10;i\+\+\)/);
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(s=>/webgpu-optics.*\.html/.test(s)),['webgpu-optics.html']);
  assert.match(gpu.WGSL_REFINE,/if\(abs\(shot\.residual\)<=bitcast<f32>\(config\[11\]\)\)/);
 });
@@ -257,17 +257,76 @@ test('140.12.4: visual mode reuses existing physical module, GPU policy and warm
 
 test('140.12.4: only the existing JS module, existing tests and canonical HTML are used',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
- assert.match(html,/value="8" selected/);
+ assert.match(html,/value="8"/);
  assert.match(html,/id="panel-8"/);
- assert.match(html,/for\(var i=0;i<9;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<10;i\+\+\)/);
  assert.match(html,/CurvatureWebGPUPhysicalTolerance14123\.run\(await response\.json\(\),undefined,\{visual:view\}\)/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.4-visual-proxy\.json/);
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(s=>/webgpu-optics.*\.html/.test(s)),['webgpu-optics.html']);
 });
 
-test('140.12.4: only newest panel is initially visible; old modes remain selectable',()=>{
+test('140.12.5: only newest panel is initially visible; old modes remain selectable',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  const sections=[...html.matchAll(/<section id="panel-(\d+)" class="experiment"( hidden)?>/g)];
- assert.equal(sections.length,9);
- assert.deepEqual(sections.filter(m=>!m[2]).map(m=>Number(m[1])),[8]);
+ assert.equal(sections.length,10);
+ assert.deepEqual(sections.filter(m=>!m[2]).map(m=>Number(m[1])),[9]);
+});
+
+test('140.12.5: scaling options are bounded and replicated fixture is deterministic',()=>{
+ const opts=physical.performanceOptions({maxRays:512,warmRepeats:3});
+ assert.equal(opts.visual.pixelBudgetPx,1);
+ assert.equal(opts.maxRays,512);
+ for(const bad of [{maxRays:10000},{maxRays:128},{warmRepeats:0},{warmRepeats:5},
+  {visual:{pixelBudgetPx:0}},{visual:{viewportHeightPx:20}}])
+  assert.throws(()=>physical.performanceOptions(bad),RangeError);
+ const req=gpu.fixtureRequests(fixture)[0].request;
+ const copy=physical.replicatedRequest(req,256);
+ assert.equal(copy.targets.length,256);
+ assert.deepEqual(copy.targets.slice(64,128),req.targets);
+ copy.targets[0][0]++;
+ assert.notDeepEqual(copy.targets[0],req.targets[0]);
+ for(const invalid of [0,65,1025,257])
+  assert.throws(()=>physical.replicatedRequest(req,invalid),RangeError);
+});
+test('140.12.5: performance experiment reuses sessions across sizes and retains pixel limitations',async()=>{
+ const calls=[],closed=[];
+ const mock={async createSession(capacity,_,opts){
+  calls.push({kind:'session',capacity,opts});
+  return {setupMs:5,close(){closed.push(capacity);},async solve(req,options){
+   calls.push({kind:'solve',count:req.targets.length,options});
+   const reference=await contract.solveCpuBatch(req);
+   return {response:{branch:contract.BRANCH,backend:'gpu-experimental',results:reference.results},
+    timing:{gpuUploadToReadbackMs:10,gpuWarmMedianMs:8,warmRunMs:[8,8],
+     warmOutputBitwiseStable:true,wallClockPhases:[{totalMs:10},{totalMs:8},{totalMs:8}]},
+    device:{adapterInfo:{vendor:'mock'}}};}};}};
+ const progress=[];
+ const report=await physical.runPerformance(fixture,{}, {solver:mock,maxRays:256,
+  onProgress:(scene,n)=>progress.push(scene+':'+n)});
+ assert.equal(report.status,'finished');assert.equal(report.version,'140.12.5');
+ assert.equal(report.decision.verdict,'PERFORMANCE_PROFILE_ONLY');
+ assert.equal(report.decision.productionAuthorized,false);
+ assert.equal(report.decision.visualEquivalenceProven,false);
+ assert.deepEqual(report.scenes.map(s=>s.scaling.map(t=>t.rays)),[[64,128,256],[64,128,256]]);
+ assert.deepEqual(calls.filter(c=>c.kind==='session').map(c=>c.capacity),[256,256]);
+ assert.deepEqual(calls.filter(c=>c.kind==='solve').map(c=>c.options.warmRepeats),Array(6).fill(2));
+ assert.deepEqual(closed,[256,256]);
+ assert.equal(progress.length,6);
+ assert.ok(report.scenes.every(s=>s.baselineVisualProxy.counts.subpixelAngleProxy===64));
+ assert.ok(report.scenes.every(s=>s.scaling.every(x=>x.identicalFixturePrefixStable)));
+ assert.match(report.limitations.join(' '),/not.*frame|Not a rendered frame/i);
+});
+test('140.12.5: unavailable WebGPU stays inconclusive and no CPU fallback masquerades as GPU',async()=>{
+ const result=await physical.runPerformance(fixture,{navigator:{}},{maxRays:256});
+ assert.equal(result.status,'incomplete');
+ assert.equal(result.decision.verdict,'INCONCLUSIVE');
+ assert.ok(result.scenes.every(x=>x.status==='unavailable'));
+});
+test('140.12.5: canonical HTML has tenth scaling mode and no extra page',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
+ assert.match(html,/value="9" selected/);
+ assert.match(html,/id="panel-9"/);
+ assert.match(html,/CurvatureWebGPUPhysicalTolerance14123\.runPerformance/);
+ assert.match(html,/curvature-webgpu-optics-140\.12\.5-performance\.json/);
+ assert.match(html,/for\(var i=0;i<10;i\+\+\)/);
+ assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(s=>/webgpu-optics.*\.html/.test(s)),['webgpu-optics.html']);
 });

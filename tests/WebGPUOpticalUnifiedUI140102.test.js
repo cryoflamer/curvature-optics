@@ -8,11 +8,11 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../tools/webgpu-
 // Execute the actual inline browser handler script against a minimal DOM, instead of
 // merely looking for button labels. This catches the #140.10.1 selector regression.
 function mount(){
- const panels=Array.from({length:9},(_,i)=>({id:'panel-'+i,hidden:i!==8,children:new Map(),
+ const panels=Array.from({length:10},(_,i)=>({id:'panel-'+i,hidden:i!==9,children:new Map(),
    querySelector(selector){assert.match(selector,/^#[a-z-]+$/);const id=selector.slice(1);
      if(!this.children.has(id))this.children.set(id,element(id));
      return this.children.get(id);}}));
- function element(id){return {id,disabled:id==='save'||id==='cancel',textContent:'',value:'4',
+ function element(id){return {id,elements:{maxRays:{value:'256'},warmRepeats:{value:'2'}},disabled:id==='save'||id==='cancel',textContent:'',value:'4',
    handlers:{},addEventListener(type,cb){this.handlers[type]=cb;},
    querySelectorAll(){return [];},reportValidity(){return true;},appendChild(){},click(){},
    async fire(type){assert.ok(this.handlers[type],`missing ${type} listener for ${id}`);
@@ -27,7 +27,7 @@ function mount(){
   CurvatureWebGPUSceneSpike14010:{run:async()=>({status:'unavailable',reason:'test runtime unavailable'})},
   CurvatureWebGPUBatchShooting1412:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test GPU'},scenes:[]})},
   CurvatureWebGPUBatchDiagnostics14121:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test diagnostics'},scenes:[]})},
-  CurvatureWebGPUPhysicalTolerance14123:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test physical'},scenes:[]})},
+  CurvatureWebGPUPhysicalTolerance14123:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test physical'},scenes:[]}),runPerformance:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test scaling'},scenes:[]})},
   CurvatureWebGPURootRefinement14122:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test refined'},scenes:[],analyticVacuum:{status:'unavailable'}})},
   CurvatureWebGPUOpticsBenchmark:{run:async()=>({status:'unavailable',reason:'test'})},
   CurvatureWebGPUOpticsMatrix1409:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test',stats:{passed:0,total:0,failed:0,unavailable:0,errors:0}},cases:[]})},
@@ -36,10 +36,10 @@ function mount(){
  vm.runInNewContext(script[1],ctx,{filename:'tools/webgpu-optics.html'});
  return {panels,choice};
 }
-test('140.10.2: all nine unified panels actually register run and export handlers',()=>{
+test('140.10.2: all ten unified panels actually register run and export handlers',()=>{
  const {panels,choice}=mount();
  for(const [i,p] of panels.entries()){
-  assert.equal(typeof (i>=3&&i!==8?p.querySelector('#start'):p.querySelector('#'+(['benchmark','matrix','precision'][i]||'visual-controls'))).handlers[i>=3&&i!==8?'click':'submit'],'function');
+  assert.equal(typeof (i>=3&&i!==8&&i!==9?p.querySelector('#start'):p.querySelector('#'+(['benchmark','matrix','precision'][i]||(i===8?'visual-controls':'scaling-controls')))).handlers[i>=3&&i!==8&&i!==9?'click':'submit'],'function');
   assert.equal(typeof p.querySelector('#save').handlers.click,'function');
  }
  choice.value='2';choice.handlers.change();
@@ -107,4 +107,15 @@ test('140.12.4: ninth visual-proxy panel submits and exports without adding a ne
  assert.match(panels[8].querySelector('#status').textContent,/INCONCLUSIVE/);
  assert.equal(panels[8].querySelector('#start').disabled,false);
  assert.equal(panels[8].querySelector('#save').disabled,false);
+});
+
+test('140.12.5: tenth scaling panel submits and exports on the same canonical page',async()=>{
+ const {panels,choice}=mount();
+ choice.value='9';choice.handlers.change();
+ assert.equal(panels.filter(p=>!p.hidden).length,1);
+ assert.equal(panels[9].hidden,false);
+ await panels[9].querySelector('#scaling-controls').fire('submit');
+ assert.match(panels[9].querySelector('#status').textContent,/INCONCLUSIVE/);
+ assert.equal(panels[9].querySelector('#start').disabled,false);
+ assert.equal(panels[9].querySelector('#save').disabled,false);
 });

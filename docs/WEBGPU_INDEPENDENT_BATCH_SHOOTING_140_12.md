@@ -109,3 +109,31 @@ pass should the project proceed to async optical-scene preparation and a
 fallback-capable optional backend. Do **not** integrate `solveBatch` into
 `OpticalSharedRayField` or synchronous rendering merely because WebGPU exists.
 Keep the **single** `tools/webgpu-optics.html` page for future diagnostics.
+
+## Follow-up #140.12.5 — one-session shooting scaling
+
+The #140.12.5 research mode reuses the original `residual-stop` WGSL shooting
+algorithm without changing its physical integration or tolerance. The research
+API `createSession(capacity, deps, options)` creates a single bounded WebGPU
+session with two reusable pipelines and one set of buffers sized for up to
+1024 targets. `session.solve(request, {warmRepeats})` accepts successively
+larger batches without recompilation, reports wall-clock phases (upload,
+encode/submit, wait/readback) and raw-output bitwise repeat stability, and
+`session.close()` releases resources. The legacy one-shot `solveBatch` remains.
+
+The existing canonical `tools/webgpu-optics.html` now includes a scaling
+mode with 64, 128, 256, 512 and 1024 ray batches. Larger cases are **exact
+replications of the 64 existing tower targets** to isolate size scaling; they
+are not more independent geometry or full frames. For each size the CPU f64
+batch is measured separately once. The GPU's launch-angle image proxy is
+assessed on the original 64 rays with a default illustrative **1 px** budget,
+plus independent CPU replay for those 64 rays outside timed GPU runs. Repeat
+stability and unchanged outputs for the first 64 rays across batch sizes
+are reported. A GPU wall-clock phase may contain scheduling/queue waits;
+these are not pure device-time GPU timestamps.
+
+This produces **`PERFORMANCE_PROFILE_ONLY`**, not a full-frame image
+comparison, rendered silhouette test, or permission for GPU production
+routing. The old 2× cold gate remains in archived historical tests but is
+**not** a gate for the profiling report. Browser results must be uploaded
+before drawing conclusions about real GPU/CPU throughput or frame quality.

@@ -1070,3 +1070,35 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   automatic opt-in, CPU solver, or GPU WGSL change. The original cold ≥2x
   stage speed requirement remains unevaluated by visual comparison itself;
   all available real browser evidence so far remains below it.
+
+## #140.12.5 — performance-first GPU batch-shooting scaling (research only)
+
+- Motivation: do not optimize extra millimetres if the difference is visually
+  negligible. An illustrative **1 pixel** launch-angle projection budget is
+  used for triage, **not** as automatic acceptance of visibility/occlusion
+  changes. Silhouettes and actual frame images are still untested.
+- The existing `CurvatureWebGPUBatchShooting1412.js` now exposes a reusable
+  `createSession(capacity, ...)`: one adapter/device, **two unchanged shooting
+  WGSL shaders**, two compute pipelines, and five preallocated buffers for
+  multiple successive size-controlled batches. The old one-shot `solveBatch`
+  delegates to this session and still closes resources. Experimental batch
+  capacity rises from **256 to 1024 targets** (bounded, not production).
+- The existing `CurvatureWebGPUPhysicalTolerance14123.js` provides
+  `runPerformance`: identical **64** tower targets are deterministically
+  replicated into **128/256/512/1024** rays (selectable max). CPU f64 shooting
+  is timed once per size; GPU times include host upload, command encoding,
+  submit, wait/readback, with warm samples reusing all GPU resources. The
+  reported phase breakdown is **host wall-clock**, not GPU timestamps or an
+  isolated kernel measurement. The 64-target baseline only gets the expensive
+  independent CPU/GPU-angle physical + ground verification and visual proxy.
+  Prefix output consistency and repeat bitwise stability are tracked across
+  sizes; GPU statuses are counted for every size. No 2× cold gate or numerical
+  angle-parity veto is imposed for this profiling stage.
+- The tenth mode is in the **same** `tools/webgpu-optics.html`. Report export:
+  `curvature-webgpu-optics-140.12.5-performance.json`. No new JS, HTML,
+  documentation, or test files, and no production renderer/solver switch.
+- **Measurement pending** in an actual WebGPU browser; Node/mock tests cannot
+  establish throughput. Larger replicated batches may not model full-scene
+  material diversity, caching, horizon, or rasterization. The result only
+  selects promising sizes/optimization paths. `PERFORMANCE_PROFILE_ONLY` is
+  never a production authorization; full-frame tests still needed.

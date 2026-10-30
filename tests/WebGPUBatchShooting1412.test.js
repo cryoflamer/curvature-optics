@@ -29,7 +29,7 @@ test('140.12: only explicit transferable model and bounded GPU resources are all
   {controls:{step:50,maxIterations:48}},
   {targets:[[100001,15]]},{targets:[[1,1000]]},
   {profileOptions:{wrong:2}},{branch:'multipath'},
-  {targets:Array(257).fill([100,1])}]){
+  {targets:Array(1025).fill([100,1])}]){
   assert.throws(()=>gpu.checked(request(overrides)),Error);
  }
 });
@@ -124,4 +124,51 @@ test('140.12: WGSL shader compiler errors stop the experiment and destroy the GP
   GPUBufferUsage:{STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8},GPUMapMode:{READ:1}
  }),/GPU shooting WGSL compilation failed: simulated WGSL compile failure/);
  assert.equal(destroyed,true);
+});
+
+test('140.12.5: reusable session scales 64 → 256 without recompilation or buffer reallocation',async()=>{
+ const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};
+ const buffers=[],copies=[],dispatch=[],maps=[];
+ let createdDevice=0,pipelines=0,destroyed=0;
+ const device={limits:{maxStorageBufferBindingSize:1e7},
+  createShaderModule(){return {getCompilationInfo:async()=>({messages:[]})};},
+  async createComputePipelineAsync(){pipelines++;return {getBindGroupLayout:()=>({})};},
+  createBuffer({size}){const b={bytes:new ArrayBuffer(size),destroy(){this.destroyed=true;},
+   mapAsync:async()=>{},getMappedRange(offset,length){maps.push(length);
+    return this.bytes.slice(offset,offset+length);},unmap(){}};buffers.push(b);return b;},
+  createBindGroup({entries}){return entries;},
+  createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},
+    dispatchWorkgroups(n){dispatch.push(n);},end(){}};},
+    copyBufferToBuffer(source,offset,target,targetOffset,length){copies.push(length);
+      new Uint8Array(target.bytes,targetOffset,length).set(new Uint8Array(source.bytes,offset,length));},
+    finish(){return {};}};},
+  queue:{writeBuffer(b,offset,arr){new Uint8Array(b.bytes,offset,arr.byteLength).set(
+    new Uint8Array(arr.buffer,arr.byteOffset,arr.byteLength));},submit(){}},
+  destroy(){destroyed++;}};
+ const deps={navigator:{gpu:{requestAdapter:async()=>({requestDevice:async()=>{
+  createdDevice++;return device;}})}},GPUBufferUsage:usage,GPUMapMode:{READ:1}};
+ const session=await gpu.createSession(256,deps);
+ const a=request({targets:Array.from({length:64},(_,i)=>[1000+i,20])});
+ const b=request({targets:Array.from({length:256},(_,i)=>[1000+i,20])});
+ try{
+  const one=await session.solve(a,{warmRepeats:1});
+  const two=await session.solve(b,{warmRepeats:2});
+  assert.equal(one.response.results.length,64);assert.equal(two.response.results.length,256);
+  assert.equal(one.timing.wallClockPhases.length,2);
+  assert.equal(two.timing.wallClockPhases.length,3);
+  assert.equal(one.timing.warmOutputBitwiseStable,true);
+  assert.deepEqual(copies,[64*48,64*48,256*48,256*48,256*48]);
+  assert.deepEqual(maps,copies);
+  assert.deepEqual(dispatch,[33,1,33,1,132,4,132,4,132,4]);
+  assert.equal(createdDevice,1);assert.equal(pipelines,2);assert.equal(buffers.length,5);
+  await assert.rejects(session.solve(request({targets:Array(257).fill([1000,20])})),
+    /session capacity/);
+ }finally{session.close();session.close();}
+ assert.equal(destroyed,1);assert.ok(buffers.every(x=>x.destroyed));
+ await assert.rejects(session.solve(a),/session is closed/);
+});
+test('140.12.5: invalid session capacity and unsupported policies fail',async()=>{
+ for(const cap of [0,-1,1.1,1025,NaN])
+  await assert.rejects(gpu.createSession(cap,{navigator:{}}),/capacity/);
+ await assert.rejects(gpu.createSession(64,{navigator:{}},{refinement:'imaginary'}),/policy/);
 });
