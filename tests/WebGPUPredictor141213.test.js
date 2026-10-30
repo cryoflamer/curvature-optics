@@ -115,8 +115,8 @@ test('140.12.13: rejects numerical parity discrepancies even with artificial GPU
 test('140.12.13: canonical diagnostics page exposes predictor and preserves older modes',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  assert.match(html,/CurvatureWebGPUPredictor141213\.run/);
- assert.match(html,/value="11" selected/);
+ assert.match(html,/value="12" selected/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.13-predictor-ab\.json/);
- assert.match(html,/for\(var i=0;i<12;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<13;i\+\+\)/);
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(x=>/webgpu-optics.*\.html/.test(x)),['webgpu-optics.html']);
 });

@@ -8,7 +8,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../tools/webgpu-
 // Execute the actual inline browser handler script against a minimal DOM, instead of
 // merely looking for button labels. This catches the #140.10.1 selector regression.
 function mount(overrides={}){
- const panels=Array.from({length:12},(_,i)=>({id:'panel-'+i,hidden:i!==11,children:new Map(),
+ const panels=Array.from({length:13},(_,i)=>({id:'panel-'+i,hidden:i!==12,children:new Map(),
    querySelector(selector){assert.match(selector,/^#[a-z-]+$/);const id=selector.slice(1);
      if(!this.children.has(id))this.children.set(id,element(id));
      return this.children.get(id);}}));
@@ -26,6 +26,7 @@ function mount(overrides={}){
  const ctx={document,fetch:async()=>({ok:true,json:async()=>({scenes:[]})}),
   CurvatureWebGPUSceneSpike14010:{run:async()=>({status:'unavailable',reason:'test runtime unavailable'})},
   CurvatureWebGPUPredictor141213:{run:async()=>({verdict:'INCONCLUSIVE',rows:[]})},
+  CurvatureWebGPUEventGuard141214:{run:async()=>({verdict:'INCONCLUSIVE',rows:[]})},
   CurvatureWebGPUBatchShooting1412:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test GPU'},scenes:[]})},
   CurvatureWebGPUBatchDiagnostics14121:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test diagnostics'},scenes:[]})},
   CurvatureWebGPUPhysicalTolerance14123:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test physical'},scenes:[]}),runPerformance:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test scaling'},scenes:[]}),runDensePerformance:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test dense'},scenes:[]})},
@@ -38,11 +39,11 @@ function mount(overrides={}){
  vm.runInNewContext(script[1],ctx,{filename:'tools/webgpu-optics.html'});
  return {panels,choice};
 }
-test('140.10.2: all twelve unified panels actually register run and export handlers',()=>{
+test('140.10.2: all thirteen unified panels actually register run and export handlers',()=>{
  const {panels,choice}=mount();
  for(const [i,p] of panels.entries()){
   const clickMode=i>=3&&i<=7;
-  const control=i===8?'visual-controls':i===9?'scaling-controls':i===11?'predictor-controls':'dense-controls';
+  const control=i===8?'visual-controls':i===9?'scaling-controls':i===11?'predictor-controls':i===12?'eventguard-controls':'dense-controls';
   const handler=clickMode?p.querySelector('#start'):p.querySelector('#'+(['benchmark','matrix','precision'][i]||control));
   assert.equal(typeof handler.handlers[clickMode?'click':'submit'],'function');
   assert.equal(typeof p.querySelector('#save').handlers.click,'function');
@@ -157,4 +158,15 @@ test('140.12.13: predictor panel submits real handler and retains older selector
  assert.match(panels[11].querySelector('#status').textContent,/INCONCLUSIVE/);
  assert.equal(panels[11].querySelector('#start').disabled,false);
  assert.equal(panels[11].querySelector('#save').disabled,false);
+});
+
+test('140.12.14: guarded predictor panel submits and exports without changing older panel handlers',async()=>{
+ const {panels,choice}=mount();
+ choice.value='12';choice.handlers.change();
+ assert.equal(panels.filter(p=>!p.hidden).length,1);
+ assert.equal(panels[12].hidden,false);
+ await panels[12].querySelector('#eventguard-controls').fire('submit');
+ assert.match(panels[12].querySelector('#status').textContent,/INCONCLUSIVE/);
+ assert.equal(panels[12].querySelector('#start').disabled,false);
+ assert.equal(panels[12].querySelector('#save').disabled,false);
 });

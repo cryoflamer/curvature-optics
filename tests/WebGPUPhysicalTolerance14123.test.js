@@ -162,7 +162,7 @@ test('140.12.3: single canonical diagnostics HTML and physical gate controls',()
  assert.match(html,/value="7"/);
  assert.match(html,/CurvatureWebGPUPhysicalTolerance14123\.run/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.3-physical-tolerance\.json/);
- assert.match(html,/for\(var i=0;i<12;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<13;i\+\+\)/);
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(s=>/webgpu-optics.*\.html/.test(s)),['webgpu-optics.html']);
  assert.match(gpu.WGSL_REFINE,/if\(abs\(shot\.residual\)<=bitcast<f32>\(config\[11\]\)\)/);
 });
@@ -259,17 +259,17 @@ test('140.12.4: only the existing JS module, existing tests and canonical HTML a
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  assert.match(html,/value="8"/);
  assert.match(html,/id="panel-8"/);
- assert.match(html,/for\(var i=0;i<12;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<13;i\+\+\)/);
  assert.match(html,/CurvatureWebGPUPhysicalTolerance14123\.run\(await response\.json\(\),undefined,\{visual:view\}\)/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.4-visual-proxy\.json/);
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(s=>/webgpu-optics.*\.html/.test(s)),['webgpu-optics.html']);
 });
 
-test('140.12.13: only newest panel is initially visible; old modes remain selectable',()=>{
+test('140.12.14: only newest panel is initially visible; old modes remain selectable',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  const sections=[...html.matchAll(/<section id="panel-(\d+)" class="experiment"( hidden)?>/g)];
- assert.equal(sections.length,12);
- assert.deepEqual(sections.filter(m=>!m[2]).map(m=>Number(m[1])),[11]);
+ assert.equal(sections.length,13);
+ assert.deepEqual(sections.filter(m=>!m[2]).map(m=>Number(m[1])),[12]);
 });
 
 test('140.12.5: scaling options are bounded and replicated fixture is deterministic',()=>{
@@ -327,7 +327,7 @@ test('140.12.5: canonical HTML has tenth scaling mode and no extra page',()=>{
  assert.match(html,/id="panel-9"/);
  assert.match(html,/CurvatureWebGPUPhysicalTolerance14123\.runPerformance/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.5-performance\.json/);
- assert.match(html,/for\(var i=0;i<12;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<13;i\+\+\)/);
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(s=>/webgpu-optics.*\.html/.test(s)),['webgpu-optics.html']);
 });
 

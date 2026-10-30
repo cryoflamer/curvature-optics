@@ -22,7 +22,7 @@
   if(!integrator.includes('advanceCompensated'))throw Error('Kahan RK4 shader unavailable');
   // Binding 3 is only used in the refinement stage; stage A has a different
   // auto pipeline layout. Do not submit extra bindings to an auto layout.
-  function shader(refinement,strict,gated,predictor){
+  function shader(refinement,strict,gated,predictor,guarded){
     // #140.12.2 keeps the original refinement math unchanged as the archived
     // residual-stop baseline. The alternate refinement is opt-in research.
     var refinementLoop=strict?`
@@ -193,6 +193,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       }
     }
   }
+  ${guarded?`// #140.12.14: a grazing/indeterminate GPU event is NOT verified.
+  // Dispatch the original sweep + bracket on this target rather than
+  // letting a nonzero status bypass it. Never manufacture visibility.
+  if(status==3.0){status=0.0;}`:''}
   results.data[offset]=vec4f(angle,residual,path,status);
   results.data[offset+1u]=vec4f(impact,contact,valid,0.0);
   // Sentinel -2 means the predictor was accepted, -3 means sweep needed.
@@ -260,6 +264,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   var WGSL_SWEEP=shader(false),WGSL_REFINE=shader(true,false),
     WGSL_REFINE_ANGLE_BRACKET=shader(true,true),
     WGSL_PREDICT=shader(false,false,false,true),
+    WGSL_PREDICT_GUARDED=shader(false,false,false,true,true),
     WGSL_PREDICT_GATED_SWEEP=shader(false,false,true,false),
     WGSL_PREDICT_GATED_REFINE=shader(true,false,true,false);
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
@@ -363,12 +368,12 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     if(!Number.isInteger(capacity)||capacity<1||capacity>MAX_TARGETS)
       throw RangeError('GPU session capacity must be 1–'+MAX_TARGETS+' targets');
     var algorithm=options.algorithm===undefined?'sweep':options.algorithm;
-    if(!['sweep','predictor'].includes(algorithm))
+    if(!['sweep','predictor','predictor-guarded'].includes(algorithm))
       throw RangeError('Unsupported GPU shooting algorithm');
     var refinement=options.refinement===undefined?'residual-stop':options.refinement;
     if(!['residual-stop','angle-bracket'].includes(refinement))
       throw RangeError('Unsupported GPU root refinement policy');
-    if(algorithm==='predictor'&&refinement!=='residual-stop')
+    if(algorithm!=='sweep'&&refinement!=='residual-stop')
       throw RangeError('GPU predictor currently requires residual-stop fallback');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
     if(!nav||!nav.gpu||!nav.gpu.requestAdapter)throw Error('WebGPU unavailable');
@@ -387,8 +392,9 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       var result=device.createBuffer({size:size,usage:flags});buffers.push(result);return result;
     }
     try{
-      var codes=algorithm==='predictor'?
-        [WGSL_PREDICT,WGSL_PREDICT_GATED_SWEEP,WGSL_PREDICT_GATED_REFINE]:
+      var codes=algorithm!=='sweep'?
+        [algorithm==='predictor-guarded'?WGSL_PREDICT_GUARDED:WGSL_PREDICT,
+          WGSL_PREDICT_GATED_SWEEP,WGSL_PREDICT_GATED_REFINE]:
         [WGSL_SWEEP,refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE];
       var modules=codes.map(function(code){return device.createShaderModule({code:code});});
       for(var module of modules){
@@ -408,7 +414,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         scan=alloc(scanSize,usage.STORAGE|usage.COPY_SRC),
         output=alloc(outputSize,usage.STORAGE|usage.COPY_SRC),
         read=alloc(outputSize,usage.COPY_DST|usage.MAP_READ);
-      var bindings=algorithm==='predictor' ? [
+      var bindings=algorithm!=='sweep' ? [
         device.createBindGroup({layout:pipelines[0].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
           {binding:2,resource:{buffer:config}}]}),
@@ -446,7 +452,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
             var encoder=device.createCommandEncoder();
             for(var i=0;i<pipelines.length;i++){
               var pass=encoder.beginComputePass();pass.setPipeline(pipelines[i]);pass.setBindGroup(0,bindings[i]);
-              var sweepPass=algorithm==='predictor'?i===1:i===0;
+              var sweepPass=algorithm!=='sweep'?i===1:i===0;
               pass.dispatchWorkgroups(Math.ceil(request.targets.length*(sweepPass?SAMPLES:1)/64));pass.end();
             }
             encoder.copyBufferToBuffer(output,0,read,0,bytes);
@@ -481,8 +487,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
               // Wall-clock phases, NOT distinct GPU timestamps or kernel-only times.
               wallClockPhases:samples},
             algorithm:{kind:algorithm,sampleAngles:SAMPLES,refineIterations:28,refinement:refinement,
-              predictorAccepted:algorithm==='predictor'?predictorAccepted:null,
-              predictorFallbacks:algorithm==='predictor'?request.targets.length-predictorAccepted:null,
+              predictorAccepted:algorithm!=='sweep'?predictorAccepted:null,
+              predictorFallbacks:algorithm!=='sweep'?request.targets.length-predictorAccepted:null,
               branch:contract.BRANCH,productionAuthorized:false},
             device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',architecture:adapter.info.architecture||''}:null}};
         }finally{busy=false;}
@@ -540,7 +546,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         'No production backend switch or authorization']};
   }
   return Object.freeze({WGSL_SWEEP:WGSL_SWEEP,WGSL_REFINE:WGSL_REFINE,
-    WGSL_PREDICT:WGSL_PREDICT,WGSL_PREDICT_GATED_SWEEP:WGSL_PREDICT_GATED_SWEEP,
+    WGSL_PREDICT:WGSL_PREDICT,WGSL_PREDICT_GUARDED:WGSL_PREDICT_GUARDED,
+    WGSL_PREDICT_GATED_SWEEP:WGSL_PREDICT_GATED_SWEEP,
     WGSL_PREDICT_GATED_REFINE:WGSL_PREDICT_GATED_REFINE,
     WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE_ANGLE_BRACKET,
     checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,createSession:createSession,solveBatch:solveBatch,

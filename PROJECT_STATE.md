@@ -1229,3 +1229,37 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   and no claim of actual WebGPU speedup or shader validation in a browser until
   a real export is provided. A faster batch with inaccurate f32 contact
   classification is not a qualifying result.
+
+## #140.12.14 — fail-closed GPU predictor event guard with per-target f64 triage
+
+- Adds a separate, explicit `algorithm:'predictor-guarded'` **research-only** mode.
+  An arrival whose GPU ground-event classifier returns `indeterminate`
+  (`contact=2`/status 3) is **not accepted** by the predictor, even when the
+  shooting residual is within tolerance. It proceeds through the existing
+  GPU sweep and bracket-refinement fallback. The original `sweep` and
+  `predictor` shader variants, output contract and production CPU renderer
+  remain untouched. A fallback result may itself remain `indeterminate`;
+  there is no invented visibility or silent CPU correction.
+- A thirteenth mode on the canonical `tools/webgpu-optics.html` page benchmarks
+  **sweep / original predictor / guarded predictor** on the exact same 1024
+  distinct 12-tower polygon-edge targets at RK4 steps 50 and 500 m, including
+  independent CPU f64 predictor reference. The new JSON export is
+  `curvature-webgpu-optics-140.12.14-event-guard.json`. Timings distinguish
+  setup, first execution and pipeline-reused warm upload-to-readback times.
+  Predictor success is counted only by the GPU telemetry sentinel (-2); all
+  nonaccepted results count toward fallback, including failed fallback.
+- The experiment records **all** status-disputed/unresolved targets, with
+  target surface altitude, GPU/CPU ground evidence and independent CPU f64
+  replay **at the GPU angle**, plus all event disagreement cases. It groups
+  near-surface cases and replay ground detections to distinguish predictor
+  acceptance problems from remaining f32 first-contact disagreement. These
+  f64 checks are explicitly outside all GPU timings and do not serve as a
+  hidden input to the GPU algorithm or timed batch.
+- #140.12.13 reported 30 predictor-vs-CPU status mismatches at 500 m versus
+  10 for the original sweep, even though 1024/1024 predictor paths were
+  counted as accepted. The strict guard addresses **that acceptance bug**, not
+  the remaining parity failures of the f32 sweep/event detector. Do not
+  assume these mismatches are fixed until a browser WebGPU export confirms it.
+- No production authorization, full-frame speedup or 1-pixel silhouette
+  equivalence is implied by this change. Browser shader compilation/execution
+  and speed/parity must be measured on actual WebGPU hardware.
