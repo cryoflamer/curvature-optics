@@ -175,7 +175,7 @@
       // The common frame/painter copies and validates its input scene. A
       // camera-only redraw may therefore reuse the optical composition itself
       // instead of rebuilding thousands of validated line primitives.
-      if(cached&&!options.onExactTarget&&!options.experimentalRayField&&cached.key===key)
+      if(cached&&!options.onExactTarget&&!options.onExactResult&&!options.experimentalRayField&&cached.key===key)
         return {composition:cached.composition,stats:cached.stats,reused:true};
       if(options.experimentalRayField && (kind!=='standard'||
           typeof options.experimentalRayField.sample!=='function'||
@@ -218,6 +218,7 @@
           shootingWarmStart:settings.shootingWarmStart,
           surfaceArithmetic:settings.surfaceArithmetic,
           onExactTarget:options.onExactTarget,
+          onExactResult:options.onExactResult,
           experimentalRayField:options.experimentalRayField});
       }
       var fieldSetupMs=clock()-startedProfile;
@@ -376,7 +377,7 @@
       stats.opticalStages={sceneAdoptionMs:assemblyDetail.sceneAdoptionMs,fieldSetupMs:fieldSetupMs,groundGuidesMs:groundGuidesMs,
         outlinesMs:outlinesMs,fillsMs:fillsMs,assemblyMs:clock()-assemblyStarted,
         exactSolveMs:fieldStats&&fieldStats.exactSolveMs||0};
-      if(!options.onExactTarget&&!options.experimentalRayField&&
+      if(!options.onExactTarget&&!options.onExactResult&&!options.experimentalRayField&&
           !stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])
         cached={key:key,stats:stats,composition:presentation};
       else cached=null;

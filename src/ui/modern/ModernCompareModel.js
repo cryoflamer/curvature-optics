@@ -203,6 +203,48 @@
       stats:function(){return {seeds:map.size,failedGpuSeeds:failures,
         gpuHits:hits,gpuExactHits:exactHits,cpuFallbackRequests:misses};}};
   }
+  // #140.12.11: replay the SAME selected adaptive requests using their
+  // original CPU f64 oracle outputs. This is a control for cache/injection
+  // effects; it does not compute a new CPU solution or use a GPU result.
+  function cpuReplayField(bundle,records){
+    if(!bundle||!bundle.request||!Array.isArray(bundle.selected)||!Array.isArray(records))
+      throw TypeError('Invalid Compare CPU replay inputs');
+    var originals=new Map();
+    records.forEach(function(row){
+      if(!row||!Number.isFinite(row.d)||!Number.isFinite(row.h)||!row.result)return;
+      var result=row.result;
+      if(!['visible','blocked','indeterminate'].includes(result.status)||
+          !Number.isFinite(result.angle))return;
+      originals.set(rayKey(row.d,row.h),Object.freeze({status:result.status,
+        angle:result.angle,residual:result.residual,reason:result.reason,
+        method:'cpu-replay-experimental'}));
+    });
+    var map=new Map(),missing=0;
+    bundle.selected.forEach(function(point){
+      var result=originals.get(point.key);
+      if(result)map.set(point.key,result);else missing++;
+    });
+    var hits=0,exactHits=0,misses=0;
+    function lookup(d,h,exact){
+      var result=map.get(rayKey(d,h));
+      if(result){hits++;if(exact)exactHits++;return result;}
+      misses++;return null;
+    }
+    return {request:bundle.request,kind:'cpu-replay-control',
+      sample:function(d,h){return lookup(d,h,false);},
+      exact:function(d,h){return lookup(d,h,true);},
+      stats:function(){return {seeds:map.size,missingCpuSeeds:missing,
+        replayHits:hits,replayExactHits:exactHits,cpuFallbackRequests:misses};}};
+  }
+  // Pixel equality and adaptive-work equality are separate evidence.
+  function frameControlCounts(reference,replay){
+    function pick(r){return r?{contours:r.drawn,fillTriangles:r.fillTriangles,
+      unresolved:r.unresolved}:null;}
+    var a=pick(reference),b=pick(replay);
+    return {reference:a,replay:b,sameCounts:!!a&&!!b&&
+      a.contours===b.contours&&a.fillTriangles===b.fillTriangles&&
+      a.unresolved===b.unresolved};
+  }
   function compareFramePixels(a,b){
     if(!a||!b||!a.getContext||!b.getContext||a.width!==b.width||a.height!==b.height)
       return {status:'unavailable',reason:'Canvas sizes differ or no readable canvas'};
@@ -228,5 +270,7 @@
   }
   return Object.freeze({pair:pair,clone:clone,invariant:invariant,
     probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview,
-    gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,compareFramePixels:compareFramePixels});
+    gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,
+    cpuReplayField:cpuReplayField,frameControlCounts:frameControlCounts,
+    compareFramePixels:compareFramePixels});
 }));

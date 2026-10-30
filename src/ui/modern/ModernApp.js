@@ -10,7 +10,7 @@
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
     geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},
     compareGpuProbe:false,probeGeneration:0,probeBusy:false,probeLast:null,
-    probeField:null,probeFrameLast:null,probeCapture:null};
+    probeField:null,probeFrameLast:null,probeCapture:null,probeCapturedResults:null};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -585,8 +585,12 @@
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
-      if(state.compareGpuProbe&&side==='A'&&state.probeCapture)
+      if(state.compareGpuProbe&&side==='A'&&state.probeCapture){
         options.onExactTarget=function(d,h){state.probeCapture.push([d,h]);};
+        options.onExactResult=function(d,h,result){
+          if(state.probeCapturedResults)state.probeCapturedResults.push({d:d,h:h,result:result});
+        };
+      }
       if(state.compareGpuProbe&&side==='B'&&state.probeField)
         options.experimentalRayField=state.probeField;
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled(side));
@@ -613,10 +617,12 @@
       var node=el('ModernCompareStatus'+side);
       if(node){
         var gpuCounts=result.fieldStats&&result.fieldStats.experimentalGpu;
-        node.textContent=(gpuCounts?'GPU-assisted optics':'Computed optics')+
+        var replayControl=state.probeField&&state.probeField.kind==='cpu-replay-control';
+        node.textContent=(replayControl?'CPU replay control':gpuCounts?'GPU-assisted optics':'Computed optics')+
           (result.cacheReused?' (cached)':'')+' · '+result.drawn+
           ' contours · '+result.fillTriangles+' fills · '+result.unresolved+' unresolved'+
-          (gpuCounts?' · '+gpuCounts.gpuHits+' GPU lookups / '+gpuCounts.cpuFallbackRequests+' CPU fallbacks':'');
+          (gpuCounts?' · '+(replayControl?gpuCounts.replayHits+' CPU replay lookups':gpuCounts.gpuHits+' GPU lookups')+
+            ' / '+gpuCounts.cpuFallbackRequests+' CPU fallbacks':'');
         node.classList.toggle('is-error',!!result.unresolved);
       }
     }catch(error){
@@ -830,12 +836,14 @@
       if(!state.compareGraphs.A||!state.compareGraphs.B)throw Error('Compare canvases unavailable');
       probeStatus('Collecting real adaptive CPU ray-field requests for model A…');
       state.probeCapture=[];
+      state.probeCapturedResults=[];
       var started=profileNow();
       // The capture is camera-independent and CPU-only. The cache is bypassed
       // while capturing, so a previously painted A frame cannot hide solves.
       state.compareGraphs.A.Redraw();
       var collected=state.probeCapture;
-      state.probeCapture=null;
+      var cpuRecords=state.probeCapturedResults;
+      state.probeCapture=null;state.probeCapturedResults=null;
       var discoverMs=profileNow()-started;
       if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
       var count=Number(probeUi('ModernGpuProbeCount').value);
@@ -847,10 +855,32 @@
       session=await gpu.createSession(bundle.selected.length,null,{refinement:'residual-stop'});
       var gpuResult=await session.solve(bundle.request,{warmRepeats:1});
       if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
+      // Controlled replay: first render B using CPU f64 answers captured
+      // during A discovery, but through the identical seeded-field interface.
+      // The replay frame is compared to A BEFORE GPU can affect B.
+      var cpuReplay=compareAdapter.cpuReplayField(bundle,cpuRecords);
+      state.probeField=cpuReplay;
+      var replayLabel=el('ModernCompareLabelB');
+      if(replayLabel)replayLabel.textContent='CPU f64 · replay control';
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareLast.B=null;
+      var replayStarted=profileNow();
+      state.compareGraphs.B.Redraw();
+      var replayMs=profileNow()-replayStarted;
+      if(!state.compareLast.B||!state.compareLast.B.fieldStats||
+         !state.compareLast.B.fieldStats.experimentalGpu)
+        throw Error('CPU replay B frame did not complete');
+      var replayRender=state.compareLast.B;
+      var replayStats=cpuReplay.stats();
+      if(!replayStats.replayHits)throw Error('No CPU replay seeds were consumed');
+      var replayFrameDiff=compareAdapter.compareFramePixels(
+        state.compareGraphs.A.Canvas,state.compareGraphs.B.Canvas);
+      if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
       state.probeField=compareAdapter.gpuRayField(bundle,gpuResult.response);
       var labelB=el('ModernCompareLabelB');
       if(labelB)labelB.textContent='GPU-assisted · physical frame';
       if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareLast.B=null;
       var paintStarted=profileNow();
       state.compareGraphs.B.Redraw();
       var paintElapsed=profileNow()-paintStarted;
@@ -861,7 +891,13 @@
       if(!gpuStats.gpuHits)throw Error('No selected GPU ray was consumed by the physical B frame');
       var aCanvas=state.compareGraphs.A.Canvas,bCanvas=state.compareGraphs.B.Canvas;
       var frameDiff=compareAdapter.compareFramePixels(aCanvas,bCanvas);
-      state.probeFrameLast={version:'140.12.10',kind:'GPU-seeded physical Compare frame',
+      var referenceCounts=compareAdapter.frameControlCounts(state.compareLast.A,replayRender);
+      var controlIdentical=replayFrameDiff.status==='measured'?
+        replayFrameDiff.strictPixels===0&&referenceCounts.sameCounts&&replayStats.missingCpuSeeds===0:null;
+      state.probeFrameLast={version:'140.12.11',kind:'CPU replay control and GPU-seeded physical Compare frame',
+        cpuReplayControl:{renderMs:replayMs,stats:replayStats,
+          rendererCounts:referenceCounts,frameDiff:replayFrameDiff,identical:controlIdentical,
+          actualRenderedImageCompared:replayFrameDiff.status==='measured'},
         geometry:bundle.request.geometry,atmosphere:bundle.request.atmosphere,
         discoveredCpuRayRequests:bundle.discovered,qualifiedCpuRayTargets:bundle.qualified,
         gpuAttemptedTargets:bundle.selected.length,gpuStats:gpuStats,
@@ -871,13 +907,21 @@
         cpuAFrameMs:state.compareLast.A&&state.compareLast.A.timings&&state.compareLast.A.timings.totalMs,
         gpuAssistedBRendererMs:state.compareLast.B&&state.compareLast.B.timings&&state.compareLast.B.timings.totalMs,
         frameDiff:frameDiff,
+        gpuRendererCounts:compareAdapter.frameControlCounts(state.compareLast.A,state.compareLast.B),
         actualRenderedImageCompared:frameDiff.status==='measured',
         // This is a mixed ray field, not an all-GPU optical renderer.
         gpuOnlyRayField:false,productionAuthorized:false,visualEquivalenceProven:false};
-      probeStatus('GPU-assisted B frame built · '+gpuStats.gpuHits+' GPU lookups · '+
+      probeStatus('CPU replay control '+(controlIdentical===true?'identical':
+        controlIdentical===false?'different':'inconclusive')+
+        ' · GPU-assisted B frame built · '+gpuStats.gpuHits+' GPU lookups · '+
         gpuStats.cpuFallbackRequests+' CPU fallbacks · '+gpuStats.seeds+' valid GPU seeds');
       var line=probeUi('ModernGpuFrameMetrics');
-      if(line)line.textContent='CPU discovery/A frame '+discoverMs.toFixed(1)+' ms · GPU setup '+
+      if(line)line.textContent='CPU replay control '+replayMs.toFixed(1)+' ms · '+
+        (replayFrameDiff.status==='measured'?replayFrameDiff.strictPixels+' strict / '+
+          replayFrameDiff.significantPixels+' significant pixels vs A':'pixel comparison unavailable')+
+        ' · '+replayStats.replayHits+' replay hits / '+replayStats.cpuFallbackRequests+' fallbacks'+
+        (replayStats.missingCpuSeeds?' · '+replayStats.missingCpuSeeds+' missing CPU seeds':'')+
+        ' · CPU discovery/A frame '+discoverMs.toFixed(1)+' ms · GPU setup '+
         session.setupMs.toFixed(1)+' ms · GPU batch '+gpuResult.timing.gpuUploadToReadbackMs.toFixed(1)+
         ' ms · assisted B frame '+paintElapsed.toFixed(1)+' ms · '+
         (frameDiff.status==='measured'?frameDiff.significantPixels+'/'+frameDiff.totalPixels+
@@ -886,13 +930,13 @@
     }catch(error){
       state.probeField=null;state.probeFrameLast=null;
       var resetLabel=el('ModernCompareLabelB');
-      if(resetLabel)resetLabel.textContent='CPU f64 · before GPU-assisted render';
+      if(resetLabel)resetLabel.textContent='CPU f64 · after failed control/GPU run';
       if(generation===state.probeGeneration){
         probeStatus('GPU-assisted frame unavailable: '+String(error.message||error));
         if(state.compareGraphs.B)state.compareGraphs.B.Redraw();
       }
     }finally{
-      state.probeCapture=null;
+      state.probeCapture=null;state.probeCapturedResults=null;
       if(session)session.close();
       state.probeBusy=false;
       if(button)button.disabled=false;
@@ -929,16 +973,17 @@
     var exportButton=probeUi('ModernGpuProbeExport');
     if(exportButton)exportButton.addEventListener('click',function(){
       if(!state.probeLast&&!state.probeFrameLast){
-        probeStatus('Run the CPU/GPU probe or build the GPU-assisted frame before exporting.');return;
+        probeStatus('Run the CPU/GPU probe or build the replay/GPU frames before exporting.');return;
       }
       if(!root.Blob||!root.URL||!root.URL.createObjectURL){
         probeStatus('JSON export unavailable in this browser.');return;
       }
-      var report=state.probeLast?Object.assign({},state.probeLast,{gpuAssistedFrame:state.probeFrameLast}):
-        {version:'140.12.10',gpuAssistedFrame:state.probeFrameLast};
+      var report=state.probeLast?Object.assign({},state.probeLast,{version:'140.12.11',
+        sampleProbeVersion:state.probeLast.version,gpuAssistedFrame:state.probeFrameLast}):
+        {version:'140.12.11',gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download='curvature-compare-140.12.10-gpu-frame.json';
+      link.href=url;link.download='curvature-compare-140.12.11-cpu-replay-gpu-frame.json';
       try{link.click();}finally{
         if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
         else root.URL.revokeObjectURL(url);

@@ -184,3 +184,41 @@ test('140.12.10: real CPU field discovery is replayed through selected GPU oracl
   assert.ok(result.stats.visibleSegments>=0);
   assert.equal(result.reused,false);
 });
+
+
+test('140.12.11: real physical optics can replay selected CPU oracle results through the seeded field',()=>{
+  const compare=require('../src/ui/modern/ModernCompareModel');
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const m=model({showModel:2,NObjects:[1,1],showGrid:0});
+  const composition=compose.composeOpticalMain(m,false,{physicalWorld:true});
+  const settings={maximumDepth:1,maxSamples:200,fieldAdaptiveDepth:0,step:100};
+  const requests=[],records=[];
+  const reference=optics.create().transform(composition,m,{atmosphere:'standard',settings,
+    onExactTarget:(d,h)=>requests.push([d,h]),
+    onExactResult:(d,h,result)=>records.push({d,h,result})});
+  const bundle=compare.gpuFieldRequest(m,requests,32,surfaces,'first-forward-x');
+  const replay=compare.cpuReplayField(bundle,records);
+  assert.ok(replay.stats().seeds>0);
+  const controlled=optics.create().transform(composition,m,{atmosphere:'standard',settings,
+    experimentalRayField:replay});
+  assert.ok(replay.stats().replayExactHits>0);
+  assert.ok(controlled.stats.visibleSegments>=0);
+  assert.equal(controlled.reused,false);
+  assert.ok(reference.stats.fieldStats.solves>0);
+});
+
+test('140.12.11: CPU exact output hook captures real f64 records without poisoning scene cache',()=>{
+  const m=model({showModel:2,NObjects:[1,1],showGrid:0});
+  const scene=compose.composeOpticalMain(m,false,{physicalWorld:true});
+  const settings={maximumDepth:1,maxSamples:200,fieldAdaptiveDepth:0,step:100};
+  const originals=[];
+  const session=optics.create();
+  const observed=session.transform(scene,m,{atmosphere:'standard',settings,
+    onExactResult:(d,h,result)=>originals.push({d,h,result})});
+  assert.equal(observed.reused,false);
+  assert.ok(originals.length>5);
+  assert.ok(originals.every(r=>r.result&&Object.isFrozen(r.result)));
+  assert.ok(originals.some(r=>r.result.method==='exact'));
+  const ordinary=session.transform(scene,m,{atmosphere:'standard',settings});
+  assert.equal(ordinary.reused,false,'capture-only render must not poison the regular CPU cache');
+});

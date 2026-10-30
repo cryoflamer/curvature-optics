@@ -272,3 +272,63 @@ test('140.12.10: full physical renderer and Compare wire GPU results into B and 
   assert.match(field,/options\.onExactTarget\(d,h\)/);
   assert.doesNotMatch(source('src/app/CurvatureMainCanvasRenderer.js'),/CurvatureWebGPUBatchShooting1412/);
 });
+
+
+test('140.12.11: CPU replay uses only original selected f64 oracle outputs and honest fallback',()=>{
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const model={showModel:2,rEarth:6371000,Height:15};
+  const bundle=compare.gpuFieldRequest(model,[[500,30],[1000,100],[1500,20]],3,surfaces,'first-forward-x');
+  const rows=[{d:500,h:30,result:{status:'visible',angle:0.012,residual:0.001}},
+    {d:1000,h:100,result:{status:'blocked',angle:-0.023,residual:0.002}},
+    {d:1500,h:20,result:{status:'solver_failed',angle:null}}];
+  const replay=compare.cpuReplayField(bundle,rows);
+  assert.deepEqual(replay.exact(500,30),{status:'visible',angle:0.012,
+    residual:0.001,reason:undefined,method:'cpu-replay-experimental'});
+  assert.equal(replay.sample(1000,100).status,'blocked');
+  assert.equal(replay.exact(1500,20),null);
+  assert.equal(replay.exact(800,40),null);
+  assert.deepEqual(replay.stats(),{seeds:2,missingCpuSeeds:1,
+    replayHits:2,replayExactHits:1,cpuFallbackRequests:2});
+  assert.throws(()=>compare.cpuReplayField({},null),/Invalid/);
+});
+
+test('140.12.11: Compare captures actual CPU answers and renders replay before GPU B',()=>{
+  const app=source('src/ui/modern/ModernApp.js');
+  const field=source('src/optics/OpticalSharedRayField.js');
+  const html=source('CurvatureModern.html');
+  assert.match(field,/options\.onExactResult\(d,h,record\)/);
+  assert.match(app,/options\.onExactResult=function\(d,h,result\)/);
+  assert.match(app,/compareAdapter\.cpuReplayField\(bundle,cpuRecords\)/);
+  assert.match(app,/replayFrameDiff=compareAdapter\.compareFramePixels/);
+  assert.match(app,/cpuReplayControl:/);
+  assert.match(html,/Build CPU replay \+ GPU frame B/);
+  assert.ok(app.indexOf('var cpuReplay=compareAdapter.cpuReplayField')<
+    app.indexOf('state.probeField=compareAdapter.gpuRayField(bundle,gpuResult.response)'));
+});
+
+test('140.12.11: CPU replay counts and source status are distinct from GPU work',()=>{
+  const request={geometry:'flat',radius:6371000,observerHeight:15,atmosphere:'standard'};
+  const selected=[{key:'500.0000000000,30.00000000000',d:500,h:30}];
+  const replay=compare.cpuReplayField({request,selected},[{d:500,h:30,
+    result:{status:'blocked',angle:-0.003,residual:0,reason:'ground-crossing'}}]);
+  assert.strictEqual(replay.request,request);
+  assert.equal(replay.kind,'cpu-replay-control');
+  assert.equal(replay.exact(500,30).method,'cpu-replay-experimental');
+  assert.equal(replay.exact(500,30).reason,'ground-crossing');
+  assert.equal(replay.stats().replayExactHits,2);
+  assert.equal(compare.frameControlCounts({drawn:7,fillTriangles:9,unresolved:0},
+    {drawn:7,fillTriangles:9,unresolved:0}).sameCounts,true);
+  assert.equal(compare.frameControlCounts({drawn:7,fillTriangles:9,unresolved:0},
+    {drawn:7,fillTriangles:10,unresolved:0}).sameCounts,false);
+  assert.equal(compare.frameControlCounts(null,{drawn:1}).sameCounts,false);
+});
+
+test('140.12.11: replay control labels and exports strict pixel and adaptive work evidence',()=>{
+  const app=source('src/ui/modern/ModernApp.js');
+  assert.match(app,/replayFrameDiff\.strictPixels===0/);
+  assert.match(app,/referenceCounts\.sameCounts/);
+  assert.match(app,/cpuReplayControl:\{renderMs:replayMs/);
+  assert.match(app,/replayStats\.replayHits/);
+  assert.match(app,/CPU replay control/);
+  assert.match(app,/curvature-compare-140\.12\.11-cpu-replay-gpu-frame\.json/);
+});

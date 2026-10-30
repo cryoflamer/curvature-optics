@@ -67,6 +67,7 @@
     delete solverOptions.maxAdaptiveCells;
     delete solverOptions.shootingOptimization;
     delete solverOptions.onExactTarget;
+    delete solverOptions.onExactResult;
     delete solverOptions.experimentalRayField;
     if (solverOptions.profileOptions)
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
@@ -112,7 +113,7 @@
       var seeded=options.experimentalRayField&&options.experimentalRayField.exact(d,h);
       if(seeded){
         var record=Object.freeze({status:seeded.status,angle:seeded.angle,
-          residual:seeded.residual,method:'gpu-experimental',reason:seeded.reason||null});
+          residual:seeded.residual,method:seeded.method||'gpu-experimental',reason:seeded.reason||null});
         cache.set(key,record);statistics.solves++;statistics.gpuSeedUses++;
         return record;
       }
@@ -149,6 +150,7 @@
         residual:result.residual,method:'exact',reason:result.reason};
       Object.freeze(record);
       cache.set(key,record);
+      if(typeof options.onExactResult==='function')options.onExactResult(d,h,record);
       if(d>=5000&&solverOptions.shootingPredictor===true&&
           options.shootingWarmStart!==false&&Number.isFinite(result.angle)&&Number.isFinite(result.residual)){
         var previous=heightSeeds.get(seedKey)||[];
