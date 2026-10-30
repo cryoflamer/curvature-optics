@@ -952,7 +952,8 @@
   // WebGPU batch, then consumed by the ordinary physical B-frame painter.
   // CPU A is cold-rendered only AFTER the GPU frame, for a separate fair
   // timing reference and pixel comparison; it is not an input to GPU work.
-  async function runCompareGpuFirst(){
+  async function runCompareGpuFirst(fast){
+    fast=fast===true;
     if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
     var spec=state.compareConfig&&state.compareConfig.A;
     if(!spec||spec.atmosphere!=='standard'){
@@ -960,7 +961,7 @@
     }
     var gpu=root.CurvatureWebGPUBatchShooting1412,contract=root.CurvatureOpticalBatchContract1411;
     if(!gpu||!contract||!root.navigator||!root.navigator.gpu||!compareAdapter||
-       !compareAdapter.gpuFirstGrid||!root.CurvatureIndependentComposition||
+       !compareAdapter.gpuFirstGrid||!compareAdapter.gpuFirstBatchRequests||!root.CurvatureIndependentComposition||
        !root.CurvatureOpticalTowerSilhouette||!root.CurvatureSurfaceGeometry){
       probeStatus('GPU-first WebGPU / physical scene dependencies unavailable.');return;
     }
@@ -969,31 +970,46 @@
     }
     var generation=state.probeGeneration,session=null,
       firstButton=probeUi('ModernGpuFirstRun'),sampleButton=probeUi('ModernGpuProbeRun'),
-      replayButton=probeUi('ModernGpuFrameRun');
+      replayButton=probeUi('ModernGpuFrameRun'),fastButton=probeUi('ModernGpuFastRun');
     state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
-    [firstButton,sampleButton,replayButton].forEach(function(b){if(b)b.disabled=true;});
+    [firstButton,sampleButton,replayButton,fastButton].forEach(function(b){if(b)b.disabled=true;});
     try{
-      var totalStarted=profileNow(),count=Number(probeUi('ModernGpuProbeCount').value);
-      probeStatus('GPU-first: preparing a physical-scene grid WITHOUT CPU ray discovery…');
+      var totalStarted=profileNow(),count=Number(probeUi(fast?'ModernGpuFastGridCount':'ModernGpuProbeCount').value);
+      probeStatus((fast?'GPU predictor':'GPU-first')+': preparing scene grid WITHOUT CPU ray discovery…');
       var grid=compareAdapter.gpuFirstGrid(state.comparePair.A,count,{
         composition:root.CurvatureIndependentComposition,
         silhouette:root.CurvatureOpticalTowerSilhouette,
         surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH});
-      gpu.checked(grid.request);
+      // Unlike #140.12.12, the fast option uses the CPU-inspired predictor
+      // on a 500 m integration step. More than 1024 grid nodes are divided
+      // into bounded GPU batches and reunited in their original order.
+      var requests=compareAdapter.gpuFirstBatchRequests(grid,1024);
+      if(fast)requests.forEach(function(request){request.controls.step=500;});
+      requests.forEach(gpu.checked);
       var gridPreparedAt=profileNow();
-      session=await gpu.createSession(grid.request.targets.length,null,{refinement:'residual-stop'});
+      session=await gpu.createSession(requests[0].targets.length,null,
+        {algorithm:fast?'predictor':'sweep',refinement:'residual-stop'});
       if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
-      probeStatus('GPU-first: solving '+grid.request.targets.length+' independent grid nodes…');
-      var batch=await session.solve(grid.request,{warmRepeats:0});
-      if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
+      var batchResults=[],batchTimes=[],accepted=0,fallbacks=0;
+      for(var batchIndex=0;batchIndex<requests.length;batchIndex++){
+        probeStatus('GPU-'+(fast?'predictor':'sweep')+': batch '+(batchIndex+1)+'/'+requests.length+'…');
+        var batch=await session.solve(requests[batchIndex],{warmRepeats:0});
+        if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
+        batchResults.push.apply(batchResults,batch.response.results);
+        batchTimes.push(batch.timing.gpuUploadToReadbackMs);
+        if(fast){accepted+=batch.algorithm.predictorAccepted;
+          fallbacks+=batch.algorithm.predictorFallbacks;}
+      }
       var gpuResolvedAt=profileNow();
-      var fastField=compareAdapter.gpuFirstRayField(grid,batch.response,root.CurvatureSurfaceGeometry);
+      var fastField=compareAdapter.gpuFirstRayField(grid,
+        {results:batchResults},root.CurvatureSurfaceGeometry);
       state.probeField=fastField;
       var labelB=el('ModernCompareLabelB');
-      if(labelB)labelB.textContent='GPU-first grid · approximate physical frame';
+      if(labelB)labelB.textContent=fast?'GPU predictor · approximate physical frame':
+        'GPU-first grid · approximate physical frame';
       if(state.compareCache.B)state.compareCache.B.clearCache();
       state.compareLast.B=null;
-      probeStatus('GPU-first: painting frame B directly from the prepared GPU grid…');
+      probeStatus((fast?'GPU predictor':'GPU-first')+': painting frame B from the GPU grid…');
       var renderStarted=profileNow();
       state.compareGraphs.B.Redraw();
       var renderFinished=profileNow();
@@ -1002,6 +1018,41 @@
          state.compareLast.B.fieldStats.experimentalGpu.kind!=='gpu-first-grid')
         throw Error('GPU-first grid did not reach the physical renderer');
       var fullGpuMs=renderFinished-totalStarted,gpuStats=fastField.stats().experimentalGpu;
+      // #140.12.15: second complete GPU-field + cold B-paint measurement
+      // reuses the already-compiled session, but regenerates scene grid and
+      // batches and clears the render cache. Unlike batch-only numbers, this
+      // includes the real Canvas frame. It is NOT added to cold fullGpuMs.
+      var warmFrameMs=null,warmBatchTimes=[],warmGridMs=null,warmPaintMs=null;
+      if(fast){
+        var warmStarted=profileNow();
+        var warmGrid=compareAdapter.gpuFirstGrid(state.comparePair.A,count,{
+          composition:root.CurvatureIndependentComposition,
+          silhouette:root.CurvatureOpticalTowerSilhouette,
+          surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH});
+        var warmRequests=compareAdapter.gpuFirstBatchRequests(warmGrid,1024);
+        warmRequests.forEach(function(request){request.controls.step=500;});
+        warmGridMs=profileNow()-warmStarted;
+        var warmResults=[];
+        for(var wi=0;wi<warmRequests.length;wi++){
+          var warmBatch=await session.solve(warmRequests[wi],{warmRepeats:0});
+          if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
+          warmResults.push.apply(warmResults,warmBatch.response.results);
+          warmBatchTimes.push(warmBatch.timing.gpuUploadToReadbackMs);
+        }
+        state.probeField=compareAdapter.gpuFirstRayField(warmGrid,
+          {results:warmResults},root.CurvatureSurfaceGeometry);
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareLast.B=null;
+        var warmPaintStarted=profileNow();
+        state.compareGraphs.B.Redraw();
+        warmPaintMs=profileNow()-warmPaintStarted;
+        if(!state.compareLast.B||!state.compareLast.B.fieldStats||
+           !state.compareLast.B.fieldStats.experimentalGpu||
+           state.compareLast.B.fieldStats.experimentalGpu.kind!=='gpu-first-grid')
+          throw Error('Warm GPU predictor grid did not reach the physical renderer');
+        warmFrameMs=profileNow()-warmStarted;
+        gpuStats=state.probeField.stats().experimentalGpu;
+      }
       // This is an independently timed CPU reference, never CPU discovery for
       // the WebGPU path. Force cold optics so cached CPU pixels cannot turn a
       // hot repaint into a misleading throughput reference.
@@ -1019,7 +1070,17 @@
       var speedup=cpuMs/fullGpuMs;
       var faster=fullGpuMs<cpuMs;
       var verdict=faster?'GPU_FIRST_FASTER_BUT_VISUAL_UNQUALIFIED':'NO_END_TO_END_GPU_SPEEDUP';
-      state.probeFrameLast={version:'140.12.12',kind:'GPU-first geometry-grid full-frame speed gate',
+      state.probeFrameLast={version:fast?'140.12.15':'140.12.12',
+        kind:fast?'Fast GPU predictor physical-grid full-frame speed/visual experiment':
+          'GPU-first geometry-grid full-frame speed gate',
+        gpuAlgorithm:fast?'predictor':'sweep',gpuRK4StepMetres:fast?500:50,
+        gpuBatchCount:requests.length,gpuBatchReadbackTimesMs:batchTimes,
+        gpuWarmBatchReadbackTimesMs:fast?warmBatchTimes:null,
+        gpuWarmGridPrepareMs:warmGridMs,gpuWarmFramePaintMs:warmPaintMs,
+        gpuWarmFrameEndToEndMs:warmFrameMs,
+        warmSpeedupCpuOverGpu:warmFrameMs?cpuMs/warmFrameMs:null,
+        gpuBatchReadbackSumMs:batchTimes.reduce(function(a,b){return a+b;},0),
+        gpuPredictorAccepted:fast?accepted:null,gpuPredictorFallbacks:fast?fallbacks:null,
         geometry:grid.request.geometry,atmosphere:grid.request.atmosphere,
         gpuGrid:{columns:grid.columns,rows:grid.rows,points:grid.request.targets.length,
           objectVertices:grid.objectVertices,objectDistanceRange:grid.objectDistanceRange,
@@ -1030,33 +1091,41 @@
         gpuFieldSetupAndBatchMs:gpuResolvedAt-totalStarted,
         gpuFrameRenderMs:renderFinished-renderStarted,
         gpuFirstEndToEndMs:fullGpuMs,cpuColdReferenceMs:cpuMs,
+        predictorFrameEndToEndMs:fast?fullGpuMs:null,
         cpuFrameColdCacheReused:state.compareLast.A.cacheReused,
         speedupCpuOverGpu:speedup,beatCpuColdReference:faster,
+        beatCpuWithWarmPipeline:warmFrameMs?warmFrameMs<cpuMs:null,
         frameDiff:diff,rendererCounts:counts,
         gpuOnlyOpticalSamples:true,gpuOnlyRasterization:false,
         interpolationApproximate:true,visualEquivalenceProven:false,
         productionAuthorized:false,verdict:verdict};
-      probeStatus('GPU-first '+fullGpuMs.toFixed(1)+' ms vs cold CPU '+
+      probeStatus((fast?'GPU predictor':'GPU-first')+' '+fullGpuMs.toFixed(1)+' ms vs cold CPU '+
         cpuMs.toFixed(1)+' ms · '+speedup.toFixed(2)+'× CPU/GPU'+
-        (faster?' · speed win (not visual approval)':' · NO SPEED WIN'));
+        (faster?' · cold speed win':' · cold NO SPEED WIN')+
+        (warmFrameMs?' · pipeline-warm frame '+warmFrameMs.toFixed(1)+' ms · '+
+          (cpuMs/warmFrameMs).toFixed(2)+'× CPU/GPU':'')+' · visual approval NOT established');
       var line=probeUi('ModernGpuFrameMetrics');
       if(line)line.textContent=grid.request.targets.length+' GPU grid rays · '+
         gpuStats.gpuHits+' optical lookups · '+gpuStats.cpuFallbackRequests+
         ' CPU shooting fallbacks · '+gpuStats.failedGpuNodes+' failed grid nodes · '+
         gpuStats.mixedStatusLookups+' mixed-status lookups · '+
-        gpuStats.extrapolatedLookups+' extrapolated lookups · GPU first total '+
+        gpuStats.extrapolatedLookups+' extrapolated lookups · '+
+        (fast?'GPU predictor':'GPU-first')+' cold full frame '+
         fullGpuMs.toFixed(1)+' ms including grid, WebGPU setup/readback and B painting'+
+        ' · '+requests.length+' GPU batches'+(fast?' · '+accepted+' predictor accepted · '+
+          fallbacks+' sweep fallback · pipeline-warm full frame '+warmFrameMs.toFixed(1)+' ms':'')+
         ' · separate CPU cold frame '+cpuMs.toFixed(1)+' ms · '+
         (diff.status==='measured'?diff.significantPixels+'/'+diff.totalPixels+
-          ' significantly different pixels':'pixel comparison unavailable: '+diff.reason)+
+          ' significantly different pixels ('+(100*diff.significantPixels/diff.totalPixels).toFixed(2)+
+          '%)':'pixel comparison unavailable: '+diff.reason)+
         ' · '+counts.reference.contours+'/'+counts.replay.contours+' contours · '+
         'experimental interpolation, NO certified occlusion/silhouette parity.';
     }catch(error){
       if(generation===state.probeGeneration){
         state.probeField=null;state.probeFrameLast=null;
         var resetLabel=el('ModernCompareLabelB');
-        if(resetLabel)resetLabel.textContent='CPU f64 · GPU-first failed';
-        probeStatus('GPU-first unavailable: '+String(error.message||error));
+        if(resetLabel)resetLabel.textContent='CPU f64 · GPU experiment failed';
+        probeStatus((fast?'GPU predictor':'GPU-first')+' unavailable: '+String(error.message||error));
         if(state.compareCache.B)state.compareCache.B.clearCache();
         state.compareGraphs.B.Redraw();
       }
@@ -1064,7 +1133,7 @@
       state.probeForceColdA=false;
       if(session)session.close();
       state.probeBusy=false;
-      [firstButton,sampleButton,replayButton].forEach(function(b){if(b)b.disabled=false;});
+      [firstButton,sampleButton,replayButton,fastButton].forEach(function(b){if(b)b.disabled=false;});
     }
   }
   function bindCompareGpuProbe(){
@@ -1091,11 +1160,21 @@
       // changes: repaint B with the regular CPU field immediately.
       redraw();
     });
+    var gridSelect=probeUi('ModernGpuFastGridCount');
+    if(gridSelect)gridSelect.addEventListener('change',function(){
+      state.probeField=null;state.probeFrameLast=null;state.probeGeneration++;
+      probeStatus('Fast GPU grid density changed · rerun the frame benchmark.');
+      var label=el('ModernCompareLabelB');if(label)label.textContent='CPU f64 · GPU grid reset';
+      var metrics=probeUi('ModernGpuFrameMetrics');if(metrics)metrics.textContent='';
+      redraw();
+    });
     run.addEventListener('click',runCompareGpuProbe);
     var frameButton=probeUi('ModernGpuFrameRun');
     if(frameButton)frameButton.addEventListener('click',runCompareGpuField);
     var firstButton=probeUi('ModernGpuFirstRun');
-    if(firstButton)firstButton.addEventListener('click',runCompareGpuFirst);
+    if(firstButton)firstButton.addEventListener('click',function(){return runCompareGpuFirst(false);});
+    var fastButton=probeUi('ModernGpuFastRun');
+    if(fastButton)fastButton.addEventListener('click',function(){return runCompareGpuFirst(true);});
     var exportButton=probeUi('ModernGpuProbeExport');
     if(exportButton)exportButton.addEventListener('click',function(){
       if(!state.probeLast&&!state.probeFrameLast){
@@ -1110,7 +1189,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.12'?
+      link.href=url;link.download=exportVersion==='140.12.15'?
+        'curvature-compare-140.12.15-fast-predictor-frame.json':
+        exportVersion==='140.12.12'?
         'curvature-compare-140.12.12-gpu-first-frame.json':
         'curvature-compare-140.12.11-cpu-replay-gpu-frame.json';
       try{link.click();}finally{

@@ -395,8 +395,8 @@ test('140.12.12: GPU-first UI measures end-to-end BEFORE separately timed CPU co
   assert.match(html,/Benchmark GPU-first full frame/);
   assert.match(app,/function runCompareGpuFirst\(/);
   assert.match(app,/gpuFirstGrid\(state\.comparePair\.A/);
-  assert.match(app,/session\.solve\(grid\.request,\{warmRepeats:0\}\)/);
-  assert.match(app,/gpuFirstRayField\(grid,batch\.response/);
+  assert.match(app,/session\.solve\(requests\[batchIndex\],\{warmRepeats:0\}\)/);
+  assert.match(app,/gpuFirstRayField\(grid,/);
   assert.match(app,/gpuFirstEndToEndMs:fullGpuMs/);
   assert.match(app,/cpuColdReferenceMs:cpuMs/);
   assert.ok(app.indexOf('var fullGpuMs=renderFinished-totalStarted')<

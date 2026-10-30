@@ -1263,3 +1263,31 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - No production authorization, full-frame speedup or 1-pixel silhouette
   equivalence is implied by this change. Browser shader compilation/execution
   and speed/parity must be measured on actual WebGPU hardware.
+
+## #140.12.15 — fast GPU predictor optical frame, cold/warm end-to-end gate
+
+- Adds an **explicit opt-in Compare** button `Benchmark fast GPU predictor frame`,
+  plus a separate grid-density selector (1024 / 2048 / 4096 default / 8192).
+  The original GPU-first sweep control and 1024-target probe are retained.
+- Builds the physical distance-height field directly from authored objects,
+  **without CPU oracle-discovery frame or CPU shooting fallback**; denser scene
+  grids are partitioned into deterministic <=1024 target batches using the
+  original WebGPU session capacity. The `algorithm:'predictor'` WGSL path from
+  #140.12.13 and RK4 step **500 m** are used only by the new action. No
+  guarded ground-event fallback is enabled; uncertain near-ground visibility
+  is intentionally retained for visual qualification at actual raster level.
+- Two complete independent timings: **cold** = grid + GPU setup + all batches
+  including readback + CPU Canvas B raster; **pipeline-warm** = new grid +
+  repeated GPU batch inputs/readbacks on the SAME live session + cache-cleared
+  full Canvas B raster. A separately forced-cold CPU A frame is measured
+  afterwards, so GPU preparation never uses CPU frame discovery. Full-frame
+  pixels, contour/fill/unresolved counts, mixed-status/extrapolated lookups,
+  batch times, accepted/fallback counts and both speedups are exported in
+  `curvature-compare-140.12.15-fast-predictor-frame.json`.
+- The regular **synchronous** adaptive field cannot directly await GPU
+  batches, so this is still an approximate scene-derived grid and **not a true
+  CPU-guided adaptive GPU renderer**, GPU rasterizer, or production promotion.
+  Larger grids may decrease visual error but are not guaranteed to do so.
+  Browser GPU shader/actual frame speed/visible-image parity require a user
+  export; Node and mocked grid samples cannot establish them.
+- Existing CPU rendering and all older experiment algorithms are unchanged.

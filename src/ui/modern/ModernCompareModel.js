@@ -149,7 +149,7 @@
   // observed CPU oracle calls.  This is a bounded coarse interpolation
   // experiment, not a numerically certified shooting replacement.
   function gpuFirstGrid(model,count,deps){
-    if(![128,256,512,1024].includes(count)||!deps||!deps.composition||
+    if(![128,256,512,1024,2048,4096,8192].includes(count)||!deps||!deps.composition||
         !deps.silhouette||!deps.surfaces||!deps.branch)
       throw TypeError('Invalid GPU-first grid inputs');
     var geometry=model.showModel===2?'flat':'globe',radius=model.rEarth,eye=model.Height;
@@ -168,7 +168,7 @@
     });
     if(!distances.length)throw Error('GPU-first grid requires positive-distance physical objects');
     distances.sort(function(a,b){return a-b;});
-    var nd=count/8,nh=8;
+    var nh=count>=2048?16:8,nd=count/nh;
     if(count===128){nd=32;nh=4;}
     var dMin=100,dMax=99900,objectMin=distances[0],objectMax=distances[distances.length-1];
     // Uniform quantiles give scene towers most of the columns, while a small
@@ -220,6 +220,22 @@
       objectVertices:vertexCount,objectDistanceRange:[objectMin,objectMax],
       maxHeight:heightMax,method:'authored-physical-scene-distance-height-grid',
       cpuOracleDiscovery:false};
+  }
+  // #140.12.15: the GPU session is intentionally bounded to 1024 targets.
+  // Split a denser physical scene grid into deterministic sub-batches without
+  // a CPU shooting oracle or a second CPU frame-discovery pass. Stitching
+  // must preserve the exact row-major order consumed by gpuFirstRayField.
+  function gpuFirstBatchRequests(grid,maxBatch){
+    if(!grid||!grid.request||!Array.isArray(grid.request.targets)||
+        grid.request.targets.length!==grid.columns*grid.rows)
+      throw TypeError('Invalid GPU-first grid batch source');
+    if(!Number.isInteger(maxBatch)||maxBatch<1||maxBatch>1024)
+      throw RangeError('GPU-first batch capacity must be 1–1024');
+    var requests=[];
+    for(var start=0;start<grid.request.targets.length;start+=maxBatch)
+      requests.push(Object.assign({},grid.request,{controls:Object.assign({},grid.request.controls),
+        targets:grid.request.targets.slice(start,start+maxBatch)}));
+    return requests;
   }
   function gpuFirstRayField(grid,response,surfaces){
     if(!grid||!grid.request||!Array.isArray(grid.distances)||!Array.isArray(grid.heights)||
@@ -423,6 +439,7 @@
     probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview,
     gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,
     gpuFirstGrid:gpuFirstGrid,gpuFirstRayField:gpuFirstRayField,
+    gpuFirstBatchRequests:gpuFirstBatchRequests,
     cpuReplayField:cpuReplayField,frameControlCounts:frameControlCounts,
     compareFramePixels:compareFramePixels});
 }));
