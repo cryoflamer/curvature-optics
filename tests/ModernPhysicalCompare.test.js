@@ -179,3 +179,28 @@ test('140.12.7: optional Compare-only GPU controls and research scripts are wire
   assert.match(app,/actualRenderedImageCompared:false/);
   assert.doesNotMatch(source('src/app/CurvatureMainCanvasRenderer.js'),/CurvatureWebGPUBatchShooting1412/);
 });
+
+test('140.12.8: disputed GPU ground contacts are independently replayed and never certified as frames',()=>{
+  const request={geometry:'flat',radius:6371000,observerHeight:2,atmosphere:'standard',
+    controls:{step:50,eventSubsteps:8},targets:[[100,0],[200,0],[300,0]]};
+  const cpu={results:[{status:'visible'},{status:'blocked'},{status:'visible'}]};
+  const gpu={results:[{status:'blocked',angle:0.01,pathLength:100},
+    {status:'blocked',angle:0.02,pathLength:200},
+    {status:'indeterminate',angle:null,pathLength:null}]};
+  const calls=[];
+  const tracer={atmosphere(){return {kind:'standard'};},trace(options){
+    calls.push(options);return {hitGround:true,travelled:99.98,
+      event:{kind:'ground',contact:'crossing',pathLength:99.98}};
+  }};
+  const review=compare.probeGroundReview(request,cpu,gpu,tracer);
+  assert.equal(review.disagreements,2);
+  assert.deepEqual(review.reviews.map(r=>r.targetIndex),[0,2]);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].angle,0.01);
+  assert.ok(Math.abs(review.reviews[0].groundReplay.remainingPathMetres-0.02)<1e-8);
+  assert.equal(review.reviews[1].groundReplay.status,'unavailable');
+  assert.equal(review.renderedSilhouetteCompared,false);
+  assert.equal(review.excludedFromGpuTimings,true);
+  assert.equal(compare.probeGroundReview(request,cpu,gpu,tracer,1).truncated,true);
+  assert.throws(()=>compare.probeGroundReview(request,cpu,{results:[]},tracer),/Mismatched/);
+});

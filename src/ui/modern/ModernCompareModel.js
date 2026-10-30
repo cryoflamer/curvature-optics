@@ -106,6 +106,44 @@
       matchedVisible:matchedVisible,actualFrameCompared:false,
       visualEquivalenceProven:false,productionAuthorized:false};
   }
+  // Replay only disputed GPU rays in the independent f64 ground-event tracer.
+  // This is evidence about the GPU launch angle, not proof of raster parity.
+  function probeGroundReview(request,cpu,gpu,rayTracer,limit){
+    if(!request||!cpu||!gpu||!rayTracer||!Array.isArray(request.targets)||
+      !Array.isArray(cpu.results)||!Array.isArray(gpu.results)||
+      request.targets.length!==cpu.results.length||cpu.results.length!==gpu.results.length)
+      throw TypeError('Mismatched Compare ground review inputs');
+    var profile=rayTracer.atmosphere(request.atmosphere,request.profileOptions);
+    var reviews=[],total=0,maximum=limit===undefined?64:limit;
+    if(!Number.isInteger(maximum)||maximum<0)throw RangeError('Invalid ground review limit');
+    for(var i=0;i<cpu.results.length;i++){
+      var a=cpu.results[i],b=gpu.results[i];
+      if(a.status===b.status)continue;
+      total++;
+      if(reviews.length>=maximum)continue;
+      var review={targetIndex:i,cpuStatus:a.status,gpuStatus:b.status,
+        gpuAngle:b.angle,gpuPathLength:b.pathLength};
+      if(!Number.isFinite(b.angle)||!Number.isFinite(b.pathLength)||b.pathLength<=0){
+        review.groundReplay={status:'unavailable',reason:'GPU angle/path unavailable'};
+      }else{
+        try{
+          var traced=rayTracer.trace({geometry:request.geometry,radius:request.radius,
+            profile:profile,observerHeight:request.observerHeight,angle:b.angle,
+            length:b.pathLength,step:request.controls&&request.controls.step||50,
+            eventSubsteps:request.controls&&request.controls.eventSubsteps||8,
+            contactTolerance:request.controls&&request.controls.contactTolerance||1e-6});
+          review.groundReplay={status:'measured',hitGround:traced.hitGround,
+            event:traced.event?{kind:traced.event.kind,contact:traced.event.contact,
+              pathLength:traced.event.pathLength}:null,
+            remainingPathMetres:traced.hitGround?Math.max(0,b.pathLength-traced.travelled):null};
+        }catch(error){review.groundReplay={status:'unavailable',reason:String(error.message||error)};}
+      }
+      reviews.push(review);
+    }
+    return {disagreements:total,reviews:reviews,truncated:total>reviews.length,
+      independentCpuReplay:true,excludedFromGpuTimings:true,
+      renderedSilhouetteCompared:false};
+  }
   return Object.freeze({pair:pair,clone:clone,invariant:invariant,
-    probeTargets:probeTargets,probeReport:probeReport});
+    probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview});
 }));

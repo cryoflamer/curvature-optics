@@ -756,14 +756,18 @@
       var result=await session.solve(request,{warmRepeats:2});
       if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
       var report=compareAdapter.probeReport(points.points,cpu,result.response,1080);
-      state.probeLast={version:'140.12.7',source:'current Compare model A physical object vertices',
+      // Independent f64 ground-event replay runs AFTER GPU measurement. It
+      // must never be included in the GPU speedup or treated as a frame diff.
+      var groundReview=compareAdapter.probeGroundReview(request,cpu,result.response,
+        root.CurvatureRayTracer,64);
+      state.probeLast={version:'140.12.8',source:'current Compare model A physical object vertices',
         reference:'CPU f64',candidate:'experimental GPU f32',geometry:points.geometry,
         atmosphere:spec.atmosphere,sourcePointCount:points.sourcePointCount,
         samples:report.count,cpuMs:cpuMs,gpuSetupMs:session.setupMs,
         cpuRenderedFrameAms:state.compareLast.A&&state.compareLast.A.timings&&state.compareLast.A.timings.totalMs,
         cpuRenderedFrameBms:state.compareLast.B&&state.compareLast.B.timings&&state.compareLast.B.timings.totalMs,
         gpuWarmMedianMs:result.timing.gpuWarmMedianMs,gpuFirstBatchMs:result.timing.gpuUploadToReadbackMs,
-        sampleReport:report,actualRenderedImageCompared:false,productionAuthorized:false};
+        sampleReport:report,groundReview:groundReview,actualRenderedImageCompared:false,productionAuthorized:false};
       probeCanvas('CPU',report.rows,state.comparePair.A);
       probeCanvas('GPU',report.rows,state.comparePair.A);
       var warm=result.timing.gpuWarmMedianMs;
@@ -772,6 +776,7 @@
       var metrics=probeUi('ModernGpuProbeMetrics');
       if(metrics)metrics.textContent='Status disagreements: '+report.statusMismatches+
         ' · unresolved: '+report.uncertain+' · angular proxy > 1 px: '+report.overOnePixel+
+        ' · independent ground replays: '+groundReview.reviews.filter(function(r){return r.groundReplay.status==='measured';}).length+'/'+groundReview.disagreements+
         ' · max angular proxy shift: '+report.maxAngleProxyShiftPx.toFixed(3)+
         ' px (illustrative 1080px / 45°). Red outlines = status disagreements. '+
         'Not actual raster pixel or silhouette parity. This does not measure full-frame GPU rendering.';
@@ -804,7 +809,7 @@
       }
       var blob=new root.Blob([JSON.stringify(state.probeLast,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download='curvature-compare-140.12.7-cpu-gpu-probe.json';
+      link.href=url;link.download='curvature-compare-140.12.8-cpu-gpu-ground-review.json';
       try{link.click();}finally{
         if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
         else root.URL.revokeObjectURL(url);

@@ -1160,3 +1160,11 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Node tests and Node-side current-scene sampling smoke checks cannot execute
   WebGPU shader code or certify browser performance. A browser export is
   required before any claim about runtime performance/visual parity.
+
+## #140.12.8 — independent ground-event triage of Compare CPU/GPU disagreements
+
+- The optional Compare CPU/WebGPU optical sample probe now independently replays **only status-disputed GPU launch angles** through the existing CPU f64 ground-event tracer, after GPU timings are complete.
+- Exported `groundReview` preserves each disputed target index, CPU/GPU status, GPU launch angle and path length, CPU replay ground contact and remaining path distance, or an explicit unavailable/error reason. At most 64 disputed targets are replayed; truncation is explicit.
+- This answers whether the *GPU-angle CPU trajectory* crosses the ground, **not** whether a real pixel is occluded. A path-distance remainder is not a vertical screen-space displacement.
+- The probe remains research-only. Both rendered Compare frames still use the CPU renderer; no GPU frame, silhouette comparison, asynchronous full-frame ray field, or production authorization is claimed.
+- `curvature-compare-140.12.8-cpu-gpu-ground-review.json` is the new export name. This patch does not claim that the exported result has been measured in a browser.
