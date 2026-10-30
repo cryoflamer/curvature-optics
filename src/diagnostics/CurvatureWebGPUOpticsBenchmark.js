@@ -58,7 +58,8 @@ fn advance(s:vec4f,ds:f32)->vec4f {
   let d=derivative(s+ds*c);
   var out=s+(ds/6.0)*(a+2.0*b+2.0*c+d);
   let inv=1.0/length(out.zw);
-  out.zw=out.zw*inv;
+  out.z=out.z*inv;
+  out.w=out.w*inv;
   return out;
 }
 @compute @workgroup_size(64)

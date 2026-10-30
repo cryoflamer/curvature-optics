@@ -13,7 +13,9 @@ test('140.8: deterministic f32-quantized seeds and configuration for independent
  for(let i=0;i<5;i++)assert.ok(Math.abs(Math.hypot(seed[4*i+2],seed[4*i+3])-1)<1e-7);
  assert.match(b.WGSL,/@compute @workgroup_size\(64\)/);
  assert.match(b.WGSL,/if\(i>=config\[0\]\)/);
- assert.match(b.WGSL,/out\.zw=out\.zw\*inv/);
+ assert.match(b.WGSL,/out\.z=out\.z\*inv/);
+ assert.match(b.WGSL,/out\.w=out\.w\*inv/);
+ assert.doesNotMatch(b.WGSL,/out\.zw\s*=/);
 });
 
 test('140.8: CPU benchmark matches the prepared production RK4 stepper for every supported atmosphere',()=>{

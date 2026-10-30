@@ -883,3 +883,12 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   as **CPU wall-clock raster/presentation time** rather than GPU execution.
   GPU timer queries in #140.1 continue to time shimmer only.
 - Details and Opera acceptance checklist: `docs/MODERN_GPU_GEOMETRY_140_2.md`.
+
+## #140.8.1 browser benchmark compatibility
+
+- Corrected WGSL direction normalization to avoid invalid multi-component
+  swizzle assignment rejected by Opera's WebGPU compiler.
+- Corrected HTML numeric step validation and used `valueAsNumber` for numeric
+  controls in the standalone benchmark. Added regression tests for both.
+- Production optical solver and renderer remain unchanged. Actual GPU shader
+  compilation and performance still require a WebGPU-enabled browser run.

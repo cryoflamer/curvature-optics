@@ -91,3 +91,22 @@ GPU for production optics. A future step must establish physical precision
 under target shooting, early ground events, branch ambiguity, critical grazing
 and large-distance rays, then measure overhead for actual scene jobs. The
 opt-in engineered CPU predictor remains unchanged/disabled by default.
+
+## #140.8.1 browser compatibility correction
+
+Opera exposed two independent blockers in the initial browser run:
+
+1. The WGSL compiler rejected assignment to a two-component vector swizzle
+   (`out.zw=...`). The direction normalization now writes `out.z` and
+   `out.w` separately, preserving the intended arithmetic.
+2. Several HTML number inputs used integer or fractional `step` constraints
+   incompatible with their own defaults (for example `min=0.001`, `step=1`,
+   `value=50`). Physical quantities and numerical tolerances now use
+   `step="any"`; counts remain integers. Numeric values are read through
+   `HTMLInputElement.valueAsNumber` so localized decimal presentation does not
+   require manual string parsing.
+
+The new Node tests guard these browser-facing contracts and confirm that
+shader compilation diagnostics are surfaced before dispatch. **They do not
+compile WGSL on a real GPU.** The shader must still be run in Opera or another
+WebGPU-capable browser; no hardware results are asserted by this patch.

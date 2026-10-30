@@ -16,18 +16,18 @@ Runs fixed-step independent rays on GPU <strong>f32</strong> and CPU <strong>f64
 <fieldset><legend>Physical model</legend>
 <label>Atmosphere<select name="atmosphere"><option value="standard">Standard</option><option value="exponential-occlusion">Exponential occlusion</option><option value="inverse-spherical">Inverse spherical</option><option value="vacuum">Vacuum</option></select></label>
 <label>Geometry<select name="geometry"><option value="flat">Flat</option><option value="globe">Globe</option></select></label>
-<label>Observer height (m)<input name="observerHeight" type="number" min="0" step="1" value="15"></label>
-<label>Comparison radius (m)<input name="occlusionRadius" type="number" min="1" step="1000" value="6371000"></label>
+<label>Observer height (m)<input name="observerHeight" type="number" min="0" step="any" value="15"></label>
+<label>Comparison radius (m)<input name="occlusionRadius" type="number" min="1" step="any" value="6371000"></label>
 </fieldset>
 <fieldset><legend>Batch</legend>
 <label>Rays<input name="count" type="number" min="1" max="65536" step="1" value="1024"></label>
 <label>RK4 steps per ray<input name="steps" type="number" min="1" max="10000" step="1" value="256"></label>
-<label>Step length (m)<input name="step" type="number" min="0.001" step="1" value="50"></label>
+<label>Step length (m)<input name="step" type="number" min="0.001" step="any" value="50"></label>
 <label>Repeats<input name="repeats" type="number" min="1" max="20" step="1" value="3"></label>
 </fieldset>
 <fieldset><legend>Numerical gates</legend>
-<label>Max position error (m)<input name="maxPositionError" type="number" min="0.0000001" step="0.01" value="0.1"></label>
-<label>Max direction error (rad)<input name="maxAngularError" type="number" min="0.000000001" step="0.000001" value="0.00001"></label>
+<label>Max position error (m)<input name="maxPositionError" type="number" min="0.0000001" step="any" value="0.1"></label>
+<label>Max direction error (rad)<input name="maxAngularError" type="number" min="0.000000001" step="any" value="0.00001"></label>
 </fieldset>
 <button id="start" type="submit">Run CPU + WebGPU comparison</button>
 <button id="save" type="button" disabled>Export JSON</button>
@@ -47,8 +47,12 @@ Runs fixed-step independent rays on GPU <strong>f32</strong> and CPU <strong>f64
   e.preventDefault();button.disabled=true;save.disabled=true;latest=null;
   status.textContent='Computing (CPU + GPU)…';
   try{
-   var controls=new FormData(form),params={};
-   for(var pair of controls.entries())params[pair[0]]=['atmosphere','geometry'].includes(pair[0])?pair[1]:Number(pair[1]);
+   // valueAsNumber reads the numeric value according to the browser's locale.
+   // Do not parse localized display strings with parseFloat/Number.
+   var params={};
+   for(var control of form.querySelectorAll('input[name], select[name]')){
+    params[control.name]=control.type==='number'?control.valueAsNumber:control.value;
+   }
    latest=await CurvatureWebGPUOpticsBenchmark.run(params);
    status.textContent=latest.status==='unavailable'?'WebGPU unavailable: '+latest.reason:
     (latest.qualified?'Numerical gates PASSED (finite sample only).':'Numerical gates FAILED; no GPU promotion.');
