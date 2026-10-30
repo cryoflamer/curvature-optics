@@ -1393,3 +1393,41 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Export: `curvature-compare-140.12.18-adaptive-vs-dense.json`. The result
   is a measured experiment requiring browser WebGPU to assess improvements;
   no visual parity, performance win or production authorization is presumed.
+
+
+## #140.12.19 — controlled near-tower analytic geometric projection versus GPU refraction
+
+- Adds a **Compare near-tower geometry vs GPU · 1.5/3/6 km** button to the
+  optional Compare CPU/WebGPU diagnostics. The scene's authored objects,
+  model, camera, ground guides, fills and outlines are all rendered by the
+  same physical scene adapter and Canvas painter. The 4096-ray near-distance
+  GPU predictor baseline (500 m RK4 step) is computed **once**; the three
+  other physical B frames reuse this same GPU field rather than changing ray
+  count or cold/warm GPU pipelines.
+- Geometric variants replace only distance/height target requests at or
+  inside **1500 m**, **3000 m** or **6000 m** with the **existing production
+  analytic vacuumSample**. It uses the real spherical-surface point and
+  geometric Earth horizon / visibility (or exact flat branch), not a local
+  planar or always-visible shortcut. Far targets keep the unchanged refracted
+  GPU field. The distance split is deliberately hard to reveal if a boundary
+  itself introduces artifacts; no smooth blending or production promotion is
+  implied. Nearby *ground-guide queries* are included in the geometric branch
+  as a documented limitation of this full-frame control.
+- A paired audit records unique near-field renderer requests, numbers of
+  ground/above-ground requests, status disagreements, invalid GPU angles,
+  mean/max absolute GPU-versus-geometric angle difference in arcseconds;
+  `nearGeometricField` serves analytic values while sampling the original GPU
+  field for the comparison. No CPU tracer/shooting is called in the GPU branch.
+- Takes the four B canvas snapshots first and then renders forced-cold
+  independent CPU f64 A **afterwards**. Reports full-frame and correct lower-
+  right ROI (>8/255 significant-pixel) differences from CPU, differences versus
+  GPU-only baseline, current renderer contour/fill/unresolved counts, and
+  separate shared GPU grid time and each Canvas paint time. No artificial
+  per-variant GPU compute time is claimed: all variants reuse the GPU grid.
+  Displays the predetermined 3 km geometric variant after the experiment,
+  without selecting the best variant based on CPU data.
+- Export: `curvature-compare-140.12.19-near-geometric-projection.json`.
+  This tests the hypothesis that near-field discrepancies originate mostly
+  from optical approximation rather than physical geometry projection. It
+  cannot yet isolate shape topology or certify visual equivalence; actual
+  WebGPU/Canvas measurements must be run in the browser.

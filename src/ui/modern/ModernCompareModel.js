@@ -445,6 +445,66 @@
       exact:function(d,h){return solve(d,h,true);},stats:stats,
       refinementCandidates:refinementCandidates};
   }
+  // #140.12.19: opt-in distance-gated geometric control of the existing
+  // GPU-first field. Use the SAME analytic vacuum path as the production
+  // physical optics adapter, including the geometric horizon. No refraction
+  // is assumed ONLY for nearby targets. Far targets and the painter remain
+  // unchanged. Both field answers are sampled for a paired-angle audit; no
+  // CPU ray integration or CPU-guided target selection takes place.
+  function nearGeometricField(gpuField,model,surfaces,vacuumSample,cutoffMetres){
+    if(!gpuField||!gpuField.fullCoverageGrid||typeof gpuField.sample!=='function'||
+        typeof gpuField.exact!=='function'||typeof gpuField.stats!=='function'||
+        !surfaces||typeof surfaces.createFromCurvature!=='function'||
+        typeof vacuumSample!=='function'||![1500,3000,6000].includes(cutoffMetres)||
+        !model||!(model.rEarth>0)||!(model.Height>=0)||
+        ![1,2].includes(model.showModel))
+      throw TypeError('Invalid near-geometric GPU experiment inputs');
+    var geometry=model.showModel===2?'flat':'globe',radius=model.rEarth,eye=model.Height,
+      unique=new Map(),lookups=0,nearExact=0;
+    function resolve(d,h,exact){
+      var method=exact?'exact':'sample';
+      if(!(d>0&&d<=cutoffMetres&&h>=0&&Number.isFinite(h)))
+        return gpuField[method](d,h);
+      var direct=vacuumSample(geometry,radius,eye,d,h,true);
+      var gpu=gpuField[method](d,h);
+      lookups++;if(exact)nearExact++;
+      var key=d.toPrecision(13)+','+h.toPrecision(13);
+      if(!unique.has(key)){
+        var angleDelta=Number.isFinite(direct.angle)&&gpu&&Number.isFinite(gpu.angle)?
+          (direct.angle-gpu.angle)*180/Math.PI*3600:null;
+        unique.set(key,{distanceMetres:d,heightMetres:h,directStatus:direct.status,
+          gpuStatus:gpu&&gpu.status,angleDeltaArcsec:angleDelta});
+      }
+      return direct;
+    }
+    function nearAudit(){
+      var counts={nearQueries:lookups,nearExactQueries:nearExact,
+        uniqueNearTargets:unique.size,groundTargets:0,objectHeightTargets:0,
+        statusDisagreements:0,anglesCompared:0,meanAbsoluteAngleDeltaArcsec:0,
+        maxAbsoluteAngleDeltaArcsec:0,nonFiniteGpuAngles:0};
+      var total=0;
+      unique.forEach(function(row){
+        if(row.heightMetres===0)counts.groundTargets++;else counts.objectHeightTargets++;
+        if(row.directStatus!==row.gpuStatus)counts.statusDisagreements++;
+        if(row.angleDeltaArcsec===null){counts.nonFiniteGpuAngles++;return;}
+        var abs=Math.abs(row.angleDeltaArcsec);
+        counts.anglesCompared++;total+=abs;
+        counts.maxAbsoluteAngleDeltaArcsec=Math.max(counts.maxAbsoluteAngleDeltaArcsec,abs);
+      });
+      counts.meanAbsoluteAngleDeltaArcsec=counts.anglesCompared?total/counts.anglesCompared:0;
+      return counts;
+    }
+    function stats(){
+      var original=gpuField.stats(),extra=nearAudit();
+      return Object.assign({},original,{experimentalGpu:Object.assign({},original.experimentalGpu,
+        {nearGeometricControl:true,nearGeometricLimitMetres:cutoffMetres,
+          nearGeometryAudit:extra,cpuShootingFallback:false,productionAuthorized:false})});
+    }
+    return {request:gpuField.request,fullCoverageGrid:true,
+      sample:function(d,h){return resolve(d,h,false);},
+      exact:function(d,h){return resolve(d,h,true);},
+      stats:stats,nearAudit:nearAudit,nearGeometricLimitMetres:cutoffMetres};
+  }
   // #140.12.10: capture the exact requests made by the real CPU adaptive
   // outline/fill field. Asynchronously seed a bounded subset of those targets
   // with WebGPU; new adaptive requests still use the unmodified CPU oracle.
@@ -609,6 +669,7 @@
     probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview,
     gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,
     gpuFirstGrid:gpuFirstGrid,gpuFirstRayField:gpuFirstRayField,
+    nearGeometricField:nearGeometricField,
     gpuFirstBatchRequests:gpuFirstBatchRequests,
     cpuReplayField:cpuReplayField,frameControlCounts:frameControlCounts,
     compareFramePixels:compareFramePixels,frameDifferenceTiles:frameDifferenceTiles});

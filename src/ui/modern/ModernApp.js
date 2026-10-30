@@ -1709,6 +1709,160 @@
       buttons.forEach(function(button){if(button)button.disabled=false;});
     }
   }
+  // #140.12.19: controlled near-geometry hypothesis test, not a new
+  // production renderer. GPU predictor samples are reused for all variants;
+  // switching the FIRST 1.5 / 3 / 6 km to the existing analytic vacuum
+  // projection makes it possible to locate near-tower errors separately
+  // from far refractive shooting. CPU A is measured only afterwards.
+  async function runCompareNearGeometry141219(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(!spec||spec.atmosphere!=='standard'){
+      probeStatus('Near-geometry experiment supports standard atmosphere only.');return;
+    }
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      physical=root.CurvaturePhysicalSceneOptics;
+    if(!gpu||!contract||!root.navigator||!root.navigator.gpu||!compareAdapter||
+        !compareAdapter.nearGeometricField||!compareAdapter.gpuFirstGrid||
+        !compareAdapter.gpuFirstBatchRequests||!compareAdapter.gpuFirstRayField||
+        !compareAdapter.compareFramePixels||!physical||!physical.vacuumSample||
+        !root.CurvatureIndependentComposition||!root.CurvatureOpticalTowerSilhouette||
+        !root.CurvatureSurfaceGeometry||!state.compareGraphs.A||!state.compareGraphs.B){
+      probeStatus('Near-geometry experiment dependencies unavailable.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuFirstRun','ModernGpuProbeRun','ModernGpuFrameRun',
+        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun',
+        'ModernGpuAdaptiveRun','ModernGpuNearGeometryRun'],
+      buttons=ids.map(probeUi),roi={x:0.55,y:0.55,width:0.45,height:0.45},
+      budgets=[1500,3000,6000],snapshots={},variants={},fields={};
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    function paint(key,field){
+      state.probeField=field;
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareLast.B=null;
+      var started=profileNow();state.compareGraphs.B.Redraw();
+      var elapsed=profileNow()-started,source=state.compareGraphs.B.Canvas,
+        copy=document.createElement('canvas');
+      copy.width=source.width;copy.height=source.height;
+      var ctx=copy.getContext&&copy.getContext('2d');
+      if(!ctx||!ctx.drawImage)throw Error('Near-geometry Canvas snapshot unavailable');
+      ctx.drawImage(source,0,0);
+      if(!state.compareLast.B||!state.compareLast.B.fieldStats||
+          !state.compareLast.B.fieldStats.experimentalGpu||
+          state.compareLast.B.fieldStats.experimentalGpu.kind!=='gpu-first-grid')
+        throw Error('Near-geometry field did not reach the physical renderer');
+      snapshots[key]=copy;
+      variants[key]={paintMs:elapsed,
+        rendererCounts:{contours:state.compareLast.B.drawn,
+          fillTriangles:state.compareLast.B.fillTriangles,
+          unresolved:state.compareLast.B.unresolved},
+        fieldStats:state.compareLast.B.fieldStats.experimentalGpu};
+    }
+    try{
+      var deps={composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,
+        surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      probeStatus('Near geometry: preparing shared 4096-ray WebGPU predictor…');
+      session=await gpu.createSession(1024,null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      var gpuStart=profileNow(),grid=compareAdapter.gpuFirstGrid(
+        state.comparePair.A,4096,deps,{layout:'distance-focused'});
+      var prepared=profileNow(),requests=compareAdapter.gpuFirstBatchRequests(grid,1024),
+        responses=[],batchTimes=[];
+      for(var request of requests){
+        request.controls.step=500;gpu.checked(request);
+        var batch=await session.solve(request,{warmRepeats:0});
+        if(cancelled())return;
+        responses.push.apply(responses,batch.response.results);
+        batchTimes.push(batch.timing.gpuUploadToReadbackMs);
+      }
+      var completed=profileNow(),sharedResponse={results:responses};
+      fields.base4096=compareAdapter.gpuFirstRayField(grid,sharedResponse,deps.surfaces);
+      paint('base4096',fields.base4096);
+      if(cancelled())return;
+      for(var limit of budgets){
+        var key='geometric'+limit;
+        fields[key]=compareAdapter.nearGeometricField(fields.base4096,
+          state.comparePair.A,deps.surfaces,physical.vacuumSample,limit);
+        probeStatus('Near geometry: painting direct projections through '+limit+' m…');
+        paint(key,fields[key]);
+        if(cancelled())return;
+        variants[key].nearGeometryAudit=fields[key].nearAudit();
+      }
+      probeStatus('Near geometry: calculating independent CPU f64 reference…');
+      state.probeForceColdA=true;
+      var cpuStart=profileNow();
+      try{state.compareGraphs.A.Redraw();}finally{state.probeForceColdA=false;}
+      var cpuMs=profileNow()-cpuStart;
+      if(cancelled()||!state.compareLast.A)throw Error('Near-geometry CPU reference missing');
+      var cpuCanvas=state.compareGraphs.A.Canvas;
+      ['base4096','geometric1500','geometric3000','geometric6000'].forEach(function(key){
+        variants[key].fullFrameDiff=compareAdapter.compareFramePixels(cpuCanvas,snapshots[key]);
+        variants[key].lowerRightFrameDiff=compareAdapter.compareFramePixels(
+          cpuCanvas,snapshots[key],roi);
+        if(key!=='base4096'){
+          variants[key].deltaFromGpuBaseline={
+            fullFrameSignificantPixels:variants[key].fullFrameDiff.significantPixels-
+              variants.base4096.fullFrameDiff.significantPixels,
+            lowerRightSignificantPixels:variants[key].lowerRightFrameDiff.significantPixels-
+              variants.base4096.lowerRightFrameDiff.significantPixels};
+          variants[key].pixelsChangedFromGpuBaseline=compareAdapter.compareFramePixels(
+            snapshots.base4096,snapshots[key]);
+        }
+      });
+      var measured=Object.keys(variants).every(function(key){return variants[key].fullFrameDiff.status==='measured'&&
+        variants[key].lowerRightFrameDiff.status==='measured';});
+      // Display the central 3 km hypothesis; do not select a winner with CPU.
+      state.probeField=fields.geometric3000;
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareGraphs.B.Redraw();
+      if(el('ModernCompareLabelB'))el('ModernCompareLabelB').textContent=
+        'GPU predictor + geometric near ≤ 3 km · diagnostic only';
+      state.probeFrameLast={version:'140.12.19',
+        kind:'Shared-GPU near-tower analytic geometric projection vs refracted GPU and CPU f64',
+        geometry:grid.request.geometry,atmosphere:'standard',
+        gpuAlgorithm:'predictor',gpuRK4StepMetres:500,
+        gpuSetupMs:session.setupMs,gpuGridLayout:'distance-focused',
+        gpuSeedRays:4096,gpuBatchReadbackTimesMs:batchTimes,
+        sharedGridPrepareMs:prepared-gpuStart,sharedGpuBatchWallMs:completed-prepared,
+        cpuColdReferenceMs:cpuMs,nearGeometricLimitsMetres:budgets,
+        nearGeometryModel:'analytic vacuum with physical spherical horizon',
+        geometryAppliedToNearGroundGuides:true,
+        sameSharedGpuSamples:true,noExtraGpuRays:true,
+        cpuOracleDiscovery:false,cpuShootingFallback:false,
+        regionIsUserObservedApproximation:true,lowerRightRegion:roi,
+        variants:variants,displayVariant:'geometric3000',
+        productionAuthorized:false,visualEquivalenceProven:false,
+        verdict:measured?'MEASURED_VISUAL_REVIEW_REQUIRED':'PIXEL_READBACK_UNAVAILABLE'};
+      var line=probeUi('ModernGpuFrameMetrics'),fmt=function(x){return Number.isFinite(x)?x.toFixed(1):'n/a';};
+      var summary=Object.keys(variants).map(function(key){return key+' '+
+        variants[key].lowerRightFrameDiff.significantPixels;}).join(' / ');
+      if(line)line.textContent='Near geometry · lower-right significant pixels '+summary+
+        ' · shared GPU '+fmt(completed-gpuStart)+' ms · CPU cold '+fmt(cpuMs)+
+        ' ms · detailed direct/GPU angular disagreement in Export JSON.';
+      probeStatus('Near geometry · lower-right '+summary+
+        ' · CPU f64 reference '+fmt(cpuMs)+' ms · no production approval · Export JSON');
+    }catch(error){
+      if(generation===state.probeGeneration){
+        state.probeField=null;state.probeFrameLast=null;
+        probeStatus('Near-geometry experiment unavailable: '+String(error.message||error));
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareGraphs.B.Redraw();
+      }
+    }finally{
+      state.probeForceColdA=false;
+      if(session)session.close();
+      state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});
+    }
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -1755,8 +1909,10 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var nearGeometryButton=probeUi('ModernGpuNearGeometryRun');
+    if(nearGeometryButton)nearGeometryButton.addEventListener('click',runCompareNearGeometry141219);
     ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
-      'ModernGpuNearRun','ModernGpuGridABCRun'].forEach(function(id){
+      'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -1775,7 +1931,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.18'?
+      link.href=url;link.download=exportVersion==='140.12.19'?
+        'curvature-compare-140.12.19-near-geometric-projection.json':
+        exportVersion==='140.12.18'?
         'curvature-compare-140.12.18-adaptive-vs-dense.json':
         exportVersion==='140.12.17'?
         'curvature-compare-140.12.17-grid-abc-lower-right.json':
