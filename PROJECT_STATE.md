@@ -1,3 +1,19 @@
+## Patch 140.9 — Finite WebGPU optical qualification and stop gate (2026-10-30)
+
+Added a standalone, opt-in 18-case browser matrix at
+`tools/webgpu-optics-1409.html` built on the unchanged #140.8 RK4 benchmark.
+All four atmospheres × Flat/Globe are tested at 12.8 km and 100 km
+mathematical path lengths; Standard/Flat small and large batches provide two
+additional scaling probes. Exports per-case CPU/GPU timings, f32-vs-f64
+numerical gates, unavailable/errors and an explicit `INCONCLUSIVE`,
+`NUMERICAL_STOP`, `PERFORMANCE_STOP` or `SPIKE_CANDIDATE` recommendation.
+Even a passing result permits only **one bounded real-scene integration spike**,
+not a GPU production switch. Explicit end-to-end correctness/performance and
+one-correction stop rules are documented at
+`docs/WEBGPU_OPTICAL_QUALIFICATION_MATRIX_140_9.md`.
+No production solver/rendering defaults have changed; real browser hardware
+matrix results are still required.
+
 ## Patch 140.8 — Isolated WebGPU optical RK4 batch benchmark (2026-10-30)
 
 - Added a standalone browser-only GPU/CPU fixed-step ray integration experiment at
