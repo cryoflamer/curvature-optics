@@ -1,0 +1,51 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const html=fs.readFileSync(require('node:path').join(__dirname,'../tools/webgpu-optics.html'),'utf8');
+
+// Execute the actual inline browser handler script against a minimal DOM, instead of
+// merely looking for button labels. This catches the #140.10.1 selector regression.
+function mount(){
+ const panels=Array.from({length:4},(_,i)=>({id:'panel-'+i,hidden:i!==3,children:new Map(),
+   querySelector(selector){assert.match(selector,/^#[a-z]+$/);const id=selector.slice(1);
+     if(!this.children.has(id))this.children.set(id,element(id));
+     return this.children.get(id);}}));
+ function element(id){return {id,disabled:id==='save'||id==='cancel',textContent:'',value:'3',
+   handlers:{},addEventListener(type,cb){this.handlers[type]=cb;},
+   querySelectorAll(){return [];},reportValidity(){return true;},appendChild(){},click(){},
+   async fire(type){assert.ok(this.handlers[type],`missing ${type} listener for ${id}`);
+     return this.handlers[type]({preventDefault(){}});}};}
+ const choice=element('experiment-choice');
+ const elements=new Map([['experiment-choice',choice],...panels.map(p=>[p.id,p])]);
+ const document={getElementById(id){assert.ok(elements.has(id),`missing ${id}`);return elements.get(id);},
+   createElement(){return element('link');}};
+ const script=html.match(/<script>\s*([\s\S]*?)<\/script>/);
+ assert.ok(script,'missing inline handlers');
+ const ctx={document,fetch:async()=>({ok:true,json:async()=>({scenes:[]})}),
+  CurvatureWebGPUSceneSpike14010:{run:async()=>({status:'unavailable',reason:'test runtime unavailable'})},
+  CurvatureWebGPUOpticsBenchmark:{run:async()=>({status:'unavailable',reason:'test'})},
+  CurvatureWebGPUOpticsMatrix1409:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test',stats:{passed:0,total:0,failed:0,unavailable:0,errors:0}},cases:[]})},
+  CurvatureWebGPUOpticsPrecision14091:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test',stats:{passed:0,total:0,failed:0},repairedCases:0,baselineFailedCases:0,missingPairs:0,failedAnalyticalChecks:0},cases:[]})},
+  Blob,URL:{createObjectURL:()=>'',revokeObjectURL(){}},setTimeout(){}};
+ vm.runInNewContext(script[1],ctx,{filename:'tools/webgpu-optics.html'});
+ return {panels,choice};
+}
+test('140.10.2: all four unified panels actually register run and export handlers',()=>{
+ const {panels,choice}=mount();
+ for(const [i,p] of panels.entries()){
+  assert.equal(typeof (i===3?p.querySelector('#start'):p.querySelector('#'+['benchmark','matrix','precision'][i])).handlers[i===3?'click':'submit'],'function');
+  assert.equal(typeof p.querySelector('#save').handlers.click,'function');
+ }
+ choice.value='2';choice.handlers.change();
+ assert.equal(panels[2].hidden,false);
+ assert.ok(panels.filter(p=>!p.hidden).length===1);
+});
+test('140.10.2: clicking scene Run invokes spike and updates its status',async()=>{
+ const {panels}=mount(),p=panels[3];
+ await p.querySelector('#start').fire('click');
+ assert.equal(p.querySelector('#status').textContent,'test runtime unavailable');
+ assert.equal(p.querySelector('#start').disabled,false);
+ assert.equal(p.querySelector('#save').disabled,false);
+});

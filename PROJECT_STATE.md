@@ -939,3 +939,15 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - **Persistent project rule:** Do not create a new version-numbered HTML page in `tools/` for each WebGPU experiment or compatpatch. Maintain the single canonical `tools/webgpu-optics.html`, with an experiment selector when historical workflows remain useful. Retire redundant HTML pages and update references/tests. New JavaScript modules are justified only by distinct implementation responsibilities, not patch numbers alone.
 - WebGPU WGSL must be validated by an actual shader compiler when available, and tested in the target browser before claiming runtime success. JavaScript mocks and regex checks do not establish shader compilation or GPU correctness; disclose unavailable runtime verification.
 - #140.10.1 fixes the WGSL reserved identifier `target` to `targetData`; the real browser run of #140.10 is still pending. No production backend change.
+
+## #140.10.2 — Unified WebGPU diagnostics Run-button regression
+
+- Fixed the consolidated `tools/webgpu-optics.html` event wiring: panel-local
+  `querySelector` calls must use **CSS ID selectors** (`#start`, `#save`, etc.),
+  not bare tag names (`start`, `save`). The latter return null and abort all
+  subsequent inline script execution, making Run buttons appear inert.
+- Regression tests must **execute the real inline browser handler script**
+  against a DOM stand-in, verify listener registration for every experiment,
+  and invoke the scene Run handler. Text/regex-only HTML tests are insufficient.
+- Preserve the canonical HTML file; do not create numbered `tools/` pages.
+  No production backend or WGSL numerical changes were made in this fix.

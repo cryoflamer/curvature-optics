@@ -15,7 +15,7 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 
 <h1>Curvature #140.8 — WebGPU RK4 experiment</h1>
 <p>Standalone, opt-in numerical benchmark. The production optical solver is not modified.
-Requires a secure context (for example <code>http://localhost:8000/tools/webgpu-optics-1408.html</code>).
+Requires a secure context (for example <code>http://localhost:8000/tools/webgpu-optics.html</code>).
 Runs fixed-step independent rays on GPU <strong>f32</strong> and CPU <strong>f64</strong>; this is <strong>not</strong> a full shooting or occlusion benchmark.</p>
 <form id="benchmark">
 <fieldset><legend>Physical model</legend>
@@ -51,7 +51,7 @@ Runs fixed-step independent rays on GPU <strong>f32</strong> and CPU <strong>f64
 <p>One bounded <strong>18-case</strong> experiment: every atmosphere × Flat/Globe at 1,024 rays × 256 RK4 steps (12.8 km),
 then 256 rays × 2,000 steps (100 km), plus small/large batch scaling (128 and 4,096 rays at 256 steps) for Standard/Flat.
 Each case compares CPU f64 to GPU f32 from identical f32 seeds. There is <strong>no</strong> shooting, visibility or production integration.
-Requires <code>http://localhost:8000/tools/webgpu-optics-1409.html</code> in a WebGPU-capable browser.</p>
+Requires <code>http://localhost:8000/tools/webgpu-optics.html</code> in a WebGPU-capable browser.</p>
 <form id="matrix">
 <fieldset><legend>Qualification settings (shared by all cases)</legend>
 <label>Repeats per case<input name="repeats" type="number" min="1" max="20" step="1" value="5" required></label>
@@ -132,9 +132,9 @@ are deliberately outside this bounded experiment. No GPU results affect the live
 <script>
 
 (function(){'use strict';
- var form=document.getElementById("panel-0").querySelector('benchmark'),button=document.getElementById("panel-0").querySelector('start');
- var save=document.getElementById("panel-0").querySelector('save'),status=document.getElementById("panel-0").querySelector('status');
- var display=document.getElementById("panel-0").querySelector('report'),latest=null;
+ var form=document.getElementById("panel-0").querySelector('#benchmark'),button=document.getElementById("panel-0").querySelector('#start');
+ var save=document.getElementById("panel-0").querySelector('#save'),status=document.getElementById("panel-0").querySelector('#status');
+ var display=document.getElementById("panel-0").querySelector('#report'),latest=null;
  form.addEventListener('submit',async function(e){
   e.preventDefault();button.disabled=true;save.disabled=true;latest=null;
   status.textContent='Computing (CPU + GPU)…';
@@ -163,10 +163,10 @@ are deliberately outside this bounded experiment. No GPU results affect the live
 
 
 (function(){'use strict';
- var form=document.getElementById("panel-1").querySelector('matrix'),start=document.getElementById("panel-1").querySelector('start');
- var cancel=document.getElementById("panel-1").querySelector('cancel'),save=document.getElementById("panel-1").querySelector('save');
- var status=document.getElementById("panel-1").querySelector('status'),summary=document.getElementById("panel-1").querySelector('summary');
- var report=document.getElementById("panel-1").querySelector('report'),latest=null,stopped=false;
+ var form=document.getElementById("panel-1").querySelector('#matrix'),start=document.getElementById("panel-1").querySelector('#start');
+ var cancel=document.getElementById("panel-1").querySelector('#cancel'),save=document.getElementById("panel-1").querySelector('#save');
+ var status=document.getElementById("panel-1").querySelector('#status'),summary=document.getElementById("panel-1").querySelector('#summary');
+ var report=document.getElementById("panel-1").querySelector('#report'),latest=null,stopped=false;
  form.addEventListener('submit',async function(event){
   event.preventDefault();if(!form.reportValidity())return;
   start.disabled=true;cancel.disabled=false;save.disabled=true;stopped=false;latest=null;
@@ -199,10 +199,10 @@ are deliberately outside this bounded experiment. No GPU results affect the live
 
 
 (function(){'use strict';
- var form=document.getElementById("panel-2").querySelector('precision'),start=document.getElementById("panel-2").querySelector('start');
- var cancel=document.getElementById("panel-2").querySelector('cancel'),save=document.getElementById("panel-2").querySelector('save');
- var status=document.getElementById("panel-2").querySelector('status'),summary=document.getElementById("panel-2").querySelector('summary');
- var report=document.getElementById("panel-2").querySelector('report'),latest=null,stopped=false;
+ var form=document.getElementById("panel-2").querySelector('#precision'),start=document.getElementById("panel-2").querySelector('#start');
+ var cancel=document.getElementById("panel-2").querySelector('#cancel'),save=document.getElementById("panel-2").querySelector('#save');
+ var status=document.getElementById("panel-2").querySelector('#status'),summary=document.getElementById("panel-2").querySelector('#summary');
+ var report=document.getElementById("panel-2").querySelector('#report'),latest=null,stopped=false;
  form.addEventListener('submit',async function(event){
   event.preventDefault();if(!form.reportValidity())return;
   start.disabled=true;cancel.disabled=false;save.disabled=true;stopped=false;latest=null;
@@ -254,9 +254,9 @@ are deliberately outside this bounded experiment. No GPU results affect the live
 
 
 (function(){'use strict';
- var start=document.getElementById("panel-3").querySelector('start'),save=document.getElementById("panel-3").querySelector('save');
- var status=document.getElementById("panel-3").querySelector('status'),summary=document.getElementById("panel-3").querySelector('summary');
- var report=document.getElementById("panel-3").querySelector('report'),latest=null;
+ var start=document.getElementById("panel-3").querySelector('#start'),save=document.getElementById("panel-3").querySelector('#save');
+ var status=document.getElementById("panel-3").querySelector('#status'),summary=document.getElementById("panel-3").querySelector('#summary');
+ var report=document.getElementById("panel-3").querySelector('#report'),latest=null;
  start.addEventListener('click',async function(){
   start.disabled=true;save.disabled=true;latest=null;status.textContent='Loading real scene vertices…';
   try{
