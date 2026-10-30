@@ -148,7 +148,10 @@
   // from the authored physical scene; NOT from a CPU reference frame or
   // observed CPU oracle calls.  This is a bounded coarse interpolation
   // experiment, not a numerically certified shooting replacement.
-  function gpuFirstGrid(model,count,deps){
+  function gpuFirstGrid(model,count,deps,options){
+    options=options||{};
+    if(options.layout!==undefined&&options.layout!=='uniform'&&options.layout!=='near-ground')
+      throw RangeError('Invalid GPU-first grid height layout');
     if(![128,256,512,1024,2048,4096,8192].includes(count)||!deps||!deps.composition||
         !deps.silhouette||!deps.surfaces||!deps.branch)
       throw TypeError('Invalid GPU-first grid inputs');
@@ -210,16 +213,35 @@
       axisD[n]=axisD[n-1]+1e-5;
     var heightMax=Math.max(20,maxH+2),axisH=[];
     for(var z=0;z<nh;z++)axisH.push(heightMax*Math.pow(z/(nh-1),1.25));
+    // #140.12.16: same ray budget, but shift vertical samples towards ground
+    // *only* for columns near the observer. Far columns retain the original
+    // height axis. This is a hypothesis test for near-tower base artifacts,
+    // not an extra GPU pass, an f64 oracle, or an accuracy certification.
+    var local=options.layout==='near-ground',heightColumns=null;
+    if(local){
+      heightColumns=axisD.map(function(d){
+        var proximity=Math.max(0,Math.min(1,(6000-d)/5000));
+        var exponent=1.25+1.4*proximity*proximity;
+        var heights=[];
+        for(var row=0;row<nh;row++)
+          heights.push(heightMax*Math.pow(row/(nh-1),exponent));
+        return heights;
+      });
+    }
     var targets=[];
-    axisD.forEach(function(d){axisH.forEach(function(h){
-      targets.push(metric.surfacePoint2(d,h));
-    });});
+    axisD.forEach(function(d,column){
+      (heightColumns?heightColumns[column]:axisH).forEach(function(h){
+        targets.push(metric.surfacePoint2(d,h));
+      });
+    });
     var request={branch:deps.branch,geometry:geometry,radius:radius,observerHeight:eye,
       atmosphere:'standard',controls:{step:50,targetTolerance:0.005,eventSubsteps:8},targets:targets};
-    return {request:request,distances:axisD,heights:axisH,columns:nd,rows:nh,
-      objectVertices:vertexCount,objectDistanceRange:[objectMin,objectMax],
-      maxHeight:heightMax,method:'authored-physical-scene-distance-height-grid',
-      cpuOracleDiscovery:false};
+    return {request:request,distances:axisD,heights:axisH,heightColumns:heightColumns,
+      columns:nd,rows:nh,objectVertices:vertexCount,
+      objectDistanceRange:[objectMin,objectMax],maxHeight:heightMax,
+      method:local?'authored-scene-local-near-ground-height-grid':
+        'authored-physical-scene-distance-height-grid',
+      layout:local?'near-ground':'uniform',cpuOracleDiscovery:false};
   }
   // #140.12.15: the GPU session is intentionally bounded to 1024 targets.
   // Split a denser physical scene grid into deterministic sub-batches without
@@ -267,14 +289,22 @@
       lookupCount++;if(exact)exactCount++;
       var key=d+','+h,cached=cache.get(key);
       if(cached)return cached;
-      var di=interval(grid.distances,d),hi=interval(grid.heights,h);
-      var d0=grid.distances[di],d1=grid.distances[di+1],h0=grid.heights[hi],h1=grid.heights[hi+1];
+      var di=interval(grid.distances,d),d0=grid.distances[di],d1=grid.distances[di+1];
       var u=Math.max(0,Math.min(1,(d-d0)/(d1-d0)));
-      var v=Math.max(0,Math.min(1,(h-h0)/(h1-h0)));
-      if(d<d0||d>d1||h<h0||h>h1)extrapolated++;
-      var indices=[di*grid.rows+hi,(di+1)*grid.rows+hi,
-        di*grid.rows+hi+1,(di+1)*grid.rows+hi+1];
-      var weights=[(1-u)*(1-v),u*(1-v),(1-u)*v,u*v];
+      var indices=[],weights=[],extrapolatedHeight=false;
+      // Near-ground grid cells have different vertical coordinates in each
+      // distance column. Interpolate vertically *within* each column before
+      // blending those two answers across distance; a shared hi/v is invalid.
+      for(var side=0;side<2;side++){
+        var column=di+side,axis=grid.heightColumns?
+          grid.heightColumns[column]:grid.heights;
+        var hi=interval(axis,h),low=axis[hi],high=axis[hi+1];
+        var v=Math.max(0,Math.min(1,(h-low)/(high-low)));
+        if(h<low||h>high)extrapolatedHeight=true;
+        indices.push(column*grid.rows+hi,column*grid.rows+hi+1);
+        weights.push((side===0?1-u:u)*(1-v),(side===0?1-u:u)*v);
+      }
+      if(d<d0||d>d1||extrapolatedHeight)extrapolated++;
       var valid=[];
       indices.forEach(function(index,j){var point=points[index];
         if(point.status!=='solver_failed'&&Number.isFinite(point.angle))
@@ -291,7 +321,8 @@
       // preserves the analytically known strong distance/height component.
       var total=0,correction=0;
       valid.forEach(function(item){var col=Math.floor(item.index/grid.rows),row=item.index%grid.rows;
-        correction+=item.weight*(item.point.angle-direct(grid.distances[col],grid.heights[row]));
+        var nodeHeights=grid.heightColumns?grid.heightColumns[col]:grid.heights;
+        correction+=item.weight*(item.point.angle-direct(grid.distances[col],nodeHeights[row]));
         total+=item.weight;
       });
       var angle=direct(d,h)+(total?correction/total:0);
@@ -412,15 +443,26 @@
       a.contours===b.contours&&a.fillTriangles===b.fillTriangles&&
       a.unresolved===b.unresolved};
   }
-  function compareFramePixels(a,b){
+  function compareFramePixels(a,b,region){
     if(!a||!b||!a.getContext||!b.getContext||a.width!==b.width||a.height!==b.height)
       return {status:'unavailable',reason:'Canvas sizes differ or no readable canvas'};
     try{
       var ac=a.getContext('2d'),bc=b.getContext('2d');
       if(!ac||!bc||!ac.getImageData||!bc.getImageData)
         return {status:'unavailable',reason:'Pixel readback not supported'};
-      var first=ac.getImageData(0,0,a.width,a.height).data,
-        second=bc.getImageData(0,0,b.width,b.height).data;
+      var x=0,y=0,width=a.width,height=a.height;
+      if(region){
+        if(![region.x,region.y,region.width,region.height].every(function(n){
+          return Number.isFinite(n)&&n>=0&&n<=1;
+        })||region.x+region.width>1||region.y+region.height>1||
+            region.width===0||region.height===0)
+          throw RangeError('Invalid normalized frame comparison region');
+        x=Math.floor(region.x*a.width);y=Math.floor(region.y*a.height);
+        width=Math.max(1,Math.min(a.width-x,Math.ceil(region.width*a.width)));
+        height=Math.max(1,Math.min(a.height-y,Math.ceil(region.height*a.height)));
+      }
+      var first=ac.getImageData(x,y,width,height).data,
+        second=bc.getImageData(x,y,width,height).data;
       var strictPixels=0,significantPixels=0,maxChannelDelta=0;
       for(var i=0;i<first.length;i+=4){
         var diff=Math.max(Math.abs(first[i]-second[i]),Math.abs(first[i+1]-second[i+1]),
@@ -429,7 +471,8 @@
         if(diff>8)significantPixels++;
         maxChannelDelta=Math.max(maxChannelDelta,diff);
       }
-      return {status:'measured',width:a.width,height:a.height,totalPixels:a.width*a.height,
+      return {status:'measured',width:width,height:height,totalPixels:width*height,
+        region:region?{x:x,y:y,width:width,height:height}:null,
         strictPixels:strictPixels,significantPixels:significantPixels,maxChannelDelta:maxChannelDelta,
         // An 8/255 channel difference filter is not a 1-pixel contour metric.
         visualEquivalenceProven:false};

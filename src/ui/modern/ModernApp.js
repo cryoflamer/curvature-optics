@@ -970,9 +970,10 @@
     }
     var generation=state.probeGeneration,session=null,
       firstButton=probeUi('ModernGpuFirstRun'),sampleButton=probeUi('ModernGpuProbeRun'),
-      replayButton=probeUi('ModernGpuFrameRun'),fastButton=probeUi('ModernGpuFastRun');
+      replayButton=probeUi('ModernGpuFrameRun'),fastButton=probeUi('ModernGpuFastRun'),
+      nearButton=probeUi('ModernGpuNearRun');
     state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
-    [firstButton,sampleButton,replayButton,fastButton].forEach(function(b){if(b)b.disabled=true;});
+    [firstButton,sampleButton,replayButton,fastButton,nearButton].forEach(function(b){if(b)b.disabled=true;});
     try{
       var totalStarted=profileNow(),count=Number(probeUi(fast?'ModernGpuFastGridCount':'ModernGpuProbeCount').value);
       probeStatus((fast?'GPU predictor':'GPU-first')+': preparing scene grid WITHOUT CPU ray discovery…');
@@ -1133,7 +1134,173 @@
       state.probeForceColdA=false;
       if(session)session.close();
       state.probeBusy=false;
-      [firstButton,sampleButton,replayButton,fastButton].forEach(function(b){if(b)b.disabled=false;});
+      [firstButton,sampleButton,replayButton,fastButton,nearButton].forEach(function(b){if(b)b.disabled=false;});
+    }
+  }
+  // #140.12.16: compare two equal-budget layouts on the real physical frame.
+  // The CPU reference is rendered only after both layouts; it NEVER supplies
+  // target discovery, shooting or a decision to refine one grid rather than
+  // the other. An alternating A/B/A/B order reduces ordering bias; timings
+  // remain wall-clock estimates (not GPU kernel timestamps).
+  async function runCompareGpuLocalAB(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(!spec||spec.atmosphere!=='standard'){
+      probeStatus('Near-ground A/B currently supports standard atmosphere only.');return;
+    }
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411;
+    if(!gpu||!contract||!root.navigator||!root.navigator.gpu||!compareAdapter||
+       !compareAdapter.gpuFirstGrid||!compareAdapter.gpuFirstBatchRequests||
+       !compareAdapter.compareFramePixels||!root.CurvatureIndependentComposition||
+       !root.CurvatureOpticalTowerSilhouette||!root.CurvatureSurfaceGeometry||
+       !state.compareGraphs.A||!state.compareGraphs.B){
+      probeStatus('Near-ground A/B WebGPU / physical scene dependencies unavailable.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuFirstRun','ModernGpuProbeRun','ModernGpuFrameRun',
+        'ModernGpuFastRun','ModernGpuNearRun'],
+      buttons=ids.map(probeUi);
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    buttons.forEach(function(button){if(button)button.disabled=true;});
+    try{
+      var count=Number(probeUi('ModernGpuFastGridCount').value),
+        deps={composition:root.CurvatureIndependentComposition,
+          silhouette:root.CurvatureOpticalTowerSilhouette,
+          surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      var runs={uniform:[],local:[]},captures={},counts={},lastFields={};
+      function cancelled(){return generation!==state.probeGeneration||
+        state.mode!=='compare'||!state.compareGpuProbe;}
+      // Both layouts use the SAME GPU pipeline, node count and batch size.
+      // Compilation is reported separately and not attributed to either.
+      probeStatus('Near-ground A/B: compiling shared predictor pipeline…');
+      session=await gpu.createSession(Math.min(count,1024),null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      var order=['uniform','local','uniform','local'];
+      for(var round=0;round<order.length;round++){
+        var layout=order[round],variant=layout==='local'?'near-ground':'uniform';
+        probeStatus('Near-ground A/B: '+variant+' · frame '+(round+1)+'/4…');
+        var started=profileNow(),grid=compareAdapter.gpuFirstGrid(state.comparePair.A,
+          count,deps,{layout:variant});
+        var requests=compareAdapter.gpuFirstBatchRequests(grid,1024);
+        requests.forEach(function(request){request.controls.step=500;gpu.checked(request);});
+        var prepared=profileNow(),results=[],batchTimes=[],accepted=0,fallbacks=0;
+        for(var b=0;b<requests.length;b++){
+          var batch=await session.solve(requests[b],{warmRepeats:0});
+          if(cancelled())return;
+          results.push.apply(results,batch.response.results);
+          batchTimes.push(batch.timing.gpuUploadToReadbackMs);
+          accepted+=batch.algorithm.predictorAccepted;
+          fallbacks+=batch.algorithm.predictorFallbacks;
+        }
+        var resolved=profileNow();
+        var field=compareAdapter.gpuFirstRayField(grid,
+          {results:results},root.CurvatureSurfaceGeometry);
+        state.probeField=field;
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareLast.B=null;
+        var paintedAt=profileNow();
+        state.compareGraphs.B.Redraw();
+        var completed=profileNow();
+        if(!state.compareLast.B||!state.compareLast.B.fieldStats||
+           !state.compareLast.B.fieldStats.experimentalGpu||
+           state.compareLast.B.fieldStats.experimentalGpu.kind!=='gpu-first-grid')
+          throw Error('Near-ground A/B grid did not reach the physical renderer');
+        var canvas=state.compareGraphs.B.Canvas;
+        var copy=document.createElement('canvas');
+        copy.width=canvas.width;copy.height=canvas.height;
+        var ctx=copy.getContext&&copy.getContext('2d');
+        if(!ctx||typeof ctx.drawImage!=='function')
+          throw Error('Near-ground A/B Canvas snapshot unavailable');
+        ctx.drawImage(canvas,0,0);
+        captures[layout]=copy;
+        counts[layout]={contours:state.compareLast.B.drawn,
+          fillTriangles:state.compareLast.B.fillTriangles,
+          unresolved:state.compareLast.B.unresolved};
+        lastFields[layout]=field;
+        runs[layout].push({sequenceIndex:round,gridPrepareMs:prepared-started,
+          gpuBatchWallMs:resolved-prepared,paintMs:completed-paintedAt,
+          frameEndToEndMs:completed-started,
+          gpuBatchReadbackTimesMs:batchTimes,predictorAccepted:accepted,
+          predictorFallbacks:fallbacks,fieldStats:field.stats().experimentalGpu});
+      }
+      if(cancelled())return;
+      // Last frame B is the local near-ground variant. Preserve both B
+      // snapshots so CPU pixels are compared against EXACTLY those frames.
+      if(el('ModernCompareLabelB'))el('ModernCompareLabelB').textContent=
+        'GPU predictor · near-ground grid (approximate)';
+      probeStatus('Near-ground A/B: measuring independent cold CPU A…');
+      state.probeForceColdA=true;
+      var cpuStart=profileNow();
+      try{state.compareGraphs.A.Redraw();}finally{state.probeForceColdA=false;}
+      var cpuMs=profileNow()-cpuStart;
+      if(cancelled())return;
+      if(!state.compareLast.A)throw Error('Near-ground A/B CPU reference missing');
+      var cpuCanvas=state.compareGraphs.A.Canvas;
+      var roi={x:0,y:0.55,width:0.55,height:0.45};
+      var reference={contours:state.compareLast.A.drawn,
+        fillTriangles:state.compareLast.A.fillTriangles,
+        unresolved:state.compareLast.A.unresolved};
+      var variants={};
+      ['uniform','local'].forEach(function(layout){
+        var measured=runs[layout];
+        variants[layout]={layout:layout==='local'?'near-ground':'uniform',
+          points:count,batches:Math.ceil(count/1024),
+          firstRun:measured[0],warmRun:measured[1],
+          fullFrameDiff:compareAdapter.compareFramePixels(cpuCanvas,captures[layout]),
+          nearLeftLowerFrameDiff:compareAdapter.compareFramePixels(cpuCanvas,captures[layout],roi),
+          rendererCounts:counts[layout]};
+      });
+      var a=variants.uniform,b=variants.local;
+      var fullA=a.fullFrameDiff,fullB=b.fullFrameDiff,
+        nearA=a.nearLeftLowerFrameDiff,nearB=b.nearLeftLowerFrameDiff;
+      var comparable=fullA.status==='measured'&&fullB.status==='measured'&&
+        nearA.status==='measured'&&nearB.status==='measured';
+      state.probeFrameLast={version:'140.12.16',
+        kind:'Equal-budget uniform vs local near-ground GPU predictor physical-frame A/B',
+        geometry:state.comparePair.A.showModel===2?'flat':'globe',
+        atmosphere:'standard',gpuAlgorithm:'predictor',gpuRK4StepMetres:500,
+        gpuSetupMs:session.setupMs,pointsPerLayout:count,layoutOrder:order,
+        cpuColdReferenceMs:cpuMs,cpuReferenceCounts:reference,
+        region:roi,variants:variants,
+        nearLeftLowerSignificantPixelDelta:comparable?
+          nearB.significantPixels-nearA.significantPixels:null,
+        fullFrameSignificantPixelDelta:comparable?
+          fullB.significantPixels-fullA.significantPixels:null,
+        warmFrameTimeDeltaMs:b.warmRun.frameEndToEndMs-a.warmRun.frameEndToEndMs,
+        sameRayBudget:true,sharedGpuSession:true,fullFrameCompared:comparable,
+        cpuOracleDiscovery:false,cpuShootingFallback:false,
+        regionIsUserObservedApproximation:true,visualEquivalenceProven:false,
+        productionAuthorized:false,
+        verdict:comparable?(nearB.significantPixels<nearA.significantPixels?
+          'NEAR_LEFT_LOWER_PIXEL_DIFF_IMPROVED_NOT_CERTIFIED':
+          'NEAR_LEFT_LOWER_PIXEL_DIFF_NOT_IMPROVED'):'PIXEL_READBACK_UNAVAILABLE'};
+      var fmt=function(n){return Number.isFinite(n)?n.toFixed(1):'n/a';};
+      var roiInfo=comparable?(nearA.significantPixels+' → '+nearB.significantPixels+
+        ' significant pixels in lower-left ROI'):'pixel readback unavailable';
+      probeStatus('Near-ground A/B (4096-style equal budget): '+roiInfo+
+        ' · warm full frame '+fmt(a.warmRun.frameEndToEndMs)+' → '+
+        fmt(b.warmRun.frameEndToEndMs)+' ms · no visual approval');
+      var line=probeUi('ModernGpuFrameMetrics');
+      if(line)line.textContent=count+' rays per variant · '+roiInfo+
+        ' · full-frame significant pixels '+
+        (comparable?fullA.significantPixels+' → '+fullB.significantPixels:'unavailable')+
+        ' · unresolved '+a.rendererCounts.unresolved+' → '+b.rendererCounts.unresolved+
+        ' · shared GPU pipeline setup '+fmt(session.setupMs)+' ms (excluded from A/B frames)'+
+        ' · cold CPU '+fmt(cpuMs)+' ms · Export JSON for full per-run breakdown.';
+    }catch(error){
+      if(generation===state.probeGeneration){
+        state.probeField=null;state.probeFrameLast=null;
+        probeStatus('Near-ground A/B unavailable: '+String(error.message||error));
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareGraphs.B.Redraw();
+      }
+    }finally{
+      state.probeForceColdA=false;
+      if(session)session.close();
+      state.probeBusy=false;
+      buttons.forEach(function(button){if(button)button.disabled=false;});
     }
   }
   function bindCompareGpuProbe(){
@@ -1175,6 +1342,8 @@
     if(firstButton)firstButton.addEventListener('click',function(){return runCompareGpuFirst(false);});
     var fastButton=probeUi('ModernGpuFastRun');
     if(fastButton)fastButton.addEventListener('click',function(){return runCompareGpuFirst(true);});
+    var nearButton=probeUi('ModernGpuNearRun');
+    if(nearButton)nearButton.addEventListener('click',runCompareGpuLocalAB);
     var exportButton=probeUi('ModernGpuProbeExport');
     if(exportButton)exportButton.addEventListener('click',function(){
       if(!state.probeLast&&!state.probeFrameLast){
@@ -1189,7 +1358,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.15'?
+      link.href=url;link.download=exportVersion==='140.12.16'?
+        'curvature-compare-140.12.16-near-ground-ab.json':
+        exportVersion==='140.12.15'?
         'curvature-compare-140.12.15-fast-predictor-frame.json':
         exportVersion==='140.12.12'?
         'curvature-compare-140.12.12-gpu-first-frame.json':

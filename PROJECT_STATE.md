@@ -1291,3 +1291,33 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   Browser GPU shader/actual frame speed/visible-image parity require a user
   export; Node and mocked grid samples cannot establish them.
 - Existing CPU rendering and all older experiment algorithms are unchanged.
+
+## #140.12.16 — equal-budget near-ground GPU field A/B in actual Compare frames
+
+- Adds **Benchmark near-ground GPU A/B** next to #140.12.15, keeping
+  the original fast predictor action untouched. Both variants have the
+  same user-selected number (1024/2048/4096/8192) of GPU nodes, the same
+  authored scene geometry, predictor shader, 500 m RK4 step and shared
+  WebGPU pipeline. No CPU shooting or CPU reference drives field selection.
+- The control is the original **uniform** 16-row vertical axis. The tested
+  variant uses **distance-local near-ground** vertical coordinates: near
+  observer columns place more nodes below the first few metres, smoothly
+  reverting to the original axis by 6 km. Its field interpolates each
+  distance column at its own height nodes before blending across distances;
+  assuming one global height interval would be mathematically incorrect.
+  The baseline field is not changed; the local variant is opt-in only.
+- One click executes **uniform / local / uniform / local** complete GPU
+  predictor fields and Canvas B frames, preserving both rendered bitmaps;
+  separately forces cold CPU A **after all four GPU frames**. JSON records
+  first and pipeline-reused full-frame timings by variant, GPU batches,
+  acceptance/fallback, rendered contours/fills/unresolved, and actual pixel
+  differences against CPU A across both the whole frame and a **fixed
+  lower-left region** (left 55%, bottom 45%). The region is an approximate
+  diagnostic for the user-observed near-tower base defect, not segmentation
+  of geometric surfaces and not an approval criterion.
+- The report `curvature-compare-140.12.16-near-ground-ab.json` describes
+  whether the selected region had fewer significant-pixel differences;
+  it does not claim silhouette equivalence, a kernel-only benchmark,
+  production approval, or a known speed win. Mock geometry/interpolation,
+  batch ordering, cropped pixel comparison and UI integration are covered
+  by tests; **actual WebGPU and frame pixels require a browser run**.
