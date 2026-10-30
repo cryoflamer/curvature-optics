@@ -2286,6 +2286,95 @@
       if(contactToggle)contactToggle.disabled=false;
     }
   }
+  // #140.12.22: fixed near-surface / upper-tower precision ladder. No repaint,
+  // CPU-guided target selection, GPU fallback, or production solver modification.
+  async function runGpuPrecisionAudit141222(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A;
+    if(!gpu||!contract||!precision||!surfaces||!model||
+        !root.navigator||!root.navigator.gpu){
+      probeStatus('GPU precision audit dependencies unavailable.');return;
+    }
+    var config=state.compareConfig&&state.compareConfig.A;
+    if(!config||config.atmosphere!=='standard'){
+      probeStatus('GPU precision audit requires standard atmosphere in A.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun',
+        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun',
+        'ModernGpuAdaptiveRun','ModernGpuNearGeometryRun',
+        'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
+        'ModernGpuPrecisionAuditRun'],buttons=ids.map(probeUi),
+      gpuResults={},gpuTimes={},cpuTimes={};
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,
+          geometry:model.showModel===2?'flat':'globe',radius:model.rEarth,
+          observerHeight:model.Height},surfaces),runs=precision.stages(ladder);
+      Object.keys(runs).forEach(function(key){gpu.checked(runs[key]);});
+      probeStatus('GPU precision: initializing '+ladder.targetsCount+
+        ' targets · 500 m / 50 m / strict 0.1 mm tolerance…');
+      session=await gpu.createSession(ladder.targetsCount,null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      for(var key of Object.keys(runs)){
+        probeStatus('GPU precision: '+key+' · '+ladder.targetsCount+' targets…');
+        var started=profileNow(),batch=await session.solve(runs[key],{warmRepeats:0});
+        if(cancelled())return;
+        gpuResults[key]=batch.response;
+        gpuTimes[key]={wallMs:profileNow()-started,
+          uploadToReadbackMs:batch.timing.gpuUploadToReadbackMs,
+          predictorAccepted:batch.algorithm.predictorAccepted,
+          predictorFallbacks:batch.algorithm.predictorFallbacks};
+      }
+      // Neither CPU batch can affect the already executed GPU workloads.
+      probeStatus('GPU precision: GPU batches finished · independent CPU f64 reference…');
+      var cpuResults={};
+      for(var atmosphere of ['standard','vacuum']){
+        var refRequest=Object.assign({},runs[atmosphere==='standard'?'standard500':'vacuum500'],
+          {controls:{step:2000,targetTolerance:0.000001,eventSubsteps:8}});
+        var cpuStart=profileNow();
+        cpuResults[atmosphere]=await contract.solveCpuBatch(refRequest);
+        cpuTimes[atmosphere]=profileNow()-cpuStart;
+        if(cancelled())return;
+      }
+      var report=precision.audit(ladder,gpuResults,cpuResults);
+      report.gpuAlgorithm='predictor';report.gpuArithmetic='f32, compensated RK4';
+      report.geometry=ladder.request.geometry;
+      report.atmosphere='standard with vacuum control';
+      report.gpuSetupMs=session.setupMs;
+      report.gpuRuns=gpuTimes;report.cpuF64ReferenceTimesMs=cpuTimes;
+      report.cpuF64TargetStepMetres=2000;
+      report.cpuOracleDiscovery=false;report.cpuAnswersNotInjectedIntoGPU=true;
+      report.framePaintingChanged=false;
+      report.verdict='MEASURED_NUMERIC_REVIEW_REQUIRED';
+      state.probeFrameLast=report;
+      var fmt=function(n){return Number.isFinite(n)?n.toFixed(2):'n/a';};
+      var line=probeUi('ModernGpuFrameMetrics');
+      if(line)line.textContent='GPU f32 precision ('+ladder.targetsCount+' targets): '+
+        Object.keys(report.variants).map(function(k){var v=report.variants[k];
+          return k+': '+v.statusMismatches+' status mismatches, '+
+            fmt(v.upperHeightMeanAbsoluteAngleDeltaArcsec)+' arcsec upper-height mean';
+        }).join(' · ')+' · CPU reference only · Export JSON';
+      probeStatus('GPU precision ladder measured · 5 mm vs 0.1 mm tolerance, '+
+        '500 m vs 50 m integration, vacuum control · no frame modifications · Export JSON');
+    }catch(error){
+      if(!cancelled()){
+        state.probeFrameLast=null;
+        probeStatus('GPU precision audit failed: '+String(error&&error.message||error));
+      }
+    }finally{
+      if(session)session.close();state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});
+    }
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2332,6 +2421,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var precisionButton=probeUi('ModernGpuPrecisionAuditRun');
+    if(precisionButton)precisionButton.addEventListener('click',runGpuPrecisionAudit141222);
     var qualificationButton=probeUi('ModernGpuStatusQualificationRun');
     if(qualificationButton)qualificationButton.addEventListener('click',runGpuStatusQualification141221);
     var visibilityButton=probeUi('ModernGpuRendererVisibilityRun');
@@ -2340,7 +2431,8 @@
     if(nearGeometryButton)nearGeometryButton.addEventListener('click',runCompareNearGeometry141219);
     ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
       'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
-      'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun'].forEach(function(id){
+      'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
+      'ModernGpuPrecisionAuditRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2359,7 +2451,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.21'?
+      link.href=url;link.download=exportVersion==='140.12.22'?
+        'curvature-compare-140.12.22-gpu-f32-precision.json':
+        exportVersion==='140.12.21'?
         'curvature-compare-140.12.21-gpu-status-qualification.json':
         exportVersion==='140.12.20'?
         'curvature-compare-140.12.20-renderer-visibility.json':

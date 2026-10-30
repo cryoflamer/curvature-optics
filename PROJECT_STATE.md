@@ -1,3 +1,10 @@
+## Patch 140.12.22 — GPU f32 near-surface precision ladder (2026-10-30)
+
+- Added an **opt-in, diagnostic-only** Compare button `Audit GPU f32 precision · surface / upper towers`; no graphics, production changes, pixel substitution or CPU shooting fallback. JSON: `curvature-compare-140.12.22-gpu-f32-precision.json`.
+- Uses 48 geometry-derived targets at six near distances (60–5400 m) and eight altitudes (0, 1 µm, 1 cm, 10 cm, 1, 5, 20, 50 m). GPU predictor compares standard atmosphere 500 m/5 mm tolerance (control), 500 m/0.1 mm tolerance, 50 m/5 mm tolerance, and vacuum 500 m/5 mm. CPU f64 references for standard/vacuum run **after all GPU batches**.
+- Reports status disagreements, ground-contact evidence and contact proximity to endpoint (diagnostic 25 cm threshold only, **not** an override), angular errors including separate high-tower heights, and local f32 coordinate round-trip height error. No renderer repaint or code-path promotion.
+- Motivation: #140.12.21 diagnostic found 54 near-surface uncertain first-ground contacts, none resolved by 500→50 m RK4. Existing WGSL uses rationalized local altitude rather than subtracting the 6371 km radius, so the audit separates a loose 5 mm target residual from integration step and atmosphere instead of guessing a radius cancellation problem. A target marked indeterminate is never automatically made visible.
+
 ## Patch 140.11 — Independent GPU shooting architecture and diagnostic batch contract (2026-10-30)
 
 - Inspected current source call chain: `OpticalTargetProjection.solve` ->
