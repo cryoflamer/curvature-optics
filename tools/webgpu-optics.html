@@ -13,7 +13,8 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 <option value="4">#140.12 — independent GPU batch shooting</option>
 <option value="5">#140.12.1 — per-target parity and warm timing</option>
 <option value="6">#140.12.2 — angle-bracket refinement A/B</option>
-<option value="7" selected>#140.12.3 — physical 5 mm qualification</option>
+<option value="7">#140.12.3 — physical 5 mm qualification</option>
+<option value="8" selected>#140.12.4 — screen-space impact proxy</option>
 </select></label>
 <section id="panel-0" class="experiment" hidden>
 
@@ -141,7 +142,7 @@ these gates. There is no production backend switch.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON report">No results yet.</pre>
 </section>
-<section id="panel-5" class="experiment">
+<section id="panel-5" class="experiment" hidden>
 <h1>Curvature #140.12.1 — independent GPU shooting diagnostics</h1>
 <p>Investigate the <strong>measured #140.12 numerical parity failure</strong>, not a new GPU algorithm.
 For every Flat/Globe mesh target, export CPU/GPU angles, residuals, ground evidence,
@@ -156,7 +157,7 @@ Production CPU/renderer are unaffected.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON diagnostic report">No report yet.</pre>
 </section>
-<section id="panel-6" class="experiment">
+<section id="panel-6" class="experiment" hidden>
 <h1>Curvature #140.12.2 — angle-bracket refinement A/B (research)</h1>
 <p>The previous #140.12.1 log showed early termination at 5 mm target residual,
 although the strict <code>1e-7 rad</code> angle gate still failed. This mode compares
@@ -175,7 +176,7 @@ This is <strong>not</strong> production authorization.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON refinement report">No report yet.</pre>
 </section>
-<section id="panel-7" class="experiment">
+<section id="panel-7" class="experiment" hidden>
 <h1>Curvature #140.12.3 — 5 mm physical shooting qualification</h1>
 <p>The application's <strong>5 mm target-height residual tolerance is deliberate</strong>.
 An angular difference from the CPU solution is reported for diagnosis, but is <strong>not a failure by itself</strong>.
@@ -192,6 +193,32 @@ batch speed gate remains. This experiment cannot authorize production use.</p>
 <p id="status" role="status" aria-live="polite">Not run.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON physical qualification report">No report yet.</pre>
+</section>
+<section id="panel-8" class="experiment">
+<h1>Curvature #140.12.4 — visible-impact triage (illustrative, research only)</h1>
+<p>The previous <strong>5 mm</strong> target residual and <strong>1 mm</strong> ground-event differences
+are diagnostic numbers, not automatic visible-image errors. This experiment measures how
+CPU/GPU <em>launch-angle</em> differences would map to pixels in an <strong>illustrative 2D
+perspective camera</strong>, then flags visibility disagreements and near-ground endpoint
+cases for further investigation. It is <strong>not</strong> Curvature's real camera projection,
+silhouette rasterization, a full-frame diff or proof of visual equivalence.</p>
+<form id="visual-controls">
+<fieldset><legend>Illustrative camera (not imported from the live app)</legend>
+<label>Viewport height (px)<input name="viewportHeightPx" type="number" min="100" max="8192" step="1" value="1080" required></label>
+<label>Vertical FOV (degrees)<input name="verticalFovDegrees" type="number" min="5" max="120" step="any" value="45" required></label>
+<label>Camera pitch (degrees)<input name="cameraPitchDegrees" type="number" min="-75" max="75" step="any" value="0" required></label>
+<label>Angle proxy budget (px)<input name="pixelBudgetPx" type="number" min="0.01" max="5" step="any" value="0.5" required></label>
+</fieldset>
+<fieldset><legend>Boundary triage windows (not physical correctness limits)</legend>
+<label>Near-ground target altitude (m)<input name="nearGroundMetres" type="number" min="0" max="0.5" step="any" value="0.01" required></label>
+<label>Near-endpoint contact path gap (m)<input name="endpointWindowMetres" type="number" min="0.001" max="10" step="any" value="0.1" required></label>
+</fieldset>
+<button id="start" type="submit">Run independent GPU shooting + visual-impact proxy</button>
+<button id="save" type="button" disabled>Export #140.12.4 JSON</button>
+</form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary"></div>
+<pre id="report" aria-label="Visual proxy diagnostic JSON">No report yet.</pre>
 </section>
 <script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="../src/optics/OpticalRayTracer.js"></script>
@@ -501,7 +528,46 @@ batch speed gate remains. This experiment cannot authorize production use.</p>
  });
 }());
 
+(function(){'use strict';
+ var panel=document.getElementById('panel-8'),form=panel.querySelector('#visual-controls');
+ var start=panel.querySelector('#start'),save=panel.querySelector('#save');
+ var status=panel.querySelector('#status'),summary=panel.querySelector('#summary');
+ var report=panel.querySelector('#report'),latest=null;
+ form.addEventListener('submit',async function(event){
+  event.preventDefault();if(!form.reportValidity())return;
+  start.disabled=true;save.disabled=true;latest=null;summary.textContent='';
+  status.textContent='Loading 12-tower scene targets…';
+  try{
+   var view={};
+   for(var field of form.querySelectorAll('input[name]'))view[field.name]=field.valueAsNumber;
+   var response=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!response.ok)throw Error('Fixture fetch failed: '+response.status);
+   status.textContent='Comparing illustrative angular pixel shifts and CPU replayed ground events…';
+   latest=await CurvatureWebGPUPhysicalTolerance14123.run(await response.json(),undefined,{visual:view});
+   report.textContent=JSON.stringify(latest,null,2);
+   status.textContent='Decision: '+latest.decision.verdict+' — '+latest.decision.nextAction;
+   summary.textContent=latest.scenes.map(function(s){return s.id+': '+s.status+
+    (s.status==='measured'?'; subpixel angle proxy '+s.visual.counts.subpixelAngleProxy+'/'+s.count+
+      ', near-ground boundary candidates '+s.visual.counts.nearBoundaryCandidates+
+      ', status disagreements '+s.visual.counts.statusDisagreements+
+      ', frame review required '+s.visual.counts.requiresFrameReview+
+      ', maximum proxy shift '+s.visual.maxLaunchAngleProxyShiftPx.toFixed(3)+' px'+
+      ', GPU warm speedup '+s.timing.warmSpeedup.toFixed(2)+'×':'; '+s.reason);}).join(' | ');
+   save.disabled=false;
+  }catch(error){status.textContent='Visual-impact diagnostic failed: '+error.message;
+   report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.12.4-visual-proxy.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
 (function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
-for(var i=0;i<8;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+for(var i=0;i<9;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
 });}());
 </script></body></html>

@@ -1041,3 +1041,32 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Keep visibility/ground correctness mandatory: matching statuses, matching first-event existence/type, <= 1 mm event path-length difference, no `indeterminate`/`solver_failed`, stable GPU repeats. GPU ground-level target classifications do not yet reproduce CPU's specially tightened endpoint tolerance. Only after these checks consider the **unchanged 2x cold GPU stage speed gate**, with production authorization always false. Warm runs reuse device/pipelines/buffers and remain separate from full-frame costs.
 - Reassessed *user-run* #140.12.1 report (2026-10-30): all 128 **GPU self-reported** residuals lie within 5 mm (max Flat 3.900 mm, Globe 3.633 mm), even though the strict diagnostic recorded 107 angular discrepancies. Independent CPU replay of the **recorded** GPU angles shows one >5 mm residual, Flat target #54 (~5.172 mm); none in Globe. Ground/status disagreements remain (Flat 4/4, Globe 3/6). The newer report's warm CPU/GPU ratios were 1.20x and 1.44x, cold 0.486x and 0.915x: not the required 2x cold gate. Historical `BATCH_NUMERICAL_STOP` applies to the older strict experiment; no retroactive stage pass is implied.
 - Eighth option in **single** `tools/webgpu-optics.html`: `#140.12.3 — physical 5 mm qualification`; exports `curvature-webgpu-optics-140.12.3-physical-tolerance.json`. Production shooting/renderer and all WGSL are unchanged. Node tests are not real-browser GPU verification. See `docs/WEBGPU_PHYSICAL_TOLERANCE_140_12_3.md`.
+
+## #140.12.4 — visual-impact triage instead of strict millimetre parity
+
+- Interpret the user's 5 mm vertical target tolerance and the old 1 mm
+  first-ground event comparison as **diagnostic conventions**, not hard
+  perceptual limits. A status flip close to the surface may or may not affect
+  the actual image; neither a passing 5 mm replay nor a subpixel angle shift
+  alone certifies image equivalence.
+- Extend the **existing** `CurvatureWebGPUPhysicalTolerance14123.js` with an
+  optional illustrative screen-space angle projection and independent `f64`
+  CPU first-ground event replay at GPU launch angles. Parameters are explicit:
+  vertical FOV, camera pitch, viewport height, pixel budget, near-surface and
+  near-endpoint path windows. Boundary cases are **flagged for review**, never
+  automatically accepted. Older physical checks and their report remain intact.
+- The ninth mode lives in the **same** `tools/webgpu-optics.html`; no new JS,
+  HTML, docs, or test files were added. Existing tests cover perspective
+  projection, clipped/offscreen rays, near-target vs early ground contacts,
+  unresolved outcomes, warm-policy preservation and real inline UI wiring.
+- Earlier #140.12.1 data replayed offline through the new illustrative proxy:
+  all 128 launch-angle differences <0.067 proxy px (1080 px viewport, 45°
+  vertical FOV), but Flat 4/64 and Globe 6/64 still require actual-frame
+  investigation due to status/ground disagreements. Three near-endpoint
+  candidates per geometry are not passes; Flat #51 remains a distinct earlier
+  ground contact (~2.45 m before target).
+- `VISUAL_PROXY_ONLY` can **never** authorize GPU production use. No live
+  camera projection, image rasterization, frame diff, full-frame performance,
+  automatic opt-in, CPU solver, or GPU WGSL change. The original cold ≥2x
+  stage speed requirement remains unevaluated by visual comparison itself;
+  all available real browser evidence so far remains below it.

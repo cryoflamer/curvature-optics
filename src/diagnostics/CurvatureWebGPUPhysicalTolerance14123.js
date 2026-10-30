@@ -136,8 +136,122 @@
       return stop('BATCH_PERFORMANCE_STOP','Physical stage passed but 2x cold GPU speedup not reached; retain CPU');
     return stop('BATCH_STAGE_PASS_ONLY','Stage-only qualification; async scene and full-frame integration still unqualified');
   }
+  // #140.12.4: screen-space *proxy*, never a renderer/image parity claim.
+  // Camera parameters below are an explicit illustrative perspective view,
+  // not inferred from Bislin's live Camera/WinTrans or a production viewport.
+  function screenProxyOptions(options){
+    options=options||{};
+    var settings={viewportHeightPx:options.viewportHeightPx===undefined?1080:options.viewportHeightPx,
+      verticalFovDegrees:options.verticalFovDegrees===undefined?45:options.verticalFovDegrees,
+      cameraPitchDegrees:options.cameraPitchDegrees===undefined?0:options.cameraPitchDegrees,
+      pixelBudgetPx:options.pixelBudgetPx===undefined?0.5:options.pixelBudgetPx,
+      nearGroundMetres:options.nearGroundMetres===undefined?0.01:options.nearGroundMetres,
+      endpointWindowMetres:options.endpointWindowMetres===undefined?0.1:options.endpointWindowMetres};
+    if(!Number.isInteger(settings.viewportHeightPx)||settings.viewportHeightPx<100||settings.viewportHeightPx>8192||
+        !Number.isFinite(settings.verticalFovDegrees)||settings.verticalFovDegrees<5||settings.verticalFovDegrees>120||
+        !Number.isFinite(settings.cameraPitchDegrees)||Math.abs(settings.cameraPitchDegrees)>75||
+        !Number.isFinite(settings.pixelBudgetPx)||settings.pixelBudgetPx<=0||settings.pixelBudgetPx>5||
+        !Number.isFinite(settings.nearGroundMetres)||settings.nearGroundMetres<0||settings.nearGroundMetres>0.5||
+        !Number.isFinite(settings.endpointWindowMetres)||settings.endpointWindowMetres<=0||settings.endpointWindowMetres>10)
+      throw RangeError('Invalid illustrative screen-space diagnostic parameters');
+    return settings;
+  }
+  function perspectiveY(angle,settings){
+    if(angle===null)return null;
+    var relative=angle-settings.cameraPitchDegrees*Math.PI/180;
+    var half=settings.verticalFovDegrees*Math.PI/360;
+    if(Math.abs(relative)>half)return null;
+    return settings.viewportHeightPx*(0.5-Math.tan(relative)/(2*Math.tan(half)));
+  }
+  // Use the same ground-event search as the CPU optical ray tracer, at the
+  // GPU's angle. This is NOT a GPU event certification and is excluded from
+  // the GPU timing. In particular, 'boundary-candidate' is never a pass.
+  function groundReplay(request,entry,profile){
+    if(entry.status==='solver_failed'||entry.angle===null||entry.pathLength===null)
+      return {status:'unavailable',reason:'GPU angle/path unavailable'};
+    try{
+      var traced=rayTracer.trace({geometry:request.geometry,radius:request.radius,
+        profile:profile,observerHeight:request.observerHeight,angle:entry.angle,
+        length:entry.pathLength,step:request.controls&&request.controls.step||50,
+        eventSubsteps:request.controls&&request.controls.eventSubsteps||8,
+        contactTolerance:request.controls&&request.controls.contactTolerance||1e-6});
+      return {status:'measured',hitGround:traced.hitGround,
+        event:traced.event?{kind:traced.event.kind,contact:traced.event.contact,
+          pathLength:traced.event.pathLength}:null,
+        remainingPathMetres:traced.hitGround?Math.max(0,entry.pathLength-traced.travelled):null};
+    }catch(error){return {status:'unavailable',reason:String(error.message||error)};}
+  }
+  function visualComparison(request,cpu,gpuResponse,settings,physical){
+    var view=screenProxyOptions(settings);
+    // The physical comparison remains a separate historical strict report;
+    // its 1 mm event threshold does not become a screen-space failure here.
+    physical=physical||physicalComparison(request,cpu,gpuResponse);
+    contract.validateResponse(request,cpu);contract.validateResponse(request,gpuResponse);
+    var profile=rayTracer.atmosphere(request.atmosphere,request.profileOptions);
+    var surface=rayTracer.resolveGeometry({geometry:request.geometry,radius:request.radius}).surface;
+    var counts={inViewport:0,outsideViewport:0,subpixelAngleProxy:0,
+      overPixelBudget:0,statusDisagreements:0,groundEvidenceDisagreements:0,
+      nearBoundaryCandidates:0,requiresFrameReview:0,groundReplayUnavailable:0};
+    var maxPixelShift=0;
+    var targets=request.targets.map(function(target,i){
+      var a=cpu.results[i],b=gpuResponse.results[i],p=physical.targets[i];
+      var aY=perspectiveY(a.angle,view),bY=perspectiveY(b.angle,view);
+      var pixelGap=aY===null||bY===null?null:Math.abs(aY-bY);
+      if(pixelGap===null)counts.outsideViewport++;
+      else{
+        counts.inViewport++;maxPixelShift=Math.max(maxPixelShift,pixelGap);
+        if(pixelGap<=view.pixelBudgetPx)counts.subpixelAngleProxy++;
+        else counts.overPixelBudget++;
+      }
+      var statusDifferent=a.status!==b.status;
+      var groundDifferent=p.flags.includes('groundEventMismatch');
+      if(statusDifferent)counts.statusDisagreements++;
+      if(groundDifferent)counts.groundEvidenceDisagreements++;
+      var event=b.ground&&b.ground.event;
+      var targetAltitude=surface.height2(target[0],target[1]);
+      var gpuContactGap=event?Math.max(0,b.pathLength-event.pathLength):null;
+      var replay=groundReplay(request,b,profile);
+      if(replay.status!=='measured')counts.groundReplayUnavailable++;
+      // A narrow endpoint contact at ground level is a REVIEW PRIORITY,
+      // not proof that a visible/blocked flip is harmless on a rendered frame.
+      var boundaryCandidate=(statusDifferent||groundDifferent)&&
+        targetAltitude>=-view.nearGroundMetres&&targetAltitude<=view.nearGroundMetres&&
+        pixelGap!==null&&pixelGap<=view.pixelBudgetPx&&
+        (gpuContactGap!==null?gpuContactGap<=view.endpointWindowMetres:
+          (replay.remainingPathMetres!==null&&
+           replay.remainingPathMetres<=view.endpointWindowMetres));
+      if(boundaryCandidate)counts.nearBoundaryCandidates++;
+      var frameReview=statusDifferent||groundDifferent||pixelGap===null||
+        pixelGap>view.pixelBudgetPx||replay.status!=='measured';
+      if(frameReview)counts.requiresFrameReview++;
+      return {targetIndex:i,target:target.slice(),cpuLaunchAngleRadians:a.angle,
+        gpuLaunchAngleRadians:b.angle,cpuIllustrativePixelY:aY,
+        gpuIllustrativePixelY:bY,launchAngleProxyShiftPx:pixelGap,
+        targetSurfaceAltitudeMetres:targetAltitude,
+        cpuStatus:a.status,gpuStatus:b.status,statusDifferent:statusDifferent,
+        groundEvidenceDifferent:groundDifferent,gpuContactToTargetPathMetres:gpuContactGap,
+        cpuGroundReplayOfGpuAngle:replay,
+        nearEndpointGroundBoundaryCandidate:boundaryCandidate,
+        requiresActualFrameReview:frameReview};
+    });
+    return {view:view,kind:'illustrative launch-angle perspective projection (NOT rendered image pixels)',
+      counts:counts,maxLaunchAngleProxyShiftPx:maxPixelShift,targets:targets,
+      actualRenderedImageCompared:false,visualEquivalenceProven:false};
+  }
+  function decideVisual(scenes){
+    var base={productionAuthorized:false,visualEquivalenceProven:false,
+      requiresFullFrameComparison:true};
+    if(!scenes||scenes.length===0||scenes.some(function(s){return s.status!=='measured';}))
+      return Object.assign({},base,{verdict:'INCONCLUSIVE',nextAction:'GPU/CPU unavailable; no visual assessment'});
+    if(scenes.some(function(s){return !s.timing.warmOutputBitwiseStable;}))
+      return Object.assign({},base,{verdict:'BATCH_REPEAT_INSTABILITY_STOP',
+        nextAction:'Unstable GPU output must be resolved before frame comparison'});
+    return Object.assign({},base,{verdict:'VISUAL_PROXY_ONLY',
+      nextAction:'Inspect ground/status edge cases and compare actual rendered CPU/GPU frames before any visual-equivalence claim'});
+  }
   async function run(fixture,deps,options){
     options=options||{};
+    var visualSettings=options.visual?screenProxyOptions(options.visual):null;
     var entries=gpu.fixtureRequests(fixture),reports=[];
     var solver=options.solver||gpu;
     var repeats=options.warmRepeats===undefined?3:options.warmRepeats;
@@ -151,18 +265,21 @@
         var measured=await solver.solveBatch(entry.request,deps,
           {refinement:'residual-stop',warmRepeats:repeats});
         var verifyStarted=now(),physical=physicalComparison(entry.request,cpu,measured.response);
+        var visual=visualSettings?
+          visualComparison(entry.request,cpu,measured.response,visualSettings,physical):null;
         var verifyMs=now()-verifyStarted;
         var timing=Object.assign({coldSpeedup:cpuMs/measured.timing.gpuColdMs,
           warmSpeedup:cpuMs/measured.timing.gpuWarmMedianMs},measured.timing);
         reports.push({id:entry.id,status:'measured',count:entry.request.targets.length,
           cpuMs:cpuMs,cpuReplayVerificationMs:verifyMs,timing:timing,
-          physical:physical,device:measured.device});
+          physical:physical,device:measured.device,
+          ...(visual?{visual:visual}:{})});
       }catch(error){reports.push({id:entry.id,status:'unavailable',count:entry.request.targets.length,
         cpuMs:cpuMs,reason:String(error.message||error)});}
     }
-    return {version:'140.12.3',status:reports.every(function(s){return s.status==='measured';})?
+    return {version:visualSettings?'140.12.4':'140.12.3',status:reports.every(function(s){return s.status==='measured';})?
       'finished':'incomplete',
-      experiment:'5 mm target tolerance and independent CPU replay of GPU angles; ground/status qualification',
+      experiment:visualSettings?'Illustrative screen-space impact proxy and independent CPU ground replay (not a frame comparison)':'5 mm target tolerance and independent CPU replay of GPU angles; ground/status qualification',
       measurement:{gpuPolicy:'residual-stop',warmRepeats:repeats,
         cpuReference:'separate complete CPU shooting batch',
         gpuTiming:'upload + dispatch + fence/readback CPU wall-clock; GPU pipelines reused in warm runs',
@@ -170,14 +287,22 @@
         targetCriterion:'each CPU/GPU residual and CPU replay residual <= requested targetTolerance',
         angleCriterion:'diagnostic only, NOT a rejection gate',
         groundCriterion:'status and first-ground event/contact agree; event path <= 1 mm difference'},
-      scenes:reports,decision:decide(reports),limitations:[
+      scenes:reports,decision:visualSettings?decideVisual(reports):decide(reports),
+      ...(visualSettings?{previousPhysicalDecision:decide(reports)}:{}),limitations:[
         '5 mm describes target-height accuracy, not a blanket tolerance on ground contact or apparent angle',
         'CPU replay verifies GPU angle against independent f64 ray model, but is diagnostic only and not in GPU timings',
         'CPU ground-level endpoints use a tighter internal solve tolerance and protective endpoint classification',
         'The GPU 33-angle sweep does not prove all roots or tangential contacts were found',
         'The preserved 2x cold GPU stage speed gate excludes full adaptive scene/frame costs',
-        'No GPU backend or rendering switch; production authorization always false']};
+        'No GPU backend or rendering switch; production authorization always false',
+        ...(visualSettings?[
+          'No images are rendered or pixel-diffed; 2D illustrative launch-angle shift is not an actual camera or scene-projection measurement',
+          'A subpixel angular shift cannot certify occlusion silhouettes, visibility or visual equivalence',
+          'Near-boundary candidates flag possible visually minor cases for frame inspection, never automatic passes',
+          'Viewport/FOV, near-ground and endpoint parameters are scenarios, not production camera settings or safety thresholds']:[])]};
   }
   return Object.freeze({tolerance:tolerance,cpuReplay:cpuReplay,
-    physicalComparison:physicalComparison,decide:decide,run:run});
+    physicalComparison:physicalComparison,screenProxyOptions:screenProxyOptions,
+    perspectiveY:perspectiveY,groundReplay:groundReplay,visualComparison:visualComparison,
+    decide:decide,decideVisual:decideVisual,run:run});
 }));

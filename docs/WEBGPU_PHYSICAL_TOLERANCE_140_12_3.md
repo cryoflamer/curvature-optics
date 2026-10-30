@@ -107,3 +107,58 @@ real WebGPU browser run. Previous #140.12.1 GPU results remain historical;
 we have **not** claimed #140.12.3 real-browser results. No scene renderer,
 production backend, CPU shooting solver, ground finder, or WebGPU WGSL shader
 is modified in this patch.
+
+## #140.12.4 addendum — illustrative screen-space impact, not a millimetre veto
+
+The user's **5 mm** shooting tolerance is a practical numerical choice, **not a
+claim** that a 5.17 mm replay or a 1 mm ground-contact path discrepancy is
+necessarily visible. The #140.12.3 strict physical/ground decision remains
+available unchanged as a historical comparison; it is **not** silently
+re-labelled as an image-quality judgement.
+
+The same existing `CurvatureWebGPUPhysicalTolerance14123.js` now optionally
+accepts `run(fixture, deps, {visual: { ... }})`. This uses the **same GPU
+`residual-stop` shader**, separate CPU shooting and warm/cold GPU timings, and
+adds diagnostic work **after** the GPU stopwatch:
+
+- Illustrative vertical perspective mapping from launch angle, with explicit
+  vertical FOV, camera pitch, viewport height and a chosen pixel budget.
+  Offscreen angles are reported as unknown, not automatically acceptable.
+- Independent CPU `f64` `trace(..., stopAtGround:true)` at the GPU launch angle
+  and length, with the original CPU ground-event detector. Contact locations
+  are reported alongside GPU first-ground events; this replay is **not** a
+  full visibility certification or a re-shooting search.
+- Separate counts for angular-proxy shifts below/above the pixel budget,
+  CPU/GPU visibility disagreement, ground evidence disagreement, endpoint
+  boundary candidates and cases requiring actual frame review. A candidate
+  needs a near-surface target, a small angular proxy and contact within an
+  explicit near-target *path* window. A disagreement more than this window
+  before the target is **not** an endpoint candidate.
+- The previous strict `physical` block is preserved in the output as a
+  historical diagnostic, along with `previousPhysicalDecision`. The new
+  decision is `VISUAL_PROXY_ONLY` (or `INCONCLUSIVE` / repeat-instability stop);
+  `visualEquivalenceProven` and `productionAuthorized` always remain false.
+
+**The illustrative pixels are not real renderer pixels.** They assume an
+independent 2D perspective vertical camera and use only launch-angle shifts:
+there is no live Bislin camera/WinTrans calibration, mesh silhouette projection,
+3D occlusion, per-pixel image comparison, or Scene/Compare integration. An
+angular shift under 0.5 illustrative pixels does **not** prove two images
+identical, especially when the visible/blocked status changes. The configurable
+near-ground 1 cm and near-endpoint 0.1 m windows are exploratory *grouping*
+parameters, not changes to the optical model or new correctness limits.
+
+Replaying the previously uploaded #140.12.1 per-target data locally with a
+1080 px, 45° FOV, zero-pitch camera proxy yielded **128/128** shifts below
+0.5 illustrative px, with maximum shifts **0.06663/0.06664 px** in Flat/Globe.
+Three near-endpoint, ground-level discrepancies in **each** scene were tagged
+as boundary candidates; Flat #51 was not, because the reported ground event
+was around **2.45 m** before its target. These are calculations on an earlier
+GPU report, **not** fresh #140.12.4 browser or actual-frame measurements.
+
+Run the **ninth option** `#140.12.4 — screen-space impact proxy` in the
+**existing** `tools/webgpu-optics.html` and export
+`curvature-webgpu-optics-140.12.4-visual-proxy.json`. The user can change the
+illustrative camera and grouping windows to test sensitivity. No new
+version-numbered HTML, JS module, test file, or standalone document was created
+for this stage; this addendum extends the existing documentation.
