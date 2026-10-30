@@ -115,7 +115,7 @@ test('140.12.18: Compare UI separates source-selected adaptive GPU from CPU-only
   assert.match(html,/id="ModernGpuAdaptiveRun"/);
   assert.match(html,/id="ModernGpuAdaptiveHeatmap"/);
   assert.match(html,/id="ModernGpuDenseHeatmap"/);
-  assert.match(html,/src\/ui\/modern\/ModernCompareModel.js\?v=140\.12\.24/);
+  assert.match(html,/src\/ui\/modern\/ModernCompareModel.js\?v=140\.12\.25/);
   assert.match(app,/addEventListener\('click',runCompareGpuAdaptive141218\)/);
   const start=app.indexOf('async function runCompareGpuAdaptive141218()');
   const end=app.indexOf('  function bindCompareGpuProbe(){',start);

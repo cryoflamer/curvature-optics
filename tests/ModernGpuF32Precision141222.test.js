@@ -87,8 +87,8 @@ test('140.12.22: upper tower angle metric excludes ground without hiding solver 
 test('140.12.22: browser audit uses GPU predictor first, CPU oracle last, no frame edits',()=>{
   const app=src('src/ui/modern/ModernApp.js'),html=src('CurvatureModern.html');
   assert.match(html,/CurvatureGpuPrecisionAudit141222\.js/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.24/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.24/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.25/);
+  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.25/);
   assert.match(html,/id="ModernGpuPrecisionAuditRun"/);
   assert.match(app,/addEventListener\('click',runGpuPrecisionAudit141222\)/);
   assert.match(app,/curvature-compare-140\.12\.22-gpu-f32-precision\.json/);

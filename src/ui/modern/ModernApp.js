@@ -2506,6 +2506,77 @@
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
+  // #140.12.25: report precision-limited f32 angles separately from the
+  // validated GPU batch status. Never paint or promote uncertified candidates.
+  async function runGpuPrecisionLimit141225(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      audit=root.CurvatureGpuPrecisionLimit141225,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A,
+      config=state.compareConfig&&state.compareConfig.A;
+    if(!gpu||!contract||!precision||!audit||!surfaces||!model||!config||
+       config.atmosphere!=='standard'||!root.navigator||!root.navigator.gpu){
+      probeStatus('GPU precision-limit audit requires WebGPU and standard atmosphere in A.');return;
+    }
+    var generation=state.probeGeneration,sessions=[],ids=[
+      'ModernGpuLimitAuditRun','ModernGpuFloorAuditRun','ModernGpuRootAuditRun',
+      'ModernGpuPrecisionAuditRun','ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],
+      buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,
+        geometry:model.showModel===2?'flat':'globe',radius:model.rEarth,
+        observerHeight:model.Height},surfaces),base=ladder.request,
+        strict=Object.assign({},base,{controls:Object.assign({},base.controls,
+          {targetTolerance:0.0001})}),
+        jobs=[['predictor5mm','predictor','residual-stop',base,false],
+          ['predictorStrict','predictor','residual-stop',strict,true],
+          ['sweepStrict','sweep','residual-stop',strict,true],
+          ['bracketStrict','sweep','angle-bracket',strict,true],
+          ['precisionAware','sweep','precision-aware',strict,true]],
+        batches={},timings={};
+      for(var job of jobs){
+        if(cancelled())return;
+        gpu.checked(job[3]);
+        probeStatus('GPU precision-limit audit: '+job[0]+'…');
+        var session=await gpu.createSession(ladder.targetsCount,null,
+          {algorithm:job[1],refinement:job[2],traceRefinement:job[4]});
+        sessions.push(session);
+        if(cancelled())return;
+        var started=profileNow(),batch=await session.solve(job[3],{warmRepeats:0});
+        if(cancelled())return;
+        batches[job[0]]=batch;
+        timings[job[0]]={wallMs:profileNow()-started,
+          gpuUploadToReadbackMs:batch.timing.gpuUploadToReadbackMs,
+          setupMs:session.setupMs,traceReadbackIncluded:job[4]};
+      }
+      probeStatus('GPU precision-limit audit: independent CPU f64 reference…');
+      var cpuRequest=Object.assign({},base,{controls:{step:2000,
+        targetTolerance:0.000001,eventSubsteps:8}});
+      var cpu=await contract.solveCpuBatch(cpuRequest);
+      if(cancelled())return;
+      var report=audit.measured(ladder,batches,cpu);
+      report.gpuRuns=timings;report.gpuArithmetic='f32, compensated RK4';
+      report.gpuStepMetres=500;report.cpuF64TargetStepMetres=2000;
+      report.controls={baseToleranceMetres:0.005,strictToleranceMetres:0.0001};
+      state.probeFrameLast=report;
+      var line=probeUi('ModernGpuFrameMetrics');
+      if(line)line.textContent='GPU precision limit: '+
+        report.variants.precisionAware.precisionLimited+' uncertified candidates · '+
+        report.variants.precisionAware.solverFailed+' unresolved · '+
+        report.traceIntervalWideningViolations.length+' trace widening violations · Export JSON';
+      probeStatus('GPU precision-limit measured · uncertified angles never painted · Export JSON');
+    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+      probeStatus('GPU precision-limit audit failed: '+String(error&&error.message||error));}}
+    finally{sessions.forEach(function(session){session.close();});
+      state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2552,6 +2623,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var limitAuditButton=probeUi('ModernGpuLimitAuditRun');
+    if(limitAuditButton)limitAuditButton.addEventListener('click',runGpuPrecisionLimit141225);
     var floorAuditButton=probeUi('ModernGpuFloorAuditRun');
     if(floorAuditButton)floorAuditButton.addEventListener('click',runGpuNumericalFloor141224);
     var rootAuditButton=probeUi('ModernGpuRootAuditRun');
@@ -2567,7 +2640,8 @@
     ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
       'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
       'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
-      'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun'].forEach(function(id){
+      'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun',
+      'ModernGpuLimitAuditRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2586,7 +2660,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.24'?
+      link.href=url;link.download=exportVersion==='140.12.25'?
+        'curvature-compare-140.12.25-gpu-precision-limit.json':
+        exportVersion==='140.12.24'?
         'curvature-compare-140.12.24-gpu-numerical-floor.json':
         exportVersion==='140.12.23'?
         'curvature-compare-140.12.23-gpu-root-convergence.json':

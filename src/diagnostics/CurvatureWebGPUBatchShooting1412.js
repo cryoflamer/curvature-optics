@@ -22,7 +22,7 @@
   if(!integrator.includes('advanceCompensated'))throw Error('Kahan RK4 shader unavailable');
   // Binding 3 is only used in the refinement stage; stage A has a different
   // auto pipeline layout. Do not submit extra bindings to an auto layout.
-  function shader(refinement,strict,gated,predictor,guarded,trace){
+  function shader(refinement,strict,gated,predictor,guarded,trace,precisionAware){
     // #140.12.2 keeps the original refinement math unchanged as the archived
     // residual-stop baseline. The alternate refinement is opt-in research.
     var refinementLoop=strict?`
@@ -30,6 +30,7 @@
   var usedIterations=0u;
   for(var iter=0u;iter<config[12];iter=iter+1u){
     usedIterations=iter+1u;
+    ${trace?'iterationTrace.data[i*12u+(iter%12u)]=vec4f(-999.0,0.0,0.0,0.0);':''}
     if(a.y==0.0){b=a;break;}
     if(b.y==0.0){a=b;break;}
     // Resolve the angle, not just the 5 mm target-height residual. In f32,
@@ -58,6 +59,43 @@
     if(a.y*shot.residual<=0.0){b=vec4f(angle,shot.residual,shot.path,1.0);}
     else{a=vec4f(angle,shot.residual,shot.path,1.0);}
   }`;
+
+    // #140.12.25: preserve the lowest-residual f32 angle. An unresolved
+    // representability floor is an uncertified candidate, never visibility.
+    // No CPU values or model-specific angles are used by this shader.
+    if(precisionAware){
+      refinementLoop=`
+  var usedIterations=0u;
+  var bestAngle=a.x;
+  var bestResidual=a.y;
+  if(abs(b.y)<abs(bestResidual)){
+    bestAngle=b.x;bestResidual=b.y;
+  }
+  var precisionSaturated=false;
+  var noImprovement=0u;
+  for(var iter=0u;iter<config[12];iter=iter+1u){
+    let angle=a.x+(b.x-a.x)*0.5;
+    // Clear this ring slot even if an early break follows. In #140.12.24 a
+    // break before the trace write left an older wrapped sample behind.
+    ${trace?'iterationTrace.data[i*12u+(iter%12u)]=vec4f(-999.0,0.0,0.0,0.0);':''}
+    if(angle<=a.x || angle>=b.x){precisionSaturated=true;break;}
+    let shot=arrival(t,angle,false);
+    usedIterations=iter+1u;
+    ${trace?'iterationTrace.data[i*12u+(iter%12u)]=vec4f(angle,shot.residual,b.x-a.x,shot.localResidual);':''}
+    if(shot.valid<0.5){break;}
+    if(abs(shot.residual)<abs(bestResidual)){
+      bestAngle=angle;bestResidual=shot.residual;
+      noImprovement=0u;
+    }else{noImprovement=noImprovement+1u;}
+    if(abs(bestResidual)<=bitcast<f32>(config[11])){break;}
+    if(a.y*shot.residual<=0.0){b=vec4f(angle,shot.residual,shot.path,1.0);}
+    else{a=vec4f(angle,shot.residual,shot.path,1.0);}
+    let angleUlp=max(abs(nextUpF32(a.x)-a.x),abs(nextUpF32(b.x)-b.x));
+    if(b.x-a.x<=2.0*angleUlp && noImprovement>=1u){
+      precisionSaturated=true;break;
+    }
+  }`;
+    }
     return `struct Rays { data: array<vec4f> }
 @group(0) @binding(0) var<storage, read> seeds: Rays;
 @group(0) @binding(1) var<storage, read_write> results: Rays;
@@ -65,6 +103,11 @@
 ${refinement?'@group(0) @binding(3) var<storage, read> coarse: Rays;':gated?'@group(0) @binding(3) var<storage, read> predicted: Rays;':''}
 ${trace&&refinement?'@group(0) @binding(4) var<storage, read_write> iterationTrace: Rays;':''}
 ${integrator}
+${precisionAware?`fn nextUpF32(x:f32)->f32 {
+  if(x==0.0){return bitcast<f32>(1u);}
+  let bits=bitcast<u32>(x);
+  return bitcast<f32>(select(bits-1u,bits+1u,x>0.0));
+}`:''}
 fn altitude(s:vec4f)->f32 {
   if(config[3]==0u){return s.y;}
   let k=bitcast<f32>(config[5]);
@@ -241,7 +284,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   var a=coarse.data[i*config[9]+u32(bracket)];
   var b=coarse.data[i*config[9]+u32(bracket)+1u];
 ${refinementLoop}
-  let angle=${strict?'a.x+(b.x-a.x)*0.5':'(a.x+b.x)*0.5'};
+  let angle=${precisionAware?'bestAngle':strict?'a.x+(b.x-a.x)*0.5':'(a.x+b.x)*0.5'};
   let shot=arrival(t,angle,true);
   // Fail closed if f32 integration did not meet the target residual threshold.
   var status=0.0;
@@ -253,6 +296,10 @@ ${refinementLoop}
       }else{status=3.0;} // contact/grazing uncertainty
     }
   }
+  ${precisionAware?`// Status 4 is a diagnostic precision-limited candidate. It is
+  // intentionally rejected by the ordinary batch response contract.
+  if(status==0.0 && precisionSaturated && shot.valid>0.5 &&
+     abs(shot.residual)>bitcast<f32>(config[11])){status=4.0;}`:''}
   results.data[offset]=vec4f(angle,shot.residual,shot.path,status);
   results.data[offset+1u]=vec4f(shot.impact,shot.contact,shot.valid,f32(candidateBrackets));
   results.data[offset+2u]=vec4f(f32(bracket),f32(usedIterations),a.x,b.x);
@@ -279,7 +326,9 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     WGSL_PREDICT_GATED_REFINE=shader(true,false,true,false),
     WGSL_REFINE_TRACE=shader(true,false,false,false,false,true),
     WGSL_REFINE_ANGLE_BRACKET_TRACE=shader(true,true,false,false,false,true),
-    WGSL_PREDICT_GATED_REFINE_TRACE=shader(true,false,true,false,false,true);
+    WGSL_PREDICT_GATED_REFINE_TRACE=shader(true,false,true,false,false,true),
+    WGSL_REFINE_PRECISION_AWARE=shader(true,false,false,false,false,false,true),
+    WGSL_REFINE_PRECISION_AWARE_TRACE=shader(true,false,false,false,false,true,true);
   var TRACE_STEPS=12;
   function decodeRefinementTrace(request,raw,telemetry){
     if(!(raw instanceof Float32Array)||raw.length!==request.targets.length*TRACE_STEPS*4||
@@ -360,6 +409,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         impact=data[b+4],contact=data[b+5],valid=data[b+6];
       var failure=function(reason){return {target:target.slice(),status:'solver_failed',
         angle:null,residual:null,pathLength:null,ground:null,reason:reason};};
+      if(status===4)return failure('GPU f32 precision-limited candidate; target tolerance unverified');
       if(!Number.isFinite(status)||!Number.isInteger(status)||status<1||status>3||valid!==1)
         return failure('No bracket or no numerically resolved GPU arrival');
       if(![angle,residual,length,impact,contact].every(Number.isFinite)||
@@ -393,7 +443,13 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         finalBracketHighRadians:bracket>=0?hi:null,
         finalBracketWidthRadians:bracket>=0?Math.abs(hi-lo):null,
         rawStatusCode:data[offset+3],rawArrivalValid:data[offset+6],
-        rawGroundContactCode:data[offset+5]};
+        rawGroundContactCode:data[offset+5],
+        precisionLimited:data[offset+3]===4,
+        candidateAngleRadians:data[offset+3]===4?data[offset]:null,
+        candidateResidualMetres:data[offset+3]===4?data[offset+1]:null,
+        candidatePathLengthMetres:data[offset+3]===4?data[offset+2]:null,
+        candidateImpactPathLengthMetres:data[offset+3]===4&&data[offset+4]>=0?data[offset+4]:null,
+        candidateContactCode:data[offset+3]===4?data[offset+5]:null};
     });
   }
   // #140.12.5: one research GPU session can run several bounded batch sizes.
@@ -407,13 +463,15 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     if(!['sweep','predictor','predictor-guarded'].includes(algorithm))
       throw RangeError('Unsupported GPU shooting algorithm');
     var refinement=options.refinement===undefined?'residual-stop':options.refinement;
-    if(!['residual-stop','angle-bracket'].includes(refinement))
+    if(!['residual-stop','angle-bracket','precision-aware'].includes(refinement))
       throw RangeError('Unsupported GPU root refinement policy');
     var traceRefinement=options.traceRefinement===true;
     if(options.traceRefinement!==undefined&&typeof options.traceRefinement!=='boolean')
       throw RangeError('Invalid diagnostic trace flag');
     if(algorithm!=='sweep'&&refinement!=='residual-stop')
       throw RangeError('GPU predictor currently requires residual-stop fallback');
+    if(refinement==='precision-aware'&&algorithm!=='sweep')
+      throw RangeError('Precision-aware refinement is an independent sweep experiment');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
     if(!nav||!nav.gpu||!nav.gpu.requestAdapter)throw Error('WebGPU unavailable');
     var usage=deps.GPUBufferUsage||((typeof GPUBufferUsage!=='undefined')?GPUBufferUsage:null);
@@ -435,8 +493,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         [algorithm==='predictor-guarded'?WGSL_PREDICT_GUARDED:WGSL_PREDICT,
           WGSL_PREDICT_GATED_SWEEP,traceRefinement?WGSL_PREDICT_GATED_REFINE_TRACE:WGSL_PREDICT_GATED_REFINE]:
         [WGSL_SWEEP,traceRefinement?
-          (refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET_TRACE:WGSL_REFINE_TRACE):
-          (refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE)];
+          (refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET_TRACE:
+           refinement==='precision-aware'?WGSL_REFINE_PRECISION_AWARE_TRACE:WGSL_REFINE_TRACE):
+          (refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET:
+           refinement==='precision-aware'?WGSL_REFINE_PRECISION_AWARE:WGSL_REFINE)];
       var modules=codes.map(function(code){return device.createShaderModule({code:code});});
       for(var module of modules){
         if(module.getCompilationInfo){
@@ -606,6 +666,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE_ANGLE_BRACKET,
     WGSL_REFINE_TRACE:WGSL_REFINE_TRACE,
     WGSL_REFINE_ANGLE_BRACKET_TRACE:WGSL_REFINE_ANGLE_BRACKET_TRACE,
+    WGSL_REFINE_PRECISION_AWARE:WGSL_REFINE_PRECISION_AWARE,
+    WGSL_REFINE_PRECISION_AWARE_TRACE:WGSL_REFINE_PRECISION_AWARE_TRACE,
     WGSL_PREDICT_GATED_REFINE_TRACE:WGSL_PREDICT_GATED_REFINE_TRACE,
     checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,
     decodeRefinementTrace:decodeRefinementTrace,createSession:createSession,solveBatch:solveBatch,
