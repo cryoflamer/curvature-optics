@@ -988,3 +988,30 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - **Decision: `SCENE_PERFORMANCE_STOP` — CLOSED / PARKED.** Predeclared warm-start and 2x cold-stage gates were not met. Do not integrate this hybrid GPU shooting path into production or extend synthetic GPU tuning by default. Keep the CPU optical solver/ground events/renderer as the reference.
 - May be reopened later only for a materially different approach or new workload evidence, with a new explicit hypothesis, bounded scope and predeclared numerical/end-to-end speed gates. No claim that all GPU optical computation is intrinsically unhelpful.
 - Detailed measurement, limitations and reopening policy: `docs/WEBGPU_REAL_SCENE_SHOOTING_SPIKE_140_10.md`. Preserve the **single** `tools/webgpu-optics.html` rule from #140.10.1. No production changes in this closure patch.
+
+## #140.12 — independent GPU shooting solver, diagnostic prototype
+
+- Implemented `src/diagnostics/CurvatureWebGPUBatchShooting1412.js`, a
+  **separate** GPU-side sweep (33 parallel launch rays per target), bracketed
+  refinement (up to 28 iterations), and bounded first-ground-contact sampling.
+  The output implements the #140.11 batch response contract. CPU runs only as
+  a **separate comparison baseline**, never inside the timed GPU solver.
+- Added the #140.12 mode to existing `tools/webgpu-optics.html` (no numbered
+  HTML), using the same committed Flat/Globe production 12-tower target fixture
+  as #140.10. The mode exports an evidence JSON report; Node tests verify
+  bounded inputs, fail-closed results, GPU dispatch orchestration and UI
+  button wiring, **not** real shader compilation or physical GPU correctness.
+- **Research only; NOT production authorized.** Real browser WGSL compilation,
+  numerical parity (status, angle, target residual and first-ground evidence)
+  and 2x cold-stage speedup have NOT yet been measured. A finite scan does not
+  guarantee all roots or tangent contacts, and f32 may fail strict precision.
+  Never assume success from mocked tests. CPU optical solver, synchronous
+  scene field, Scene/Compare renderer and their backend selectors are unchanged.
+- Next: collect and inspect the user's exported #140.12 JSON. If numerical
+  or speed gates fail, diagnose explicitly; do not silently relax tolerance or
+  switch production based solely on WebGPU capability. Full async preparation
+  and fallback only become relevant after independent stage qualification.
+- Detailed algorithm, limitations, gates and browser workflow:
+  `docs/WEBGPU_INDEPENDENT_BATCH_SHOOTING_140_12.md`. The earlier
+  `SCENE_PERFORMANCE_STOP / CLOSED / PARKED` verdict for the different
+  #140.10 warm-start approach remains valid.
