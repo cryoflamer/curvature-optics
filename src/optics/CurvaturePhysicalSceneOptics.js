@@ -207,7 +207,12 @@
       if(kind==='vacuum')field={sample:function(d,h){return vacuumSample(geometry,model.rEarth,model.Height,d,h,physicalSurface);}};
       else {
         span=bounds(objects,geometry,model.rEarth,model.Height,physicalSurface);
-        if(span)field=fields.create({geometry:geometry,radius:model.rEarth,
+        // #140.12.12: opt-in precomputed GPU-first grid serves both outlines
+        // and fills directly. No CPU shooting is invoked to discover requests
+        // or fill gaps. Failed GPU cells stay unresolved, not silently CPU-corrected.
+        if(span&&options.experimentalRayField&&options.experimentalRayField.fullCoverageGrid)
+          field=options.experimentalRayField;
+        else if(span)field=fields.create({geometry:geometry,radius:model.rEarth,
           observerHeight:model.Height,atmosphere:kind,
           profileOptions:kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:R}:undefined,
           distances:span.distances,heights:span.heights,

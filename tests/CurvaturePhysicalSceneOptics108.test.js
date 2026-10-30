@@ -222,3 +222,27 @@ test('140.12.11: CPU exact output hook captures real f64 records without poisoni
   const ordinary=session.transform(scene,m,{atmosphere:'standard',settings});
   assert.equal(ordinary.reused,false,'capture-only render must not poison the regular CPU cache');
 });
+
+
+test('140.12.12: physical scene renderer accepts a GPU-first grid directly without CPU shooting',()=>{
+  const compare=require('../src/ui/modern/ModernCompareModel');
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const silhouette=require('../src/optics/OpticalTowerSilhouette');
+  const m=model({showGrid:0,NObjects:[2,1]});
+  const composed=compose.composeOpticalMain(m,true,{physicalWorld:true});
+  const grid=compare.gpuFirstGrid(m,128,{composition:compose,silhouette,surfaces,
+    branch:'first-forward-x'});
+  const answer={results:grid.request.targets.map(t=>({target:t,status:'visible',
+    angle:Math.atan2(t[1]-m.Height,t[0]),residual:0}))};
+  const field=compare.gpuFirstRayField(grid,answer,surfaces);
+  const result=optics.create().transform(composed,m,{atmosphere:'standard',
+    experimentalRayField:field,settings:{minimumDepth:0,maximumDepth:1,
+      maxSamples:200,fieldAdaptiveDepth:0,step:100}});
+  assert.ok(result.composition.scene.primitives.length>0);
+  assert.equal(result.stats.fieldStats.shootRK4Calls,0);
+  assert.equal(result.stats.fieldStats.exactSolveMs,0);
+  assert.equal(result.stats.fieldStats.experimentalGpu.cpuFallbackRequests,0);
+  assert.ok(result.stats.fieldStats.experimentalGpu.gpuHits>0);
+  assert.throws(()=>optics.create().transform(composed,{...m,Height:16},
+    {atmosphere:'standard',experimentalRayField:field}),/does not match/);
+});

@@ -174,3 +174,9 @@ changing production optics or introducing new application modules.
   application projection, filled geometry, clipping, painter, async orchestration,
   driver-dependent rendering and full-frame timing remain separately untested.
   Node tests validate construction/orchestration, not real WGSL execution.
+
+### #140.12.12 GPU-first full-frame speed experiment in Compare
+
+The new **Benchmark GPU-first full frame** button (on `CurvatureModern.html` → Compare → experimental CPU/WebGPU mode) tests a different, performance-first architecture from the earlier #140.12.10–11 CPU-discovered seed/replay experiment. Instead of rendering a CPU frame first to obtain adaptive target requests, it builds 128–1024 scene-dependent distance/height grid nodes directly from authored world geometry, shoots all nodes in one WebGPU batch, and uses a GPU-sourced interpolation field for the whole physical B-frame construction. A separate cold CPU A frame is rendered **afterwards** as the timing and pixel reference.
+
+The JSON output `curvature-compare-140.12.12-gpu-first-frame.json` contains full GPU-first wall-clock latency (including scene preparation, WebGPU setup/dispatch/readback, interpolation and CPU Canvas painting), separately measured cold CPU latency, speedup, failed nodes, grid lookup counts and real Canvas pixel differences. A speed result is not an image-correctness result. GPU visibility classification is nearest-node in mixed-status grid cells and therefore **not certified at occlusion boundaries**. This experimental GPU-first mode does not use the f64 shooting solver for missing grid samples and is never silently promoted to production. The ordinary CPU optical path remains available and unchanged.

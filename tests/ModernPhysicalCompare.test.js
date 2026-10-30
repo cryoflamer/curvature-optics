@@ -332,3 +332,75 @@ test('140.12.11: replay control labels and exports strict pixel and adaptive wor
   assert.match(app,/CPU replay control/);
   assert.match(app,/curvature-compare-140\.12\.11-cpu-replay-gpu-frame\.json/);
 });
+
+
+test('140.12.12: GPU-first scene grid is authored without discovering CPU ray solves',()=>{
+  const composition=require('../src/scene/CurvatureIndependentComposition');
+  const silhouette=require('../src/optics/OpticalTowerSilhouette');
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const gpu=require('../src/diagnostics/CurvatureWebGPUBatchShooting1412');
+  for(const showModel of [1,2]){
+    const model=actualModel();model.showModel=showModel;
+    const grid=compare.gpuFirstGrid(model,1024,{composition,silhouette,surfaces,
+      branch:'first-forward-x'});
+    assert.equal(grid.cpuOracleDiscovery,false);
+    assert.equal(grid.request.geometry,showModel===1?'globe':'flat');
+    assert.equal(grid.request.targets.length,1024);
+    assert.equal(grid.distances.length*grid.heights.length,1024);
+    assert.ok(grid.objectVertices>50);
+    assert.equal(grid.distances[0],100);
+    assert.ok(grid.distances.every((d,i,a)=>i===0||d>a[i-1]));
+    assert.ok(grid.heights.every((h,i,a)=>i===0||h>a[i-1]));
+    assert.equal(grid.heights[0],0);
+    assert.doesNotThrow(()=>gpu.checked(grid.request));
+  }
+  assert.throws(()=>compare.gpuFirstGrid(actualModel(),64,{}),/Invalid GPU-first/);
+});
+
+test('140.12.12: GPU-first field serves every sample with bounded GPU data and no CPU oracle fallback',()=>{
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const metric=surfaces.createFromCurvature(0),d=[100,1000],h=[0,100];
+  const request={branch:'first-forward-x',geometry:'flat',radius:6371000,
+    observerHeight:15,atmosphere:'standard',targets:d.flatMap(x=>h.map(y=>metric.surfacePoint2(x,y)))};
+  const grid={request,distances:d,heights:h,columns:2,rows:2};
+  const results=request.targets.map((t,i)=>({target:t,status:i===3?'blocked':'visible',
+    angle:Math.atan2(t[1]-15,t[0]),residual:0}));
+  const field=compare.gpuFirstRayField(grid,{results},surfaces);
+  assert.equal(field.fullCoverageGrid,true);
+  assert.equal(field.sample(100,0).status,'visible');
+  assert.equal(field.exact(1000,100).status,'blocked');
+  const centre=field.sample(500,25);
+  assert.ok(Number.isFinite(centre.angle));
+  assert.equal(centre.method,'gpu-first-grid-approximation');
+  assert.equal(field.sample(99999,500).status,'blocked');
+  const report=field.stats().experimentalGpu;
+  assert.equal(report.cpuFallbackRequests,0);
+  assert.equal(report.gpuSeedNodes,4);
+  assert.ok(report.gpuHits>=4);
+  assert.ok(report.mixedStatusLookups>0);
+  assert.ok(report.extrapolatedLookups>0);
+  assert.equal(report.productionAuthorized,false);
+  assert.throws(()=>compare.gpuFirstRayField(grid,{results:results.slice().reverse()},surfaces),
+    /target order mismatch/);
+  const failed=results.map(r=>({...r,status:'solver_failed',angle:null}));
+  const empty=compare.gpuFirstRayField(grid,{results:failed},surfaces);
+  assert.equal(empty.sample(500,25).status,'solver_failed');
+  assert.equal(empty.stats().experimentalGpu.cpuFallbackRequests,0);
+});
+
+test('140.12.12: GPU-first UI measures end-to-end BEFORE separately timed CPU cold reference',()=>{
+  const html=source('CurvatureModern.html'),app=source('src/ui/modern/ModernApp.js');
+  const physical=source('src/optics/CurvaturePhysicalSceneOptics.js');
+  assert.match(html,/id="ModernGpuFirstRun"/);
+  assert.match(html,/Benchmark GPU-first full frame/);
+  assert.match(app,/function runCompareGpuFirst\(/);
+  assert.match(app,/gpuFirstGrid\(state\.comparePair\.A/);
+  assert.match(app,/session\.solve\(grid\.request,\{warmRepeats:0\}\)/);
+  assert.match(app,/gpuFirstRayField\(grid,batch\.response/);
+  assert.match(app,/gpuFirstEndToEndMs:fullGpuMs/);
+  assert.match(app,/cpuColdReferenceMs:cpuMs/);
+  assert.ok(app.indexOf('var fullGpuMs=renderFinished-totalStarted')<
+    app.indexOf('state.probeForceColdA=true'));
+  assert.match(physical,/options\.experimentalRayField\.fullCoverageGrid/);
+  assert.match(app,/curvature-compare-140\.12\.12-gpu-first-frame\.json/);
+});

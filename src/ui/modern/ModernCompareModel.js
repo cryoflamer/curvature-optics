@@ -144,6 +144,157 @@
       independentCpuReplay:true,excludedFromGpuTimings:true,
       renderedSilhouetteCompared:false};
   }
+  // #140.12.12: GPU-first optical field.  Grid coordinates come directly
+  // from the authored physical scene; NOT from a CPU reference frame or
+  // observed CPU oracle calls.  This is a bounded coarse interpolation
+  // experiment, not a numerically certified shooting replacement.
+  function gpuFirstGrid(model,count,deps){
+    if(![128,256,512,1024].includes(count)||!deps||!deps.composition||
+        !deps.silhouette||!deps.surfaces||!deps.branch)
+      throw TypeError('Invalid GPU-first grid inputs');
+    var geometry=model.showModel===2?'flat':'globe',radius=model.rEarth,eye=model.Height;
+    if(!(radius>0&&eye>=0))throw RangeError('Invalid GPU-first observer');
+    var metric=deps.surfaces.createFromCurvature(geometry==='globe'?1/radius:0);
+    var composed=deps.composition.composeOpticalMain(Object.assign({},model,
+      {geometryRadius:radius}),geometry==='globe',{physicalWorld:true});
+    var distances=[],maxH=0,vertexCount=0;
+    composed.ranges.filter(function(r){return r.role==='objects';}).forEach(function(r){
+      for(var i=r.start;i<r.end;i++)(composed.scene.primitives[i].points||[]).forEach(function(p){
+        var c=deps.silhouette.coordinate(p,geometry,radius,eye,metric);
+        if(!Number.isFinite(c.distance)||!Number.isFinite(c.height)||c.distance<=0||
+            c.distance>100000||c.height<0)return;
+        vertexCount++;distances.push(c.distance);maxH=Math.max(maxH,c.height);
+      });
+    });
+    if(!distances.length)throw Error('GPU-first grid requires positive-distance physical objects');
+    distances.sort(function(a,b){return a-b;});
+    var nd=count/8,nh=8;
+    if(count===128){nd=32;nh=4;}
+    var dMin=100,dMax=99900,objectMin=distances[0],objectMax=distances[distances.length-1];
+    // Uniform quantiles give scene towers most of the columns, while a small
+    // logarithmic backbone covers foreground/ground guides outside the towers.
+    var samples=[];
+    var objectColumns=nd-Math.max(6,Math.floor(nd/5));
+    for(var j=0;j<objectColumns;j++){
+      var q=(j+0.5)/objectColumns,at=Math.floor(q*(distances.length-1));
+      samples.push(Math.min(dMax,Math.max(dMin,distances[at])));
+    }
+    for(var k=0;k<nd-objectColumns;k++){
+      var t=k/(nd-objectColumns-1);
+      samples.push(dMin*Math.pow(dMax/dMin,t));
+    }
+    samples.push(dMin,dMax);
+    samples.sort(function(a,b){return a-b;});
+    // Keep the two outer limits and select a monotone fixed-width axis.
+    var deduplicated=[];
+    samples.forEach(function(d){if(!deduplicated.length||d-deduplicated[deduplicated.length-1]>1e-4)
+      deduplicated.push(d);});
+    // Fill duplicated tower-distance quantiles by splitting the widest
+    // unsampled interval INSIDE the object region, not by spending scarce
+    // GPU slots on empty tens-of-kilometres far-field distances.
+    while(deduplicated.length<nd){
+      var gap=-1,at=-1,stop=Math.min(dMax,objectMax+100);
+      for(var n=1;n<deduplicated.length;n++){
+        var a=deduplicated[n-1],b=deduplicated[n];
+        if(a>stop)break;
+        var candidate=Math.min(b,stop)-a;
+        if(candidate>gap){gap=candidate;at=n;}
+      }
+      if(at<0||gap<1e-5)throw Error('GPU-first scene grid has degenerate distance bounds');
+      deduplicated.splice(at,0,(deduplicated[at-1]+Math.min(deduplicated[at],stop))/2);
+    }
+    var axisD=[dMin];
+    for(var x=1;x<nd-1;x++)axisD.push(deduplicated[Math.floor(x*(deduplicated.length-1)/(nd-1))]);
+    axisD.push(dMax);
+    for(var n=1;n<axisD.length;n++)if(axisD[n]<=axisD[n-1])
+      axisD[n]=axisD[n-1]+1e-5;
+    var heightMax=Math.max(20,maxH+2),axisH=[];
+    for(var z=0;z<nh;z++)axisH.push(heightMax*Math.pow(z/(nh-1),1.25));
+    var targets=[];
+    axisD.forEach(function(d){axisH.forEach(function(h){
+      targets.push(metric.surfacePoint2(d,h));
+    });});
+    var request={branch:deps.branch,geometry:geometry,radius:radius,observerHeight:eye,
+      atmosphere:'standard',controls:{step:50,targetTolerance:0.005,eventSubsteps:8},targets:targets};
+    return {request:request,distances:axisD,heights:axisH,columns:nd,rows:nh,
+      objectVertices:vertexCount,objectDistanceRange:[objectMin,objectMax],
+      maxHeight:heightMax,method:'authored-physical-scene-distance-height-grid',
+      cpuOracleDiscovery:false};
+  }
+  function gpuFirstRayField(grid,response,surfaces){
+    if(!grid||!grid.request||!Array.isArray(grid.distances)||!Array.isArray(grid.heights)||
+        !response||!Array.isArray(response.results)||!surfaces||
+        response.results.length!==grid.request.targets.length||
+        response.results.length!==grid.columns*grid.rows)
+      throw TypeError('Invalid GPU-first response');
+    var r=grid.request,points=response.results,failures=0,lookupCount=0,
+      exactCount=0,mixedCells=0,extrapolated=0,uncertain=0,cache=new Map();
+    for(var i=0;i<points.length;i++){
+      if(!Array.isArray(points[i].target)||points[i].target.length!==2||
+          points[i].target[0]!==r.targets[i][0]||points[i].target[1]!==r.targets[i][1])
+        throw RangeError('GPU-first response target order mismatch');
+      if(points[i].status==='solver_failed'||!Number.isFinite(points[i].angle))failures++;
+    }
+    var metric=surfaces.createFromCurvature(r.geometry==='globe'?1/r.radius:0);
+    function direct(d,h){var p=metric.surfacePoint2(d,h);
+      return Math.atan2(p[1]-r.observerHeight,p[0]);}
+    function interval(a,x){
+      if(x<=a[0])return 0;
+      if(x>=a[a.length-1])return a.length-2;
+      var lo=0,hi=a.length-1;
+      while(hi-lo>1){var middle=(lo+hi)>>1;if(a[middle]<=x)lo=middle;else hi=middle;}
+      return lo;
+    }
+    function solve(d,h,exact){
+      if(!Number.isFinite(d)||!Number.isFinite(h)||!(d>0)||h<0)
+        throw RangeError('Invalid GPU-first field sample');
+      lookupCount++;if(exact)exactCount++;
+      var key=d+','+h,cached=cache.get(key);
+      if(cached)return cached;
+      var di=interval(grid.distances,d),hi=interval(grid.heights,h);
+      var d0=grid.distances[di],d1=grid.distances[di+1],h0=grid.heights[hi],h1=grid.heights[hi+1];
+      var u=Math.max(0,Math.min(1,(d-d0)/(d1-d0)));
+      var v=Math.max(0,Math.min(1,(h-h0)/(h1-h0)));
+      if(d<d0||d>d1||h<h0||h>h1)extrapolated++;
+      var indices=[di*grid.rows+hi,(di+1)*grid.rows+hi,
+        di*grid.rows+hi+1,(di+1)*grid.rows+hi+1];
+      var weights=[(1-u)*(1-v),u*(1-v),(1-u)*v,u*v];
+      var valid=[];
+      indices.forEach(function(index,j){var point=points[index];
+        if(point.status!=='solver_failed'&&Number.isFinite(point.angle))
+          valid.push({point:point,index:index,weight:weights[j],order:j});
+      });
+      if(!valid.length){uncertain++;var failure={status:'solver_failed',angle:null,
+        reason:'GPU-first grid cell has no valid GPU nodes',method:'gpu-first-grid-unresolved'};
+        cache.set(key,failure);return failure;}
+      var classes=new Set(valid.map(function(a){return a.point.status;}));
+      if(classes.size>1)mixedCells++;
+      var nearest=valid.reduce(function(best,item){return !best||item.weight>best.weight?item:best;},null);
+      var status=classes.size===1?valid[0].point.status:nearest.point.status;
+      // Subtract the geometric arrival angle before interpolation; this
+      // preserves the analytically known strong distance/height component.
+      var total=0,correction=0;
+      valid.forEach(function(item){var col=Math.floor(item.index/grid.rows),row=item.index%grid.rows;
+        correction+=item.weight*(item.point.angle-direct(grid.distances[col],grid.heights[row]));
+        total+=item.weight;
+      });
+      var angle=direct(d,h)+(total?correction/total:0);
+      if(status==='indeterminate')uncertain++;
+      var record=Object.freeze({status:status,angle:angle,residual:null,
+        method:'gpu-first-grid-approximation',reason:classes.size>1?
+          'Mixed GPU visibility nodes; nearest status, NOT certified':'Interpolated GPU grid'});
+      cache.set(key,record);return record;
+    }
+    function stats(){return {solves:0,hits:Math.max(0,lookupCount-cache.size),
+      interpolations:lookupCount,shootRK4Calls:0,shootEvaluations:0,
+      exactSolveMs:0,fallbacks:0,experimentalGpu:{kind:'gpu-first-grid',
+        gpuSeedNodes:points.length,failedGpuNodes:failures,gpuHits:lookupCount,
+        gpuExactHits:exactCount,cpuFallbackRequests:0,mixedStatusLookups:mixedCells,
+        extrapolatedLookups:extrapolated,uncertainLookups:uncertain,
+        uniqueRequests:cache.size,approximate:true,productionAuthorized:false}};}
+    return {request:r,fullCoverageGrid:true,sample:function(d,h){return solve(d,h,false);},
+      exact:function(d,h){return solve(d,h,true);},stats:stats};
+  }
   // #140.12.10: capture the exact requests made by the real CPU adaptive
   // outline/fill field. Asynchronously seed a bounded subset of those targets
   // with WebGPU; new adaptive requests still use the unmodified CPU oracle.
@@ -271,6 +422,7 @@
   return Object.freeze({pair:pair,clone:clone,invariant:invariant,
     probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview,
     gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,
+    gpuFirstGrid:gpuFirstGrid,gpuFirstRayField:gpuFirstRayField,
     cpuReplayField:cpuReplayField,frameControlCounts:frameControlCounts,
     compareFramePixels:compareFramePixels});
 }));
