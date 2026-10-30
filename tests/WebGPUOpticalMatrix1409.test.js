@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const m=require('../src/diagnostics/CurvatureWebGPUOpticsMatrix1409');
 const b=require('../src/diagnostics/CurvatureWebGPUOpticsBenchmark');
-const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics-1409.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
 
 function success(p,ratio=5){
  return {status:'measured',qualified:true,parameters:p,

@@ -37,7 +37,7 @@ full-scene speedup, even if the stage gate passes.
 
     python3 -m http.server 8000
 
-Visit `http://localhost:8000/tools/webgpu-optics-14010.html`, click
+Visit `http://localhost:8000/tools/webgpu-optics.html`, click
 **Run one cold scene-shooting spike**, then **Export #140.10 JSON**.
 The report includes CPU shooting baseline, GPU device/pipeline setup, upload
 through readback, and CPU-certified shooting of the same target sets. The
@@ -75,3 +75,7 @@ are close/noisy, consider the evidence `INCONCLUSIVE` rather than promoting GPU.
   readback. Hardware acceleration remains unverified.
 - No full-renderer/frame/FPS or cold scene-composition claims are made.
 - The production CPU scene path, selector, cache and renderer remain untouched.
+
+# #140.10.1 follow-up
+
+Use the canonical `tools/webgpu-optics.html` and choose #140.10. The shader identifier `target` was renamed because WGSL reserves it. Actual GPU compilation and shooting remain to be verified on the target browser. See `PROJECT_STATE.md` for the permanent single-page rule.

@@ -49,7 +49,7 @@ From the repository root:
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/tools/webgpu-optics-14091.html` in Opera, keeping
+Open `http://localhost:8000/tools/webgpu-optics.html` in Opera, keeping
 the **same 0.1 m / 1e-5 rad tolerances** and **5 repeats** used in #140.9.
 Click **Run final 18-case paired diagnostic**; then **Export #140.9.1 JSON**.
 It executes the **same 18 fixed scenarios** twice (baseline and compensated),

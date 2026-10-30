@@ -26,11 +26,11 @@
 fn main(@builtin(global_invocation_id) id:vec3u){
   let i=id.x;
   if(i>=config[0]){return;}
-  let target=seeds.data[i];
-  let x=target.x;
-  let z=target.y;
-  let eye=target.z;
-  var angle=target.w;
+  let targetData=seeds.data[i];
+  let x=targetData.x;
+  let z=targetData.y;
+  let eye=targetData.z;
+  var angle=targetData.w;
   var residual=1e10;
   var endpoint=vec4f(0.0,eye,cos(angle),sin(angle));
   let pathLength=length(vec2f(x,z-eye));

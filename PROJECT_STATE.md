@@ -7,7 +7,7 @@ drift. An opt-in `accumulation: 'compensated'` GPU shader now evaluates RK4
 increments before compensated f32 position accumulation while retaining the
 original shader as the unmodified default. A Vacuum f64 analytic straight-line
 reference separates CPU RK4 error from GPU drift. A browser-only 18-pair
-(36-run) diagnostic and hard stop gates are at `tools/webgpu-optics-14091.html`
+(36-run) diagnostic and hard stop gates are at `tools/webgpu-optics.html`
 and `docs/WEBGPU_OPTICAL_PRECISION_DIAGNOSTIC_140_9_1.md`.
 **No real WebGPU result for this correction is available yet.** If the fixed
 numerical/performance gates are met, stop isolated RK4 experiments and allow
@@ -17,7 +17,7 @@ Production optics and renderer defaults remain unchanged.
 ## Patch 140.9 — Finite WebGPU optical qualification and stop gate (2026-10-30)
 
 Added a standalone, opt-in 18-case browser matrix at
-`tools/webgpu-optics-1409.html` built on the unchanged #140.8 RK4 benchmark.
+`tools/webgpu-optics.html` built on the unchanged #140.8 RK4 benchmark.
 All four atmospheres × Flat/Globe are tested at 12.8 km and 100 km
 mathematical path lengths; Standard/Flat small and large batches provide two
 additional scaling probes. Exports per-case CPU/GPU timings, f32-vs-f64
@@ -33,7 +33,7 @@ matrix results are still required.
 ## Patch 140.8 — Isolated WebGPU optical RK4 batch benchmark (2026-10-30)
 
 - Added a standalone browser-only GPU/CPU fixed-step ray integration experiment at
-  `tools/webgpu-optics-1408.html`, with implementation at
+  `tools/webgpu-optics.html`, with implementation at
   `src/diagnostics/CurvatureWebGPUOpticsBenchmark.js`.
 - Tests WebGPU `f32` RK4 on independent rays against the **production CPU f64
   stepper** with matching f32-quantized initial vectors; supports Flat/Globe,
@@ -933,3 +933,9 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Added opt-in WebGPU compensated shooting-angle candidate kernel; unchanged production CPU `OpticalTargetProjection.solve` performs all target and ground-event certification via the existing warm-start API.
 - Added standalone browser spike and JSON report: cold GPU setup, upload/readback, CPU certification, statuses and angle comparison, explicit stage-only 2x stop gate.
 - **No live production switch**; stage evidence excludes full scene assembly, outlines, fills, guides and painter. See `docs/WEBGPU_REAL_SCENE_SHOOTING_SPIKE_140_10.md`.
+
+## #140.10.1 — Canonical WebGPU diagnostics UI and validation rule
+
+- **Persistent project rule:** Do not create a new version-numbered HTML page in `tools/` for each WebGPU experiment or compatpatch. Maintain the single canonical `tools/webgpu-optics.html`, with an experiment selector when historical workflows remain useful. Retire redundant HTML pages and update references/tests. New JavaScript modules are justified only by distinct implementation responsibilities, not patch numbers alone.
+- WebGPU WGSL must be validated by an actual shader compiler when available, and tested in the target browser before claiming runtime success. JavaScript mocks and regex checks do not establish shader compilation or GPU correctness; disclose unavailable runtime verification.
+- #140.10.1 fixes the WGSL reserved identifier `target` to `targetData`; the real browser run of #140.10 is still pending. No production backend change.

@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const b=require('../src/diagnostics/CurvatureWebGPUOpticsBenchmark');
-const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics-1408.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
 
 test('140.8.1: shader does not write through multi-component vector swizzles',()=>{
  assert.doesNotMatch(b.WGSL,/\b\w+\.(?:xy|xz|yz|zw|xyz|xyzw)\s*(?:[+*\/-]?=)/);

@@ -1,0 +1,291 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Curvature WebGPU optical diagnostics</title><style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:980px;margin:2em auto;padding:0 1em;color:#20242c;background:#f8fafc}
+fieldset{border:1px solid #bec9d5;border-radius:8px;margin:1em 0;padding:1em;display:flex;gap:1em;flex-wrap:wrap}
+label{display:flex;flex-direction:column;min-width:150px}input,select,button{font:inherit;padding:.4em}button{cursor:pointer}
+pre{overflow:auto;background:#fff;border:1px solid #ccc;padding:1em;white-space:pre-wrap}
+small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:100%}th,td{padding:.4em;border-bottom:1px solid #dae1e8;text-align:left}
+.experiment[hidden]{display:none}#experiment-selector{margin-bottom:1.5em}
+</style></head><body>
+<label id="experiment-selector">Experiment<select id="experiment-choice">
+<option value="0">#140.8 — single RK4 benchmark</option><option value="1">#140.9 — qualification matrix</option>
+<option value="2">#140.9.1 — precision diagnostic</option><option value="3" selected>#140.10 — scene shooting spike</option>
+</select></label>
+<section id="panel-0" class="experiment" hidden>
+
+<h1>Curvature #140.8 — WebGPU RK4 experiment</h1>
+<p>Standalone, opt-in numerical benchmark. The production optical solver is not modified.
+Requires a secure context (for example <code>http://localhost:8000/tools/webgpu-optics-1408.html</code>).
+Runs fixed-step independent rays on GPU <strong>f32</strong> and CPU <strong>f64</strong>; this is <strong>not</strong> a full shooting or occlusion benchmark.</p>
+<form id="benchmark">
+<fieldset><legend>Physical model</legend>
+<label>Atmosphere<select name="atmosphere"><option value="standard">Standard</option><option value="exponential-occlusion">Exponential occlusion</option><option value="inverse-spherical">Inverse spherical</option><option value="vacuum">Vacuum</option></select></label>
+<label>Geometry<select name="geometry"><option value="flat">Flat</option><option value="globe">Globe</option></select></label>
+<label>Observer height (m)<input name="observerHeight" type="number" min="0" step="any" value="15"></label>
+<label>Comparison radius (m)<input name="occlusionRadius" type="number" min="1" step="any" value="6371000"></label>
+</fieldset>
+<fieldset><legend>Batch</legend>
+<label>Rays<input name="count" type="number" min="1" max="65536" step="1" value="1024"></label>
+<label>RK4 steps per ray<input name="steps" type="number" min="1" max="10000" step="1" value="256"></label>
+<label>Step length (m)<input name="step" type="number" min="0.001" step="any" value="50"></label>
+<label>Repeats<input name="repeats" type="number" min="1" max="20" step="1" value="3"></label>
+</fieldset>
+<fieldset><legend>Numerical gates</legend>
+<label>Max position error (m)<input name="maxPositionError" type="number" min="0.0000001" step="any" value="0.1"></label>
+<label>Max direction error (rad)<input name="maxAngularError" type="number" min="0.000000001" step="any" value="0.00001"></label>
+</fieldset>
+<button id="start" type="submit">Run CPU + WebGPU comparison</button>
+<button id="save" type="button" disabled>Export JSON</button>
+</form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<p class="warning"><strong>Interpretation:</strong> a GPU speedup is useful only if the numerical gate passes for the intended application. No GPU hardware-acceleration assertion is made.</p>
+<pre id="report" aria-label="Benchmark JSON">No report yet.</pre>
+
+
+
+
+</section>
+<section id="panel-1" class="experiment" hidden>
+
+<h1>Curvature #140.9 — finite GPU optics qualification matrix</h1>
+<p>One bounded <strong>18-case</strong> experiment: every atmosphere × Flat/Globe at 1,024 rays × 256 RK4 steps (12.8 km),
+then 256 rays × 2,000 steps (100 km), plus small/large batch scaling (128 and 4,096 rays at 256 steps) for Standard/Flat.
+Each case compares CPU f64 to GPU f32 from identical f32 seeds. There is <strong>no</strong> shooting, visibility or production integration.
+Requires <code>http://localhost:8000/tools/webgpu-optics-1409.html</code> in a WebGPU-capable browser.</p>
+<form id="matrix">
+<fieldset><legend>Qualification settings (shared by all cases)</legend>
+<label>Repeats per case<input name="repeats" type="number" min="1" max="20" step="1" value="5" required></label>
+<label>Max position error (m)<input name="maxPositionError" type="number" min="0.0000001" step="any" value="0.1" required></label>
+<label>Max direction error (rad)<input name="maxAngularError" type="number" min="0.000000001" step="any" value="0.00001" required></label>
+</fieldset>
+<button id="start" type="submit">Run 18-case qualification</button>
+<button id="cancel" type="button" disabled>Stop after current case</button>
+<button id="save" type="button" disabled>Export matrix JSON</button>
+</form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<p><small>Stopping or a missing case yields an INCONCLUSIVE decision. Numeric failures never authorize GPU use. A passing matrix authorizes at most one bounded integration spike, not a production switch.</small></p>
+<div id="summary" aria-live="polite"></div>
+<pre id="report" aria-label="Full JSON report">No report yet.</pre>
+
+
+
+
+
+</section>
+<section id="panel-2" class="experiment" hidden>
+
+<h1>Curvature #140.9.1 — Final precision diagnostic</h1>
+<p>Compare the <strong>unchanged f32 GPU RK4</strong> against an opt-in
+<strong>Kahan compensated-position variant</strong> across the same 18 cases as #140.9.
+Each case is measured twice (36 GPU/CPU comparisons); the Vacuum rays are also checked
+against an independent analytic straight line. A 100-km mathematical ray is not
+necessarily physically visible. This page does not modify the production CPU solver.</p>
+<form id="precision"><fieldset><legend>Use the same tolerances as #140.9</legend>
+<label>Repeats per mode per case<input name="repeats" type="number" min="1" max="20" step="1" value="5" required></label>
+<label>Max position error (m)<input name="maxPositionError" type="number" min="0.0000001" step="any" value="0.1" required></label>
+<label>Max direction error (rad)<input name="maxAngularError" type="number" min="0.000000001" step="any" value="0.00001" required></label>
+</fieldset>
+<button id="start" type="submit">Run final 18-case paired diagnostic</button>
+<button id="cancel" type="button" disabled>Stop after current comparison</button>
+<button id="save" type="button" disabled>Export #140.9.1 JSON</button>
+</form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<p><small>If paired numerical and analytic checks pass with ≥3× representative speedups,
+STOP isolated benchmarks and consider only one bounded end-to-end spike. Otherwise STOP
+this f32 GPU RK4 branch and keep CPU. No automatic production enablement.</small></p>
+<div id="summary" aria-live="polite"></div>
+<pre id="report" aria-label="Full JSON report">No report yet.</pre>
+
+
+
+
+
+
+</section>
+<section id="panel-3" class="experiment">
+
+<h1>Curvature #140.10 — scene shooting integration spike</h1>
+<p><strong>One bounded cold-run test.</strong> Scene targets come from the production physical 12-tower mesh (Flat and Globe).
+The compensated WebGPU integrator proposes launch angles; the <em>unchanged CPU target-shooting solver</em>
+verifies the target and ground events. Compare complete GPU-setup + GPU-batch + CPU-certification time against CPU shooting alone.</p>
+<p><strong>Not a full scene/frame benchmark:</strong> composition, guide projection, clipping, fills, renderer, FPS and caches
+are deliberately outside this bounded experiment. No GPU results affect the live application; there is no backend switch.</p>
+<button id="start" type="button">Run one cold scene-shooting spike</button>
+<button id="save" type="button" disabled>Export #140.10 JSON</button>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary"></div>
+<pre id="report" aria-label="Full JSON report">No results yet.</pre>
+
+
+
+
+
+
+</section>
+<script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
+<script src="../src/optics/OpticalRayTracer.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js"></script>
+<script src="../src/optics/OpticalTargetProjection.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUSceneSpike14010.js"></script>
+<script>
+
+(function(){'use strict';
+ var form=document.getElementById("panel-0").querySelector('benchmark'),button=document.getElementById("panel-0").querySelector('start');
+ var save=document.getElementById("panel-0").querySelector('save'),status=document.getElementById("panel-0").querySelector('status');
+ var display=document.getElementById("panel-0").querySelector('report'),latest=null;
+ form.addEventListener('submit',async function(e){
+  e.preventDefault();button.disabled=true;save.disabled=true;latest=null;
+  status.textContent='Computing (CPU + GPU)…';
+  try{
+   // valueAsNumber reads the numeric value according to the browser's locale.
+   // Do not parse localized display strings with parseFloat/Number.
+   var params={};
+   for(var control of form.querySelectorAll('input[name], select[name]')){
+    params[control.name]=control.type==='number'?control.valueAsNumber:control.value;
+   }
+   latest=await CurvatureWebGPUOpticsBenchmark.run(params);
+   status.textContent=latest.status==='unavailable'?'WebGPU unavailable: '+latest.reason:
+    (latest.qualified?'Numerical gates PASSED (finite sample only).':'Numerical gates FAILED; no GPU promotion.');
+   save.disabled=false;display.textContent=JSON.stringify(latest,null,2);
+  }catch(error){status.textContent='Benchmark failed: '+error.message;display.textContent=error.stack||String(error);}
+  finally{button.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var blob=new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'});
+  var url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='curvature-webgpu-optics-140.8.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
+
+(function(){'use strict';
+ var form=document.getElementById("panel-1").querySelector('matrix'),start=document.getElementById("panel-1").querySelector('start');
+ var cancel=document.getElementById("panel-1").querySelector('cancel'),save=document.getElementById("panel-1").querySelector('save');
+ var status=document.getElementById("panel-1").querySelector('status'),summary=document.getElementById("panel-1").querySelector('summary');
+ var report=document.getElementById("panel-1").querySelector('report'),latest=null,stopped=false;
+ form.addEventListener('submit',async function(event){
+  event.preventDefault();if(!form.reportValidity())return;
+  start.disabled=true;cancel.disabled=false;save.disabled=true;stopped=false;latest=null;
+  summary.textContent='';report.textContent='Experiment in progress…';
+  try{
+   var options={};
+   for(var control of form.querySelectorAll('input[name]'))options[control.name]=control.valueAsNumber;
+   latest=await CurvatureWebGPUOpticsMatrix1409.run(options,{
+    isCancelled:function(){return stopped;},
+    onProgress:function(p){status.textContent=p.index+'/'+p.total+' — '+p.id+
+     (p.phase==='start'?' running…':' finished');}
+   });
+   var gate=latest.decision;
+   status.textContent='Decision: '+gate.verdict+' — '+gate.nextAction;
+   summary.textContent=gate.stats.passed+'/'+gate.stats.total+' numerical cases passed; '+
+     gate.stats.failed+' failed; '+gate.stats.unavailable+' unavailable; '+gate.stats.errors+' errors.';
+   report.textContent=JSON.stringify(latest,null,2);save.disabled=false;
+  }catch(error){status.textContent='Matrix failed: '+error.message;report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;cancel.disabled=true;}
+ });
+ cancel.addEventListener('click',function(){stopped=true;cancel.disabled=true;
+  status.textContent='Stopping after the current case…';});
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;link.download='curvature-webgpu-optics-140.9-matrix.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
+
+(function(){'use strict';
+ var form=document.getElementById("panel-2").querySelector('precision'),start=document.getElementById("panel-2").querySelector('start');
+ var cancel=document.getElementById("panel-2").querySelector('cancel'),save=document.getElementById("panel-2").querySelector('save');
+ var status=document.getElementById("panel-2").querySelector('status'),summary=document.getElementById("panel-2").querySelector('summary');
+ var report=document.getElementById("panel-2").querySelector('report'),latest=null,stopped=false;
+ form.addEventListener('submit',async function(event){
+  event.preventDefault();if(!form.reportValidity())return;
+  start.disabled=true;cancel.disabled=false;save.disabled=true;stopped=false;latest=null;
+  summary.textContent='';report.textContent='Experiment in progress…';
+  try{
+   var options={};
+   for(var control of form.querySelectorAll('input[name]'))options[control.name]=control.valueAsNumber;
+   latest=await CurvatureWebGPUOpticsPrecision14091.run(options,{
+    isCancelled:function(){return stopped;},
+    onProgress:function(p){status.textContent=p.index+'/'+p.total+' — '+p.id+' ['+p.mode+'] '+
+     (p.phase==='start'?'running…':'finished');}
+   });
+   var gate=latest.decision;
+   status.textContent='Decision: '+gate.verdict+' — '+gate.nextAction;
+   summary.textContent=gate.stats.passed+'/'+gate.stats.total+' compensated cases passed; '+
+     gate.stats.failed+' failed; '+gate.repairedCases+'/'+gate.baselineFailedCases+
+     ' baseline failures repaired; '+gate.missingPairs+' missing pairs; '+
+     gate.failedAnalyticalChecks+' analytic failures.';
+   var table=document.createElement('table');
+   var heading=document.createElement('tr');
+   for(var label of ['Case','Baseline error (m)','Compensated error (m)','GPU speedup']){
+    var th=document.createElement('th');th.textContent=label;heading.appendChild(th);
+   }
+   table.appendChild(heading);
+   for(var row of latest.cases){
+    var tr=document.createElement('tr'),c=row.comparison||{};
+    var fields=[row.id,c.baselineMaxPositionErrorMetres,c.compensatedMaxPositionErrorMetres,
+      c.compensatedCpuToGpu];
+    for(var value of fields){var td=document.createElement('td');
+      td.textContent=typeof value==='number'&&Number.isFinite(value)?value.toPrecision(5):String(value??'—');
+      tr.appendChild(td);}
+    table.appendChild(tr);
+   }
+   summary.appendChild(table);
+   report.textContent=JSON.stringify(latest,null,2);save.disabled=false;
+  }catch(error){status.textContent='Diagnostic failed: '+error.message;report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;cancel.disabled=true;}
+ });
+ cancel.addEventListener('click',function(){stopped=true;cancel.disabled=true;
+  status.textContent='Stopping after the current comparison…';});
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.9.1-precision.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
+
+(function(){'use strict';
+ var start=document.getElementById("panel-3").querySelector('start'),save=document.getElementById("panel-3").querySelector('save');
+ var status=document.getElementById("panel-3").querySelector('status'),summary=document.getElementById("panel-3").querySelector('summary');
+ var report=document.getElementById("panel-3").querySelector('report'),latest=null;
+ start.addEventListener('click',async function(){
+  start.disabled=true;save.disabled=true;latest=null;status.textContent='Loading real scene vertices…';
+  try{
+   var response=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!response.ok)throw Error('Fixture fetch failed: '+response.status);
+   var fixture=await response.json();
+   status.textContent='Running CPU baseline + GPU candidate shooting + CPU ground verification…';
+   latest=await CurvatureWebGPUSceneSpike14010.run(fixture);
+   report.textContent=JSON.stringify(latest,null,2);
+   if(latest.status==='finished'){
+    status.textContent='Decision: '+latest.decision.verdict+' — '+latest.decision.nextAction;
+    summary.textContent='CPU '+latest.timing.cpuShootingMs.toFixed(1)+' ms; cold GPU-assisted '+
+     latest.timing.hybridColdMs.toFixed(1)+' ms; speedup '+latest.timing.coldSpeedup.toFixed(2)+'×. '+
+     'Production GPU authorization: NO.';
+   }else{status.textContent=latest.reason||'Unavailable';summary.textContent='';}
+   save.disabled=false;
+  }catch(error){status.textContent='Spike failed: '+error.message;
+    report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;link.download='curvature-webgpu-optics-140.10-scene-spike.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
+(function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
+for(var i=0;i<4;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+});}());
+</script></body></html>

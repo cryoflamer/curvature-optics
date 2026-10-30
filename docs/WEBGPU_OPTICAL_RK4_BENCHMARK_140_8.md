@@ -20,7 +20,7 @@ From the repository root:
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/tools/webgpu-optics-1408.html` in an eligible
+Open `http://localhost:8000/tools/webgpu-optics.html` in an eligible
 WebGPU-enabled browser (secure context: localhost). Choose atmosphere,
 Flat/Globe geometry, number of independent rays, RK4 steps per ray, step
 length and repeats; click **Run CPU + WebGPU comparison** and **Export JSON**.

@@ -8,7 +8,7 @@ const matrix=require('../src/diagnostics/CurvatureWebGPUOpticsMatrix1409');
 const spike=require('../src/diagnostics/CurvatureWebGPUSceneSpike14010');
 const generated=require('../tools/generate-webgpu-scene-targets-14010');
 const fixture=require('../tools/reference/webgpu-real-scene-targets-14010.json');
-const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics-14010.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
 function passedCase(id){return {id,count:64,status:'measured',
  baseline:{ms:200,shootRK4Calls:200},
  hybrid:{gpuBatchMs:2,cpuCertificationMs:20,warmStartAccepted:25,warmStartAttempts:64,shootRK4Calls:100},
@@ -143,4 +143,10 @@ test('140.10: shader compilation failure cannot be reported as an authorized sce
   await assert.rejects(spike.run(fixture,{navigator:{gpu:{requestAdapter:async()=>({
     requestDevice:async()=>device})}},GPUBufferUsage:{},GPUMapMode:{}}),/Scene WGSL compilation failed/);
   assert.equal(device.destroyed,true);
+});
+
+// #140.10.1: catch the reserved identifier that prevented actual browser compilation.
+test('140.10.1: WGSL scene shader avoids reserved target identifier',()=>{
+ assert.doesNotMatch(spike.WGSL,/\b(?:let|var|const)\s+target\s*=/);
+ assert.match(spike.WGSL,/let targetData=seeds\.data\[i\]/);
 });

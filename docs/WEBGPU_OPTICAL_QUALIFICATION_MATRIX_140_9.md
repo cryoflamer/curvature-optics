@@ -46,7 +46,7 @@ From repository root:
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/tools/webgpu-optics-1409.html` in Opera or another
+Open `http://localhost:8000/tools/webgpu-optics.html` in Opera or another
 WebGPU-capable browser. Set tolerances to the actual intended application
 requirements; record them rather than loosening after a failing result.
 Click **Run 18-case qualification** and after completion **Export matrix JSON**.

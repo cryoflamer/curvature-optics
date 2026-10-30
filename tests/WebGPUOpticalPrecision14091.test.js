@@ -6,7 +6,7 @@ const path=require('node:path');
 const bench=require('../src/diagnostics/CurvatureWebGPUOpticsBenchmark');
 const matrix=require('../src/diagnostics/CurvatureWebGPUOpticsMatrix1409');
 const precise=require('../src/diagnostics/CurvatureWebGPUOpticsPrecision14091');
-const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics-14091.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
 function result(p,mode){
  const a=p.atmosphere==='vacuum'?{
   cpuVsAnalytic:{qualified:true},gpuVsAnalytic:{qualified:true}}:null;
