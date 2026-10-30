@@ -93,7 +93,8 @@ test('140.12.1: diagnostic browser mode remains in single canonical HTML',()=>{
  assert.match(html,/CurvatureWebGPUBatchDiagnostics14121\.run/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.1-diagnostics\.json/);
  assert.match(html,/value="5"/);
- assert.match(html,/for\(var i=0;i<7;i\+\+\)/);
+ const panelCount=html.match(/for\(var i=0;i<(\d+);i\+\+\)/);
+ assert.ok(panelCount&&Number(panelCount[1])>=7, 'older panels must remain selectable');
  const named=fs.readdirSync(path.join(__dirname,'../tools')).filter(x=>/webgpu-optics.*\.html/.test(x));
  assert.deepEqual(named,['webgpu-optics.html']);
 });

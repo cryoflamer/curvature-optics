@@ -12,7 +12,8 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 <option value="2">#140.9.1 — precision diagnostic</option><option value="3">#140.10 — archived scene spike</option>
 <option value="4">#140.12 — independent GPU batch shooting</option>
 <option value="5">#140.12.1 — per-target parity and warm timing</option>
-<option value="6" selected>#140.12.2 — angle-bracket refinement A/B</option>
+<option value="6">#140.12.2 — angle-bracket refinement A/B</option>
+<option value="7" selected>#140.12.3 — physical 5 mm qualification</option>
 </select></label>
 <section id="panel-0" class="experiment" hidden>
 
@@ -174,6 +175,24 @@ This is <strong>not</strong> production authorization.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON refinement report">No report yet.</pre>
 </section>
+<section id="panel-7" class="experiment">
+<h1>Curvature #140.12.3 — 5 mm physical shooting qualification</h1>
+<p>The application's <strong>5 mm target-height residual tolerance is deliberate</strong>.
+An angular difference from the CPU solution is reported for diagnosis, but is <strong>not a failure by itself</strong>.
+Use the unchanged <strong>GPU residual-stop</strong> solver, not the extra-precision A/B variant.</p>
+<p>Each target is checked for: separate CPU/GPU residual ≤ 0.005 m, an <strong>independent f64 CPU
+forward trace at the GPU angle</strong> reaching the target within the same tolerance,
+matching visibility status and matching ground-contact evidence (1 mm path threshold).
+CPU replay runs <em>outside</em> the timed GPU solver and never searches a new shooting angle.
+Ground-level endpoints retain the CPU's stricter protective classification.</p>
+<p>Report cold and three pipeline-reused warm timings separately. The original ≥2× <em>cold</em>
+batch speed gate remains. This experiment cannot authorize production use.</p>
+<button id="start" type="button">Run 5 mm physical qualification and warm timing</button>
+<button id="save" type="button" disabled>Export #140.12.3 JSON</button>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary"></div>
+<pre id="report" aria-label="Full JSON physical qualification report">No report yet.</pre>
+</section>
 <script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="../src/optics/OpticalRayTracer.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
@@ -185,6 +204,7 @@ This is <strong>not</strong> production authorization.</p>
 <script src="../src/diagnostics/CurvatureWebGPUBatchShooting1412.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPURootRefinement14122.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js"></script>
 <script>
 
 (function(){'use strict';
@@ -445,7 +465,43 @@ This is <strong>not</strong> production authorization.</p>
  });
 }());
 
+(function(){'use strict';
+ var panel=document.getElementById('panel-7'),start=panel.querySelector('#start');
+ var save=panel.querySelector('#save'),status=panel.querySelector('#status');
+ var summary=panel.querySelector('#summary'),report=panel.querySelector('#report'),latest=null;
+ start.addEventListener('click',async function(){
+  start.disabled=true;save.disabled=true;latest=null;summary.textContent='';
+  status.textContent='Loading production-scene targets…';
+  try{
+   var response=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!response.ok)throw Error('Fixture fetch failed: '+response.status);
+   status.textContent='Checking 5 mm residuals, CPU replay of GPU angles and ground events…';
+   latest=await CurvatureWebGPUPhysicalTolerance14123.run(await response.json());
+   report.textContent=JSON.stringify(latest,null,2);
+   status.textContent='Decision: '+latest.decision.verdict+' — '+latest.decision.nextAction;
+   summary.textContent=latest.scenes.map(function(s){return s.id+': '+s.status+
+    (s.status==='measured'?'; physically adequate '+s.physical.counts.physicallyAdequate+'/'+s.count+
+      ', GPU target failures '+s.physical.counts.gpuResidualExceeded+
+      ', CPU replay failures '+s.physical.counts.gpuReplayResidualExceeded+
+      ', status mismatches '+s.physical.counts.statusMismatch+
+      ', ground mismatches '+s.physical.counts.groundEventMismatch+
+      ', angle mismatches (diagnostic only) '+s.physical.strictParityDiagnostic.angleMismatch+
+      ', GPU warm speedup '+s.timing.warmSpeedup.toFixed(2)+'×':'; '+s.reason);}).join(' | ');
+   save.disabled=false;
+  }catch(error){status.textContent='Physical qualification failed: '+error.message;
+   report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.12.3-physical-tolerance.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
 (function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
-for(var i=0;i<7;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+for(var i=0;i<8;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
 });}());
 </script></body></html>

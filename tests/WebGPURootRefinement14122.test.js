@@ -109,8 +109,9 @@ test('140.12.2: canonical selector runs the new mode without adding a numbered p
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  assert.match(html,/CurvatureWebGPURootRefinement14122\.run/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.2-refinement\.json/);
- assert.match(html,/value="6" selected/);
- assert.match(html,/for\(var i=0;i<7;i\+\+\)/);
+ assert.match(html,/value="6"/); // the mode survives when a newer one is selected
+ const panelCount=html.match(/for\(var i=0;i<(\d+);i\+\+\)/);
+ assert.ok(panelCount&&Number(panelCount[1])>=7, 'older panels must remain selectable');
  assert.deepEqual(fs.readdirSync(path.join(__dirname,'../tools')).filter(x=>/webgpu-optics.*\.html/.test(x)),['webgpu-optics.html']);
 });
 
