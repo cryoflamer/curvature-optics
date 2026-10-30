@@ -204,3 +204,71 @@ test('140.12.8: disputed GPU ground contacts are independently replayed and neve
   assert.equal(compare.probeGroundReview(request,cpu,gpu,tracer,1).truncated,true);
   assert.throws(()=>compare.probeGroundReview(request,cpu,{results:[]},tracer),/Mismatched/);
 });
+
+test('140.12.10: collected exact adaptive rays create bounded ordered metric GPU field requests',()=>{
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const m={showModel:2,rEarth:6371000,Height:12};
+  const records=Array.from({length:24},(_,i)=>[100+i*50,5+i]);
+  records.push(records[0],records[3],[-1,0],[100001,10]);
+  const bundle=compare.gpuFieldRequest(m,records,8,surfaces,'first-forward-x');
+  assert.equal(bundle.discovered,28);
+  assert.equal(bundle.qualified,24);
+  assert.equal(bundle.selected.length,8);
+  assert.equal(bundle.request.geometry,'flat');
+  assert.equal(bundle.request.atmosphere,'standard');
+  assert.deepEqual(bundle.request.targets,bundle.selected.map(x=>x.target));
+  assert.ok(bundle.request.targets.every(t=>t[0]>0&&t[0]<=100000));
+  assert.ok(bundle.selected.every(p=>p.key===p.d.toPrecision(13)+','+p.h.toPrecision(13)));
+  assert.throws(()=>compare.gpuFieldRequest(m,records,1025,surfaces,'first-forward-x'),/Invalid/);
+  assert.throws(()=>compare.gpuFieldRequest(m,records,8,{},'first-forward-x'),/Invalid/);
+});
+
+test('140.12.10: GPU-seeded optical field uses real statuses, CPU fallback and reports honest coverage',()=>{
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const model={showModel:1,rEarth:6371000,Height:15};
+  const bundle=compare.gpuFieldRequest(model,[[500,30],[1000,100],[500,30]],2,surfaces,'first-forward-x');
+  const response={results:[
+    {target:bundle.selected[0].target,status:'blocked',angle:-0.001,residual:0.001},
+    {target:bundle.selected[1].target,status:'solver_failed',angle:null,residual:null}
+  ]};
+  const field=compare.gpuRayField(bundle,response);
+  const a=bundle.selected[0],b=bundle.selected[1];
+  assert.equal(field.sample(a.d,a.h).status,'blocked','do not reclassify blocked to CPU visible');
+  assert.equal(field.exact(a.d,a.h).method,'gpu-experimental');
+  assert.equal(field.sample(b.d,b.h),null,'failed GPU rays must fall back to CPU');
+  assert.equal(field.sample(800,25),null,'unseeded rays must fall back to CPU');
+  assert.deepEqual(field.stats(),{seeds:1,failedGpuSeeds:1,gpuHits:2,gpuExactHits:1,
+    cpuFallbackRequests:2});
+  assert.throws(()=>compare.gpuRayField(bundle,{results:response.results.slice().reverse()}),/order mismatch/);
+});
+
+test('140.12.10: rendered frame comparison measures real pixels, not angular-ray proxies',()=>{
+  function fake(pixels,w=2){return {width:w,height:1,getContext(){return {
+    getImageData(){return {data:new Uint8ClampedArray(pixels)};}}}};}
+  const a=fake([0,0,0,255,10,10,10,255]),b=fake([0,0,0,255,20,10,10,255]);
+  const report=compare.compareFramePixels(a,b);
+  assert.equal(report.status,'measured');
+  assert.equal(report.totalPixels,2);
+  assert.equal(report.significantPixels,1);
+  assert.equal(report.strictPixels,1);
+  assert.equal(report.maxChannelDelta,10);
+  assert.equal(report.visualEquivalenceProven,false);
+  assert.equal(compare.compareFramePixels(a,fake([0,0,0,255],1)).status,'unavailable');
+  assert.equal(compare.compareFramePixels({},{}).status,'unavailable');
+});
+
+test('140.12.10: full physical renderer and Compare wire GPU results into B and keep opt-in bounds',()=>{
+  const html=source('CurvatureModern.html'),app=source('src/ui/modern/ModernApp.js');
+  const optics=source('src/optics/CurvaturePhysicalSceneOptics.js'),field=source('src/optics/OpticalSharedRayField.js');
+  assert.match(html,/id="ModernGpuFrameRun"/);
+  assert.match(html,/GPU-seeded rays and explicit CPU fallback/);
+  assert.match(app,/runCompareGpuField/);
+  assert.match(app,/state\.compareGraphs\.B\.Redraw\(\)/);
+  assert.match(app,/options\.experimentalRayField=state\.probeField/);
+  assert.match(app,/options\.onExactTarget=function/);
+  assert.match(app,/gpuAssistedFrame:state\.probeFrameLast/);
+  assert.match(optics,/experimentalRayField:options.experimentalRayField/);
+  assert.match(field,/options\.experimentalRayField\.exact\(d,h\)/);
+  assert.match(field,/options\.onExactTarget\(d,h\)/);
+  assert.doesNotMatch(source('src/app/CurvatureMainCanvasRenderer.js'),/CurvatureWebGPUBatchShooting1412/);
+});

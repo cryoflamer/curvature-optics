@@ -175,8 +175,17 @@
       // The common frame/painter copies and validates its input scene. A
       // camera-only redraw may therefore reuse the optical composition itself
       // instead of rebuilding thousands of validated line primitives.
-      if(cached&&cached.key===key)return {composition:cached.composition,
-        stats:cached.stats,reused:true};
+      if(cached&&!options.onExactTarget&&!options.experimentalRayField&&cached.key===key)
+        return {composition:cached.composition,stats:cached.stats,reused:true};
+      if(options.experimentalRayField && (kind!=='standard'||
+          typeof options.experimentalRayField.sample!=='function'||
+          typeof options.experimentalRayField.exact!=='function'||
+          !options.experimentalRayField.request||
+          options.experimentalRayField.request.geometry!==geometry||
+          options.experimentalRayField.request.radius!==model.rEarth||
+          options.experimentalRayField.request.observerHeight!==model.Height||
+          options.experimentalRayField.request.atmosphere!==kind))
+        throw RangeError('Experimental GPU ray field does not match the physical scene');
       // Representative profiles are smooth over kilometre scales. RK4 at
       // 2 km was checked against the 200 m shooting oracle; cap the step
       // relative to smaller geometric or engineered curvature radii.
@@ -207,7 +216,9 @@
           maxAdaptiveCells:settings.fieldMaxAdaptiveCells,
           shootingOptimization:settings.shootingOptimization,
           shootingWarmStart:settings.shootingWarmStart,
-          surfaceArithmetic:settings.surfaceArithmetic});
+          surfaceArithmetic:settings.surfaceArithmetic,
+          onExactTarget:options.onExactTarget,
+          experimentalRayField:options.experimentalRayField});
       }
       var fieldSetupMs=clock()-startedProfile;
       var deadline=settings.maxBuildMs===null?Infinity:Date.now()+settings.maxBuildMs,cutoff=false;
@@ -365,7 +376,8 @@
       stats.opticalStages={sceneAdoptionMs:assemblyDetail.sceneAdoptionMs,fieldSetupMs:fieldSetupMs,groundGuidesMs:groundGuidesMs,
         outlinesMs:outlinesMs,fillsMs:fillsMs,assemblyMs:clock()-assemblyStarted,
         exactSolveMs:fieldStats&&fieldStats.exactSolveMs||0};
-      if(!stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])
+      if(!options.onExactTarget&&!options.experimentalRayField&&
+          !stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])
         cached={key:key,stats:stats,composition:presentation};
       else cached=null;
       return {composition:presentation,stats:stats,reused:false};

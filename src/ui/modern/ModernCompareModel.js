@@ -144,6 +144,89 @@
       independentCpuReplay:true,excludedFromGpuTimings:true,
       renderedSilhouetteCompared:false};
   }
+  // #140.12.10: capture the exact requests made by the real CPU adaptive
+  // outline/fill field. Asynchronously seed a bounded subset of those targets
+  // with WebGPU; new adaptive requests still use the unmodified CPU oracle.
+  function rayKey(d,h){return d.toPrecision(13)+','+h.toPrecision(13);}
+  function gpuFieldRequest(model,records,count,surfaces,branch){
+    if(!Array.isArray(records)||!surfaces||typeof surfaces.createFromCurvature!=='function'||
+        !Number.isInteger(count)||count<1||count>1024)
+      throw TypeError('Invalid Compare GPU field discovery inputs');
+    var geometry=model.showModel===2?'flat':'globe',radius=model.rEarth,eye=model.Height;
+    if(!(radius>0&&eye>=0))throw RangeError('Invalid ray field geometry');
+    var metric=surfaces.createFromCurvature(geometry==='globe'?1/radius:0);
+    var seen=new Set(),qualified=[];
+    records.forEach(function(record){
+      var d=record[0],h=record[1];
+      if(!Number.isFinite(d)||!Number.isFinite(h)||d<=0||d>100000||h<0||h>100000||
+          (geometry==='globe'&&d>=radius*Math.PI/2))return;
+      var key=rayKey(d,h);
+      if(seen.has(key))return;
+      var target=metric.surfacePoint2(d,h);
+      if(!Array.isArray(target)||target.length!==2||target.some(function(x){return !Number.isFinite(x);})||
+          target[0]<=0||target[0]>100000||Math.abs(target[1])>100000||
+          Math.abs(Math.atan2(target[1]-eye,target[0]))>1.2)return;
+      seen.add(key);qualified.push({key:key,d:d,h:h,target:target});
+    });
+    var selected=[];
+    var size=Math.min(count,qualified.length);
+    for(var i=0;i<size;i++)selected.push(qualified[Math.floor((i+0.5)*qualified.length/size)]);
+    return {request:{branch:branch,geometry:geometry,radius:radius,observerHeight:eye,
+        atmosphere:'standard',controls:{step:50,targetTolerance:0.005,eventSubsteps:8},
+        targets:selected.map(function(q){return q.target;})},
+      selected:selected,discovered:records.length,qualified:qualified.length};
+  }
+  function gpuRayField(bundle,response){
+    if(!bundle||!response||!Array.isArray(bundle.selected)||
+        !Array.isArray(response.results)||bundle.selected.length!==response.results.length)
+      throw TypeError('Invalid Compare GPU ray field response');
+    var map=new Map(),failures=0;
+    bundle.selected.forEach(function(point,i){
+      var result=response.results[i];
+      if(!result||!Array.isArray(result.target)||result.target.length!==2||
+          result.target[0]!==point.target[0]||result.target[1]!==point.target[1])
+        throw RangeError('GPU ray field target order mismatch');
+      if(result.status==='solver_failed'){failures++;return;}
+      if(!['visible','blocked','indeterminate'].includes(result.status)||!Number.isFinite(result.angle))
+        throw RangeError('Invalid GPU ray field result');
+      map.set(point.key,Object.freeze({status:result.status,angle:result.angle,
+        residual:result.residual,reason:result.reason,method:'gpu-experimental'}));
+    });
+    var hits=0,misses=0,exactHits=0;
+    function lookup(d,h,exact){
+      var result=map.get(rayKey(d,h));
+      if(result){hits++;if(exact)exactHits++;return result;}
+      misses++;return null;
+    }
+    return {request:bundle.request,sample:function(d,h){return lookup(d,h,false);},
+      exact:function(d,h){return lookup(d,h,true);},
+      stats:function(){return {seeds:map.size,failedGpuSeeds:failures,
+        gpuHits:hits,gpuExactHits:exactHits,cpuFallbackRequests:misses};}};
+  }
+  function compareFramePixels(a,b){
+    if(!a||!b||!a.getContext||!b.getContext||a.width!==b.width||a.height!==b.height)
+      return {status:'unavailable',reason:'Canvas sizes differ or no readable canvas'};
+    try{
+      var ac=a.getContext('2d'),bc=b.getContext('2d');
+      if(!ac||!bc||!ac.getImageData||!bc.getImageData)
+        return {status:'unavailable',reason:'Pixel readback not supported'};
+      var first=ac.getImageData(0,0,a.width,a.height).data,
+        second=bc.getImageData(0,0,b.width,b.height).data;
+      var strictPixels=0,significantPixels=0,maxChannelDelta=0;
+      for(var i=0;i<first.length;i+=4){
+        var diff=Math.max(Math.abs(first[i]-second[i]),Math.abs(first[i+1]-second[i+1]),
+          Math.abs(first[i+2]-second[i+2]),Math.abs(first[i+3]-second[i+3]));
+        if(diff>0)strictPixels++;
+        if(diff>8)significantPixels++;
+        maxChannelDelta=Math.max(maxChannelDelta,diff);
+      }
+      return {status:'measured',width:a.width,height:a.height,totalPixels:a.width*a.height,
+        strictPixels:strictPixels,significantPixels:significantPixels,maxChannelDelta:maxChannelDelta,
+        // An 8/255 channel difference filter is not a 1-pixel contour metric.
+        visualEquivalenceProven:false};
+    }catch(error){return {status:'unavailable',reason:String(error.message||error)};}
+  }
   return Object.freeze({pair:pair,clone:clone,invariant:invariant,
-    probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview});
+    probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview,
+    gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,compareFramePixels:compareFramePixels});
 }));

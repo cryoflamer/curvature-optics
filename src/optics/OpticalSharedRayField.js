@@ -66,6 +66,8 @@
     delete solverOptions.adaptiveDepth;
     delete solverOptions.maxAdaptiveCells;
     delete solverOptions.shootingOptimization;
+    delete solverOptions.onExactTarget;
+    delete solverOptions.experimentalRayField;
     if (solverOptions.profileOptions)
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
     // #140.4: engineered profiles may be measured with the existing guarded
@@ -91,7 +93,7 @@
       warmStartAttempts:0,warmStartAccepted:0,warmStartMisses:0,
       clearGroundSteps:0,fullGroundEventSteps:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
-      maxDepthUsed:0};
+      maxDepthUsed:0,gpuSeedUses:0};
     // Bounded history per 0.1 mm distance bucket, owned by this field alone.
     // Bucketing absorbs last-bit distance drift across nearly identical
     // tower ranges. It is ONLY used to guess an angle; not to cache results.
@@ -100,6 +102,20 @@
     function exact(d,h) {
       var key=d+','+h;
       if (cache.has(key)) {statistics.hits++;return cache.get(key);}
+      // Optional Compare-only ray field capture; one callback per unique exact
+      // CPU request, never inside an ordinary production field.
+      if(typeof options.onExactTarget==='function')options.onExactTarget(d,h);
+      // Inside exact(): adaptive prism corners and qualification midpoints
+      // reach here without traversing the public field.sample wrapper.
+      // GPU values must be injected at this oracle boundary, not merely at
+      // the outer sampling API. Missing/failed GPU rays retain CPU f64.
+      var seeded=options.experimentalRayField&&options.experimentalRayField.exact(d,h);
+      if(seeded){
+        var record=Object.freeze({status:seeded.status,angle:seeded.angle,
+          residual:seeded.residual,method:'gpu-experimental',reason:seeded.reason||null});
+        cache.set(key,record);statistics.solves++;statistics.gpuSeedUses++;
+        return record;
+      }
       var started=clock(),shootOpts={geometry:geometry,radius:radius,curvature:k,
         target:legacy?(geometry==='flat'?[d,h]:[
           (radius+h)*Math.sin(d/radius),(radius+h)*Math.cos(d/radius)-radius]):
@@ -201,6 +217,12 @@
     function sample(d,h) {
       if (!Number.isFinite(d) || !Number.isFinite(h) || d <= 0 || h < 0)
         throw Error('Invalid shared-field target coordinates');
+      // Directly sampled GPU oracle points must not be re-interpolated by
+      // CPU cells. Both paths still respect explicit status/angle evidence.
+      if(options.experimentalRayField){
+        var seeded=options.experimentalRayField.sample(d,h);
+        if(seeded){statistics.gpuSeedUses++;return seeded;}
+      }
       var i=interval(distances,d),j=interval(heights,h);
       if(i<0||j<0){statistics.fallbacks++;return exact(d,h);}
       var cell=rootCell(i,j);
@@ -227,7 +249,8 @@
         for(var j=0;j<heights.length-1;j++) prepare(rootCell(i,j));
       return stats();
     }
-    function stats() {return Object.assign({cells:cellCount,roots:cells.size,points:cache.size},statistics);}
+    function stats() {return Object.assign({cells:cellCount,roots:cells.size,points:cache.size},statistics,
+      options.experimentalRayField?{experimentalGpu:options.experimentalRayField.stats()}:{});}
     return {sample:sample,exact:exact,warm:warm,stats:stats,
       distances:distances.slice(),heights:heights.slice()};
   }

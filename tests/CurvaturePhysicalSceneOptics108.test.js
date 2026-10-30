@@ -132,3 +132,55 @@ test('108: entrypoint loads scene optics before shared main renderer and keeps L
   assert.match(html,/<option value="legacy" selected>Legacy/);
   assert.match(html,/<option value="physical">Physical optics/);
 });
+
+test('140.12.10: real physical adaptive scene is rendered with injected GPU samples and CPU fallback',()=>{
+  const m=model({showModel:2,NObjects:[1,1],showGrid:0});
+  const source=compose.composeOpticalMain(m,false,{physicalWorld:true});
+  const captured=[];
+  const settings={maximumDepth:1,maxSamples:200,fieldAdaptiveDepth:0,step:100};
+  const cpu=optics.create().transform(source,m,{atmosphere:'standard',settings,
+    onExactTarget:(d,h)=>captured.push([d,h])});
+  assert.ok(captured.length>=16,'record real solver calls, not static fixture');
+  assert.ok(cpu.stats.visibleSegments>0);
+  const first=captured[0],key=first.map(v=>v.toPrecision(13)).join(',');
+  let gpuReads=0,cpuFallbackReads=0;
+  const injected={request:{geometry:'flat',radius:m.rEarth,observerHeight:m.Height,atmosphere:'standard'},
+    sample(d,h){if(d.toPrecision(13)+','+h.toPrecision(13)===key){gpuReads++;return {
+      status:'blocked',angle:0,method:'gpu-experimental'};}cpuFallbackReads++;return null;},
+    exact(d,h){return this.sample(d,h);},
+    stats(){return {gpuHits:gpuReads,cpuFallbackRequests:cpuFallbackReads};}};
+  const session=optics.create();
+  const gpu=session.transform(source,m,{atmosphere:'standard',settings,experimentalRayField:injected});
+  assert.equal(gpu.reused,false);
+  assert.ok(gpuReads>0,'real silhouettes/fills/ground should consult GPU-derived sample');
+  assert.ok(cpuFallbackReads>0,'unseeded adaptive ray requests use CPU fallback');
+  assert.ok(gpu.stats.fieldStats.experimentalGpu.gpuHits>0);
+  assert.equal(session.transform(source,m,{atmosphere:'standard',settings}).reused,false,
+    'experimental GPU composition must not poison ordinary CPU cache');
+  assert.throws(()=>optics.create().transform(source,m,{atmosphere:'vacuum',experimentalRayField:injected}),
+    /does not match/);
+  assert.throws(()=>optics.create().transform(source,{...m,Height:m.Height+1},
+    {atmosphere:'standard',settings,experimentalRayField:injected}),/does not match/);
+});
+
+test('140.12.10: real CPU field discovery is replayed through selected GPU oracle seeds',()=>{
+  const compare=require('../src/ui/modern/ModernCompareModel');
+  const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
+  const m=model({showModel:2,NObjects:[1,1],showGrid:0});
+  const composition=compose.composeOpticalMain(m,false,{physicalWorld:true});
+  const settings={maximumDepth:1,maxSamples:200,fieldAdaptiveDepth:0,step:100};
+  const requests=[];
+  optics.create().transform(composition,m,{atmosphere:'standard',settings,
+    onExactTarget:(d,h)=>requests.push([d,h])});
+  const bundle=compare.gpuFieldRequest(m,requests,32,surfaces,'first-forward-x');
+  assert.ok(bundle.selected.length>=16);
+  const gpuResponse={results:bundle.selected.map(q=>({target:q.target,status:'visible',angle:0,residual:0}))};
+  const field=compare.gpuRayField(bundle,gpuResponse);
+  const result=optics.create().transform(composition,m,{atmosphere:'standard',settings,
+    experimentalRayField:field});
+  const stats=result.stats.fieldStats.experimentalGpu;
+  assert.ok(stats.gpuHits>0,'selected real CPU oracle requests must be consumed by GPU-assisted frame');
+  assert.ok(stats.cpuFallbackRequests>0,'unseeded requests cannot silently be treated as GPU');
+  assert.ok(result.stats.visibleSegments>=0);
+  assert.equal(result.reused,false);
+});
