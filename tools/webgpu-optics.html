@@ -10,7 +10,8 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 <label id="experiment-selector">Experiment<select id="experiment-choice">
 <option value="0">#140.8 — single RK4 benchmark</option><option value="1">#140.9 — qualification matrix</option>
 <option value="2">#140.9.1 — precision diagnostic</option><option value="3">#140.10 — archived scene spike</option>
-<option value="4" selected>#140.12 — independent GPU batch shooting</option>
+<option value="4">#140.12 — independent GPU batch shooting</option>
+<option value="5" selected>#140.12.1 — per-target parity and warm timing</option>
 </select></label>
 <section id="panel-0" class="experiment" hidden>
 
@@ -123,7 +124,7 @@ are deliberately outside this bounded experiment. No GPU results affect the live
 
 
 </section>
-<section id="panel-4" class="experiment">
+<section id="panel-4" class="experiment" hidden>
 <h1>Curvature #140.12 — independent GPU batch shooting (research)</h1>
 <p>WebGPU independently sweeps 33 launch angles per actual production target, detects brackets,
 refines roots and samples ground contacts <strong>on GPU</strong>. CPU solves only the separate
@@ -138,6 +139,21 @@ these gates. There is no production backend switch.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON report">No results yet.</pre>
 </section>
+<section id="panel-5" class="experiment">
+<h1>Curvature #140.12.1 — independent GPU shooting diagnostics</h1>
+<p>Investigate the <strong>measured #140.12 numerical parity failure</strong>, not a new GPU algorithm.
+For every Flat/Globe mesh target, export CPU/GPU angles, residuals, ground evidence,
+GPU sweep bracket index/count, refinement iterations and final interval width.</p>
+<p>The first GPU batch includes setup; <strong>three additional runs reuse the SAME device,
+pipelines, bind groups and buffers</strong>. Warm timings include upload, execution and readback;
+they are not pure GPU kernel time or full-scene FPS. Strict parity gates are unchanged.
+Production CPU/renderer are unaffected.</p>
+<button id="start" type="button">Run #140.12.1 detailed parity + warm timing</button>
+<button id="save" type="button" disabled>Export #140.12.1 JSON</button>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary"></div>
+<pre id="report" aria-label="Full JSON diagnostic report">No report yet.</pre>
+</section>
 <script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="../src/optics/OpticalRayTracer.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
@@ -147,6 +163,7 @@ these gates. There is no production backend switch.</p>
 <script src="../src/diagnostics/CurvatureWebGPUSceneSpike14010.js"></script>
 <script src="../src/diagnostics/CurvatureOpticalBatchContract1411.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUBatchShooting1412.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js"></script>
 <script>
 
 (function(){'use strict';
@@ -335,7 +352,42 @@ these gates. There is no production backend switch.</p>
  });
 }());
 
+(function(){'use strict';
+ var panel=document.getElementById('panel-5');
+ var start=panel.querySelector('#start'),save=panel.querySelector('#save');
+ var status=panel.querySelector('#status'),summary=panel.querySelector('#summary');
+ var report=panel.querySelector('#report'),latest=null;
+ start.addEventListener('click',async function(){
+  start.disabled=true;save.disabled=true;latest=null;
+  status.textContent='Loading production-scene targets…';summary.textContent='';
+  try{
+   var response=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!response.ok)throw Error('Fixture fetch failed: '+response.status);
+   status.textContent='Measuring first + warm GPU batches and checking each CPU/GPU target…';
+   latest=await CurvatureWebGPUBatchDiagnostics14121.run(await response.json());
+   report.textContent=JSON.stringify(latest,null,2);
+   status.textContent='Decision: '+latest.decision.verdict+' — '+latest.decision.nextAction;
+   summary.textContent=latest.scenes.map(function(s){return s.id+': '+s.status+
+    (s.status==='measured'?'; mismatched targets '+s.diagnosticSummary.flaggedTargets+'/'+s.count+
+     ', no-bracket '+s.diagnosticSummary.noBracketTargets+
+     ', CPU '+s.cpuMs.toFixed(1)+' ms, GPU cold '+s.timing.gpuColdMs.toFixed(1)+
+     ' ms, warm median '+s.timing.gpuWarmMedianMs.toFixed(1)+' ms, warm '+
+     s.timing.warmSpeedup.toFixed(2)+'×, repeat stable '+s.timing.warmOutputBitwiseStable:
+     '; '+s.reason);}).join(' | ');
+   save.disabled=false;
+  }catch(error){status.textContent='GPU diagnostics failed: '+error.message;report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.12.1-diagnostics.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
 (function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
-for(var i=0;i<5;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+for(var i=0;i<6;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
 });}());
 </script></body></html>

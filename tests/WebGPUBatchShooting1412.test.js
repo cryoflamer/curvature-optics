@@ -109,7 +109,7 @@ test('140.12: canonical browser page hosts the fifth mode, not another numbered 
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  assert.match(html,/CurvatureWebGPUBatchShooting1412\.run/);
  assert.match(html,/curvature-webgpu-optics-140\.12-independent-shooting\.json/);
- assert.match(html,/for\(var i=0;i<5;i\+\+\)/);
+ assert.match(html,/for\(var i=0;i<6;i\+\+\)/);
  const named=fs.readdirSync(path.join(__dirname,'../tools')).filter(x=>/webgpu-optics.*\.html/.test(x));
  assert.deepEqual(named,['webgpu-optics.html']);
 });

@@ -114,11 +114,13 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   let t=seeds.data[i];
   var bestDistance=1e30;
   var bracket=-1i;
+  var candidateBrackets=0u;
   // Choose the nearest detected sign-change interval to straight line of sight.
   for(var j=0u;j<config[9]-1u;j=j+1u){
     let a=coarse.data[i*config[9]+j];
     let b=coarse.data[i*config[9]+j+1u];
     if(a.w>0.5 && b.w>0.5 && a.y*b.y<=0.0){
+      candidateBrackets=candidateBrackets+1u;
       let distance=abs((a.x+b.x)*0.5-t.w);
       if(distance<bestDistance){bestDistance=distance;bracket=i32(j);}
     }
@@ -127,12 +129,14 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   if(bracket<0){
     results.data[offset]=vec4f(0.0,0.0,0.0,0.0);
     results.data[offset+1u]=vec4f(0.0,0.0,0.0,0.0);
-    results.data[offset+2u]=vec4f(0.0);
+    results.data[offset+2u]=vec4f(-1.0,0.0,0.0,0.0);
     return;
   }
   var a=coarse.data[i*config[9]+u32(bracket)];
   var b=coarse.data[i*config[9]+u32(bracket)+1u];
+  var usedIterations=0u;
   for(var iter=0u;iter<config[12];iter=iter+1u){
+    usedIterations=iter+1u;
     let angle=(a.x+b.x)*0.5;
     let shot=arrival(t,angle,false);
     if(shot.valid<0.5){break;}
@@ -157,8 +161,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     }
   }
   results.data[offset]=vec4f(angle,shot.residual,shot.path,status);
-  results.data[offset+1u]=vec4f(shot.impact,shot.contact,shot.valid,0.0);
-  results.data[offset+2u]=vec4f(0.0);
+  results.data[offset+1u]=vec4f(shot.impact,shot.contact,shot.valid,f32(candidateBrackets));
+  results.data[offset+2u]=vec4f(f32(bracket),f32(usedIterations),a.x,b.x);
 }`:`
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id:vec3u){
@@ -250,8 +254,30 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     return contract.validateResponse(request,{backend:'gpu-experimental',
       branch:contract.BRANCH,results:results});
   }
-  async function solveBatch(request,deps){
-    checked(request);deps=deps||{};
+  // Raw shader audit fields are separate from the strict #140.11 result
+  // contract. The shader writes these into previously unused vec4 slots.
+  function decodeTelemetry(request,data){
+    checked(request);
+    if(!(data instanceof Float32Array)||data.length!==request.targets.length*12)
+      throw Error('GPU telemetry buffer length mismatch');
+    return request.targets.map(function(target,i){
+      var offset=i*12,bracket=data[offset+8],lo=data[offset+10],hi=data[offset+11];
+      return {targetIndex:i,bracketIndex:bracket,bracketCount:data[offset+7],
+        refineIterations:data[offset+9],
+        finalBracketLowRadians:bracket>=0?lo:null,
+        finalBracketHighRadians:bracket>=0?hi:null,
+        finalBracketWidthRadians:bracket>=0?Math.abs(hi-lo):null,
+        rawStatusCode:data[offset+3],rawArrivalValid:data[offset+6],
+        rawGroundContactCode:data[offset+5]};
+    });
+  }
+  // #140.12.1: optional diagnostic-only repeat measurements re-use the SAME
+  // device, pipelines and buffers. Default remains the original single run.
+  async function solveBatch(request,deps,options){
+    checked(request);deps=deps||{};options=options||{};
+    var warmRepeats=options.warmRepeats===undefined?0:options.warmRepeats;
+    if(!Number.isInteger(warmRepeats)||warmRepeats<0||warmRepeats>5)
+      throw RangeError('Diagnostic repeat count must be an integer from 0 to 5');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
     if(!nav||!nav.gpu||!nav.gpu.requestAdapter)throw Error('WebGPU unavailable');
     var usage=deps.GPUBufferUsage||((typeof GPUBufferUsage!=='undefined')?GPUBufferUsage:null);
@@ -290,20 +316,38 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         device.createBindGroup({layout:pipelines[1].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
           {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}]})];
-      var began=now();
-      device.queue.writeBuffer(seeds,0,prepared.input);device.queue.writeBuffer(config,0,prepared.config);
-      var encoder=device.createCommandEncoder();
-      for(var i=0;i<2;i++){
-        var pass=encoder.beginComputePass();pass.setPipeline(pipelines[i]);pass.setBindGroup(0,bindings[i]);
-        pass.dispatchWorkgroups(Math.ceil(request.targets.length*(i===0?SAMPLES:1)/64));pass.end();
+      var firstRaw=null,firstMs=null,warmMs=[],warmStable=true;
+      for(var repeat=0;repeat<=warmRepeats;repeat++){
+        var began=now();
+        device.queue.writeBuffer(seeds,0,prepared.input);
+        device.queue.writeBuffer(config,0,prepared.config);
+        var encoder=device.createCommandEncoder();
+        for(var i=0;i<2;i++){
+          var pass=encoder.beginComputePass();pass.setPipeline(pipelines[i]);pass.setBindGroup(0,bindings[i]);
+          pass.dispatchWorkgroups(Math.ceil(request.targets.length*(i===0?SAMPLES:1)/64));pass.end();
+        }
+        encoder.copyBufferToBuffer(output,0,read,0,outputSize);
+        device.queue.submit([encoder.finish()]);
+        await read.mapAsync(mapMode.READ);
+        var current=new Float32Array(read.getMappedRange().slice(0));read.unmap();
+        var elapsed=now()-began;
+        if(repeat===0){firstRaw=current;firstMs=elapsed;}
+        else{
+          warmMs.push(elapsed);
+          var aBytes=new Uint32Array(firstRaw.buffer),bBytes=new Uint32Array(current.buffer);
+          for(var index=0;index<aBytes.length;index++){
+            if(aBytes[index]!==bBytes[index]){warmStable=false;break;}
+          }
+        }
       }
-      encoder.copyBufferToBuffer(output,0,read,0,outputSize);
-      device.queue.submit([encoder.finish()]);
-      await read.mapAsync(mapMode.READ);
-      var raw=new Float32Array(read.getMappedRange().slice(0));read.unmap();
-      var runMs=now()-began;
-      return {response:decode(request,raw),timing:{gpuSetupMs:setupMs,
-        gpuUploadToReadbackMs:runMs,gpuColdMs:setupMs+runMs},
+      var sorted=warmMs.slice().sort(function(a,b){return a-b;});
+      var middle=Math.floor(sorted.length/2);
+      var median=!sorted.length?null:sorted.length%2?sorted[middle]:
+        (sorted[middle-1]+sorted[middle])/2;
+      return {response:decode(request,firstRaw),telemetry:decodeTelemetry(request,firstRaw),
+        timing:{gpuSetupMs:setupMs,gpuUploadToReadbackMs:firstMs,
+          gpuColdMs:setupMs+firstMs,warmRunMs:warmMs,
+          gpuWarmMedianMs:median,warmOutputBitwiseStable:warmStable},
         algorithm:{sampleAngles:SAMPLES,refineIterations:28,
           branch:contract.BRANCH,productionAuthorized:false},
         device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',architecture:adapter.info.architecture||''}:null}};
@@ -353,6 +397,6 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         'No production backend switch or authorization']};
   }
   return Object.freeze({WGSL_SWEEP:WGSL_SWEEP,WGSL_REFINE:WGSL_REFINE,
-    checked:checked,pack:pack,decode:decode,solveBatch:solveBatch,
+    checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,solveBatch:solveBatch,
     fixtureRequests:fixtureRequests,decision:decision,run:run});
 }));

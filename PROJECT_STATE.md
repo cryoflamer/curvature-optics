@@ -1003,15 +1003,24 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   button wiring, **not** real shader compilation or physical GPU correctness.
 - **Research only; NOT production authorized.** Real browser WGSL compilation,
   numerical parity (status, angle, target residual and first-ground evidence)
-  and 2x cold-stage speedup have NOT yet been measured. A finite scan does not
+  and 2x cold-stage speedup were measured in the user-run 2026-10-30 browser
+  report and FAILED (details in #140.12.1 below). A finite scan does not
   guarantee all roots or tangent contacts, and f32 may fail strict precision.
   Never assume success from mocked tests. CPU optical solver, synchronous
   scene field, Scene/Compare renderer and their backend selectors are unchanged.
-- Next: collect and inspect the user's exported #140.12 JSON. If numerical
-  or speed gates fail, diagnose explicitly; do not silently relax tolerance or
+- Next: isolate the observed #140.12 numerical failures using the #140.12.1
+  per-target / warm-pipeline diagnostics; do not silently relax tolerance or
   switch production based solely on WebGPU capability. Full async preparation
   and fallback only become relevant after independent stage qualification.
 - Detailed algorithm, limitations, gates and browser workflow:
   `docs/WEBGPU_INDEPENDENT_BATCH_SHOOTING_140_12.md`. The earlier
   `SCENE_PERFORMANCE_STOP / CLOSED / PARKED` verdict for the different
   #140.10 warm-start approach remains valid.
+
+## #140.12.1 — independent GPU shooting parity and warmed-pipeline diagnostic
+
+- A user-run **real browser** #140.12 report (`curvature-webgpu-optics-140.12-independent-shooting.json`, 2026-10-30, Intel Gen-12LP) showed **`BATCH_NUMERICAL_STOP`**, 64 targets each for Flat/Globe. CPU times 34.7/56.8 ms; GPU cold 867.5/71.3 ms; 54/53 angular mismatches (107/128), 4/3 status mismatches and 4/6 ground-event mismatches; 3 unresolved targets in each scene. Flat setup alone 826.5 ms. **No production approval; this replaces the earlier "not yet measured" status of #140.12.**
+- New read-only diagnostic module `src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js` reports every target's CPU/GPU status, angle, residual, ground evidence and numerical discrepancy flags, reusing the #140.11 strict comparison gates. #140.12 WGSL now outputs selected sweep-bracket index/count, refinement-iteration count and final bracket bounds in previously unused buffer slots. **The root search, refinement math, event decisions, precision and tolerances are unchanged.**
+- Optional `solveBatch(..., ..., {warmRepeats:3})` reuses the same device, two pipelines and buffers for three further full workload runs, reporting first cold run, warm sample times, warm median and raw-output bitwise stability. CPU reference is measured separately. Warm timings include upload+dispatch+readback; these are diagnostic wall-clock numbers, **not full scene/FPS, kernel-only timings, or authorization to switch solvers**.
+- Sixth selector mode in the **existing** `tools/webgpu-optics.html` exports `curvature-webgpu-optics-140.12.1-diagnostics.json`. Historical #140.12 and older modes remain available. No new numbered HTML pages, no production changes.
+- Next: run #140.12.1 in a real WebGPU browser, inspect per-target differences before changing one algorithmic assumption (sampling density, f32 precision, event detector, etc.). WGSL runtime verification and performance require browser execution; mocked Node tests are not proof. Details: `docs/WEBGPU_SHOOTING_DIAGNOSTICS_140_12_1.md`.

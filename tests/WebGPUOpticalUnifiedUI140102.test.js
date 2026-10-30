@@ -8,7 +8,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../tools/webgpu-
 // Execute the actual inline browser handler script against a minimal DOM, instead of
 // merely looking for button labels. This catches the #140.10.1 selector regression.
 function mount(){
- const panels=Array.from({length:5},(_,i)=>({id:'panel-'+i,hidden:i!==4,children:new Map(),
+ const panels=Array.from({length:6},(_,i)=>({id:'panel-'+i,hidden:i!==4,children:new Map(),
    querySelector(selector){assert.match(selector,/^#[a-z]+$/);const id=selector.slice(1);
      if(!this.children.has(id))this.children.set(id,element(id));
      return this.children.get(id);}}));
@@ -26,6 +26,7 @@ function mount(){
  const ctx={document,fetch:async()=>({ok:true,json:async()=>({scenes:[]})}),
   CurvatureWebGPUSceneSpike14010:{run:async()=>({status:'unavailable',reason:'test runtime unavailable'})},
   CurvatureWebGPUBatchShooting1412:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test GPU'},scenes:[]})},
+  CurvatureWebGPUBatchDiagnostics14121:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test diagnostics'},scenes:[]})},
   CurvatureWebGPUOpticsBenchmark:{run:async()=>({status:'unavailable',reason:'test'})},
   CurvatureWebGPUOpticsMatrix1409:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test',stats:{passed:0,total:0,failed:0,unavailable:0,errors:0}},cases:[]})},
   CurvatureWebGPUOpticsPrecision14091:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test',stats:{passed:0,total:0,failed:0},repairedCases:0,baselineFailedCases:0,missingPairs:0,failedAnalyticalChecks:0},cases:[]})},
@@ -33,7 +34,7 @@ function mount(){
  vm.runInNewContext(script[1],ctx,{filename:'tools/webgpu-optics.html'});
  return {panels,choice};
 }
-test('140.10.2: all five unified panels actually register run and export handlers',()=>{
+test('140.10.2: all six unified panels actually register run and export handlers',()=>{
  const {panels,choice}=mount();
  for(const [i,p] of panels.entries()){
   assert.equal(typeof (i>=3?p.querySelector('#start'):p.querySelector('#'+['benchmark','matrix','precision'][i])).handlers[i>=3?'click':'submit'],'function');
@@ -60,4 +61,15 @@ test('140.12: fifth selector panel invokes GPU batch handler and retains histori
  assert.match(panels[4].querySelector('#status').textContent,/INCONCLUSIVE/);
  assert.equal(panels[4].querySelector('#start').disabled,false);
  assert.equal(panels[4].querySelector('#save').disabled,false);
+});
+
+test('140.12.1: sixth diagnostic panel invokes warm/per-target handler and export',async()=>{
+ const {panels,choice}=mount();
+ choice.value='5';choice.handlers.change();
+ assert.equal(panels.filter(p=>!p.hidden).length,1);
+ assert.equal(panels[5].hidden,false);
+ await panels[5].querySelector('#start').fire('click');
+ assert.match(panels[5].querySelector('#status').textContent,/INCONCLUSIVE/);
+ assert.equal(panels[5].querySelector('#start').disabled,false);
+ assert.equal(panels[5].querySelector('#save').disabled,false);
 });
