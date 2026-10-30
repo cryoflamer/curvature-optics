@@ -951,3 +951,11 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   and invoke the scene Run handler. Text/regex-only HTML tests are insufficient.
 - Preserve the canonical HTML file; do not create numbered `tools/` pages.
   No production backend or WGSL numerical changes were made in this fix.
+
+## #140.10.3 — WebGPU scene-shooting experiment closed (reopenable)
+
+- User-run #140.10 browser report (`curvature-webgpu-optics-140.10-scene-spike.json`, 2026-10-30): Flat and Globe, 64 real 12-tower mesh targets each; **0/128 GPU warm starts accepted**; no status/angle mismatches and no unresolved targets.
+- CPU-only shooting **27.3 ms**; GPU setup **26.7 ms**, upload/readback **13.6 ms**, CPU certification **27.6 ms**; cold hybrid **67.9 ms** (**0.402x**, ~2.49x slower). CPU shooting RK4 calls increased from **47,371** to **63,822**. Single cold run; Intel Gen-12LP, hardware acceleration unverified.
+- **Decision: `SCENE_PERFORMANCE_STOP` — CLOSED / PARKED.** Predeclared warm-start and 2x cold-stage gates were not met. Do not integrate this hybrid GPU shooting path into production or extend synthetic GPU tuning by default. Keep the CPU optical solver/ground events/renderer as the reference.
+- May be reopened later only for a materially different approach or new workload evidence, with a new explicit hypothesis, bounded scope and predeclared numerical/end-to-end speed gates. No claim that all GPU optical computation is intrinsically unhelpful.
+- Detailed measurement, limitations and reopening policy: `docs/WEBGPU_REAL_SCENE_SHOOTING_SPIKE_140_10.md`. Preserve the **single** `tools/webgpu-optics.html` rule from #140.10.1. No production changes in this closure patch.

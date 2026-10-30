@@ -79,3 +79,51 @@ are close/noisy, consider the evidence `INCONCLUSIVE` rather than promoting GPU.
 # #140.10.1 follow-up
 
 Use the canonical `tools/webgpu-optics.html` and choose #140.10. The shader identifier `target` was renamed because WGSL reserves it. Actual GPU compilation and shooting remain to be verified on the target browser. See `PROJECT_STATE.md` for the permanent single-page rule.
+
+## #140.10.3 — Recorded browser outcome and archived decision (2026-10-30)
+
+The user ran the consolidated diagnostic page on an Intel Gen-12LP adapter
+(`hardwareAcceleration: unverified`) and exported
+`curvature-webgpu-optics-140.10-scene-spike.json` (`status: finished`).
+The following figures are **observations from one cold browser run**, not a
+portable performance estimate:
+
+| Measurement | Flat (64 targets) | Globe (64 targets) |
+| --- | ---: | ---: |
+| CPU-only shooting | 13.3 ms | 14.0 ms |
+| GPU batch upload-to-readback | 7.9 ms | 5.7 ms |
+| CPU certification after GPU | 12.0 ms | 15.6 ms |
+| Accepted GPU warm starts | **0 / 64** | **0 / 64** |
+| CPU-only shooting RK4 calls | 23,920 | 23,451 |
+| Hybrid shooting RK4 calls | 32,145 | 31,677 |
+| Status / angle mismatches | 0 / 0 | 0 / 0 |
+| Unresolved targets | 0 | 0 |
+
+Aggregate timings: CPU shooting **27.3 ms**, GPU setup **26.7 ms**, GPU
+upload-to-readback **13.6 ms**, CPU certification **27.6 ms**, hybrid cold
+**67.9 ms**, cold speedup **0.402x** (hybrid approximately **2.49x slower**).
+Both scene comparisons were numerically consistent with the CPU baseline,
+but neither accepted a GPU-proposed warm start. The hybrid path performed
+**63,822** shooting RK4 calls versus **47,371** for CPU-only (~34.7% more).
+
+**Decision: `SCENE_PERFORMANCE_STOP` — CLOSED / PARKED.** The previously
+specified gate requires at least 2x cold-stage speedup and accepted warm starts
+in both scenes. Both conditions failed. Do not promote this GPU-assisted
+shooting strategy, enable it by default, or continue tuning its synthetic
+benchmarks merely to improve the score. Keep the existing CPU solver and
+renderer authoritative and unchanged. No further GPU patch is scheduled by
+this experiment.
+
+**Reopening policy:** The work is *parked*, not deleted or declared
+fundamentally impossible. Revisit only with a materially different design or
+new evidence (for example, a GPU-side solver that eliminates the redundant CPU
+shooting work, or a changed real-scene workload). Before reopening, state the
+hypothesis, define end-to-end performance and numerical acceptance gates, and
+obtain explicit authorization for a new bounded experiment. The isolated RK4
+speedups and Kahan precision improvement remain useful historical findings;
+they are not evidence that the tested hybrid architecture accelerates scenes.
+
+**Reproducibility:** Keep the #140.8–#140.10 diagnostics selectable from the
+single canonical `tools/webgpu-optics.html`; do not add versioned HTML pages.
+The browser JSON is an external measured artifact, not generated test data;
+this document records its decisive values without fabricating additional runs.
