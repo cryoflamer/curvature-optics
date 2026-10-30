@@ -59,14 +59,14 @@ function compareScenes(reference,experimental){
   comparedCoordinates,toleranceMetres:TOPOLOGY_EPS};
 }
 function run({towers=10,geometry='flat',atmosphere='exponential-occlusion',
-  repeats=3,radius=R}={}){
+  repeats=3,radius=R,physicalWorld=false}={}){
  if(!['exponential-occlusion','inverse-spherical'].includes(atmosphere))
   throw Error('Choose an engineered atmosphere');
  if(!['flat','globe'].includes(geometry))throw Error('Choose flat or globe geometry');
  if(!Number.isInteger(repeats)||repeats<1||repeats>20)throw Error('repeats must be 1..20');
  if(!Number.isFinite(radius)||radius<=0)throw Error('Invalid refractive comparison radius');
  const m=model(towers,geometry);
- const source=compose.composeOpticalMain(m,geometry==='globe');
+ const source=compose.composeOpticalMain(m,geometry==='globe',{physicalWorld});
  const rows=[];
  for(let i=0;i<repeats;i++){
   const order=i%2?['experimental','reference']:['reference','experimental'];
@@ -94,7 +94,7 @@ function run({towers=10,geometry='flat',atmosphere='exponential-occlusion',
  const sum=(key,mode)=>rows.reduce((v,r)=>v+r[mode][key],0);
  const allQualified=rows.every(r=>r.comparison.qualified);
  return {version:'140.4',scope:'offline CPU qualification; not a GPU benchmark',
-  atmosphere,geometry,towers,radius,comparisonRadiusMetres:radius,
+  atmosphere,geometry,towers,radius,physicalWorld,comparisonRadiusMetres:radius,
   node:process.version,numberOfPairs:repeats,qualifiedInSample:allQualified,
   maxCoordinateDeltaMetres:Math.max(...rows.map(r=>r.comparison.maxCoordinateDelta)),
   summary:{referenceMedianMs:median(rows.map(r=>r.reference.totalMs)),
@@ -127,7 +127,8 @@ if(require.main===module){
  try{
   const report=run({towers:integerFlag('towers',10),repeats:integerFlag('repeats',3),
    atmosphere:stringFlag('atmosphere','exponential-occlusion'),
-   geometry:stringFlag('geometry','flat'),radius:integerFlag('radius',R)});
+   geometry:stringFlag('geometry','flat'),radius:integerFlag('radius',R),
+   physicalWorld:process.argv.includes('--physical-world')});
   console.log(JSON.stringify(report,null,2));
   if(!report.qualifiedInSample)process.exitCode=1;
  }catch(error){console.error(error.stack);process.exitCode=1;}

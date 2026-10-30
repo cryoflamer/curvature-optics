@@ -1,3 +1,15 @@
+## Patch 140.5 — Expanded engineered-shooting numerical qualification (2026-10-30)
+
+Added offline near-horizon/near-eye target grids, reduced-step numerical
+cross-checks, active warm-start sequences and 2/10/85-tower paired scene
+comparisons for both modern metric and older nonmetric guides. A wider matrix
+revealed an unqualified short-range reference-solver failure (candidate solves)
+and mismatched old nonmetric radial guide interpolation at half comparison
+radius, while modern physical metric scenes matched. Results are reported
+**fail-closed**: the engineered optimization remains offline-only and cannot
+be automatically promoted; no production changes or GPU compute were made.
+See `docs/ENGINEERED_OPTICAL_QUALIFICATION_140_5.md`.
+
 ## Patch 140.4 — Opt-in engineered shooting qualification (2026-10-29)
 
 Diagnosed why #140.3 reports zero predictor/warm-start attempts for engineered
