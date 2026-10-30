@@ -2020,6 +2020,272 @@
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});
     }
   }
+  // #140.12.21: independent status-only GPU experiments. CPU f64 is used
+  // for reference AFTER all B variants; it neither selects nor fixes targets.
+  // This is intentionally a two-paint diagnostic, NOT an optimized frame path.
+  async function runGpuStatusQualification141221(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(!spec||spec.atmosphere!=='standard'){
+      probeStatus('Status qualification supports standard atmosphere only.');return;
+    }
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411;
+    if(!gpu||!contract||!root.navigator||!root.navigator.gpu||!compareAdapter||
+        !compareAdapter.gpuFirstGrid||!compareAdapter.gpuFirstBatchRequests||
+        !compareAdapter.gpuFirstRayField||!compareAdapter.captureGpuRendererQueries||
+        !compareAdapter.selectIndeterminateRendererTargets||
+        !compareAdapter.gpuStatusQualificationField||!root.CurvatureIndependentComposition||
+        !root.CurvatureOpticalTowerSilhouette||!root.CurvatureSurfaceGeometry||
+        !state.compareGraphs.A||!state.compareGraphs.B){
+      probeStatus('GPU status qualification dependencies unavailable.');return;
+    }
+    var directToggle=probeUi('ModernGpuStatusDirectToggle'),
+      contactToggle=probeUi('ModernGpuContactQualificationToggle'),
+      useDirect=!!directToggle&&directToggle.checked,
+      useFine=!!contactToggle&&contactToggle.checked;
+    if(!useDirect&&!useFine){probeStatus('Select at least one GPU status experiment.');return;}
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuFirstRun','ModernGpuProbeRun','ModernGpuFrameRun',
+        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun',
+        'ModernGpuAdaptiveRun','ModernGpuNearGeometryRun','ModernGpuRendererVisibilityRun',
+        'ModernGpuStatusQualificationRun'],buttons=ids.map(probeUi),
+      targetBudget=128,roi={x:0.55,y:0.55,width:0.45,height:0.45};
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    if(directToggle)directToggle.disabled=true;
+    if(contactToggle)contactToggle.disabled=true;
+    var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    function snapshot(){
+      var canvas=state.compareGraphs.B.Canvas,copy=document.createElement('canvas');
+      copy.width=canvas.width;copy.height=canvas.height;
+      var ctx=copy.getContext&&copy.getContext('2d');
+      if(!ctx||!ctx.drawImage)throw Error('Status qualification Canvas snapshot unavailable');
+      ctx.drawImage(canvas,0,0);return copy;
+    }
+    try{
+      var deps={composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,
+        surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      probeStatus('GPU status experiment: preparing 4096 near-distance rays…');
+      session=await gpu.createSession(1024,null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      var start=profileNow(),grid=compareAdapter.gpuFirstGrid(state.comparePair.A,
+        4096,deps,{layout:'distance-focused'}),gridPrepared=profileNow(),responses=[];
+      for(var request of compareAdapter.gpuFirstBatchRequests(grid,1024)){
+        request.controls.step=500;gpu.checked(request);
+        var batch=await session.solve(request,{warmRepeats:0});
+        if(cancelled())return;
+        responses.push.apply(responses,batch.response.results);
+      }
+      var gridDone=profileNow(),base=compareAdapter.gpuFirstRayField(grid,
+        {results:responses},deps.surfaces),capture=compareAdapter.captureGpuRendererQueries(base,
+          {maximumDistance:6000,maximumHeight:20}),variants={},snapshots={};
+      function paint(key,field){
+        state.probeField=field;
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareLast.B=null;
+        var begun=profileNow();state.compareGraphs.B.Redraw();
+        if(!state.compareLast.B||!state.compareLast.B.fieldStats||
+            !state.compareLast.B.fieldStats.experimentalGpu)
+          throw Error('GPU status qualification field did not reach physical renderer');
+        variants[key]={paintMs:profileNow()-begun,
+          rendererCounts:{contours:state.compareLast.B.drawn,
+            fillTriangles:state.compareLast.B.fillTriangles,
+            unresolved:state.compareLast.B.unresolved},
+          fieldStats:state.compareLast.B.fieldStats.experimentalGpu};
+        snapshots[key]=snapshot();
+      }
+      paint('base4096',capture);
+      if(cancelled())return;
+      var rendererCapture=capture.audit(),selected=
+        compareAdapter.selectIndeterminateRendererTargets(capture,targetBudget);
+      if(!selected.length)throw Error('No indeterminate renderer targets within 6 km / 20 m');
+      var metric=deps.surfaces.createFromCurvature(
+        grid.request.geometry==='globe'?1/grid.request.radius:0),
+        targets=selected.map(function(row){return metric.surfacePoint2(row.d,row.h);}),
+        directRequest=Object.assign({},grid.request,{controls:Object.assign({},
+          grid.request.controls,{step:500}),targets:targets});
+      gpu.checked(directRequest);
+      probeStatus('GPU status experiment: '+selected.length+' uncertain targets · direct GPU 500 m…');
+      var directStart=profileNow(),directBatch=await session.solve(directRequest,{warmRepeats:0}),
+        directMs=profileNow()-directStart;
+      if(cancelled())return;
+      var fineResults=[],fineMs=0,fineBatchTimes=[],fineRequest=null,
+        fineRows=[];
+      if(useFine){
+        fineRows=selected.filter(function(row,i){
+          return directBatch.response.results[i].status==='indeterminate';
+        });
+        if(fineRows.length){
+          fineRequest=Object.assign({},directRequest,{controls:Object.assign({},
+            directRequest.controls,{step:50}),targets:fineRows.map(function(row){
+              return metric.surfacePoint2(row.d,row.h);
+            })});
+          gpu.checked(fineRequest);
+          probeStatus('GPU contact qualification: '+fineRows.length+' still-uncertain rays · 50 m RK4…');
+          var fineStart=profileNow();
+          var fineBatch=await session.solve(fineRequest,{warmRepeats:0});
+          fineMs=profileNow()-fineStart;
+          fineBatchTimes.push(fineBatch.timing.gpuUploadToReadbackMs);
+          fineResults=fineRows.map(function(row,i){return {sample:row,
+            result:fineBatch.response.results[i]};});
+        }
+      }
+      if(cancelled())return;
+      var audit={direct500:{visible:0,blocked:0,indeterminate:0,solver_failed:0},
+        fine50:{visible:0,blocked:0,indeterminate:0,solver_failed:0},
+        groundContacts500:{crossing:0,grazing:0,none:0},
+        groundContacts50:{crossing:0,grazing:0,none:0},
+        directIndeterminateToFineVisible:0,directIndeterminateToFineBlocked:0};
+      function tally(result,field,contacts){
+        audit[field][result.status]++;
+        var event=result.ground&&result.ground.event;
+        audit[contacts][event?event.contact:'none']++;
+      }
+      directBatch.response.results.forEach(function(item){tally(item,'direct500','groundContacts500');});
+      fineResults.forEach(function(item){
+        tally(item.result,'fine50','groundContacts50');
+        if(item.result.status==='visible')audit.directIndeterminateToFineVisible++;
+        if(item.result.status==='blocked')audit.directIndeterminateToFineBlocked++;
+      });
+      var combinations=[['directOnly',true,false],['fineOnly',false,true],
+        ['combined',true,true]].filter(function(row){
+          return (row[1]&&useDirect&&!row[2])||
+            (row[2]&&useFine&&!row[1])||
+            (row[1]&&row[2]&&useDirect&&useFine);
+        }),fields={};
+      combinations.forEach(function(row){
+        var field=compareAdapter.gpuStatusQualificationField(base,selected,
+          directBatch.response,{useDirect:row[1],useFine:row[2],
+            fineResults:fineResults,surfaces:deps.surfaces});
+        fields[row[0]]=field;
+        probeStatus('GPU status experiment: painting '+row[0]+'…');
+        paint(row[0],field);
+        variants[row[0]].qualification=field.qualificationAudit();
+      });
+      if(cancelled())return;
+      // Independent f64 samples are also acquired only after ALL GPU B
+      // variants have been selected and painted. They cannot guide repair.
+      var cpuTargetRequest=Object.assign({},directRequest,{controls:Object.assign({},
+        directRequest.controls,{step:Math.max(20,Math.min(2000,
+          grid.request.radius/3000)),targetTolerance:1e-6})});
+      var cpuTargetStart=profileNow(),cpuTargetBatch=await contract.solveCpuBatch(cpuTargetRequest),
+        cpuTargetsMs=profileNow()-cpuTargetStart;
+      if(cancelled())return;
+      var cpuTargetAudit=compareAdapter.compareRendererVisibility(selected,
+        cpuTargetBatch,directBatch.response),fineByKey=new Map();
+      fineResults.forEach(function(item){fineByKey.set(item.sample.d+','+item.sample.h,item.result);});
+      var fineCpuMismatches=0,directCpuMismatches=0,fineResolvedCpuVisible=0;
+      var perTargetResults=selected.map(function(row,i){
+        var d=directBatch.response.results[i],c=cpuTargetBatch.results[i],
+          f=fineByKey.get(row.d+','+row.h)||null;
+        if(c.status!==d.status)directCpuMismatches++;
+        if(f&&f.status!==c.status)fineCpuMismatches++;
+        if(f&&c.status==='visible'&&d.status==='indeterminate'&&f.status==='visible')
+          fineResolvedCpuVisible++;
+        function contact(result){
+          var event=result&&result.ground&&result.ground.event;
+          return {status:result?result.status:null,
+            contact:event?event.contact:null,
+            hitGround:result&&result.ground?result.ground.hitGround:null,
+            contactDistanceBeforeEndMetres:event&&Number.isFinite(result.pathLength)?
+              result.pathLength-event.pathLength:null,
+            residualMetres:result&&Number.isFinite(result.residual)?result.residual:null};
+        }
+        return {d:row.d,h:row.h,gridStatus:row.gridStatus,
+          cpuStatus:c.status,direct500:contact(d),fine50:contact(f)};
+      });
+      // Reference rendering is deliberately last: no CPU value can influence
+      // target selection, status upgrades, or the B frame variants above.
+      probeStatus('GPU status experiment: cold independent CPU f64 frame…');
+      state.probeForceColdA=true;
+      var cpuStart=profileNow();
+      try{state.compareGraphs.A.Redraw();}finally{state.probeForceColdA=false;}
+      var cpuMs=profileNow()-cpuStart;
+      if(cancelled()||!state.compareLast.A)throw Error('CPU reference missing');
+      Object.keys(variants).forEach(function(key){
+        variants[key].fullFrameDiff=compareAdapter.compareFramePixels(
+          state.compareGraphs.A.Canvas,snapshots[key]);
+        variants[key].lowerRightFrameDiff=compareAdapter.compareFramePixels(
+          state.compareGraphs.A.Canvas,snapshots[key],roi);
+        if(key!=='base4096'){
+          variants[key].changedFromBase=compareAdapter.compareFramePixels(
+            snapshots.base4096,snapshots[key]);
+          variants[key].deltaSignificantPixels={
+            fullFrame:variants[key].fullFrameDiff.significantPixels-
+              variants.base4096.fullFrameDiff.significantPixels,
+            lowerRight:variants[key].lowerRightFrameDiff.significantPixels-
+              variants.base4096.lowerRightFrameDiff.significantPixels};
+        }
+      });
+      // Keep the combined variant visible when both switches were selected.
+      var shown=useDirect&&useFine?'combined':useDirect?'directOnly':'fineOnly';
+      state.probeField=fields[shown];
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareGraphs.B.Redraw();
+      if(el('ModernCompareLabelB'))el('ModernCompareLabelB').textContent=
+        'GPU status-only '+shown+' (diagnostic, 4096 + '+selected.length+' rays)';
+      var measured=Object.keys(variants).every(function(key){
+        return variants[key].fullFrameDiff.status==='measured'&&
+          variants[key].lowerRightFrameDiff.status==='measured';
+      });
+      var gpuExperimentMs=profileNow()-start;
+      state.probeFrameLast={version:'140.12.21',
+        kind:'Independent GPU grid-status repair and finer-step contact qualification',
+        geometry:grid.request.geometry,atmosphere:'standard',gpuAlgorithm:'predictor',
+        baseGridRays:4096,directTargetBudget:targetBudget,directTargets:selected.length,
+        fineTargets:fineRows.length,originalRK4StepMetres:500,
+        fineContactRK4StepMetres:50,
+        toggles:{useDirectStatus:useDirect,useFineContact:useFine},
+        timings:{gpuSetupMs:session.setupMs,gpuExperimentWallMs:gpuExperimentMs,
+          gridPrepareMs:gridPrepared-start,
+          gridGpuWallMs:gridDone-gridPrepared,firstPaintMs:variants.base4096.paintMs,
+          directGpuWallMs:directMs,fineGpuWallMs:fineMs,
+          cpuF64ReferenceMs:cpuMs},
+        fineGpuReadbackTimesMs:fineBatchTimes,
+        cpuTargetAudit:cpuTargetAudit.summary,cpuF64TargetStepMetres:cpuTargetRequest.controls.step,
+        cpuTargetWallMs:cpuTargetsMs,
+        cpuStatusComparisons:{directVsCpuMismatches:directCpuMismatches,
+          fineVsCpuMismatches:fineCpuMismatches,
+          fineResolvedCpuVisible:fineResolvedCpuVisible},
+        perTargetResults:perTargetResults,
+        rendererCapture:rendererCapture,contactAudit:audit,
+        variants:variants,displayVariant:shown,
+        targetSelection:'Actual GPU B renderer indeterminate queries only; <=6km, <=20m',
+        statusOnlyNoAngleReplacement:true,originalNonindeterminateGridStatusesPreserved:true,
+        noCpuOracleTargetSelection:true,cpuShootingFallback:false,
+        cpuAnswersNotInjectedIntoGPU:true,productionAuthorized:false,
+        visualEquivalenceProven:false,
+        verdict:measured?'DIAGNOSTIC_VISUAL_REVIEW_REQUIRED':'PIXEL_READBACK_UNAVAILABLE'};
+      var metricLine=probeUi('ModernGpuFrameMetrics'),fmt=function(v){return Number.isFinite(v)?v.toFixed(1):'n/a';};
+      if(metricLine)metricLine.textContent='GPU status experiments: '+selected.length+
+        ' uncertain targets · fine contact '+fineRows.length+
+        ' · direct 500m '+fmt(directMs)+'ms / fine 50m '+fmt(fineMs)+
+        'ms · lower-right significant pixels: '+Object.keys(variants).map(function(key){
+          return key+' '+variants[key].lowerRightFrameDiff.significantPixels;
+        }).join(' · ')+' · CPU reference '+fmt(cpuMs)+'ms';
+      probeStatus('GPU status qualification measured · '+Object.keys(variants).join(', ')+
+        ' · both switches independent · no CPU fallback · Export JSON');
+    }catch(error){
+      if(generation===state.probeGeneration){
+        state.probeField=null;state.probeFrameLast=null;
+        probeStatus('GPU status qualification unavailable: '+String(error.message||error));
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareGraphs.B.Redraw();
+      }
+    }finally{
+      state.probeForceColdA=false;
+      if(session)session.close();
+      state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});
+      if(directToggle)directToggle.disabled=false;
+      if(contactToggle)contactToggle.disabled=false;
+    }
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2066,13 +2332,15 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var qualificationButton=probeUi('ModernGpuStatusQualificationRun');
+    if(qualificationButton)qualificationButton.addEventListener('click',runGpuStatusQualification141221);
     var visibilityButton=probeUi('ModernGpuRendererVisibilityRun');
     if(visibilityButton)visibilityButton.addEventListener('click',runCompareRendererVisibility141220);
     var nearGeometryButton=probeUi('ModernGpuNearGeometryRun');
     if(nearGeometryButton)nearGeometryButton.addEventListener('click',runCompareNearGeometry141219);
     ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
       'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
-      'ModernGpuRendererVisibilityRun'].forEach(function(id){
+      'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2091,7 +2359,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.20'?
+      link.href=url;link.download=exportVersion==='140.12.21'?
+        'curvature-compare-140.12.21-gpu-status-qualification.json':
+        exportVersion==='140.12.20'?
         'curvature-compare-140.12.20-renderer-visibility.json':
         exportVersion==='140.12.19'?
         'curvature-compare-140.12.19-near-geometric-projection.json':

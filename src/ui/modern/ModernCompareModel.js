@@ -521,9 +521,135 @@
       sample:function(d,h){return record(d,h,'sample');},
       exact:function(d,h){return record(d,h,'exact');},
       stats:function(){return field.stats();},
+      candidates:function(){return Array.from(unique.values()).map(function(row){return Object.assign({},row);});},
       audit:function(){return {rendererCalls:calls,qualifyingCalls:qualifyingCalls,
         uniqueQualifiedTargets:unique.size,maximumDistanceMetres:maximumDistance,
         maximumHeightMetres:maximumHeight};},select:select};
+  }
+  // #140.12.21: select the actually indeterminate renderer queries, not
+  // CPU-identified errors. Keep each distance bin represented. The output
+  // never changes capture results and is deterministic for the same frame.
+  function selectIndeterminateRendererTargets(capture,limit){
+    if(!capture||typeof capture.select!=='function'||typeof capture.audit!=='function')
+      throw TypeError('Invalid GPU renderer-query capture');
+    if(!Number.isInteger(limit)||limit<1||limit>1024)
+      throw RangeError('Invalid indeterminate target budget');
+    // We need the complete captured set, not the pre-stratified first 128.
+    if(typeof capture.candidates!=='function')
+      throw TypeError('Renderer-query capture lacks status candidates');
+    var all=capture.candidates().filter(function(row){return row.gridStatus==='indeterminate';});
+    var groups=Array.from({length:4},function(){return [];});
+    all.forEach(function(row){groups[Math.min(3,Math.floor(row.d/6000*4))].push(row);});
+    groups.forEach(function(group,bin){
+      group.sort(function(a,b){return a.h-b.h||a.d-b.d;});
+      // Split the first share of each bin between genuinely near-ground
+      // points and heights sampled through the full 0–20 m envelope.
+      // Otherwise sorting by height alone can consume all 128 rays on
+      // effectively zero-height feet without auditing higher footing edges.
+      var quota=Math.min(group.length,Math.ceil(limit/4)),chosen=[],used=new Set();
+      for(var j=0;j<quota;j++){
+        var index=j%2===0?Math.floor(j/2):
+          Math.min(group.length-1,Math.floor((Math.floor(j/2)+0.5)*
+            group.length/Math.max(1,Math.floor(quota/2))));
+        if(!used.has(index)){chosen.push(group[index]);used.add(index);}
+      }
+      for(var k=0;chosen.length<quota&&k<group.length;k++)
+        if(!used.has(k)){chosen.push(group[k]);used.add(k);}
+      groups[bin]=chosen.concat(group.filter(function(_,index){return !used.has(index);}));
+    });
+    var selected=[],pointers=[0,0,0,0],max=Math.min(limit,all.length);
+    while(selected.length<max){
+      var moved=false;
+      for(var bin=0;bin<4 && selected.length<max;bin++){
+        if(pointers[bin]<groups[bin].length){
+          selected.push(Object.assign({},groups[bin][pointers[bin]++]));moved=true;
+        }
+      }
+      if(!moved)break;
+    }
+    return selected;
+  }
+  // Diagnostic status-only override on exact renderer requests. A previously
+  // visible or blocked GRID result is never changed; nor is the grid ANGLE.
+  // Direct GPU and fine-step GPU statuses must be independently certified as
+  // visible/blocked. Indeterminate/failed remain indeterminate; no CPU oracle.
+  function gpuStatusQualificationField(field,samples,direct,options){
+    options=options||{};
+    if(!field||!field.fullCoverageGrid||!field.request||
+        typeof field.sample!=='function'||typeof field.exact!=='function'||
+        typeof field.stats!=='function'||!Array.isArray(samples)||
+        !direct||!Array.isArray(direct.results)||direct.results.length!==samples.length)
+      throw TypeError('Invalid GPU status qualification input');
+    var useDirect=options.useDirect===true,useFine=options.useFine===true,
+      fine=options.fineResults||[],surface=options.surfaces;
+    if(!surface||typeof surface.createFromCurvature!=='function')
+      throw TypeError('GPU status qualification requires surface geometry');
+    if(!Array.isArray(fine))throw TypeError('Invalid fine GPU qualification results');
+    var metric=surface.createFromCurvature(field.request.geometry==='globe'?1/field.request.radius:0),
+      lookup=new Map(),fineLookup=new Map(),counts={directUpgrades:0,fineUpgrades:0,
+        eligibleRendererRequests:0,uniqueUpgradedTargets:0,unconfirmedTargets:0};
+    function validStatus(value){return value==='visible'||value==='blocked';}
+    function matchTarget(row,result){
+      var target=metric.surfacePoint2(row.d,row.h);
+      if(!result||!Array.isArray(result.target)||
+          result.target[0]!==target[0]||result.target[1]!==target[1])
+        throw RangeError('GPU status qualification target/order mismatch');
+    }
+    samples.forEach(function(row,i){
+      if(!row||!Number.isFinite(row.d)||!Number.isFinite(row.h)||
+          !(row.d>0)||row.h<0||row.gridStatus!=='indeterminate')
+        throw RangeError('GPU status qualification requires indeterminate renderer targets');
+      matchTarget(row,direct.results[i]);
+      var key=row.d+','+row.h;
+      if(lookup.has(key))throw RangeError('Duplicate GPU status qualification target');
+      lookup.set(key,direct.results[i]);
+    });
+    fine.forEach(function(item){
+      if(!item||!item.sample||!item.result)throw TypeError('Invalid fine GPU qualification sample');
+      matchTarget(item.sample,item.result);
+      var key=item.sample.d+','+item.sample.h;
+      if(!lookup.has(key)||fineLookup.has(key)||lookup.get(key).status!=='indeterminate')
+        throw RangeError('Fine GPU status qualification target not uncertain in direct pass');
+      fineLookup.set(key,item.result);
+    });
+    var previously=new Map();
+    function read(d,h,method){
+      var original=field[method](d,h),key=d+','+h;
+      if(original.status!=='indeterminate'||!lookup.has(key))return original;
+      counts.eligibleRendererRequests++;
+      var directResult=lookup.get(key),fineResult=fineLookup.get(key),
+        chosen=useDirect&&validStatus(directResult.status)?directResult:null,
+        source=chosen?'direct-500m':null;
+      if(!chosen&&useFine&&directResult.status==='indeterminate'&&fineResult&&
+          validStatus(fineResult.status)){
+        chosen=fineResult;source='contact-50m';
+      }
+      if(!chosen||!Number.isFinite(chosen.angle)){
+        if(!previously.has(key)){counts.unconfirmedTargets++;previously.set(key,'unconfirmed');}
+        return original;
+      }
+      if(!previously.has(key)){
+        counts.uniqueUpgradedTargets++;
+        if(source==='direct-500m')counts.directUpgrades++;
+        else counts.fineUpgrades++;
+        previously.set(key,source);
+      }
+      return Object.freeze(Object.assign({},original,{status:chosen.status,
+        method:'gpu-status-only-'+source,
+        reason:'Diagnostic independently solved GPU visibility; original grid angle retained'}));
+    }
+    return {request:field.request,fullCoverageGrid:true,
+      sample:function(d,h){return read(d,h,'sample');},
+      exact:function(d,h){return read(d,h,'exact');},
+      stats:function(){
+        var s=field.stats();
+        return Object.assign({},s,{experimentalGpu:Object.assign({},s.experimentalGpu,
+          {statusQualification:Object.assign({useDirect:useDirect,useFine:useFine,
+            qualifiedTargets:samples.length,fineTargets:fineLookup.size,
+            cpuFallbackRequests:0},counts)})});
+      },
+      qualificationAudit:function(){return Object.assign({useDirect:useDirect,useFine:useFine,
+        qualifiedTargets:samples.length,fineTargets:fineLookup.size},counts);}};
   }
   // Compare CPU f64, *interpolated* GPU, and *direct* GPU shooting for exactly
   // the same renderer-requested coordinates. Each comparison is descriptive:
@@ -825,6 +951,8 @@
     nearGeometricField:nearGeometricField,
     captureGpuRendererQueries:captureGpuRendererQueries,
     compareRendererVisibility:compareRendererVisibility,
+    selectIndeterminateRendererTargets:selectIndeterminateRendererTargets,
+    gpuStatusQualificationField:gpuStatusQualificationField,
     gpuFirstBatchRequests:gpuFirstBatchRequests,
     cpuReplayField:cpuReplayField,frameControlCounts:frameControlCounts,
     compareFramePixels:compareFramePixels,frameDifferenceTiles:frameDifferenceTiles});

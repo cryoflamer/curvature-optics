@@ -1470,3 +1470,42 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   The result distinguishes a likely interpolation/status decision problem
   from disagreement in direct GPU ray shooting. It does **not** certify
   silhouette equivalence, production performance, or a GPU-first release.
+
+## #140.12.21 — GPU-only visibility status and fine-step contact-qualification controls
+
+- Adds a Compare-only **Compare GPU status qualification · lower towers**
+  diagnostic with two independent checkboxes: **Direct GPU status-only** and
+  **50 m GPU contact qualification**. CPU f64 remains the unchanged reference
+  frame and is calculated *after* all GPU variants.
+- The initial GPU B frame uses the existing near-distance **4096-ray** grid,
+  predictor RK4 **500 m**; it transparently captures actual renderer optical
+  queries in the **0–6 km, 0–20 m** envelope. A deterministic, distance-
+  stratified selector chooses up to **128 queries actually classified
+  `indeterminate` by the grid**, never CPU-discovered pixels or CPU ray
+  statuses. Original 4096-ray scene and B renderer are otherwise untouched.
+- Direct GPU shooting at **500 m** can replace a grid query's *status only*
+  when its own answer is `visible` or `blocked`. Already `visible` or `blocked`
+  grid decisions are never changed; the grid **angle is never overwritten**.
+  Unresolved direct results never imply visibility. The second independent
+  control re-shoots **only still-indeterminate direct targets** with a **50 m**
+  GPU RK4 step and optionally uses a certified `visible`/`blocked` result.
+  A `solver_failed` or `indeterminate` fine result leaves the target
+  unchanged. No heuristic contact override, assumed endpoint visibility,
+  or CPU fallback is allowed.
+- When both controls are enabled, the diagnostic paints base / direct-only /
+  fine-only / combined frames. Each variant reports renderer counts, actual
+  unique status upgrades, full-frame and **lower-right** significant pixels
+  against a cold CPU f64 reference, and changed pixels versus the original
+  GPU frame. The JSON also includes direct versus fine-step statuses,
+  crossing/grazing contact counts, extra GPU target counts, and separate
+  timings for initial grid, first discovery paint, 500 m direct batch,
+  optional 50 m contact batch, subsequent paint(s), and CPU reference.
+  An independent CPU f64 target audit runs only after every GPU B variant
+  is finished and records per-target status and pre-endpoint contact distance
+  for both 500 m and 50 m GPU calculations. No CPU result feeds back into B.
+  This is deliberately **not** an optimized single-pass implementation:
+  discovering the renderer's queries still requires the initial paint.
+- Export: `curvature-compare-140.12.21-gpu-status-qualification.json`.
+  The experiment determines whether GPU status-only correction or sensitivity
+  of first-contact detection to RK4 step changes the missing tower-base
+  geometry. Pixel equivalence, production approval and speedup are not claimed.
