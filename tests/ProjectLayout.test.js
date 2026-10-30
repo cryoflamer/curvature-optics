@@ -12,7 +12,7 @@ test('every local HTML script and stylesheet resolves from project root', () => 
   assert.ok(scripts.length > 20);
   for (const asset of [...scripts, ...styles]) {
     assert.ok(!asset.startsWith('../'), `asset escapes project root: ${asset}`);
-    assert.ok(fs.statSync(path.join(root, asset)).isFile(), `missing browser asset: ${asset}`);
+    assert.ok(fs.statSync(path.join(root, asset.split('?')[0])).isFile(), `missing browser asset: ${asset}`);
   }
   assert.equal(new Set(scripts).size, scripts.length, 'duplicate script include');
 });

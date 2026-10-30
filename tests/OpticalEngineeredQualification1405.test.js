@@ -25,19 +25,19 @@ test('140.5: ray gate rejects false successes, branch differences and ground eve
  assert.equal(qualification.compareRays(fake(),badlyIntegrated).qualified,false);
 });
 
-test('140.5: near-eye disagreement is surfaced rather than certified as branch equivalence',()=>{
+test('140.7: near-eye reference is recovered and still checked against predictor',()=>{
  const o={geometry:'flat',radius:R,observerHeight:15,
   atmosphere:'exponential-occlusion',profileOptions:{occlusionRadius:R/2},
   target:[0.3,0],step:1000};
  const a=projection.solve(o),b=projection.solve({...o,shootingPredictor:true});
- assert.equal(a.status,'solver_failed');
+ assert.equal(a.status,'visible');
  assert.equal(b.status,'visible');
- assert.equal(qualification.compareRays(a,b).qualified,false);
- // The error is not to be called a branch mismatch: baseline is unresolved.
+ assert.equal(qualification.compareRays(a,b).qualified,true);
+ assert.ok(Math.abs(a.residual)<1e-10);
  assert.ok(b.angle!==null&&Math.abs(b.residual)<1e-10);
 });
 
-test('140.5: full-size physical metric scenes and old nonmetric guides are distinguished',()=>{
+test('140.7: physical metric and legacy guide scenes now agree on the fixed bracket',()=>{
  const cfg={atmosphere:'exponential-occlusion',geometry:'flat',radius:R/2,
   towers:2,repeats:1};
  const modern=benchmark.run({...cfg,physicalWorld:true});
@@ -45,21 +45,21 @@ test('140.5: full-size physical metric scenes and old nonmetric guides are disti
  assert.equal(modern.physicalWorld,true);
  assert.equal(modern.qualifiedInSample,true,JSON.stringify(modern.rows[0].comparison));
  assert.equal(older.physicalWorld,false);
- assert.equal(older.qualifiedInSample,false);
- assert.ok(older.maxCoordinateDeltaMetres>100);
+ assert.equal(older.qualifiedInSample,true);
+ assert.ok(older.maxCoordinateDeltaMetres<=older.rows[0].comparison.toleranceMetres);
 });
 
-test('140.5: complete smoke qualification fails closed, while still exercising predictor and warm start',()=>{
+test('140.7: repaired short rays pass the smoke qualification without default promotion',()=>{
  const r=qualification.run({suite:'smoke'});
  assert.equal(r.grid.byKind['horizon-scale'].count,128);
  assert.equal(r.grid.byKind['horizon-scale'].unqualified,0);
- assert.ok(r.grid.byKind['near-observer'].unqualified>0);
+ assert.equal(r.grid.byKind['near-observer'].unqualified,0);
  assert.equal(r.warmStarts.unqualified,0);
  assert.ok(r.warmStarts.attempts>0);
  assert.ok(r.warmStarts.accepted>0);
  assert.equal(r.scenes.count,8);
  assert.equal(r.scenes.unqualified,0);
- assert.equal(r.qualifiedInSample,false);
+ assert.equal(r.qualifiedInSample,true);
  assert.equal(r.defaultPromotionAllowed,false);
 });
 

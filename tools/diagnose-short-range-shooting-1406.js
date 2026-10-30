@@ -74,6 +74,10 @@ function solveCase(c,step=2000,fineStep=500,ultraStep=125){
  const ultra=admissible?projection.solve({...o,step:ultraStep,initialSpan:limitedSpan}):null;
  const oracle=c.geometry==='flat'?independentFlatOracle(c):null;
  const violations=[];
+ // #140.7: the production bracket now stays inside its angular domain.
+ // Keep the 16 historical overshoot cases visible as a regression signal,
+ // rather than expecting the fixed production solver to fail again.
+ const formerBracketOvershootRisk=admissible&&angularMargin<BASE_SPAN;
  if(!admissible)violations.push('initial direction is outside forward-x domain');
  if(admissible){
   for(const [name,value] of [['bounded bracket',bracket],['predictor',experimental],
@@ -98,6 +102,9 @@ function solveCase(c,step=2000,fineStep=500,ultraStep=125){
     eye:c.eye,distance:c.distance,height:c.height},
   cause:original.status==='solver_failed'&&/bracket left the forward-x integration domain/.test(original.reason||'')&&
    angularMargin<BASE_SPAN?'initial bracket probe crosses forward-x angle bound':null,
+  formerBracketOvershootRisk:formerBracketOvershootRisk,
+  repairedHistoricalOvershoot:formerBracketOvershootRisk&&
+   ['visible','blocked'].includes(original.status)&&violations.length===0,
   angularMarginRadians:angularMargin,originalInitialSpanRadians:BASE_SPAN,
   boundedInitialSpanRadians:admissible?limitedSpan:null,
   originalStatus:original.status,originalReason:original.reason||null,
@@ -124,17 +131,19 @@ function run({step=2000,fineStep=500,ultraStep=125}={}){
   caseCount:rows.length,baselineFailures:unresolvedOriginal.length,
   recoveredBaselineFailures:rows.filter(r=>r.recoveredOriginalFailure).length,
   unexplainedBaselineFailures:unexplained.length,
+  formerBracketOvershootRisks:rows.filter(r=>r.formerBracketOvershootRisk).length,
+  repairedHistoricalOvershoots:rows.filter(r=>r.repairedHistoricalOvershoot).length,
   independentFlatOracleChecks:rows.filter(r=>r.independentFlatOracle).length,
   locallyQualified:issues.length===0&&unexplained.length===0,
   globalBranchCertified:false,defaultPromotionAllowed:false,
   decision:'No default promotion: local monotone-flat invariant and RK4 step convergence do not prove global branch completeness',
   issues,rows,limitations:[
    'The forward-x shooting domain excludes near-vertical launch angles beyond its explicit threshold',
-   'Reducing initialSpan only diagnoses an oversized first bracket step; it does not certify a universal bracket search',
+   'The 140.7 production bracket avoids known oversized probes; this does not certify a universal bracket search',
    'The flat Snell-invariant oracle covers monotone downward rays only; it is not a multipath oracle',
    'Globe cases have three-step RK4 convergence checks but no independent analytic branch oracle',
    'Visible or blocked status does not prove the absence of other physical rays',
-   'Neither the built-in shooting algorithm nor Scene/Compare selection has been changed']};
+   '140.7 changes only production bracket boundary handling; Scene/Compare predictor defaults remain unchanged']};
 }
 function flag(name,fallback){
  const value=process.argv.find(v=>v.startsWith('--'+name+'='));

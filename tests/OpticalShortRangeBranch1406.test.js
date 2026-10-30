@@ -6,26 +6,27 @@ const tracer=require('../src/optics/OpticalRayTracer');
 const diag=require('../tools/diagnose-short-range-shooting-1406');
 const R=6371000;
 
-test('140.6: short-range baseline failure is a bracket-domain overshoot, not an absent ray',()=>{
+test('140.7: short-range historical bracket overshoot is repaired in the production solver',()=>{
  const c={atmosphere:'exponential-occlusion',geometry:'flat',radius:R/2,
   eye:15,distance:0.1,height:0};
  const v=diag.solveCase(c);
- assert.equal(v.originalStatus,'solver_failed');
- assert.match(v.originalReason,/bracket left the forward-x integration domain/);
- assert.equal(v.cause,'initial bracket probe crosses forward-x angle bound');
+ assert.equal(v.originalStatus,'visible');
+ assert.equal(v.formerBracketOvershootRisk,true);
+ assert.equal(v.repairedHistoricalOvershoot,true);
  assert.equal(v.boundedStatus,'visible');
  assert.equal(v.experimentalStatus,'visible');
  assert.equal(v.fineStatus,'visible');
  assert.equal(v.ultraStatus,'visible');
- assert.equal(v.recoveredOriginalFailure,true);
+ assert.equal(v.recoveredOriginalFailure,false);
  assert.ok(v.boundedInitialSpanRadians<v.angularMarginRadians);
  assert.ok(v.locallyQualified,JSON.stringify(v.violations));
  assert.ok(Math.abs(v.angles.bounded-v.angles.independentFlat)<2e-8);
- // No change to the default solver even after running the diagnostic.
+ // The production solver now returns the same monotone branch without opt-in.
  const production=projection.solve({geometry:'flat',observerHeight:15,
   atmosphere:'exponential-occlusion',profileOptions:{occlusionRadius:R/2},
   target:[0.1,0],step:2000});
- assert.equal(production.status,'solver_failed');
+ assert.equal(production.status,'visible');
+ assert.ok(Math.abs(production.angle-v.angles.independentFlat)<2e-8);
 });
 
 test('140.6: Snell invariant supplies an independent monotone flat branch for both profiles',()=>{
@@ -49,11 +50,13 @@ test('140.6: Snell invariant supplies an independent monotone flat branch for bo
  assert.ok(Math.abs(numeric-exact)<1e-6,`${numeric} vs ${exact}`);
 });
 
-test('140.6: all 16 reference near-eye misses are recovered without production promotion',()=>{
+test('140.7: all 16 former bracket misses are solved without predictor promotion',()=>{
  const report=diag.run();
  assert.equal(report.caseCount,56);
- assert.equal(report.baselineFailures,16);
- assert.equal(report.recoveredBaselineFailures,16);
+ assert.equal(report.baselineFailures,0);
+ assert.equal(report.recoveredBaselineFailures,0);
+ assert.equal(report.formerBracketOvershootRisks,16);
+ assert.equal(report.repairedHistoricalOvershoots,16);
  assert.equal(report.unexplainedBaselineFailures,0);
  assert.equal(report.independentFlatOracleChecks,28);
  assert.equal(report.issues.length,0,JSON.stringify(report.issues));

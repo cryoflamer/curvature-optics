@@ -7,7 +7,9 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'latin1');
 const html = read('CurvatureApp.html');
-const scripts = [...html.matchAll(/<script\s+src="([^"]+)"\s*><\/script>/g)].map(m => m[1]);
+const scriptSources = [...html.matchAll(/<script\s+src="([^"]+)"\s*><\/script>/g)].map(m => m[1]);
+// Browser cache-busting query strings are not filesystem path components.
+const scripts = scriptSources.map(source => source.split('?')[0]);
 
 test('HTML entrypoint contains no inline JavaScript, script attributes, or page CSS blocks', () => {
   assert.doesNotMatch(html, /<script\b(?![^>]*\bsrc=)/i);
@@ -53,7 +55,7 @@ test('parser-time panel creation remains synchronous at its original DOM locatio
   assert.ok(scripts.indexOf('src/animation/CurvatureDemos.js') > scripts.indexOf('src/animation/CurvatureAnimations.js'));
   assert.ok(html.indexOf('id="SaveRestorePanel"') < html.indexOf('src/app/CurvatureStatePersistence.js'));
   assert.ok(html.indexOf('id="TowerComparisonMode"') < html.indexOf('src/ui/OpticsOverlayControls.js'));
-  for (const file of scripts) assert.doesNotMatch(html.match(new RegExp('<script src="' + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"[^>]*>'))[0], /\b(?:async|defer|type="module")/);
+  for (const file of scriptSources) assert.doesNotMatch(html.match(new RegExp('<script src="' + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"[^>]*>'))[0], /\b(?:async|defer|type="module")/);
 });
 
 test('all extracted classic scripts parse independently', () => {

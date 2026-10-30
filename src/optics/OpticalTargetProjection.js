@@ -173,6 +173,15 @@
     if (!vacuum && Math.abs(best.residual) > solveTolerance) {
       var atStart=best, span=initialSpan, lower, upper;
       var sign = atStart.residual > 0 ? -1 : 1;
+      // The forward-x solver excludes near-vertical launch angles. At a
+      // nearby target, the straight-ray direction can lie inside that domain
+      // while the usual 0.02 rad first bracket probe does not. Start with an
+      // interior probe instead of declaring that a valid ray is missing.
+      // This changes nothing for a bracket whose probes are already valid.
+      var limit=HALF_PI-0.001;
+      var available=sign<0?directionAngle+limit:limit-directionAngle;
+      if (!(available>0)) return failed('Shooting bracket left the forward-x integration domain');
+      if (span>=available) span=available/4;
       while (span <= maxSpan * (1 + 1e-12)) {
         var candidateAngle = directionAngle + sign * span;
         var candidate = shoot(candidateAngle);
@@ -183,7 +192,13 @@
         }
         if (!candidate) return failed('Shooting bracket left the forward-x integration domain');
         if (span === maxSpan) break;
-        span = Math.min(maxSpan,span * 2);
+        // Do not blindly double past the valid angular domain. An interior
+        // final probe can still bracket a short-range, steep descent. If no
+        // sign change exists there, fail closed rather than infer visibility.
+        var nextSpan=Math.min(maxSpan,span*2);
+        if (nextSpan>=available) nextSpan=Math.min(maxSpan,available*(1-1e-9));
+        if (!(nextSpan>span)) break;
+        span=nextSpan;
       }
       if (!lower) return failed('No sign-changing angular bracket was found');
       best = null;

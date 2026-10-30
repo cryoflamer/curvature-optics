@@ -1,3 +1,19 @@
+## Patch 140.7 — Forward-x shooting bracket boundary repair (2026-10-30)
+
+Fixed the production bracket-first shooter's near-vertical first probe: an
+oversized initial angular step is reduced only when it would leave the
+solver's forward-x domain, and later steps are capped inside that domain.
+Previously valid probes, RK4 integration, collision classification, and
+Scene/Compare predictor defaults are unchanged. The 16 historical near-eye
+failures are now resolved, independently cross-checked where the Flat
+monotone Snell invariant applies. Repeating the complete #140.5 matrix gave
+**1064/1064** ray cases, **3600/3600** warm-start sequence checks, and
+**72/72** full scene pairs, including formerly divergent nonmetric guides.
+These are finite-sample CPU qualifications, **not** proof of global ray-branch
+completeness or approval for default predictor promotion. See
+`docs/ENGINEERED_SHOOTING_BRACKET_REPAIR_140_7.md`. The two HTML entry points
+now version the changed optical script to avoid stale browser caches.
+
 ## Patch 140.6 — Short-range shooting bracket and branch diagnostics (2026-10-30)
 
 Diagnosed all 16 near-observer `solver_failed` baseline cases from #140.5 as
