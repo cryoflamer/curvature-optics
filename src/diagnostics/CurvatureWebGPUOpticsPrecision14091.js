@@ -16,7 +16,8 @@
   function evaluate(rows,expectedCount){
     if(!Array.isArray(rows)||!Number.isInteger(expectedCount)||expectedCount<1)
       throw Error('Invalid #140.9.1 results');
-    var seen=new Set(),evaluated=[],missing=0,analyticMissing=0,analyticFailures=0;
+    var seen=new Set(),evaluated=[],missing=0,analyticMissing=0,analyticFailures=0,
+      baselineAnalyticFailures=0;
     var baselineFailed=0,repaired=0;
     for(var i=0;i<rows.length;i++){
       var row=rows[i];
@@ -34,7 +35,10 @@
         for(var j=0;j<MODES.length;j++){
           var a=row[MODES[j]]&&row[MODES[j]].analyticVacuum;
           if(!a||!a.cpuVsAnalytic||!a.gpuVsAnalytic){analyticMissing++;continue;}
-          if(!a.cpuVsAnalytic.qualified||!a.gpuVsAnalytic.qualified)analyticFailures++;
+          if(!a.cpuVsAnalytic.qualified||!a.gpuVsAnalytic.qualified){
+            if(MODES[j]==='compensated')analyticFailures++;
+            else baselineAnalyticFailures++;
+          }
         }
       }
     }
@@ -58,7 +62,7 @@
     return {verdict:verdict,nextAction:nextAction,reasons:reasons,
       stats:gate.stats,baselineFailedCases:baselineFailed,repairedCases:repaired,
       missingPairs:missing,missingAnalyticalChecks:analyticMissing,
-      failedAnalyticalChecks:analyticFailures,minimumRepresentativeSpeedup:gate.minimumRepresentativeSpeedup,
+      failedAnalyticalChecks:analyticFailures,baselineFailedAnalyticalChecks:baselineAnalyticFailures,minimumRepresentativeSpeedup:gate.minimumRepresentativeSpeedup,
       representativeSpeedups:gate.representativeSpeedups,productionAuthorized:false,
       experimentsRemaining:0};
   }

@@ -924,3 +924,12 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   controls in the standalone benchmark. Added regression tests for both.
 - Production optical solver and renderer remain unchanged. Actual GPU shader
   compilation and performance still require a WebGPU-enabled browser run.
+
+
+## #140.10 — bounded real-scene GPU-assisted shooting spike
+
+- #140.9.1 analytical accounting now distinguishes obsolete naive Vacuum failures from compensated analytic failures (18/18 compensated gates passed in the user-provided measurement).
+- Added 64 actual production-composed mesh targets each for 12-tower Flat and Globe scenes; deterministic generator and committed fixture.
+- Added opt-in WebGPU compensated shooting-angle candidate kernel; unchanged production CPU `OpticalTargetProjection.solve` performs all target and ground-event certification via the existing warm-start API.
+- Added standalone browser spike and JSON report: cold GPU setup, upload/readback, CPU certification, statuses and angle comparison, explicit stage-only 2x stop gate.
+- **No live production switch**; stage evidence excludes full scene assembly, outlines, fills, guides and painter. See `docs/WEBGPU_REAL_SCENE_SHOOTING_SPIKE_140_10.md`.
