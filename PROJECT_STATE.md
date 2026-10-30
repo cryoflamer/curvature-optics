@@ -1,3 +1,19 @@
+## Patch 140.9.1 — Final bounded f32 precision diagnosis (2026-10-30)
+
+The user-supplied #140.9 Opera/Intel Gen-12LP export measured 18/18 scenarios,
+with 10 passing and all 8 long (100-km) cases exceeding the 0.1-m position
+tolerance; Vacuum long had a 2.647-m discrepancy with essentially no angular
+drift. An opt-in `accumulation: 'compensated'` GPU shader now evaluates RK4
+increments before compensated f32 position accumulation while retaining the
+original shader as the unmodified default. A Vacuum f64 analytic straight-line
+reference separates CPU RK4 error from GPU drift. A browser-only 18-pair
+(36-run) diagnostic and hard stop gates are at `tools/webgpu-optics-14091.html`
+and `docs/WEBGPU_OPTICAL_PRECISION_DIAGNOSTIC_140_9_1.md`.
+**No real WebGPU result for this correction is available yet.** If the fixed
+numerical/performance gates are met, stop isolated RK4 experiments and allow
+at most one real-scene integration spike. If not, stop this f32 GPU branch.
+Production optics and renderer defaults remain unchanged.
+
 ## Patch 140.9 — Finite WebGPU optical qualification and stop gate (2026-10-30)
 
 Added a standalone, opt-in 18-case browser matrix at

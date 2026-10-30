@@ -71,6 +71,45 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   for(var j=0u;j<config[1];j=j+1u){s=advance(s,ds);}
   results.data[i]=s;
 }`;
+  // #140.9.1: opt-in position Kahan summation. Keep the original shader byte-for-byte
+  // for the default path, and calculate RK4 increments BEFORE rounding positions.
+  // In particular, correcting `advance(s)-s` would lose the f32 low bits already.
+  var WGSL_COMPENSATED=WGSL.replace('@compute @workgroup_size(64)', `
+struct Accumulated { state:vec4f, correction:vec2f }
+fn advanceCompensated(s:vec4f,ds:f32,correction:vec2f)->Accumulated {
+  let a=derivative(s);
+  let b=derivative(s+0.5*ds*a);
+  let c=derivative(s+0.5*ds*b);
+  let d=derivative(s+ds*c);
+  let delta=(ds/6.0)*(a+2.0*b+2.0*c+d);
+  let adjusted=delta.xy-correction;
+  let summed=s.xy+adjusted;
+  let nextCorrection=(summed-s.xy)-adjusted;
+  var out=vec4f(summed,s.zw+delta.zw);
+  let inv=1.0/length(out.zw);
+  out.z=out.z*inv;
+  out.w=out.w*inv;
+  return Accumulated(out,nextCorrection);
+}
+@compute @workgroup_size(64)`).replace(
+    'for(var j=0u;j<config[1];j=j+1u){s=advance(s,ds);}',
+    'var correction=vec2f(0.0,0.0);\n  for(var j=0u;j<config[1];j=j+1u){\n    let next=advanceCompensated(s,ds,correction);\n    s=next.state;correction=next.correction;\n  }'.replace(/\\n/g,'\n'));
+  if(WGSL_COMPENSATED===WGSL||WGSL_COMPENSATED.indexOf('advanceCompensated(s,ds,correction)')<0)
+    throw Error('Kahan WGSL construction failed');
+  function vacuumAnalytic(inputs,p){
+    p=check(p);
+    if(p.atmosphere!=='vacuum')throw Error('Analytical reference is only defined for vacuum');
+    if(!(inputs instanceof Float32Array)||inputs.length!==p.count*4)throw Error('Incorrect vacuum seeds');
+    var out=new Float64Array(inputs.length),distance=p.step*p.steps;
+    for(var i=0;i<p.count;i++){
+      var o=i*4,vx=inputs[o+2],vz=inputs[o+3];
+      var norm=Math.hypot(vx,vz);
+      out[o]=inputs[o]+distance*vx/norm;
+      out[o+1]=inputs[o+1]+distance*vz/norm;
+      out[o+2]=vx/norm;out[o+3]=vz/norm;
+    }
+    return out;
+  }
   function check(opts){
     opts=opts||{};
     var p={count:opts.count===undefined?1024:opts.count,
@@ -96,13 +135,15 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       !Number.isFinite(p.scaleHeight)||p.scaleHeight<=0||
       !Number.isFinite(p.maxPositionError)||p.maxPositionError<=0||
       !Number.isFinite(p.maxAngularError)||p.maxAngularError<=0||
-      !(p.atmosphere in PROFILES)||!['flat','globe'].includes(p.geometry))
+      !(p.atmosphere in PROFILES)||!['flat','globe'].includes(p.geometry)||
+      (opts.accumulation!==undefined&&!['naive','compensated'].includes(opts.accumulation)))
       throw Error('Invalid WebGPU optical benchmark controls');
     if(p.count*p.steps>12000000)throw Error('Benchmark budget exceeded: maximum 12 million RK4 steps');
     // Avoid silent truncation of integer/floating inputs when preparing GPU buffers.
     if(!Number.isFinite(Math.fround(p.step))||Math.fround(p.step)<=0||
        !Number.isFinite(Math.fround(p.radius))||!Number.isFinite(Math.fround(p.occlusionRadius))||
        !Number.isFinite(Math.fround(p.scaleHeight)))throw Error('Values cannot be represented as f32');
+    if(opts.accumulation!==undefined)p.accumulation=opts.accumulation;
     return p;
   }
   function seeds(p){
@@ -180,7 +221,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     if(bytes>device.limits.maxStorageBufferBindingSize)throw Error('Ray buffer exceeds GPU storage limit');
     var cpuTimes=[],gpuTimes=[],cpuOutput=null,gpuOutput=null,validation=null;
     var pipelineStart=now();
-    var shader=device.createShaderModule({code:WGSL});
+    var shader=device.createShaderModule({code:p.accumulation==='compensated'?WGSL_COMPENSATED:WGSL});
     if(shader.getCompilationInfo){
       var compilation=await shader.getCompilationInfo();
       var errors=compilation.messages.filter(m=>m.type==='error');
@@ -225,6 +266,13 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       source.destroy();result.destroy();settings.destroy();read.destroy();
       if(device.destroy)device.destroy();
     }
+    var analytic=null;
+    if(p.atmosphere==='vacuum'){
+      var analyticalReference=vacuumAnalytic(input,p);
+      analytic={reference:'straight-line normalized f32 seed direction (f64 arithmetic)',
+        cpuVsAnalytic:compare(analyticalReference,cpuOutput,p),
+        gpuVsAnalytic:compare(analyticalReference,gpuOutput,p)};
+    }
     var resultReport={version:'140.8',status:'measured',qualified:validation.qualified,
       parameters:p,device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',
         architecture:adapter.info.architecture||'',device:adapter.info.device||'',description:adapter.info.description||''}:null,
@@ -233,7 +281,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         gpuUploadToReadbackMedianMs:median(gpuTimes),cpuSamplesMs:cpuTimes,
         gpuUploadToReadbackSamplesMs:gpuTimes,
         ratioCpuToGpu:median(cpuTimes)/median(gpuTimes)},
-      validation:validation,limitations:[
+      validation:validation,analyticVacuum:analytic,limitations:[
         'GPU uses f32 while the existing CPU integrator uses f64; tolerances are application-specific, not a certification',
         'Each ray is an independent fixed-step RK4 path; no shooting, boundary events, adaptive integration, or occlusion is computed',
         'CPU and GPU use identical f32-quantized initial states but independent f64/f32 integration arithmetic',
@@ -244,6 +292,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         'A passing finite set is not a proof of equivalent multipath, grazing or distant-ray behaviour']};
     return resultReport;
   }
-  return Object.freeze({WGSL:WGSL,check:check,seeds:seeds,cpuIntegrate:cpuIntegrate,
+  return Object.freeze({WGSL:WGSL,WGSL_COMPENSATED:WGSL_COMPENSATED,
+    vacuumAnalytic:vacuumAnalytic,check:check,seeds:seeds,cpuIntegrate:cpuIntegrate,
     compare:compare,config:config,run:run});
 }));
