@@ -60,7 +60,7 @@
 <script src="src/diagnostics/CurvatureOpticalBatchContract1411.js"></script>
 <script src="src/diagnostics/CurvatureWebGPUSceneSpike14010.js"></script>
 <script src="src/diagnostics/CurvatureWebGPUBatchShooting1412.js"></script>
-<script src="src/ui/modern/ModernCompareModel.js?v=140.12.17"></script>
+<script src="src/ui/modern/ModernCompareModel.js?v=140.12.18"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
@@ -277,7 +277,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.17"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.18"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
@@ -308,17 +308,25 @@
             <button id="ModernGpuFastRun" type="button">Benchmark fast GPU predictor frame</button>
             <button id="ModernGpuNearRun" type="button">Benchmark near-ground GPU A/B</button>
             <button id="ModernGpuGridABCRun" type="button">Benchmark GPU grid A/B/C · lower-right</button>
+            <button id="ModernGpuAdaptiveRun" type="button">Benchmark adaptive GPU vs dense · 4608 rays</button>
             <button id="ModernGpuProbeExport" type="button">Export JSON</button></div>
           <p class="modern-compare-note">Frame A is the CPU reference. Use <strong>Build CPU replay + GPU frame B</strong> to discover the actual adaptive optical-ray requests in A, first build a <strong>CPU replay control frame B</strong> with the same selected original CPU answers, compare its pixels with A, then batch the identical targets asynchronously on WebGPU and repaint the <strong>real physical B frame</strong> with GPU-seeded rays and explicit CPU fallback for unsampled/failed rays. This is <strong>not</strong> a GPU-only frame: painting, adaptive refinement, ground guides and missing rays still use CPU. Requires WebGPU and standard atmosphere; production backend stays unchanged.</p>
           <p class="modern-compare-note"><strong>GPU-first speed experiment (#140.12.12):</strong> the separate <strong>Benchmark GPU-first full frame</strong> action prepares a distance/height grid from authored objects, computes it asynchronously on WebGPU, and paints a real model B frame without first rendering A or tracing CPU rays to discover targets. A fresh CPU A frame is timed <em>afterwards</em> as an independent cold reference. The grid interpolates GPU data, including visibility classification near boundaries; it is intentionally approximate and must pass real frame comparisons before any production use. The end-to-end GPU number includes preparation, GPU setup/readback and frame painting. The older replay button is retained for controlled diagnostics.</p>
           <p class="modern-compare-note"><strong>#140.12.15 · fast predictor frame:</strong> opt-in WebGPU predictor (RK4 step 500 m), dense scene-derived grid, batched up to 1024 targets at a time. This measures the entire GPU field + real Canvas B frame before a separate cold CPU A reference; compare the actual pixel diff. Approximate grid visibility may create artifacts; no full CPU oracle discovery, no CPU shooting fallback, no production authorization. Larger grids can improve sampling but add work. This is <em>not</em> a CPU-guided adaptive GPU renderer.</p>
           <p class="modern-compare-note"><strong>#140.12.16 · near-ground grid A/B:</strong> the new button compares the original uniform height levels with distance-local ground-focused levels. Both receive the <em>same number</em> of GPU predictor rays and run on one reused WebGPU pipeline (uniform/local/uniform/local). CPU A is rendered independently <em>after</em> the GPU variants. Pixel differences are reported for the whole frame and a fixed lower-left region (left 55%, bottom 45%), now known to be the WRONG side of the user-observed defect (retained for historical A/B reproduction), without treating the region as a certified segmentation. No extra CPU shooting, no production promotion.</p>
           <p class="modern-compare-note"><strong>#140.12.17 · lower-right GPU grid A/B/C:</strong> compares <strong>near-ground 256×16</strong>, <strong>vertical 128×32</strong>, and <strong>near-distance 256×16</strong>, each with exactly <strong>4096</strong> GPU predictor rays (independent of Fast grid selector). All three reuse one GPU pipeline, run in mirrored order A/B/C/C/B/A, and use the same 500 m RK4 step. The pixel difference is measured for the <strong>lower-right 45%×45%</strong> (correcting the left-side ROI used by #140.12.16) as well as the whole frame. An independent CPU A frame is rendered only after the GPU candidates; no CPU-guided sampling or CPU shooting fallback. B displays the near-distance candidate after measurement, not a CPU-selected winner. No production promotion.</p>
+          <p class="modern-compare-note"><strong>#140.12.18 · adaptive vs dense:</strong> a 4096-ray near-distance GPU frame discovers its own uncertain/mixed/rapidly varying optical field queries, then up to 512 exact queried targets are sent to WebGPU and repainted. The control uses a standalone 4608-ray near-distance grid. Both use 500 m RK4, one shared predictor pipeline and no CPU shooting. <em>Adaptive timing includes the entire 4096-ray discovery frame and the second paint.</em> The CPU frame is calculated only after the GPU variants for pixel comparison; the spatial difference maps visualize where significant differences are, not which samples to refine. This is an optional experiment, not a production backend.</p>
           <p id="ModernGpuProbeStatus" role="status" aria-live="polite">Select Run to measure current scene.</p>
           <div class="modern-gpu-probe-maps"><div><strong>CPU f64 · reference rays</strong><canvas id="ModernGpuProbeCanvasCPU" width="460" height="200" aria-label="CPU angular sample map"></canvas></div>
             <div><strong>WebGPU f32 · experimental rays</strong><canvas id="ModernGpuProbeCanvasGPU" width="460" height="200" aria-label="GPU angular sample map"></canvas></div></div>
           <p id="ModernGpuProbeMetrics" class="modern-compare-note"></p>
           <p id="ModernGpuFrameMetrics" class="modern-compare-note" aria-live="polite"></p>
+          <div id="ModernGpuDiffMaps" class="modern-gpu-probe-maps" aria-label="GPU pixel-difference heatmaps versus CPU" hidden>
+            <div><strong>Adaptive 4096+512 · pixel differences vs CPU</strong>
+              <canvas id="ModernGpuAdaptiveHeatmap" width="408" height="272" style="max-width:100%;height:auto" aria-label="Adaptive GPU difference heatmap; bottom-right region outlined"></canvas></div>
+            <div><strong>Dense 4608 · pixel differences vs CPU</strong>
+              <canvas id="ModernGpuDenseHeatmap" width="408" height="272" style="max-width:100%;height:auto" aria-label="Dense GPU difference heatmap; bottom-right region outlined"></canvas></div>
+          </div>
         </section>
         <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. The orange horizon marker, when resolved, is derived from forward-traced first-ground-contact rays and is not a guarantee of unique global visibility.</p>
       </section>

@@ -1356,3 +1356,40 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   earlier GPU experiments and visibility acceptance rules are unchanged.
   Browser WebGPU timings and actual pixel results are still **unmeasured**
   until the user runs the new button on GPU hardware.
+
+## #140.12.18 — GPU query-selected sparse refinement versus a 4608-ray dense control
+
+- Added **Benchmark adaptive GPU vs dense · 4608 rays** to Compare's optional
+  CPU/WebGPU controls. The baseline is the #140.12.17 near-distance 256×16
+  grid (4096 scene-derived predictor targets, RK4 step 500 m). Its actual
+  physical **GPU B renderer** is painted first, with opt-in collection of
+  problematic distance/height requests: mixed GPU status, indeterminate GPU
+  status, out-of-grid extrapolation, or abrupt angle-correction variation.
+  The risk ranking uses only the B renderer's GPU-field lookup context; CPU
+  reference rays, pixels and CPU shooting do **not** select refinement rays.
+  Candidates are de-duplicated and spread across grid cells; at most 512 are
+  submitted in a second asynchronous WebGPU predictor request. Valid answers
+  replace only the exact same (distance, height) lookup on a second B paint,
+  never the neighboring interpolation; failed GPU nodes retain the base grid.
+- A separately constructed **4608-node near-distance** 288×16 grid uses the
+  same scene, GPU predictor and RK4 step, but distributes its additional 512
+  rays uniformly according to the distance-focused scene quantile algorithm.
+  Both variants share a single created WebGPU pipeline. If fewer than 512
+  risky, distinct candidates are available, the exported report explicitly
+  marks `sameRayBudget:false` and gives actual counts: no phantom rays.
+- **Adaptive timing explicitly includes** first 4096-ray GPU discovery,
+  its full Canvas B paint, the sparse GPU batch, and the final Canvas B paint.
+  The 4608-ray dense candidate's whole field and frame are timed separately.
+  GPU setup cost is separate. This design is conservative about adaptive
+  overhead and is NOT a claim of algorithmic or end-to-end speedup.
+- A forced-cold independent CPU f64 frame A is painted **after** GPU variants.
+  The report includes whole-frame and correct lower-right 45%×45% significant
+  pixel differences, status/fill/contour counts, per-variant frame timings,
+  and 16×12 per-tile spatial heatmaps using the same >8/255 channel difference
+  criterion. Two visible heatmaps (adaptive/dense) share a color intensity
+  scale, with the lower-right ROI outlined. The maps visualize evidence and
+  are **never used** to select extra GPU targets. All GPU experiments remain
+  opt-in, CPU production renderer and earlier Compare controls unchanged.
+- Export: `curvature-compare-140.12.18-adaptive-vs-dense.json`. The result
+  is a measured experiment requiring browser WebGPU to assess improvements;
+  no visual parity, performance win or production authorization is presumed.

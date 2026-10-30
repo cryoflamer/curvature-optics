@@ -1134,7 +1134,7 @@
       state.probeForceColdA=false;
       if(session)session.close();
       state.probeBusy=false;
-      [firstButton,sampleButton,replayButton,fastButton,nearButton,probeUi('ModernGpuGridABCRun')].forEach(function(b){if(b)b.disabled=false;});
+      [firstButton,sampleButton,replayButton,fastButton,nearButton,probeUi('ModernGpuGridABCRun'),probeUi('ModernGpuAdaptiveRun')].forEach(function(b){if(b)b.disabled=false;});
     }
   }
   // #140.12.16: compare two equal-budget layouts on the real physical frame.
@@ -1324,7 +1324,7 @@
     }
     var generation=state.probeGeneration,session=null,
       buttonIds=['ModernGpuFirstRun','ModernGpuProbeRun','ModernGpuFrameRun',
-        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun'],
+        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuAdaptiveRun'],
       buttons=buttonIds.map(probeUi),count=4096;
     state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
     buttons.forEach(function(button){if(button)button.disabled=true;});
@@ -1481,6 +1481,234 @@
       buttons.forEach(function(button){if(button)button.disabled=false;});
     }
   }
+  // #140.12.18: GPU-only adaptive refinement against a density-matched
+  // 4608-node control. CPU A is painted only AFTER all GPU variants, and
+  // neither CPU pixels nor CPU ray solves contribute any refinement targets.
+  function paintGpuDifferenceHeatmap(id,tiles,sharedPeak){
+    var canvas=probeUi(id);
+    if(!canvas||!canvas.getContext)return;
+    var ctx=canvas.getContext('2d');if(!ctx)return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(!tiles||tiles.status!=='measured')return;
+    var tileW=canvas.width/tiles.columns,tileH=canvas.height/tiles.rows;
+    // Relative *density* per tile; adjust edge tiles by their actual area.
+    var maximum=0,densities=[];
+    for(var row=0;row<tiles.rows;row++)for(var col=0;col<tiles.columns;col++){
+      var x0=Math.ceil(col*tiles.width/tiles.columns),x1=Math.ceil((col+1)*tiles.width/tiles.columns);
+      var y0=Math.ceil(row*tiles.height/tiles.rows),y1=Math.ceil((row+1)*tiles.height/tiles.rows);
+      var density=tiles.tileCounts[row*tiles.columns+col]/Math.max(1,(x1-x0)*(y1-y0));
+      densities.push(density);maximum=Math.max(maximum,density);
+    }
+    if(sharedPeak>0){
+      var nominalArea=tiles.width*tiles.height/(tiles.columns*tiles.rows);
+      maximum=sharedPeak/nominalArea;
+    }
+    densities.forEach(function(density,i){
+      var intensity=maximum?Math.sqrt(Math.min(1,density/maximum)):0;
+      var red=Math.round(255-42*intensity),green=Math.round(252-215*intensity),
+        blue=Math.round(250-228*intensity);
+      ctx.fillStyle='rgb('+red+','+green+','+blue+')';
+      ctx.fillRect((i%tiles.columns)*tileW,Math.floor(i/tiles.columns)*tileH,
+        Math.ceil(tileW+0.1),Math.ceil(tileH+0.1));
+    });
+    ctx.strokeStyle='#64748b';ctx.lineWidth=1;
+    ctx.strokeRect(0.5,0.5,canvas.width-1,canvas.height-1);
+    ctx.strokeStyle='#334155';ctx.lineWidth=2;
+    ctx.strokeRect(0.55*canvas.width,0.55*canvas.height,
+      0.45*canvas.width,0.45*canvas.height);
+  }
+  async function runCompareGpuAdaptive141218(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(!spec||spec.atmosphere!=='standard'){
+      probeStatus('Adaptive GPU experiment supports standard atmosphere only.');return;
+    }
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411;
+    if(!gpu||!contract||!root.navigator||!root.navigator.gpu||!compareAdapter||
+       !compareAdapter.gpuFirstGrid||!compareAdapter.gpuFirstBatchRequests||
+       !compareAdapter.gpuFirstRayField||!compareAdapter.compareFramePixels||
+       !compareAdapter.frameDifferenceTiles||!root.CurvatureIndependentComposition||
+       !root.CurvatureOpticalTowerSilhouette||!root.CurvatureSurfaceGeometry||
+       !state.compareGraphs.A||!state.compareGraphs.B){
+      probeStatus('Adaptive GPU experiment WebGPU / Compare dependencies unavailable.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuFirstRun','ModernGpuProbeRun','ModernGpuFrameRun',
+        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuAdaptiveRun'],
+      buttons=ids.map(probeUi);
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    var mapGroup=probeUi('ModernGpuDiffMaps');if(mapGroup)mapGroup.hidden=true;
+    buttons.forEach(function(button){if(button)button.disabled=true;});
+    try{
+      var deps={composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,
+        surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      var baseCount=4096,extraBudget=512,roi={x:0.55,y:0.55,width:0.45,height:0.45};
+      var grids={},snapshots={},counts={},timing={};
+      function cancelled(){return generation!==state.probeGeneration||
+        state.mode!=='compare'||!state.compareGpuProbe;}
+      function snapshot(key){
+        var canvas=state.compareGraphs.B.Canvas,copy=document.createElement('canvas');
+        copy.width=canvas.width;copy.height=canvas.height;
+        var ctx=copy.getContext&&copy.getContext('2d');
+        if(!ctx||!ctx.drawImage)throw Error('Adaptive GPU Canvas snapshot unavailable');
+        ctx.drawImage(canvas,0,0);snapshots[key]=copy;
+        if(!state.compareLast.B||!state.compareLast.B.fieldStats||
+            !state.compareLast.B.fieldStats.experimentalGpu||
+            state.compareLast.B.fieldStats.experimentalGpu.kind!=='gpu-first-grid')
+          throw Error('Adaptive GPU field did not reach the physical renderer');
+        counts[key]={contours:state.compareLast.B.drawn,
+          fillTriangles:state.compareLast.B.fillTriangles,
+          unresolved:state.compareLast.B.unresolved,
+          fieldStats:state.compareLast.B.fieldStats.experimentalGpu};
+      }
+      function paint(field,key){
+        state.probeField=field;
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareLast.B=null;
+        var at=profileNow();state.compareGraphs.B.Redraw();
+        var duration=profileNow()-at;snapshot(key);return duration;
+      }
+      async function shoot(grid){
+        var requests=compareAdapter.gpuFirstBatchRequests(grid,1024),results=[],times=[];
+        for(var request of requests){
+          request.controls.step=500;gpu.checked(request);
+          var batch=await session.solve(request,{warmRepeats:0});
+          if(cancelled())return null;
+          results.push.apply(results,batch.response.results);
+          times.push(batch.timing.gpuUploadToReadbackMs);
+        }
+        return {results:results,times:times};
+      }
+      probeStatus('Adaptive GPU: creating one shared predictor pipeline…');
+      session=await gpu.createSession(1024,null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      var baseStart=profileNow();
+      var baseGrid=compareAdapter.gpuFirstGrid(state.comparePair.A,baseCount,deps,
+        {layout:'distance-focused'});
+      var basePrepared=profileNow(),baseResponse=await shoot(baseGrid);
+      if(cancelled()||!baseResponse)return;
+      var baseSolved=profileNow(),baseField=compareAdapter.gpuFirstRayField(
+        baseGrid,baseResponse,root.CurvatureSurfaceGeometry,{collectCandidates:true});
+      var basePaintMs=paint(baseField,'base4096');
+      var baseFinished=profileNow();
+      timing.base4096={gridPrepareMs:basePrepared-baseStart,
+        gpuBatchWallMs:baseSolved-basePrepared,paintMs:basePaintMs,
+        frameEndToEndMs:baseFinished-baseStart,
+        gpuBatchReadbackTimesMs:baseResponse.times};
+      var candidates=baseField.refinementCandidates(extraBudget);
+      var reasonCounts={};candidates.forEach(function(c){c.causes.forEach(function(reason){
+        reasonCounts[reason]=(reasonCounts[reason]||0)+1;
+      });});
+      probeStatus('Adaptive GPU: '+candidates.length+' risky renderer queries · GPU refinement…');
+      var refinementStart=profileNow(),refinements=[],refineBatchTimes=[];
+      if(candidates.length){
+        var metric=root.CurvatureSurfaceGeometry.createFromCurvature(
+          baseGrid.request.geometry==='globe'?1/baseGrid.request.radius:0);
+        var request=Object.assign({},baseGrid.request,{controls:Object.assign({},baseGrid.request.controls,
+          {step:500}),targets:candidates.map(function(c){return metric.surfacePoint2(c.d,c.h);})});
+        gpu.checked(request);
+        var refined=await session.solve(request,{warmRepeats:0});
+        if(cancelled())return;
+        refineBatchTimes.push(refined.timing.gpuUploadToReadbackMs);
+        if(refined.response.results.length!==candidates.length)
+          throw Error('Adaptive GPU refinement response count mismatch');
+        refinements=candidates.map(function(c,i){return {d:c.d,h:c.h,
+          result:refined.response.results[i]};});
+      }
+      var refinementSolved=profileNow();
+      var adaptiveField=compareAdapter.gpuFirstRayField(baseGrid,baseResponse,
+        root.CurvatureSurfaceGeometry,{refinements:refinements});
+      var adaptivePaintMs=paint(adaptiveField,'adaptive4608');
+      timing.adaptive4608={refinementGpuWallMs:refinementSolved-refinementStart,
+        refineBatchReadbackTimesMs:refineBatchTimes,
+        paintMs:adaptivePaintMs,frameEndToEndMs:profileNow()-baseStart,
+        includesBaseDiscoveryPaint:true};
+      var denseStart=profileNow();
+      var denseGrid=compareAdapter.gpuFirstGrid(state.comparePair.A,
+        baseCount+extraBudget,deps,{layout:'distance-focused'});
+      var densePrepared=profileNow(),denseResponse=await shoot(denseGrid);
+      if(cancelled()||!denseResponse)return;
+      var denseSolved=profileNow(),denseField=compareAdapter.gpuFirstRayField(
+        denseGrid,denseResponse,root.CurvatureSurfaceGeometry);
+      var densePaintMs=paint(denseField,'dense4608');
+      timing.dense4608={gridPrepareMs:densePrepared-denseStart,
+        gpuBatchWallMs:denseSolved-densePrepared,paintMs:densePaintMs,
+        frameEndToEndMs:profileNow()-denseStart,
+        gpuBatchReadbackTimesMs:denseResponse.times};
+      if(cancelled())return;
+      probeStatus('Adaptive GPU: measuring independent cold CPU A and diff maps…');
+      state.probeForceColdA=true;
+      var cpuStart=profileNow();
+      try{state.compareGraphs.A.Redraw();}finally{state.probeForceColdA=false;}
+      var cpuMs=profileNow()-cpuStart;
+      if(cancelled()||!state.compareLast.A)throw Error('Adaptive GPU CPU reference missing');
+      var referenceCanvas=state.compareGraphs.A.Canvas,variants={};
+      ['base4096','adaptive4608','dense4608'].forEach(function(key){
+        variants[key]={rayBudget:key==='base4096'?baseCount:baseCount+extraBudget,
+          timings:timing[key],rendererCounts:counts[key],
+          fullFrameDiff:compareAdapter.compareFramePixels(referenceCanvas,snapshots[key]),
+          lowerRightFrameDiff:compareAdapter.compareFramePixels(referenceCanvas,snapshots[key],roi),
+          pixelHeatmap:compareAdapter.frameDifferenceTiles(referenceCanvas,snapshots[key],16,12)};
+      });
+      var measured=Object.keys(variants).every(function(key){
+        return variants[key].fullFrameDiff.status==='measured'&&
+          variants[key].lowerRightFrameDiff.status==='measured'&&
+          variants[key].pixelHeatmap.status==='measured';});
+      // The overlay result is displayed after measurement. This untimed
+      // repaint is not used for choosing refinement points or comparisons.
+      state.probeField=adaptiveField;
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareGraphs.B.Redraw();
+      if(el('ModernCompareLabelB'))el('ModernCompareLabelB').textContent=
+        'GPU predictor · sparse adaptive 4096+512 (approximate)';
+      var sharedPeak=Math.max(variants.adaptive4608.pixelHeatmap.maxTileCount||0,
+        variants.dense4608.pixelHeatmap.maxTileCount||0);
+      paintGpuDifferenceHeatmap('ModernGpuAdaptiveHeatmap',variants.adaptive4608.pixelHeatmap,sharedPeak);
+      paintGpuDifferenceHeatmap('ModernGpuDenseHeatmap',variants.dense4608.pixelHeatmap,sharedPeak);
+      if(mapGroup)mapGroup.hidden=!measured;
+      state.probeFrameLast={version:'140.12.18',
+        kind:'GPU-query-selected sparse refinement vs equal-ray dense distance grid',
+        geometry:baseGrid.request.geometry,atmosphere:'standard',gpuAlgorithm:'predictor',
+        gpuRK4StepMetres:500,gpuSetupMs:session.setupMs,baseRays:baseCount,
+        extraRayBudget:extraBudget,actualRefinementRays:candidates.length,
+        adaptiveTotalRays:baseCount+candidates.length,denseTotalRays:baseCount+extraBudget,
+        refinementReasons:reasonCounts,refinementSelection:'GPU B renderer queries only',
+        cpuColdReferenceMs:cpuMs,lowerRightRegion:roi,variants:variants,
+        sameRayBudget:candidates.length===extraBudget,sharedGpuSession:true,
+        cpuOracleDiscovery:false,cpuShootingFallback:false,
+        includesDiscoveryFrameInAdaptiveTime:true,
+        displayVariant:'adaptive4608',productionAuthorized:false,
+        visualEquivalenceProven:false,
+        verdict:measured?'MEASURED_VISUAL_REVIEW_REQUIRED':'PIXEL_READBACK_UNAVAILABLE'};
+      var roiInfo=Object.keys(variants).map(function(key){return key+': '+
+        variants[key].lowerRightFrameDiff.significantPixels;}).join(' / ');
+      var fmt=function(n){return Number.isFinite(n)?n.toFixed(1):'n/a';};
+      probeStatus('Adaptive GPU vs dense · lower-right significant pixels '+roiInfo+
+        ' · adaptive inclusive '+fmt(timing.adaptive4608.frameEndToEndMs)+
+        ' ms / dense '+fmt(timing.dense4608.frameEndToEndMs)+
+        ' ms · CPU cold '+fmt(cpuMs)+' ms · visual approval NOT established');
+      var line=probeUi('ModernGpuFrameMetrics');
+      if(line)line.textContent='GPU refinement '+candidates.length+'/'+extraBudget+
+        ' · lower-right '+roiInfo+' · full-frame '+Object.keys(variants).map(function(key){
+          return key+': '+variants[key].fullFrameDiff.significantPixels;
+        }).join(' / ')+' · see two spatial pixel-difference maps below; Export JSON.';
+    }catch(error){
+      if(generation===state.probeGeneration){
+        state.probeField=null;state.probeFrameLast=null;
+        probeStatus('Adaptive GPU experiment unavailable: '+String(error.message||error));
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareGraphs.B.Redraw();
+      }
+    }finally{
+      state.probeForceColdA=false;
+      if(session)session.close();
+      state.probeBusy=false;
+      buttons.forEach(function(button){if(button)button.disabled=false;});
+    }
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -1490,6 +1718,7 @@
       state.probeLast=null;state.probeField=null;state.probeFrameLast=null;
       state.probeGeneration++;
       var frameMetrics=probeUi('ModernGpuFrameMetrics');if(frameMetrics)frameMetrics.textContent='';
+      var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       if(state.compareGpuProbe){state.compareSelected='A';syncCompareEditor();}
       var bTab=probeUi('ModernModelTabB');if(bTab)bTab.disabled=state.compareGpuProbe;
       var preset=probeUi('ModernPairPreset');if(preset)preset.disabled=state.compareGpuProbe;
@@ -1524,6 +1753,14 @@
     if(nearButton)nearButton.addEventListener('click',runCompareGpuLocalAB);
     var abcButton=probeUi('ModernGpuGridABCRun');
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
+    var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
+    if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
+      'ModernGpuNearRun','ModernGpuGridABCRun'].forEach(function(id){
+      var button=probeUi(id);if(button)button.addEventListener('click',function(){
+        var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
+      });
+    });
     var exportButton=probeUi('ModernGpuProbeExport');
     if(exportButton)exportButton.addEventListener('click',function(){
       if(!state.probeLast&&!state.probeFrameLast){
@@ -1538,7 +1775,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.17'?
+      link.href=url;link.download=exportVersion==='140.12.18'?
+        'curvature-compare-140.12.18-adaptive-vs-dense.json':
+        exportVersion==='140.12.17'?
         'curvature-compare-140.12.17-grid-abc-lower-right.json':
         exportVersion==='140.12.16'?
         'curvature-compare-140.12.16-near-ground-ab.json':
@@ -1965,6 +2204,7 @@
       probeStatus('Scene changed · rerun the CPU/GPU comparison.');
       var metrics=probeUi('ModernGpuProbeMetrics');if(metrics)metrics.textContent='';
       var frameMetrics=probeUi('ModernGpuFrameMetrics');if(frameMetrics)frameMetrics.textContent='';
+      var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
     }
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.

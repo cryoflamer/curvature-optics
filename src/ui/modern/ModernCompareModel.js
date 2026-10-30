@@ -154,7 +154,7 @@
       throw RangeError('Invalid GPU-first grid height layout');
     if(options.layout==='vertical-32'&&count<1024)
       throw RangeError('Vertical-32 GPU-first grid requires at least 1024 targets');
-    if(![128,256,512,1024,2048,4096,8192].includes(count)||!deps||!deps.composition||
+    if(![128,256,512,1024,2048,4096,4608,8192].includes(count)||!deps||!deps.composition||
         !deps.silhouette||!deps.surfaces||!deps.branch)
       throw TypeError('Invalid GPU-first grid inputs');
     var geometry=model.showModel===2?'flat':'globe',radius=model.rEarth,eye=model.Height;
@@ -288,14 +288,37 @@
         targets:grid.request.targets.slice(start,start+maxBatch)}));
     return requests;
   }
-  function gpuFirstRayField(grid,response,surfaces){
+  function gpuFirstRayField(grid,response,surfaces,options){
+    options=options||{};
     if(!grid||!grid.request||!Array.isArray(grid.distances)||!Array.isArray(grid.heights)||
         !response||!Array.isArray(response.results)||!surfaces||
         response.results.length!==grid.request.targets.length||
         response.results.length!==grid.columns*grid.rows)
       throw TypeError('Invalid GPU-first response');
     var r=grid.request,points=response.results,failures=0,lookupCount=0,
-      exactCount=0,mixedCells=0,extrapolated=0,uncertain=0,cache=new Map();
+      exactCount=0,mixedCells=0,extrapolated=0,uncertain=0,cache=new Map(),
+      candidates=[],refinements=new Map(),refinementHits=0,refinementFailures=0;
+    // Opt-in #140.12.18 sparse GPU answers are selected by the FIRST GPU B
+    // frame's own queries, never by CPU pixels or CPU shooting. An exact
+    // lookup replacement is deliberately local: no unvalidated field-wide
+    // correction or guessed visibility is propagated across cell boundaries.
+    if(options.refinements){
+      if(!Array.isArray(options.refinements))throw TypeError('Invalid GPU refinement samples');
+      var metricCheck=surfaces.createFromCurvature(r.geometry==='globe'?1/r.radius:0);
+      options.refinements.forEach(function(item){
+        if(!item||!Number.isFinite(item.d)||!Number.isFinite(item.h)||
+            !item.result||!Array.isArray(item.result.target))
+          throw TypeError('Invalid GPU refinement sample');
+        var target=metricCheck.surfacePoint2(item.d,item.h);
+        if(item.result.target[0]!==target[0]||item.result.target[1]!==target[1])
+          throw RangeError('GPU refinement target/order mismatch');
+        var key=item.d+','+item.h;
+        if(refinements.has(key))throw RangeError('Duplicate GPU refinement sample');
+        refinements.set(key,item.result);
+        if(item.result.status==='solver_failed'||!Number.isFinite(item.result.angle))
+          refinementFailures++;
+      });
+    }
     for(var i=0;i<points.length;i++){
       if(!Array.isArray(points[i].target)||points[i].target.length!==2||
           points[i].target[0]!==r.targets[i][0]||points[i].target[1]!==r.targets[i][1])
@@ -318,6 +341,16 @@
       lookupCount++;if(exact)exactCount++;
       var key=d+','+h,cached=cache.get(key);
       if(cached)return cached;
+      if(refinements.has(key)){
+        var refined=refinements.get(key);
+        if(refined.status!=='solver_failed'&&Number.isFinite(refined.angle)){
+          refinementHits++;
+          var directResult=Object.freeze({status:refined.status,angle:refined.angle,
+            residual:refined.residual===undefined?null:refined.residual,
+            method:'gpu-first-sparse-direct',reason:'Exact queried GPU refinement; no CPU fallback'});
+          cache.set(key,directResult);return directResult;
+        }
+      }
       var di=interval(grid.distances,d),d0=grid.distances[di],d1=grid.distances[di+1];
       var u=Math.max(0,Math.min(1,(d-d0)/(d1-d0)));
       var indices=[],weights=[],extrapolatedHeight=false;
@@ -348,10 +381,13 @@
       var status=classes.size===1?valid[0].point.status:nearest.point.status;
       // Subtract the geometric arrival angle before interpolation; this
       // preserves the analytically known strong distance/height component.
-      var total=0,correction=0;
+      var total=0,correction=0,minCorrection=Infinity,maxCorrection=-Infinity;
       valid.forEach(function(item){var col=Math.floor(item.index/grid.rows),row=item.index%grid.rows;
         var nodeHeights=grid.heightColumns?grid.heightColumns[col]:grid.heights;
-        correction+=item.weight*(item.point.angle-direct(grid.distances[col],nodeHeights[row]));
+        var localCorrection=item.point.angle-direct(grid.distances[col],nodeHeights[row]);
+        correction+=item.weight*localCorrection;
+        minCorrection=Math.min(minCorrection,localCorrection);
+        maxCorrection=Math.max(maxCorrection,localCorrection);
         total+=item.weight;
       });
       var angle=direct(d,h)+(total?correction/total:0);
@@ -359,17 +395,55 @@
       var record=Object.freeze({status:status,angle:angle,residual:null,
         method:'gpu-first-grid-approximation',reason:classes.size>1?
           'Mixed GPU visibility nodes; nearest status, NOT certified':'Interpolated GPU grid'});
-      cache.set(key,record);return record;
+      cache.set(key,record);
+      if(options.collectCandidates){
+        var causes=[];
+        if(classes.size>1)causes.push('mixed-status');
+        if(status==='indeterminate')causes.push('indeterminate');
+        if(extrapolatedHeight||d<d0||d>d1)causes.push('extrapolated');
+        var spread=Number.isFinite(minCorrection)&&Number.isFinite(maxCorrection)?
+          (maxCorrection-minCorrection)*1e6:0;
+        if(spread>0.15)causes.push('angular-gradient');
+        // Prefer actual status risk, then locally rapidly varying angles;
+        // below 6 km is a small tie-breaker, not a mandatory restriction.
+        var score=(status==='indeterminate'?1000:0)+(classes.size>1?500:0)+
+          (extrapolatedHeight?160:0)+(d<d0||d>d1?160:0)+
+          Math.min(200,spread*15)+(d<=6000?5:0);
+        if(causes.length)candidates.push({d:d,h:h,score:score,causes:causes,
+          dCell:di,hCell:Math.floor(h/Math.max(0.5,grid.maxHeight||75)*16)});
+      }
+      return record;
     }
     function stats(){return {solves:0,hits:Math.max(0,lookupCount-cache.size),
       interpolations:lookupCount,shootRK4Calls:0,shootEvaluations:0,
       exactSolveMs:0,fallbacks:0,experimentalGpu:{kind:'gpu-first-grid',
-        gpuSeedNodes:points.length,failedGpuNodes:failures,gpuHits:lookupCount,
+        gpuSeedNodes:points.length,failedGpuNodes:failures,
+        refinementSamples:refinements.size,refinementFailures:refinementFailures,
+        refinementHits:refinementHits,gpuHits:lookupCount,
         gpuExactHits:exactCount,cpuFallbackRequests:0,mixedStatusLookups:mixedCells,
         extrapolatedLookups:extrapolated,uncertainLookups:uncertain,
         uniqueRequests:cache.size,approximate:true,productionAuthorized:false}};}
+    function refinementCandidates(limit){
+      if(!Number.isInteger(limit)||limit<0||limit>1024)
+        throw RangeError('Invalid GPU refinement budget');
+      // Spread the budget over distance/height cells before selecting second
+      // candidates from a cell. Original renderer requests are deterministic.
+      var sorted=candidates.slice().sort(function(a,b){return b.score-a.score||a.d-b.d||a.h-b.h;});
+      var selected=[],seen=new Set(),cellPass=new Set();
+      for(var pass=0;pass<2&&selected.length<limit;pass++){
+        sorted.forEach(function(item){
+          if(selected.length>=limit)return;
+          var key=item.d+','+item.h,cell=item.dCell+':'+item.hCell;
+          if(seen.has(key)||(pass===0&&cellPass.has(cell)))return;
+          seen.add(key);cellPass.add(cell);
+          selected.push({d:item.d,h:item.h,score:item.score,causes:item.causes});
+        });
+      }
+      return selected;
+    }
     return {request:r,fullCoverageGrid:true,sample:function(d,h){return solve(d,h,false);},
-      exact:function(d,h){return solve(d,h,true);},stats:stats};
+      exact:function(d,h){return solve(d,h,true);},stats:stats,
+      refinementCandidates:refinementCandidates};
   }
   // #140.12.10: capture the exact requests made by the real CPU adaptive
   // outline/fill field. Asynchronously seed a bounded subset of those targets
@@ -507,11 +581,35 @@
         visualEquivalenceProven:false};
     }catch(error){return {status:'unavailable',reason:String(error.message||error)};}
   }
+  // #140.12.18: spatially resolved, channel-thresholded frame differences.
+  // The heatmap uses the same >8/255 criterion as compareFramePixels. It is
+  // diagnostic only and is NEVER accessed by the GPU refinement selector.
+  function frameDifferenceTiles(a,b,cols,rows){
+    if(!Number.isInteger(cols)||!Number.isInteger(rows)||cols<1||rows<1||
+        cols>128||rows>128)throw RangeError('Invalid frame heatmap dimensions');
+    if(!a||!b||a.width!==b.width||a.height!==b.height||!a.getContext||!b.getContext)
+      return {status:'unavailable',reason:'Canvas sizes differ or no readable canvas'};
+    try{
+      var first=a.getContext('2d').getImageData(0,0,a.width,a.height).data,
+        second=b.getContext('2d').getImageData(0,0,b.width,b.height).data,
+        counts=Array(cols*rows).fill(0),total=0;
+      for(var y=0;y<a.height;y++)for(var x=0;x<a.width;x++){
+        var i=(y*a.width+x)*4;
+        var delta=Math.max(Math.abs(first[i]-second[i]),Math.abs(first[i+1]-second[i+1]),
+          Math.abs(first[i+2]-second[i+2]),Math.abs(first[i+3]-second[i+3]));
+        if(delta>8){counts[Math.floor(y*rows/a.height)*cols+
+          Math.floor(x*cols/a.width)]++;total++;}
+      }
+      return {status:'measured',width:a.width,height:a.height,columns:cols,rows:rows,
+        significantPixels:total,tileCounts:counts,maxTileCount:Math.max.apply(null,counts),
+        thresholdChannelDelta:8};
+    }catch(error){return {status:'unavailable',reason:String(error.message||error)};}
+  }
   return Object.freeze({pair:pair,clone:clone,invariant:invariant,
     probeTargets:probeTargets,probeReport:probeReport,probeGroundReview:probeGroundReview,
     gpuFieldRequest:gpuFieldRequest,gpuRayField:gpuRayField,
     gpuFirstGrid:gpuFirstGrid,gpuFirstRayField:gpuFirstRayField,
     gpuFirstBatchRequests:gpuFirstBatchRequests,
     cpuReplayField:cpuReplayField,frameControlCounts:frameControlCounts,
-    compareFramePixels:compareFramePixels});
+    compareFramePixels:compareFramePixels,frameDifferenceTiles:frameDifferenceTiles});
 }));
