@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Curvature #140.8 — WebGPU Optical RK4 Benchmark</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em;color:#20242c;background:#f8fafc}
+fieldset{border:1px solid #bec9d5;border-radius:8px;margin:1em 0;padding:1em;display:flex;gap:1em;flex-wrap:wrap}
+label{display:flex;flex-direction:column;min-width:120px}input,select,button{font:inherit;padding:.35em}
+button{cursor:pointer}pre{overflow:auto;background:#fff;border:1px solid #ccc;padding:1em;white-space:pre-wrap}
+.warning{color:#8a3d00}small{color:#515a65}
+</style></head><body>
+<h1>Curvature #140.8 — WebGPU RK4 experiment</h1>
+<p>Standalone, opt-in numerical benchmark. The production optical solver is not modified.
+Requires a secure context (for example <code>http://localhost:8000/tools/webgpu-optics-1408.html</code>).
+Runs fixed-step independent rays on GPU <strong>f32</strong> and CPU <strong>f64</strong>; this is <strong>not</strong> a full shooting or occlusion benchmark.</p>
+<form id="benchmark">
+<fieldset><legend>Physical model</legend>
+<label>Atmosphere<select name="atmosphere"><option value="standard">Standard</option><option value="exponential-occlusion">Exponential occlusion</option><option value="inverse-spherical">Inverse spherical</option><option value="vacuum">Vacuum</option></select></label>
+<label>Geometry<select name="geometry"><option value="flat">Flat</option><option value="globe">Globe</option></select></label>
+<label>Observer height (m)<input name="observerHeight" type="number" min="0" step="1" value="15"></label>
+<label>Comparison radius (m)<input name="occlusionRadius" type="number" min="1" step="1000" value="6371000"></label>
+</fieldset>
+<fieldset><legend>Batch</legend>
+<label>Rays<input name="count" type="number" min="1" max="65536" step="1" value="1024"></label>
+<label>RK4 steps per ray<input name="steps" type="number" min="1" max="10000" step="1" value="256"></label>
+<label>Step length (m)<input name="step" type="number" min="0.001" step="1" value="50"></label>
+<label>Repeats<input name="repeats" type="number" min="1" max="20" step="1" value="3"></label>
+</fieldset>
+<fieldset><legend>Numerical gates</legend>
+<label>Max position error (m)<input name="maxPositionError" type="number" min="0.0000001" step="0.01" value="0.1"></label>
+<label>Max direction error (rad)<input name="maxAngularError" type="number" min="0.000000001" step="0.000001" value="0.00001"></label>
+</fieldset>
+<button id="start" type="submit">Run CPU + WebGPU comparison</button>
+<button id="save" type="button" disabled>Export JSON</button>
+</form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<p class="warning"><strong>Interpretation:</strong> a GPU speedup is useful only if the numerical gate passes for the intended application. No GPU hardware-acceleration assertion is made.</p>
+<pre id="report" aria-label="Benchmark JSON">No report yet.</pre>
+<script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
+<script src="../src/optics/OpticalRayTracer.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
+<script>
+(function(){'use strict';
+ var form=document.getElementById('benchmark'),button=document.getElementById('start');
+ var save=document.getElementById('save'),status=document.getElementById('status');
+ var display=document.getElementById('report'),latest=null;
+ form.addEventListener('submit',async function(e){
+  e.preventDefault();button.disabled=true;save.disabled=true;latest=null;
+  status.textContent='Computing (CPU + GPU)…';
+  try{
+   var controls=new FormData(form),params={};
+   for(var pair of controls.entries())params[pair[0]]=['atmosphere','geometry'].includes(pair[0])?pair[1]:Number(pair[1]);
+   latest=await CurvatureWebGPUOpticsBenchmark.run(params);
+   status.textContent=latest.status==='unavailable'?'WebGPU unavailable: '+latest.reason:
+    (latest.qualified?'Numerical gates PASSED (finite sample only).':'Numerical gates FAILED; no GPU promotion.');
+   save.disabled=false;display.textContent=JSON.stringify(latest,null,2);
+  }catch(error){status.textContent='Benchmark failed: '+error.message;display.textContent=error.stack||String(error);}
+  finally{button.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var blob=new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'});
+  var url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='curvature-webgpu-optics-140.8.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+</script></body></html>

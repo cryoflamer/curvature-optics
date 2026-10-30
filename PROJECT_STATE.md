@@ -1,3 +1,20 @@
+## Patch 140.8 — Isolated WebGPU optical RK4 batch benchmark (2026-10-30)
+
+- Added a standalone browser-only GPU/CPU fixed-step ray integration experiment at
+  `tools/webgpu-optics-1408.html`, with implementation at
+  `src/diagnostics/CurvatureWebGPUOpticsBenchmark.js`.
+- Tests WebGPU `f32` RK4 on independent rays against the **production CPU f64
+  stepper** with matching f32-quantized initial vectors; supports Flat/Globe,
+  vacuum, standard and two engineered refractive profiles. Exports measured
+  sample timing and fail-closed position/angle deviation gates to JSON.
+- GPU timing includes input uploads, compute and full readback; device and
+  pipeline initialization are timed separately. It is **not** a full shooting
+  solver or a production integration. Hardware acceleration not asserted.
+- Added seven focused Node tests (including a mock GPU host path); real WGSL
+  compilation and GPU parity require an actual browser GPU adapter.
+- Production shooting, geometry, profile and UI defaults are unchanged.
+  See `docs/WEBGPU_OPTICAL_RK4_BENCHMARK_140_8.md`.
+
 ## Patch 140.7 — Forward-x shooting bracket boundary repair (2026-10-30)
 
 Fixed the production bracket-first shooter's near-vertical first probe: an
