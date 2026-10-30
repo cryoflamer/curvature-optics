@@ -1102,3 +1102,25 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   material diversity, caching, horizon, or rasterization. The result only
   selects promising sizes/optimization paths. `PERFORMANCE_PROFILE_ONLY` is
   never a production authorization; full-frame tests still needed.
+
+## #140.12.6 — distinct physical-edge shooting and 1D projected sample comparison
+
+- Extended the **existing** deterministic scene-fixture generator and existing
+  reference JSON: each geometry now contains 1024 different points selected
+  from >1000 real 12-tower physical polygon-edge samples (subdivided in the
+  source mesh before coordinate conversion). The original 64 vertices and
+  previous experiments are preserved unchanged. No new repository files.
+- `runDensePerformance` in the existing tolerance diagnostics runs nested
+  64/128/256/512/1024 target subsets using a bit-reversal order that spans
+  the scene and preserves earlier prefixes for stability checks. CPU and GPU
+  are measured separately; GPU reuses its pipelines/buffers/device.
+- The largest batch reports illustrative subpixel launch-angle shifts, status
+  disagreements, unresolved rays, ground contact-class disagreements and
+  sampled projected visible-target row occupancy; a dedicated red diagnostic
+  strip shows unmatched rows outside the 1 px budget. Replayed GPU-angle
+  ground events for at most 24 disputed targets are **not timed as GPU work**.
+- Added the eleventh mode to canonical `tools/webgpu-optics.html` and reused
+  existing unit tests/docs. Does not compare full rendered scenes or actual
+  tower silhouettes, does not measure FPS, and never authorizes production.
+- Actual browser GPU performance/visual results for this dense case remain
+  **pending** until an exported #140.12.6 JSON is obtained.

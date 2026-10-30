@@ -15,7 +15,8 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 <option value="6">#140.12.2 — angle-bracket refinement A/B</option>
 <option value="7">#140.12.3 — physical 5 mm qualification</option>
 <option value="8">#140.12.4 — screen-space impact proxy</option>
-<option value="9" selected>#140.12.5 — GPU shooting scaling (64–1024)</option>
+<option value="9">#140.12.5 — GPU shooting scaling (64–1024)</option>
+<option value="10" selected>#140.12.6 — dense tower-edge shooting (64–1024)</option>
 </select></label>
 <section id="panel-0" class="experiment" hidden>
 
@@ -221,7 +222,7 @@ silhouette rasterization, a full-frame diff or proof of visual equivalence.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Visual proxy diagnostic JSON">No report yet.</pre>
 </section>
-<section id="panel-9" class="experiment">
+<section id="panel-9" class="experiment" hidden>
 <h1>Curvature #140.12.5 — GPU shooting throughput scaling (research)</h1>
 <p>Run actual independent GPU shooting at 64, 128, 256, 512 and up to 1024 rays,
 with the same <strong>residual-stop</strong> solver and one reusable WebGPU device,
@@ -243,6 +244,32 @@ no actual frame/silhouette comparison or production switch is performed.</p>
 <p id="status" role="status" aria-live="polite">Not run.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="GPU throughput scaling JSON">No report yet.</pre>
+</section>
+<section id="panel-10" class="experiment">
+<h1>Curvature #140.12.6 — real polygon-edge dense shooting and projected target coverage</h1>
+<p>Sample <strong>different points along actual 12-tower physical polygon edges</strong> (not copies of 64 rays),
+with nested batches of 64, 128, 256, 512 and 1024. A reusable GPU session handles each scene;
+CPU f64 shooting runs separately for comparison. This mode measures scalability with more diverse
+real geometry than #140.12.5.</p>
+<p>At the largest batch, compare <strong>one-dimensional projected visible-target occupancy</strong>
+between CPU and GPU and flag unresolved/occlusion disagreements. The 1 px budget is for reviewing
+nearby sample locations only. <strong>This is not an actual image, filled tower silhouette,
+production camera comparison, or FPS measurement.</strong> No production backend changes.</p>
+<form id="dense-controls">
+<fieldset><legend>Dense real-geometry sampling</legend>
+<label>Largest batch<select name="maxRays"><option value="256">256</option><option value="512">512</option><option value="1024" selected>1024</option></select></label>
+<label>Warm samples per size<select name="warmRepeats"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></label>
+</fieldset>
+<button id="start" type="submit">Measure dense GPU shooting + projected coverage</button>
+<button id="save" type="button" disabled>Export #140.12.6 JSON</button>
+</form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary"></div>
+<p><small>Projected target-visibility sample rows (CPU blue / GPU orange; red = unmatched beyond 1 px).
+Rows are magnified to the occupied vertical range, not a true rendered image.</small></p>
+<canvas id="plot-flat" width="920" height="150" style="max-width:100%;border:1px solid #bec9d5" aria-label="Flat projected visible-target point occupancy"></canvas>
+<canvas id="plot-globe" width="920" height="150" style="max-width:100%;border:1px solid #bec9d5" aria-label="Globe projected visible-target point occupancy"></canvas>
+<pre id="report" aria-label="Dense GPU and projected-target occupancy JSON">No report yet.</pre>
 </section>
 <script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="../src/optics/OpticalRayTracer.js"></script>
@@ -631,7 +658,70 @@ no actual frame/silhouette comparison or production switch is performed.</p>
  });
 }());
 
+(function(){'use strict';
+ var panel=document.getElementById('panel-10'),form=panel.querySelector('#dense-controls');
+ var start=panel.querySelector('#start'),save=panel.querySelector('#save');
+ var status=panel.querySelector('#status'),summary=panel.querySelector('#summary');
+ var report=panel.querySelector('#report'),latest=null;
+ function plot(canvas,scene){
+  var ctx=canvas.getContext('2d');if(!ctx)return;
+  var w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#263445';ctx.font='13px system-ui';ctx.fillText(scene.id+' — projected samples, not full silhouettes',10,17);
+  var rows=scene.projectedTargetOccupancy.sampleRows;
+  var combined=rows.cpuVisible.concat(rows.gpuVisible);
+  if(!combined.length){ctx.fillText('No visible projected samples in viewport',10,65);return;}
+  var low=Math.max(0,Math.min.apply(null,combined)-5);
+  var high=Math.min(scene.projectedTargetOccupancy.view.viewportHeightPx-1,Math.max.apply(null,combined)+5);
+  var x=function(value){return 80+(w-105)*(value-low)/Math.max(1,high-low);};
+  function stripe(values,y,color){
+   ctx.fillStyle=color;
+   values.forEach(function(value){ctx.fillRect(Math.round(x(value)),y,2,22);});
+  }
+  ctx.fillStyle='#263445';ctx.fillText('CPU',10,54);ctx.fillText('GPU',10,91);ctx.fillText('Δ > 1px',10,128);
+  stripe(rows.cpuVisible,37,'#286bc4');stripe(rows.gpuVisible,74,'#db7621');
+  stripe(rows.unmatchedCpu.concat(rows.unmatchedGpu),111,'#be2836');
+  ctx.fillStyle='#263445';ctx.font='11px system-ui';
+  ctx.fillText(low+' px',80,147);ctx.fillText(high+' px',w-78,147);
+ }
+ form.addEventListener('submit',async function(event){
+  event.preventDefault();if(!form.reportValidity())return;
+  start.disabled=true;save.disabled=true;latest=null;summary.textContent='';
+  status.textContent='Loading physical polygon-edge samples…';
+  try{
+   var response=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!response.ok)throw Error('Fixture fetch failed: '+response.status);
+   latest=await CurvatureWebGPUPhysicalTolerance14123.runDensePerformance(await response.json(),undefined,{
+    maxRays:Number(form.elements.maxRays.value),warmRepeats:Number(form.elements.warmRepeats.value),
+    onProgress:function(scene,count,max){status.textContent='Measured '+scene+' '+count+'/'+max+' distinct targets…';}
+   });
+   report.textContent=JSON.stringify(latest,null,2);
+   status.textContent='Decision: '+latest.decision.verdict+' — '+latest.decision.nextAction;
+   latest.scenes.forEach(function(scene){
+    if(scene.status==='measured')plot(panel.querySelector(scene.id.endsWith('.flat')?'#plot-flat':'#plot-globe'),scene);
+   });
+   summary.textContent=latest.scenes.map(function(s){return s.id+': '+s.status+
+    (s.status==='measured'?'; '+s.scaling.map(function(x){return x.rays+' distinct rays '+
+      x.gpuWarmMedianMs.toFixed(1)+' ms ('+x.gpuCpuWarmSpeedup.toFixed(2)+'× CPU)';}).join(', ')+
+      '; max projected shift '+s.projectedTargetOccupancy.maxLaunchAngleProxyShiftPx.toFixed(3)+
+      ' px; occupancy disagreements '+s.projectedTargetOccupancy.unmatchedBeyondPixelBudget+
+      '; status disagreements '+s.projectedTargetOccupancy.counts.statusDisagreements:
+      '; '+s.reason);}).join(' | ');
+   save.disabled=false;
+  }catch(error){status.textContent='Dense shooting failed: '+error.message;
+   report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.12.6-dense-performance.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
 (function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
-for(var i=0;i<10;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+for(var i=0;i<11;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
 });}());
 </script></body></html>

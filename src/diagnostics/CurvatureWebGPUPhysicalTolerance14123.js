@@ -405,9 +405,190 @@
         'CPU replay and ground checks occur only for the 64 original fixture targets, outside all timed GPU runs',
         'GPU execution is experimental and does not authorize replacing the production solver or renderer']};
   }
+  // #140.12.6: dense REAL boundary samples (the polygon-edge sample pool is
+  // generated from the same physical scene). No repeated target coordinates.
+  // Bit reversal spreads the first 64/128/... targets across the whole scene
+  // while guaranteeing that previous targets keep their indices on growth.
+  function denseOptions(options){
+    options=options||{};
+    var maxRays=options.maxRays===undefined?1024:options.maxRays;
+    var warmRepeats=options.warmRepeats===undefined?2:options.warmRepeats;
+    if(![256,512,1024].includes(maxRays)||![1,2,3].includes(warmRepeats))
+      throw RangeError('Dense scaling requires 256/512/1024 maximum rays and 1–3 warm repeats');
+    return {maxRays:maxRays,warmRepeats:warmRepeats,
+      visual:screenProxyOptions(Object.assign({pixelBudgetPx:1},options.visual||{}))};
+  }
+  function reverseTenBits(i){
+    var reversed=0;
+    for(var j=0;j<10;j++){reversed=(reversed<<1)|(i&1);i>>=1;}
+    return reversed;
+  }
+  function denseRequest(scene,base,count){
+    gpu.checked(base);
+    if(!scene||!Array.isArray(scene.denseTargets)||scene.denseTargets.length!==1024||
+      ![64,128,256,512,1024].includes(count))
+      throw RangeError('Exactly 1024 precomputed production polygon-edge targets required');
+    var surface=rayTracer.resolveGeometry({geometry:base.geometry,radius:base.radius}).surface;
+    var targets=Array.from({length:count},function(_,i){
+      var target=scene.denseTargets[reverseTenBits(i)];
+      if(!Array.isArray(target)||target.length!==2||!target.every(Number.isFinite)||
+          target[0]<=0||target[1]<0)throw Error('Invalid physical polygon-edge target');
+      return surface.surfacePoint2(target[0],target[1]);
+    });
+    return Object.assign({},base,{targets:targets});
+  }
+  // A one-dimensional raster of projected *visible target point occupancy*.
+  // This is NOT an image, polygon fill, depth buffer, production camera,
+  // silhouette or full-frame parity measurement. Unknown rays never count as
+  // resolved pixels. A one-pixel neighborhood is a triage comparison only.
+  function projectedTargetOccupancy(request,cpu,gpuResponse,settings){
+    var view=screenProxyOptions(settings);
+    contract.validateResponse(request,cpu);contract.validateResponse(request,gpuResponse);
+    var cpuMask=new Uint8Array(view.viewportHeightPx),gpuMask=new Uint8Array(view.viewportHeightPx);
+    var counts={targets:request.targets.length,projectedPairs:0,
+      subpixelAngleProxy:0,overPixelBudget:0,statusDisagreements:0,
+      unresolvedPairs:0,groundEvidenceDisagreements:0,offscreenPairs:0};
+    var maxShift=0,review=[],profile=rayTracer.atmosphere(request.atmosphere,request.profileOptions);
+    for(var i=0;i<request.targets.length;i++){
+      var a=cpu.results[i],b=gpuResponse.results[i];
+      var ay=perspectiveY(a.angle,view),by=perspectiveY(b.angle,view);
+      var shift=ay===null||by===null?null:Math.abs(ay-by);
+      var uncertain=['solver_failed','indeterminate'].includes(a.status)||
+        ['solver_failed','indeterminate'].includes(b.status);
+      var statusMismatch=a.status!==b.status;
+      var eventA=a.ground&&a.ground.event,eventB=b.ground&&b.ground.event;
+      var groundMismatch=!!(a.ground&&a.ground.hitGround)!==!!(b.ground&&b.ground.hitGround)||
+        !!eventA!==!!eventB||(eventA&&eventB&&eventA.contact!==eventB.contact);
+      if(uncertain)counts.unresolvedPairs++;
+      if(statusMismatch)counts.statusDisagreements++;
+      if(groundMismatch)counts.groundEvidenceDisagreements++;
+      if(shift===null)counts.offscreenPairs++;
+      else{
+        counts.projectedPairs++;maxShift=Math.max(maxShift,shift);
+        if(shift<=view.pixelBudgetPx)counts.subpixelAngleProxy++;
+        else counts.overPixelBudget++;
+      }
+      // A visible target marks one sample pixel (not a filled geometry pixel).
+      if(a.status==='visible'&&ay!==null)cpuMask[Math.min(cpuMask.length-1,Math.max(0,Math.floor(ay)))]=1;
+      if(b.status==='visible'&&by!==null)gpuMask[Math.min(gpuMask.length-1,Math.max(0,Math.floor(by)))]=1;
+      if(statusMismatch||groundMismatch||uncertain||(shift!==null&&shift>view.pixelBudgetPx)){
+        review.push({targetIndex:i,cpuStatus:a.status,gpuStatus:b.status,
+          shiftPx:shift,groundEvidenceDifferent:groundMismatch});
+      }
+    }
+    var strict=0,outsideBudget=0,occupiedCpu=0,occupiedGpu=0;
+    var cpuRows=[],gpuRows=[],unmatchedCpuRows=[],unmatchedGpuRows=[];
+    var radius=Math.ceil(view.pixelBudgetPx);
+    function nearby(mask,i){
+      for(var j=Math.max(0,i-radius);j<=Math.min(mask.length-1,i+radius);j++)
+        if(mask[j])return true;
+      return false;
+    }
+    for(var px=0;px<cpuMask.length;px++){
+      var c=cpuMask[px],g=gpuMask[px];
+      occupiedCpu+=c;occupiedGpu+=g;
+      if(c)cpuRows.push(px);
+      if(g)gpuRows.push(px);
+      if(c!==g)strict++;
+      if(c&&!nearby(gpuMask,px)){outsideBudget++;unmatchedCpuRows.push(px);}
+      if(g&&!nearby(cpuMask,px)){outsideBudget++;unmatchedGpuRows.push(px);}
+    }
+    // A bounded CPU ground replay is used only to explain contentious rays;
+    // never inserted into GPU timings and never confused with frame parity.
+    var groundReviews=review.slice(0,24).map(function(item){
+      return {targetIndex:item.targetIndex,
+        cpuGroundReplayOfGpuAngle:groundReplay(request,gpuResponse.results[item.targetIndex],profile)};
+    });
+    return {kind:'1D projected visible-target occupancy (NOT rendered silhouettes)',
+      view:view,counts:counts,maxLaunchAngleProxyShiftPx:maxShift,
+      occupiedSamplePixels:{cpu:occupiedCpu,gpu:occupiedGpu},
+      sampleRows:{cpuVisible:cpuRows,gpuVisible:gpuRows,
+        unmatchedCpu:unmatchedCpuRows,unmatchedGpu:unmatchedGpuRows},
+      strictOccupancyDifferencePixels:strict,unmatchedBeyondPixelBudget:outsideBudget,
+      reviewTargetCount:review.length,reviewTargets:review.slice(0,64),
+      reviewListTruncated:review.length>64,groundReplays:groundReviews,
+      groundReplayTruncated:review.length>24,
+      actualRenderedImageCompared:false,actualSilhouetteCompared:false,
+      visualEquivalenceProven:false};
+  }
+  async function runDensePerformance(fixture,deps,options){
+    options=options||{};
+    var settings=denseOptions(options),solver=options.solver||gpu;
+    var entries=gpu.fixtureRequests(fixture),reports=[];
+    for(var entry of entries){
+      var scene=fixture.scenes.find(function(s){return s.id===entry.id;});
+      var session=null,steps=[],device=null,baseline=null,quality=null;
+      try{
+        // Validate dense source before allocating a GPU session.
+        denseRequest(scene,entry.request,settings.maxRays);
+        session=await solver.createSession(settings.maxRays,deps,{refinement:'residual-stop'});
+        for(var count=64;count<=settings.maxRays;count*=2){
+          var req=denseRequest(scene,entry.request,count),began=now();
+          var cpu=await contract.solveCpuBatch(req),cpuMs=now()-began;
+          var measured=await session.solve(req,{warmRepeats:settings.warmRepeats});
+          device=measured.device;
+          var timing=measured.timing,warm=timing.gpuWarmMedianMs;
+          if(!Number.isFinite(warm)||warm<=0||!Number.isFinite(cpuMs))
+            throw Error('Invalid dense scaling timing');
+          var prefix=measured.response.results;
+          var stable=baseline===null||prefix.slice(0,baseline.length).every(function(r,i){
+            return JSON.stringify(r)===JSON.stringify(baseline[i]);
+          });
+          baseline=prefix;
+          // The first and final sizes provide independent visual diagnostics;
+          // intermediate batches are timed with no extra CPU replay.
+          if(count===settings.maxRays)
+            quality=projectedTargetOccupancy(req,cpu,measured.response,settings.visual);
+          steps.push({rays:count,uniquePhysicalTargets:count,
+            cpuMs:cpuMs,gpuFirstBatchMs:timing.gpuUploadToReadbackMs,
+            gpuWarmMedianMs:warm,gpuWarmRunsMs:timing.warmRunMs,
+            gpuCpuWarmSpeedup:cpuMs/warm,gpuWarmRaysPerSecond:1000*count/warm,
+            gpuWallClockPhases:timing.wallClockPhases,
+            gpuOutputBitwiseStable:timing.warmOutputBitwiseStable,
+            sharedPrefixStable:stable});
+          if(typeof options.onProgress==='function')options.onProgress(entry.id,count,settings.maxRays);
+        }
+        reports.push({id:entry.id,status:'measured',source:'real 12-tower physical polygon edges',
+          denseSourcePointCount:scene.denseSourcePointCount,
+          sessionCapacity:settings.maxRays,setupMs:session.setupMs,
+          sessionReusesDevicePipelinesBuffers:true,device:device,
+          scaling:steps,projectedTargetOccupancy:quality});
+      }catch(error){reports.push({id:entry.id,status:'unavailable',
+        reason:String(error.message||error),scaling:steps});}
+      finally{if(session)session.close();}
+    }
+    var measuredAll=reports.every(function(s){return s.status==='measured';});
+    var stable=measuredAll&&reports.every(function(s){return s.scaling.every(function(t){
+      return t.gpuOutputBitwiseStable&&t.sharedPrefixStable;
+    });});
+    return {version:'140.12.6',status:measuredAll?'finished':'incomplete',
+      experiment:'Dense physical polygon-edge GPU shooting scaling and 1D projected visible-target occupancy diagnostic',
+      measurement:{batchSizes:'64, 128, 256, 512, 1024 (up to selected maximum)',
+        batchConstruction:'Distinct distance-distributed samples on real 12-tower polygon edges; nested 10-bit bit-reversal ordering',
+        gpuPolicy:'residual-stop',warmRepeats:settings.warmRepeats,
+        deviceSession:'One device, two pipelines and fixed-capacity buffers reused per scene',
+        timings:'CPU f64 shooting separately; GPU warm includes browser upload/dispatch/fence/readback wall-clock',
+        screenProxy:'1D projected visible-target occupancy and angle proxy at the largest batch, not production rendering'},
+      scenes:reports,decision:{verdict:!measuredAll?'INCONCLUSIVE':!stable?
+        'DENSE_STABILITY_REVIEW':'DENSE_PROFILE_REVIEW_ONLY',
+        productionAuthorized:false,visualEquivalenceProven:false,
+        requiresFullFrameComparison:true,
+        nextAction:!measuredAll?'Resolve unavailable dense GPU/CPU measurements; retain CPU':
+          !stable?'Investigate batch-dependent GPU output; retain CPU':
+          'Review projected-target occupancy disagreements; compare actual production CPU/GPU frames before backend integration'},
+      limitations:[
+        'The dense targets lie on real physical polygon boundaries; they are not independent random rays or pixels of a rendered frame',
+        '1D visible-target occupancy is not a silhouette, depth buffer, rasterized geometry, camera projection or full-frame image diff',
+        'Subpixel launch-angle differences cannot certify correct visible/blocked classifications',
+        'Only a bounded subset of contentious GPU rays receives independent CPU ground replay, outside all GPU timings',
+        'CPU has one wall-clock sample per size; GPU warm timings include transfer/synchronization and are not kernel timestamps',
+        'GPU solve is experimental; no production renderer or backend is changed or authorized']};
+  }
   return Object.freeze({tolerance:tolerance,cpuReplay:cpuReplay,
     physicalComparison:physicalComparison,screenProxyOptions:screenProxyOptions,
     perspectiveY:perspectiveY,groundReplay:groundReplay,visualComparison:visualComparison,
     decide:decide,decideVisual:decideVisual,run:run,
-    performanceOptions:performanceOptions,replicatedRequest:replicatedRequest,runPerformance:runPerformance});
+    performanceOptions:performanceOptions,replicatedRequest:replicatedRequest,runPerformance:runPerformance,
+    denseOptions:denseOptions,denseRequest:denseRequest,reverseTenBits:reverseTenBits,
+    projectedTargetOccupancy:projectedTargetOccupancy,runDensePerformance:runDensePerformance});
 }));

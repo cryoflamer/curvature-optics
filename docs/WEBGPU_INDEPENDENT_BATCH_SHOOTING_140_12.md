@@ -137,3 +137,40 @@ comparison, rendered silhouette test, or permission for GPU production
 routing. The old 2× cold gate remains in archived historical tests but is
 **not** a gate for the profiling report. Browser results must be uploaded
 before drawing conclusions about real GPU/CPU throughput or frame quality.
+
+## #140.12.6 — dense physical tower-edge shooting (research only)
+
+The prior #140.12.5 browser measurements showed **11.93× Flat / 11.53× Globe
+warm GPU shooting speedup at 1024 rays** on Intel Gen12 LP, but those batches
+repeated the same 64 targets. The next test removes that limitation without
+changing production optics or introducing new application modules.
+
+- The **existing** `tools/generate-webgpu-scene-targets-14010.js` also samples
+  twelve subdivisions of each physical object polygon edge **before** optical
+  coordinate transformation. The existing reference JSON retains its original
+  64 vertices verbatim and includes a new set of **1024 unique** polygon-edge
+  points for Flat and Globe. These are actual points on original physical
+  boundaries, not interpolations between separate towers or repetitions of
+  the same 64 rays. Regenerate using the existing fixture generator.
+- The existing `CurvatureWebGPUPhysicalTolerance14123.js` exposes
+  `runDensePerformance()`: nested, deterministic bit-reversal ordering spreads
+  target selections across the scene while keeping every earlier batch prefix
+  identical. Sizes are 64 / 128 / 256 / 512 / 1024, configurable up to 1024.
+  One WebGPU device/pipeline/buffer session per scene; independent CPU f64
+  shooting baseline per size; separately recorded browser warm timings.
+- At the largest batch, a **1D vertical projected visible-target point-occupancy
+  diagnostic** compares CPU/GPU visible sample rows, including strict sample-row
+  occupancy differences and unmatched rows outside a **1 px** neighborhood.
+  Every unresolved or differing visibility classification remains listed for
+  review, regardless of angle shift. CPU ground replay is capped at 24
+  contentious targets and happens **outside** GPU timings. The existing HTML
+  shows magnified CPU/GPU/discordant projected target-row strips to inspect
+  gross mismatches. **These are not actual silhouettes or rendered images.**
+- The eleventh experiment mode lives in the **same**
+  `tools/webgpu-optics.html`; export
+  `curvature-webgpu-optics-140.12.6-dense-performance.json`.
+- `DENSE_PROFILE_REVIEW_ONLY` does **not** establish frame parity, FPS, complete
+  occlusion equivalence, or authorize GPU production rendering. Actual
+  application projection, filled geometry, clipping, painter, async orchestration,
+  driver-dependent rendering and full-frame timing remain separately untested.
+  Node tests validate construction/orchestration, not real WGSL execution.
