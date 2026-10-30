@@ -150,8 +150,10 @@
   // experiment, not a numerically certified shooting replacement.
   function gpuFirstGrid(model,count,deps,options){
     options=options||{};
-    if(options.layout!==undefined&&options.layout!=='uniform'&&options.layout!=='near-ground')
+    if(options.layout!==undefined&&!['uniform','near-ground','vertical-32','distance-focused'].includes(options.layout))
       throw RangeError('Invalid GPU-first grid height layout');
+    if(options.layout==='vertical-32'&&count<1024)
+      throw RangeError('Vertical-32 GPU-first grid requires at least 1024 targets');
     if(![128,256,512,1024,2048,4096,8192].includes(count)||!deps||!deps.composition||
         !deps.silhouette||!deps.surfaces||!deps.branch)
       throw TypeError('Invalid GPU-first grid inputs');
@@ -171,7 +173,7 @@
     });
     if(!distances.length)throw Error('GPU-first grid requires positive-distance physical objects');
     distances.sort(function(a,b){return a-b;});
-    var nh=count>=2048?16:8,nd=count/nh;
+    var nh=options.layout==='vertical-32'?32:(count>=2048?16:8),nd=count/nh;
     if(count===128){nd=32;nh=4;}
     var dMin=100,dMax=99900,objectMin=distances[0],objectMax=distances[distances.length-1];
     // Uniform quantiles give scene towers most of the columns, while a small
@@ -211,13 +213,39 @@
     axisD.push(dMax);
     for(var n=1;n<axisD.length;n++)if(axisD[n]<=axisD[n-1])
       axisD[n]=axisD[n-1]+1e-5;
+    // #140.12.17: redistribute the SAME number of distance columns towards
+    // the nearest 6 km, preserving the scene-derived baseline distribution
+    // within each segment (rather than sampling a uniform artificial scene).
+    // Neither CPU rays nor CPU frame pixels decide where GPU samples go.
+    if(options.layout==='distance-focused'){
+      var focusLimit=Math.min(6000,Math.max(axisD[0]+1,objectMax));
+      if(focusLimit>=axisD[axisD.length-1])focusLimit=axisD[axisD.length-2];
+      var nearAxis=axisD.filter(function(d){return d<focusLimit;});
+      nearAxis.push(focusLimit);
+      var farAxis=[focusLimit].concat(axisD.filter(function(d){return d>focusLimit;}));
+      if(nearAxis.length<2||farAxis.length<2)
+        throw Error('Distance-focused GPU grid requires both near and far coverage');
+      function resample(axis,fraction){
+        var at=fraction*(axis.length-1),lo=Math.floor(at),hi=Math.min(axis.length-1,lo+1);
+        return axis[lo]+(axis[hi]-axis[lo])*(at-lo);
+      }
+      var nearColumns=Math.max(3,Math.min(nd-3,Math.round(nd*0.45)));
+      var focused=[];
+      for(var f=0;f<nearColumns;f++)
+        focused.push(resample(nearAxis,f/(nearColumns-1)));
+      for(var g=0;g<nd-nearColumns;g++)
+        focused.push(resample(farAxis,(g+1)/(nd-nearColumns)));
+      axisD=focused;
+      for(var k=1;k<nd;k++)if(!(axisD[k]>axisD[k-1]))
+        throw Error('Distance-focused GPU grid is not strictly monotone');
+    }
     var heightMax=Math.max(20,maxH+2),axisH=[];
     for(var z=0;z<nh;z++)axisH.push(heightMax*Math.pow(z/(nh-1),1.25));
     // #140.12.16: same ray budget, but shift vertical samples towards ground
     // *only* for columns near the observer. Far columns retain the original
     // height axis. This is a hypothesis test for near-tower base artifacts,
     // not an extra GPU pass, an f64 oracle, or an accuracy certification.
-    var local=options.layout==='near-ground',heightColumns=null;
+    var local=['near-ground','vertical-32','distance-focused'].includes(options.layout),heightColumns=null;
     if(local){
       heightColumns=axisD.map(function(d){
         var proximity=Math.max(0,Math.min(1,(6000-d)/5000));
@@ -239,9 +267,10 @@
     return {request:request,distances:axisD,heights:axisH,heightColumns:heightColumns,
       columns:nd,rows:nh,objectVertices:vertexCount,
       objectDistanceRange:[objectMin,objectMax],maxHeight:heightMax,
-      method:local?'authored-scene-local-near-ground-height-grid':
+      method:options.layout==='distance-focused'?'authored-scene-near-distance-height-grid':
+        local?'authored-scene-local-near-ground-height-grid':
         'authored-physical-scene-distance-height-grid',
-      layout:local?'near-ground':'uniform',cpuOracleDiscovery:false};
+      layout:options.layout||'uniform',cpuOracleDiscovery:false};
   }
   // #140.12.15: the GPU session is intentionally bounded to 1024 targets.
   // Split a denser physical scene grid into deterministic sub-batches without

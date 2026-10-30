@@ -140,11 +140,11 @@ test('140.1: profiler controls and documentation remain available with optional 
 });
 
 
-test('140.1.2: profiler and app use matching cache-busted module versions',()=>{
+test('140.1.2: profiler and app use explicit cache-busted module versions',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   assert.match(html,/ModernRenderProfiler\.js\?v=140\.3/);
-  assert.match(html,/ModernApp\.js\?v=140\.3/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.17/);
   assert.match(app,/typeof renderProfiler\.setEnabled!==['"]function['"]/);
   assert.match(app,/Profiler API mismatch/);
   const actual=profiler.create();

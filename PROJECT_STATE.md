@@ -1313,11 +1313,46 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   acceptance/fallback, rendered contours/fills/unresolved, and actual pixel
   differences against CPU A across both the whole frame and a **fixed
   lower-left region** (left 55%, bottom 45%). The region is an approximate
-  diagnostic for the user-observed near-tower base defect, not segmentation
-  of geometric surfaces and not an approval criterion.
+  diagnostic that was subsequently identified as the **wrong side** of the
+  user-observed near-tower base defect (the issue is lower-right), not
+  segmentation of geometric surfaces and not an approval criterion.
 - The report `curvature-compare-140.12.16-near-ground-ab.json` describes
   whether the selected region had fewer significant-pixel differences;
   it does not claim silhouette equivalence, a kernel-only benchmark,
   production approval, or a known speed win. Mock geometry/interpolation,
   batch ordering, cropped pixel comparison and UI integration are covered
   by tests; **actual WebGPU and frame pixels require a browser run**.
+
+## #140.12.17 — lower-right equal-budget near-ground / vertical / near-distance GPU grid A/B/C
+
+- Added a separate **Benchmark GPU grid A/B/C · lower-right** Compare action.
+  It explicitly fixes all three variants at **4096 predictor rays** and the
+  same 500 m RK4 step, independent of the older density selector. The old
+  #140.12.16 A/B remains available unmodified; its historical lower-left ROI
+  export is not retroactively relabeled as lower-right evidence.
+- The baseline retains **256 distance × 16 near-ground height** nodes; the
+  vertical candidate trades distance resolution for **128 × 32** nodes; the
+  distance candidate retains **256 × 16** but redistributes distance columns
+  to put roughly 45% at or below 6 km, following the original authored-scene
+  distance distribution within both near and far segments. Near-ground height
+  redistribution remains active in both new candidates; no CPU oracle pixels,
+  ray solves or outside scene geometry guide the grids. The existing response
+  order checks, per-column height interpolation and <=1024-ray batch capacity
+  are unchanged.
+- Performs **A/B/C/C/B/A** full WebGPU+Canvas B frames with a shared GPU
+  predictor pipeline, capturing each full bitmap and actual renderer counts.
+  The independent, forced-cold CPU f64 frame A is rendered only afterwards.
+  Exports full-frame and **lower-right 45% × 45%** significant pixel counts,
+  both run wall-clock timings and GPU lookup/uncertainty statistics per layout
+  (including how many distance columns are <=6 km), and a machine-readable
+  comparison versus the near-ground baseline. Restores the near-distance B
+  image after measurement as an **untimed** UI redraw, not as an oracle-selected
+  winner. The ROI is user-observed approximate coordinates, not a segmented
+  ground silhouette. One warm frame per candidate is not statistical proof of
+  timing superiority; visual comparison is not automatically approved.
+- Export: `curvature-compare-140.12.17-grid-abc-lower-right.json`. The
+  browser scripts have a new cache-busting query so stale Compare UI/code
+  does not hide the action. The production CPU solver, nonexperimental Scene,
+  earlier GPU experiments and visibility acceptance rules are unchanged.
+  Browser WebGPU timings and actual pixel results are still **unmeasured**
+  until the user runs the new button on GPU hardware.
