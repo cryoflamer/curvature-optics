@@ -1,3 +1,32 @@
+## Patch 140.11 — Independent GPU shooting architecture and diagnostic batch contract (2026-10-30)
+
+- Inspected current source call chain: `OpticalTargetProjection.solve` ->
+  `OpticalSharedRayField.sample/exact` -> recursive tower silhouette, polygon
+  fills and ground guides -> synchronous `CurvaturePhysicalSceneOptics.transform`
+  -> `CurvatureMainCanvasRenderer.renderPhysical` -> Scene/Compare redraw.
+  **A simple GPU `solveBatch` drop-in is NOT possible today:** the scene and
+  field are synchronous and generate new target queries adaptively.
+- Added diagnostic-only `src/diagnostics/CurvatureOpticalBatchContract1411.js`
+  with a fail-closed first-forward-x batch schema, actual CPU scalar-solver
+  reference adapter (`solveCpuBatch`, Promise-shaped), structural first-ground-
+  event evidence validation and result comparison. It is **not** a GPU solver,
+  nonblocking CPU worker, production path, or new UI. Focused contract tests
+  guard target order, Flat/Globe oracle parity, invalid inputs and current
+  synchronous integration boundary.
+- Defined a separately proposed GPU **parallel angle search + GPU root/event
+  classification**, rather than GPU warm starts re-solved on CPU; subsequent
+  wavefront/batch scene integration would need new async orchestration,
+  generation cancellation and per-configuration caching. See
+  `docs/WEBGPU_BATCH_SHOOTING_ARCHITECTURE_140_11.md` for interfaces, source
+  points, precise limitations and prospective numerical/performance gates.
+- #140.10 `SCENE_PERFORMANCE_STOP` stays **CLOSED / PARKED**; #140.11 is
+  an authorized design exploration, not a production promotion or automatic
+  launch of #140.12. CPU optics, Canvas/WebGL2 geometry selection and Modern
+  Scene/Compare defaults remain unchanged.
+- **Persistent UI rule:** no new `tools/` HTML per GPU experiment. Use the
+  existing `tools/webgpu-optics.html` with experiment selection. JS tests
+  cannot substitute for browser WGSL compilation and actual GPU validation.
+
 ## Patch 140.9.1 — Final bounded f32 precision diagnosis (2026-10-30)
 
 The user-supplied #140.9 Opera/Intel Gen-12LP export measured 18/18 scenarios,
