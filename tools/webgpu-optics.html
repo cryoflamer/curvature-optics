@@ -11,7 +11,8 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 <option value="0">#140.8 — single RK4 benchmark</option><option value="1">#140.9 — qualification matrix</option>
 <option value="2">#140.9.1 — precision diagnostic</option><option value="3">#140.10 — archived scene spike</option>
 <option value="4">#140.12 — independent GPU batch shooting</option>
-<option value="5" selected>#140.12.1 — per-target parity and warm timing</option>
+<option value="5">#140.12.1 — per-target parity and warm timing</option>
+<option value="6" selected>#140.12.2 — angle-bracket refinement A/B</option>
 </select></label>
 <section id="panel-0" class="experiment" hidden>
 
@@ -154,6 +155,25 @@ Production CPU/renderer are unaffected.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="Full JSON diagnostic report">No report yet.</pre>
 </section>
+<section id="panel-6" class="experiment">
+<h1>Curvature #140.12.2 — angle-bracket refinement A/B (research)</h1>
+<p>The previous #140.12.1 log showed early termination at 5 mm target residual,
+although the strict <code>1e-7 rad</code> angle gate still failed. This mode compares
+<strong>the original GPU residual-stop</strong> with <strong>GPU angle-bracket refinement</strong>
+on the same 128 Flat/Globe targets. CPU is an independent reference.</p>
+<p>A separate 7-ray <strong>flat vacuum analytical test</strong> checks launch angles
+against <code>atan2(target height - observer height, horizontal range)</code>.
+The revised GPU policy continues until its bracket reaches <code>2e-8 rad</code>,
+the <code>f32</code> representational midpoint stalls, or the 28-iteration limit.
+It does <em>not</em> change sweep density, atmosphere integration, or ground-event sampling.
+Warm measurements use three repeats per variant; each A/B variant starts a separate GPU session.
+This is <strong>not</strong> production authorization.</p>
+<button id="start" type="button">Run #140.12.2 independent A/B + vacuum check</button>
+<button id="save" type="button" disabled>Export #140.12.2 JSON</button>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary"></div>
+<pre id="report" aria-label="Full JSON refinement report">No report yet.</pre>
+</section>
 <script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="../src/optics/OpticalRayTracer.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
@@ -164,6 +184,7 @@ Production CPU/renderer are unaffected.</p>
 <script src="../src/diagnostics/CurvatureOpticalBatchContract1411.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUBatchShooting1412.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPURootRefinement14122.js"></script>
 <script>
 
 (function(){'use strict';
@@ -387,7 +408,44 @@ Production CPU/renderer are unaffected.</p>
  });
 }());
 
+(function(){'use strict';
+ var panel=document.getElementById('panel-6'),start=panel.querySelector('#start');
+ var save=panel.querySelector('#save'),status=panel.querySelector('#status');
+ var summary=panel.querySelector('#summary'),report=panel.querySelector('#report'),latest=null;
+ start.addEventListener('click',async function(){
+  start.disabled=true;save.disabled=true;latest=null;summary.textContent='';
+  status.textContent='Loading production-scene targets…';
+  try{
+   var response=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!response.ok)throw Error('Fixture fetch failed: '+response.status);
+   status.textContent='Running original and refined GPU solvers plus independent CPU and vacuum checks…';
+   latest=await CurvatureWebGPURootRefinement14122.run(await response.json());
+   report.textContent=JSON.stringify(latest,null,2);
+   status.textContent='Decision: '+latest.decision.verdict+' — '+latest.decision.nextAction;
+   summary.textContent=latest.scenes.map(function(s){return s.id+': '+s.status+
+    (s.status==='measured'?'; angular mismatches '+s.legacy.comparison.angleMismatch+
+      ' → '+s.corrected.comparison.angleMismatch+', ground mismatches '+
+      s.legacy.comparison.groundEventMismatch+' → '+s.corrected.comparison.groundEventMismatch+
+      ', GPU warm '+s.corrected.timing.gpuWarmMedianMs.toFixed(1)+' ms':
+      '; '+s.reason);}).join(' | ')+
+      ' | analytic corrected: '+(latest.analyticVacuum.status==='measured'?
+      latest.analyticVacuum.corrected.passed+'/'+latest.analyticVacuum.corrected.targets.length:
+      'unavailable');
+   save.disabled=false;
+  }catch(error){status.textContent='A/B diagnostic failed: '+error.message;
+   report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.12.2-refinement.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
 (function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
-for(var i=0;i<6;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+for(var i=0;i<7;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
 });}());
 </script></body></html>

@@ -92,8 +92,8 @@ test('140.12.1: diagnostic browser mode remains in single canonical HTML',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../tools/webgpu-optics.html'),'utf8');
  assert.match(html,/CurvatureWebGPUBatchDiagnostics14121\.run/);
  assert.match(html,/curvature-webgpu-optics-140\.12\.1-diagnostics\.json/);
- assert.match(html,/value="5" selected/);
- assert.match(html,/for\(var i=0;i<6;i\+\+\)/);
+ assert.match(html,/value="5"/);
+ assert.match(html,/for\(var i=0;i<7;i\+\+\)/);
  const named=fs.readdirSync(path.join(__dirname,'../tools')).filter(x=>/webgpu-optics.*\.html/.test(x));
  assert.deepEqual(named,['webgpu-optics.html']);
 });

@@ -22,7 +22,40 @@
   if(!integrator.includes('advanceCompensated'))throw Error('Kahan RK4 shader unavailable');
   // Binding 3 is only used in the refinement stage; stage A has a different
   // auto pipeline layout. Do not submit extra bindings to an auto layout.
-  function shader(refinement){
+  function shader(refinement,strict){
+    // #140.12.2 keeps the original refinement math unchanged as the archived
+    // residual-stop baseline. The alternate refinement is opt-in research.
+    var refinementLoop=strict?`
+  var refinementValid=true;
+  var usedIterations=0u;
+  for(var iter=0u;iter<config[12];iter=iter+1u){
+    usedIterations=iter+1u;
+    if(a.y==0.0){b=a;break;}
+    if(b.y==0.0){a=b;break;}
+    // Resolve the angle, not just the 5 mm target-height residual. In f32,
+    // the midpoint may become an endpoint before the desired width is reached.
+    if(b.x-a.x<=2e-8){break;}
+    let midpoint=a.x+(b.x-a.x)*0.5;
+    if(midpoint<=a.x || midpoint>=b.x){break;}
+    let shot=arrival(t,midpoint,false);
+    if(shot.valid<0.5){refinementValid=false;break;}
+    if(a.y*shot.residual<=0.0){b=vec4f(midpoint,shot.residual,shot.path,1.0);}
+    else{a=vec4f(midpoint,shot.residual,shot.path,1.0);}
+  }` : `
+  var usedIterations=0u;
+  for(var iter=0u;iter<config[12];iter=iter+1u){
+    usedIterations=iter+1u;
+    let angle=(a.x+b.x)*0.5;
+    let shot=arrival(t,angle,false);
+    if(shot.valid<0.5){break;}
+    if(abs(shot.residual)<=bitcast<f32>(config[11])){
+      a=vec4f(angle,shot.residual,shot.path,1.0);
+      b=a;
+      break;
+    }
+    if(a.y*shot.residual<=0.0){b=vec4f(angle,shot.residual,shot.path,1.0);}
+    else{a=vec4f(angle,shot.residual,shot.path,1.0);}
+  }`;
     return `struct Rays { data: array<vec4f> }
 @group(0) @binding(0) var<storage, read> seeds: Rays;
 @group(0) @binding(1) var<storage, read_write> results: Rays;
@@ -134,25 +167,12 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   }
   var a=coarse.data[i*config[9]+u32(bracket)];
   var b=coarse.data[i*config[9]+u32(bracket)+1u];
-  var usedIterations=0u;
-  for(var iter=0u;iter<config[12];iter=iter+1u){
-    usedIterations=iter+1u;
-    let angle=(a.x+b.x)*0.5;
-    let shot=arrival(t,angle,false);
-    if(shot.valid<0.5){break;}
-    if(abs(shot.residual)<=bitcast<f32>(config[11])){
-      a=vec4f(angle,shot.residual,shot.path,1.0);
-      b=a;
-      break;
-    }
-    if(a.y*shot.residual<=0.0){b=vec4f(angle,shot.residual,shot.path,1.0);}
-    else{a=vec4f(angle,shot.residual,shot.path,1.0);}
-  }
-  let angle=(a.x+b.x)*0.5;
+${refinementLoop}
+  let angle=${strict?'a.x+(b.x-a.x)*0.5':'(a.x+b.x)*0.5'};
   let shot=arrival(t,angle,true);
   // Fail closed if f32 integration did not meet the target residual threshold.
   var status=0.0;
-  if(shot.valid>0.5 && abs(shot.residual)<=bitcast<f32>(config[11])){
+  if(shot.valid>0.5 && abs(shot.residual)<=bitcast<f32>(config[11])${strict?' && refinementValid':''}){
     status=1.0;
     if(shot.impact>=0.0){
       if(shot.contact==1.0 && shot.impact<shot.path-bitcast<f32>(config[15])){
@@ -177,7 +197,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   results.data[i]=vec4f(angle,shot.residual,shot.path,shot.valid);
 }`}`;
   }
-  var WGSL_SWEEP=shader(false),WGSL_REFINE=shader(true);
+  var WGSL_SWEEP=shader(false),WGSL_REFINE=shader(true,false),
+    WGSL_REFINE_ANGLE_BRACKET=shader(true,true);
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function bits(f){var v=new DataView(new ArrayBuffer(4));v.setFloat32(0,f,true);return v.getUint32(0,true);}
   function checked(request){
@@ -276,6 +297,9 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   async function solveBatch(request,deps,options){
     checked(request);deps=deps||{};options=options||{};
     var warmRepeats=options.warmRepeats===undefined?0:options.warmRepeats;
+    var refinement=options.refinement===undefined?'residual-stop':options.refinement;
+    if(!['residual-stop','angle-bracket'].includes(refinement))
+      throw RangeError('Unsupported GPU root refinement policy');
     if(!Number.isInteger(warmRepeats)||warmRepeats<0||warmRepeats>5)
       throw RangeError('Diagnostic repeat count must be an integer from 0 to 5');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
@@ -290,7 +314,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       var result=device.createBuffer({size:size,usage:flags});buffers.push(result);return result;
     }
     try{
-      var modules=[WGSL_SWEEP,WGSL_REFINE].map(function(code){return device.createShaderModule({code:code});});
+      var modules=[WGSL_SWEEP,refinement==='angle-bracket'?
+        WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE].map(function(code){return device.createShaderModule({code:code});});
       for(var module of modules){
         if(module.getCompilationInfo){
           var info=await module.getCompilationInfo(),errors=info.messages.filter(function(m){return m.type==='error';});
@@ -348,7 +373,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         timing:{gpuSetupMs:setupMs,gpuUploadToReadbackMs:firstMs,
           gpuColdMs:setupMs+firstMs,warmRunMs:warmMs,
           gpuWarmMedianMs:median,warmOutputBitwiseStable:warmStable},
-        algorithm:{sampleAngles:SAMPLES,refineIterations:28,
+        algorithm:{sampleAngles:SAMPLES,refineIterations:28,refinement:refinement,
           branch:contract.BRANCH,productionAuthorized:false},
         device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',architecture:adapter.info.architecture||''}:null}};
     }finally{buffers.forEach(function(b){b.destroy();});if(device.destroy)device.destroy();}
@@ -397,6 +422,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         'No production backend switch or authorization']};
   }
   return Object.freeze({WGSL_SWEEP:WGSL_SWEEP,WGSL_REFINE:WGSL_REFINE,
+    WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE_ANGLE_BRACKET,
     checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,solveBatch:solveBatch,
     fixtureRequests:fixtureRequests,decision:decision,run:run});
 }));
