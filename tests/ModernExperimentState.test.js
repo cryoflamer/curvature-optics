@@ -164,3 +164,21 @@ function boot(href,saved){
   callbacks[0]();
   return {nodes,storage,location,assigned,copied,app};
 }
+test('140.12.9: GPU Compare mode and target count survive share URL and old links remain valid',()=>{
+  const e=experiment();
+  e.display.gpuProbe=true;
+  e.display.probeTargets=1024;
+  const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html?ui=modern',e);
+  assert.deepEqual(codec.readUrl(new URL(url).search),e);
+  assert.equal(codec.readUrl(new URL(url).search).display.gpuProbe,true);
+  assert.equal(codec.readUrl(new URL(url).search).display.probeTargets,1024);
+  const legacy=JSON.parse(JSON.stringify(e));
+  delete legacy.display.gpuProbe;
+  delete legacy.display.probeTargets;
+  assert.deepEqual(codec.validate(legacy).display,{mode:'compare',eyeLevel:true,horizon:true,
+    gpuProbe:false,probeTargets:256});
+  for(const invalid of [0,64,2048,'1024',null]){
+    const candidate=JSON.parse(JSON.stringify(e));candidate.display.probeTargets=invalid;
+    assert.throws(()=>codec.validate(candidate));
+  }
+});

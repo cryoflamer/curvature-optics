@@ -39,7 +39,8 @@
       showGrid:model.showGrid!==0,preset:scene.preset,resetPreset:scene.resetPreset,
       title:model.DemoText||'',description:model.Description||''},
       compare:{A:compare.A,B:compare.B,preset:compare.preset,selected:ui.selected},
-      display:{mode:ui.mode,eyeLevel:ui.eyeLevel,horizon:ui.horizon}});
+      display:{mode:ui.mode,eyeLevel:ui.eyeLevel,horizon:ui.horizon,
+        gpuProbe:ui.gpuProbe===true,probeTargets:ui.probeTargets||256}});
   }
   function validate(value){
     shape(value,['version','scene','compare','display']);
@@ -74,7 +75,10 @@
         atmosphere:choice(p.atmosphere,ATMOSPHERE),occlusionRadius:num(p.occlusionRadius,1,1e16)};
     }
     var d=value.display;
-    shape(d,['mode','eyeLevel','horizon']);
+    // Probe fields are optional for links saved before the GPU Compare experiment.
+    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets'].includes(k);})||
+      !['mode','eyeLevel','horizon'].every(function(k){return Object.prototype.hasOwnProperty.call(d,k);}))
+      throw RangeError('Invalid experiment display fields');
     return {version:VERSION,scene:{camera:camera,objects:objects,surface:surface,
       atmosphere:choice(s.atmosphere,ATMOSPHERE),occlusionRadius:num(s.occlusionRadius,1,1e16),
       showGrid:bool(s.showGrid),preset:choice(s.preset,SCENE_PRESETS),
@@ -82,7 +86,9 @@
       title:title(s.title,160),description:title(s.description,500)},
       compare:{A:physics(c.A),B:physics(c.B),preset:choice(c.preset,PAIR_PRESETS),
         selected:choice(c.selected,['A','B'])},
-      display:{mode:choice(d.mode,['scene','compare']),eyeLevel:bool(d.eyeLevel),horizon:bool(d.horizon)}};
+      display:{mode:choice(d.mode,['scene','compare']),eyeLevel:bool(d.eyeLevel),horizon:bool(d.horizon),
+        gpuProbe:d.gpuProbe===undefined?false:bool(d.gpuProbe),
+        probeTargets:d.probeTargets===undefined?256:choice(d.probeTargets,[128,256,512,1024])}};
   }
   function encode(value){
     var json=JSON.stringify(validate(value));

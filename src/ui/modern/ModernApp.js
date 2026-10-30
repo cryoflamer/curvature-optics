@@ -336,7 +336,8 @@
       preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
       resetPreset:state.preset
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
-      horizon:state.compareHorizon,selected:state.compareSelected});
+      horizon:state.compareHorizon,selected:state.compareSelected,
+      gpuProbe:state.compareGpuProbe,probeTargets:Number((probeUi('ModernGpuProbeCount')||{}).value)||256});
   }
   function storeExperiment(){
     if(!persistence.ready||!experiments||!root.location)return;
@@ -379,6 +380,14 @@
     state.compareSelected=data.compare.selected;
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
     state.mode=data.display.mode;
+    state.compareGpuProbe=data.display.gpuProbe;
+    var kind=probeUi('ModernCompareKind');if(kind)kind.value=state.compareGpuProbe?'gpu-probe':'models';
+    var probeGroup=probeUi('ModernGpuCompareProbe');if(probeGroup)probeGroup.hidden=!state.compareGpuProbe;
+    var count=probeUi('ModernGpuProbeCount');if(count)count.value=String(data.display.probeTargets);
+    var bTab=probeUi('ModernModelTabB');if(bTab)bTab.disabled=state.compareGpuProbe;
+    var pairPreset=probeUi('ModernPairPreset');if(pairPreset)pairPreset.disabled=state.compareGpuProbe;
+    if(state.compareGpuProbe)state.compareSelected='A';
+    state.probeLast=null;state.probeGeneration++;
     model.Update();
     var select=el('ModernPreset');if(select)select.value=scene.preset;
   }
@@ -799,6 +808,12 @@
       var preset=probeUi('ModernPairPreset');if(preset)preset.disabled=state.compareGpuProbe;
       probeStatus('Select Run to measure current scene.');
       redraw();
+    });
+    var countSelect=probeUi('ModernGpuProbeCount');
+    if(countSelect)countSelect.addEventListener('change',function(){
+      state.probeLast=null;state.probeGeneration++;
+      probeStatus('Target count changed · rerun the CPU/GPU sample probe.');
+      scheduleExperimentSave();
     });
     run.addEventListener('click',runCompareGpuProbe);
     var exportButton=probeUi('ModernGpuProbeExport');
