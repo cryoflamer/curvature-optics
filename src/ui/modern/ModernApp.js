@@ -8,7 +8,8 @@
     preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
+    geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},
+    compareGpuProbe:false,probeGeneration:0,probeBusy:false,probeLast:null};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -566,7 +567,7 @@
     try{
       var startedAt=profileNow();
       // A and B invoke the actual Physical renderer separately, not copied pixels.
-      var spec=state.compareConfig&&state.compareConfig[side];
+      var spec=state.compareConfig&&(state.compareGpuProbe?state.compareConfig.A:state.compareConfig[side]);
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
         occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,interactive:false,
         geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
@@ -694,12 +695,133 @@
     if(side!=='A'&&side!=='B')throw RangeError('Invalid Compare side');
     state.compareGraphs[side]=g;
   }
+  // Explicit Compare-only diagnostic: both real full frames remain CPU. The
+  // WebGPU path supplies angular point samples, not a painter or silhouette.
+  function probeUi(id){return typeof document.querySelector==='function'?document.querySelector('#'+id):null;}
+  function probeStatus(message){var node=probeUi('ModernGpuProbeStatus');if(node)node.textContent=message;}
+  function probeCanvas(which,rows,model){
+    var canvas=probeUi('ModernGpuProbeCanvas'+which);
+    if(!canvas||!canvas.getContext)return;
+    var ctx=canvas.getContext('2d');if(!ctx)return;
+    var width=canvas.width,height=canvas.height;
+    ctx.clearRect(0,0,width,height);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+    ctx.strokeStyle='#e6edf5';ctx.beginPath();ctx.moveTo(width/2,0);ctx.lineTo(width/2,height);
+    ctx.moveTo(0,height/2);ctx.lineTo(width,height/2);ctx.stroke();
+    var fov=model.camViewAngle,aspect=model.deviceRatio;
+    var halfV=Math.tan(fov/2)/Math.sqrt(1+aspect*aspect);
+    var halfH=halfV*aspect;
+    var pan=model.Pan*Math.PI/180,nick=model.Nick*Math.PI/180;
+    rows.forEach(function(row){
+      var angle=which==='CPU'?row.cpuAngle:row.gpuAngle;
+      var status=which==='CPU'?row.cpu:row.gpu;
+      if(!Number.isFinite(angle)||!Number.isFinite(row.azimuth))return;
+      var x=width/2+(width/2)*Math.tan(row.azimuth-pan)/halfH;
+      var y=height/2-(height/2)*Math.tan(angle-nick)/halfV;
+      if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=width||y>=height)return;
+      ctx.beginPath();ctx.arc(x,y,2,0,2*Math.PI);
+      ctx.fillStyle=status==='visible'?'#16754a':status==='blocked'?'#8a9bae':'#d39427';ctx.fill();
+      if(row.cpu!==row.gpu){ctx.strokeStyle='#ce3c40';ctx.lineWidth=1.4;ctx.stroke();}
+    });
+  }
+  async function runCompareGpuProbe(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var button=probeUi('ModernGpuProbeRun');
+    var generation=state.probeGeneration;
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(!spec||spec.atmosphere!=='standard'){
+      probeStatus('Unavailable: this research shader currently supports Compare probes only for the standard atmosphere.');return;
+    }
+    var gpu=root.CurvatureWebGPUBatchShooting1412,contract=root.CurvatureOpticalBatchContract1411;
+    if(!gpu||!contract||!root.navigator||!root.navigator.gpu){
+      probeStatus('WebGPU unavailable; regular CPU Compare remains unchanged.');return;
+    }
+    var session=null;state.probeBusy=true;
+    if(button)button.disabled=true;
+    probeStatus('Sampling current physical scene…');
+    try{
+      var count=Number(probeUi('ModernGpuProbeCount').value);
+      var points=compareAdapter.probeTargets(state.comparePair.A,{count:count,atmosphere:spec.atmosphere},{
+        composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,surfaces:root.CurvatureSurfaceGeometry});
+      if(points.points.length<8)throw Error('At least eight usable physical object vertices are required');
+      var request={branch:contract.BRANCH,geometry:points.geometry,radius:points.radius,
+        observerHeight:points.observerHeight,atmosphere:points.atmosphere,
+        controls:{step:50,targetTolerance:0.005,eventSubsteps:8},
+        targets:points.points.map(function(p){return p.target;})};
+      gpu.checked(request);
+      // CPU timings cover the exact same targets as the GPU, not the physical
+      // frame's adaptive ray field. GPU includes readback; setup is separate.
+      var began=profileNow(),cpu=await contract.solveCpuBatch(request),cpuMs=profileNow()-began;
+      session=await gpu.createSession(request.targets.length,null,{refinement:'residual-stop'});
+      var result=await session.solve(request,{warmRepeats:2});
+      if(generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe)return;
+      var report=compareAdapter.probeReport(points.points,cpu,result.response,1080);
+      state.probeLast={version:'140.12.7',source:'current Compare model A physical object vertices',
+        reference:'CPU f64',candidate:'experimental GPU f32',geometry:points.geometry,
+        atmosphere:spec.atmosphere,sourcePointCount:points.sourcePointCount,
+        samples:report.count,cpuMs:cpuMs,gpuSetupMs:session.setupMs,
+        cpuRenderedFrameAms:state.compareLast.A&&state.compareLast.A.timings&&state.compareLast.A.timings.totalMs,
+        cpuRenderedFrameBms:state.compareLast.B&&state.compareLast.B.timings&&state.compareLast.B.timings.totalMs,
+        gpuWarmMedianMs:result.timing.gpuWarmMedianMs,gpuFirstBatchMs:result.timing.gpuUploadToReadbackMs,
+        sampleReport:report,actualRenderedImageCompared:false,productionAuthorized:false};
+      probeCanvas('CPU',report.rows,state.comparePair.A);
+      probeCanvas('GPU',report.rows,state.comparePair.A);
+      var warm=result.timing.gpuWarmMedianMs;
+      probeStatus(report.count+' physical edge/vertex points · CPU '+cpuMs.toFixed(1)+' ms · WebGPU warm '+
+        (warm===null?'not measured':warm.toFixed(1)+' ms')+' · GPU setup '+session.setupMs.toFixed(1)+' ms');
+      var metrics=probeUi('ModernGpuProbeMetrics');
+      if(metrics)metrics.textContent='Status disagreements: '+report.statusMismatches+
+        ' · unresolved: '+report.uncertain+' · angular proxy > 1 px: '+report.overOnePixel+
+        ' · max angular proxy shift: '+report.maxAngleProxyShiftPx.toFixed(3)+
+        ' px (illustrative 1080px / 45°). Red outlines = status disagreements. '+
+        'Not actual raster pixel or silhouette parity. This does not measure full-frame GPU rendering.';
+    }catch(error){
+      if(generation===state.probeGeneration)probeStatus('Probe unavailable: '+String(error.message||error));
+    }finally{
+      if(session)session.close();state.probeBusy=false;
+      if(button)button.disabled=false;
+    }
+  }
+  function bindCompareGpuProbe(){
+    var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
+    if(!kind||!run)return;
+    kind.addEventListener('change',function(){
+      state.compareGpuProbe=kind.value==='gpu-probe';
+      var group=probeUi('ModernGpuCompareProbe');if(group)group.hidden=!state.compareGpuProbe;
+      state.probeLast=null;state.probeGeneration++;
+      if(state.compareGpuProbe){state.compareSelected='A';syncCompareEditor();}
+      var bTab=probeUi('ModernModelTabB');if(bTab)bTab.disabled=state.compareGpuProbe;
+      var preset=probeUi('ModernPairPreset');if(preset)preset.disabled=state.compareGpuProbe;
+      probeStatus('Select Run to measure current scene.');
+      redraw();
+    });
+    run.addEventListener('click',runCompareGpuProbe);
+    var exportButton=probeUi('ModernGpuProbeExport');
+    if(exportButton)exportButton.addEventListener('click',function(){
+      if(!state.probeLast){probeStatus('Run the current-scene probe before exporting.');return;}
+      if(!root.Blob||!root.URL||!root.URL.createObjectURL){
+        probeStatus('JSON export unavailable in this browser.');return;
+      }
+      var blob=new root.Blob([JSON.stringify(state.probeLast,null,2)],{type:'application/json'});
+      var url=root.URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download='curvature-compare-140.12.7-cpu-gpu-probe.json';
+      try{link.click();}finally{
+        if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);
+      }
+    });
+  }
   function prepareCompare(){
     if(!compareAdapter){updateStatus('Compare adapter is unavailable',true);return false;}
     if(compareState&&!state.compareConfig)
       state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius);
     var result=compareState?compareState.pair(model,state.compareConfig,compareAdapter):compareAdapter.pair(model);
     if(!compareAdapter.invariant(result))throw Error('Compare shared-scene invariant failed');
+    if(state.compareGpuProbe){
+      // Matching physical models for CPU/GPU samples; neither canvas switches
+      // its full-frame solver. Keep independent A/B user settings untouched.
+      result.B=compareAdapter.clone(result.A);
+    }
     state.comparePair=result;
     var aLabel=el('ModernCompareLabelA'),bLabel=el('ModernCompareLabelB');
     if(compareState){
@@ -708,6 +830,10 @@
     }else{
       if(aLabel)aLabel.textContent=(result.A.showModel===2?'Exact flat':'R = '+(result.A.rEarth/1000).toLocaleString('en-US')+' km')+' · '+state.atmosphere;
       if(bLabel)bLabel.textContent='κ = 0 · '+state.atmosphere;
+    }
+    if(state.compareGpuProbe){
+      if(aLabel)aLabel.textContent='CPU physical frame · f64 ray probe';
+      if(bLabel)bLabel.textContent='CPU physical frame · GPU ray probe below';
     }
     return true;
   }
@@ -1089,6 +1215,11 @@
       redrawMs:finished-resized};
   }
   function redraw(opticalSampleMode){
+    state.probeGeneration++;
+    if(state.compareGpuProbe&&state.mode==='compare'){
+      state.probeLast=null;probeStatus('Scene changed · rerun the CPU/GPU sample probe.');
+      var metrics=probeUi('ModernGpuProbeMetrics');if(metrics)metrics.textContent='';
+    }
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
     state.opticalSample=opticalSampleMode==='cold'||opticalSampleMode==='warm'?
@@ -1459,6 +1590,7 @@
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
     bindLibrary();
+    bindCompareGpuProbe();
     var restored=restoreExperiment();
     syncNumericInputs();
     if(restored){
@@ -1477,6 +1609,7 @@
     getCompareModels:function(){return state.comparePair;},
     getCompareLast:function(){return state.compareLast;},
     getCompareConfig:function(){return state.compareConfig;},
+    getCompareGpuProbe:function(){return state.probeLast;},
     getRenderProfile:function(){return renderProfiler?renderProfiler.summary():null;},
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
     getPerformanceSnapshot:performanceSnapshot,

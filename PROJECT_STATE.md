@@ -1124,3 +1124,39 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   tower silhouettes, does not measure FPS, and never authorizes production.
 - Actual browser GPU performance/visual results for this dense case remain
   **pending** until an exported #140.12.6 JSON is obtained.
+
+## #140.12.7 — opt-in CPU/WebGPU optical probe in Modern Compare (research only)
+
+- Existing Modern Compare now offers **Physical models A/B** (unchanged default)
+  and **CPU / WebGPU optical samples** (explicitly selected). The research
+  mode clones the chosen A physical model onto B (including atmosphere and
+  radius), without altering saved A/B settings, the Scene model, or production
+  solver/renderer defaults.
+- The existing `ModernCompareModel` draws deterministic, distributed samples
+  from *the current* authored physical model's object vertices **and real
+  edges** (up to 1024 unique samples). No archived 12-tower fixture or
+  replicated rays are inserted. A request uses the existing bounded
+  `CurvatureOpticalBatchContract1411` and independent
+  `CurvatureWebGPUBatchShooting1412.createSession` interfaces.
+- Only an explicit **Run sampled comparison** launches CPU f64 and WebGPU f32
+  batch shooting. Timings distinguish CPU reference, GPU setup, first batch,
+  and warm GPU readback-inclusive wall clock. A/B angular maps use the same
+  sample targets and mark status disagreements in red. Unresolved rays and
+  >1 px *illustrative* launch-angle shifts are reported separately, never
+  silently accepted as equivalent. A JSON export includes the sample report
+  and a `productionAuthorized:false`/`actualRenderedImageCompared:false` flag.
+- Both full rendered viewports deliberately remain **CPU physical frames**.
+  The angular maps are *not* production camera pixels, filled polygon
+  silhouettes, 2D frame difference images, or proof of visually equivalent
+  GPU rendering. Compare's experiment is limited to **standard atmosphere**;
+  unsupported models and WebGPU absence fail visibly without a backend switch.
+  Changing the physical scene invalidates old probe displays; out-of-date
+  asynchronous runs cannot publish results. Resources are closed after each
+  run. The GPU scene backend is **NOT** integrated or authorized.
+- Only existing files were touched (Modern HTML/CSS/App, CompareModel, existing
+  tests and this PROJECT_STATE). The next stage for true CPU/GPU full-frame
+  Compare requires an async, cacheable ray-field interface (including adaptive
+  fill/outline/ground consumers), then actual painter-frame comparisons.
+- Node tests and Node-side current-scene sampling smoke checks cannot execute
+  WebGPU shader code or certify browser performance. A browser export is
+  required before any claim about runtime performance/visual parity.

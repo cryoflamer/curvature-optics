@@ -54,6 +54,12 @@
 <script src="src/ui/modern/ModernGpuCapabilities.js?v=140.0"></script>
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
+<!-- #140.12.7: the existing research solver is loaded ONLY for an explicitly
+     clicked Compare probe. Neither module is selected by the physical renderer. -->
+<script src="src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
+<script src="src/diagnostics/CurvatureOpticalBatchContract1411.js"></script>
+<script src="src/diagnostics/CurvatureWebGPUSceneSpike14010.js"></script>
+<script src="src/diagnostics/CurvatureWebGPUBatchShooting1412.js"></script>
 <script src="src/ui/modern/ModernCompareModel.js"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
@@ -92,6 +98,9 @@
             <option value="standard-inverse" hidden disabled>Globe standard / Globe inverse spherical (legacy)</option>
             <option value="flat-inverse" hidden disabled>Globe standard / Flat inverse spherical (legacy)</option>
           </select></div>
+        <div class="modern-field"><label for="ModernCompareKind">Compare</label>
+          <select id="ModernCompareKind"><option value="models">Physical models A / B</option>
+            <option value="gpu-probe">CPU / WebGPU optical samples · experimental</option></select></div>
         <div class="modern-model-tabs" role="group" aria-label="Model to edit">
           <button type="button" id="ModernModelTabA" class="is-active" aria-pressed="true">Model A</button>
           <button type="button" id="ModernModelTabB" aria-pressed="false">Model B</button>
@@ -289,6 +298,17 @@
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>
         </div>
+        <section id="ModernGpuCompareProbe" class="modern-gpu-compare-probe" hidden aria-label="Experimental CPU and GPU optical samples">
+          <div class="modern-gpu-probe-head"><strong>CPU / WebGPU · optical sample comparison</strong>
+            <label for="ModernGpuProbeCount">Targets <select id="ModernGpuProbeCount"><option value="128">128</option><option value="256" selected>256</option><option value="512">512</option><option value="1024">1024</option></select></label>
+            <button id="ModernGpuProbeRun" type="button">Run sampled comparison</button>
+            <button id="ModernGpuProbeExport" type="button">Export JSON</button></div>
+          <p class="modern-compare-note">Both full scenes above remain CPU-rendered. These two angular sample maps below are CPU vs GPU calculations for identical vertices in the current physical scene, <strong>not</strong> a GPU-rendered frame or pixel-diff. Requires WebGPU and the standard atmosphere; never changes production backend.</p>
+          <p id="ModernGpuProbeStatus" role="status" aria-live="polite">Select Run to measure current scene.</p>
+          <div class="modern-gpu-probe-maps"><div><strong>CPU f64 · reference rays</strong><canvas id="ModernGpuProbeCanvasCPU" width="460" height="200" aria-label="CPU angular sample map"></canvas></div>
+            <div><strong>WebGPU f32 · experimental rays</strong><canvas id="ModernGpuProbeCanvasGPU" width="460" height="200" aria-label="GPU angular sample map"></canvas></div></div>
+          <p id="ModernGpuProbeMetrics" class="modern-compare-note"></p>
+        </section>
         <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. The orange horizon marker, when resolved, is derived from forward-traced first-ground-contact rays and is not a guarantee of unique global visibility.</p>
       </section>
       <div class="modern-compare-message" id="ModernCompareMessage" hidden>

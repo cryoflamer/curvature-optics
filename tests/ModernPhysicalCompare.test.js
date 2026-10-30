@@ -125,3 +125,57 @@ test('132: each Compare viewport invokes Physical renderer separately with share
   assert.equal(app.getMode(),'scene');
   assert.equal(renders.length,4);
 });
+
+test('140.12.7: Compare optical probes sample the actual physical scene, never fixture rays',()=>{
+  const points=Array.from({length:20},(_,i)=>[i+1,0,1]);
+  const composed={scene:{primitives:[{points:points.slice(0,10)},{points:points.slice(10)}]},
+    ranges:[{start:0,end:2,role:'objects'}]};
+  const dependencies={composition:{composeOpticalMain(m,globe,opts){
+    assert.equal(opts.physicalWorld,true);assert.equal(globe,true);return composed;
+  }},surfaces:{createFromCurvature(){return {surfacePoint2(d,h){return [d,h]}};}},
+  silhouette:{coordinate(p){return {distance:p[0],height:1,azimuth:p[0]*0.001};}}};
+  const m={showModel:1,rEarth:6371000,Height:1};
+  const data=compare.probeTargets(m,{count:8,atmosphere:'standard',includeEdges:false},dependencies);
+  assert.equal(data.points.length,8);
+  assert.equal(data.sourcePointCount,20);
+  assert.equal(data.geometry,'globe');
+  assert.deepEqual(data.points.map(p=>p.target[0]),[2,4,7,9,12,14,17,19]);
+  assert.ok(data.points.every(p=>p.azimuth>0));
+  assert.throws(()=>compare.probeTargets(m,{count:1025},dependencies),/8–1024/);
+  assert.throws(()=>compare.probeTargets(m,{count:8},{}),/dependencies/);
+});
+
+test('140.12.7: CPU/GPU statuses remain reviewable despite subpixel angular proxy',()=>{
+  const points=[{azimuth:0},{azimuth:0.05},{azimuth:0.2}];
+  const cpu={results:[{status:'visible',angle:0},{status:'visible',angle:.02},
+    {status:'blocked',angle:.08}]};
+  const gpu={results:[{status:'indeterminate',angle:0.0000001},
+    {status:'visible',angle:.0200001},{status:'blocked',angle:.0800001}]};
+  const report=compare.probeReport(points,cpu,gpu,1080);
+  assert.equal(report.statusMismatches,1);
+  assert.equal(report.uncertain,1);
+  assert.equal(report.overOnePixel,0);
+  assert.equal(report.matchedVisible,1);
+  assert.equal(report.actualFrameCompared,false);
+  assert.equal(report.productionAuthorized,false);
+  assert.equal(report.visualEquivalenceProven,false);
+  assert.equal(report.rows[0].gpu,'indeterminate');
+  assert.throws(()=>compare.probeReport(points,cpu,{results:[]}),/Mismatched/);
+});
+
+test('140.12.7: optional Compare-only GPU controls and research scripts are wired, no production backend switch',()=>{
+  const html=source('CurvatureModern.html'),app=source('src/ui/modern/ModernApp.js');
+  assert.match(html,/id="ModernCompareKind"/);
+  assert.match(html,/id="ModernGpuProbeRun"/);
+  assert.match(html,/id="ModernGpuProbeCanvasCPU"/);
+  assert.match(html,/id="ModernGpuProbeCanvasGPU"/);
+  assert.match(html,/id="ModernGpuProbeExport"/);
+  assert.match(html,/CurvatureWebGPUBatchShooting1412\.js/);
+  assert.match(app,/session=await gpu\.createSession/);
+  assert.match(app,/gpu\.checked\(request\)/);
+  assert.match(app,/generation!==state\.probeGeneration/);
+  assert.match(app,/result\.B=compareAdapter\.clone\(result\.A\)/);
+  assert.match(app,/spec=state\.compareConfig&&\(state\.compareGpuProbe\?state\.compareConfig\.A/);
+  assert.match(app,/actualRenderedImageCompared:false/);
+  assert.doesNotMatch(source('src/app/CurvatureMainCanvasRenderer.js'),/CurvatureWebGPUBatchShooting1412/);
+});
