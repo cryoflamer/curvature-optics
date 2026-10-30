@@ -1,3 +1,10 @@
+## Patch 140.12.24 — GPU f32 numerical floor / last-iteration audit (2026-10-30)
+
+- Added opt-in **Audit GPU f32 numerical floor · last 12 iterations** to Compare and exports `curvature-compare-140.12.24-gpu-numerical-floor.json`. It uses the existing 48-target physical ladder, retains standard 5-mm predictor and three strict 0.1-mm modes, and runs the independent CPU f64 comparison **only after** all GPU batches. No default renderer, GPU status, angles or CPU fallback are changed.
+- Only the opt-in diagnostic refinement shaders write a bounded 12-iteration ring per target (angle, target-vertical residual, bracket width and an alternate **surface-relative local-altitude residual**), with explicit storage/readback allocated only when `traceRefinement: true`. This captures the last attempted refinement steps without retaining all 28 iterations or altering the previous GPU shader variants.
+- Summaries distinguish missing brackets, exhausted refinement, repeated f32 angles, unchanged residuals across changing angles, and bracket widths measured in local f32 ULPs. A possible numerical precision floor is **only a hypothesis label**, not proof of convergence or reason to upgrade an indeterminate/failed ray. The alternate residual uses local altitude and may itself be affected by terminal horizontal error; it is not an f64 oracle or proof of higher precision.
+- Benchmark timing for trace-enabled batches includes the extra GPU-to-CPU readback and is not directly comparable to the non-trace performance measurements. Actual WGSL compilation and optical measurements must be made on real browser WebGPU hardware.
+
 ## Patch 140.12.22 — GPU f32 near-surface precision ladder (2026-10-30)
 
 - Added an **opt-in, diagnostic-only** Compare button `Audit GPU f32 precision · surface / upper towers`; no graphics, production changes, pixel substitution or CPU shooting fallback. JSON: `curvature-compare-140.12.22-gpu-f32-precision.json`.

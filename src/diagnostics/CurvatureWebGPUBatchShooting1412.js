@@ -22,7 +22,7 @@
   if(!integrator.includes('advanceCompensated'))throw Error('Kahan RK4 shader unavailable');
   // Binding 3 is only used in the refinement stage; stage A has a different
   // auto pipeline layout. Do not submit extra bindings to an auto layout.
-  function shader(refinement,strict,gated,predictor,guarded){
+  function shader(refinement,strict,gated,predictor,guarded,trace){
     // #140.12.2 keeps the original refinement math unchanged as the archived
     // residual-stop baseline. The alternate refinement is opt-in research.
     var refinementLoop=strict?`
@@ -38,6 +38,7 @@
     let midpoint=a.x+(b.x-a.x)*0.5;
     if(midpoint<=a.x || midpoint>=b.x){break;}
     let shot=arrival(t,midpoint,false);
+    ${trace?'iterationTrace.data[i*12u+(iter%12u)]=vec4f(midpoint,shot.residual,b.x-a.x,shot.localResidual);':''}
     if(shot.valid<0.5){refinementValid=false;break;}
     if(a.y*shot.residual<=0.0){b=vec4f(midpoint,shot.residual,shot.path,1.0);}
     else{a=vec4f(midpoint,shot.residual,shot.path,1.0);}
@@ -47,6 +48,7 @@
     usedIterations=iter+1u;
     let angle=(a.x+b.x)*0.5;
     let shot=arrival(t,angle,false);
+    ${trace?'iterationTrace.data[i*12u+(iter%12u)]=vec4f(angle,shot.residual,b.x-a.x,shot.localResidual);':''}
     if(shot.valid<0.5){break;}
     if(abs(shot.residual)<=bitcast<f32>(config[11])){
       a=vec4f(angle,shot.residual,shot.path,1.0);
@@ -61,6 +63,7 @@
 @group(0) @binding(1) var<storage, read_write> results: Rays;
 @group(0) @binding(2) var<storage, read> config: array<u32>;
 ${refinement?'@group(0) @binding(3) var<storage, read> coarse: Rays;':gated?'@group(0) @binding(3) var<storage, read> predicted: Rays;':''}
+${trace&&refinement?'@group(0) @binding(4) var<storage, read_write> iterationTrace: Rays;':''}
 ${integrator}
 fn altitude(s:vec4f)->f32 {
   if(config[3]==0u){return s.y;}
@@ -71,7 +74,7 @@ fn altitude(s:vec4f)->f32 {
   if(a>=0.0){return s.y+k*s.x*s.x/(lengthScale+a);}
   return (2.0*s.y+k*(s.x*s.x+s.y*s.y))/(lengthScale+1.0);
 }
-struct Arrival { residual:f32, path:f32, valid:f32, impact:f32, contact:f32 }
+struct Arrival { residual:f32, path:f32, valid:f32, impact:f32, contact:f32${trace?', localResidual:f32':''} }
 fn arrival(t:vec4f,angle:f32,withGround:bool)->Arrival {
   let stepSize=bitcast<f32>(config[4]);
   var s=vec4f(0.0,t.z,cos(angle),sin(angle));
@@ -132,12 +135,14 @@ fn arrival(t:vec4f,angle:f32,withGround:bool)->Arrival {
     travelled=travelled+segment;
     if(endpoint.x>=t.x-0.0001){
       if(abs(endpoint.x-t.x)>0.01){break;}
-      return Arrival(endpoint.y-t.y,travelled,1.0,impact,contact);
+      // The local-height expression does not subtract the 6371 km radius.
+      // It is an independent diagnostic residual, NOT used for shooting.
+      return Arrival(endpoint.y-t.y,travelled,1.0,impact,contact${trace?',altitude(endpoint)-altitude(vec4f(t.x,t.y,0.0,0.0))':''});
     }
     s=next.state;
     correction=next.correction;
   }
-  return Arrival(0.0,0.0,0.0,-1.0,0.0);
+  return Arrival(0.0,0.0,0.0,-1.0,0.0${trace?',0.0':''});
 }
 ${predictor?`
 // #140.12.13: one GPU invocation per target, CPU-inspired local
@@ -211,6 +216,11 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   var bestDistance=1e30;
   var bracket=-1i;
   var candidateBrackets=0u;
+  ${trace?`// The ring stores only the most recent 12 bracket iterations per target.
+  // Sentinels prevent stale data from a previous session batch leaking out.
+  for(var slot=0u;slot<12u;slot=slot+1u){
+    iterationTrace.data[i*12u+slot]=vec4f(-999.0,0.0,0.0,0.0);
+  }`:''}
   // Choose the nearest detected sign-change interval to straight line of sight.
   for(var j=0u;j<config[9]-1u;j=j+1u){
     let a=coarse.data[i*config[9]+j];
@@ -266,7 +276,33 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     WGSL_PREDICT=shader(false,false,false,true),
     WGSL_PREDICT_GUARDED=shader(false,false,false,true,true),
     WGSL_PREDICT_GATED_SWEEP=shader(false,false,true,false),
-    WGSL_PREDICT_GATED_REFINE=shader(true,false,true,false);
+    WGSL_PREDICT_GATED_REFINE=shader(true,false,true,false),
+    WGSL_REFINE_TRACE=shader(true,false,false,false,false,true),
+    WGSL_REFINE_ANGLE_BRACKET_TRACE=shader(true,true,false,false,false,true),
+    WGSL_PREDICT_GATED_REFINE_TRACE=shader(true,false,true,false,false,true);
+  var TRACE_STEPS=12;
+  function decodeRefinementTrace(request,raw,telemetry){
+    if(!(raw instanceof Float32Array)||raw.length!==request.targets.length*TRACE_STEPS*4||
+       !Array.isArray(telemetry)||telemetry.length!==request.targets.length)
+      throw RangeError('GPU refinement trace shape mismatch');
+    return request.targets.map(function(target,i){
+      var row=telemetry[i],steps=[];
+      if(row.bracketIndex>=0){
+        var total=Math.max(0,Math.min(28,Math.trunc(row.refineIterations)));
+        for(var iteration=Math.max(0,total-TRACE_STEPS);iteration<total;iteration++){
+          var k=(i*TRACE_STEPS+(iteration%TRACE_STEPS))*4,angle=raw[k];
+          if(angle===-999)continue;
+          var residual=raw[k+1],width=raw[k+2],local=raw[k+3];
+          if(![angle,residual,width,local].every(Number.isFinite))
+            throw RangeError('Invalid GPU refinement trace entry');
+          steps.push({iteration:iteration+1,angleRadians:angle,
+            residualMetres:residual,localAltitudeResidualMetres:local,
+            bracketWidthRadians:width});
+        }
+      }
+      return {targetIndex:i,target:target.slice(),trace:steps};
+    });
+  }
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function bits(f){var v=new DataView(new ArrayBuffer(4));v.setFloat32(0,f,true);return v.getUint32(0,true);}
   function checked(request){
@@ -373,6 +409,9 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     var refinement=options.refinement===undefined?'residual-stop':options.refinement;
     if(!['residual-stop','angle-bracket'].includes(refinement))
       throw RangeError('Unsupported GPU root refinement policy');
+    var traceRefinement=options.traceRefinement===true;
+    if(options.traceRefinement!==undefined&&typeof options.traceRefinement!=='boolean')
+      throw RangeError('Invalid diagnostic trace flag');
     if(algorithm!=='sweep'&&refinement!=='residual-stop')
       throw RangeError('GPU predictor currently requires residual-stop fallback');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
@@ -394,8 +433,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     try{
       var codes=algorithm!=='sweep'?
         [algorithm==='predictor-guarded'?WGSL_PREDICT_GUARDED:WGSL_PREDICT,
-          WGSL_PREDICT_GATED_SWEEP,WGSL_PREDICT_GATED_REFINE]:
-        [WGSL_SWEEP,refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE];
+          WGSL_PREDICT_GATED_SWEEP,traceRefinement?WGSL_PREDICT_GATED_REFINE_TRACE:WGSL_PREDICT_GATED_REFINE]:
+        [WGSL_SWEEP,traceRefinement?
+          (refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET_TRACE:WGSL_REFINE_TRACE):
+          (refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE)];
       var modules=codes.map(function(code){return device.createShaderModule({code:code});});
       for(var module of modules){
         if(module.getCompilationInfo){
@@ -406,14 +447,18 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       var pipelines=[];
       for(var shaderModule of modules)
         pipelines.push(await device.createComputePipelineAsync({layout:'auto',compute:{module:shaderModule,entryPoint:'main'}}));
-      var inputSize=capacity*16,scanSize=capacity*SAMPLES*16,outputSize=capacity*3*16;
-      if([inputSize,scanSize,outputSize].some(function(v){return v>device.limits.maxStorageBufferBindingSize;}))
+      var inputSize=capacity*16,scanSize=capacity*SAMPLES*16,outputSize=capacity*3*16,
+        traceSize=capacity*TRACE_STEPS*16;
+      if([inputSize,scanSize,outputSize].concat(traceRefinement?[traceSize]:[]).some(function(v){return v>device.limits.maxStorageBufferBindingSize;}))
         throw Error('WebGPU storage binding limit exceeded');
       var seeds=alloc(inputSize,usage.STORAGE|usage.COPY_DST),
         config=alloc(64,usage.STORAGE|usage.COPY_DST),
         scan=alloc(scanSize,usage.STORAGE|usage.COPY_SRC),
         output=alloc(outputSize,usage.STORAGE|usage.COPY_SRC),
-        read=alloc(outputSize,usage.COPY_DST|usage.MAP_READ);
+        read=alloc(outputSize,usage.COPY_DST|usage.MAP_READ),
+        traceBuffer=traceRefinement?alloc(traceSize,usage.STORAGE|usage.COPY_SRC):null,
+        traceRead=traceRefinement?alloc(traceSize,usage.COPY_DST|usage.MAP_READ):null;
+      var traceEntry=traceRefinement?[{binding:4,resource:{buffer:traceBuffer}}]:[];
       var bindings=algorithm!=='sweep' ? [
         device.createBindGroup({layout:pipelines[0].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
@@ -423,14 +468,14 @@ fn main(@builtin(global_invocation_id) id:vec3u){
           {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:output}}]}),
         device.createBindGroup({layout:pipelines[2].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
-          {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}]})
+          {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}].concat(traceEntry)})
       ] : [
         device.createBindGroup({layout:pipelines[0].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:scan}},
           {binding:2,resource:{buffer:config}}]}),
         device.createBindGroup({layout:pipelines[1].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
-          {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}]})];
+          {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}].concat(traceEntry)})];
       var setupMs=now()-started;
       async function solve(request,runOptions){
         if(closed)throw Error('GPU session is closed');
@@ -440,10 +485,11 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         var warmRepeats=runOptions.warmRepeats===undefined?0:runOptions.warmRepeats;
         if(!Number.isInteger(warmRepeats)||warmRepeats<0||warmRepeats>5)
           throw RangeError('Diagnostic repeat count must be an integer from 0 to 5');
-        var prepared=pack(request),bytes=request.targets.length*3*16;
+        var prepared=pack(request),bytes=request.targets.length*3*16,
+          traceBytes=request.targets.length*TRACE_STEPS*16;
         busy=true;
         try{
-          var raw=null,samples=[],stable=true;
+          var raw=null,rawTrace=null,samples=[],stable=true;
           for(var repeat=0;repeat<=warmRepeats;repeat++){
             var began=now();
             device.queue.writeBuffer(seeds,0,prepared.input);
@@ -456,16 +502,23 @@ fn main(@builtin(global_invocation_id) id:vec3u){
               pass.dispatchWorkgroups(Math.ceil(request.targets.length*(sweepPass?SAMPLES:1)/64));pass.end();
             }
             encoder.copyBufferToBuffer(output,0,read,0,bytes);
+            if(traceRefinement)encoder.copyBufferToBuffer(traceBuffer,0,traceRead,0,traceBytes);
             device.queue.submit([encoder.finish()]);
             var afterSubmit=now();
             await read.mapAsync(mapMode.READ);
             // The preallocated readback may be larger than the active batch.
             // Read only the current output; old tail bytes must never leak.
             var current=new Float32Array(read.getMappedRange(0,bytes).slice(0));read.unmap();
+            var currentTrace=null;
+            if(traceRefinement){
+              await traceRead.mapAsync(mapMode.READ);
+              currentTrace=new Float32Array(traceRead.getMappedRange(0,traceBytes).slice(0));
+              traceRead.unmap();
+            }
             var finished=now();
             samples.push({totalMs:finished-began,uploadMs:afterUpload-began,
               encodeSubmitMs:afterSubmit-afterUpload,waitReadbackMs:finished-afterSubmit});
-            if(repeat===0)raw=current;
+            if(repeat===0){raw=current;rawTrace=currentTrace;}
             else{
               var aBytes=new Uint32Array(raw.buffer),bBytes=new Uint32Array(current.buffer);
               for(var index=0;index<aBytes.length;index++){
@@ -481,6 +534,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
           var telemetry=decodeTelemetry(request,raw);
           var predictorAccepted=telemetry.filter(function(t){return t.bracketIndex===-2;}).length;
           return {response:decode(request,raw),telemetry:telemetry,
+            refinementTrace:traceRefinement?decodeRefinementTrace(request,rawTrace,telemetry):null,
             timing:{gpuSetupMs:setupMs,gpuUploadToReadbackMs:samples[0].totalMs,
               gpuColdMs:setupMs+samples[0].totalMs,warmRunMs:warmMs,
               gpuWarmMedianMs:median,warmOutputBitwiseStable:stable,
@@ -550,6 +604,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     WGSL_PREDICT_GATED_SWEEP:WGSL_PREDICT_GATED_SWEEP,
     WGSL_PREDICT_GATED_REFINE:WGSL_PREDICT_GATED_REFINE,
     WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE_ANGLE_BRACKET,
-    checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,createSession:createSession,solveBatch:solveBatch,
+    WGSL_REFINE_TRACE:WGSL_REFINE_TRACE,
+    WGSL_REFINE_ANGLE_BRACKET_TRACE:WGSL_REFINE_ANGLE_BRACKET_TRACE,
+    WGSL_PREDICT_GATED_REFINE_TRACE:WGSL_PREDICT_GATED_REFINE_TRACE,
+    checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,
+    decodeRefinementTrace:decodeRefinementTrace,createSession:createSession,solveBatch:solveBatch,
     fixtureRequests:fixtureRequests,decision:decision,run:run});
 }));
