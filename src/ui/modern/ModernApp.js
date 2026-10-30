@@ -2577,6 +2577,84 @@
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
+  // #140.12.26: same GPU launch angle is replayed with multiple independent
+  // GPU ground samplers, THEN on CPU f64. The f64 solution never supplies
+  // angles or targets to the GPU, and no ray is reclassified or repainted.
+  async function runGpuGroundAudit141226(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      ground=root.CurvatureGpuGroundContact141226,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A,
+      config=state.compareConfig&&state.compareConfig.A;
+    if(!gpu||!contract||!precision||!ground||!surfaces||!model||!config||
+       config.atmosphere!=='standard'||!root.navigator||!root.navigator.gpu){
+      probeStatus('GPU ground-contact audit needs WebGPU and standard atmosphere in A.');return;
+    }
+    var generation=state.probeGeneration,sessions=[],ids=[
+      'ModernGpuGroundAuditRun','ModernGpuLimitAuditRun','ModernGpuFloorAuditRun',
+      'ModernGpuRootAuditRun','ModernGpuPrecisionAuditRun',
+      'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,
+        geometry:model.showModel===2?'flat':'globe',radius:model.rEarth,
+        observerHeight:model.Height},surfaces),base=ladder.request;
+      gpu.checked(base);
+      probeStatus('GPU ground-contact audit: original GPU shooting angles…');
+      var shooting=await gpu.createSession(ladder.targetsCount,null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      sessions.push(shooting);
+      if(cancelled())return;
+      var source=await shooting.solve(base,{warmRepeats:0});
+      if(cancelled())return;
+      // All 48 GPU angles must exist. Never substitute the CPU oracle or
+      // synthetic line-of-sight angles for an indeterminate GPU ray.
+      var angles=source.response.results.map(function(x){return x.angle;});
+      if(!angles.every(function(x){return Number.isFinite(x);}))
+        throw Error('GPU shooting did not return all fixed angles; fail closed');
+      var groundSession=await ground.createSession(ladder.targetsCount);
+      sessions.push(groundSession);
+      if(cancelled())return;
+      var replays={},timings={};
+      for(var mode of ground.GPU_MODES){
+        if(cancelled())return;
+        var request=Object.assign({},base,{controls:Object.assign({},base.controls,
+          {step:mode.step,eventSubsteps:mode.eventSubsteps})});
+        gpu.checked(request);
+        probeStatus('GPU ground-contact audit: '+mode.id+' · identical GPU angles…');
+        replays[mode.id]=await groundSession.solve(request,angles);
+        if(cancelled())return;
+        timings[mode.id]=replays[mode.id].timing;
+      }
+      // All GPU work is complete before the independent f64 shooting oracle.
+      probeStatus('GPU contact audit: independent CPU f64 shooting and same-angle traces…');
+      var cpuRequest=Object.assign({},base,{controls:{step:2000,
+        targetTolerance:0.000001,eventSubsteps:8}});
+      var cpu=await contract.solveCpuBatch(cpuRequest);
+      if(cancelled())return;
+      var report=ground.analyze(ladder,source,replays,cpu);
+      report.gpuRuns=timings;
+      report.gpuShootingTiming=source.timing;
+      report.geometry=base.geometry;
+      report.gpuArithmetic='f32 compensated RK4';
+      report.cpuF64ShootingStepMetres=2000;
+      state.probeFrameLast=report;
+      var line=probeUi('ModernGpuFrameMetrics'),s=report.summaries.step500Sub8;
+      if(line)line.textContent='GPU ground crossing: '+s.gpuCrossings+
+        ' crossings · '+s.gpuProximity+' proximity samples · '+
+        s.gpuCpuContactDisagreements+' f64 same-angle event differences · Export JSON';
+      probeStatus('GPU ground-contact audit measured · no visibility override · Export JSON');
+    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+      probeStatus('GPU ground-contact audit failed: '+String(error&&error.message||error));}}
+    finally{sessions.forEach(function(session){session.close();});
+      state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2623,6 +2701,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var groundAuditButton=probeUi('ModernGpuGroundAuditRun');
+    if(groundAuditButton)groundAuditButton.addEventListener('click',runGpuGroundAudit141226);
     var limitAuditButton=probeUi('ModernGpuLimitAuditRun');
     if(limitAuditButton)limitAuditButton.addEventListener('click',runGpuPrecisionLimit141225);
     var floorAuditButton=probeUi('ModernGpuFloorAuditRun');
@@ -2641,7 +2721,7 @@
       'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
       'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
       'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun',
-      'ModernGpuLimitAuditRun'].forEach(function(id){
+      'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2660,7 +2740,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.25'?
+      link.href=url;link.download=exportVersion==='140.12.26'?
+        'curvature-compare-140.12.26-gpu-ground-contact.json':
+        exportVersion==='140.12.25'?
         'curvature-compare-140.12.25-gpu-precision-limit.json':
         exportVersion==='140.12.24'?
         'curvature-compare-140.12.24-gpu-numerical-floor.json':
