@@ -16,7 +16,8 @@ small{color:#515a65}.warning{color:#8a3d00}table{border-collapse:collapse;width:
 <option value="7">#140.12.3 — physical 5 mm qualification</option>
 <option value="8">#140.12.4 — screen-space impact proxy</option>
 <option value="9">#140.12.5 — GPU shooting scaling (64–1024)</option>
-<option value="10" selected>#140.12.6 — dense tower-edge shooting (64–1024)</option>
+<option value="10">#140.12.6 — dense tower-edge shooting (64–1024)</option>
+<option value="11" selected>#140.12.13 — GPU predictor vs sweep (50/500 m)</option>
 </select></label>
 <section id="panel-0" class="experiment" hidden>
 
@@ -245,7 +246,7 @@ no actual frame/silhouette comparison or production switch is performed.</p>
 <div id="summary"></div>
 <pre id="report" aria-label="GPU throughput scaling JSON">No report yet.</pre>
 </section>
-<section id="panel-10" class="experiment">
+<section id="panel-10" class="experiment" hidden>
 <h1>Curvature #140.12.6 — real polygon-edge dense shooting and projected target coverage</h1>
 <p>Sample <strong>different points along actual 12-tower physical polygon edges</strong> (not copies of 64 rays),
 with nested batches of 64, 128, 256, 512 and 1024. A reusable GPU session handles each scene;
@@ -271,6 +272,29 @@ Rows are magnified to the occupied vertical range, not a true rendered image.</s
 <canvas id="plot-globe" width="920" height="150" style="max-width:100%;border:1px solid #bec9d5" aria-label="Globe projected visible-target point occupancy"></canvas>
 <pre id="report" aria-label="Dense GPU and projected-target occupancy JSON">No report yet.</pre>
 </section>
+<section id="panel-11" class="experiment">
+<h1>Curvature #140.12.13 — GPU predictor fast path and RK4 step A/B</h1>
+<p>Run <strong>the same 1024 distinct physical polygon-edge targets</strong> through the
+original 33-angle sweep and the new guarded GPU predictor. For each algorithm,
+compare RK4 steps of <strong>50 m and 500 m</strong>. An independent predictor-enabled
+CPU <strong>f64</strong> reference and CPU replay of the GPU angles verify physics
+<strong>outside</strong> the timed GPU batches.</p>
+<p>Warm times include dispatch, upload and readback; they are NOT GPU kernel times,
+full-frame times, or proof of a faster renderer. GPU predictor successes skip the
+sweep; missed or unverified targets use the unchanged GPU sweep/bracket fallback.
+Both GPU modes are experimental, never production.</p>
+<form id="predictor-controls"><fieldset><legend>Independent dense-scene experiment</legend>
+<label>Geometry<select name="geometry"><option value="globe" selected>Globe</option>
+<option value="flat">Flat</option></select></label>
+<label>GPU warm repeats<select name="warmRepeats"><option value="1">1</option>
+<option value="2" selected>2</option><option value="3">3</option></select></label>
+</fieldset>
+<button id="start" type="submit">Benchmark GPU predictor vs sweep</button>
+<button id="save" type="button" disabled>Export #140.12.13 JSON</button></form>
+<p id="status" role="status" aria-live="polite">Not run.</p>
+<div id="summary" aria-live="polite"></div>
+<pre id="report" aria-label="GPU predictor A/B diagnostic JSON">No results yet.</pre>
+</section>
 <script src="../src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="../src/optics/OpticalRayTracer.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUOpticsBenchmark.js"></script>
@@ -283,6 +307,7 @@ Rows are magnified to the occupied vertical range, not a true rendered image.</s
 <script src="../src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPURootRefinement14122.js"></script>
 <script src="../src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js"></script>
+<script src="../src/diagnostics/CurvatureWebGPUPredictor141213.js"></script>
 <script>
 
 (function(){'use strict';
@@ -721,7 +746,48 @@ Rows are magnified to the occupied vertical range, not a true rendered image.</s
  });
 }());
 
+(function(){'use strict';
+ var panel=document.getElementById('panel-11'),form=panel.querySelector('#predictor-controls');
+ var start=panel.querySelector('#start'),save=panel.querySelector('#save');
+ var status=panel.querySelector('#status'),summary=panel.querySelector('#summary');
+ var report=panel.querySelector('#report'),latest=null;
+ form.addEventListener('submit',async function(event){
+  event.preventDefault();start.disabled=true;save.disabled=true;
+  latest=null;summary.textContent='';status.textContent='Loading real 1024-point tower-edge scene…';
+  try{
+   var source=await fetch('./reference/webgpu-real-scene-targets-14010.json',{cache:'no-store'});
+   if(!source.ok)throw Error('Fixture fetch failed: '+source.status);
+   latest=await CurvatureWebGPUPredictor141213.run(await source.json(),undefined,{
+    geometry:form.elements.geometry.value,warmRepeats:Number(form.elements.warmRepeats.value),
+    onProgress:function(geometry,step,algorithm){status.textContent=geometry+' '+step+
+     ' m: GPU '+algorithm+' shooting and readback…';}
+   });
+   report.textContent=JSON.stringify(latest,null,2);
+   status.textContent='Decision: '+latest.verdict+' — production remains CPU';
+   summary.textContent=latest.rows.map(function(r){return r.step+' m — CPU f64 '+
+    r.cpuMs.toFixed(1)+' ms; '+r.variants.map(function(v){return v.status==='unavailable'?
+      v.algorithm+' unavailable: '+v.reason:v.algorithm+' GPU warm '+
+      (v.timing.gpuWarmMedianMs===null?'n/a':v.timing.gpuWarmMedianMs.toFixed(1)+' ms')+
+      ', parity status mismatches '+v.comparison.statusMismatch+
+      ', physical passes '+v.physical.counts.physicallyAdequate+'/1024'+
+      (v.algorithm==='predictor'?', predictor accepted '+v.predictorAccepted+'/1024':'');
+    }).join('; ')+(r.predictorOverSweepWarmSpeedup!==null?', predictor/sweep '+
+      r.predictorOverSweepWarmSpeedup.toFixed(2)+'×':'');}).join(' | ');
+   save.disabled=false;
+  }catch(error){status.textContent='Predictor benchmark failed: '+error.message;
+   report.textContent=error.stack||String(error);}
+  finally{start.disabled=false;}
+ });
+ save.addEventListener('click',function(){
+  if(!latest)return;
+  var url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)+'\n'],{type:'application/json'}));
+  var link=document.createElement('a');link.href=url;
+  link.download='curvature-webgpu-optics-140.12.13-predictor-ab.json';link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+ });
+}());
+
 (function(){var choice=document.getElementById('experiment-choice');choice.addEventListener('change',function(){
-for(var i=0;i<11;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
+for(var i=0;i<12;i++)document.getElementById('panel-'+i).hidden=String(i)!==choice.value;
 });}());
 </script></body></html>

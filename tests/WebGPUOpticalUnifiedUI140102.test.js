@@ -8,11 +8,11 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../tools/webgpu-
 // Execute the actual inline browser handler script against a minimal DOM, instead of
 // merely looking for button labels. This catches the #140.10.1 selector regression.
 function mount(overrides={}){
- const panels=Array.from({length:11},(_,i)=>({id:'panel-'+i,hidden:i!==10,children:new Map(),
+ const panels=Array.from({length:12},(_,i)=>({id:'panel-'+i,hidden:i!==11,children:new Map(),
    querySelector(selector){assert.match(selector,/^#[a-z-]+$/);const id=selector.slice(1);
      if(!this.children.has(id))this.children.set(id,element(id));
      return this.children.get(id);}}));
- function element(id){return {id,getContext(){return {clearRect(){},fillRect(){},fillText(){},set fillStyle(v){},set font(v){}};},width:920,height:150,elements:{maxRays:{value:'256'},warmRepeats:{value:'2'}},disabled:id==='save'||id==='cancel',textContent:'',value:'4',
+ function element(id){return {id,getContext(){return {clearRect(){},fillRect(){},fillText(){},set fillStyle(v){},set font(v){}};},width:920,height:150,elements:{maxRays:{value:'256'},warmRepeats:{value:'2'},geometry:{value:'globe'}},disabled:id==='save'||id==='cancel',textContent:'',value:'4',
    handlers:{},addEventListener(type,cb){this.handlers[type]=cb;},
    querySelectorAll(){return [];},reportValidity(){return true;},appendChild(){},click(){},
    async fire(type){assert.ok(this.handlers[type],`missing ${type} listener for ${id}`);
@@ -25,6 +25,7 @@ function mount(overrides={}){
  assert.ok(script,'missing inline handlers');
  const ctx={document,fetch:async()=>({ok:true,json:async()=>({scenes:[]})}),
   CurvatureWebGPUSceneSpike14010:{run:async()=>({status:'unavailable',reason:'test runtime unavailable'})},
+  CurvatureWebGPUPredictor141213:{run:async()=>({verdict:'INCONCLUSIVE',rows:[]})},
   CurvatureWebGPUBatchShooting1412:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test GPU'},scenes:[]})},
   CurvatureWebGPUBatchDiagnostics14121:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test diagnostics'},scenes:[]})},
   CurvatureWebGPUPhysicalTolerance14123:{run:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test physical'},scenes:[]}),runPerformance:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test scaling'},scenes:[]}),runDensePerformance:async()=>({decision:{verdict:'INCONCLUSIVE',nextAction:'test dense'},scenes:[]})},
@@ -37,11 +38,11 @@ function mount(overrides={}){
  vm.runInNewContext(script[1],ctx,{filename:'tools/webgpu-optics.html'});
  return {panels,choice};
 }
-test('140.10.2: all eleven unified panels actually register run and export handlers',()=>{
+test('140.10.2: all twelve unified panels actually register run and export handlers',()=>{
  const {panels,choice}=mount();
  for(const [i,p] of panels.entries()){
   const clickMode=i>=3&&i<=7;
-  const control=i===8?'visual-controls':i===9?'scaling-controls':'dense-controls';
+  const control=i===8?'visual-controls':i===9?'scaling-controls':i===11?'predictor-controls':'dense-controls';
   const handler=clickMode?p.querySelector('#start'):p.querySelector('#'+(['benchmark','matrix','precision'][i]||control));
   assert.equal(typeof handler.handlers[clickMode?'click':'submit'],'function');
   assert.equal(typeof p.querySelector('#save').handlers.click,'function');
@@ -145,4 +146,15 @@ test('140.12.6: measured projected-target strips render without pretending to be
  await panels[10].querySelector('#dense-controls').fire('submit');
  assert.match(panels[10].querySelector('#status').textContent,/DENSE_PROFILE_REVIEW_ONLY/);
  assert.match(panels[10].querySelector('#summary').textContent,/status disagreements 1/);
+});
+
+test('140.12.13: predictor panel submits real handler and retains older selector modes',async()=>{
+ const {panels,choice}=mount();
+ choice.value='11';choice.handlers.change();
+ assert.equal(panels.filter(p=>!p.hidden).length,1);
+ assert.equal(panels[11].hidden,false);
+ await panels[11].querySelector('#predictor-controls').fire('submit');
+ assert.match(panels[11].querySelector('#status').textContent,/INCONCLUSIVE/);
+ assert.equal(panels[11].querySelector('#start').disabled,false);
+ assert.equal(panels[11].querySelector('#save').disabled,false);
 });

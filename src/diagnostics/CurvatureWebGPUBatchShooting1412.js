@@ -22,7 +22,7 @@
   if(!integrator.includes('advanceCompensated'))throw Error('Kahan RK4 shader unavailable');
   // Binding 3 is only used in the refinement stage; stage A has a different
   // auto pipeline layout. Do not submit extra bindings to an auto layout.
-  function shader(refinement,strict){
+  function shader(refinement,strict,gated,predictor){
     // #140.12.2 keeps the original refinement math unchanged as the archived
     // residual-stop baseline. The alternate refinement is opt-in research.
     var refinementLoop=strict?`
@@ -60,7 +60,7 @@
 @group(0) @binding(0) var<storage, read> seeds: Rays;
 @group(0) @binding(1) var<storage, read_write> results: Rays;
 @group(0) @binding(2) var<storage, read> config: array<u32>;
-${refinement?'@group(0) @binding(3) var<storage, read> coarse: Rays;':''}
+${refinement?'@group(0) @binding(3) var<storage, read> coarse: Rays;':gated?'@group(0) @binding(3) var<storage, read> predicted: Rays;':''}
 ${integrator}
 fn altitude(s:vec4f)->f32 {
   if(config[3]==0u){return s.y;}
@@ -139,12 +139,71 @@ fn arrival(t:vec4f,angle:f32,withGround:bool)->Arrival {
   }
   return Arrival(0.0,0.0,0.0,-1.0,0.0);
 }
-${refinement?`
+${predictor?`
+// #140.12.13: one GPU invocation per target, CPU-inspired local
+// secant predictor. Success MUST be independently integrated with ground
+// evidence; failures are handled by the old sweep+bracket passes.
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id:vec3u){
   let i=id.x;
   if(i>=config[0]){return;}
   let t=seeds.data[i];
+  let tol=bitcast<f32>(config[11]);
+  var angle=t.w;
+  var shot=arrival(t,angle,false);
+  var evaluations=1u;
+  var accepted=shot.valid>0.5 && abs(shot.residual)<=tol;
+  var slope=t.x/(cos(t.w)*cos(t.w));
+  if(shot.valid>0.5 && !accepted){
+    for(var k=0u;k<3u;k=k+1u){
+      if(!(slope>0.0 && slope<1e10)){break;}
+      let correction=-shot.residual/slope;
+      if(!(abs(correction)<=0.01 && abs(correction)>1e-9 &&
+           abs(angle+correction)<1.45)){break;}
+      let trialAngle=angle+correction;
+      if(trialAngle==angle){break;}
+      let trial=arrival(t,trialAngle,false);
+      evaluations=evaluations+1u;
+      if(trial.valid<0.5){break;}
+      if(abs(trial.residual)<=tol){
+        accepted=true;angle=trialAngle;shot=trial;break;
+      }
+      if(abs(trial.residual)>=abs(shot.residual)*0.9){break;}
+      slope=(trial.residual-shot.residual)/(trialAngle-angle);
+      angle=trialAngle;shot=trial;
+    }
+  }
+  let offset=i*3u;
+  var status=0.0;
+  var impact=-1.0;
+  var contact=0.0;
+  var path=0.0;
+  var residual=0.0;
+  var valid=0.0;
+  if(accepted){
+    let verified=arrival(t,angle,true);
+    evaluations=evaluations+1u;
+    if(verified.valid>0.5 && abs(verified.residual)<=tol){
+      impact=verified.impact;contact=verified.contact;
+      path=verified.path;residual=verified.residual;valid=verified.valid;
+      status=1.0;
+      if(impact>=0.0){
+        if(contact==1.0 && impact<path-bitcast<f32>(config[15])){status=2.0;}
+        else{status=3.0;}
+      }
+    }
+  }
+  results.data[offset]=vec4f(angle,residual,path,status);
+  results.data[offset+1u]=vec4f(impact,contact,valid,0.0);
+  // Sentinel -2 means the predictor was accepted, -3 means sweep needed.
+  results.data[offset+2u]=vec4f(select(-3.0,-2.0,status>0.5),f32(evaluations),0.0,0.0);
+}`:refinement?`
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) id:vec3u){
+  let i=id.x;
+  if(i>=config[0]){return;}
+  let t=seeds.data[i];
+  ${gated?'if(results.data[i*3u].w>0.5){return;}':''}
   var bestDistance=1e30;
   var bracket=-1i;
   var candidateBrackets=0u;
@@ -191,6 +250,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   let targetIndex=i/config[9];
   let sampleIndex=i%config[9];
   let t=seeds.data[targetIndex];
+  ${gated?'if(predicted.data[targetIndex*3u].w>0.5){return;}':''}
   let angle=t.w+(f32(sampleIndex)/(f32(config[9])-1.0)*2.0-1.0)*bitcast<f32>(config[10]);
   if(abs(angle)>1.45){results.data[i]=vec4f(angle,0.0,0.0,0.0);return;}
   let shot=arrival(t,angle,false);
@@ -198,7 +258,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
 }`}`;
   }
   var WGSL_SWEEP=shader(false),WGSL_REFINE=shader(true,false),
-    WGSL_REFINE_ANGLE_BRACKET=shader(true,true);
+    WGSL_REFINE_ANGLE_BRACKET=shader(true,true),
+    WGSL_PREDICT=shader(false,false,false,true),
+    WGSL_PREDICT_GATED_SWEEP=shader(false,false,true,false),
+    WGSL_PREDICT_GATED_REFINE=shader(true,false,true,false);
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function bits(f){var v=new DataView(new ArrayBuffer(4));v.setFloat32(0,f,true);return v.getUint32(0,true);}
   function checked(request){
@@ -299,9 +362,14 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     deps=deps||{};options=options||{};
     if(!Number.isInteger(capacity)||capacity<1||capacity>MAX_TARGETS)
       throw RangeError('GPU session capacity must be 1–'+MAX_TARGETS+' targets');
+    var algorithm=options.algorithm===undefined?'sweep':options.algorithm;
+    if(!['sweep','predictor'].includes(algorithm))
+      throw RangeError('Unsupported GPU shooting algorithm');
     var refinement=options.refinement===undefined?'residual-stop':options.refinement;
     if(!['residual-stop','angle-bracket'].includes(refinement))
       throw RangeError('Unsupported GPU root refinement policy');
+    if(algorithm==='predictor'&&refinement!=='residual-stop')
+      throw RangeError('GPU predictor currently requires residual-stop fallback');
     var nav=deps.navigator||((typeof navigator!=='undefined')?navigator:null);
     if(!nav||!nav.gpu||!nav.gpu.requestAdapter)throw Error('WebGPU unavailable');
     var usage=deps.GPUBufferUsage||((typeof GPUBufferUsage!=='undefined')?GPUBufferUsage:null);
@@ -319,8 +387,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       var result=device.createBuffer({size:size,usage:flags});buffers.push(result);return result;
     }
     try{
-      var modules=[WGSL_SWEEP,refinement==='angle-bracket'?
-        WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE].map(function(code){return device.createShaderModule({code:code});});
+      var codes=algorithm==='predictor'?
+        [WGSL_PREDICT,WGSL_PREDICT_GATED_SWEEP,WGSL_PREDICT_GATED_REFINE]:
+        [WGSL_SWEEP,refinement==='angle-bracket'?WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE];
+      var modules=codes.map(function(code){return device.createShaderModule({code:code});});
       for(var module of modules){
         if(module.getCompilationInfo){
           var info=await module.getCompilationInfo(),errors=info.messages.filter(function(m){return m.type==='error';});
@@ -338,7 +408,17 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         scan=alloc(scanSize,usage.STORAGE|usage.COPY_SRC),
         output=alloc(outputSize,usage.STORAGE|usage.COPY_SRC),
         read=alloc(outputSize,usage.COPY_DST|usage.MAP_READ);
-      var bindings=[
+      var bindings=algorithm==='predictor' ? [
+        device.createBindGroup({layout:pipelines[0].getBindGroupLayout(0),entries:[
+          {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
+          {binding:2,resource:{buffer:config}}]}),
+        device.createBindGroup({layout:pipelines[1].getBindGroupLayout(0),entries:[
+          {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:scan}},
+          {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:output}}]}),
+        device.createBindGroup({layout:pipelines[2].getBindGroupLayout(0),entries:[
+          {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:output}},
+          {binding:2,resource:{buffer:config}},{binding:3,resource:{buffer:scan}}]})
+      ] : [
         device.createBindGroup({layout:pipelines[0].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:scan}},
           {binding:2,resource:{buffer:config}}]}),
@@ -364,9 +444,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
             device.queue.writeBuffer(config,0,prepared.config);
             var afterUpload=now();
             var encoder=device.createCommandEncoder();
-            for(var i=0;i<2;i++){
+            for(var i=0;i<pipelines.length;i++){
               var pass=encoder.beginComputePass();pass.setPipeline(pipelines[i]);pass.setBindGroup(0,bindings[i]);
-              pass.dispatchWorkgroups(Math.ceil(request.targets.length*(i===0?SAMPLES:1)/64));pass.end();
+              var sweepPass=algorithm==='predictor'?i===1:i===0;
+              pass.dispatchWorkgroups(Math.ceil(request.targets.length*(sweepPass?SAMPLES:1)/64));pass.end();
             }
             encoder.copyBufferToBuffer(output,0,read,0,bytes);
             device.queue.submit([encoder.finish()]);
@@ -391,13 +472,17 @@ fn main(@builtin(global_invocation_id) id:vec3u){
           var middle=Math.floor(sorted.length/2);
           var median=!sorted.length?null:sorted.length%2?sorted[middle]:
             (sorted[middle-1]+sorted[middle])/2;
-          return {response:decode(request,raw),telemetry:decodeTelemetry(request,raw),
+          var telemetry=decodeTelemetry(request,raw);
+          var predictorAccepted=telemetry.filter(function(t){return t.bracketIndex===-2;}).length;
+          return {response:decode(request,raw),telemetry:telemetry,
             timing:{gpuSetupMs:setupMs,gpuUploadToReadbackMs:samples[0].totalMs,
               gpuColdMs:setupMs+samples[0].totalMs,warmRunMs:warmMs,
               gpuWarmMedianMs:median,warmOutputBitwiseStable:stable,
               // Wall-clock phases, NOT distinct GPU timestamps or kernel-only times.
               wallClockPhases:samples},
-            algorithm:{sampleAngles:SAMPLES,refineIterations:28,refinement:refinement,
+            algorithm:{kind:algorithm,sampleAngles:SAMPLES,refineIterations:28,refinement:refinement,
+              predictorAccepted:algorithm==='predictor'?predictorAccepted:null,
+              predictorFallbacks:algorithm==='predictor'?request.targets.length-predictorAccepted:null,
               branch:contract.BRANCH,productionAuthorized:false},
             device:{adapterInfo:adapter.info?{vendor:adapter.info.vendor||'',architecture:adapter.info.architecture||''}:null}};
         }finally{busy=false;}
@@ -455,6 +540,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         'No production backend switch or authorization']};
   }
   return Object.freeze({WGSL_SWEEP:WGSL_SWEEP,WGSL_REFINE:WGSL_REFINE,
+    WGSL_PREDICT:WGSL_PREDICT,WGSL_PREDICT_GATED_SWEEP:WGSL_PREDICT_GATED_SWEEP,
+    WGSL_PREDICT_GATED_REFINE:WGSL_PREDICT_GATED_REFINE,
     WGSL_REFINE_ANGLE_BRACKET:WGSL_REFINE_ANGLE_BRACKET,
     checked:checked,pack:pack,decode:decode,decodeTelemetry:decodeTelemetry,createSession:createSession,solveBatch:solveBatch,
     fixtureRequests:fixtureRequests,decision:decision,run:run});

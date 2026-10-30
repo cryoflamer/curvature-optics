@@ -1196,3 +1196,36 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - **Actual end-to-end GPU time** starts before scene/grid preparation and ends after complete B frame paint: it includes geometry preparation, WebGPU device/pipelines, upload, dispatch, synchronization/readback, grid lookup and CPU painter. **Only after the GPU frame is complete** is a cold CPU reference A frame painted and independently timed. The CPU reference is NOT required as an input to the GPU pass. Both frames use the same existing physical scene renderer and per-frame overlays; WebGPU still computes the optical grid, not the 2D rasterization.
 - JSON `curvature-compare-140.12.12-gpu-first-frame.json` reports `gpuFirstEndToEndMs`, `cpuColdReferenceMs`, `speedupCpuOverGpu`, `beatCpuColdReference`, `verdict`, grid geometry, failed GPU nodes, interpolation/coverage diagnostics, actual Canvas pixel differences and outline/fill/unresolved counts. `NO_END_TO_END_GPU_SPEEDUP` is explicit when the experiment loses the speed race. Faster without validated visuals is labelled `GPU_FIRST_FASTER_BUT_VISUAL_UNQUALIFIED`; **neither authorizes production**. There is no claim of 1px silhouette equivalence or measured browser performance before a real export.
 - Node regression and real-scene smoke tests check grid construction, bounded GPU request acceptance, absence of CPU shooting in the new full-grid field path and controller sequencing. **Node cannot exercise browser WebGPU f32 compilation/execution**, so the user must run the new action and export JSON to decide whether the approach is actually faster and visually usable on their GPU.
+
+## #140.12.13 — GPU predictor fast-path A/B at 50 m and 500 m
+
+- **Opt-in research-only** `algorithm:'predictor'` added to the existing
+  independent `CurvatureWebGPUBatchShooting1412.createSession`; all callers
+  without this option retain the original two-pass 33-angle sweep/bracket
+  implementation. The predictor is a distinct WebGPU compute pass, not a CPU
+  estimate injected into the GPU workload. It tests a straight-ray starting
+  angle and up to three guarded local secant corrections, independently
+  re-integrates accepted target arrivals **with GPU ground-event sampling**,
+  and stores results in the original response buffer. Failed/unverified
+  candidates automatically pass to the **unchanged** two sweep/bracket stages.
+  Sweep and refine shaders skip the targets accepted by the predictor.
+- The twelfth mode of **existing** `tools/webgpu-optics.html` is
+  `#140.12.13 — GPU predictor vs sweep (50/500 m)`, with Globe/Flat selection.
+  It uses exactly **1024 distinct real polygon-edge targets** from the existing
+  **12-tower fixture**, not replicated rays or invented raster pixels. For
+  each of 50 m and 500 m, old GPU sweep and new GPU predictor run on exactly
+  the same ordered targets. A separate CPU f64 reference with the CPU predictor
+  enabled runs outside GPU timings; full GPU-angle CPU f64 replay and status,
+  residual and ground-event comparisons are also outside GPU timings.
+- `curvature-webgpu-optics-140.12.13-predictor-ab.json` includes CPU oracle
+  wall time/solver counts; per-GPU mode session setup, first upload-to-readback
+  and pipeline-reused warm times; direct predictor/sweep speedup; predictor
+  accepted/fallback targets, GPU statuses, refinement iterations, physical
+  parity failures and representative failing target indices. Readback-inclusive
+  GPU times are not pure GPU timestamps or end-to-end rendering times.
+- The only modified GPU pipeline is **explicitly requested** by the new
+  diagnostic; original production CPU rendering and the #140.12.12 GPU-first
+  Compare path are not silently changed. No automatic GPU production enablement,
+  and no claim of actual WebGPU speedup or shader validation in a browser until
+  a real export is provided. A faster batch with inaccurate f32 contact
+  classification is not a qualifying result.
