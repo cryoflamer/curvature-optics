@@ -1431,3 +1431,42 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   from optical approximation rather than physical geometry projection. It
   cannot yet isolate shape topology or certify visual equivalence; actual
   WebGPU/Canvas measurements must be run in the browser.
+
+## #140.12.20 — CPU f64 versus GPU field and direct GPU visibility at actual renderer targets
+
+- Adds an **Audit lower-tower visibility · CPU vs GPU** button to the opt-in
+  Compare CPU/WebGPU diagnostics. It renders the existing 4096-ray
+  distance-focused GPU predictor frame (RK4 500 m) through the *unchanged*
+  physical scene adapter and Canvas renderer. The only instrumentation is a
+  transparent field wrapper that records the renderer's actual `(distance,
+  height)` `sample`/`exact` calls, their returned interpolated status and
+  angle. The wrapper never changes an optical answer.
+- Captures unique targets in the **0–6 km, 0–20 m** envelope and selects up to
+  **128** targets in distance-stratified bins. At most one eighth of the batch
+  can be zero-height requests, because those may be ground-guide samples.
+  Above-ground requests are *low-height queries*, not certified vertex or
+  tower-primitive identities; no source-primitive attribution is claimed.
+  Target selection is based exclusively on the actual B renderer queries;
+  neither CPU f64 samples nor CPU image pixels guide selection.
+- Sends the exact same selected spherical-surface coordinates to one direct
+  WebGPU predictor batch and the existing `CurvatureOpticalBatchContract1411`
+  CPU f64 batch solver. CPU uses the physical frame's automatically selected
+  standard-atmosphere RK4 step (typically 2000 m) and a tighter 1e-6 m
+  target tolerance; direct GPU uses RK4 500 m and 0.005 m tolerance. These
+  unequal numerical controls are **explicitly reported**. CPU is an oracle
+  only for this bounded diagnostic, never a GPU fallback or repaint source.
+- Reports three-way status confusion and angle differences, counts of
+  CPU-visible targets rejected by the interpolated/direct GPU paths,
+  recovered-versus-new direct-GPU mismatches, per-distance-band counts,
+  status categories, and first-ground-contact evidence for each target.
+  Ground contact on diagnostic samples does not by itself prove which
+  geometry primitive was omitted from the painted frame. Also includes the
+  original GPU B physical-frame contours/fills/unresolved counts, full-frame
+  and **lower-right** pixel difference vs cold independent CPU A, plus
+  separately measured GPU grid, direct GPU target, CPU target and CPU frame
+  timings. The B frame is not modified by the audit.
+- Export:
+  `curvature-compare-140.12.20-renderer-visibility.json`.
+  The result distinguishes a likely interpolation/status decision problem
+  from disagreement in direct GPU ray shooting. It does **not** certify
+  silhouette equivalence, production performance, or a GPU-first release.

@@ -1863,6 +1863,163 @@
       buttons.forEach(function(b){if(b)b.disabled=false;});
     }
   }
+  // #140.12.20: isolate *which* visibility decision loses lower geometry.
+  // Only the original GPU B frame discovers targets. Exact CPU f64 is run
+  // AFTER both grid interpolation and direct GPU shooting, never as fallback.
+  async function runCompareRendererVisibility141220(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(!spec||spec.atmosphere!=='standard'){
+      probeStatus('Renderer visibility audit supports standard atmosphere only.');return;
+    }
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411;
+    if(!gpu||!contract||!root.navigator||!root.navigator.gpu||!compareAdapter||
+        !compareAdapter.gpuFirstGrid||!compareAdapter.gpuFirstBatchRequests||
+        !compareAdapter.gpuFirstRayField||!compareAdapter.captureGpuRendererQueries||
+        !compareAdapter.compareRendererVisibility||!root.CurvatureIndependentComposition||
+        !root.CurvatureOpticalTowerSilhouette||!root.CurvatureSurfaceGeometry||
+        !state.compareGraphs.A||!state.compareGraphs.B){
+      probeStatus('Renderer visibility audit WebGPU / Compare dependencies unavailable.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuFirstRun','ModernGpuProbeRun','ModernGpuFrameRun',
+        'ModernGpuFastRun','ModernGpuNearRun','ModernGpuGridABCRun',
+        'ModernGpuAdaptiveRun','ModernGpuNearGeometryRun','ModernGpuRendererVisibilityRun'],
+      buttons=ids.map(probeUi),targetBudget=128,
+      roi={x:0.55,y:0.55,width:0.45,height:0.45};
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    try{
+      var deps={composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,
+        surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      probeStatus('Visibility audit: preparing shared 4096-ray GPU grid…');
+      session=await gpu.createSession(1024,null,
+        {algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      var begun=profileNow(),grid=compareAdapter.gpuFirstGrid(state.comparePair.A,
+        4096,deps,{layout:'distance-focused'}),responses=[],batchTimes=[];
+      var gridPrepared=profileNow();
+      for(var request of compareAdapter.gpuFirstBatchRequests(grid,1024)){
+        request.controls.step=500;gpu.checked(request);
+        var batch=await session.solve(request,{warmRepeats:0});
+        if(cancelled())return;
+        responses.push.apply(responses,batch.response.results);
+        batchTimes.push(batch.timing.gpuUploadToReadbackMs);
+      }
+      var gridSolved=profileNow(),field=compareAdapter.gpuFirstRayField(grid,
+        {results:responses},deps.surfaces),captured=compareAdapter.captureGpuRendererQueries(field,
+          {maximumDistance:6000,maximumHeight:20});
+      state.probeField=captured;
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareLast.B=null;
+      var paintBegin=profileNow();state.compareGraphs.B.Redraw();
+      var gpuPaintMs=profileNow()-paintBegin,gridAndPaintMs=profileNow()-begun;
+      if(cancelled()||!state.compareLast.B||!state.compareLast.B.fieldStats||
+          !state.compareLast.B.fieldStats.experimentalGpu)
+        throw Error('Visibility audit GPU field did not reach physical renderer');
+      var snapshot=document.createElement('canvas'),canvas=state.compareGraphs.B.Canvas;
+      snapshot.width=canvas.width;snapshot.height=canvas.height;
+      var ctx=snapshot.getContext&&snapshot.getContext('2d');
+      if(!ctx||!ctx.drawImage)throw Error('Visibility audit Canvas snapshot unavailable');
+      ctx.drawImage(canvas,0,0);
+      var capturedCounts={contours:state.compareLast.B.drawn,
+        fillTriangles:state.compareLast.B.fillTriangles,
+        unresolved:state.compareLast.B.unresolved},
+        rendererCapture=captured.audit(),selected=captured.select(targetBudget);
+      if(!selected.length)throw Error('No lower-object-height renderer queries were captured');
+      // The GPU predictor and CPU oracle receive precisely the same target
+      // coordinates. The only intentional difference is their integration
+      // tolerance/step; report both explicitly rather than claiming identity.
+      var metric=deps.surfaces.createFromCurvature(
+        grid.request.geometry==='globe'?1/grid.request.radius:0);
+      var targets=selected.map(function(row){return metric.surfacePoint2(row.d,row.h);});
+      var exactRequest=Object.assign({},grid.request,{controls:Object.assign({},
+        grid.request.controls,{step:500}),targets:targets});
+      gpu.checked(exactRequest);
+      probeStatus('Visibility audit: '+selected.length+' real renderer targets · direct GPU predictor…');
+      var directBegin=profileNow(),directBatch=await session.solve(exactRequest,{warmRepeats:0});
+      if(cancelled())return;
+      var directGpuMs=profileNow()-directBegin;
+      // CPU reference uses the physical renderer's standard-atmosphere step
+      // policy, not GPU f32 numbers. Its exhaustive f64 shooting does NOT
+      // change the B frame or any chosen target.
+      var physicalCpuStep=Math.max(20,Math.min(2000,grid.request.radius/3000));
+      var cpuRequest=Object.assign({},exactRequest,{controls:Object.assign({},
+        exactRequest.controls,{step:physicalCpuStep,targetTolerance:1e-6})});
+      probeStatus('Visibility audit: independent CPU f64 shooting for '+selected.length+' targets…');
+      var cpuBegin=profileNow(),reference=await contract.solveCpuBatch(cpuRequest),
+        cpuTargetMs=profileNow()-cpuBegin;
+      if(cancelled())return;
+      var comparison=compareAdapter.compareRendererVisibility(selected,reference,
+        directBatch.response);
+      probeStatus('Visibility audit: independent CPU f64 image and pixel difference…');
+      state.probeForceColdA=true;
+      var imageCpuBegin=profileNow();
+      try{state.compareGraphs.A.Redraw();}finally{state.probeForceColdA=false;}
+      var cpuFrameMs=profileNow()-imageCpuBegin;
+      if(cancelled()||!state.compareLast.A)throw Error('Visibility audit CPU frame unavailable');
+      var fullDiff=compareAdapter.compareFramePixels(state.compareGraphs.A.Canvas,snapshot),
+        lowerDiff=compareAdapter.compareFramePixels(state.compareGraphs.A.Canvas,snapshot,roi);
+      // Restore the untouched grid field (not a new CPU-guided GPU hybrid).
+      state.probeField=field;
+      if(state.compareCache.B)state.compareCache.B.clearCache();
+      state.compareGraphs.B.Redraw();
+      if(el('ModernCompareLabelB'))el('ModernCompareLabelB').textContent=
+        'GPU predictor · 4096 grid (visibility audit only)';
+      state.probeFrameLast={version:'140.12.20',
+        kind:'Same-renderer-target CPU f64 vs interpolated GPU vs direct GPU visibility audit',
+        geometry:grid.request.geometry,atmosphere:'standard',
+        gpuAlgorithm:'predictor',gpuRK4StepMetres:500,
+        gridRays:4096,directTargetBudget:targetBudget,directTargets:selected.length,
+        gpuSetupMs:session.setupMs,gridPrepareMs:gridPrepared-begun,
+        gridGpuBatchWallMs:gridSolved-gridPrepared,
+        gridGpuReadbackTimesMs:batchTimes,gpuFramePaintMs:gpuPaintMs,
+        gridAndPaintMs:gridAndPaintMs,
+        directGpuWallMs:directGpuMs,
+        directGpuBatchReadbackMs:directBatch.timing.gpuUploadToReadbackMs,
+        cpuF64TargetWallMs:cpuTargetMs,cpuF64FrameWallMs:cpuFrameMs,
+        cpuF64TargetStepMetres:physicalCpuStep,
+        cpuF64TargetToleranceMetres:1e-6,
+        gpuDirectTargetToleranceMetres:exactRequest.controls.targetTolerance,
+        rendererCapture:rendererCapture,rendererCounts:capturedCounts,
+        statusAudit:comparison.summary,perTargetResults:comparison.rows,
+        fullFrameDiff:fullDiff,lowerRightFrameDiff:lowerDiff,
+        lowerRightRegion:roi,
+        targetSelection:'GPU B physical renderer requests only, d <= 6 km, 0 <= h <= 20 m, stratified',
+        cpuOracleDiscovery:false,cpuShootingFallback:false,
+        directGpuAnswersNotInjectedIntoFrame:true,
+        originalGpuFramePreserved:true,productionAuthorized:false,
+        visualEquivalenceProven:false,
+        verdict:'DIAGNOSTIC_STATUS_COMPARISON_ONLY'};
+      var summary=comparison.summary,metricLine=probeUi('ModernGpuFrameMetrics');
+      if(metricLine)metricLine.textContent='Visibility audit '+selected.length+
+        ' renderer targets · status mismatches vs CPU: grid '+
+        summary.gridVsCpuMismatches+' / direct GPU '+summary.directGpuVsCpuMismatches+
+        ' · CPU-visible rejected: grid '+summary.cpuVisibleGridNonvisible+
+        ' / direct '+summary.cpuVisibleDirectNonvisible+
+        ' · pixel differences bottom-right '+lowerDiff.significantPixels+
+        ' · Export JSON for ground contacts and per-target angles.';
+      probeStatus('Visibility audit · '+selected.length+' targets · grid/CPU '+
+        summary.gridVsCpuMismatches+' mismatches · directGPU/CPU '+
+        summary.directGpuVsCpuMismatches+' · original B frame unchanged · Export JSON');
+    }catch(error){
+      if(generation===state.probeGeneration){
+        state.probeField=null;state.probeFrameLast=null;
+        probeStatus('Visibility audit unavailable: '+String(error.message||error));
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        state.compareGraphs.B.Redraw();
+      }
+    }finally{
+      state.probeForceColdA=false;
+      if(session)session.close();
+      state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});
+    }
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -1909,10 +2066,13 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var visibilityButton=probeUi('ModernGpuRendererVisibilityRun');
+    if(visibilityButton)visibilityButton.addEventListener('click',runCompareRendererVisibility141220);
     var nearGeometryButton=probeUi('ModernGpuNearGeometryRun');
     if(nearGeometryButton)nearGeometryButton.addEventListener('click',runCompareNearGeometry141219);
     ['ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFirstRun','ModernGpuFastRun',
-      'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun'].forEach(function(id){
+      'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
+      'ModernGpuRendererVisibilityRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -1931,7 +2091,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.19'?
+      link.href=url;link.download=exportVersion==='140.12.20'?
+        'curvature-compare-140.12.20-renderer-visibility.json':
+        exportVersion==='140.12.19'?
         'curvature-compare-140.12.19-near-geometric-projection.json':
         exportVersion==='140.12.18'?
         'curvature-compare-140.12.18-adaptive-vs-dense.json':
