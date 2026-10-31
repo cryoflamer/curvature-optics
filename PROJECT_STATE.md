@@ -1,3 +1,10 @@
+## Patch 140.12.41 — Independent GPU double-single RK4 shooting and ground-event audit (2026-10-31)
+
+- Added `CurvatureGpuDsRk4Shooting141241.js`: **separate** WGSL classic-double-single port of tangent-frame `[x,z,vx,vz]` RK4 and first-forward-x target shooting, with angular bracket/regula falsi and fixed-x endpoint correction. Uses a sampled DS first-ground crossing/grazing detector and endpoint ground uncertainty. The old Bouguer #140.12.32 solver is untouched. Input direct-angle seeds are **not CPU solved angles**.
+- Added `CurvatureGpuDsRk4Audit141241.js` and an opt-in Modern Compare button to run the 48 original physical points from #140.12.40 with independent CPU f64 reference. ZIP contains JSON, a real CPU Canvas screenshot, clearly labeled **sample-only** GPU/CPU point maps, status-error map, timing visualization, README; failure produces an error ZIP.
+- All output failures and indeterminate contacts are fail-closed. A 48-point sample match does not authorize replacing the production CPU painter: no full-frame DS reconstruction, no adaptive query scheduling, no cross-platform DS precision guarantee and no general multipath certification.
+- Exact scope and verification limitations: `docs/GPU_DS_RK4_SHOOTING_140_12_41.md`. Canonical `tools/webgpu-optics.html`, production CPU/GPU paths and painting remain unchanged. A real WebGPU runtime check is required for generated WGSL, in addition to Node/structural tests.
+
 ## Patch 140.12.40 — GPU DS real-scene painter-equivalence feasibility gate (2026-10-31)
 
 - Added Modern Compare **Audit CPU f64 vs GPU DS · real-scene shooting gate · PNG + JSON ZIP** action. It samples 48 deterministic physically authored tower/foundation edge targets from the active Globe scene and compares existing DS radial Bouguer shooting (256/512 quadrature nodes) with CPU f64 RK4 shooting on the **same** targets, reporting angle and pixel-space displacement, candidate visibility disagreements, GPU compile/dispatch+readback vs CPU solver timing, source-lineage metadata, and an actual CPU Canvas reference screenshot alongside correctly labeled ray-only PNGs.
