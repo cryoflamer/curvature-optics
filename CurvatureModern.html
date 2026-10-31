@@ -74,6 +74,8 @@
 <script src="src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js?v=140.12.33"></script>
 <script src="src/diagnostics/CurvatureGpuFullFrameParity141234.js?v=140.12.34"></script>
 <script src="src/diagnostics/CurvatureGpuAlgorithmAttribution141235.js?v=140.12.35"></script>
+<script src="src/diagnostics/GeometryDiagnosticsZip.js"></script>
+<script src="src/diagnostics/CurvatureAttributionVisualZip141236.js?v=140.12.36"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.30"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
@@ -368,7 +370,7 @@
             <em>This GPU renderer path does not use the 48-ray DS shooting shader and is not DS frame parity;
             neither an edge proxy nor painted/background pixel is certified sky/ground classification.</em>
             JSON downloads automatically, production remains unchanged.</p>
-          <p class="modern-note">#140.12.35: <strong>algorithmic error attribution</strong> (diagnostic only). One shared 4096-ray GPU f32 predictor field is repainted as baseline (nearest-status), conservative strict-status gate (mixed / missing / out-of-grid becomes <code>indeterminate</code>) and strict + up to 192 sparse direct GPU f32 predictor answers chosen from real baseline B renderer queries. All three frames are measured against independent CPU f64 reference at four camera positions. A separate CPU f64 oracle checks exactly the selected GPU query coordinates after the GPU variants. These ablations change recursive geometry paths, so differences are not additive causal percentages. No DS full-frame integration, CPU-guided sample selection, CPU fallback, or production changes. JSON downloads automatically.</p>
+          <p class="modern-note">#140.12.35: <strong>algorithmic error attribution</strong> (diagnostic only). One shared 4096-ray GPU f32 predictor field is repainted as baseline (nearest-status), conservative strict-status gate (mixed / missing / out-of-grid becomes <code>indeterminate</code>) and strict + up to 192 sparse direct GPU f32 predictor answers chosen from real baseline B renderer queries. All three frames are measured against independent CPU f64 reference at four camera positions. A separate CPU f64 oracle checks exactly the selected GPU query coordinates after the GPU variants. These ablations change recursive geometry paths, so differences are not additive causal percentages. No DS full-frame integration, CPU-guided sample selection, CPU fallback, or production changes. #140.12.36 exports one ZIP with JSON and CPU/GPU/overlay/difference PNGs for all four views.</p>
           <div id="ModernGpuFullFrameParityVisual" hidden>
             <div class="modern-compare-note"><strong>Current-camera significant pixel differences</strong> · red: RGB change beyond 8; purple: painted/background classification differs; gray: within tolerance</div>
             <canvas id="ModernGpuFullFrameDiffHeatmap" width="408" height="272" style="max-width:100%;height:auto" aria-label="Actual CPU versus GPU predictor full-frame significant pixel difference heatmap"></canvas>

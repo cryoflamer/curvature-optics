@@ -4208,7 +4208,14 @@
           out.getContext('2d').drawImage(off,0,0,out.width,out.height);}
       }catch(_){/* preview failure does not invalidate pixel measurements */}
       var maps=probeUi('ModernGpuFullFrameParityVisual');if(maps)maps.hidden=false;
-      state.probeFrameLast=report;numericAuditComplete(report);
+      phase='visual ZIP export';
+      var visualZip=root.CurvatureAttributionVisualZip141236,zipWriter=root.GeometryDiagnosticsZip;
+      if(!visualZip||!zipWriter)throw Error('Visual ZIP modules missing');
+      var zip=zipWriter.build(visualZip.entries(visualCases,report,document));
+      var zipUrl=root.URL.createObjectURL(zip),zipLink=document.createElement('a');
+      zipLink.href=zipUrl;zipLink.download='curvature-compare-140.12.36-visual-attribution.zip';
+      try{zipLink.click();}finally{if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(zipUrl);},1000);else root.URL.revokeObjectURL(zipUrl);}
+      state.probeFrameLast=report;state.probeExportLast=report;
       var current=cameraCases[cameraCases.length-1],text=probeUi('ModernGpuFrameMetrics');
       if(text)text.textContent='REAL pixel diff · current camera '+
         current.pixelDiff.significantPixels+'/'+current.pixelDiff.totalPixels+
@@ -4264,7 +4271,7 @@
     }
     var generation=state.probeGeneration,oldHorizon=state.compareHorizon,
       oldEye=state.compareEyeLevel,started=profileNow(),phase='initialize',
-      lastPair=null,cases=[],pairs=[],captured=null,selected=[],batchMs=[];
+      lastPair=null,cases=[],pairs=[],captured=null,selected=[],batchMs=[],visualCases=[];
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
     function clear(which){if(state.compareCache[which])state.compareCache[which].clearCache();
@@ -4396,6 +4403,7 @@
           variant.pixelChangeFromBaseline=key==='baseline'?null:
             parity.analyze(stored.baseline,stored[key],{zeroElevationRowPx:row});
         }
+        visualCases.push({id:measurement.id,frames:{cpu:repeat,baseline:stored.baseline,strict:stored.strict,strictDirect:stored.strictDirect}});
         delete measurement._frames; // never put raw pixels in JSON
       }
       state.probeForceColdA=false;
@@ -4426,15 +4434,22 @@
         totalElapsedMs:profileNow()-started,
         originalModelsUnaffected:true,shimmerDisabled:true,
         horizonGuidesDisabled:true});
-      state.probeFrameLast=report;numericAuditComplete(report);
+      phase='visual ZIP export';
+      var visualZip=root.CurvatureAttributionVisualZip141236,zipWriter=root.GeometryDiagnosticsZip;
+      if(!visualZip||!zipWriter)throw Error('Visual ZIP modules missing');
+      var zip=zipWriter.build(visualZip.entries(visualCases,report,document));
+      var zipUrl=root.URL.createObjectURL(zip),zipLink=document.createElement('a');
+      zipLink.href=zipUrl;zipLink.download='curvature-compare-140.12.36-visual-attribution.zip';
+      try{zipLink.click();}finally{if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(zipUrl);},1000);else root.URL.revokeObjectURL(zipUrl);}
+      state.probeFrameLast=report;state.probeExportLast=report;
       var line=probeUi('ModernGpuFrameMetrics'),one=cases[3].variants,
         fmt=function(v){return v.pixelDiff.significantPixels;};
       if(line)line.textContent='Actual camera significant px: baseline '+fmt(one.baseline)+
         ' / strict '+fmt(one.strict)+' / strict+direct '+fmt(one.strictDirect)+
         ' · CPU robust status mismatches: grid '+oracle.summary.gridStatusMismatches+
         ' / direct '+oracle.summary.directStatusMismatches+
-        ' · attribution (not DS, not production) · Export JSON';
-      probeStatus('Algorithm attribution finished · 4 views, three GPU modes, independent CPU oracle · Export JSON');
+        ' · attribution (not DS, not production) · ZIP exported';
+      probeStatus('Algorithm attribution finished · 4 views, three GPU modes, independent CPU oracle · ZIP exported');
     }catch(error){if(!cancelled()){
       numericAuditFailed('140.12.35','runGpuAlgorithmAttribution141235',error,
         {phase:phase,finishedCases:cases.length,totalElapsedMs:profileNow()-started});

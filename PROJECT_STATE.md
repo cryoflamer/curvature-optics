@@ -1,3 +1,7 @@
+
+## Patch 140.12.36 — Visual ZIP attribution (2026-10-31)
+- The #140.12.35 algorithm attribution action now downloads a single `curvature-compare-140.12.36-visual-attribution.zip` containing the full numerical JSON and 44 PNG snapshots (four camera views × CPU, three GPU variants, three overlays, three CPU/GPU difference maps, and one baseline/direct difference map). Frames are taken from the same RGBA snapshots used by the pixel metrics; no rerendering or GPU changes. Difference colors are occupancy proxies, not physical sky/terrain labels.
+- A small browser-side PNG exporter and the existing ZIP writer are reused. No new versioned HTML tools page was created. Browser WebGPU end-to-end ZIP export remains unverified here.
 ## Patch 140.12.35 — Algorithmic error attribution (research, 2026-10-31)
 
 - Added opt-in Compare action **Audit algorithm attribution · baseline / strict / direct GPU**, automatically exporting `curvature-compare-140.12.35-algorithm-attribution.json`. One 4096-ray scene-derived f32 predictor grid is reused across three real Canvas B variants for four fixed camera views. `baseline` retains nearest-weight visibility selection, `strict` reports mixed/invalid/out-of-domain responses as indeterminate (angle unchanged), and `strictDirect` replaces up to 192 exact original B renderer query coordinates with independent direct GPU f32 predictor results. No CPU-guided GPU sampling and no production changes.
