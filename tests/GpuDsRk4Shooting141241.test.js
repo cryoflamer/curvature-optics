@@ -63,6 +63,11 @@ test('140.12.41.1: generated WGSL does not use reserved `final` in a field or me
  assert.match(source,/best\.endState\.x/);
  assert.match(source,/best\.endState\.vz/);
 });
+test('140.12.41.2: generated WGSL never passes a DS struct to select',()=>{
+ const source=rk4.shader();
+ assert.doesNotMatch(source,/\bselect\s*\(\s*mulf\s*\(dsAdd\(lo,hi\)/);
+ assert.match(source,/if\(greater\(candidate,lo\)\&\&less\(candidate,hi\)\)/);
+});
 test('140.12.41: decoded GPU readback preserves DS limbs and complete first-ground evidence',()=>{
  const request={...inputs().request,targets:[[1000,7],[9000,20],[20000,3]]};
  const raw=new Float32Array(3*16);

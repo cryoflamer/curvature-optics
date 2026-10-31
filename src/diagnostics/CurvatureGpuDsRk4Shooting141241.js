@@ -142,7 +142,7 @@ fn shot(angle:DS,xGoal:DS,zGoal:DS,eye:DS,k:DS,N:DS,H:DS,maxSteps:u32)->Shot{
         if(near(error,max(0.000000001,dval(xGoal)*1e-14))){break;}
         if(greater(error,D(0.0))){hi=t;}else{lo=t;}
         let candidate=dsSub(t,dsDiv(error,endpoint.vx));
-        t=select(mulf(dsAdd(lo,hi),0.5),candidate,greater(candidate,lo)&&less(candidate,hi));
+        if(greater(candidate,lo)&&less(candidate,hi)){t=candidate;}else{t=mulf(dsAdd(lo,hi),0.5);}
       }
       if(!near(dsSub(endpoint.x,xGoal),max(0.00000001,dval(xGoal)*1e-12))){return invalidShot(angle);}
       return Shot(true,angle,dsSub(endpoint.z,zGoal),dsAdd(distance,t),endpoint,calls);
