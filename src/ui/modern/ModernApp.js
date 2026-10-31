@@ -2777,6 +2777,48 @@
     }}finally{if(session)session.close();state.probeBusy=false;
       buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
+  // #140.12.29: independent Globe/Flat precision geometry and input packing.
+  async function runGpuPrecisionGeometry141229(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var precision=root.CurvatureGpuPrecisionGeometry141229;
+    if(!precision||!root.navigator||!root.navigator.gpu){
+      probeStatus('GPU precision geometry requires WebGPU.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuPrecisionGeometryRun','ModernGpuPrecisionFoundationRun',
+        'ModernGpuBouguerAuditRun','ModernGpuGroundAuditRun',
+        'ModernGpuLimitAuditRun','ModernGpuFloorAuditRun',
+        'ModernGpuRootAuditRun','ModernGpuPrecisionAuditRun',
+        'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var rows=precision.cases();
+      probeStatus('GPU precision geometry: compiling Globe/Flat f32, classic DS and integer-residual DS…');
+      session=await precision.createSession(rows.length);
+      if(cancelled())return;
+      probeStatus('GPU precision geometry: measuring target angles, local heights and coordinate splits…');
+      var report=await session.run(rows,{warmRepeats:5,benchmarkIterations:32});
+      if(cancelled())return;
+      report.adapterInfo=session.adapterInfo||null;
+      state.probeFrameLast=report;
+      var metric=probeUi('ModernGpuFrameMetrics');
+      if(metric)metric.textContent='GPU geometry '+report.targets+' targets · old normalized atan2 max '+
+        report.summary.f32.maxAbsoluteNormalizedAtan2ErrorSurfaceMetres.toExponential(3)+' m'+
+        ' · direct arc d/R: '+precision.MODES.map(function(mode){return mode+' '+
+          report.summary[mode].maxAbsolutePolarErrorSurfaceMetres.toExponential(3)+' m';}).join(' / ')+
+        ' · DS Cartesian atan max '+report.summary.classic_ds.maxAbsoluteCartesianPolarErrorSurfaceMetres.toExponential(3)+' m'+
+        ' · DS local height max '+report.summary.classic_ds.maxAbsoluteLocalHeightErrorMetres.toExponential(3)+
+        ' m · Export JSON';
+      probeStatus('GPU geometry precision measured · shooting / painting unchanged · Export JSON');
+    }catch(error){if(!cancelled()){
+      state.probeFrameLast=null;
+      probeStatus('GPU geometry audit failed: '+String(error&&error.message||error));
+    }}finally{if(session)session.close();state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2823,6 +2865,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var geometryButton=probeUi('ModernGpuPrecisionGeometryRun');
+    if(geometryButton)geometryButton.addEventListener('click',runGpuPrecisionGeometry141229);
     var arithmeticButton=probeUi('ModernGpuPrecisionFoundationRun');
     if(arithmeticButton)arithmeticButton.addEventListener('click',runGpuPrecisionFoundation141228);
     var bouguerButton=probeUi('ModernGpuBouguerAuditRun');
@@ -2848,7 +2892,8 @@
       'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
       'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun',
       'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun',
-      'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun'].forEach(function(id){
+      'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun',
+      'ModernGpuPrecisionGeometryRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2867,7 +2912,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.28'?
+      link.href=url;link.download=exportVersion==='140.12.29'?
+        'curvature-compare-140.12.29-gpu-precision-geometry.json':
+        exportVersion==='140.12.28'?
         'curvature-compare-140.12.28-gpu-arithmetic.json':
         exportVersion==='140.12.27'?
         'curvature-compare-140.12.27-bouguer-invariant.json':

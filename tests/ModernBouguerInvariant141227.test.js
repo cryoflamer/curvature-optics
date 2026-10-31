@@ -96,7 +96,7 @@ test('140.12.27: GPU decode preserves raw signed surface-polar margins, includin
 test('140.12.27: UI GPU angle selection and two GPU audits precede f64 reference, no painting',()=>{
   assert.match(html,/src\/diagnostics\/CurvatureBouguerInvariant141227\.js/);
   assert.match(html,/ModernGpuBouguerAuditRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.28/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.29/);
   assert.match(app,/addEventListener\('click',runGpuBouguerAudit141227\)/);
   assert.match(app,/curvature-compare-140\.12\.27-bouguer-invariant\.json/);
   const body=app.slice(app.indexOf('async function runGpuBouguerAudit141227(){'),app.indexOf('function bindCompareGpuProbe(){'));
