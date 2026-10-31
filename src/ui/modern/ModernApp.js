@@ -3021,6 +3021,8 @@
     if(frameParityButton)frameParityButton.addEventListener('click',runGpuFullFrameParity141234);
     var cameraFirstButton=probeUi('ModernCameraFirstOracleRun');
     if(cameraFirstButton)cameraFirstButton.addEventListener('click',runCameraFirstOracle141238);
+    var cameraObjectsButton=probeUi('ModernCameraFirstObjectsRun');
+    if(cameraObjectsButton)cameraObjectsButton.addEventListener('click',runCameraFirstObjects141239);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
     if(attributionButton)attributionButton.addEventListener('click',runGpuAlgorithmAttribution141235);
     var pixelSpaceButton=probeUi('ModernGpuPixelSpaceAuditRun');
@@ -4570,6 +4572,115 @@
       numericAuditFailed('140.12.38','runCameraFirstOracle141238',error,
         {phase:phase,elapsedMs:profileNow()-started});
       probeStatus('Camera-first CPU oracle failed: '+String(error&&error.message||error));
+    }}finally{state.probeBusy=false;if(button)button.disabled=false;}
+  }
+  // #140.12.39: opt-in direct CPU f64 first opaque-world-polygon / Earth hit.
+  // Reuses the #140.12.38 camera direction convention, not target shooting,
+  // optical polygon projection, GPU field, or screen-space z-depth.
+  async function runCameraFirstObjects141239(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var objects=root.CurvatureCameraFirstObjects141239,
+      oracle=root.CurvatureCameraFirstOracle141238,
+      pixelAudit=root.CurvatureGpuPixelSpaceAudit141233,
+      composition=root.CurvatureIndependentComposition,
+      parity=root.CurvatureGpuFullFrameParity141234,
+      visual=root.CurvatureAttributionVisualZip141236,
+      zipWriter=root.GeometryDiagnosticsZip,
+      source=state.comparePair&&state.comparePair.A,
+      graph=state.compareGraphs&&state.compareGraphs.A,
+      button=probeUi('ModernCameraFirstObjectsRun'),
+      generation=state.probeGeneration,phase='capturing camera and physical scene';
+    if(!objects||!oracle||!pixelAudit||!composition||!parity||!visual||!zipWriter||!source||!graph){
+      probeStatus('Camera-first objects unavailable: missing source scene or diagnostic module.');return;
+    }
+    if((state.compareConfig&&state.compareConfig.A&&
+        (state.compareConfig.A.surface!=='globe'||state.compareConfig.A.atmosphere!=='standard'))||
+        source.showModel!==1||!(source.Height>0)){
+      probeStatus('Camera-first object audit requires Compare A Globe, standard atmosphere and positive eye height.');return;
+    }
+    var interrupted=function(){return state.probeGeneration!==generation||
+      state.mode!=='compare'||!state.compareGpuProbe;};
+    var started=profileNow();state.probeBusy=true;if(button)button.disabled=true;
+    try{
+      var camera=pixelAudit.capture(source,graph),
+        captured=parity.canvasCapture(graph.Canvas),
+        model=Object.assign({},source,{geometryRadius:source.rEarth}),
+        composed=composition.composeOpticalMain(model,true,{physicalWorld:true}),
+        mesh=objects.prepare(composed),config={model:source,snapshot:camera},rows=[];
+      oracle.check(config);
+      if(!mesh.triangles.length&&!mesh.proxyTriangles.length)throw Error('No authored object polygons in Compare A physical scene');
+      for(var row=0;row<objects.SIZE;row++){
+        if(interrupted())return;
+        phase='integrating object and Earth intersections, row '+row;
+        rows.push(objects.sampleRow(config,mesh,row,'standard',objects.STEP));
+        if(row%2===1){
+          probeStatus('Camera-first first-object/Earth f64: '+(row+1)+'/64 rows…');
+          await new Promise(function(resolve){root.setTimeout(resolve,0);});
+        }
+      }
+      if(interrupted())return;
+      phase='selecting and tracing focused physical-object ROI';
+      var roi=objects.focusedRoi(config,composed),roiRows=[];
+      if(roi){
+        for(var focusRow=0;focusRow<objects.SIZE;focusRow++){
+          if(interrupted())return;
+          phase='focused ROI '+(focusRow+1)+'/64';
+          roiRows.push(objects.sampleRow(roi.config,mesh,focusRow,'standard',objects.STEP));
+          if(focusRow%2===1){
+            probeStatus('Camera-first focused object ROI: '+(focusRow+1)+'/64 rows…');
+            await new Promise(function(resolve){root.setTimeout(resolve,0);});
+          }
+        }
+      }
+      if(interrupted())return;
+      phase='same-pixel 100m / 50m RK4-chord first-hit convergence';
+      var convergence=objects.convergence(roi?roi.config:config,mesh,roi?roiRows:rows,128);
+      if(interrupted())return;
+      phase='rendering diagnostic PNG and ZIP';
+      var report={version:objects.VERSION,kind:'camera-first-first-opaque-object-or-ground',
+        title:'Independent camera-first CPU f64 object/Earth first-hit investigation',
+        method:'authored physical metric 3D opaque polygon triangulation; radial ray meridian RK4; 3D integrated-segment chord intersections',
+        camera:camera,rayGrid:{width:64,height:64,maxDistanceMetres:objects.MAX_DISTANCE,
+          stepMetres:objects.STEP},
+        scene:{composition:composed.scene.metadata.composition,
+          physicalMetricWorld:composed.scene.metadata.physicalMetricWorld,
+          sourceObjectLayers:composed.ranges.filter(function(r){return r.role==='objects';}).map(function(r){return {name:r.name,count:r.count};})},
+        summary:objects.summary(rows,mesh),samples:rows.flat(),
+        focusedRoi:roi?{bounds:roi.bounds,chosenObject:roi.chosenObject,warning:roi.warning,
+          summary:objects.summary(roiRows,mesh),samples:roiRows.flat()}:null,
+        refinement:convergence,wallTimeMs:profileNow()-started,
+        limitations:[
+          'This is a separate camera-first OBJECT diagnostic; it uses the same physical RK4 kernel as #140.12.38, not an independent integrator.',
+          'A curved path is intersected using 100m straight chords. Small/grazing polygon hits are not certified; a later convergence audit must bracket them.',
+          'Unfilled tower outlines are also examined as a separate hypothetical opaque-silhouette proxy, not a physical visibility result.',
+          'The focused ROI is chosen from vacuum object projections purely for sampling placement; it does not change physical tracing.',
+          'Only authored opaque filled polygons are intersected; thin lines, outline-only objects, alpha and textures are not reproduced.',
+          'Original physical object polygons share their triangulation helper with the existing geometry pipeline; their OPTICALLY PROJECTED triangles are not used.',
+          'First-hit uses integrated path ordering; no screen-space z-buffer, inverse target shooting or GPU fields.',
+          'A downsample of the production CPU Canvas is provided only as a visual reference; colours/guides/strokes are not semantic hit labels.',
+          'No contact by 30km does not imply infinite-distance visibility or exclude farther objects.',
+          'No changes to production CPU/GPU painting, WebGPU, shader or optics solver.'
+        ]};
+      var files=objects.entries(rows,report,captured,document,visual,roiRows,roi),
+        zip=zipWriter.build(files),url=root.URL.createObjectURL(zip),
+        link=document.createElement('a');
+      link.href=url;
+      link.download='curvature-compare-140.12.39-camera-first-objects.zip';
+      try{link.click();}finally{
+        if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);
+      }
+      state.probeExportLast=report;
+      var metrics=probeUi('ModernGpuFrameMetrics');
+      if(metrics)metrics.textContent='Camera-first 64×64 f64: '+report.summary.counts.object+
+        ' object / '+report.summary.counts.ground+' Earth / '+report.summary.counts.range+
+        ' range · ZIP exported';
+      probeStatus('Camera-first object/Earth diagnostic exported · '+report.summary.counts.object+
+        ' object hits / 4096 rays · ZIP');
+    }catch(error){if(!interrupted()){
+      numericAuditFailed('140.12.39','runCameraFirstObjects141239',error,
+        {phase:phase,elapsedMs:profileNow()-started});
+      probeStatus('Camera-first object audit failed: '+String(error&&error.message||error));
     }}finally{state.probeBusy=false;if(button)button.disabled=false;}
   }
   function bind(){
