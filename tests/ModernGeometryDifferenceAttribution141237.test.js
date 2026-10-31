@@ -105,3 +105,18 @@ test('140.12.37: new callback is strictly opt-in and browser runs candidate geom
   assert.match(opticsSource,/if\(options\.geometryAudit&&typeof options\.geometryAudit\.onScene/);
   assert.match(opticsSource,/onUnresolved:options\.geometryAudit&&/);
 });
+test('140.12.37.1: physical painter binds captured scene after optical transform, even on cache reuse',()=>{
+  const src=fs.readFileSync(path.resolve(__dirname,'../src/app/CurvatureMainCanvasRenderer.js'),'utf8');
+  const begin=src.indexOf('var opticalFrame=session.transform(composed,physicalModel,options);');
+  const end=src.indexOf('var opticalAt=now();',begin);
+  assert.ok(begin>0&&end>begin);
+  const hook=src.slice(begin,end);
+  assert.match(hook,/options\.geometryAudit\.onScene\(opticalFrame\.composition\.scene,opticalFrame\.stats\)/);
+  for(const reused of [false,true]){
+    const scene={primitives:[line,triangle]},events=[];
+    const session={transform:()=>({composition:{scene},stats:{},reused})};
+    const options={geometryAudit:{onScene:(s)=>events.push(s)}};
+    Function('session','composed','physicalModel','options',hook)(session,{}, {},options);
+    assert.deepEqual(events,[scene]);
+  }
+});

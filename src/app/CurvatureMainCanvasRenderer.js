@@ -133,6 +133,11 @@
     if(options.geometryAudit&&typeof options.geometryAudit.onCamera==='function')
       options.geometryAudit.onCamera(camera,g.Canvas.width,g.Canvas.height);
     var opticalFrame=session.transform(composed,physicalModel,options);
+    // #140.12.37.1: bind the collector to the composition actually handed
+    // to the painter, including cached/reused optical frames. The transform
+    // callback alone is not a reliable source for camera-only redraws.
+    if(options.geometryAudit&&typeof options.geometryAudit.onScene==='function')
+      options.geometryAudit.onScene(opticalFrame.composition.scene,opticalFrame.stats);
     var opticalAt=now();
     var drawSource=options.interactive?previewComposition(opticalFrame.composition):
       {composition:opticalFrame.composition,preview:false};
