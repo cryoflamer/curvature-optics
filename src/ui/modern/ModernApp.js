@@ -730,7 +730,7 @@
   // Export only completed numerical audits, never ordinary rendered frames.
   function downloadNumericAudit(report,failed){
     if(!report||!root.Blob||!root.URL||!root.URL.createObjectURL)return false;
-    var nameByVersion={'140.12.33':'curvature-compare-140.12.33-pixel-space-audit.json','140.12.32':'curvature-compare-140.12.32-gpu-ds-shooting.json','140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
+    var nameByVersion={'140.12.34':'curvature-compare-140.12.34-full-frame-pixel-parity.json','140.12.33':'curvature-compare-140.12.33-pixel-space-audit.json','140.12.32':'curvature-compare-140.12.32-gpu-ds-shooting.json','140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
       '140.12.29':'curvature-compare-140.12.29-gpu-precision-geometry.json','140.12.28':'gpu-arithmetic',
       '140.12.27':'bouguer-invariant','140.12.26':'gpu-ground-contact',
       '140.12.25':'gpu-precision-limit','140.12.24':'gpu-numerical-floor',
@@ -3012,6 +3012,8 @@
     if(bouguerQuadratureButton)bouguerQuadratureButton.addEventListener('click',runGpuBouguerQuadrature141231);
     var highPrecisionShootingButton=probeUi('ModernGpuHighPrecisionShootingRun');
     if(highPrecisionShootingButton)highPrecisionShootingButton.addEventListener('click',runGpuHighPrecisionShooting141232);
+    var frameParityButton=probeUi('ModernGpuFullFrameParityRun');
+    if(frameParityButton)frameParityButton.addEventListener('click',runGpuFullFrameParity141234);
     var pixelSpaceButton=probeUi('ModernGpuPixelSpaceAuditRun');
     if(pixelSpaceButton)pixelSpaceButton.addEventListener('click',function(){
       return runGpuHighPrecisionShooting141232({pixelSpace:true});
@@ -3043,7 +3045,8 @@
       'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun',
       'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun',
       'ModernGpuPrecisionGeometryRun','ModernGpuBouguerPrecisionRun',
-      'ModernGpuBouguerQuadratureRun','ModernGpuHighPrecisionShootingRun','ModernGpuPixelSpaceAuditRun'].forEach(function(id){
+      'ModernGpuBouguerQuadratureRun','ModernGpuHighPrecisionShootingRun','ModernGpuPixelSpaceAuditRun',
+      'ModernGpuFullFrameParityRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -4066,6 +4069,166 @@
       probeStatus('GPU DS shooting failed: '+String(error&&error.message||error));
     }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;
       buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
+  // #140.12.34: four real, independent CPU A / GPU-first f32 B frame paints.
+  // The 48-ray GPU DS module DOES NOT supply the physical frame field yet.
+  // Never represent this GPU predictor parity check as DS full-frame parity.
+  async function runGpuFullFrameParity141234(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var parity=root.CurvatureGpuFullFrameParity141234,
+      pixelAudit=root.CurvatureGpuPixelSpaceAudit141233,
+      gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      graphA=state.compareGraphs.A,graphB=state.compareGraphs.B,
+      sourcePair=state.comparePair,sourceA=sourcePair&&sourcePair.A,
+      spec=state.compareConfig&&state.compareConfig.A,
+      button=probeUi('ModernGpuFullFrameParityRun'),session=null;
+    if(!parity||!pixelAudit||!gpu||!contract||!graphA||!graphB||!sourceA||
+       !root.navigator||!root.navigator.gpu||!root.CurvatureSurfaceGeometry||
+       !root.CurvatureIndependentComposition||!root.CurvatureOpticalTowerSilhouette){
+      probeStatus('Full-frame parity unavailable: WebGPU or physical scene dependency missing.');return;
+    }
+    if(!spec||spec.atmosphere!=='standard'||spec.surface!=='globe'||
+       state.geometryBackend!=='canvas'){
+      probeStatus('Full-frame parity requires Globe, standard atmosphere and Canvas 2D painting.');return;
+    }
+    if(atmosphericPresentation&&(atmosphericPresentation.enabled('A')||
+       atmosphericPresentation.enabled('B'))){
+      probeStatus('Turn off Atmospheric Turbulence for BOTH Compare views before pixel parity.');return;
+    }
+    if(!compareAdapter.invariant(sourcePair)){
+      probeStatus('A/B camera and objects differ; cannot make an aligned pixel comparison.');return;
+    }
+    var generation=state.probeGeneration,oldHorizon=state.compareHorizon,
+      oldEye=state.compareEyeLevel,started=profileNow(),phase='initialize',
+      cameraCases=[],latest=null,report=null,workingPair=null;
+    function cancelled(){return generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe;}
+    function clear(side){if(state.compareCache[side])state.compareCache[side].clearCache();state.compareLast[side]=null;}
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    if(button)button.disabled=true;
+    try{
+      state.compareHorizon=false;state.compareEyeLevel=false; // omit guides and keep both painters identical
+      var deps={composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,
+        surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      phase='prepare independent scene-derived GPU grid';
+      probeStatus('Full-frame parity: preparing a 4096-ray GPU predictor grid (not DS)…');
+      var grid=compareAdapter.gpuFirstGrid(sourceA,4096,deps,{layout:'distance-focused'}),
+        requests=compareAdapter.gpuFirstBatchRequests(grid,1024);
+      requests.forEach(function(request){request.controls.step=500;gpu.checked(request);});
+      phase='WebGPU predictor compilation';
+      session=await gpu.createSession(1024,null,{algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      var results=[],batchMs=[];
+      for(var batchIndex=0;batchIndex<requests.length;batchIndex++){
+        phase='GPU predictor batch '+(batchIndex+1)+'/'+requests.length;
+        probeStatus('Full-frame parity: GPU grid '+(batchIndex+1)+'/'+requests.length+'…');
+        var response=await session.solve(requests[batchIndex],{warmRepeats:0});
+        if(cancelled())return;
+        results.push.apply(results,response.response.results);
+        batchMs.push(response.timing.gpuUploadToReadbackMs);
+      }
+      var gpuDone=profileNow();
+      // The GPU response alone determines B: A's pixels and ray requests are
+      // never used to choose samples, correct angles, or interpolate the field.
+      var verticalFov=2*Math.atan(Math.tan(sourceA.camViewAngle/2)/
+        Math.sqrt(1+sourceA.deviceRatio*sourceA.deviceRatio));
+      var shiftDegrees=verticalFov*180/Math.PI*.3;
+      var cases=[
+        {id:'tilt-up',nickOffsetDegrees:shiftDegrees,focalMultiplier:1},
+        {id:'tilt-down',nickOffsetDegrees:-shiftDegrees,focalMultiplier:1},
+        {id:'narrow-field',nickOffsetDegrees:0,focalMultiplier:1.5},
+        {id:'actual-camera',nickOffsetDegrees:0,focalMultiplier:1}
+      ];
+      for(var caseIndex=0;caseIndex<cases.length;caseIndex++){
+        if(cancelled())return;
+        var definition=cases[caseIndex],a=compareAdapter.clone(sourceA);
+        a.Nick=sourceA.Nick+definition.nickOffsetDegrees;
+        a.FocalLengthField=sourceA.FocalLengthField*definition.focalMultiplier;
+        a.Update();
+        var b=compareAdapter.clone(a);b.Update();
+        if(!compareAdapter.invariant({A:a,B:b})||a.rEarth!==sourceA.rEarth||
+           a.showModel!==1)throw Error('Camera case physical scene invariant failed');
+        workingPair={A:a,B:b};state.comparePair=workingPair;
+        phase='CPU f64 rendering / stability control '+definition.id;
+        probeStatus('Full-frame parity: '+definition.id+' · painting independent CPU reference…');
+        state.probeField=null;clear('A');state.probeForceColdA=true;
+        var cpuStart=profileNow();graphA.Redraw();
+        if(!state.compareLast.A)throw Error('CPU A renderer did not return a frame');
+        var first=parity.canvasCapture(graphA.Canvas),cpuFrameMs=profileNow()-cpuStart;
+        clear('A');graphA.Redraw();
+        var second=parity.canvasCapture(graphA.Canvas),cpuCamera=pixelAudit.capture(a,graphA),
+          eyeRow=pixelAudit.project(cpuCamera,0).yPx,
+          repeat=parity.analyze(first,second,{zeroElevationRowPx:eyeRow});
+        state.probeForceColdA=false;
+        if(repeat.significantPixels>0)
+          throw Error('CPU A is unstable across two cold paints ('+repeat.significantPixels+
+            ' changed pixels); freeze scene animations before auditing');
+        phase='GPU field painting '+definition.id;
+        probeStatus('Full-frame parity: '+definition.id+' · painting real GPU-assisted B frame…');
+        state.probeField=compareAdapter.gpuFirstRayField(grid,{results:results},deps.surfaces);
+        clear('B');var bStart=profileNow();graphB.Redraw();
+        var bMs=profileNow()-bStart,bResult=state.compareLast.B,
+          stats=bResult&&bResult.fieldStats&&bResult.fieldStats.experimentalGpu;
+        if(!stats||stats.kind!=='gpu-first-grid'||stats.cpuFallbackRequests!==0)
+          throw Error('GPU predictor grid failed to reach B painter without CPU shooting fallbacks');
+        var candidate=parity.canvasCapture(graphB.Canvas),gpuCamera=pixelAudit.capture(b,graphB);
+        if(!pixelAudit.sameCamera(cpuCamera,gpuCamera))
+          throw Error('A/B physical camera mismatch during full-frame comparison');
+        var metrics=parity.analyze(second,candidate,{zeroElevationRowPx:eyeRow});
+        cameraCases.push({id:definition.id,camera:{nickDegrees:a.Nick,
+          diagonalFovRadians:a.camViewAngle,verticalFovRadians:cpuCamera.verticalFovRadians,
+          zeroElevationRowPx:eyeRow,widthPx:second.width,heightPx:second.height},
+          pixelDiff:metrics,cpuRepeatSignificantPixels:repeat.significantPixels,
+          cpuColdFirstFrameMs:cpuFrameMs,gpuFramePaintMs:bMs,
+          gpuFieldStats:stats,rendererCounts:compareAdapter.frameControlCounts(state.compareLast.A,bResult)});
+        if(definition.id==='actual-camera')latest={reference:second,candidate:candidate};
+      }
+      if(cancelled())return;
+      phase='build full-frame report';
+      report=parity.report(cameraCases,{geometry:'globe',atmosphere:'standard',
+        sceneFrom:'Compare A physical model',viewports:cameraCases.length,
+        gpuRayCount:grid.request.targets.length,gpuGridLayout:grid.layout,
+        gpuBatchReadbackMs:batchMs,gpuSetupMs:session.setupMs,
+        gpuPreparationAndReadbackMs:gpuDone-started,wholeAuditMs:profileNow()-started,
+        allCpuReferencesRenderedAfterGpuGrid:true,shimmerDisabled:true,
+        eyeLevelAndHorizonGuideOverlaysDisabledForAudit:true});
+      // Render the final, real per-pixel heatmap without exporting raw RGBA in JSON.
+      var out=probeUi('ModernGpuFullFrameDiffHeatmap');
+      if(out&&latest&&out.getContext)try{
+        var heat=parity.diffHeatmap(latest.reference,latest.candidate),off=document.createElement('canvas');
+        off.width=heat.width;off.height=heat.height;
+        var offCtx=off.getContext('2d');
+        if(offCtx){var im=offCtx.createImageData(heat.width,heat.height);
+          im.data.set(heat.rgba);offCtx.putImageData(im,0,0);
+          out.getContext('2d').drawImage(off,0,0,out.width,out.height);}
+      }catch(_){/* preview failure does not invalidate pixel measurements */}
+      var maps=probeUi('ModernGpuFullFrameParityVisual');if(maps)maps.hidden=false;
+      state.probeFrameLast=report;numericAuditComplete(report);
+      var current=cameraCases[cameraCases.length-1],text=probeUi('ModernGpuFrameMetrics');
+      if(text)text.textContent='REAL pixel diff · current camera '+
+        current.pixelDiff.significantPixels+'/'+current.pixelDiff.totalPixels+
+        ' significant pixels · zero-elevation band '+current.pixelDiff.eyeLevelBand.significantPixels+
+        ' · four camera cases · GPU f32 predictor, NOT DS · Export JSON';
+      probeStatus('Four CPU/GPU physical frames compared · GPU f32 predictor only, NOT DS · JSON exported');
+    }catch(error){
+      if(!cancelled()){
+        numericAuditFailed('140.12.34','runGpuFullFrameParity141234',error,
+          {failedPhase:phase,completedCases:cameraCases.length,totalElapsedMs:profileNow()-started});
+        probeStatus('Full-frame parity failed: '+String(error&&error.message||error));
+        state.probeFrameLast=null;
+      }
+    }finally{
+      state.probeForceColdA=false;state.probeField=null;
+      if(state.comparePair===workingPair)state.comparePair=sourcePair;
+      if(!cancelled()){state.compareHorizon=oldHorizon;state.compareEyeLevel=oldEye;}
+      if(session)session.close();
+      // Leave regular physical Compare untouched after the diagnostic, even on errors.
+      if(!cancelled()){
+        try{clear('B');graphB.Redraw();clear('A');graphA.Redraw();}catch(_){/* do not mask audit report */}
+      }
+      state.probeBusy=false;if(button)button.disabled=false;
+    }
   }
   function bind(){
     bindCameraDrag();

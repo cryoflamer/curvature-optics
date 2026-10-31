@@ -173,7 +173,7 @@ test('140.12.32: isolated modern Compare UI wires versioned shader, GPU-first/CP
   assert.match(js,/pixelMode\?'runGpuPixelSpaceAudit141233':'runGpuHighPrecisionShooting141232'/);
   assert.match(js,/numericAuditComplete\(report\)/);
   assert.match(js,/curvature-compare-140\.12\.32-gpu-ds-shooting\.json/);
-  const fn=js.slice(js.indexOf('async function runGpuHighPrecisionShooting141232('),js.indexOf('  function bind(){',js.indexOf('async function runGpuHighPrecisionShooting141232(')));
+  const fn=js.slice(js.indexOf('async function runGpuHighPrecisionShooting141232('),js.indexOf('  // #140.12.34: four real, independent CPU A / GPU-first f32 B frame paints.',js.indexOf('async function runGpuHighPrecisionShooting141232(')));
   for(const token of ['predictor.solve','shootingAudit.validate','shootingAudit.createSession','ds.solve','contract.solveCpuBatch','shootingAudit.analyze'])
     assert.ok(fn.includes(token),token);
   assert.ok(fn.indexOf('ds.solve')<fn.indexOf('contract.solveCpuBatch'));

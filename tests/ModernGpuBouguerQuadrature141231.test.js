@@ -115,7 +115,7 @@ test('140.12.31: Compare UI has a separate experiment and computes all GPU modes
   assert.match(app,/addEventListener\('click',runGpuBouguerQuadrature141231\)/);
   assert.match(app,/curvature-compare-140\.12\.31-bouguer-quadrature\.json/);
   const body=app.slice(app.indexOf('async function runGpuBouguerQuadrature141231(){'),
-    app.indexOf('  function bind(){',app.indexOf('async function runGpuBouguerQuadrature141231(){')));
+    app.indexOf('  // #140.12.34: four real, independent CPU A / GPU-first f32 B frame paints.',app.indexOf('async function runGpuBouguerQuadrature141231(){')));
   const ordered=['return shooting.solve','audit.validateSolveInputs',
     'return originalSession.solve','return oldSession.solve','return dsSession.solve',
     'return groundSession.solve','return contract.solveCpuBatch'];
