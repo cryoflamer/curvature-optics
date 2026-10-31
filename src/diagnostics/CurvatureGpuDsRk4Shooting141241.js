@@ -83,7 +83,7 @@ fn cosd(x:DS)->DS{
 struct S {x:DS,z:DS,vx:DS,vz:DS}
 struct K {x:DS,z:DS,vx:DS,vz:DS}
 struct M {height:DS,nx:DS,nz:DS}
-struct Shot {ok:bool,a:DS,res:DS,path:DS,final:S,calls:u32}
+struct Shot {ok:bool,a:DS,res:DS,path:DS,endState:S,calls:u32}
 struct Sample {state:S,t:DS,h:DS,slope:DS}
 struct Event {kind:u32,path:DS}
 struct Verification {status:u32,kind:u32,path:DS,checks:u32}
@@ -217,8 +217,8 @@ fn verify(best:Shot,xGoal:DS,zGoal:DS,eye:DS,k:DS,N:DS,H:DS)->Verification{
         let radius=dsDiv(D(1.0),k);
         let envelope=sqrt(2.0*max(dval(radius),1000.0)*(abs(dval(best.res))+1e-10));
         if(dval(dsSub(best.path,at))<=envelope){
-          let m=metric(best.final.x,best.final.z,k);
-          let slope=dval(dsAdd(dsMul(m.nx,best.final.vx),dsMul(m.nz,best.final.vz)));
+          let m=metric(best.endState.x,best.endState.z,k);
+          let slope=dval(dsAdd(dsMul(m.nx,best.endState.vx),dsMul(m.nz,best.endState.vz)));
           let descend=slope<-sqrt(2e-6/max(dval(radius),1000.0));
           verdict=select(3u,1u,impact.kind==1u&&descend);
         }

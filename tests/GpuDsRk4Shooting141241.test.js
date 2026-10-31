@@ -55,6 +55,14 @@ test('140.12.41: generated WGSL uses DS RK4, first-forward-x bracket, sampled gr
  assert.equal((text.match(/@compute\s+@workgroup_size\(64\)/g)||[]).length,1);
  assert.ok(text.length>10000);
 });
+test('140.12.41.1: generated WGSL does not use reserved `final` in a field or member access',()=>{
+ const source=rk4.shader();
+ // WGSL reserves `final`; a JS syntax check cannot detect this compile failure.
+ assert.doesNotMatch(source,/\bfinal\b/);
+ assert.match(source,/struct Shot \{ok:bool,a:DS,res:DS,path:DS,endState:S,calls:u32\}/);
+ assert.match(source,/best\.endState\.x/);
+ assert.match(source,/best\.endState\.vz/);
+});
 test('140.12.41: decoded GPU readback preserves DS limbs and complete first-ground evidence',()=>{
  const request={...inputs().request,targets:[[1000,7],[9000,20],[20000,3]]};
  const raw=new Float32Array(3*16);

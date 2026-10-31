@@ -1,3 +1,9 @@
+## Patch 140.12.41.1 — WGSL reserved identifier hotfix (2026-10-31)
+
+- Fixed actual user-reported WebGPU shader compilation error from #140.12.41: WGSL reserves `final`, which had been used as a `Shot` struct field and twice in member access. Renamed this field consistently to `endState` in `src/diagnostics/CurvatureGpuDsRk4Shooting141241.js`. No numerical or rendering algorithm changes.
+- Added a shader-source regression test to catch the exact reserved-word failure that JavaScript syntax tests missed. Real WebGPU shader validation/compilation remains required on the user's adapter; the test checks text, not the WGSL grammar.
+- The existing #140.12.41 button and success/error ZIP output names are intentionally unchanged; this is a minimal follow-up fix.
+
 ## Patch 140.12.41 — Independent GPU double-single RK4 shooting and ground-event audit (2026-10-31)
 
 - Added `CurvatureGpuDsRk4Shooting141241.js`: **separate** WGSL classic-double-single port of tangent-frame `[x,z,vx,vz]` RK4 and first-forward-x target shooting, with angular bracket/regula falsi and fixed-x endpoint correction. Uses a sampled DS first-ground crossing/grazing detector and endpoint ground uncertainty. The old Bouguer #140.12.32 solver is untouched. Input direct-angle seeds are **not CPU solved angles**.
