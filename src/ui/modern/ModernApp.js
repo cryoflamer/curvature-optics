@@ -727,6 +727,40 @@
   // WebGPU path supplies angular point samples, not a painter or silhouette.
   function probeUi(id){return typeof document.querySelector==='function'?document.querySelector('#'+id):null;}
   function probeStatus(message){var node=probeUi('ModernGpuProbeStatus');if(node)node.textContent=message;}
+  // Export only completed numerical audits, never ordinary rendered frames.
+  function downloadNumericAudit(report,failed){
+    if(!report||!root.Blob||!root.URL||!root.URL.createObjectURL)return false;
+    var nameByVersion={'140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
+      '140.12.29':'curvature-compare-140.12.29-gpu-precision-geometry.json','140.12.28':'gpu-arithmetic',
+      '140.12.27':'bouguer-invariant','140.12.26':'gpu-ground-contact',
+      '140.12.25':'gpu-precision-limit','140.12.24':'gpu-numerical-floor',
+      '140.12.23':'gpu-root-convergence','140.12.22':'gpu-f32-precision',
+      '140.12.21':'gpu-status-qualification'};
+    var version=String(report.version||'unknown');
+    var filename=nameByVersion[version]||('curvature-compare-'+version+'-diagnostic.json');
+    var url=root.URL.createObjectURL(new root.Blob([JSON.stringify(report,null,2)],
+      {type:'application/json'}));
+    var link=document.createElement('a');link.href=url;
+    link.download=failed?filename.replace(/\.json$/,'-error.json'):filename;
+    try{link.click();return true;}catch(error){return false;}finally{
+      if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+      else root.URL.revokeObjectURL(url);
+    }
+  }
+  function numericAuditComplete(report){
+    state.probeExportLast=report;
+    if(!downloadNumericAudit(report,false))
+      probeStatus('Automatic JSON download failed; use Export JSON to retry.');
+  }
+  function numericAuditFailed(version,stage,error){
+    var failure={version:version,kind:'numerical-audit-error',ok:false,stage:stage,
+      message:String(error&&error.message||error),
+      stack:error&&error.stack?String(error.stack):null,timestamp:new Date().toISOString()};
+    state.probeExportLast=failure;
+    if(!downloadNumericAudit(failure,true))
+      probeStatus('Diagnostic JSON download failed; use Export JSON to retry.');
+  }
+
   function probeCanvas(which,rows,model){
     var canvas=probeUi('ModernGpuProbeCanvas'+which);
     if(!canvas||!canvas.getContext)return;
@@ -2312,7 +2346,7 @@
       gpuResults={},gpuTimes={},cpuTimes={};
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2356,6 +2390,7 @@
       report.framePaintingChanged=false;
       report.verdict='MEASURED_NUMERIC_REVIEW_REQUIRED';
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var fmt=function(n){return Number.isFinite(n)?n.toFixed(2):'n/a';};
       var line=probeUi('ModernGpuFrameMetrics');
       if(line)line.textContent='GPU f32 precision ('+ladder.targetsCount+' targets): '+
@@ -2366,6 +2401,7 @@
       probeStatus('GPU precision ladder measured · 5 mm vs 0.1 mm tolerance, '+
         '500 m vs 50 m integration, vacuum control · no frame modifications · Export JSON');
     }catch(error){
+      numericAuditFailed('140.12.22','runGpuPrecisionAudit141222',error);
       if(!cancelled()){
         state.probeFrameLast=null;
         probeStatus('GPU precision audit failed: '+String(error&&error.message||error));
@@ -2394,7 +2430,7 @@
       'ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2429,12 +2465,14 @@
       report.gpuRuns=timings;report.gpuArithmetic='f32, compensated RK4';
       report.gpuStepMetres=500;report.cpuF64TargetStepMetres=2000;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var line=probeUi('ModernGpuFrameMetrics');
       if(line)line.textContent='GPU root audit: '+Object.keys(report.variants).map(function(k){
         return k+' '+report.variants[k].statusMismatches+' mismatches / '+
           report.variants[k].solverFailed+' failed';}).join(' · ')+' · Export JSON';
       probeStatus('GPU root convergence measured · Export JSON · no frame changes');
-    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.23','runGpuRootAudit141223',error);state.probeFrameLast=null;
       probeStatus('GPU root audit failed: '+String(error&&error.message||error));}}
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
@@ -2459,7 +2497,7 @@
       'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2496,12 +2534,14 @@
       report.gpuStepMetres=500;report.cpuF64TargetStepMetres=2000;
       report.controls={baseToleranceMetres:0.005,strictToleranceMetres:0.0001};
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var line=probeUi('ModernGpuFrameMetrics');
       if(line)line.textContent='GPU numerical floor: '+Object.keys(report.variants).map(function(k){
         var v=report.variants[k];return k+' '+v.solverFailed+' failed / '+
           v.numericFloorCandidates+' suspected f32 floors';}).join(' · ')+' · Export JSON';
       probeStatus('GPU numerical floor measured · last 12 bracket iterations · Export JSON · no frame changes');
-    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.24','runGpuNumericalFloor141224',error);state.probeFrameLast=null;
       probeStatus('GPU numerical floor audit failed: '+String(error&&error.message||error));}}
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
@@ -2527,7 +2567,7 @@
       buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2566,13 +2606,15 @@
       report.gpuStepMetres=500;report.cpuF64TargetStepMetres=2000;
       report.controls={baseToleranceMetres:0.005,strictToleranceMetres:0.0001};
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var line=probeUi('ModernGpuFrameMetrics');
       if(line)line.textContent='GPU precision limit: '+
         report.variants.precisionAware.precisionLimited+' uncertified candidates · '+
         report.variants.precisionAware.solverFailed+' unresolved · '+
         report.traceIntervalWideningViolations.length+' trace widening violations · Export JSON';
       probeStatus('GPU precision-limit measured · uncertified angles never painted · Export JSON');
-    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.25','runGpuPrecisionLimit141225',error);state.probeFrameLast=null;
       probeStatus('GPU precision-limit audit failed: '+String(error&&error.message||error));}}
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
@@ -2599,7 +2641,7 @@
       'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2645,12 +2687,14 @@
       report.gpuArithmetic='f32 compensated RK4';
       report.cpuF64ShootingStepMetres=2000;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var line=probeUi('ModernGpuFrameMetrics'),s=report.summaries.step500Sub8;
       if(line)line.textContent='GPU ground crossing: '+s.gpuCrossings+
         ' crossings · '+s.gpuProximity+' proximity samples · '+
         s.gpuCpuContactDisagreements+' f64 same-angle event differences · Export JSON';
       probeStatus('GPU ground-contact audit measured · no visibility override · Export JSON');
-    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.26','runGpuGroundAudit141226',error);state.probeFrameLast=null;
       probeStatus('GPU ground-contact audit failed: '+String(error&&error.message||error));}}
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
@@ -2681,7 +2725,7 @@
       'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2721,13 +2765,15 @@
       report.geometry=base.geometry;
       report.cpuF64ShootingStepMetres=2000;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var line=probeUi('ModernGpuFrameMetrics'),s=report.summary;
       if(line)line.textContent='Bouguer f32 vs f64: '+s.gpuVsF64ContactDisagreements+
         ' contact sign differences · '+s.gpuVsF64Outside1cm+
         ' beyond 1 cm · '+s.cpuAnalyticVsCpuReplayDisagreements+
         ' f64 quadrature vs RK4 event differences · Export JSON';
       probeStatus('Bouguer invariant measured · no visibility override · Export JSON');
-    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.27','runGpuBouguerAudit141227',error);state.probeFrameLast=null;
       probeStatus('Bouguer audit failed: '+String(error&&error.message||error));}}
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
@@ -2759,7 +2805,7 @@
       'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -2805,6 +2851,7 @@
       report.gpuGroundRk4Timing=groundGpu.timing;
       report.cpuF64ShootingStepMetres=2000;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var metric=probeUi('ModernGpuFrameMetrics'),sum=report.summary;
       if(metric)metric.textContent='Bouguer same-angle contact sign mismatches (48 rays): '+
         report.modes.map(function(m){return m+' '+sum[m].contactDisagreements;}).join(' / ')+
@@ -2813,6 +2860,7 @@
         ' m · Export JSON';
       probeStatus('GPU Bouguer target-angle precision measured · physics / painting unchanged · Export JSON');
     }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.30','runGpuBouguerPrecision141230',error);
       state.probeFrameLast=null;
       probeStatus('Bouguer precision recheck failed: '+String(error&&error.message||error));
     }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;
@@ -2833,7 +2881,7 @@
         'ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var vectors=precision.makeVectors();
@@ -2847,6 +2895,7 @@
       report.adapterInfo=session.adapterInfo||null;
       report.sessionSetupMs=session.setupMs;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var metric=probeUi('ModernGpuFrameMetrics'),summary=report.summary;
       if(metric)metric.textContent='GPU arithmetic '+report.vectors+' cases · max abs error: f32 '+
         summary.f32.maxAbsoluteError.toExponential(2)+' / classic DS '+
@@ -2858,6 +2907,7 @@
         ' · Export JSON';
       probeStatus('GPU arithmetic measured · no renderer/shooting changes · Export JSON');
     }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.28','runGpuPrecisionFoundation141228',error);
       state.probeFrameLast=null;
       probeStatus('GPU arithmetic audit failed: '+String(error&&error.message||error));
     }}finally{if(session)session.close();state.probeBusy=false;
@@ -2878,7 +2928,7 @@
         'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var rows=precision.cases();
@@ -2890,6 +2940,7 @@
       if(cancelled())return;
       report.adapterInfo=session.adapterInfo||null;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var metric=probeUi('ModernGpuFrameMetrics');
       if(metric)metric.textContent='GPU geometry '+report.targets+' targets · old normalized atan2 max '+
         report.summary.f32.maxAbsoluteNormalizedAtan2ErrorSurfaceMetres.toExponential(3)+' m'+
@@ -2900,6 +2951,7 @@
         ' m · Export JSON';
       probeStatus('GPU geometry precision measured · shooting / painting unchanged · Export JSON');
     }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.29','runGpuPrecisionGeometry141229',error);
       state.probeFrameLast=null;
       probeStatus('GPU geometry audit failed: '+String(error&&error.message||error));
     }}finally{if(session)session.close();state.probeBusy=false;
@@ -2991,6 +3043,11 @@
     });
     var exportButton=probeUi('ModernGpuProbeExport');
     if(exportButton)exportButton.addEventListener('click',function(){
+      if(state.probeExportLast){
+        if(!downloadNumericAudit(state.probeExportLast,state.probeExportLast.ok===false))
+          probeStatus('JSON export unavailable in this browser.');
+        return;
+      }
       if(!state.probeLast&&!state.probeFrameLast){
         probeStatus('Run the CPU/GPU probe or build the replay/GPU frames before exporting.');return;
       }
@@ -3803,7 +3860,7 @@
       buttons=ids.map(probeUi);
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
-    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -3842,6 +3899,7 @@
       report.gpuGroundRk4Timing=groundGpu.timing;
       report.cpuF64ShootingStepMetres=2000;
       state.probeFrameLast=report;
+      numericAuditComplete(report);
       var metric=probeUi('ModernGpuFrameMetrics'),sum=report.summary;
       if(metric)metric.textContent='Bouguer fixed-angle contact sign mismatches (48 rays): '+
         report.modes.map(function(m){return m+' '+sum[m].contactDisagreements;}).join(' / ')+
@@ -3850,6 +3908,7 @@
         ' · Export JSON';
       probeStatus('GPU Bouguer quadrature precision measured · physics / painting unchanged · Export JSON');
     }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.31','runGpuBouguerQuadrature141231',error);
       state.probeFrameLast=null;
       probeStatus('Bouguer quadrature audit failed: '+String(error&&error.message||error));
     }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;
