@@ -3029,6 +3029,8 @@
     if(cpuQuadratureButton)cpuQuadratureButton.addEventListener('click',runCpuQuadratureBenchmark141242);
     var cpuConformalButton=probeUi('ModernCpuConformalRun');
     if(cpuConformalButton)cpuConformalButton.addEventListener('click',runCpuConformalBenchmark141243);
+    var cpuAdaptiveConformalButton=probeUi('ModernCpuAdaptiveConformalRun');
+    if(cpuAdaptiveConformalButton)cpuAdaptiveConformalButton.addEventListener('click',runCpuAdaptiveConformalBenchmark141244);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4511,6 +4513,136 @@
       if(button)button.disabled=false;
     }
     function captureSummary(c){return c.audit();}
+  }
+  // #140.12.44 — Diagnostic-only comparison. Every candidate is handed to
+  // the original strict Globe RK4 shooting/ground-contact contract unchanged.
+  async function runCpuAdaptiveConformalBenchmark141244(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var adaptive=root.CurvatureCpuAdaptiveConformal141244,
+      gate=root.CurvatureGpuDsPainterGate141240,
+      composition=root.CurvatureIndependentComposition,
+      zipWriter=root.GeometryDiagnosticsZip,
+      source=state.comparePair&&state.comparePair.A,
+      button=probeUi('ModernCpuAdaptiveConformalRun'),phase='preparing',
+      generation=state.probeGeneration,started=profileNow();
+    if(!adaptive||!gate||!composition||!zipWriter||!source){
+      probeStatus('Adaptive conformal benchmark: missing diagnostic modules or Compare A');return;
+    }
+    if(state.compareConfig&&state.compareConfig.A&&state.compareConfig.A.atmosphere!=='standard'){
+      probeStatus('Adaptive conformal benchmark requires the standard atmosphere in Compare A');return;
+    }
+    if(!(source.Height>0&&source.Height<=147&&source.rEarth>=1e5)){
+      probeStatus('Adaptive conformal benchmark requires positive observer altitude and Earth radius');return;
+    }
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe;}
+    function download(files,name){
+      var blob=zipWriter.build(files),url=root.URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download=name;
+      try{link.click();}finally{if(root.setTimeout)root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);}
+    }
+    function csv(report,eye){
+      var fields=['observerHeight','index','target','altitudeMetres','cpuStatus','cpuAngleRadians',
+        'cpuGroundHit','cpuRK4Calls'];
+      ['fixed2','adaptive','richardson'].forEach(function(mode){
+        ['Status','Reason','AngleRadians','ErrorArcseconds','Steps','Levels',
+          'EstimatedMetres','ExtrapolationRadians','GradientCalls','WarmAccepted',
+          'Fallback','RK4Calls','CertifiedStatus','Parity'].forEach(function(suffix){fields.push(mode+suffix);});
+      });
+      function cell(value){
+        if(value===null||value===undefined)return '';
+        var str=typeof value==='object'?JSON.stringify(value):String(value);
+        return /[,"\n]/.test(str)?'"'+str.replace(/"/g,'""')+'"':str;
+      }
+      return fields.join(',')+'\n'+report.rows.map(function(row){
+        return fields.map(function(f){return cell(f==='observerHeight'?eye:row[f]);}).join(',');
+      }).join('\n')+'\n';
+    }
+    function chart(report){
+      var values=[{name:'Existing predictor',ms:report.mediansMs.baselineTotalMs},
+        {name:'Fixed 2-step',ms:report.mediansMs.fixed2TotalMs},
+        {name:'Adaptive 2/4/8/16',ms:report.mediansMs.adaptiveTotalMs},
+        {name:'Adaptive + Richardson',ms:report.mediansMs.richardsonTotalMs}],
+        max=Math.max.apply(null,values.map(function(x){return x.ms;}).concat([0.001]));
+      var svg=['<svg xmlns="http://www.w3.org/2000/svg" width="780" height="250" viewBox="0 0 780 250">',
+        '<rect width="780" height="250" fill="white"/>',
+        '<text x="18" y="28" font-family="sans-serif" font-size="16" font-weight="bold">#140.12.44 Globe CPU f64 · full shooting median ms</text>'];
+      values.forEach(function(v,i){var y=47+i*45,w=420*v.ms/max;
+        svg.push('<text x="18" y="'+(y+14)+'" font-family="sans-serif" font-size="12">'+v.name+'</text>');
+        svg.push('<rect x="245" y="'+y+'" width="'+w.toFixed(2)+'" height="22" fill="'+(i===3?'#27846e':i===2?'#589ba5':i===1?'#b08d51':'#64748b')+'"/>');
+        svg.push('<text x="'+(251+w).toFixed(2)+'" y="'+(y+15)+'" font-family="sans-serif" font-size="12">'+v.ms.toFixed(3)+' ms</text>');
+      });svg.push('</svg>');return svg.join('');
+    }
+    state.probeBusy=true;if(button)button.disabled=true;
+    try{
+      var model=Object.assign({},source,{showModel:1,geometryRadius:source.rEarth}),
+        composed=composition.composeOpticalMain(model,true,{physicalWorld:true}),
+        inputs=gate.requestFromScene(composed,model),R=model.rEarth,
+        targets=inputs.selected.map(function(s){return s.target.slice();}),
+        sceneSignature=JSON.stringify(targets),controls=inputs.request.controls;
+      if(targets.length!==48)throw Error('Expected 48 real authored targets; got '+targets.length);
+      var request={geometry:'globe',radius:R,observerHeight:model.Height,
+        atmosphere:'standard',targets:targets,controls:controls};
+      phase='48 real authored targets';
+      probeStatus('Globe adaptive conformal: existing predictor vs fixed 2 vs adaptive vs Richardson…');
+      await new Promise(function(resolve){root.setTimeout(resolve,0);});
+      if(interrupted())return;
+      var main=adaptive.experiment(request,{repeats:5});
+      phase='ground and equal-height stress';
+      var stress=adaptive.experiment(Object.assign({},request,
+        {targets:adaptive.stressTargets(R,model.Height)}),{repeats:1});
+      phase='extended distance and altitude envelope';
+      var envelope=[15,100].map(function(eye){return {observerHeight:eye,
+        report:adaptive.experiment(Object.assign({},request,
+          {observerHeight:eye,targets:adaptive.envelopeTargets(R)}),{repeats:3})};});
+      if(interrupted())return;
+      phase='confirming scene and exporting ZIP';
+      if(state.comparePair.A!==source)throw Error('Compare A changed during benchmark');
+      var fresh=composition.composeOpticalMain(Object.assign({},source,
+        {showModel:1,geometryRadius:source.rEarth}),true,{physicalWorld:true});
+      if(JSON.stringify(gate.requestFromScene(fresh,model).selected.map(function(s){return s.target;}))!==sceneSignature)
+        throw Error('Authored physical targets changed during benchmark');
+      var report={version:'140.12.44',kind:'Adaptive conformal Globe CPU f64 shooting benchmark',
+        productionUnchanged:true,experimentalOnly:true,elapsedMs:profileNow()-started,
+        source:'48 actual authored Compare A physical targets; 8 separate stress; 20 per extended-altitude observer set',
+        main:main,stress:stress,envelope:envelope,
+        timingScope:'medians from 5 warmed rounds for main, 3 for each envelope; each total includes prediction + strict RK4 checks/fallback',
+        verificationScope:'All classification and ground contact from unchanged Globe RK4. No global multipath or full-frame pixel parity proven.'};
+      var guide=['#140.12.44 · CPU f64 Adaptive Conformal Globe Shooting',
+        'Diagnostic only. Does not modify production shooting, renderer, polygon filling or WebGPU.',
+        'Four compared pipelines: original CPU RK4 + predictor, fixed 2-step conformal, '+
+        'adaptive 2/4/8/16-step conformal, and adaptive + local Richardson angle extrapolation.',
+        'All candidate angles are untrusted. Existing OpticalTargetProjection.solve integrates and checks each candidate at the original strict residual/ground tolerance and falls back unchanged.',
+        'Adaptive selection uses 4th-order step-doubling angle differences and a heuristic angular-to-height error threshold. Short paths keep the fast fixed two-step path; near-surface cases are more conservative.',
+        'Richardson correction estimates the local step-size error as (angle_fine-angle_coarse)/15. It is NOT itself a strict RK4 certificate.',
+        '48 authored object-edge targets (five warmed timed rounds). 8 ground/equal-height stress targets. Two 20-target envelopes at 15 m and 100 m observer height (three rounds each).',
+        'Extended envelope times are NOT mixed into the 48-target timing medians.',
+        'Per-target CSV exposes all acceptance/fallback flags, RK4 calls, status/ground parity, chosen steps and candidate-angle errors.',
+        'No proof of all optical branches, no pixel-parity claim, no production promotion.'];
+      download([{name:'results.json',data:JSON.stringify(report,null,2)},
+        {name:'authored-globe.csv',data:csv(main,model.Height)},
+        {name:'stress-globe.csv',data:csv(stress,model.Height)},
+        {name:'envelope-eye-15m.csv',data:csv(envelope[0].report,15)},
+        {name:'envelope-eye-100m.csv',data:csv(envelope[1].report,100)},
+        {name:'performance.svg',data:chart(main)},
+        {name:'README.txt',data:guide.join('\n')+'\n'}],
+        'curvature-compare-140.12.44-cpu-f64-adaptive-conformal.zip');
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var metric=probeUi('ModernGpuFrameMetrics');
+      if(metric)metric.textContent='Globe f64 · predictor '+main.mediansMs.baselineTotalMs.toFixed(2)+
+        ' / fixed '+main.mediansMs.fixed2TotalMs.toFixed(2)+
+        ' / adaptive '+main.mediansMs.adaptiveTotalMs.toFixed(2)+
+        ' / refined '+main.mediansMs.richardsonTotalMs.toFixed(2)+' ms · warm starts '+
+        main.summary.richardson.warmAccepted+'/48 · ZIP exported';
+      probeStatus('Globe adaptive conformal benchmark exported · production renderer unchanged');
+    }catch(error){if(!interrupted()){
+      numericAuditFailed('140.12.44','runCpuAdaptiveConformalBenchmark141244',error,
+        {phase:phase,elapsedMs:profileNow()-started});
+      try{download([{name:'error.json',data:JSON.stringify({version:'140.12.44',phase:phase,
+        message:String(error&&error.message||error)},null,2)}],
+        'curvature-compare-140.12.44-cpu-f64-adaptive-conformal-error.zip');}catch(_){/* original error shown */}
+      probeStatus('Adaptive conformal benchmark failed ('+phase+'): '+String(error&&error.message||error));
+    }}finally{state.probeBusy=false;if(button)button.disabled=false;}
   }
   // #140.12.43 — Strict Globe RK4 remains the only source of visibility,
   // ground-contact and shooting decisions. This is a diagnostic benchmark of
