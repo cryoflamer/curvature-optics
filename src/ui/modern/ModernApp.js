@@ -3025,6 +3025,8 @@
     if(cameraObjectsButton)cameraObjectsButton.addEventListener('click',runCameraFirstObjects141239);
     var dsGateButton=probeUi('ModernGpuDsPainterGateRun');
     if(dsGateButton)dsGateButton.addEventListener('click',runGpuDsPainterGate141240);
+    var cpuQuadratureButton=probeUi('ModernCpuQuadratureRun');
+    if(cpuQuadratureButton)cpuQuadratureButton.addEventListener('click',runCpuQuadratureBenchmark141242);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4507,6 +4509,152 @@
       if(button)button.disabled=false;
     }
     function captureSummary(c){return c.audit();}
+  }
+  // #140.12.42: no WebGPU, no renderer mutation. Two invariant quadratures
+  // use equivalent physical heights from original authored edges; each hybrid
+  // result still follows the existing RK4 ground-contact path. No production
+  // promotion can follow from the monotone-branch benchmark alone.
+  async function runCpuQuadratureBenchmark141242(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var quadrature=root.CurvatureCpuQuadratureFeasibility141242,
+      gate=root.CurvatureGpuDsPainterGate141240,
+      composition=root.CurvatureIndependentComposition,
+      zipWriter=root.GeometryDiagnosticsZip,
+      source=state.comparePair&&state.comparePair.A,
+      button=probeUi('ModernCpuQuadratureRun'),started=profileNow(),phase='preparing',
+      generation=state.probeGeneration;
+    if(!quadrature||!gate||!composition||!zipWriter||!source){
+      probeStatus('CPU quadrature benchmark: missing modules or Compare A');return;
+    }
+    if(state.compareConfig&&state.compareConfig.A&&
+        state.compareConfig.A.atmosphere!=='standard'){
+      probeStatus('CPU quadrature benchmark uses Compare A standard atmosphere (Flat and Globe both audited).');return;
+    }
+    if(!(source.Height>0&&source.Height<=147)||!(source.rEarth>=1e5)){
+      probeStatus('CPU quadrature benchmark needs a positive observer height and finite radius');return;
+    }
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe;}
+    function download(files,name){
+      var blob=zipWriter.build(files),url=root.URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download=name;
+      try{link.click();}finally{
+        if(root.setTimeout)root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);
+      }
+    }
+    state.probeBusy=true;if(button)button.disabled=true;
+    try{
+      // The previous DS gate is only a deterministic object-edge sampler.
+      // It is NOT used for DS shooting or for any GPU operation here.
+      var model=Object.assign({},source,{showModel:1,geometryRadius:source.rEarth}),
+        composed=composition.composeOpticalMain(model,true,{physicalWorld:true}),
+        inputs=gate.requestFromScene(composed,model),R=model.rEarth,
+        originalTargets=inputs.selected.map(function(s){return s.target.slice();}),
+        surfaceTargets=inputs.selected.map(function(s){return [s.target[0],s.heightMetres];}),
+        flatTargets=surfaceTargets.map(function(t){return t.slice();}),
+        sceneSignature=JSON.stringify(originalTargets),controls=inputs.request.controls;
+      phase='running CPU f64 Flat and Globe benchmarks';
+      probeStatus('CPU f64 quadrature: RK4, predictor-only, integral, seeded RK4 · Flat + Globe…');
+      // Yield a UI frame before synchronous CPU timings. Neither mode may
+      // borrow roots or results from the other.
+      await new Promise(function(resolve){root.setTimeout(resolve,0);});
+      if(interrupted())return;
+      var flat=quadrature.experiment({geometry:'flat',radius:R,observerHeight:model.Height,
+        atmosphere:'standard',targets:flatTargets,controls:controls},{nodes:64,repeats:5});
+      var globe=quadrature.experiment({geometry:'globe',radius:R,observerHeight:model.Height,
+        atmosphere:'standard',targets:originalTargets,controls:controls},{nodes:64,repeats:5});
+      // Additional edge cases are audited separately from the 48-target timing
+      // population, so difficult/unsupported paths cannot improve its median.
+      function stressTargets(kind){
+        var xs=[1000,3000,10000,20000],heights=[0,model.Height];
+        return xs.reduce(function(out,x){heights.forEach(function(h){
+          var z=kind==='flat'?h:h-x*x/(Math.sqrt((R+h)*(R+h)-x*x)+R+h);
+          out.push([x,z]);
+        });return out;},[]);
+      }
+      phase='auditing equal-height and ground-endpoint cases';
+      var flatStress=quadrature.experiment({geometry:'flat',radius:R,observerHeight:model.Height,
+        atmosphere:'standard',targets:stressTargets('flat'),controls:controls},{nodes:64,repeats:1});
+      var globeStress=quadrature.experiment({geometry:'globe',radius:R,observerHeight:model.Height,
+        atmosphere:'standard',targets:stressTargets('globe'),controls:controls},{nodes:64,repeats:1});
+      if(interrupted())return;
+      phase='verifying scene identity and exporting ZIP';
+      if(state.comparePair.A!==source)throw Error('Compare A scene changed during benchmark');
+      var fresh=composition.composeOpticalMain(Object.assign({},source,
+        {showModel:1,geometryRadius:source.rEarth}),true,{physicalWorld:true});
+      if(JSON.stringify(gate.requestFromScene(fresh,model).selected.map(function(p){return p.target;}))!==sceneSignature)
+        throw Error('Authored physical targets changed during benchmark');
+      var result={version:'140.12.42',kind:'CPU f64 quadrature feasibility',
+        source:'same 48 authored metric scene contour samples as #140.12.40',
+        conversion:'Globe: original [x,z]; Flat: same authored horizontal x and physical altitude h',
+        experimentalOnly:true,productionUnchanged:true,elapsedMs:profileNow()-started,
+        flat:flat,globe:globe,stress:{flat:flatStress,globe:globeStress,
+          note:'8 extra targets per geometry: 1/3/10/20 km at surface and same height as observer; excluded from performance medians'}};
+      var summary=['CPU f64 Quadrature Feasibility #140.12.42',
+        'The 48 targets come from actual authored object edges, not a synthetic ray grid.',
+        'Flat has the same horizontal distance and physical height as Globe.',
+        'Quadrature only supports ONE monotone-height leg; turning rays and equal-height targets are unsupported.',
+        'Unresolved candidates remain unsupported; no invisible status is invented.',
+        'Hybrid is quadratic-angle warm-start into existing RK4, preserving original residual, ground detection and fallback.',
+        'Predictor-only RK4 is measured separately, so a predictor speed gain is not credited to quadrature.',
+        'Medians are warmed JavaScript main-thread timings, not full-frame speedups.',
+        'Separate stress cases cover surface endpoints and equal-height rays at four distances; NOT included in 48-target medians.',
+        'Neither a ground-parity proof nor a production frame is provided.'];
+      function csv(report){
+        var columns=['index','target','heightMetres','cpuStatus','cpuAngleRadians',
+          'quadratureStatus','quadratureReason','quadratureAngleRadians','angularDifferenceRadians',
+          'quadratureIntegrals','quadratureSamples','cpuRK4Calls','predictorOnlyRK4Calls',
+          'hybridStatus','hybridRK4Calls','hybridWarmStartAccepted','hybridFallback',
+          'hybridStatusMismatch','hybridAngleMismatch','hybridGroundHitMismatch'];
+        function cell(v){if(v===undefined||v===null)return '';var text=Array.isArray(v)?v.join('|'):String(v);
+          return /[,"\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;}
+        return columns.join(',')+'\n'+report.rows.map(function(row){return columns.map(function(k){return cell(row[k]);}).join(',');}).join('\n')+'\n';
+      }
+      function svgBars(){
+        var modes=[{name:'RK4',key:'rk4Ms'},
+          {name:'RK4 predictor only',key:'predictorOnlyMs'},
+          {name:'Quadrature only',key:'quadratureMs'},
+          {name:'Quadrature + RK4',key:'hybridTotalMs'}],
+          values=[flat,globe].reduce(function(out,item){modes.forEach(function(m){out.push(item.mediansMs[m.key]);});return out;},[]),
+          max=Math.max.apply(null,values.concat([.001])),scale=420/max;
+        var lines=['<svg xmlns="http://www.w3.org/2000/svg" width="780" height="310" viewBox="0 0 780 310">',
+          '<rect width="780" height="310" fill="white"/>',
+          '<text x="20" y="25" font-family="sans-serif" font-weight="bold" font-size="17">CPU f64 median timings · 48 physical targets</text>'];
+        [flat,globe].forEach(function(item,g){
+          lines.push('<text x="20" y="'+(50+g*128)+'" font-size="14" font-family="sans-serif">'+item.geometry+'</text>');
+          modes.forEach(function(m,i){
+            var ms=item.mediansMs[m.key],y=58+g*128+i*27,width=Math.max(.5,ms*scale),color=i===3?'#b87834':i===1?'#5c91a1':'#64748b';
+            lines.push('<text x="20" y="'+(y+14)+'" font-size="11" font-family="sans-serif">'+m.name+'</text>');
+            lines.push('<rect x="165" y="'+y+'" width="'+width.toFixed(2)+'" height="17" fill="'+color+'"/>');
+            lines.push('<text x="'+(170+width).toFixed(2)+'" y="'+(y+13)+'" font-size="12" font-family="sans-serif">'+ms.toFixed(3)+' ms</text>');
+          });
+        });
+        lines.push('</svg>');return lines.join('');
+      }
+      download([{name:'results.json',data:JSON.stringify(result,null,2)},
+        {name:'flat-targets.csv',data:csv(flat)},
+        {name:'globe-targets.csv',data:csv(globe)},
+        {name:'stress-flat.csv',data:csv(flatStress)},
+        {name:'stress-globe.csv',data:csv(globeStress)},
+        {name:'performance.svg',data:svgBars()},
+        {name:'README.txt',data:summary.join('\n')+'\n'}],
+        'curvature-compare-140.12.42-cpu-f64-quadrature-feasibility.zip');
+      state.probeFrameLast=result;state.probeExportLast=result;
+      var metric=probeUi('ModernGpuFrameMetrics');
+      if(metric)metric.textContent='CPU f64 quadrature · Flat '+flat.summary.quadratureCandidates+'/48 · '+
+        flat.mediansMs.hybridTotalMs.toFixed(1)+' ms hybrid / '+flat.mediansMs.rk4Ms.toFixed(1)+' ms RK4; Globe '+
+        globe.summary.quadratureCandidates+'/48 · '+globe.mediansMs.hybridTotalMs.toFixed(1)+
+        ' ms hybrid / '+globe.mediansMs.rk4Ms.toFixed(1)+' ms RK4 · ZIP exported';
+      probeStatus('CPU f64 quadrature Flat + Globe benchmark exported · no renderer changes');
+    }catch(error){if(!interrupted()){
+      numericAuditFailed('140.12.42','runCpuQuadratureBenchmark141242',error,
+        {phase:phase,elapsedMs:profileNow()-started});
+      try{download([{name:'error.json',data:JSON.stringify({version:'140.12.42',
+        phase:phase,message:String(error&&error.message||error)},null,2)}],
+        'curvature-compare-140.12.42-cpu-f64-quadrature-feasibility-error.zip');}
+      catch(_){/* original diagnostic error reported below */}
+      probeStatus('CPU quadrature benchmark failed ('+phase+'): '+String(error&&error.message||error));
+    }}finally{state.probeBusy=false;if(button)button.disabled=false;}
   }
   // #140.12.40: isolate real-scene GPU DS ray samples BEFORE any attempt to
   // inject them into the existing CPU painter. The current DS GPU kernel is a

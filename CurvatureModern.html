@@ -82,6 +82,7 @@
 <script src="src/diagnostics/CurvatureGpuDsPainterGate141240.js?v=140.12.40"></script>
 <script src="src/diagnostics/CurvatureGpuDsRk4Shooting141241.js?v=140.12.41"></script>
 <script src="src/diagnostics/CurvatureGpuDsRk4Audit141241.js?v=140.12.41"></script>
+<script src="src/diagnostics/CurvatureCpuQuadratureFeasibility141242.js?v=140.12.42"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.30"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
@@ -299,7 +300,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.30&amp;quadrature=140.12.31.3&amp;shooting=140.12.32.2&amp;pixel=140.12.33&amp;geometry=140.12.37.2&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;dsGate=140.12.40&amp;dsRk4=140.12.41"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.30&amp;quadrature=140.12.31.3&amp;shooting=140.12.32.2&amp;pixel=140.12.33&amp;geometry=140.12.37.2&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;dsGate=140.12.40&amp;dsRk4=140.12.41&amp;cpuQuadrature=140.12.42"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
@@ -355,6 +356,7 @@
             <button id="ModernCameraFirstObjectsRun" type="button">Audit camera-first CPU f64 · 64×64 objects + Earth · ZIP</button>
             <button id="ModernGpuDsPainterGateRun" type="button">Audit CPU f64 vs GPU DS · real-scene shooting gate · PNG + JSON ZIP</button>
             <button id="ModernGpuDsRk4Run" type="button">Audit CPU f64 vs GPU DS RK4 + ground events · 48 objects · ZIP</button>
+            <button id="ModernCpuQuadratureRun" type="button">Benchmark CPU f64 · RK4 vs Flat/Globe quadrature + hybrid · ZIP</button>
             <button id="ModernGpuProbeExport" type="button">Export JSON</button></div>
           <p class="modern-compare-note">Frame A is the CPU reference. Use <strong>Build CPU replay + GPU frame B</strong> to discover the actual adaptive optical-ray requests in A, first build a <strong>CPU replay control frame B</strong> with the same selected original CPU answers, compare its pixels with A, then batch the identical targets asynchronously on WebGPU and repaint the <strong>real physical B frame</strong> with GPU-seeded rays and explicit CPU fallback for unsampled/failed rays. This is <strong>not</strong> a GPU-only frame: painting, adaptive refinement, ground guides and missing rays still use CPU. Requires WebGPU and standard atmosphere; production backend stays unchanged.</p>
           <p class="modern-compare-note"><strong>GPU-first speed experiment (#140.12.12):</strong> the separate <strong>Benchmark GPU-first full frame</strong> action prepares a distance/height grid from authored objects, computes it asynchronously on WebGPU, and paints a real model B frame without first rendering A or tracing CPU rays to discover targets. A fresh CPU A frame is timed <em>afterwards</em> as an independent cold reference. The grid interpolates GPU data, including visibility classification near boundaries; it is intentionally approximate and must pass real frame comparisons before any production use. The end-to-end GPU number includes preparation, GPU setup/readback and frame painting. The older replay button is retained for controlled diagnostics.</p>
