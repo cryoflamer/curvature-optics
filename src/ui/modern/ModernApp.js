@@ -3863,11 +3863,17 @@
       state.mode!=='compare'||!state.compareGpuProbe;}
     state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
-    var phase='initialization',phaseTimings=[],auditStarted=performance.now();
+    var phase='initialization',phaseTimings=[],compilePhaseTimings=[],auditStarted=performance.now();
     async function measured(label,work){
       phase=label;
       var started=performance.now();
       probeStatus('Bouguer quadrature: '+label+'…');
+      // Native WebGPU pipeline compilation can keep its promise pending for
+      // tens of seconds. The clock makes it clear the audit is still running.
+      var ticker=label.startsWith('compiling ')?setInterval(function(){
+        if(!cancelled())probeStatus('Bouguer quadrature: '+phase+' · elapsed '+
+          ((performance.now()-started)/1000).toFixed(1)+' s…');
+      },1000):null;
       try{
         var result=await work();
         phaseTimings.push({stage:label,elapsedMs:performance.now()-started});
@@ -3875,7 +3881,7 @@
       }catch(error){
         phaseTimings.push({stage:label,elapsedMs:performance.now()-started,failed:true});
         throw error;
-      }
+      }finally{if(ticker!==null)clearInterval(ticker);}
     }
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
@@ -3894,9 +3900,16 @@
       var oldSession=await measured('DS-target shader setup',function(){return oldPrecision.createSession(48);});
       sessions.push(oldSession);if(cancelled())return;
       var f32Variants=await measured('DS-target f32-quadrature control',function(){return oldSession.solve(base,angles,ladder.coordinates);});if(cancelled())return;
-      var dsSession=await measured('compiling 2 DS arithmetic shaders',function(){return audit.createSession(base);});
+      var includeIntegerResidual=!!(probeUi('ModernGpuBouguerIntegerResidualToggle')||{}).checked;
+      var dsSession=await measured('compiling '+(includeIntegerResidual?'2 DS arithmetic shaders':'classic DS arithmetic shader'),function(){
+        return audit.createSession(base,null,{includeIntegerResidual:includeIntegerResidual,
+          onCompileProgress:function(event){
+            if(event.stage!=='start')compilePhaseTimings.push(event);
+            if(!cancelled())phase='compiling '+event.arithmetic+' · '+event.stage;
+          }});
+      });
       sessions.push(dsSession);if(cancelled())return;
-      var dsVariants=await measured('DS quadratures (six modes)',function(){return dsSession.solve(base,angles,ladder.coordinates,
+      var dsVariants=await measured('DS quadratures ('+dsSession.modes.length+' modes)',function(){return dsSession.solve(base,angles,ladder.coordinates,
         function(mode,timing,done,total){if(!cancelled())probeStatus('Bouguer quadrature: '+done+'/'+total+' '+mode+' ('+timing.gpuDispatchToReadbackMs.toFixed(1)+' ms)');});});if(cancelled())return;
       var groundSession=await measured('GPU RK4 setup',function(){return ground.createSession(48);});
       sessions.push(groundSession);if(cancelled())return;
@@ -3910,6 +3923,8 @@
       original.gpuBouguerTiming=originalGpu.timing;
       var report=await measured('CPU 128/256/512-node convergence and report',function(){return audit.analyze(original,ladder,f32Variants.classic_ds,dsVariants);});
       report.phaseTimings=phaseTimings;
+      report.compilationTimings=compilePhaseTimings;
+      report.eagerWgslDiagnostics=dsSession.inspectCompilation;
       report.totalElapsedMs=performance.now()-auditStarted;
       report.gpuShootingTiming=source.timing;
       report.gpuGroundRk4Timing=groundGpu.timing;
@@ -3925,7 +3940,8 @@
       probeStatus('GPU Bouguer quadrature precision measured · physics / painting unchanged · Export JSON');
     }catch(error){if(!cancelled()){
       numericAuditFailed('140.12.31','runGpuBouguerQuadrature141231',error,
-        {failedPhase:phase,phaseTimings:phaseTimings,totalElapsedMs:performance.now()-auditStarted});
+        {failedPhase:phase,phaseTimings:phaseTimings,compilationTimings:compilePhaseTimings,
+          totalElapsedMs:performance.now()-auditStarted});
       state.probeFrameLast=null;
       probeStatus('Bouguer quadrature audit failed: '+String(error&&error.message||error));
     }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;

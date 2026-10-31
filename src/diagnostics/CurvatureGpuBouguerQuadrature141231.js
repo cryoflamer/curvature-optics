@@ -20,6 +20,7 @@
   if(!bouguer||!precision||!gpu||!oldPrecision)throw Error('Bouguer quadrature dependencies unavailable');
   var VERSION='140.12.31',NODES=[128,256,512],ARITHMETIC=['classic_ds','integer_residual_ds'],
     MODES=ARITHMETIC.flatMap(function(a){return NODES.map(function(n){return a+'_'+n;});});
+  function selectedArithmetic(options){return options&&options.includeIntegerResidual?ARITHMETIC.slice():['classic_ds'];}
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function environment(request){
     var p=bouguer.options(request),limit=200;
@@ -94,19 +95,41 @@ fn dsLogF(h:DS,invR:DS,n:DS,scale:DS)->DS {
   return dsAdd(geometry,dsLog1pSmall(correction));
 }
 `;
+  // #140.12.31.3: specialize the common DS arithmetic once at source level.
+  // Import the ORIGINAL definitions, without forking numerical formulas, but
+  // exclude unused integer/benchmark functions from classic shaders and
+  // exclude unused classic/benchmark functions from integer shaders.
+  // Crucially, twoSum/twoProd have no MODE-dependent branch in the output.
+  function isolatedHelper(name){
+    var source=precision.HELPERS,match=source.match(new RegExp('(?:^|\\n)fn '+name+'\\('));
+    if(!match)throw Error('Missing DS arithmetic helper '+name);
+    var start=match.index+(match[0][0]==='\n'?1:0),next=source.indexOf('\nfn ',start+3);
+    return source.slice(start,next<0?source.length:next).trim();
+  }
+  function arithmeticHelpers(mode){
+    var integer=mode.startsWith('integer_residual_ds');
+    var dependencies=integer?[
+      'u64add','u64neg','u64sub','u64shift','u64shr','u64bits',
+      'fexp','fsig','packAligned','residualToF32','normal']:[];
+    var sum=integer?'intTwoSum':'classicTwoSum',prod=integer?'intTwoProd':'classicTwoProd';
+    return ['struct DS { hi:f32, lo:f32 }',isolatedHelper('ds')]
+      .concat(dependencies.map(isolatedHelper))
+      .concat([isolatedHelper(sum).replace('fn '+sum+'(', 'fn twoSum('),
+        isolatedHelper(prod).replace('fn '+prod+'(', 'fn twoProd(')])
+      .concat(['dsAdd','dsNeg','dsSub','dsMul','dsDiv','dsSqrt'].map(isolatedHelper))
+      .join('\n');
+  }
   function wgsl(mode){
     if(!MODES.includes(mode))throw RangeError('Unknown Bouguer quadrature mode');
-    var integer=mode.startsWith('integer_residual_ds'),index=integer?2:1;
     return `struct Rays { data:array<vec4f> }
 @group(0) @binding(0) var<storage,read> seeds:Rays;
 @group(0) @binding(1) var<storage,read> constants:array<vec4f>;
 @group(0) @binding(2) var<storage,read_write> results:Rays;
 @group(0) @binding(3) var<storage,read> config:array<u32>;
 @group(0) @binding(4) var<storage,read> arcs:Rays;
-const MODE:u32=${index}u;
 // Node count is supplied in config[1], allowing one pipeline per arithmetic.
 const VACUUM:bool=false;
-${precision.HELPERS}
+${arithmeticHelpers(mode)}
 ${MATH}
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id:vec3u){
@@ -211,10 +234,18 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     });
     return true;
   }
-  async function createSession(request,deps){
+  async function createSession(request,deps,options){
     var p=environment(request);
     if(p.h0/p.H>0.02)throw RangeError('DS quadrature requires observer height / scale height <= 0.02');
-    deps=deps||{};
+    deps=deps||{};options=options||{};
+    var arithmeticModes=selectedArithmetic(options),compilationTimings=[],
+      inspectCompilation=options.inspectCompilation===undefined?!!options.includeIntegerResidual:!!options.inspectCompilation;
+    function compileEvent(arithmetic,stage,elapsedMs,failed){
+      var row={arithmetic:arithmetic,stage:stage,elapsedMs:elapsedMs};
+      if(failed)row.failed=true;
+      if(stage!=='start')compilationTimings.push(row);
+      if(typeof options.onCompileProgress==='function')options.onCompileProgress(row);
+    }
     var nav=deps.navigator||(typeof navigator!=='undefined'?navigator:null),
       usage=deps.GPUBufferUsage||(typeof GPUBufferUsage!=='undefined'?GPUBufferUsage:null),
       mapMode=deps.GPUMapMode||(typeof GPUMapMode!=='undefined'?GPUMapMode:null);
@@ -225,16 +256,48 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     function alloc(size,flags){var b=device.createBuffer({size:size,usage:flags});buffers.push(b);return b;}
     function close(){if(closed)return;closed=true;buffers.forEach(function(b){b.destroy();});if(device.destroy)device.destroy();}
     try{
-      // Six experiments require only TWO WGSL programs. Vary the quadrature
-      // node count by config[1] per dispatch; compile each arithmetic once.
-      for(var arithmetic of ARITHMETIC){
-        var mode=arithmetic+'_512';
-        var module=device.createShaderModule({code:shader(mode,request)});
-        if(module.getCompilationInfo){
-          var info=await module.getCompilationInfo(),errors=info.messages.filter(function(m){return m.type==='error';});
-          if(errors.length)throw Error('Bouguer quadrature '+mode+' WGSL: '+errors.map(function(e){return e.message;}).join('; '));
+      // Full comparison uses two programs; quick mode uses classic only.
+      // Node counts vary by config[1] per dispatch, with no recompilation.
+      for(var arithmetic of arithmeticModes){
+        var mode=arithmetic+'_512',source=shader(mode,request);
+        compileEvent(arithmetic,'start',0);
+        var startModule=now(),module;
+        try{module=device.createShaderModule({code:source});
+          compileEvent(arithmetic,'createShaderModule',now()-startModule);
+        }catch(error){compileEvent(arithmetic,'createShaderModule',now()-startModule,true);throw error;}
+        if(module.getCompilationInfo&&inspectCompilation){
+          var startInfo=now();
+          try{
+            var info=await module.getCompilationInfo(),errors=info.messages.filter(function(m){return m.type==='error';});
+            if(errors.length)throw Error('Bouguer quadrature '+mode+' WGSL: '+errors.map(function(e){return e.message;}).join('; '));
+            compileEvent(arithmetic,'getCompilationInfo',now()-startInfo);
+          }catch(error){compileEvent(arithmetic,'getCompilationInfo',now()-startInfo,true);throw error;}
+        }else{compileEvent(arithmetic,'getCompilationInfoSkipped',0);}
+        var startPipeline=now();
+        try{
+          pipelines[arithmetic]=await device.createComputePipelineAsync({layout:'auto',compute:{module:module,entryPoint:'main'}});
+          compileEvent(arithmetic,'createComputePipelineAsync',now()-startPipeline);
+        }catch(error){
+          compileEvent(arithmetic,'createComputePipelineAsync',now()-startPipeline,true);
+          // A successful pipeline creation already validates WGSL. Pay for a
+          // separate detailed diagnostic pass only after a pipeline error.
+          if(module.getCompilationInfo&&!inspectCompilation){
+            var startedDiagnostics=now();
+            try{
+              var diagnostics=await module.getCompilationInfo();
+              compileEvent(arithmetic,'getCompilationInfoOnFailure',now()-startedDiagnostics);
+              var compilerErrors=diagnostics.messages.filter(function(m){return m.type==='error';});
+              if(compilerErrors.length)throw Error('Bouguer quadrature '+mode+' WGSL: '+
+                compilerErrors.map(function(e){return e.message;}).join('; '));
+            }catch(diagnosticError){
+              if(diagnosticError!==error){
+                if(String(diagnosticError).includes('WGSL:'))throw diagnosticError;
+                compileEvent(arithmetic,'getCompilationInfoOnFailure',now()-startedDiagnostics,true);
+              }
+            }
+          }
+          throw error;
         }
-        pipelines[arithmetic]=await device.createComputePipelineAsync({layout:'auto',compute:{module:module,entryPoint:'main'}});
       }
       var count=request.targets.length;
       if(count<1||count>1024||count*48>device.limits.maxStorageBufferBindingSize)
@@ -245,7 +308,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         config=alloc(64,usage.STORAGE|usage.COPY_DST),
         output=alloc(count*48,usage.STORAGE|usage.COPY_SRC),
         read=alloc(count*48,usage.COPY_DST|usage.MAP_READ),binds={};
-      ARITHMETIC.forEach(function(arithmetic){binds[arithmetic]=device.createBindGroup({
+      arithmeticModes.forEach(function(arithmetic){binds[arithmetic]=device.createBindGroup({
         layout:pipelines[arithmetic].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:constants}},
           {binding:2,resource:{buffer:output}},{binding:3,resource:{buffer:config}},
@@ -259,7 +322,8 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         device.queue.writeBuffer(constants,0,packedConstants(request));
         device.queue.writeBuffer(arcs,0,oldPrecision.input(coordinates,request.radius));
         var runs={};
-        for(var mode of MODES){
+        var activeModes=arithmeticModes.flatMap(function(a){return NODES.map(function(n){return a+'_'+n;});});
+        for(var mode of activeModes){
           var arithmetic=mode.startsWith('classic_ds')?'classic_ds':'integer_residual_ds',
             nodeCount=Number(mode.split('_').at(-1)),
             modeConfig=new Uint32Array(packed.config);
@@ -275,11 +339,12 @@ fn main(@builtin(global_invocation_id) id:vec3u){
           read.unmap();
           runs[mode]={traces:decode(request,angles,raw),timing:{
             gpuDispatchToReadbackMs:now()-started,setupExcluded:true,includesReadback:true}};
-          if(typeof onProgress==='function')onProgress(mode,runs[mode].timing,MODES.indexOf(mode)+1,MODES.length);
+          if(typeof onProgress==='function')onProgress(mode,runs[mode].timing,activeModes.indexOf(mode)+1,activeModes.length);
         }
         return runs;
       }
-      return Object.freeze({solve:solve,close:close});
+      return Object.freeze({solve:solve,close:close,inspectCompilation:inspectCompilation,modes:Object.freeze(arithmeticModes.flatMap(function(a){return NODES.map(function(n){return a+'_'+n;});})),
+        compilationTimings:compilationTimings});
     }catch(e){close();throw e;}
   }
   function event(g){return g.contactBeforeTarget===null?null:g.contactBeforeTarget;}
@@ -290,7 +355,11 @@ fn main(@builtin(global_invocation_id) id:vec3u){
        !f32Control||!Array.isArray(f32Control.traces)||f32Control.traces.length!==48)
       throw RangeError('Bouguer quadrature needs complete fixed-angle source and f32 control');
     var R=ladder.request.radius,rows=[],summary={},cpuConvergence=[],
-      modes=['f32_quadrature_256'].concat(MODES),runs=Object.assign({f32_quadrature_256:f32Control},variants);
+      availableModes=MODES.filter(function(mode){return Object.prototype.hasOwnProperty.call(variants,mode);}),
+      modes=['f32_quadrature_256'].concat(availableModes),runs=Object.assign({f32_quadrature_256:f32Control},variants);
+    if(!NODES.every(function(n){return availableModes.includes('classic_ds_'+n);})||
+       ![0,3].includes(availableModes.filter(function(mode){return mode.startsWith('integer_residual_ds_');}).length))
+      throw RangeError('Incomplete Bouguer quadrature mode selection');
     original.perTargetResults.forEach(function(b,i){
       // Only CPU f64 references: these are evaluated after the GPU variants.
       var base=b.cpuF64Bouguer;
@@ -339,18 +408,21 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     });
     return {version:VERSION,kind:'fixed-GPU-angle GPU Bouguer quadrature precision audit',
       assumptions:original.assumptions,geometry:'globe',modes:modes,targets:48,
-      nodeCounts:NODES,arithmetic:['f32_integrand_DS_target','classic_ds','integer_residual_ds'],
+      nodeCounts:NODES,arithmetic:['f32_integrand_DS_target','classic_ds'].concat(
+        availableModes.includes('integer_residual_ds_128')?['integer_residual_ds']:[]),
+      integerResidualEvaluated:availableModes.includes('integer_residual_ds_128'),
       precisionScope:'DS log-invariant and local exponential-atmosphere polynomial, DS integrand/accumulator/sqrt/division, DS d/R target and contact margin; bounded angle/height domain; no IEEE f64 or rigorous error bound',
       control:'f32_quadrature_256 is the unchanged #140.12.30 classic_ds target-angle variant with original #140.12.27 f32 Bouguer integrand',
-      gpuAnglesFrom:'One independent GPU predictor batch, unchanged across seven quadrature modes',
+      gpuAnglesFrom:'One independent GPU predictor batch, unchanged across all evaluated quadrature modes',
       cpuReference:'CPU f64 Bouguer 128,256,512,2048 and independent same-angle CPU RK4; CPU all run after GPU',
       timingCaveat:'Per-mode sequential dispatch/readback wall times include browser scheduling; not GPU-only kernel time',
+      compilationCaveat:'Successful createComputePipelineAsync validates WGSL; quick mode skips eager getCompilationInfo, detailed diagnostics run on failure. Full mode times eager WGSL diagnostics and pipeline creation separately. All are host wall times, not GPU kernel times',
       summary:summary,nearSurfaceCases:rows.filter(function(r){return [60,350,1250,5400].includes(r.distanceMetres)&&r.heightMetres<=.000001;}),
       perCase:rows,cpuNodeConvergence:cpuConvergence,
       cpuReferenceAfterGpu:true,framePaintingChanged:false,shootingChanged:false,
       cpuShootingFallback:false,contactClassificationsChanged:false,productionAuthorized:false};
   }
   return Object.freeze({VERSION:VERSION,MODES:MODES,NODES:NODES,MATH:MATH,
-    environment:environment,packedConstants:packedConstants,wgsl:wgsl,shader:shader,
+    environment:environment,packedConstants:packedConstants,wgsl:wgsl,shader:shader,arithmeticHelpers:arithmeticHelpers,selectedArithmetic:selectedArithmetic,
     decode:decode,validateSolveInputs:validateSolveInputs,createSession:createSession,analyze:analyze});
 }));

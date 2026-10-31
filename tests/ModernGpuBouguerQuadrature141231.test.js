@@ -40,7 +40,16 @@ test('140.12.31: DS invariant, atmosphere, quadrature, sqrt and contact subtract
     assert.match(s,/let nodeCount=config\[1\];/);
     assert.match(s,/j<nodeCount/);
     assert.doesNotMatch(s,/const NODE_COUNT/);
-    assert.match(s,new RegExp('const MODE:u32='+(mode.startsWith('classic')?1:2)+'u;'));
+    assert.doesNotMatch(s,/const MODE:u32|if\(MODE==|fn oneStep\(/);
+    assert.equal((s.match(/fn twoSum\(/g)||[]).length,1);
+    assert.equal((s.match(/fn twoProd\(/g)||[]).length,1);
+    if(mode.startsWith('classic')){
+      assert.doesNotMatch(s,/fn intTwoSum|fn u64add|fn classicTwoSum/);
+      assert.match(s,/let e=\(a-\(s-v\)\)\+\(b-v\)/);
+    }else{
+      assert.doesNotMatch(s,/fn classicTwoSum|fn classicTwoProd/);
+      assert.match(s,/fn u64add/);
+    }
   }
   assert.match(q.shader('classic_ds_256',{...request(),atmosphere:'vacuum'}),/const VACUUM:bool=true/);
   assert.throws(()=>q.wgsl('f64'),/Unknown Bouguer quadrature mode/);
@@ -87,6 +96,7 @@ test('140.12.31: 48-case report keeps GPU angles, per-mode errors, CPU convergen
     contactMarginSurfaceMetres:.1})),timing:{gpuDispatchToReadbackMs:4}};}
   const report=q.analyze(original,{request:req,coordinates:coords},f32,variants);
   assert.equal(report.version,'140.12.31');
+  assert.equal(report.integerResidualEvaluated,true);
   assert.equal(report.perCase.length,48*7);
   assert.equal(report.cpuNodeConvergence.length,48);
   assert.equal(report.summary.f32_quadrature_256.contactDisagreements,48);
@@ -99,9 +109,9 @@ test('140.12.31: 48-case report keeps GPU angles, per-mode errors, CPU convergen
   assert.throws(()=>q.analyze(original,{request:req,coordinates:coords},f32,variants),/angle\/target mismatch/);
 });
 test('140.12.31: Compare UI has a separate experiment and computes all GPU modes before CPU oracle',()=>{
-  assert.match(html,/CurvatureGpuBouguerQuadrature141231\.js\?v=140\.12\.31\.2/);
+  assert.match(html,/CurvatureGpuBouguerQuadrature141231\.js\?v=140\.12\.31\.3/);
   assert.match(html,/ModernGpuBouguerQuadratureRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30&amp;quadrature=140\.12\.31\.2/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.30&amp;quadrature=140\.12\.31\.3/);
   assert.match(app,/addEventListener\('click',runGpuBouguerQuadrature141231\)/);
   assert.match(app,/curvature-compare-140\.12\.31-bouguer-quadrature\.json/);
   const body=app.slice(app.indexOf('async function runGpuBouguerQuadrature141231(){'),
@@ -111,7 +121,10 @@ test('140.12.31: Compare UI has a separate experiment and computes all GPU modes
     'return groundSession.solve','return contract.solveCpuBatch'];
   for(let i=1;i<ordered.length;i++)assert.ok(body.indexOf(ordered[i-1])>=0 &&
     body.indexOf(ordered[i-1])<body.indexOf(ordered[i]),ordered[i-1]+' before '+ordered[i]);
-  assert.match(body,/compiling 2 DS arithmetic shaders/);
+  assert.match(body,/compiling '\+\(includeIntegerResidual\?'2 DS arithmetic shaders'/);
+  assert.match(body,/ModernGpuBouguerIntegerResidualToggle/);
+  assert.match(body,/onCompileProgress/);
+  assert.match(body,/compilePhaseTimings/);
   assert.match(body,/phaseTimings/);
   assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback|status='visible'/);
 });
@@ -136,10 +149,13 @@ test('140.12.31: mocked WebGPU yields six independent readbacks, explicit DS inp
     destroy(){this.destroyed=true;}};
   const deps={navigator:{gpu:{requestAdapter:async()=>({requestDevice:async()=>device})}},
     GPUBufferUsage:usage,GPUMapMode:{READ:1}};
-  const session=await q.createSession(req,deps);
+  const compilationEvents=[];
+  const session=await q.createSession(req,deps,{includeIntegerResidual:true,onCompileProgress:e=>compilationEvents.push(e)});
   try{
     const out=await session.solve(req,angles,coordinates);
     assert.equal(modules.length,2); // one compilation for each arithmetic, not each node count
+    assert.equal(session.compilationTimings.length,6);
+    assert.equal(compilationEvents.filter(e=>e.stage==='createComputePipelineAsync').length,2);
     assert.equal(writes.length,9); // three input buffers plus six per-dispatch node counts
     assert.deepEqual(copies,[96,96,96,96,96,96]);
     assert.equal(passes.length,6);
@@ -171,4 +187,71 @@ test('140.12.31.2: the 48-ray ladder accepts real upward GPU angle and rejects i
   const wrongCoords=ladder.coordinates.map(x=>({...x}));wrongCoords[7].distanceMetres+=1;
   assert.throws(()=>q.validateSolveInputs(ladder.request,ladder.request,angles,wrongCoords),
     /coordinate mismatch 7/);
+});
+
+// The default mode must skip the expensive integer shader entirely, not
+// merely skip its dispatch after spending time compiling it.
+test('140.12.31.3: quick audit compiles classic only; full comparison remains opt-in',async()=>{
+  assert.deepEqual(q.selectedArithmetic(),['classic_ds']);
+  assert.deepEqual(q.selectedArithmetic({includeIntegerResidual:true}),['classic_ds','integer_residual_ds']);
+  const req=request();
+  const kinds=[],writes=[],buffers=[];let eagerInfoReads=0;
+  const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};
+  const device={limits:{maxStorageBufferBindingSize:1e8},
+    createShaderModule({code}){kinds.push(code);return {getCompilationInfo:async()=>{eagerInfoReads++;return {messages:[]};}};},
+    createComputePipelineAsync:async()=>({getBindGroupLayout:()=>({})}),
+    createBindGroup(){return {};},
+    createBuffer({size}){const b={bytes:new ArrayBuffer(size),destroy(){},mapAsync:async()=>{},
+      getMappedRange(){return this.bytes.slice(0);},unmap(){}};buffers.push(b);return b;},
+    createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},
+      copyBufferToBuffer(a,ao,b,bo,len){new Uint8Array(b.bytes).set(new Uint8Array(a.bytes,ao,len));},finish(){return {};}};},
+    queue:{writeBuffer(){writes.push(true);},submit(){}},destroy(){}};
+  const deps={navigator:{gpu:{requestAdapter:async()=>({requestDevice:async()=>device})}},
+    GPUBufferUsage:usage,GPUMapMode:{READ:1}};
+  const session=await q.createSession(req,deps);
+  try{
+    assert.equal(kinds.length,1);
+    assert.deepEqual(session.modes,['classic_ds_128','classic_ds_256','classic_ds_512']);
+    assert.equal(session.compilationTimings.length,3);
+    assert.equal(session.inspectCompilation,false);
+    assert.equal(eagerInfoReads,0); // pipeline validation is sufficient on successful fast path
+    assert.equal(session.compilationTimings[1].stage,'getCompilationInfoSkipped');
+    assert.doesNotMatch(kinds[0],/fn intTwoSum|fn intTwoProd|fn u64add/);
+    const result=await session.solve(req,[-.2,-.05],coordinates);
+    assert.deepEqual(Object.keys(result),session.modes);
+  }finally{session.close();}
+});
+test('140.12.31.3: classic-only report is explicit and rejects incomplete integer mode',()=>{
+  const coords=Array.from({length:48},(_,i)=>({distanceMetres:60+40*i,heightMetres:0}));
+  const req=request(coords),angle=-.25;
+  const cases=coords.map((c,i)=>({gpuAngleRadians:angle,
+    cpuF64Bouguer:{status:'before_target',targetPolarAngleRadians:c.distanceMetres/req.radius,
+      groundPolarAngleRadians:0,contactMarginSurfaceMetres:.1},cpuF64Quadrature256:{contactMarginSurfaceMetres:.1}}));
+  const ref={version:'140.12.27',assumptions:'radial',perTargetResults:cases};
+  const traces=coords.map((c,i)=>({targetIndex:i,angleRadians:angle,phase:'ground_reachable',contactBeforeTarget:true,
+    targetPolarAngleRadians:c.distanceMetres/req.radius,groundPolarAngleRadians:0,contactMarginSurfaceMetres:.1}));
+  const variants=Object.fromEntries(['classic_ds_128','classic_ds_256','classic_ds_512'].map(m=>[m,{traces}]));
+  const report=q.analyze(ref,{request:req,coordinates:coords},{traces},variants);
+  assert.deepEqual(report.modes,['f32_quadrature_256','classic_ds_128','classic_ds_256','classic_ds_512']);
+  assert.equal(report.perCase.length,48*4);
+  assert.equal(report.integerResidualEvaluated,false);
+  assert.deepEqual(report.arithmetic,['f32_integrand_DS_target','classic_ds']);
+  variants.integer_residual_ds_128={traces};
+  assert.throws(()=>q.analyze(ref,{request:req,coordinates:coords},{traces},variants),/Incomplete Bouguer quadrature mode selection/);
+});
+
+test('140.12.31.3: failed asynchronous pipeline compilation collects WGSL diagnostics and releases device',async()=>{
+  const req=request(),events=[];let infoCalls=0,destroyed=false;
+  const device={
+    createShaderModule(){return {getCompilationInfo:async()=>{infoCalls++;return {messages:[{type:'error',message:'synthetic WGSL failure'}]};}};},
+    createComputePipelineAsync:async()=>{throw Error('pipeline rejected');},
+    destroy(){destroyed=true;}};
+  const deps={navigator:{gpu:{requestAdapter:async()=>({requestDevice:async()=>device})}},
+    GPUBufferUsage:{STORAGE:1},GPUMapMode:{READ:1}};
+  await assert.rejects(q.createSession(req,deps,{onCompileProgress:e=>events.push(e)}),/synthetic WGSL failure/);
+  assert.equal(infoCalls,1);
+  assert.equal(destroyed,true);
+  assert.deepEqual(events.map(e=>e.stage),['start','createShaderModule','getCompilationInfoSkipped',
+    'createComputePipelineAsync','getCompilationInfoOnFailure']);
+  assert.equal(events[3].failed,true);
 });

@@ -16,7 +16,7 @@ test('140.12.31.1: error payload includes stage, message and stack, without a fa
   assert.match(app,/kind:'numerical-audit-error',ok:false,stage:stage/);
   assert.match(app,/stack:error&&error\.stack/);
   assert.match(app,/numericAuditFailed\('140\.12\.31','runGpuBouguerQuadrature141231',error,/);
-  assert.match(app,/failedPhase:phase,phaseTimings:phaseTimings,totalElapsedMs:/);
+  assert.match(app,/failedPhase:phase,phaseTimings:phaseTimings,compilationTimings:compilePhaseTimings,/);
   assert.match(app,/filename\.replace\(\/\\\.json\$\//);
 });
 test('140.12.31.1: completed numerical audits export directly; frame rendering is not auto-exported',()=>{
