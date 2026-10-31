@@ -77,6 +77,7 @@ test('140.12.32: validates exact 48 real GPU predictor angles and radial-leg dom
 test('140.12.32: GPU-owned secant shooting reuses classic DS arithmetic and evaluates 256/512-node polar/ground integrals',()=>{
   const wgsl=s.shader(ladder().request);
   assert.match(wgsl,/fn evaluate\(angle:DS/);
+  assert.doesNotMatch(wgsl,/\btarget\b/,"WGSL reserved keyword must not be used as identifier");
   assert.match(wgsl,/fn dsSinHalf\(angle:DS\)/);
   assert.match(wgsl,/fn twoSum\(/);
   assert.match(wgsl,/fn twoProd\(/);
@@ -84,7 +85,7 @@ test('140.12.32: GPU-owned secant shooting reuses classic DS arithmetic and eval
   assert.match(wgsl,/let proposal=dsSub\(angle,dsDiv\(/);
   assert.match(wgsl,/let ground=evaluate\(angle,observer,ds\(0\.0,0\.0\)/);
   assert.match(wgsl,/results\.data\[i\*4u\+3u\]/);
-  assert.match(wgsl,/if\(inward\)\{lower=target;upper=observer;\}/);
+  assert.match(wgsl,/if\(inward\)\{lower=targetHeight;upper=observer;\}/);
   assert.doesNotMatch(wgsl,/fn intTwoSum|fn intTwoProd|@MODE@|CPU_REFERENCE|cpuRoot/);
   assert.ok(wgsl.length<10000,'short specialized shader, not benchmark helper dump');
   assert.deepEqual(s.NODE_COUNTS,[256,512]);

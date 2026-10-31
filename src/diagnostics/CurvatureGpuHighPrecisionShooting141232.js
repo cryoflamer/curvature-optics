@@ -69,15 +69,15 @@ const VACUUM:bool=${request.atmosphere==='vacuum'?'true':'false'};
 ${quad.arithmeticHelpers('classic_ds_512')}
 ${math}
 struct Evaluation { residual:DS, polar:DS, valid:bool }
-fn evaluate(angle:DS,observer:DS,target:DS,radius:DS,invR:DS,n:DS,scale:DS,theta:DS,nodeCount:u32)->Evaluation {
+fn evaluate(angle:DS,observer:DS,targetHeight:DS,radius:DS,invR:DS,n:DS,scale:DS,theta:DS,nodeCount:u32)->Evaluation {
   let zero=ds(0.0,0.0);
-  let inward=dsPositive(dsSub(observer,target));
+  let inward=dsPositive(dsSub(observer,targetHeight));
   if((inward && angle.hi>=0.0)||(!inward && angle.hi<=0.0)||abs(angle.hi)>=0.54){
     return Evaluation(zero,zero,false);
   }
   var lower=observer;
-  var upper=target;
-  if(inward){lower=target;upper=observer;}
+  var upper=targetHeight;
+  if(inward){lower=targetHeight;upper=observer;}
   let span=dsSub(upper,lower);
   let half=dsSinHalf(angle);
   let correction=dsMul(ds(-2.0,0.0),dsMul(half,half));
@@ -105,12 +105,12 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   let heightParts=targetHeights.data[i];
   let arc=arcs.data[i];
   let c=constants[0];let d=constants[1];
-  let radius=ds(c.x,c.y),observer=ds(c.z,c.w),target=ds(heightParts.x,heightParts.y);
+  let radius=ds(c.x,c.y),observer=ds(c.z,c.w),targetHeight=ds(heightParts.x,heightParts.y);
   let invR=dsDiv(ds(1.0,0.0),radius);
   let theta=dsDiv(ds(arc.x,arc.y),radius);
   let n=ds(d.x,d.y),scale=ds(d.z,d.w);
   var previousAngle=ds(seed.w,0.0);
-  var previous=evaluate(previousAngle,observer,target,radius,invR,n,scale,theta,config[1]);
+  var previous=evaluate(previousAngle,observer,targetHeight,radius,invR,n,scale,theta,config[1]);
   let firstResidual=previous.residual;
   var angle=previousAngle;
   var current=previous;
@@ -120,10 +120,10 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     if(abs(previous.residual.hi)<=0.00001){status=1.0;}
     else {
       // The perturbation is chosen on the SAME monotone radial branch.
-      // No CPU oracle or saved target-angle solution seeds the derivative.
+      // No CPU oracle or saved targetHeight-angle solution seeds the derivative.
       let step=select(-1.0,1.0,seed.w>0.0)*max(0.000001,abs(seed.w)*0.0001);
       angle=dsAdd(previousAngle,ds(step,0.0));
-      current=evaluate(angle,observer,target,radius,invR,n,scale,theta,config[1]);
+      current=evaluate(angle,observer,targetHeight,radius,invR,n,scale,theta,config[1]);
       if(current.valid){
         for(var iteration=0u;iteration<9u;iteration=iteration+1u){
           count=iteration+1u;
@@ -133,7 +133,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
           let proposal=dsSub(angle,dsDiv(dsMul(current.residual,dsSub(angle,previousAngle)),slope));
           if(abs(proposal.hi)>=0.54 || (seed.w<0.0 && proposal.hi>=0.0) ||
              (seed.w>0.0 && proposal.hi<=0.0)){break;}
-          let next=evaluate(proposal,observer,target,radius,invR,n,scale,theta,config[1]);
+          let next=evaluate(proposal,observer,targetHeight,radius,invR,n,scale,theta,config[1]);
           if(!next.valid){break;}
           previousAngle=angle;previous=current;angle=proposal;current=next;
         }
