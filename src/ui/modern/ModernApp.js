@@ -752,10 +752,11 @@
     if(!downloadNumericAudit(report,false))
       probeStatus('Automatic JSON download failed; use Export JSON to retry.');
   }
-  function numericAuditFailed(version,stage,error){
+  function numericAuditFailed(version,stage,error,details){
     var failure={version:version,kind:'numerical-audit-error',ok:false,stage:stage,
       message:String(error&&error.message||error),
       stack:error&&error.stack?String(error.stack):null,timestamp:new Date().toISOString()};
+    if(details)failure.details=details;
     state.probeExportLast=failure;
     if(!downloadNumericAudit(failure,true))
       probeStatus('Diagnostic JSON download failed; use Export JSON to retry.');
@@ -3862,39 +3863,54 @@
       state.mode!=='compare'||!state.compareGpuProbe;}
     state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
     buttons.forEach(function(b){if(b)b.disabled=true;});
+    var phase='initialization',phaseTimings=[],auditStarted=performance.now();
+    async function measured(label,work){
+      phase=label;
+      var started=performance.now();
+      probeStatus('Bouguer quadrature: '+label+'…');
+      try{
+        var result=await work();
+        phaseTimings.push({stage:label,elapsedMs:performance.now()-started});
+        return result;
+      }catch(error){
+        phaseTimings.push({stage:label,elapsedMs:performance.now()-started,failed:true});
+        throw error;
+      }
+    }
     try{
       var ladder=precision.createLadder({branch:contract.BRANCH,
         geometry:'globe',radius:model.rEarth,observerHeight:model.Height},surfaces),base=ladder.request;
       audit.environment(base);
-      probeStatus('Bouguer quadrature: collecting 48 GPU predictor angles…');
-      var shooting=await gpu.createSession(48,null,{algorithm:'predictor',refinement:'residual-stop'});
+      var shooting=await measured('GPU predictor setup',function(){return gpu.createSession(48,null,{algorithm:'predictor',refinement:'residual-stop'});});
       sessions.push(shooting);if(cancelled())return;
-      var source=await shooting.solve(base,{warmRepeats:0});if(cancelled())return;
+      var source=await measured('48 GPU predictor angles',function(){return shooting.solve(base,{warmRepeats:0});});if(cancelled())return;
       var angles=source.response.results.map(function(x){return x.angle;});
       if(!angles.every(Number.isFinite))throw Error('GPU shooting angles missing; no CPU substitution');
-      probeStatus('Bouguer quadrature: unchanged f32 original and DS-target control…');
-      var originalSession=await bouguer.createSession(48);
+      // Check the actual angle domain BEFORE any expensive quadrature WGSL compilation.
+      await measured('validating 48 GPU angles and geometry',function(){return audit.validateSolveInputs(base,base,angles,ladder.coordinates);});
+      var originalSession=await measured('f32 Bouguer shader setup',function(){return bouguer.createSession(48);});
       sessions.push(originalSession);if(cancelled())return;
-      var originalGpu=await originalSession.solve(base,angles);if(cancelled())return;
-      var oldSession=await oldPrecision.createSession(48);
+      var originalGpu=await measured('f32 Bouguer control',function(){return originalSession.solve(base,angles);});if(cancelled())return;
+      var oldSession=await measured('DS-target shader setup',function(){return oldPrecision.createSession(48);});
       sessions.push(oldSession);if(cancelled())return;
-      var f32Variants=await oldSession.solve(base,angles,ladder.coordinates);if(cancelled())return;
-      probeStatus('Bouguer quadrature: DS invariant / atmosphere / integrand (128, 256, 512)…');
-      var dsSession=await audit.createSession(base);
+      var f32Variants=await measured('DS-target f32-quadrature control',function(){return oldSession.solve(base,angles,ladder.coordinates);});if(cancelled())return;
+      var dsSession=await measured('compiling 2 DS arithmetic shaders',function(){return audit.createSession(base);});
       sessions.push(dsSession);if(cancelled())return;
-      var dsVariants=await dsSession.solve(base,angles,ladder.coordinates);if(cancelled())return;
-      probeStatus('Bouguer quadrature: independent same-angle GPU RK4 ground trace…');
-      var groundSession=await ground.createSession(48);
+      var dsVariants=await measured('DS quadratures (six modes)',function(){return dsSession.solve(base,angles,ladder.coordinates,
+        function(mode,timing,done,total){if(!cancelled())probeStatus('Bouguer quadrature: '+done+'/'+total+' '+mode+' ('+timing.gpuDispatchToReadbackMs.toFixed(1)+' ms)');});});if(cancelled())return;
+      var groundSession=await measured('GPU RK4 setup',function(){return ground.createSession(48);});
       sessions.push(groundSession);if(cancelled())return;
-      var groundGpu=await groundSession.solve(base,angles);if(cancelled())return;
+      var groundGpu=await measured('independent GPU RK4 ground trace',function(){return groundSession.solve(base,angles);});if(cancelled())return;
       // CPU reference is NEVER used to select angles, refine, or decide GPU variants.
-      probeStatus('Bouguer quadrature: CPU f64 RK4 and 128/256/512/2048-node reference…');
+
       var cpuRequest=Object.assign({},base,{controls:{step:2000,
         targetTolerance:0.000001,eventSubsteps:8}});
-      var cpu=await contract.solveCpuBatch(cpuRequest);if(cancelled())return;
-      var original=bouguer.analyze(ladder,source,originalGpu,groundGpu,cpu);
+      var cpu=await measured('CPU f64 shooting',function(){return contract.solveCpuBatch(cpuRequest);});if(cancelled())return;
+      var original=await measured('CPU f64 Bouguer / same-angle RK4 reference',function(){return bouguer.analyze(ladder,source,originalGpu,groundGpu,cpu);});
       original.gpuBouguerTiming=originalGpu.timing;
-      var report=audit.analyze(original,ladder,f32Variants.classic_ds,dsVariants);
+      var report=await measured('CPU 128/256/512-node convergence and report',function(){return audit.analyze(original,ladder,f32Variants.classic_ds,dsVariants);});
+      report.phaseTimings=phaseTimings;
+      report.totalElapsedMs=performance.now()-auditStarted;
       report.gpuShootingTiming=source.timing;
       report.gpuGroundRk4Timing=groundGpu.timing;
       report.cpuF64ShootingStepMetres=2000;
@@ -3908,7 +3924,8 @@
         ' · Export JSON';
       probeStatus('GPU Bouguer quadrature precision measured · physics / painting unchanged · Export JSON');
     }catch(error){if(!cancelled()){
-      numericAuditFailed('140.12.31','runGpuBouguerQuadrature141231',error);
+      numericAuditFailed('140.12.31','runGpuBouguerQuadrature141231',error,
+        {failedPhase:phase,phaseTimings:phaseTimings,totalElapsedMs:performance.now()-auditStarted});
       state.probeFrameLast=null;
       probeStatus('Bouguer quadrature audit failed: '+String(error&&error.message||error));
     }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;

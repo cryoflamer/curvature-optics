@@ -96,8 +96,7 @@ fn dsLogF(h:DS,invR:DS,n:DS,scale:DS)->DS {
 `;
   function wgsl(mode){
     if(!MODES.includes(mode))throw RangeError('Unknown Bouguer quadrature mode');
-    var integer=mode.startsWith('integer_residual_ds'),nodes=Number(mode.split('_').at(-1)),
-      index=integer?2:1;
+    var integer=mode.startsWith('integer_residual_ds'),index=integer?2:1;
     return `struct Rays { data:array<vec4f> }
 @group(0) @binding(0) var<storage,read> seeds:Rays;
 @group(0) @binding(1) var<storage,read> constants:array<vec4f>;
@@ -105,7 +104,7 @@ fn dsLogF(h:DS,invR:DS,n:DS,scale:DS)->DS {
 @group(0) @binding(3) var<storage,read> config:array<u32>;
 @group(0) @binding(4) var<storage,read> arcs:Rays;
 const MODE:u32=${index}u;
-const NODE_COUNT:u32=${nodes}u;
+// Node count is supplied in config[1], allowing one pipeline per arithmetic.
 const VACUUM:bool=false;
 ${precision.HELPERS}
 ${MATH}
@@ -113,6 +112,7 @@ ${MATH}
 fn main(@builtin(global_invocation_id) id:vec3u){
   let i=id.x;
   if(i>=config[0]){return;}
+  let nodeCount=config[1];
   let t=seeds.data[i];
   let a=constants[0];
   let b=constants[1];
@@ -133,9 +133,9 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     flag=2.0;
   } else {
     var sum=ds(0.0,0.0);
-    for(var j=0u;j<NODE_COUNT;j=j+1u){
+    for(var j=0u;j<nodeCount;j=j+1u){
       // This midpoint is exactly representable in f32 at 128/256/512.
-      let u=ds((f32(j)+0.5)/f32(NODE_COUNT),0.0);
+      let u=ds((f32(j)+0.5)/f32(nodeCount),0.0);
       let h=dsMul(height,dsMul(u,u));
       let z=dsMul(ds(2.0,0.0),dsSub(dsLogF(h,inverseRadius,refractivity,scale),logB));
       if(dsLessOrEqualZero(z)){
@@ -152,7 +152,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
       sum=dsAdd(sum,dsDiv(numerator,denominator));
     }
     if(flag==1.0){
-      phi=dsDiv(sum,ds(f32(NODE_COUNT),0.0));
+      phi=dsDiv(sum,ds(f32(nodeCount),0.0));
       margin=dsMul(dsSub(theta,phi),radius);
     }
   }
@@ -185,6 +185,32 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         logBOverSurface:v[7]+v[8]};
     });
   }
+  // Validate the actual fixed-angle inputs *before* creating expensive WGSL
+  // pipelines. Outward rays never reach the ground and skip the quadrature;
+  // the narrow polynomial domain only constrains inward rays.
+  function validateSolveInputs(request,actual,angles,coordinates){
+    var params=environment(request);environment(actual);
+    if(params.h0/params.H>0.02)
+      throw RangeError('DS quadrature requires observer height / scale height <= 0.02');
+    if(actual!==request)throw RangeError('Bouguer quadrature request identity mismatch');
+    var count=request.targets.length;
+    if(!Array.isArray(angles)||angles.length!==count||
+       !Array.isArray(coordinates)||coordinates.length!==count)
+      throw RangeError('Bouguer quadrature angle/coordinate count mismatch');
+    angles.forEach(function(a,i){
+      if(!Number.isFinite(a)||Math.abs(a)>=1.45)
+        throw RangeError('Bouguer quadrature invalid GPU angle at target '+i+': '+a);
+      if(a<-.5)
+        throw RangeError('Bouguer quadrature inward polynomial angle domain exceeded at target '+i+': '+a);
+    });
+    coordinates.forEach(function(c,i){
+      var t=request.targets[i],theta=Math.atan2(t[0],request.radius+t[1]);
+      if(!c||!Number.isFinite(c.distanceMetres)||!Number.isFinite(c.heightMetres)||
+         Math.abs(request.radius*theta-c.distanceMetres)>1e-6)
+        throw RangeError('Bouguer quadrature coordinate mismatch '+i);
+    });
+    return true;
+  }
   async function createSession(request,deps){
     var p=environment(request);
     if(p.h0/p.H>0.02)throw RangeError('DS quadrature requires observer height / scale height <= 0.02');
@@ -199,13 +225,16 @@ fn main(@builtin(global_invocation_id) id:vec3u){
     function alloc(size,flags){var b=device.createBuffer({size:size,usage:flags});buffers.push(b);return b;}
     function close(){if(closed)return;closed=true;buffers.forEach(function(b){b.destroy();});if(device.destroy)device.destroy();}
     try{
-      for(var mode of MODES){
+      // Six experiments require only TWO WGSL programs. Vary the quadrature
+      // node count by config[1] per dispatch; compile each arithmetic once.
+      for(var arithmetic of ARITHMETIC){
+        var mode=arithmetic+'_512';
         var module=device.createShaderModule({code:shader(mode,request)});
         if(module.getCompilationInfo){
           var info=await module.getCompilationInfo(),errors=info.messages.filter(function(m){return m.type==='error';});
           if(errors.length)throw Error('Bouguer quadrature '+mode+' WGSL: '+errors.map(function(e){return e.message;}).join('; '));
         }
-        pipelines[mode]=await device.createComputePipelineAsync({layout:'auto',compute:{module:module,entryPoint:'main'}});
+        pipelines[arithmetic]=await device.createComputePipelineAsync({layout:'auto',compute:{module:module,entryPoint:'main'}});
       }
       var count=request.targets.length;
       if(count<1||count>1024||count*48>device.limits.maxStorageBufferBindingSize)
@@ -216,33 +245,28 @@ fn main(@builtin(global_invocation_id) id:vec3u){
         config=alloc(64,usage.STORAGE|usage.COPY_DST),
         output=alloc(count*48,usage.STORAGE|usage.COPY_SRC),
         read=alloc(count*48,usage.COPY_DST|usage.MAP_READ),binds={};
-      MODES.forEach(function(mode){binds[mode]=device.createBindGroup({
-        layout:pipelines[mode].getBindGroupLayout(0),entries:[
+      ARITHMETIC.forEach(function(arithmetic){binds[arithmetic]=device.createBindGroup({
+        layout:pipelines[arithmetic].getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:seeds}},{binding:1,resource:{buffer:constants}},
           {binding:2,resource:{buffer:output}},{binding:3,resource:{buffer:config}},
           {binding:4,resource:{buffer:arcs}}]});});
-      async function solve(actual,angles,coordinates){
+      async function solve(actual,angles,coordinates,onProgress){
         if(closed)throw Error('Bouguer quadrature session closed');
-        environment(actual);
-        if(actual!==request||!Array.isArray(angles)||angles.length!==count||
-           !angles.every(function(a){return Number.isFinite(a)&&Math.abs(a)<=.5;})||
-           !Array.isArray(coordinates)||coordinates.length!==count)
-          throw RangeError('Bouguer quadrature requires original request and bounded GPU angles');
+        validateSolveInputs(request,actual,angles,coordinates);
         var packed=gpu.pack(request);
         angles.forEach(function(a,i){packed.input[i*4+3]=a;});
         device.queue.writeBuffer(seeds,0,packed.input);
         device.queue.writeBuffer(constants,0,packedConstants(request));
-        device.queue.writeBuffer(config,0,packed.config);
-        coordinates.forEach(function(c,i){
-          if(!c||!Number.isFinite(c.distanceMetres)||
-             Math.abs(request.radius*Math.atan2(request.targets[i][0],request.radius+request.targets[i][1])-c.distanceMetres)>1e-6)
-            throw RangeError('Bouguer quadrature coordinate mismatch '+i);
-        });
         device.queue.writeBuffer(arcs,0,oldPrecision.input(coordinates,request.radius));
         var runs={};
         for(var mode of MODES){
+          var arithmetic=mode.startsWith('classic_ds')?'classic_ds':'integer_residual_ds',
+            nodeCount=Number(mode.split('_').at(-1)),
+            modeConfig=new Uint32Array(packed.config);
+          modeConfig[1]=nodeCount;
+          device.queue.writeBuffer(config,0,modeConfig);
           var started=now(),encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();
-          pass.setPipeline(pipelines[mode]);pass.setBindGroup(0,binds[mode]);
+          pass.setPipeline(pipelines[arithmetic]);pass.setBindGroup(0,binds[arithmetic]);
           pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();
           encoder.copyBufferToBuffer(output,0,read,0,count*48);
           device.queue.submit([encoder.finish()]);
@@ -251,6 +275,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
           read.unmap();
           runs[mode]={traces:decode(request,angles,raw),timing:{
             gpuDispatchToReadbackMs:now()-started,setupExcluded:true,includesReadback:true}};
+          if(typeof onProgress==='function')onProgress(mode,runs[mode].timing,MODES.indexOf(mode)+1,MODES.length);
         }
         return runs;
       }
@@ -327,5 +352,5 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   }
   return Object.freeze({VERSION:VERSION,MODES:MODES,NODES:NODES,MATH:MATH,
     environment:environment,packedConstants:packedConstants,wgsl:wgsl,shader:shader,
-    decode:decode,createSession:createSession,analyze:analyze});
+    decode:decode,validateSolveInputs:validateSolveInputs,createSession:createSession,analyze:analyze});
 }));

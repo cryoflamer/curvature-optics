@@ -23,6 +23,9 @@ test('140.12.31: DS invariant, atmosphere, quadrature, sqrt and contact subtract
   assert.deepEqual(q.MODES,[
     'classic_ds_128','classic_ds_256','classic_ds_512',
     'integer_residual_ds_128','integer_residual_ds_256','integer_residual_ds_512']);
+  assert.equal(q.shader('classic_ds_128',request()),q.shader('classic_ds_512',request()));
+  assert.equal(q.shader('integer_residual_ds_128',request()),q.shader('integer_residual_ds_512',request()));
+  assert.notEqual(q.shader('classic_ds_128',request()),q.shader('integer_residual_ds_128',request()));
   for(const mode of q.MODES){
     const s=q.shader(mode,request());
     assert.match(s,/let logB=dsAdd\(dsLogF/);
@@ -34,7 +37,9 @@ test('140.12.31: DS invariant, atmosphere, quadrature, sqrt and contact subtract
     assert.match(s,/let theta=dsDiv\(ds\(arc\.x,arc\.y\),radius\)/);
     assert.match(s,/const VACUUM:bool=false/);
     assert.doesNotMatch(s,/@VACUUM@|\bprecise\b/);
-    assert.match(s,new RegExp('const NODE_COUNT:u32='+Number(mode.split('_').at(-1))+'u;'));
+    assert.match(s,/let nodeCount=config\[1\];/);
+    assert.match(s,/j<nodeCount/);
+    assert.doesNotMatch(s,/const NODE_COUNT/);
     assert.match(s,new RegExp('const MODE:u32='+(mode.startsWith('classic')?1:2)+'u;'));
   }
   assert.match(q.shader('classic_ds_256',{...request(),atmosphere:'vacuum'}),/const VACUUM:bool=true/);
@@ -94,24 +99,26 @@ test('140.12.31: 48-case report keeps GPU angles, per-mode errors, CPU convergen
   assert.throws(()=>q.analyze(original,{request:req,coordinates:coords},f32,variants),/angle\/target mismatch/);
 });
 test('140.12.31: Compare UI has a separate experiment and computes all GPU modes before CPU oracle',()=>{
-  assert.match(html,/CurvatureGpuBouguerQuadrature141231\.js/);
+  assert.match(html,/CurvatureGpuBouguerQuadrature141231\.js\?v=140\.12\.31\.2/);
   assert.match(html,/ModernGpuBouguerQuadratureRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30&amp;quadrature=140\.12\.31/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.30&amp;quadrature=140\.12\.31\.2/);
   assert.match(app,/addEventListener\('click',runGpuBouguerQuadrature141231\)/);
   assert.match(app,/curvature-compare-140\.12\.31-bouguer-quadrature\.json/);
   const body=app.slice(app.indexOf('async function runGpuBouguerQuadrature141231(){'),
     app.indexOf('  function bind(){',app.indexOf('async function runGpuBouguerQuadrature141231(){')));
-  assert.ok(body.indexOf('await shooting.solve')<body.indexOf('await originalSession.solve'));
-  assert.ok(body.indexOf('await originalSession.solve')<body.indexOf('await oldSession.solve'));
-  assert.ok(body.indexOf('await oldSession.solve')<body.indexOf('await dsSession.solve'));
-  assert.ok(body.indexOf('await dsSession.solve')<body.indexOf('await groundSession.solve'));
-  assert.ok(body.indexOf('await groundSession.solve')<body.indexOf('await contract.solveCpuBatch'));
+  const ordered=['return shooting.solve','audit.validateSolveInputs',
+    'return originalSession.solve','return oldSession.solve','return dsSession.solve',
+    'return groundSession.solve','return contract.solveCpuBatch'];
+  for(let i=1;i<ordered.length;i++)assert.ok(body.indexOf(ordered[i-1])>=0 &&
+    body.indexOf(ordered[i-1])<body.indexOf(ordered[i]),ordered[i-1]+' before '+ordered[i]);
+  assert.match(body,/compiling 2 DS arithmetic shaders/);
+  assert.match(body,/phaseTimings/);
   assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback|status='visible'/);
 });
 test('140.12.31: mocked WebGPU yields six independent readbacks, explicit DS inputs and cleanup',async()=>{
-  const req=request(),angles=[-.25,-.05];
+  const req=request(),angles=[.5280675292015076,-.05];
   const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};
-  const buffers=[],writes=[],passes=[],modules=[],copies=[];
+  const buffers=[],writes=[],nodeCounts=[],passes=[],modules=[],copies=[];
   const device={limits:{maxStorageBufferBindingSize:1e8},
     createShaderModule({code}){modules.push(code);return {getCompilationInfo:async()=>({messages:[]})};},
     createComputePipelineAsync:async()=>({getBindGroupLayout:()=>({})}),
@@ -124,6 +131,7 @@ test('140.12.31: mocked WebGPU yields six independent readbacks, explicit DS inp
       copyBufferToBuffer(src,o,dst,q,len){copies.push(len);new Uint8Array(dst.bytes,q,len)
         .set(new Uint8Array(src.bytes,o,len));},finish(){return {};}};},
     queue:{writeBuffer(b,o,data){writes.push(data.constructor.name);
+      if(data instanceof Uint32Array)nodeCounts.push(data[1]);
       new Uint8Array(b.bytes,o,data.byteLength).set(new Uint8Array(data.buffer,data.byteOffset,data.byteLength));},submit(){}},
     destroy(){this.destroyed=true;}};
   const deps={navigator:{gpu:{requestAdapter:async()=>({requestDevice:async()=>device})}},
@@ -131,14 +139,36 @@ test('140.12.31: mocked WebGPU yields six independent readbacks, explicit DS inp
   const session=await q.createSession(req,deps);
   try{
     const out=await session.solve(req,angles,coordinates);
-    assert.equal(modules.length,6);
-    assert.equal(writes.length,4);
+    assert.equal(modules.length,2); // one compilation for each arithmetic, not each node count
+    assert.equal(writes.length,9); // three input buffers plus six per-dispatch node counts
     assert.deepEqual(copies,[96,96,96,96,96,96]);
     assert.equal(passes.length,6);
     for(const mode of q.MODES)assert.equal(out[mode].traces.length,2);
-    await assert.rejects(()=>session.solve(req,[1,-.05],coordinates),/bounded GPU angles/);
+    assert.deepEqual(nodeCounts,[128,256,512,128,256,512]);
+    assert.deepEqual(writes,[ 'Float32Array','Float32Array','Float32Array',
+      'Uint32Array','Uint32Array','Uint32Array','Uint32Array','Uint32Array','Uint32Array' ]);
+    assert.equal(q.validateSolveInputs(req,req,[.5280675292015076,-.05],coordinates),true);
+    await assert.rejects(()=>session.solve(req,[-.75,-.05],coordinates),/inward polynomial angle domain exceeded at target 0/);
     await assert.rejects(()=>session.solve(req,angles,[coordinates[1],coordinates[0]]),/coordinate mismatch/);
   }finally{session.close();}
   assert.ok(buffers.every(b=>b.destroyed));
   assert.equal(device.destroyed,true);
+});
+
+// Regression: the real #140.12.30 experiment included an outward ray at
+// +0.5280675292 rad (60 m / 50 m). It must not reject the whole audit.
+test('140.12.31.2: the 48-ray ladder accepts real upward GPU angle and rejects inward out-of-domain rays early',()=>{
+  const ladder=require('../src/diagnostics/CurvatureGpuPrecisionAudit141222')
+    .createLadder({branch:contract.BRANCH,geometry:'globe',radius:6371000,observerHeight:15},surfaces);
+  const angles=Array(48).fill(-.01);
+  angles[7]=.5280675292015076;
+  assert.equal(q.validateSolveInputs(ladder.request,ladder.request,angles,ladder.coordinates),true);
+  const wrongAngles=angles.slice();wrongAngles[7]=-.5280675292015076;
+  assert.throws(()=>q.validateSolveInputs(ladder.request,ladder.request,wrongAngles,ladder.coordinates),
+    /inward polynomial angle domain exceeded at target 7/);
+  assert.throws(()=>q.validateSolveInputs(ladder.request,{...ladder.request},angles,ladder.coordinates),
+    /request identity mismatch/);
+  const wrongCoords=ladder.coordinates.map(x=>({...x}));wrongCoords[7].distanceMetres+=1;
+  assert.throws(()=>q.validateSolveInputs(ladder.request,ladder.request,angles,wrongCoords),
+    /coordinate mismatch 7/);
 });
