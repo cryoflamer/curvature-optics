@@ -730,7 +730,7 @@
   // Export only completed numerical audits, never ordinary rendered frames.
   function downloadNumericAudit(report,failed){
     if(!report||!root.Blob||!root.URL||!root.URL.createObjectURL)return false;
-    var nameByVersion={'140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
+    var nameByVersion={'140.12.32':'curvature-compare-140.12.32-gpu-ds-shooting.json','140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
       '140.12.29':'curvature-compare-140.12.29-gpu-precision-geometry.json','140.12.28':'gpu-arithmetic',
       '140.12.27':'bouguer-invariant','140.12.26':'gpu-ground-contact',
       '140.12.25':'gpu-precision-limit','140.12.24':'gpu-numerical-floor',
@@ -3010,6 +3010,8 @@
     if(arithmeticButton)arithmeticButton.addEventListener('click',runGpuPrecisionFoundation141228);
     var bouguerQuadratureButton=probeUi('ModernGpuBouguerQuadratureRun');
     if(bouguerQuadratureButton)bouguerQuadratureButton.addEventListener('click',runGpuBouguerQuadrature141231);
+    var highPrecisionShootingButton=probeUi('ModernGpuHighPrecisionShootingRun');
+    if(highPrecisionShootingButton)highPrecisionShootingButton.addEventListener('click',runGpuHighPrecisionShooting141232);
     var bouguerPrecisionButton=probeUi('ModernGpuBouguerPrecisionRun');
     if(bouguerPrecisionButton)bouguerPrecisionButton.addEventListener('click',runGpuBouguerPrecision141230);
     var bouguerButton=probeUi('ModernGpuBouguerAuditRun');
@@ -3037,7 +3039,7 @@
       'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun',
       'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun',
       'ModernGpuPrecisionGeometryRun','ModernGpuBouguerPrecisionRun',
-      'ModernGpuBouguerQuadratureRun'].forEach(function(id){
+      'ModernGpuBouguerQuadratureRun','ModernGpuHighPrecisionShootingRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -3854,7 +3856,7 @@
     }
     if(model.showModel===2){probeStatus('Bouguer quadrature audit requires Globe, not Flat.');return;}
     var generation=state.probeGeneration,sessions=[],ids=[
-      'ModernGpuBouguerQuadratureRun','ModernGpuBouguerPrecisionRun','ModernGpuBouguerAuditRun',
+      'ModernGpuBouguerQuadratureRun','ModernGpuHighPrecisionShootingRun','ModernGpuBouguerPrecisionRun','ModernGpuBouguerAuditRun',
       'ModernGpuPrecisionGeometryRun','ModernGpuPrecisionFoundationRun','ModernGpuGroundAuditRun',
       'ModernGpuLimitAuditRun','ModernGpuFloorAuditRun','ModernGpuRootAuditRun',
       'ModernGpuPrecisionAuditRun','ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],
@@ -3944,6 +3946,88 @@
           totalElapsedMs:performance.now()-auditStarted});
       state.probeFrameLast=null;
       probeStatus('Bouguer quadrature audit failed: '+String(error&&error.message||error));
+    }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
+  // #140.12.32: independent GPU-owned DS angle refinement on 48 original
+  // predictor seeds. CPU f64 shooting and Bouguer checks run only AFTER GPU.
+  async function runGpuHighPrecisionShooting141232(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      shootingAudit=root.CurvatureGpuHighPrecisionShooting141232,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A,
+      config=state.compareConfig&&state.compareConfig.A;
+    if(!gpu||!contract||!precision||!shootingAudit||!surfaces||!model||!config||
+       config.atmosphere!=='standard'||!root.navigator||!root.navigator.gpu){
+      probeStatus('DS shooting audit requires WebGPU and standard atmosphere in Compare A.');return;
+    }
+    if(model.showModel===2){probeStatus('DS shooting requires Globe, not Flat.');return;}
+    var generation=state.probeGeneration,sessions=[],phase='initialization',timings=[],started=performance.now(),
+      ids=['ModernGpuHighPrecisionShootingRun','ModernGpuBouguerQuadratureRun',
+        'ModernGpuBouguerPrecisionRun','ModernGpuBouguerAuditRun',
+        'ModernGpuPrecisionGeometryRun','ModernGpuPrecisionFoundationRun',
+        'ModernGpuGroundAuditRun','ModernGpuLimitAuditRun','ModernGpuFloorAuditRun',
+        'ModernGpuRootAuditRun','ModernGpuPrecisionAuditRun',
+        'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeExportLast=null;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    async function measure(label,callback){
+      phase=label;var began=performance.now();
+      probeStatus('GPU DS shooting: '+label+'…');
+      var ticker=setInterval(function(){if(!cancelled())probeStatus('GPU DS shooting: '+phase+
+        ' · elapsed '+((performance.now()-began)/1000).toFixed(1)+' s…');},1000);
+      try{var result=await callback();timings.push({stage:label,elapsedMs:performance.now()-began});return result;}
+      catch(error){timings.push({stage:label,elapsedMs:performance.now()-began,failed:true});throw error;}
+      finally{clearInterval(ticker);}
+    }
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,geometry:'globe',
+        radius:model.rEarth,observerHeight:model.Height},surfaces),base=ladder.request;
+      var predictor=await measure('GPU predictor setup',function(){
+        return gpu.createSession(48,null,{algorithm:'predictor',refinement:'residual-stop'});});
+      sessions.push(predictor);if(cancelled())return;
+      var source=await measure('48 independent f32 GPU predictor angles',function(){
+        return predictor.solve(base,{warmRepeats:0});});if(cancelled())return;
+      var seeds=source.response.results.map(function(r){return r.angle;});
+      await measure('validate radial-leg polynomial domain',function(){
+        return shootingAudit.validate(base,ladder.coordinates,seeds);});
+      var ds=await measure('compile classic DS radial shooting shader',function(){
+        return shootingAudit.createSession(base);});sessions.push(ds);if(cancelled())return;
+      var runs=await measure('GPU-owned DS secant refinement (256 / 512 nodes)',function(){
+        return ds.solve(base,ladder.coordinates,seeds,function(mode,timing){
+          if(!cancelled())probeStatus('GPU DS shooting: '+mode+' · '+timing.dispatchToReadbackMs.toFixed(1)+' ms');
+        });});if(cancelled())return;
+      // The CPU never selects, corrects or reruns a GPU angle. It is an
+      // independent post-GPU oracle and cannot affect the returned GPU roots.
+      var cpuRequest=Object.assign({},base,{controls:{step:2000,
+        targetTolerance:0.000001,eventSubsteps:8}});
+      var cpu=await measure('independent CPU f64 RK4 shooting',function(){
+        return contract.solveCpuBatch(cpuRequest);});if(cancelled())return;
+      var report=await measure('CPU f64 2048-node roots / same-angle contact comparison',function(){
+        return shootingAudit.analyze(ladder,source,runs,cpu);});if(cancelled())return;
+      report.phaseTimings=timings;
+      report.totalElapsedMs=performance.now()-started;
+      report.shootingShaderCompilationMs=ds.compileMs;
+      report.gpuPredictorTiming=source.timing;
+      report.cpuF64ShootingStepMetres=2000;
+      state.probeFrameLast=report;
+      numericAuditComplete(report);
+      var summary=report.summary,metric=probeUi('ModernGpuFrameMetrics');
+      if(metric)metric.textContent='DS shooting · '+report.modes.map(function(m){
+        var s=summary[m];return m+': '+s.converged+'/48 roots, '+s.within1cmCpuResidual+
+          '/48 within 1 cm CPU f64 same-angle residual, '+s.groundDisagreementsBeyond1cm+
+          ' robust contact mismatches';}).join(' / ')+' · Export JSON';
+      probeStatus('GPU DS shooting audited · production optics unchanged · Export JSON');
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.32','runGpuHighPrecisionShooting141232',error,
+        {failedPhase:phase,phaseTimings:timings,totalElapsedMs:performance.now()-started});
+      state.probeFrameLast=null;
+      probeStatus('GPU DS shooting failed: '+String(error&&error.message||error));
     }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;
       buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
