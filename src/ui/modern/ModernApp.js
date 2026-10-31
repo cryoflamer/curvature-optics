@@ -3023,6 +3023,8 @@
     if(cameraFirstButton)cameraFirstButton.addEventListener('click',runCameraFirstOracle141238);
     var cameraObjectsButton=probeUi('ModernCameraFirstObjectsRun');
     if(cameraObjectsButton)cameraObjectsButton.addEventListener('click',runCameraFirstObjects141239);
+    var dsGateButton=probeUi('ModernGpuDsPainterGateRun');
+    if(dsGateButton)dsGateButton.addEventListener('click',runGpuDsPainterGate141240);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
     if(attributionButton)attributionButton.addEventListener('click',runGpuAlgorithmAttribution141235);
     var pixelSpaceButton=probeUi('ModernGpuPixelSpaceAuditRun');
@@ -4503,6 +4505,112 @@
       if(button)button.disabled=false;
     }
     function captureSummary(c){return c.audit();}
+  }
+  // #140.12.40: isolate real-scene GPU DS ray samples BEFORE any attempt to
+  // inject them into the existing CPU painter. The current DS GPU kernel is a
+  // bounded radial Bouguer root, NOT the CPU RK4 algorithm. Never fabricate
+  // a GPU DS painted frame or claim CPU-equivalent visibility from this gate.
+  async function runGpuDsPainterGate141240(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gate=root.CurvatureGpuDsPainterGate141240,
+      gpuDs=root.CurvatureGpuHighPrecisionShooting141232,
+      cpuContract=root.CurvatureOpticalBatchContract1411,
+      composition=root.CurvatureIndependentComposition,
+      parity=root.CurvatureGpuFullFrameParity141234,
+      pixelAudit=root.CurvatureGpuPixelSpaceAudit141233,
+      zipWriter=root.GeometryDiagnosticsZip,
+      source=state.comparePair&&state.comparePair.A,
+      graph=state.compareGraphs&&state.compareGraphs.A,
+      button=probeUi('ModernGpuDsPainterGateRun'),
+      generation=state.probeGeneration,phase='checking prerequisites',
+      started=profileNow(),session=null;
+    if(!gate||!gpuDs||!cpuContract||!composition||!parity||!pixelAudit||!zipWriter||!source||!graph){
+      probeStatus('GPU DS gate unavailable: missing research modules / Compare A.');return;
+    }
+    if(!root.navigator||!root.navigator.gpu){
+      probeStatus('GPU DS gate requires real WebGPU; CPU-only substitutes are prohibited.');return;
+    }
+    if((state.compareConfig&&state.compareConfig.A&&
+        (state.compareConfig.A.surface!=='globe'||state.compareConfig.A.atmosphere!=='standard'))||
+        source.showModel!==1||!(source.Height>0)){
+      probeStatus('GPU DS gate requires Compare A Globe / standard atmosphere / positive eye height.');return;
+    }
+    function interrupted(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;if(button)button.disabled=true;
+    var timings={},cpuCapture=null,originalSourceSignature=null;
+    function compositionsAreEquivalent(){
+      var currentModel=state.comparePair&&state.comparePair.A;
+      if(currentModel!==source)return false;
+      var currentComposition=composition.composeOpticalMain(
+        Object.assign({},source,{geometryRadius:source.rEarth}),true,{physicalWorld:true});
+      var currentInputs=gate.requestFromScene(currentComposition,source);
+      return JSON.stringify(currentInputs.selected.map(function(p){return [p.sourceIndex,p.target];}))===originalSourceSignature;
+    }
+    function download(files,name){
+      var zip=zipWriter.build(files),url=root.URL.createObjectURL(zip),link=document.createElement('a');
+      link.href=url;link.download=name;
+      try{link.click();}finally{
+        if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);
+      }
+    }
+    try{
+      phase='capturing real CPU Canvas and physical objects';
+      var camera=pixelAudit.capture(source,graph),model=Object.assign({},source,{geometryRadius:source.rEarth}),
+        composed=composition.composeOpticalMain(model,true,{physicalWorld:true}),
+        inputs=gate.requestFromScene(composed,source);
+      cpuCapture=parity.canvasCapture(graph.Canvas);
+      originalSourceSignature=JSON.stringify(inputs.selected.map(function(p){return [p.sourceIndex,p.target];}));
+      phase='compiling real WebGPU double-single kernel';
+      probeStatus('GPU DS gate: compiling existing radial Bouguer shooting (48 actual-scene targets)…');
+      var build=profileNow();session=await gpuDs.createSession(inputs.request);
+      timings.gpuSessionSetupMs=profileNow()-build;
+      timings.gpuCompileMs=session.compileMs;
+      if(interrupted())return;
+      phase='GPU DS 256 and 512 node shooting';
+      probeStatus('GPU DS gate: dispatching 48 real-scene target rays (256 / 512 DS nodes)…');
+      var measured=await session.solve(inputs.request,inputs.coordinates,inputs.angles);
+      timings.gpu256Ms=measured.classic_ds_256.timing.dispatchToReadbackMs;
+      timings.gpu512Ms=measured.classic_ds_512.timing.dispatchToReadbackMs;
+      if(interrupted())return;
+      phase='CPU f64 reference (same physical targets)';
+      probeStatus('GPU DS gate: CPU f64 RK4 oracle on the identical 48 targets…');
+      var begin=profileNow(),cpu=await cpuContract.solveCpuBatch(inputs.request);
+      timings.cpuOracleMs=profileNow()-begin;
+      if(interrupted())return;
+      phase='checking camera identity and building ZIP images';
+      var current=pixelAudit.capture(source,graph);
+      if(!pixelAudit.sameCamera(camera,current))throw Error('Compare A camera changed during DS audit');
+      var latest=compositionsAreEquivalent();
+      if(!latest)throw Error('Physical object scene changed during DS audit; rerun');
+      var report=gate.makeReport(inputs,measured,cpu,camera,timings,cpuCapture);
+      report.elapsedMs=profileNow()-started;
+      download(gate.entries(report,cpuCapture,document),
+        'curvature-compare-140.12.40-gpu-ds-painter-gate.zip');
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var m=report.modeSummary.classic_ds_512,metric=probeUi('ModernGpuFrameMetrics');
+      if(metric)metric.textContent='48 real-scene targets · GPU DS 512: '+m.converged+
+        '/48 candidate roots, '+m.candidateVisibilityDisagreements+' candidate status disagreements, '+
+        m.uncertainOrUnresolvedVisibility+' unqualified · NOT CPU-equivalent / NO GPU DS frame · ZIP exported';
+      probeStatus('GPU DS ray-sample feasibility ZIP exported · FULL GPU DS frame NOT available');
+    }catch(error){if(!interrupted()){
+      numericAuditFailed('140.12.40','runGpuDsPainterGate141240',error,
+        {phase:phase,totalElapsedMs:profileNow()-started,timings:timings});
+      var message=String(error&&error.message||error),errorReport={version:'140.12.40',
+        status:'failed',phase:phase,error:message,timings:timings,
+        gpuDsFullFrameAvailable:false,eligibleForCpuPainter:false,
+        totalElapsedMs:profileNow()-started};
+      try{
+        var diagnosticFiles=[{name:'error.json',data:JSON.stringify(errorReport,null,2)},
+          {name:'README.txt',data:'GPU DS experiment FAILED at phase: '+phase+'\nError: '+message+
+            '\nNo GPU DS results or GPU DS-painted frame were produced.\n'}];
+        if(cpuCapture)diagnosticFiles.push({name:'cpu-reference.png',
+          data:root.CurvatureAttributionVisualZip141236.png(cpuCapture,document)});
+        download(diagnosticFiles,'curvature-compare-140.12.40-gpu-ds-painter-gate-error.zip');
+      }catch(zipError){probeStatus('DS diagnostic ZIP failed: '+String(zipError&&zipError.message||zipError));}
+      probeStatus('GPU DS gate failed ('+phase+'): '+message+' · error ZIP attempted');
+    }}finally{if(session)session.close();state.probeBusy=false;if(button)button.disabled=false;}
   }
   // #140.12.38: opt-in camera-first FIRST GROUND contact. No GPU, shooting,
   // interpolated optical field or polygon scene. This diagnostic NEVER changes
