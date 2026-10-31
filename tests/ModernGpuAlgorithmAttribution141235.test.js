@@ -132,3 +132,19 @@ test('140.12.35: strict diagnostic field reaches real contours/fills without CPU
   assert.ok(strict.stats().experimentalGpu.strictRejected>0);
   assert.equal(strict.stats().experimentalGpu.cpuFallbackRequests,0);
 });
+
+test('140.12.35.1: baseline paint timing declares elapsed in strict browser scope',()=>{
+  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const start=app.indexOf('async function runGpuAlgorithmAttribution141235()');
+  const end=app.indexOf('  function bind(){',start);
+  const block=app.slice(start,end);
+  const match=block.match(/var t=profileNow\(\);graphB\.Redraw\(\);var elapsed=profileNow\(\)-t,\s*stats=ensureGpuResult\(\),frame=parity\.canvasCapture\(graphB\.Canvas\);/);
+  assert.ok(match,'paint duration must be declared locally rather than assigned as an undeclared identifier');
+  const run=new Function('profileNow','graphB','ensureGpuResult','parity',
+    '\"use strict\";'+match[0]+'return {elapsed,stats,frame};');
+  let now=100;const result=run(()=>{now+=5;return now;},
+    {Redraw(){},Canvas:{width:1}},()=>({ok:true}),{canvasCapture:()=>({width:1})});
+  assert.equal(result.elapsed,5);
+  assert.deepEqual(result.stats,{ok:true});
+  assert.deepEqual(result.frame,{width:1});
+});

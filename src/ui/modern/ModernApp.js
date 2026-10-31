@@ -4353,7 +4353,7 @@
           phase='paint '+config.id+' / '+name;
           probeStatus('Algorithm attribution: '+config.id+' · GPU '+name+'…');
           state.probeField=fields[name];clear('B');
-          var t=profileNow();graphB.Redraw(),elapsed=profileNow()-t,
+          var t=profileNow();graphB.Redraw();var elapsed=profileNow()-t,
             stats=ensureGpuResult(),frame=parity.canvasCapture(graphB.Canvas);
           frames[name]=frame;
           measurements.variants[name]={paintMs:elapsed,fieldStats:stats,
