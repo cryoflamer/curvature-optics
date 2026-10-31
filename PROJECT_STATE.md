@@ -1537,3 +1537,13 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   The experiment determines whether GPU status-only correction or sensitivity
   of first-contact detection to RK4 step changes the missing tower-base
   geometry. Pixel equivalence, production approval and speedup are not claimed.
+
+
+## #140.12.27 · Bouguer spherical-invariant contact audit (diagnostic only)
+
+- The Globe/standard profile is radially stratified: `n(h)=1+0.000293*exp(-h/7350)` by default. For a straight surface-normal coordinate `r=R+h`, `b=n(r) r cos(alpha)` is conserved in exact geometrical optics. This does not hold for Flat geometry with its own vertical stratification or arbitrary horizontally varying profiles.
+- The new **Audit Bouguer invariant · analytic ground angle** Compare button runs GPU-first 48-target shooting, a **separate 256-node f32 invariant quadrature**, and independent GPU fixed-angle RK4 ground evidence. Only *after* all GPU work it computes the CPU f64 shooting oracle, 2048-node radial invariant quadrature, and CPU f64 same-angle RK4 replay.
+- With `F(r)=n(r)r` strictly increasing over the observer-to-ground altitude interval and an inward launch angle, `log(b/F(R)) > 0` implies an above-ground turning radius. Otherwise the first-ground polar angle is an integral over altitude; `h=h0*u^2` regularizes near-tangent integrability. The ground-event decision compares this angle against the **geometric target polar angle**, not an RK4 endpoint path length. An initially outward ray cannot strike the surface on this monotone radial branch. The module rejects unsupported profiles, Flat geometry, and nonmonotone `F`.
+- f32 uses dimensionless `h/R` and stabilized `log1p`/`expm1` polynomials to avoid subtracting kilometre-scale radii; f64 uses native `Math.log1p`/`Math.expm1`. The two quadrature resolutions and margins are exposed in exported JSON to assess numerical truncation. Neither is certified/interval arithmetic, especially near tangency.
+- No CPU angle is fed to GPU, no CPU fallback, no production authorization, and **no change to scene painting or ray classifications**. A near-endpoint ground crossing for a ray *not exactly aimed at the target* is not a proof that the target is occluded.
+- Export: `curvature-compare-140.12.27-bouguer-invariant.json`. Runtime shader compilation still requires a browser WebGPU pass.

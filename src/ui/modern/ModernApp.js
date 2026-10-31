@@ -2655,6 +2655,83 @@
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
+  // #140.12.27: radial-invariant independent contact geometry; the GPU
+  // computes both angles and a separate f32 Bouguer quadrature BEFORE CPU f64.
+  // This is not a visibility decision and never alters the picture.
+  async function runGpuBouguerAudit141227(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      bouguer=root.CurvatureBouguerInvariant141227,
+      ground=root.CurvatureGpuGroundContact141226,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A,
+      config=state.compareConfig&&state.compareConfig.A;
+    if(!gpu||!contract||!precision||!bouguer||!ground||!surfaces||!model||!config||
+       config.atmosphere!=='standard'||!root.navigator||!root.navigator.gpu){
+      probeStatus('Bouguer audit requires WebGPU and standard atmosphere in Compare A.');return;
+    }
+    if(model.showModel===2){
+      probeStatus('Bouguer radial invariant requires Globe geometry, not Flat.');return;
+    }
+    var generation=state.probeGeneration,sessions=[],ids=[
+      'ModernGpuBouguerAuditRun','ModernGpuGroundAuditRun','ModernGpuLimitAuditRun',
+      'ModernGpuFloorAuditRun','ModernGpuRootAuditRun','ModernGpuPrecisionAuditRun',
+      'ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,
+        geometry:'globe',radius:model.rEarth,observerHeight:model.Height},surfaces),base=ladder.request;
+      bouguer.options(base);
+      probeStatus('Bouguer audit: obtaining 48 independently shot GPU f32 angles…');
+      var shooting=await gpu.createSession(48,null,{algorithm:'predictor',refinement:'residual-stop'});
+      sessions.push(shooting);
+      if(cancelled())return;
+      var source=await shooting.solve(base,{warmRepeats:0});
+      if(cancelled())return;
+      var angles=source.response.results.map(function(x){return x.angle;});
+      if(!angles.every(function(x){return Number.isFinite(x);}))
+        throw Error('Missing GPU shooting angles; CPU cannot substitute them');
+      probeStatus('Bouguer audit: independent f32 radial-invariant quadrature…');
+      var analyticSession=await bouguer.createSession(48);
+      sessions.push(analyticSession);
+      if(cancelled())return;
+      var analyticGpu=await analyticSession.solve(base,angles);
+      if(cancelled())return;
+      probeStatus('Bouguer audit: baseline GPU RK4 first-ground trace…');
+      var groundSession=await ground.createSession(48);
+      sessions.push(groundSession);
+      if(cancelled())return;
+      var groundGpu=await groundSession.solve(base,angles);
+      if(cancelled())return;
+      // No f64 solves were run during any GPU submission or angle selection.
+      probeStatus('Bouguer audit: f64 independent quadrature and same-angle RK4…');
+      var cpuRequest=Object.assign({},base,{controls:{step:2000,
+        targetTolerance:0.000001,eventSubsteps:8}});
+      var cpu=await contract.solveCpuBatch(cpuRequest);
+      if(cancelled())return;
+      var report=bouguer.analyze(ladder,source,analyticGpu,groundGpu,cpu);
+      report.gpuBouguerTiming=analyticGpu.timing;
+      report.gpuRk4GroundTiming=groundGpu.timing;
+      report.gpuShootingTiming=source.timing;
+      report.geometry=base.geometry;
+      report.cpuF64ShootingStepMetres=2000;
+      state.probeFrameLast=report;
+      var line=probeUi('ModernGpuFrameMetrics'),s=report.summary;
+      if(line)line.textContent='Bouguer f32 vs f64: '+s.gpuVsF64ContactDisagreements+
+        ' contact sign differences · '+s.gpuVsF64Outside1cm+
+        ' beyond 1 cm · '+s.cpuAnalyticVsCpuReplayDisagreements+
+        ' f64 quadrature vs RK4 event differences · Export JSON';
+      probeStatus('Bouguer invariant measured · no visibility override · Export JSON');
+    }catch(error){if(!cancelled()){state.probeFrameLast=null;
+      probeStatus('Bouguer audit failed: '+String(error&&error.message||error));}}
+    finally{sessions.forEach(function(session){session.close();});
+      state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2701,6 +2778,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var bouguerButton=probeUi('ModernGpuBouguerAuditRun');
+    if(bouguerButton)bouguerButton.addEventListener('click',runGpuBouguerAudit141227);
     var groundAuditButton=probeUi('ModernGpuGroundAuditRun');
     if(groundAuditButton)groundAuditButton.addEventListener('click',runGpuGroundAudit141226);
     var limitAuditButton=probeUi('ModernGpuLimitAuditRun');
@@ -2721,7 +2800,8 @@
       'ModernGpuNearRun','ModernGpuGridABCRun','ModernGpuNearGeometryRun',
       'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
       'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun',
-      'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun'].forEach(function(id){
+      'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun',
+      'ModernGpuBouguerAuditRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2740,7 +2820,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.26'?
+      link.href=url;link.download=exportVersion==='140.12.27'?
+        'curvature-compare-140.12.27-bouguer-invariant.json':
+        exportVersion==='140.12.26'?
         'curvature-compare-140.12.26-gpu-ground-contact.json':
         exportVersion==='140.12.25'?
         'curvature-compare-140.12.25-gpu-precision-limit.json':

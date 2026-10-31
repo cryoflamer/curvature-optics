@@ -90,8 +90,8 @@ test('140.12.19: invalid boundary/field inputs fail closed',()=>{
 test('140.12.19: production code keeps paired GPU+CPU physics, exports diagnostic and does not promote geometry to default',()=>{
   const html=src('CurvatureModern.html'),app=src('src/ui/modern/ModernApp.js');
   assert.match(html,/id="ModernGpuNearGeometryRun"/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.26/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.26/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.27/);
+  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.27/);
   assert.match(app,/addEventListener\('click',runCompareNearGeometry141219\)/);
   assert.match(app,/curvature-compare-140\.12\.19-near-geometric-projection\.json/);
   const block=app.slice(app.indexOf('async function runCompareNearGeometry141219()'),

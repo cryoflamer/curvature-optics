@@ -80,8 +80,8 @@ test('140.12.21: rejected misordered or non-direct-uncertain fine result cannot 
 });
 test('140.12.21: UI triggers both independent, GPU-only status experiments and CPU reference last',()=>{
   const app=src('src/ui/modern/ModernApp.js'),html=src('CurvatureModern.html');
-  assert.match(html,/ModernApp\.js\?v=140\.12\.26/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.26/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.27/);
+  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.27/);
   assert.match(html,/id="ModernGpuStatusQualificationRun"/);
   assert.match(html,/id="ModernGpuStatusDirectToggle"/);
   assert.match(html,/id="ModernGpuContactQualificationToggle"/);
