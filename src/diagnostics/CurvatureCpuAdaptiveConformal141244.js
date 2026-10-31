@@ -7,63 +7,20 @@
   var api=factory(typeof module==='object'&&module.exports?
     require('./CurvatureCpuConformalGlobe141243'):root.CurvatureCpuConformalGlobe141243,
     typeof module==='object'&&module.exports?
-    require('../optics/OpticalTargetProjection'):root.CurvatureTargetProjection);
+    require('../optics/OpticalTargetProjection'):root.CurvatureTargetProjection,
+    typeof module==='object'&&module.exports?
+    require('../optics/OpticalConformalPredictor'):root.CurvatureOpticalConformalPredictor);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureCpuAdaptiveConformal141244=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(previous,projection){
+}(typeof globalThis!=='undefined'?globalThis:this,function(previous,projection,conformal){
   'use strict';
   var VERSION='140.12.44',ARCSEC=180*3600/Math.PI;
   function now(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function median(xs){var a=xs.slice().sort(function(x,y){return x-y;}),n=a.length;
     return n?(a[Math.floor((n-1)/2)]+a[Math.floor(n/2)])/2:null;}
+  // The diagnostic and opt-in field use the identical numerical predictor.
+  var adaptiveCandidate=conformal.adaptiveCandidate;
   function finiteAngle(v){return v&&v.status==='candidate'&&Number.isFinite(v.angle);}
-  function adaptiveCandidate(c,target,config){
-    config=config||{};
-    var mode=config.mode||'adaptive',threshold=config.angularResidualMetres===undefined?2e-7:config.angularResidualMetres;
-    if(['fixed2','adaptive','richardson'].indexOf(mode)<0||
-      !Number.isFinite(threshold)||!(threshold>0)||threshold>0.01)
-      throw RangeError('Invalid adaptive predictor configuration');
-    var first=previous.conformalCandidate(c,target,{steps:2,corrections:2});
-    if(!finiteAngle(first))return Object.assign({},first,{mode:mode,coarseCalls:0,stepsUsed:0});
-    var calls=first.gradientCalls||0,levels=[2],last=first,older=null,estimatedMetres=null;
-    if(mode!=='fixed2'){
-      // The short-path two-step solution is already inside the original
-      // warm-start tolerance. Avoid paying for step-doubling on all 48 rays.
-      // The cutoff is a measured computational heuristic, NOT a physical
-      // assertion or a ground-contact classification.
-      var X=first.transformed.X;
-      var nearSurface=first.transformed.h<=1e-6&&X>5000;
-      var goal=nearSurface?Math.min(threshold,5e-11):threshold;
-      if(X>30000||nearSurface){
-        for(var steps=4;steps<=16;steps*=2){
-          var next=previous.conformalCandidate(c,target,{steps:steps,corrections:2});
-          if(!finiteAngle(next))return {status:'unsupported',reason:'adaptive coarse integration failed',
-            mode:mode,stepsUsed:steps,coarseCalls:calls,certified:false};
-          calls+=next.gradientCalls||0;
-          older=last;last=next;levels.push(steps);
-          // RK4 fourth-order step-doubling estimate; target-distance scaling
-          // is only a numerical *heuristic*. Certification is always via
-          // original Globe RK4, including strict surface and ground events.
-          estimatedMetres=Math.abs(last.angle-older.angle)*X/15;
-          if(estimatedMetres<=goal)break;
-        }
-      }
-    }
-    var angle=last.angle,extrapolationRadians=0;
-    if(mode==='richardson'&&older){
-      extrapolationRadians=(last.angle-older.angle)/15;
-      var trial=angle+extrapolationRadians;
-      // A corrected angle is still an untrusted candidate, not a solved ray.
-      if(Number.isFinite(trial)&&Math.abs(trial)<Math.PI/2-.001)angle=trial;
-      else extrapolationRadians=0;
-    }
-    return {status:'candidate',angle:angle,mode:mode,
-      method:mode==='richardson'?'adaptive conformal + local Richardson angle refinement':
-        mode==='fixed2'?'fixed two-step conformal':'adaptive conformal step-doubling',
-      stepsUsed:levels[levels.length-1],evaluatedLevels:levels,coarseCalls:calls,
-      estimateMetres:estimatedMetres,extrapolationRadians:extrapolationRadians,
-      transformed:first.transformed,certified:false,groundVerdict:null};
-  }
   function parity(reference,certified){
     return {status:reference.status!==certified.status,
       ground:!!(reference.ray&&reference.ray.hitGround)!==!!(certified.ray&&certified.ray.hitGround),

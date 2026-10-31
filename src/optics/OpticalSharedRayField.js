@@ -7,10 +7,12 @@
   var api = factory(typeof module === 'object' && module.exports
     ? require('./OpticalTargetProjection') : root.CurvatureTargetProjection,
     typeof module === 'object' && module.exports
-      ? require('../geometry/CurvatureSurfaceGeometry') : root.CurvatureSurfaceGeometry);
+      ? require('../geometry/CurvatureSurfaceGeometry') : root.CurvatureSurfaceGeometry,
+    typeof module === 'object' && module.exports
+      ? require('./OpticalConformalPredictor') : root.CurvatureOpticalConformalPredictor);
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CurvatureSharedRayField = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function (projection,surfaces) {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (projection,surfaces,conformal) {
   'use strict';
   function axis(values, name, positive) {
     if (!Array.isArray(values) || values.length < 2 ||
@@ -76,6 +78,13 @@
     // grazing rays can be branch-sensitive, so the shipped Scene/Compare
     // defaults retain the original bracket-first solver. A custom profile
     // must never be included in this narrowly-scoped experiment.
+    // Explicitly opt in to the proven *candidate-only* Globe predictor. No
+    // global default or profile-specific inference may enable this path.
+    var conformalExperimental=options.shootingOptimization==='conformal-experimental' &&
+      geometry==='globe' && options.atmosphere==='standard' &&
+      options.profile===undefined && !!conformal;
+    var conformalConstants=conformalExperimental?conformal.constants(solverOptions):null;
+    conformalExperimental=!!conformalConstants;
     var engineeredExperiment=options.shootingOptimization==='engineered-experimental' &&
       options.profile===undefined &&
       (options.atmosphere==='exponential-occlusion'||options.atmosphere==='inverse-spherical');
@@ -92,6 +101,9 @@
       exactSolveMs:0,shootRK4Calls:0,shootEvaluations:0,
       predictorAttempts:0,predictorAccepted:0,predictorFallbacks:0,
       warmStartAttempts:0,warmStartAccepted:0,warmStartMisses:0,
+      conformalAttempts:0,conformalCandidates:0,conformalWarmAccepted:0,
+      conformalFallbacks:0,conformalPredictionMs:0,conformalGradientCalls:0,
+      conformalStepsHistogram:{},
       clearGroundSteps:0,fullGroundEventSteps:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
       maxDepthUsed:0,gpuSeedUses:0};
@@ -125,11 +137,31 @@
       // height/angle secant. Restrict to distant rays: nearby steep angles
       // are substantially nonlinear in height. Engineered seeds are ONLY
       // consumed by the explicit benchmark opt-in above.
+      var seedKey=Math.round(d*10000),conformalCandidate=null;
+      if(conformalExperimental){
+        statistics.conformalAttempts++;
+        var predictionStart=clock();
+        // Candidate generation has no physical authority; invalid or
+        // unsupported predictions use the ordinary baseline shooting path.
+        try{conformalCandidate=conformal.adaptiveCandidate(conformalConstants,shootOpts.target,
+          {mode:'richardson'});}
+        catch(_){conformalCandidate=null;}
+        statistics.conformalPredictionMs+=clock()-predictionStart;
+        if(conformalCandidate&&conformalCandidate.status==='candidate'&&
+            Number.isFinite(conformalCandidate.angle)){
+          shootOpts.shootingWarmStartAngle=conformalCandidate.angle;
+          statistics.conformalCandidates++;
+          statistics.conformalGradientCalls+=conformalCandidate.coarseCalls||0;
+          var steps=String(conformalCandidate.stepsUsed||0);
+          statistics.conformalStepsHistogram[steps]=(statistics.conformalStepsHistogram[steps]||0)+1;
+        }
+      }
       var seedKey=Math.round(d*10000);
       var seeds=d>=5000&&solverOptions.shootingPredictor===true&&
         options.shootingWarmStart!==false?
         heightSeeds.get(seedKey):null;
-      if(seeds&&seeds.length===2&&seeds[0].h!==seeds[1].h){
+      if(!Number.isFinite(shootOpts.shootingWarmStartAngle)&&
+          seeds&&seeds.length===2&&seeds[0].h!==seeds[1].h){
         var a=seeds[0],b=seeds[1];
         var angle=b.angle+(a.angle-b.angle)*(h-b.h)/(a.h-b.h);
         if(Number.isFinite(angle))shootOpts.shootingWarmStartAngle=angle;
@@ -144,6 +176,11 @@
       statistics.warmStartAttempts+=result.warmStartAttempts||0;
       statistics.warmStartAccepted+=result.warmStartAccepted||0;
       statistics.warmStartMisses+=result.warmStartMisses||0;
+      if(conformalExperimental){
+        if(conformalCandidate&&conformalCandidate.status==='candidate'&&result.warmStartAccepted)
+          statistics.conformalWarmAccepted++;
+        else statistics.conformalFallbacks++;
+      }
       statistics.clearGroundSteps+=result.ray&&result.ray.fastGroundSkips||0;
       statistics.fullGroundEventSteps+=result.ray&&result.ray.fullGroundChecks||0;
       var record={status:result.status,angle:result.angle,

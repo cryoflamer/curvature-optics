@@ -11,7 +11,7 @@
     geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},
     compareGpuProbe:false,probeGeneration:0,probeBusy:false,probeLast:null,
     probeField:null,probeFrameLast:null,probeCapture:null,probeCapturedResults:null,
-    probeForceColdA:false,probeGeometryAudit:null};
+    probeForceColdA:false,probeGeometryAudit:null,conformalCompareB:false};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -586,6 +586,11 @@
           (state.probeForceColdA&&side==='A')};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
+      // #140.12.45: explicit, off-by-default production-oracle experiment.
+      // Never layer it on a GPU-seeded field or use it for non-Globe profiles.
+      if(side==='B'&&state.conformalCompareB&&!state.probeField&&
+          m.showModel===1&&options.atmosphere==='standard')
+        options.settings={shootingOptimization:'conformal-experimental'};
       if(state.compareCache[side])options.cacheSession=state.compareCache[side];
       if(state.compareGpuProbe&&side==='A'&&state.probeCapture){
         options.onExactTarget=function(d,h){state.probeCapture.push([d,h]);};
@@ -3031,6 +3036,24 @@
     if(cpuConformalButton)cpuConformalButton.addEventListener('click',runCpuConformalBenchmark141243);
     var cpuAdaptiveConformalButton=probeUi('ModernCpuAdaptiveConformalRun');
     if(cpuAdaptiveConformalButton)cpuAdaptiveConformalButton.addEventListener('click',runCpuAdaptiveConformalBenchmark141244);
+    var conformalToggle=probeUi('ModernConformalProductionToggle');
+    if(conformalToggle){
+      conformalToggle.checked=false;
+      conformalToggle.addEventListener('change',function(){
+        state.conformalCompareB=!!conformalToggle.checked;
+        if(state.conformalCompareB&&state.probeField){
+          // Do not advertise a CPU conformal run while B is GPU seeded.
+          state.probeField=null;state.probeFrameLast=null;state.probeGeneration++;
+        }
+        if(state.compareCache.B)state.compareCache.B.clearCache();
+        probeStatus(state.conformalCompareB?
+          'Conformal predictor enabled for standard Globe Compare B only (strict RK4 certified).':
+          'Conformal predictor disabled; baseline production shooting restored.');
+        redraw();
+      });
+    }
+    var conformalFrameButton=probeUi('ModernConformalFrameParityRun');
+    if(conformalFrameButton)conformalFrameButton.addEventListener('click',runConformalFrameParity141245);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4516,6 +4539,128 @@
   }
   // #140.12.44 — Diagnostic-only comparison. Every candidate is handed to
   // the original strict Globe RK4 shooting/ground-contact contract unchanged.
+  // #140.12.45 — the *real* physical canvas/painter, independent optical
+  // sessions, identical authored Globe scene and fixed camera for both modes.
+  // Neither a sampled mask nor predicted angles masquerade as a screenshot.
+  async function runConformalFrameParity141245(){
+    var button=probeUi('ModernConformalFrameParityRun'),zipWriter=root.GeometryDiagnosticsZip,
+      renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
+      graphs=state.compareGraphs,source=state.comparePair&&state.comparePair.A,
+      phase='checking input',started=profileNow();
+    if(state.probeBusy)return;
+    if(!zipWriter||!renderer||!optics||!compareAdapter||!source||
+        !graphs.A||!graphs.B||!graphs.A.Canvas||!graphs.B.Canvas){
+      probeStatus('Conformal frame audit needs Compare A/B canvases and physical renderer.');return;
+    }
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(source.showModel!==1||!(source.Height>0)||
+        (spec&&spec.atmosphere!=='standard')){
+      probeStatus('Conformal frame audit requires Compare A: Globe, standard atmosphere, positive eye height.');return;
+    }
+    var generation=state.probeGeneration,original=state.comparePair.A;
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||
+      state.comparePair.A!==original;}
+    function snapshot(canvas){
+      var copy=document.createElement('canvas');copy.width=canvas.width;copy.height=canvas.height;
+      var ctx=copy.getContext('2d');if(!ctx)throw Error('Canvas snapshot context unavailable');
+      ctx.drawImage(canvas,0,0);return copy;
+    }
+    function pngBytes(canvas){
+      var url=canvas.toDataURL('image/png');
+      if(!url.startsWith('data:image/png;base64,'))throw Error('PNG encoder unavailable');
+      var raw=root.atob(url.substring(url.indexOf(',')+1)),data=new Uint8Array(raw.length);
+      for(var i=0;i<raw.length;i++)data[i]=raw.charCodeAt(i);
+      return data;
+    }
+    function diffImage(a,b){
+      var canvas=document.createElement('canvas');canvas.width=a.width;canvas.height=a.height;
+      var ctx=canvas.getContext('2d'),out=ctx.createImageData(a.width,a.height),
+        aa=a.getContext('2d').getImageData(0,0,a.width,a.height).data,
+        bb=b.getContext('2d').getImageData(0,0,b.width,b.height).data;
+      for(var i=0;i<aa.length;i+=4){
+        var d=Math.max(Math.abs(aa[i]-bb[i]),Math.abs(aa[i+1]-bb[i+1]),
+          Math.abs(aa[i+2]-bb[i+2]),Math.abs(aa[i+3]-bb[i+3]));
+        out.data[i]=d>8?255:0;out.data[i+1]=d>8?40:0;
+        out.data[i+2]=d>8?40:0;out.data[i+3]=255;
+      }ctx.putImageData(out,0,0);return canvas;
+    }
+    function exportZip(files,name){
+      var blob=zipWriter.build(files),url=root.URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download=name;
+      try{link.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
+    }
+    state.probeBusy=true;if(button)button.disabled=true;
+    try{
+      var model=compareAdapter.clone(source),atmosphere='standard',
+        baselineSession=optics.create(),experimentalSession=optics.create(),
+        settings={shootingOptimization:'conformal-experimental'},
+        common={atmosphere:atmosphere,geometryBackend:'canvas',interactive:false,
+          deferDecorations:true,forceColdOptics:true};
+      // Both independently rendered frames receive the identical physical model.
+      // No atmospheric display overlays, captions or GPU render backend.
+      phase='cold baseline physical frame';
+      probeStatus('Conformal frame: cold original Globe RK4 + existing predictor…');
+      await new Promise(function(resolve){root.setTimeout(resolve,0);});
+      if(interrupted())return;
+      var base=renderer.renderPhysical(graphs.A,model,Object.assign({},common,
+        {cacheSession:baselineSession})),imageA=snapshot(graphs.A.Canvas);
+      if(interrupted())return;
+      phase='cold experimental physical frame';
+      probeStatus('Conformal frame: cold adaptive predictor + strict Globe RK4…');
+      await new Promise(function(resolve){root.setTimeout(resolve,0);});
+      if(interrupted())return;
+      var variant=renderer.renderPhysical(graphs.B,model,Object.assign({},common,
+        {cacheSession:experimentalSession,settings:settings})),imageB=snapshot(graphs.B.Canvas);
+      phase='pixel and topology comparison';
+      if(interrupted())return;
+      var pixels=compareAdapter.compareFramePixels(imageA,imageB);
+      if(pixels.status!=='measured')throw Error('Pixel comparison unavailable: '+pixels.reason);
+      var keys=['drawn','fillTriangles','fillUnresolved','fillHidden','unresolved',
+        'guideSegments','guideSolves','towerSolves','primitiveCount'],counts={};
+      keys.forEach(function(key){counts[key]={baseline:base[key],conformal:variant[key],
+        equal:JSON.stringify(base[key])===JSON.stringify(variant[key])};});
+      var report={version:'140.12.45',kind:'Full-frame CPU f64 conformal production-oracle audit',
+        scene:'actual Compare A physical model cloned identically for A/B',
+        atmosphere:atmosphere,geometry:'globe',camera:'same model, same painter, same viewport settings',
+        canvas:{width:imageA.width,height:imageA.height},
+        experimentalSetting:settings,baselineSetting:'default (existing shooting predictor)',
+        singleColdFramePerMode:true,notAMedianBenchmark:true,
+        baseline:{timings:base.timings,fieldStats:base.fieldStats,opticalWork:base.opticalWork,
+          unresolvedReasons:base.unresolvedReasons,fillUnresolvedReasons:base.fillUnresolvedReasons},
+        conformal:{timings:variant.timings,fieldStats:variant.fieldStats,opticalWork:variant.opticalWork,
+          unresolvedReasons:variant.unresolvedReasons,fillUnresolvedReasons:variant.fillUnresolvedReasons},
+        pixels:pixels,counts:counts,
+        parity:{allCountsEqual:keys.every(function(k){return counts[k].equal;}),
+          exactlyIdenticalPixels:pixels.strictPixels===0},
+        limitations:'One camera/scene; no global multipath proof; painter does not have a full Z-buffer. ' +
+          'Identical pixels do not prove all other scenes or contacts.'};
+      phase='PNG/JSON ZIP export';
+      exportZip([{name:'results.json',data:JSON.stringify(report,null,2)},
+        {name:'baseline-real-frame.png',data:pngBytes(imageA)},
+        {name:'conformal-real-frame.png',data:pngBytes(imageB)},
+        {name:'pixel-difference.png',data:pngBytes(diffImage(imageA,imageB))},
+        {name:'README.txt',data:'#140.12.45 · Full CPU Canvas frame comparison\n'+
+          'Actual physical frames, same model and camera. Original baseline versus opt-in conformal predictor.\n'+
+          'Every candidate receives the original Globe RK4 shooting and ground-event certification.\n'+
+          'Both timings are single cold frames, not statistical speedup claims.\n'+
+          'Pixel-difference.png: red marks channel differences >8/255.\n'}],
+        'curvature-compare-140.12.45-conformal-production-frame.zip');
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var metric=probeUi('ModernGpuFrameMetrics');
+      if(metric)metric.textContent='Conformal cold frames · baseline '+base.timings.totalMs.toFixed(1)+
+        ' / experimental '+variant.timings.totalMs.toFixed(1)+' ms · strict pixel changes '+
+        pixels.strictPixels+' / '+pixels.totalPixels+' · ZIP exported';
+      probeStatus('Conformal full-frame ZIP exported · strict changed pixels: '+pixels.strictPixels);
+    }catch(error){if(!interrupted()){
+      probeStatus('Conformal full-frame audit failed ('+phase+'): '+String(error.message||error));
+      if(root.console&&root.console.error)root.console.error('Conformal frame audit:',error);
+    }}finally{
+      state.probeBusy=false;if(button)button.disabled=false;
+      // Restore the interactive Compare views (including current A/B settings).
+      if(!interrupted()){if(graphs.A&&graphs.A.Redraw)graphs.A.Redraw();
+        if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}
+    }
+  }
   async function runCpuAdaptiveConformalBenchmark141244(){
     if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
     var adaptive=root.CurvatureCpuAdaptiveConformal141244,
