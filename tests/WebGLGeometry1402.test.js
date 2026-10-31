@@ -47,7 +47,7 @@ test('Modern UI loads GPU module before the shared frame renderer and exposes ex
   const html=fs.readFileSync(path.join(base,'CurvatureModern.html'),'utf8');
   assert.ok(html.indexOf('CurvatureWebGLGeometryRenderer.js')<html.indexOf('CurvatureFrameRenderer.js'));
   assert.match(html,/id="ModernGeometryBackend"/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.27/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.28/);
   const app=fs.readFileSync(path.join(base,'src/ui/modern/ModernApp.js'),'utf8');
   assert.match(app,/geometryBackend:state\.geometryBackend/);
   assert.match(app,/bindGeometryBackend\(\)/);

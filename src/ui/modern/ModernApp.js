@@ -2732,6 +2732,51 @@
     finally{sessions.forEach(function(session){session.close();});
       state.probeBusy=false;buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
+  // #140.12.28: self-contained WebGPU arithmetic bench. No optical scene
+  // inputs or CPU shooting are involved; always tests the same fixed vectors.
+  async function runGpuPrecisionFoundation141228(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var precision=root.CurvatureGpuPrecisionFoundation141228;
+    if(!precision||!root.navigator||!root.navigator.gpu){
+      probeStatus('GPU arithmetic foundation requires WebGPU.');return;
+    }
+    var generation=state.probeGeneration,session=null,
+      ids=['ModernGpuPrecisionFoundationRun','ModernGpuBouguerAuditRun',
+        'ModernGpuGroundAuditRun','ModernGpuLimitAuditRun','ModernGpuFloorAuditRun',
+        'ModernGpuRootAuditRun','ModernGpuPrecisionAuditRun','ModernGpuProbeRun',
+        'ModernGpuFrameRun','ModernGpuFastRun'],buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var vectors=precision.makeVectors();
+      probeStatus('GPU arithmetic: compiling independent f32, classic DS and integer-residual DS pipelines…');
+      session=await precision.createSession(vectors.length);
+      if(cancelled())return;
+      probeStatus('GPU arithmetic: running exact input vectors and warmed compute/readback timings…');
+      var report=await session.run(vectors,{warmRepeats:5,benchmarkIterations:128});
+      if(cancelled())return;
+      // JS reference is used only in offline analysis after GPU submissions.
+      report.adapterInfo=session.adapterInfo||null;
+      report.sessionSetupMs=session.setupMs;
+      state.probeFrameLast=report;
+      var metric=probeUi('ModernGpuFrameMetrics'),summary=report.summary;
+      if(metric)metric.textContent='GPU arithmetic '+report.vectors+' cases · max abs error: f32 '+
+        summary.f32.maxAbsoluteError.toExponential(2)+' / classic DS '+
+        summary.classic_ds.maxAbsoluteError.toExponential(2)+' / integer-residual DS '+
+        summary.integer_residual_ds.maxAbsoluteError.toExponential(2)+
+        ' · warm medians (readback-inclusive) '+
+        precision.MODES.map(function(mode){return mode+' '+
+          summary[mode].benchmarkWarmMedianMs.toFixed(2)+' ms';}).join(' / ')+
+        ' · Export JSON';
+      probeStatus('GPU arithmetic measured · no renderer/shooting changes · Export JSON');
+    }catch(error){if(!cancelled()){
+      state.probeFrameLast=null;
+      probeStatus('GPU arithmetic audit failed: '+String(error&&error.message||error));
+    }}finally{if(session)session.close();state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});}
+  }
   function bindCompareGpuProbe(){
     var kind=probeUi('ModernCompareKind'),run=probeUi('ModernGpuProbeRun');
     if(!kind||!run)return;
@@ -2778,6 +2823,8 @@
     if(abcButton)abcButton.addEventListener('click',runCompareGpuGridABC);
     var adaptiveButton=probeUi('ModernGpuAdaptiveRun');
     if(adaptiveButton)adaptiveButton.addEventListener('click',runCompareGpuAdaptive141218);
+    var arithmeticButton=probeUi('ModernGpuPrecisionFoundationRun');
+    if(arithmeticButton)arithmeticButton.addEventListener('click',runGpuPrecisionFoundation141228);
     var bouguerButton=probeUi('ModernGpuBouguerAuditRun');
     if(bouguerButton)bouguerButton.addEventListener('click',runGpuBouguerAudit141227);
     var groundAuditButton=probeUi('ModernGpuGroundAuditRun');
@@ -2801,7 +2848,7 @@
       'ModernGpuRendererVisibilityRun','ModernGpuStatusQualificationRun',
       'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun',
       'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun',
-      'ModernGpuBouguerAuditRun'].forEach(function(id){
+      'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -2820,7 +2867,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.27'?
+      link.href=url;link.download=exportVersion==='140.12.28'?
+        'curvature-compare-140.12.28-gpu-arithmetic.json':
+        exportVersion==='140.12.27'?
         'curvature-compare-140.12.27-bouguer-invariant.json':
         exportVersion==='140.12.26'?
         'curvature-compare-140.12.26-gpu-ground-contact.json':
