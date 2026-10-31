@@ -2955,6 +2955,8 @@
     if(geometryButton)geometryButton.addEventListener('click',runGpuPrecisionGeometry141229);
     var arithmeticButton=probeUi('ModernGpuPrecisionFoundationRun');
     if(arithmeticButton)arithmeticButton.addEventListener('click',runGpuPrecisionFoundation141228);
+    var bouguerQuadratureButton=probeUi('ModernGpuBouguerQuadratureRun');
+    if(bouguerQuadratureButton)bouguerQuadratureButton.addEventListener('click',runGpuBouguerQuadrature141231);
     var bouguerPrecisionButton=probeUi('ModernGpuBouguerPrecisionRun');
     if(bouguerPrecisionButton)bouguerPrecisionButton.addEventListener('click',runGpuBouguerPrecision141230);
     var bouguerButton=probeUi('ModernGpuBouguerAuditRun');
@@ -2981,7 +2983,8 @@
       'ModernGpuPrecisionAuditRun','ModernGpuRootAuditRun','ModernGpuFloorAuditRun',
       'ModernGpuLimitAuditRun','ModernGpuGroundAuditRun',
       'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun',
-      'ModernGpuPrecisionGeometryRun','ModernGpuBouguerPrecisionRun'].forEach(function(id){
+      'ModernGpuPrecisionGeometryRun','ModernGpuBouguerPrecisionRun',
+      'ModernGpuBouguerQuadratureRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -3000,7 +3003,9 @@
         {version:exportVersion,gpuAssistedFrame:state.probeFrameLast};
       var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
       var url=root.URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=exportVersion==='140.12.30'?
+      link.href=url;link.download=exportVersion==='140.12.31'?
+        'curvature-compare-140.12.31-bouguer-quadrature.json':
+        exportVersion==='140.12.30'?
         'curvature-compare-140.12.30-bouguer-precision.json':
         exportVersion==='140.12.29'?
         'curvature-compare-140.12.29-gpu-precision-geometry.json':
@@ -3770,6 +3775,85 @@
       var label=document.querySelector('label[for="'+id+'"]');
       if(label)addHelpToLabel(label,objectHelp[key]);
     });
+  }
+  // #140.12.31: fixed-angle comparison of a preserved f32 quadrature
+  // control with DS log-invariant / integrand / accumulation at three node counts.
+  async function runGpuBouguerQuadrature141231(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var gpu=root.CurvatureWebGPUBatchShooting1412,
+      contract=root.CurvatureOpticalBatchContract1411,
+      precision=root.CurvatureGpuPrecisionAudit141222,
+      bouguer=root.CurvatureBouguerInvariant141227,
+      oldPrecision=root.CurvatureGpuBouguerPrecision141230,
+      audit=root.CurvatureGpuBouguerQuadrature141231,
+      ground=root.CurvatureGpuGroundContact141226,
+      surfaces=root.CurvatureSurfaceGeometry,
+      model=state.comparePair&&state.comparePair.A,
+      config=state.compareConfig&&state.compareConfig.A;
+    if(!gpu||!contract||!precision||!bouguer||!oldPrecision||!audit||!ground||!surfaces||!model||
+       !config||config.atmosphere!=='standard'||!root.navigator||!root.navigator.gpu){
+      probeStatus('Bouguer quadrature audit requires WebGPU and standard atmosphere in Compare A.');return;
+    }
+    if(model.showModel===2){probeStatus('Bouguer quadrature audit requires Globe, not Flat.');return;}
+    var generation=state.probeGeneration,sessions=[],ids=[
+      'ModernGpuBouguerQuadratureRun','ModernGpuBouguerPrecisionRun','ModernGpuBouguerAuditRun',
+      'ModernGpuPrecisionGeometryRun','ModernGpuPrecisionFoundationRun','ModernGpuGroundAuditRun',
+      'ModernGpuLimitAuditRun','ModernGpuFloorAuditRun','ModernGpuRootAuditRun',
+      'ModernGpuPrecisionAuditRun','ModernGpuProbeRun','ModernGpuFrameRun','ModernGpuFastRun'],
+      buttons=ids.map(probeUi);
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    state.probeBusy=true;state.probeLast=null;state.probeFrameLast=null;
+    buttons.forEach(function(b){if(b)b.disabled=true;});
+    try{
+      var ladder=precision.createLadder({branch:contract.BRANCH,
+        geometry:'globe',radius:model.rEarth,observerHeight:model.Height},surfaces),base=ladder.request;
+      audit.environment(base);
+      probeStatus('Bouguer quadrature: collecting 48 GPU predictor angles…');
+      var shooting=await gpu.createSession(48,null,{algorithm:'predictor',refinement:'residual-stop'});
+      sessions.push(shooting);if(cancelled())return;
+      var source=await shooting.solve(base,{warmRepeats:0});if(cancelled())return;
+      var angles=source.response.results.map(function(x){return x.angle;});
+      if(!angles.every(Number.isFinite))throw Error('GPU shooting angles missing; no CPU substitution');
+      probeStatus('Bouguer quadrature: unchanged f32 original and DS-target control…');
+      var originalSession=await bouguer.createSession(48);
+      sessions.push(originalSession);if(cancelled())return;
+      var originalGpu=await originalSession.solve(base,angles);if(cancelled())return;
+      var oldSession=await oldPrecision.createSession(48);
+      sessions.push(oldSession);if(cancelled())return;
+      var f32Variants=await oldSession.solve(base,angles,ladder.coordinates);if(cancelled())return;
+      probeStatus('Bouguer quadrature: DS invariant / atmosphere / integrand (128, 256, 512)…');
+      var dsSession=await audit.createSession(base);
+      sessions.push(dsSession);if(cancelled())return;
+      var dsVariants=await dsSession.solve(base,angles,ladder.coordinates);if(cancelled())return;
+      probeStatus('Bouguer quadrature: independent same-angle GPU RK4 ground trace…');
+      var groundSession=await ground.createSession(48);
+      sessions.push(groundSession);if(cancelled())return;
+      var groundGpu=await groundSession.solve(base,angles);if(cancelled())return;
+      // CPU reference is NEVER used to select angles, refine, or decide GPU variants.
+      probeStatus('Bouguer quadrature: CPU f64 RK4 and 128/256/512/2048-node reference…');
+      var cpuRequest=Object.assign({},base,{controls:{step:2000,
+        targetTolerance:0.000001,eventSubsteps:8}});
+      var cpu=await contract.solveCpuBatch(cpuRequest);if(cancelled())return;
+      var original=bouguer.analyze(ladder,source,originalGpu,groundGpu,cpu);
+      original.gpuBouguerTiming=originalGpu.timing;
+      var report=audit.analyze(original,ladder,f32Variants.classic_ds,dsVariants);
+      report.gpuShootingTiming=source.timing;
+      report.gpuGroundRk4Timing=groundGpu.timing;
+      report.cpuF64ShootingStepMetres=2000;
+      state.probeFrameLast=report;
+      var metric=probeUi('ModernGpuFrameMetrics'),sum=report.summary;
+      if(metric)metric.textContent='Bouguer fixed-angle contact sign mismatches (48 rays): '+
+        report.modes.map(function(m){return m+' '+sum[m].contactDisagreements;}).join(' / ')+
+        ' · max ground-angle errors '+report.modes.map(function(m){return m+' '+
+          sum[m].maxAbsoluteGroundAngleErrorSurfaceMetres.toExponential(2)+' m';}).join(' / ')+
+        ' · Export JSON';
+      probeStatus('GPU Bouguer quadrature precision measured · physics / painting unchanged · Export JSON');
+    }catch(error){if(!cancelled()){
+      state.probeFrameLast=null;
+      probeStatus('Bouguer quadrature audit failed: '+String(error&&error.message||error));
+    }}finally{sessions.forEach(function(session){session.close();});state.probeBusy=false;
+      buttons.forEach(function(b){if(b)b.disabled=false;});}
   }
   function bind(){
     bindCameraDrag();
