@@ -105,10 +105,13 @@ fn main(@builtin(global_invocation_id) id:vec3u){
   let heightParts=targetHeights.data[i];
   let arc=arcs.data[i];
   let c=constants[0];let d=constants[1];
-  let radius=ds(c.x,c.y),observer=ds(c.z,c.w),targetHeight=ds(heightParts.x,heightParts.y);
+  let radius=ds(c.x,c.y);
+  let observer=ds(c.z,c.w);
+  let targetHeight=ds(heightParts.x,heightParts.y);
   let invR=dsDiv(ds(1.0,0.0),radius);
   let theta=dsDiv(ds(arc.x,arc.y),radius);
-  let n=ds(d.x,d.y),scale=ds(d.z,d.w);
+  let n=ds(d.x,d.y);
+  let scale=ds(d.z,d.w);
   var previousAngle=ds(seed.w,0.0);
   var previous=evaluate(previousAngle,observer,targetHeight,radius,invR,n,scale,theta,config[1]);
   let firstResidual=previous.residual;
