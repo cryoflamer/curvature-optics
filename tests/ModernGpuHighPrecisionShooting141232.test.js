@@ -169,10 +169,11 @@ test('140.12.32: isolated modern Compare UI wires versioned shader, GPU-first/CP
   assert.match(html,/CurvatureGpuHighPrecisionShooting141232\.js\?v=140\.12\.32/);
   assert.match(html,/id="ModernGpuHighPrecisionShootingRun"/);
   assert.match(js,/runGpuHighPrecisionShooting141232/);
-  assert.match(js,/numericAuditFailed\('140\.12\.32','runGpuHighPrecisionShooting141232'/);
+  assert.match(js,/numericAuditFailed\(pixelMode\?'140\.12\.33':'140\.12\.32'/);
+  assert.match(js,/pixelMode\?'runGpuPixelSpaceAudit141233':'runGpuHighPrecisionShooting141232'/);
   assert.match(js,/numericAuditComplete\(report\)/);
   assert.match(js,/curvature-compare-140\.12\.32-gpu-ds-shooting\.json/);
-  const fn=js.slice(js.indexOf('async function runGpuHighPrecisionShooting141232(){'),js.indexOf('  function bind(){',js.indexOf('async function runGpuHighPrecisionShooting141232(){')));
+  const fn=js.slice(js.indexOf('async function runGpuHighPrecisionShooting141232('),js.indexOf('  function bind(){',js.indexOf('async function runGpuHighPrecisionShooting141232(')));
   for(const token of ['predictor.solve','shootingAudit.validate','shootingAudit.createSession','ds.solve','contract.solveCpuBatch','shootingAudit.analyze'])
     assert.ok(fn.includes(token),token);
   assert.ok(fn.indexOf('ds.solve')<fn.indexOf('contract.solveCpuBatch'));
