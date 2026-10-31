@@ -44,7 +44,9 @@ test('140.12.30: original 256-node log-invariant integrand is retained byte-for-
     assert.match(s,/let h=t\.z\*u\*u/);
     assert.match(s,/angleLows\[i\]=thetaLo/);
     assert.match(s,/@group\(0\) @binding\(4\) var<storage, read_write> angleLows/);
-    assert.match(s,/@group\(0\) @binding\(3\) var<storage, read> precise: Rays/);
+    assert.match(s,/@group\(0\) @binding\(3\) var<storage, read> preciseRays: Rays/);
+    assert.doesNotMatch(s,/var<storage, read> precise: Rays/);
+    assert.doesNotMatch(s,/precise\.data\[/);
     assert.doesNotMatch(s,/let theta=atan2\(k\*t\.x/);
     assert.doesNotMatch(s,/rootSolve|raySolve|trace\(/);
     // A mechanical comparison ensures that the old Bouguer WGSL is

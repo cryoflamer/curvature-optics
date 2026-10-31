@@ -25,7 +25,7 @@
     if(!MODES.includes(mode))throw RangeError('Unknown Bouguer precision mode');
     var index=MODES.indexOf(mode),s=bouguer.WGSL;
     var originalAngle='let theta=atan2(k*t.x,1.0+k*t.y);';
-    var replacement=`let d=precise.data[i];
+    var replacement=`let d=preciseRays.data[i];
   var theta=d.x*k;
   var thetaLo=0.0;
   if(MODE!=0u){
@@ -39,7 +39,7 @@
       'struct Rays { data: array<vec4f> }\nconst MODE:u32='+index+'u;\n'+arithmetic.HELPERS);
     s=s.replace('@group(0) @binding(2) var<storage, read> config: array<u32>;',
       '@group(0) @binding(2) var<storage, read> config: array<u32>;\n'+
-      '@group(0) @binding(3) var<storage, read> precise: Rays;\n'+
+      '@group(0) @binding(3) var<storage, read> preciseRays: Rays;\n'+
       '@group(0) @binding(4) var<storage, read_write> angleLows: array<f32>;');
     s=s.replace(originalAngle,replacement);
     s=s.replace('(theta-phi)/k','((theta-phi)+thetaLo)/k');
