@@ -35,7 +35,10 @@ function collector(id,variant){
           world:q.world};})});
     },
     result:function(){
-      if(!scene||!camera||!(width>0&&height>0))throw Error('Optical geometry/camera was not captured');
+      if(!scene||!camera||!(width>0&&height>0))
+        throw Error('Optical geometry/camera was not captured ('+
+          'scene='+!!scene+', camera='+!!camera+', size='+width+'x'+height+
+          '). Check renderer/optics module revisions and preceding paint errors.');
       var objects=scene.primitives.filter(kind).map(function(p){return {
         type:p.type,kind:kind(p),source:sourceKey(p),
         points:p.points.map(function(q){return q.slice();})};});

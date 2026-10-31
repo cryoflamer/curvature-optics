@@ -400,5 +400,6 @@
     }
     return {transform:transform,clearCache:function(){cached=null;}};
   }
-  return {create:create,vacuumSample:vacuumSample,arrivalPoint:arrivalPoint,placedObjects:placedObjects};
+  return {geometryAuditRevision:'140.12.37.2',create:create,vacuumSample:vacuumSample,
+    arrivalPoint:arrivalPoint,placedObjects:placedObjects};
 }));

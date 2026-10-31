@@ -634,6 +634,10 @@
       var status=el('ModernCompareStatus'+side);
       if(status){status.textContent='Physical model '+side+': '+error.message;status.classList.toggle('is-error',true);}
       if(root.console&&root.console.error)root.console.error('Modern Compare '+side+':',error);
+      // A normal preview should remain interactive on renderer errors. An
+      // explicit attribution pass, however, must report the ORIGINAL paint
+      // exception rather than a misleading missing-collector error.
+      if(state.probeGeometryAudit)throw error;
     }
   }
   // Screen-space annotation only. The camera is observer-fixed in Compare;
@@ -4262,6 +4266,21 @@
        !root.CurvatureIndependentComposition||!root.CurvatureOpticalTowerSilhouette||
        !root.CurvatureSurfaceGeometry){
       probeStatus('Algorithm attribution unavailable: WebGPU or scene module missing.');return;
+    }
+    // #140.12.37.2: reject a mixed browser module cache BEFORE GPU work.
+    // The optical scene and Canvas painter used to be loaded without matching
+    // revisioned URLs, while ModernApp itself was refreshed. In that state
+    // there is no callback, and the failure surfaced only after a paint.
+    if(!root.CurvatureMainCanvasRenderer||
+       root.CurvatureMainCanvasRenderer.geometryAuditRevision!=='140.12.37.2'||
+       !root.CurvaturePhysicalSceneOptics||
+       root.CurvaturePhysicalSceneOptics.geometryAuditRevision!=='140.12.37.2'||
+       !root.CurvatureOpticalTowerSilhouette||
+       root.CurvatureOpticalTowerSilhouette.geometryAuditRevision!=='140.12.37.2'||
+       !root.CurvaturePhysicalPolygonFills||
+       root.CurvaturePhysicalPolygonFills.geometryAuditRevision!=='140.12.37.2'){
+      probeStatus('Geometry audit modules out of date. Reload the page (Ctrl+Shift+R) to fetch updated optical/Canvas scripts.');
+      return;
     }
     if(!spec||spec.atmosphere!=='standard'||spec.surface!=='globe'||
        state.geometryBackend!=='canvas'||!compareAdapter.invariant(original)){

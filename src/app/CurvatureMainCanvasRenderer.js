@@ -207,7 +207,8 @@
     finally{ctx.restore();}
   }
   function resetPhysicalSession(){opticalSession=optical.create();}
-  return {render:render,renderPhysical:renderPhysical,drawPresentationDecorations:drawPresentationDecorations,
+  return {geometryAuditRevision:'140.12.37.2',
+    render:render,renderPhysical:renderPhysical,drawPresentationDecorations:drawPresentationDecorations,
     resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,
     supportPhysical:support,selectObject:selectObject,configureCamera:configureCamera};
 }));

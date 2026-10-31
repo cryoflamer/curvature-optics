@@ -252,6 +252,6 @@
     result.primitives=primitives.length;
     return result;
   }
-  return {coordinate:coordinate,projectPrimitives:projectPrimitives,
-    projectTowerScene:projectTowerScene};
+  return {geometryAuditRevision:'140.12.37.2',coordinate:coordinate,
+    projectPrimitives:projectPrimitives,projectTowerScene:projectTowerScene};
 }));

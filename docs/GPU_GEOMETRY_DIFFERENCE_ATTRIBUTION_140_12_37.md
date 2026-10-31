@@ -40,3 +40,25 @@ The CPU and GPU project the same authored object geometry, but adaptive optical 
 - No WGSL/shader changes are introduced. A browser/WebGPU runtime run is still necessary to validate actual export and capture of the four real scenes.
 - No production authorization or causal decomposition is claimed. Comparison must be repeated with additional controlled interventions before selecting a new algorithm.
 - Geometry footprints are conservative bounding rectangles of projected visible edges, not the pixel-perfect painted mask. Rejected leaves and unknown angles have no certified pixel projection.
+
+## #140.12.37.2 — Mixed browser script cache regression
+
+The diagnostic may fail at the first `tilt-up / baseline` capture if the HTML
+loads the revised `ModernApp.js` and geometry collector but a cached *older*
+`CurvatureMainCanvasRenderer.js?v=140.3` or unversioned
+`CurvaturePhysicalSceneOptics.js`. Neither old implementation emits the
+geometry collector callbacks. Updating the .37.1 implementation alone did
+not force the browser to refetch those scripts.
+
+The Modern HTML now cache-busts **all four** hook-bearing runtime modules
+(`OpticalTowerSilhouette`, `CurvaturePhysicalPolygonFills`,
+`CurvaturePhysicalSceneOptics`, `CurvatureMainCanvasRenderer`) with
+`?v=140.12.37.2`, plus ModernApp and the diagnostic. The explicit attribution entrypoint checks
+`geometryAuditRevision` on all four modules and advises a hard reload before
+any GPU work if a mixed cache persists. Attribution paints now propagate
+the original renderer exception rather than swallowing it in the interactive
+Compare error handler; the collector also states which input was absent.
+
+These changes affect asset loading and diagnostic error reporting only, not
+ray tracing, camera geometry, Canvas painting or WGSL. If the browser still
+uses an older HTML shell, refresh `CurvatureModern.html` (Ctrl+Shift+R).

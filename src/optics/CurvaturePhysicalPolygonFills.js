@@ -186,5 +186,5 @@
     return {primitives:primitives,stats:stats,
       scope:'Sample-qualified opaque fills only; no mutual mesh occlusion or multipath'};
   }
-  return {project:project,planeTriangles:planeTriangles};
+  return {geometryAuditRevision:'140.12.37.2',project:project,planeTriangles:planeTriangles};
 }));

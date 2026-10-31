@@ -1617,3 +1617,9 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - The JSON explicitly sets `gpuDoubleSingleShootingUsed: false`, `dsFullFrameParityEstablished: false`, `productionAuthorized: false`. This frame comparison qualifies the existing GPU predictor interpolated path only, separating visual rendering errors from #140.12.33's isolated 48 DS rays; DS integration into the actual full-frame renderer requires a later change.
 - All GPU samples use WebGPU; Canvas 2D still rasterizes. Actual browser GPU execution and real viewport equality require user-side browser run; Node tests are not substitutes for WGSL compilation or visual qualification.
 - Project rule unchanged: reuse the sole canonical `tools/webgpu-optics.html` experiment page. Never create a version-numbered tools/ HTML file.
+
+### #140.12.37.2 — Geometry audit script-cache and error propagation fix
+
+- Fixed a mixed-version browser load: #140.12.37 and .37.1 changed optical geometry collectors, unresolved-leaf hooks and Canvas capture code without updating the Modern HTML asset URLs for all four providers. The browser could load a new `ModernApp.js` with old optics/renderer scripts, causing `Optical geometry/camera was not captured` at the first `tilt-up / baseline` paint.
+- All hook-bearing modules (`OpticalTowerSilhouette`, `CurvaturePhysicalPolygonFills`, `CurvaturePhysicalSceneOptics`, `CurvatureMainCanvasRenderer`) now have `?v=140.12.37.2` cache keys, matching the Modern diagnostic/app revision. The audit checks exported hook revisions before GPU computation to fail early on mixed caches. Actual paint errors are rethrown during explicit attribution and no longer disguised as a missing-geometry error; the collector reports which camera/scene inputs are missing.
+- No shader, ray solver, triangulation or production draw behavior changed. Re-run the real WebGPU browser audit with a hard refresh to verify end-to-end export.
