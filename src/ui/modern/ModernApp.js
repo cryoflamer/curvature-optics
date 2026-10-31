@@ -3054,6 +3054,8 @@
     }
     var conformalFrameButton=probeUi('ModernConformalFrameParityRun');
     if(conformalFrameButton)conformalFrameButton.addEventListener('click',runConformalFrameParity141245);
+    var profileButton=probeUi('ModernConformalProfile141246Run');
+    if(profileButton)profileButton.addEventListener('click',runConformalFrameProfile141246);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4542,6 +4544,185 @@
   // #140.12.45 — the *real* physical canvas/painter, independent optical
   // sessions, identical authored Globe scene and fixed camera for both modes.
   // Neither a sampled mask nor predicted angles masquerade as a screenshot.
+  // #140.12.46: warm, order-rotated full physical frames + independently
+  // profiled predictor stages on REAL exact-ray requests. A/B parity remains
+  // strict; no experimental candidate ever decides contact or visibility.
+  async function runConformalFrameProfile141246(){
+    var button=probeUi('ModernConformalProfile141246Run'),zipWriter=root.GeometryDiagnosticsZip,
+      renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
+      profiler=root.CurvatureConformalProfile141246,
+      source=state.comparePair&&state.comparePair.A,graphs=state.compareGraphs,
+      started=profileNow(),phase='input';
+    if(state.probeBusy)return;
+    if(!button||!zipWriter||!renderer||!optics||!profiler||!compareAdapter||
+        !source||!graphs.A||!graphs.B||!graphs.A.Canvas||!graphs.B.Canvas){
+      probeStatus('Conformal profiler: missing Compare A/B, physical renderer, or profiler module');return;
+    }
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(source.showModel!==1||!(source.Height>0)||
+        (spec&&spec.atmosphere!=='standard')){
+      probeStatus('Conformal profiler needs standard Globe Compare A and positive eye height');return;
+    }
+    var generation=state.probeGeneration,original=state.comparePair.A,
+      modes=['baseline','reference','gradient','fast'],
+      settings={reference:'conformal-reference',gradient:'conformal-gradient',fast:'conformal-experimental'},
+      rounds=8,warmups=1,captured=[],runs={baseline:[],reference:[],gradient:[],fast:[]},
+      last={},images={},orderLog=[],common={atmosphere:'standard',geometryBackend:'canvas',
+        interactive:false,deferDecorations:true,forceColdOptics:true};
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||
+      state.comparePair.A!==original;}
+    function snapshot(canvas){
+      var out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;
+      var ctx=out.getContext('2d');if(!ctx)throw Error('Canvas snapshot unavailable');
+      ctx.drawImage(canvas,0,0);return out;
+    }
+    function pngBytes(canvas){
+      var url=canvas.toDataURL('image/png');
+      if(!url.startsWith('data:image/png;base64,'))throw Error('PNG encoder unavailable');
+      var raw=root.atob(url.substring(url.indexOf(',')+1)),data=new Uint8Array(raw.length);
+      for(var i=0;i<raw.length;i++)data[i]=raw.charCodeAt(i);
+      return data;
+    }
+    function pixelDiff(a,b){
+      var out=document.createElement('canvas');out.width=a.width;out.height=a.height;
+      var ctx=out.getContext('2d'),pixels=ctx.createImageData(a.width,a.height),
+        aa=a.getContext('2d').getImageData(0,0,a.width,a.height).data,
+        bb=b.getContext('2d').getImageData(0,0,b.width,b.height).data;
+      for(var i=0;i<aa.length;i+=4){
+        var delta=Math.max(Math.abs(aa[i]-bb[i]),Math.abs(aa[i+1]-bb[i+1]),
+          Math.abs(aa[i+2]-bb[i+2]),Math.abs(aa[i+3]-bb[i+3]));
+        pixels.data[i]=delta>8?255:0;pixels.data[i+1]=delta>8?40:0;
+        pixels.data[i+2]=delta>8?40:0;pixels.data[i+3]=255;
+      }
+      ctx.putImageData(pixels,0,0);return out;
+    }
+    function median(values){var v=values.slice().sort(function(a,b){return a-b;}),n=v.length;
+      return n?(v[(n-1)>>1]+v[n>>1])/2:null;}
+    function metric(mode,path){return median(runs[mode].map(function(run){return path(run);}));}
+    var countKeys=['drawn','fillTriangles','fillUnresolved','fillHidden','unresolved',
+      'guideSegments','guideSolves','towerSolves','primitiveCount'];
+    function details(result){
+      var stats=result.fieldStats||{},times=result.timings||{};
+      return {totalMs:times.totalMs,exactSolveMs:stats.exactSolveMs,
+        predictionMs:stats.conformalPredictionMs||0,
+        rk4Calls:stats.shootRK4Calls||0,gradientCalls:stats.conformalGradientCalls||0,
+        shootingEvaluations:stats.shootEvaluations||0,
+        warmAccepted:stats.conformalWarmAccepted||0,
+        warmFallbacks:stats.conformalFallbacks||0,
+        levels:stats.conformalStepsHistogram||{},
+        structural:Object.fromEntries(countKeys.map(function(key){return [key,result[key]];}))};
+    }
+    function frame(mode,collect){
+      var args=Object.assign({},common,{cacheSession:optics.create()});
+      if(settings[mode])args.settings={shootingOptimization:settings[mode]};
+      if(collect)args.onExactTarget=function(d,h){captured.push([d,h]);};
+      var canvas=mode==='baseline'?graphs.A.Canvas:graphs.B.Canvas;
+      var result=renderer.renderPhysical(mode==='baseline'?graphs.A:graphs.B,
+        compareAdapter.clone(source),args);
+      return {result:result,canvas:canvas};
+    }
+    state.probeBusy=true;button.disabled=true;
+    try{
+      // Warm-ups build JIT code but never count as measured frames. Capture
+      // exact ray requests on the original untouched physical scene only.
+      for(var w=0;w<warmups;w++)for(var i=0;i<modes.length;i++){
+        if(interrupted())return;
+        phase='warm-up '+modes[i];probeStatus('Conformal profile: warming '+modes[i]);
+        await new Promise(function(resolve){root.setTimeout(resolve,0);});
+        frame(modes[i],modes[i]==='baseline');
+      }
+      for(var round=0;round<rounds;round++){
+        var shift=round%modes.length,
+          order=modes.slice(shift).concat(modes.slice(0,shift));
+        orderLog.push(order.slice());
+        for(var j=0;j<order.length;j++){
+          if(interrupted())return;
+          var mode=order[j];phase='measured '+mode+' round '+(round+1);
+          probeStatus('Conformal profiler: '+(round+1)+'/'+rounds+' · '+mode);
+          await new Promise(function(resolve){root.setTimeout(resolve,0);});
+          var render=frame(mode,false),info=details(render.result);
+          runs[mode].push(info);
+          last[mode]=info;images[mode]=snapshot(render.canvas);
+        }
+      }
+      if(interrupted())return;
+      phase='pixel and topology parity';
+      var pixels={},structural={},allParity=true;
+      ['reference','gradient','fast'].forEach(function(mode){
+        pixels[mode]=compareAdapter.compareFramePixels(images.baseline,images[mode]);
+        structural[mode]={};countKeys.forEach(function(key){
+          structural[mode][key]={baseline:last.baseline.structural[key],
+            variant:last[mode].structural[key],
+            equal:JSON.stringify(last.baseline.structural[key])===
+              JSON.stringify(last[mode].structural[key])};
+        });
+        if(pixels[mode].status!=='measured'||pixels[mode].strictPixels!==0||
+            !countKeys.every(function(k){return structural[mode][k].equal;}))allParity=false;
+      });
+      pixels.fastVsReference=compareAdapter.compareFramePixels(images.reference,images.fast);
+      if(pixels.fastVsReference.status!=='measured'||pixels.fastVsReference.strictPixels!==0)
+        allParity=false;
+      phase='predictor microprofile on captured scene requests';
+      probeStatus('Conformal profiler: profiling exact-target sample and preparing ZIP');
+      await new Promise(function(resolve){root.setTimeout(resolve,0);});
+      if(interrupted())return;
+      var micro=profiler.benchmark(captured,{radius:source.rEarth,
+        observerHeight:source.Height,sampleLimit:256,rounds:5,iterations:10});
+      var summary={};modes.forEach(function(mode){
+        summary[mode]={medianTotalMs:metric(mode,function(r){return r.totalMs;}),
+          medianExactSolveMs:metric(mode,function(r){return r.exactSolveMs;}),
+          medianPredictionMs:metric(mode,function(r){return r.predictionMs;}),
+          medianRK4Calls:metric(mode,function(r){return r.rk4Calls;}),
+          medianGradientCalls:metric(mode,function(r){return r.gradientCalls;})};
+      });
+      var report={version:'140.12.46',kind:'hot-order-rotated full-frame CPU f64 conformal profiler',
+        source:'actual Compare A scene rendered with original physical painter',
+        comparison:'baseline; old array RK4; optimized gradient; optimized scalar RK4',
+        atmosphere:'standard',geometry:'globe',
+        defaultShootingUnchanged:true,experimentalOnly:true,
+        framesPerMode:rounds,warmupsPerMode:warmups,
+        orderRotation:orderLog,allExactFieldsCold:true,
+        timingScope:'Each measurement independently rebuilds optical rays; JS/JIT warmed; no session cache reused',
+        browserElapsedMs:profileNow()-started,
+        summary:summary,runs:runs,lastFrame:{pixels:pixels,counts:structural},
+        strictParityOnLastFrame:allParity,microprofile:micro,
+        limitations:'One scene/camera, non-isolated browser CPU timings. Last frame pixel parity only; ' +
+          'not a proof of multi-branch equivalence or all possible contact events. ' +
+          'One report cannot justify enabling production by default.'};
+      var files=[{name:'results.json',data:JSON.stringify(report,null,2)},
+        {name:'baseline-real-frame.png',data:pngBytes(images.baseline)},
+        {name:'reference-real-frame.png',data:pngBytes(images.reference)},
+        {name:'gradient-real-frame.png',data:pngBytes(images.gradient)},
+        {name:'fast-real-frame.png',data:pngBytes(images.fast)},
+        {name:'baseline-vs-fast-diff.png',data:pngBytes(pixelDiff(images.baseline,images.fast))},
+        {name:'reference-vs-fast-diff.png',data:pngBytes(pixelDiff(images.reference,images.fast))},
+        {name:'README.txt',data:'#140.12.46 · Hot full-frame audit + exact-target profiler\n'+
+          'Four actual physical Canvas frames per round, 1 warm-up + 8 measured rounds each.\n'+
+          'Execution order rotated by round; optical field is cold and independent in EVERY frame.\n'+
+          'Microprofile uses 256 evenly selected actual exact targets captured in the warm baseline.\n'+
+          'All angles remain subject to original RK4 contact, residual and visibility checks.\n'+
+          'PNG difference images mark channel deltas >8; strict pixel delta is in results.json.\n'}];
+      phase='ZIP export';
+      var blob=zipWriter.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download='curvature-compare-140.12.46-conformal-production-profile.zip';
+      try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var view=probeUi('ModernGpuFrameMetrics');
+      if(view)view.textContent='Conformal hot frame · baseline '+summary.baseline.medianTotalMs.toFixed(1)+
+        ' / old '+summary.reference.medianTotalMs.toFixed(1)+' / scalar '+
+        summary.fast.medianTotalMs.toFixed(1)+' ms · strict parity '+
+        (allParity?'PASS':'FAIL')+' · ZIP exported';
+      probeStatus('Conformal profile ZIP exported · strict last-frame parity: '+
+        (allParity?'PASS':'FAIL')+' · 8 timed rounds per mode');
+    }catch(error){if(!interrupted()){
+      probeStatus('Conformal profile failed ('+phase+'): '+String(error.message||error));
+      if(root.console&&root.console.error)root.console.error('Conformal profile:',error);
+    }}finally{
+      state.probeBusy=false;button.disabled=false;
+      if(!interrupted()){if(graphs.A&&graphs.A.Redraw)graphs.A.Redraw();
+        if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}
+    }
+  }
   async function runConformalFrameParity141245(){
     var button=probeUi('ModernConformalFrameParityRun'),zipWriter=root.GeometryDiagnosticsZip,
       renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,

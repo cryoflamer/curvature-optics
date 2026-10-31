@@ -80,9 +80,13 @@
     // must never be included in this narrowly-scoped experiment.
     // Explicitly opt in to the proven *candidate-only* Globe predictor. No
     // global default or profile-specific inference may enable this path.
-    var conformalExperimental=options.shootingOptimization==='conformal-experimental' &&
-      geometry==='globe' && options.atmosphere==='standard' &&
-      options.profile===undefined && !!conformal;
+    // #140.12.46: selectable reference/gradient/scalar implementations,
+    // all strictly opt-in and all certified by the same Globe RK4 solver.
+    var conformalEngine=options.shootingOptimization==='conformal-reference'?'reference':
+      options.shootingOptimization==='conformal-gradient'?'gradient':
+      options.shootingOptimization==='conformal-experimental'?'fast':null;
+    var conformalExperimental=!!conformalEngine&&geometry==='globe'&&
+      options.atmosphere==='standard'&&options.profile===undefined&&!!conformal;
     var conformalConstants=conformalExperimental?conformal.constants(solverOptions):null;
     conformalExperimental=!!conformalConstants;
     var engineeredExperiment=options.shootingOptimization==='engineered-experimental' &&

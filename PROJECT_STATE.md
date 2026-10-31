@@ -1686,3 +1686,36 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Every candidate is fed only into **unchanged** `OpticalTargetProjection.solve` as a warm-start angle. That solver still decides whether a candidate meets the original endpoint/ground tolerance and executes its usual RK4 fallback and first-contact verification. No approximate predictor is permitted to decide visibility or ground contact.
 - The new Modern Compare button `ModernCpuAdaptiveConformalRun` exports `curvature-compare-140.12.44-cpu-f64-adaptive-conformal.zip`: five warmed rounds on **48 real physical Compare A object-edge targets**, plus eight independently reported surface/equal-height stress cases and two 20-target altitude/distance envelopes (eyes at 15 and 100 m, three rounds each). ZIP includes JSON, CSVs, SVG median-time plot and README; raw per-target acceptance, fallback, number of RK4 calls, prediction effort and parity are exposed.
 - This is diagnostic only. No new versioned HTML under `tools/`, no GPU/WGSL changes, no production renderer/shooting changes. No claim of full frame/pixel parity or correctness for all multipath branches. See `tests/CpuAdaptiveConformal141244.test.js` and `docs/CPU_F64_ADAPTIVE_CONFORMAL_140_12_44.md`.
+
+
+## #140.12.46 · Conformal Globe CPU f64 performance profiling (experimental)
+
+- `src/optics/OpticalConformalPredictor.js` now keeps the original array-based
+  RK4 predictor as the `reference` numerical oracle and exposes two independent
+  opt-in variants: `gradient` uses a single stable `expm1` result to recover
+  both transformed height and radial scale, while `fast` also removes array
+  mapping and temporary RK4 state allocations. Both still use the same fourth-
+  order RK4 equations, Newton corrections, adaptation and Richardson angle
+  refinement. They supply **untrusted candidate angles only** to the original
+  `OpticalTargetProjection.solve()`; all first-ground-contact and visibility
+  classifications remain solely with the strict physical RK4 solver.
+- Explicit `shootingOptimization` values in `OpticalSharedRayField`: `conformal-reference`
+  (former implementation), `conformal-gradient`, and `conformal-experimental`
+  (optimized scalar variant). All are disabled by default and are limited to
+  spherical geometry with standard exponential atmosphere. All previous
+  production/Compare paths stay unchanged when the toggle is off.
+- Modern Compare button **Profile conformal RK4** performs one JIT warm-up
+  and eight order-rotated timed *cold optical field* physical Canvas renders
+  each for the ordinary predictor, reference conformal, gradient-only, and
+  optimized scalar. It exports actual PNGs, strict pixel comparisons, contour/
+  fill counters, per-round timings and RK4 work in a ZIP. A separate per-stage
+  profiler samples up to 256 actual baseline exact-ray requests and times
+  gradient evaluations, two-step coarse RK4 and full adaptive candidates. No
+  repeated ray-field cache is included in the measured full frame.
+- This is a diagnostic experiment, NOT authorization to enable conformal
+  shooting by default. Microprofile speedups are not end-to-end gains. Strict
+  last-frame parity is scene-specific, not proof of all ground/multipath cases.
+- Do not create version-numbered HTML pages for further experiments; reuse
+  canonical `tools/webgpu-optics.html` and the existing Modern Compare page.
+  Validate WGSL compilation (not just JavaScript syntax) for any shader edits,
+  or explicitly state when actual GPU shader compilation was not performed.

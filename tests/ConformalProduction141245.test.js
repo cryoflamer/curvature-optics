@@ -75,7 +75,7 @@ test('Modern Compare explicit opt-in and genuine full-frame PNG ZIP wiring',()=>
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
   const js=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   const field=fs.readFileSync(path.join(__dirname,'../src/optics/OpticalSharedRayField.js'),'utf8');
-  assert.match(html,/OpticalConformalPredictor\.js\?v=140\.12\.45/);
+  assert.match(html,/OpticalConformalPredictor\.js\?v=140\.12\.(45|46)/);
   assert.match(html,/id="ModernConformalProductionToggle" type="checkbox"/);
   assert.match(html,/id="ModernConformalFrameParityRun"/);
   assert.match(js,/function runConformalFrameParity141245/);

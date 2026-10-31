@@ -79,10 +79,79 @@
     }
     return {u:u,a:a,v:v,w:w,gradientCalls:calls};
   }
+  // #140.12.46. Two independent, deliberately selectable optimizations.
+  // gradient: same array RK4, one fewer transcendental per stage.
+  // scalar: gradient optimization plus no state/map allocations in RK4.
+  // The pre-140.12.46 coarse() above is retained as the numeric oracle.
+  function logGradientFast(c,u){
+    var h=c.R*Math.expm1(u/c.R),f=1+h/c.R,
+      a=c.N*Math.exp(-h/c.H),inv=1/(1+a),invH=1/c.H,
+      g=1/c.R-f*a*inv*invH,
+      gp=-f*a*inv*invH/c.R+f*f*a*inv*inv*invH*invH;
+    return [g,gp];
+  }
+  function coarseGradient(c,X,start,steps){
+    var dx=X/steps,u=c.uObserver,a=start,v=0,w=1,calls=0;
+    function rhs(state){
+      var U=state[0],A=state[1],V=state[2],W=state[3],
+        pair=logGradientFast(c,U);calls++;
+      var cosine=Math.cos(A);
+      if(!(cosine>0.001)||!Number.isFinite(pair[0])||!Number.isFinite(pair[1]))return null;
+      return [Math.tan(A),pair[0],W/(cosine*cosine),pair[1]*V];
+    }
+    function offset(state,slope,k){return state.map(function(x,i){return x+slope[i]*k;});}
+    for(var j=0;j<steps;j++){
+      var state=[u,a,v,w],k1=rhs(state);if(!k1)return null;
+      var k2=rhs(offset(state,k1,dx/2));if(!k2)return null;
+      var k3=rhs(offset(state,k2,dx/2));if(!k3)return null;
+      var k4=rhs(offset(state,k3,dx));if(!k4)return null;
+      u+=dx*(k1[0]+2*k2[0]+2*k3[0]+k4[0])/6;
+      a+=dx*(k1[1]+2*k2[1]+2*k3[1]+k4[1])/6;
+      v+=dx*(k1[2]+2*k2[2]+2*k3[2]+k4[2])/6;
+      w+=dx*(k1[3]+2*k2[3]+2*k3[3]+k4[3])/6;
+      if(![u,a,v,w].every(Number.isFinite)||Math.abs(a)>=Math.PI/2-.001)return null;
+    }
+    return {u:u,a:a,v:v,w:w,gradientCalls:calls};
+  }
+  function coarseFast(c,X,start,steps){
+    var dx=X/steps,half=dx/2,sixth=dx/6,
+      u=c.uObserver,a=start,v=0,w=1;
+    // A stage returns only its derivatives; no stage-state / offset / map.
+    // Preserve RK4 arithmetic order to bound drift relative to coarse().
+    function stage(U,A,V,W){
+      var h=c.R*Math.expm1(U/c.R),f=1+h/c.R,
+        n=c.N*Math.exp(-h/c.H),inv=1/(1+n),invH=1/c.H,
+        g=1/c.R-f*n*inv*invH,
+        gp=-f*n*inv*invH/c.R+f*f*n*inv*inv*invH*invH,
+        cosine=Math.cos(A);
+      if(!(cosine>0.001)||!Number.isFinite(g)||!Number.isFinite(gp))return null;
+      return [Math.tan(A),g,W/(cosine*cosine),gp*V];
+    }
+    for(var j=0;j<steps;j++){
+      var k1=stage(u,a,v,w);if(!k1)return null;
+      var k2=stage(u+half*k1[0],a+half*k1[1],v+half*k1[2],w+half*k1[3]);if(!k2)return null;
+      var k3=stage(u+half*k2[0],a+half*k2[1],v+half*k2[2],w+half*k2[3]);if(!k3)return null;
+      var k4=stage(u+dx*k3[0],a+dx*k3[1],v+dx*k3[2],w+dx*k3[3]);if(!k4)return null;
+      u+=sixth*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
+      a+=sixth*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
+      v+=sixth*(k1[2]+2*k2[2]+2*k3[2]+k4[2]);
+      w+=sixth*(k1[3]+2*k2[3]+2*k3[3]+k4[3]);
+      if(!Number.isFinite(u)||!Number.isFinite(a)||!Number.isFinite(v)||
+          !Number.isFinite(w)||Math.abs(a)>=Math.PI/2-.001)return null;
+    }
+    return {u:u,a:a,v:v,w:w,gradientCalls:steps*4};
+  }
+  function chooseIntegrator(engine){
+    if(engine==='reference')return coarse;
+    if(engine==='gradient')return coarseGradient;
+    if(engine==='fast')return coarseFast;
+    throw RangeError('Invalid conformal integrator');
+  }
   function conformalCandidate(c,target,config){
     config=config||{};
     var steps=config.steps===undefined?2:config.steps,
       corrections=config.corrections===undefined?2:config.corrections,
+      engine=config.engine||'reference',integrate=chooseIntegrator(engine),
       first=inverseAngle(c,target,c.effectiveRadius);
     if(!Number.isInteger(steps)||steps<1||steps>32||
         !Number.isInteger(corrections)||corrections<1||corrections>6)
@@ -90,7 +159,7 @@
     if(first.status!=='candidate')return first;
     var angle=first.angle,calls=0,residual=null;
     for(var i=0;i<corrections;i++){
-      var result=coarse(c,first.transformed.X,angle,steps);
+      var result=integrate(c,first.transformed.X,angle,steps);
       if(!result||!(Math.abs(result.v)>1e-12))return {status:'unsupported',reason:'coarse integration/sensitivity failed'};
       calls+=result.gradientCalls;residual=result.u-first.transformed.u;
       var correction=residual/result.v;
@@ -107,11 +176,13 @@
   function finiteAngle(v){return v&&v.status==='candidate'&&Number.isFinite(v.angle);}
   function adaptiveCandidate(c,target,config){
     config=config||{};
-    var mode=config.mode||'adaptive',threshold=config.angularResidualMetres===undefined?2e-7:config.angularResidualMetres;
+    var mode=config.mode||'adaptive',threshold=config.angularResidualMetres===undefined?2e-7:config.angularResidualMetres,
+      engine=config.engine||'reference';
+    chooseIntegrator(engine);
     if(['fixed2','adaptive','richardson'].indexOf(mode)<0||
       !Number.isFinite(threshold)||!(threshold>0)||threshold>0.01)
       throw RangeError('Invalid adaptive predictor configuration');
-    var first=conformalCandidate(c,target,{steps:2,corrections:2});
+    var first=conformalCandidate(c,target,{steps:2,corrections:2,engine:engine});
     if(!finiteAngle(first))return Object.assign({},first,{mode:mode,coarseCalls:0,stepsUsed:0});
     var calls=first.gradientCalls||0,levels=[2],last=first,older=null,estimatedMetres=null;
     if(mode!=='fixed2'){
@@ -124,7 +195,7 @@
       var goal=nearSurface?Math.min(threshold,5e-11):threshold;
       if(X>30000||nearSurface){
         for(var steps=4;steps<=16;steps*=2){
-          var next=conformalCandidate(c,target,{steps:steps,corrections:2});
+          var next=conformalCandidate(c,target,{steps:steps,corrections:2,engine:engine});
           if(!finiteAngle(next))return {status:'unsupported',reason:'adaptive coarse integration failed',
             mode:mode,stepsUsed:steps,coarseCalls:calls,certified:false};
           calls+=next.gradientCalls||0;
@@ -153,5 +224,8 @@
       transformed:first.transformed,certified:false,groundVerdict:null};
   }
   return {constants:constants,transform:transform,inverseAngle:inverseAngle,
-    conformalCandidate:conformalCandidate,adaptiveCandidate:adaptiveCandidate};
+    conformalCandidate:conformalCandidate,adaptiveCandidate:adaptiveCandidate,
+    // Exposed for controlled microprofiling, not for physical classification.
+    coarseReference:coarse,coarseGradient:coarseGradient,coarseFast:coarseFast,
+    gradientReference:logGradient,gradientFast:logGradientFast};
 }));
