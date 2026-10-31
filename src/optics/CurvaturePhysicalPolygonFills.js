@@ -68,13 +68,13 @@
     function sample(world){
       var key=world.join(',');
       if(samples.has(key))return samples.get(key);
-      var q=silhouette.coordinate(world,geometry,radius,eye,metric),result={world:world,status:'solver_failed',reason:'sample-budget'};
+      var q=silhouette.coordinate(world,geometry,radius,eye,metric),result={world:world,status:'solver_failed',reason:'sample-budget',fieldQueried:false};
       if(stats.samples<maxSamples){
         stats.samples++;
         if(q.height< -1e-6){result.status='blocked';result.reason='under-ground';}
         else if(q.distance>0&&(geometry==='flat'||q.distance<radius*Math.PI/2)){
           var projection=null;
-          try{projection=field.sample(q.distance,Math.max(0,q.height));}catch(_error){}
+          try{result.fieldQueried=true;projection=field.sample(q.distance,Math.max(0,q.height));}catch(_error){}
           if(projection&&['visible','blocked','indeterminate','solver_failed'].includes(projection.status)){
             result.status=projection.status;result.reason=projection.reason||null;
             if(projection.status==='visible'&&Number.isFinite(projection.angle)){
@@ -86,6 +86,8 @@
           }
         }else{result.reason='unsupported-range';}
       }
+      if(options.onUnresolved)result.query={distance:q.distance,height:q.height,
+        azimuth:q.azimuth};
       samples.set(key,result);
       return result;
     }
@@ -93,13 +95,18 @@
       return Math.max(Math.abs(mid.angle-(a.angle+b.angle)/2),
         Math.abs(delta(mid.azimuth,a.azimuth+delta(b.azimuth,a.azimuth)/2)));
     }
-    function unresolved(reason){stats.unresolvedTriangles++;
-      stats.unresolvedReasons[reason]=(stats.unresolvedReasons[reason]||0)+1;}
+    function unresolved(reason,poly,polygonIndex,depth,probes){stats.unresolvedTriangles++;
+      stats.unresolvedReasons[reason]=(stats.unresolvedReasons[reason]||0)+1;
+      if(typeof options.onUnresolved==='function')options.onUnresolved({reason:reason,
+        sourceId:poly.commandIndex,sourcePolygon:polygonIndex,depth:depth,
+        queries:(probes||[]).map(function(q){return {status:q.status,reason:q.reason,
+          distance:q.query&&q.query.distance,height:q.query&&q.query.height,
+          azimuth:q.query&&q.query.azimuth,angle:q.angle,fieldQueried:q.fieldQueried,world:q.world.slice()};})});}
     polygons.forEach(function(poly,polygonIndex){
       if(!poly||poly.type!=='polygon'||!(poly.mode&2))return;
       stats.sourcePolygons++;
       var mesh=planeTriangles(poly.points);
-      if(mesh.reason){unresolved('triangulation-'+mesh.reason);return;}
+      if(mesh.reason){unresolved('triangulation-'+mesh.reason,poly,polygonIndex,0,[]);return;}
       stats.triangulated+=mesh.triangles.length;
       function emitTriangle(a,b,c){
         primitives.push({type:'polygon',mode:2,points:[a,b,c].map(arrival),
@@ -165,7 +172,8 @@
         if(!refined){
           unresolved(uncertain?'optical-solver':
             all.some(function(q){return q.status==='indeterminate';})?'grazing-uncertainty':
-            visible?'projection-curvature':'visibility-boundary');return;
+            visible?'projection-curvature':'visibility-boundary',
+            poly,polygonIndex,depth,all);return;
         }
         stats.subdivisions++;
         visit(a,ab,ca,depth+1);

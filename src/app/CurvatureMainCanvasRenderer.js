@@ -130,6 +130,8 @@
         throw new TypeError('Cold optical sampling requires a clearable session');
       session.clearCache();
     }
+    if(options.geometryAudit&&typeof options.geometryAudit.onCamera==='function')
+      options.geometryAudit.onCamera(camera,g.Canvas.width,g.Canvas.height);
     var opticalFrame=session.transform(composed,physicalModel,options);
     var opticalAt=now();
     var drawSource=options.interactive?previewComposition(opticalFrame.composition):

@@ -66,14 +66,14 @@
       var key=p.join(',');
       if(samples.has(key)) return samples.get(key);
       var coord=coordinate(p,geometry,radius,observerHeight,metric);
-      var record={world:p,coordinate:coord,status:'solver_failed',angle:null,method:null,reason:null};
+      var record={world:p,coordinate:coord,status:'solver_failed',angle:null,method:null,reason:null,fieldQueried:false};
       if (stats.evaluations<maxSamples) {
         stats.evaluations++;
         // A point strictly inside the physical surface cannot be drawn.
         if (coord.height < -1e-6) record.status='blocked';
         else if (coord.distance>0 && (geometry==='flat' || coord.distance<radius*Math.PI/2)) {
           var projected;
-          try { projected=field.sample(coord.distance,Math.max(0,coord.height)); }
+          try { record.fieldQueried=true;projected=field.sample(coord.distance,Math.max(0,coord.height)); }
           catch (error) { projected=null; }
           if (projected && STATUSES.includes(projected.status)) {
             record.status=projected.status;
@@ -108,6 +108,10 @@
       unresolved.push({source:source,reason:reason,
         statuses:points.map(function(p){return p.status;}),
         details:points.filter(function(p){return p.reason;}).map(function(p){return p.reason;})});
+      if(typeof options.onUnresolved==='function')options.onUnresolved({source:source,reason:reason,
+        queries:points.map(function(p){return {distance:p.coordinate.distance,
+          height:p.coordinate.height,azimuth:p.coordinate.azimuth,
+          status:p.status,reason:p.reason,angle:p.angle,fieldQueried:p.fieldQueried,world:p.world.slice()};})});
     }
     // Conservative single-transition closure.  When a leaf is shorter than
     // the specified spatial boundary tolerance and its three samples are

@@ -175,7 +175,7 @@
       // The common frame/painter copies and validates its input scene. A
       // camera-only redraw may therefore reuse the optical composition itself
       // instead of rebuilding thousands of validated line primitives.
-      if(cached&&!options.onExactTarget&&!options.onExactResult&&!options.experimentalRayField&&cached.key===key)
+      if(cached&&!options.geometryAudit&&!options.onExactTarget&&!options.onExactResult&&!options.experimentalRayField&&cached.key===key)
         return {composition:cached.composition,stats:cached.stats,reused:true};
       if(options.experimentalRayField && (kind!=='standard'||
           typeof options.experimentalRayField.sample!=='function'||
@@ -303,6 +303,11 @@
         var projected=silhouette.projectPrimitives({primitives:prim,field:limited,
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
           physicalSurface:physicalSurface,
+          onUnresolved:options.geometryAudit&&function(item){
+            var origin=prim[item.source.primitiveIndex];
+            options.geometryAudit.onUnresolved(Object.assign({phase:'outline',
+              sourceId:origin&&origin.commandIndex,objectLayer:r.name},item));
+          },
           angularTolerance:settings.angularTolerance,minimumDepth:settings.minimumDepth,
           maximumDepth:settings.maximumDepth,maxSamples:settings.maxSamples});
         outlinesMs+=clock()-beganOutline;
@@ -317,7 +322,10 @@
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
           physicalSurface:physicalSurface,
           angularTolerance:settings.angularTolerance,maximumDepth:7,
-          maxSamples:settings.maxSamples,layer:r.name});
+          maxSamples:settings.maxSamples,layer:r.name,
+          onUnresolved:options.geometryAudit&&function(item){
+            options.geometryAudit.onUnresolved(Object.assign({phase:'fill',objectLayer:r.name},item));
+          }});
         fillsMs+=clock()-beganFill;
         var afterFill=counters();
         addWork(phaseWork.fills,workDelta(workCheckpoint,afterFill));
@@ -379,10 +387,12 @@
       var assemblyStarted=clock();
       var assemblyDetail={};
       var presentation=assemble(composed,results,geometry,physicalGuides,assemblyDetail);
+      if(options.geometryAudit&&typeof options.geometryAudit.onScene==='function')
+        options.geometryAudit.onScene(presentation.scene,stats);
       stats.opticalStages={sceneAdoptionMs:assemblyDetail.sceneAdoptionMs,fieldSetupMs:fieldSetupMs,groundGuidesMs:groundGuidesMs,
         outlinesMs:outlinesMs,fillsMs:fillsMs,assemblyMs:clock()-assemblyStarted,
         exactSolveMs:fieldStats&&fieldStats.exactSolveMs||0};
-      if(!options.onExactTarget&&!options.onExactResult&&!options.experimentalRayField&&
+      if(!options.geometryAudit&&!options.onExactTarget&&!options.onExactResult&&!options.experimentalRayField&&
           !stats.budgetExceeded&&!stats.unresolvedReasons['sample-budget']&&!stats.fillUnresolvedReasons['optical-solver'])
         cached={key:key,stats:stats,composition:presentation};
       else cached=null;

@@ -11,7 +11,7 @@
     geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},
     compareGpuProbe:false,probeGeneration:0,probeBusy:false,probeLast:null,
     probeField:null,probeFrameLast:null,probeCapture:null,probeCapturedResults:null,
-    probeForceColdA:false};
+    probeForceColdA:false,probeGeometryAudit:null};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -595,6 +595,7 @@
       }
       if(state.compareGpuProbe&&side==='B'&&state.probeField)
         options.experimentalRayField=state.probeField;
+      if(state.probeGeometryAudit)options.geometryAudit=state.probeGeometryAudit;
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled(side));
       if(separateDecorations)options.deferDecorations=true;
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,m,options);
@@ -4254,8 +4255,9 @@
       graphA=state.compareGraphs.A,graphB=state.compareGraphs.B,
       original=state.comparePair,sourceA=original&&original.A,
       spec=state.compareConfig&&state.compareConfig.A,
-      button=probeUi('ModernGpuAlgorithmAttributionRun'),session=null;
-    if(!attribution||!parity||!pixelAudit||!contract||!gpu||
+      button=probeUi('ModernGpuAlgorithmAttributionRun'),session=null,
+      geometryAudit=root.CurvatureGeometryDifferenceAttribution141237;
+    if(!attribution||!parity||!pixelAudit||!contract||!gpu||!geometryAudit||
        !graphA||!graphB||!sourceA||!root.navigator||!root.navigator.gpu||
        !root.CurvatureIndependentComposition||!root.CurvatureOpticalTowerSilhouette||
        !root.CurvatureSurfaceGeometry){
@@ -4271,7 +4273,7 @@
     }
     var generation=state.probeGeneration,oldHorizon=state.compareHorizon,
       oldEye=state.compareEyeLevel,started=profileNow(),phase='initialize',
-      lastPair=null,cases=[],pairs=[],captured=null,selected=[],batchMs=[],visualCases=[];
+      lastPair=null,cases=[],pairs=[],captured=null,selected=[],batchMs=[],visualCases=[],geometryCases=[];
     function cancelled(){return generation!==state.probeGeneration||
       state.mode!=='compare'||!state.compareGpuProbe;}
     function clear(which){if(state.compareCache[which])state.compareCache[which].clearCache();
@@ -4354,14 +4356,17 @@
         var b=compareAdapter.clone(a);b.Update();
         if(!compareAdapter.invariant({A:a,B:b}))throw Error('Physical camera/scene mismatch');
         var pair={A:a,B:b};pairs.push(pair);usePair(pair);
-        var measurements={id:config.id,camera:null,variants:{}},frames={};
+        var measurements={id:config.id,camera:null,variants:{}},frames={},geometry={};
         for(var name of ['baseline','strict','strictDirect']){
           if(cancelled())return;
           phase='paint '+config.id+' / '+name;
           probeStatus('Algorithm attribution: '+config.id+' · GPU '+name+'…');
           state.probeField=fields[name];clear('B');
+          state.probeGeometryAudit=geometryAudit.collector(config.id,name);
           var t=profileNow();graphB.Redraw();var elapsed=profileNow()-t,
             stats=ensureGpuResult(),frame=parity.canvasCapture(graphB.Canvas);
+          var geometryCapture=state.probeGeometryAudit.result();
+          state.probeGeometryAudit=null;geometry[name]=geometryCapture;
           frames[name]=frame;
           measurements.variants[name]={paintMs:elapsed,fieldStats:stats,
             renderer:{contours:state.compareLast.B.drawn,
@@ -4374,6 +4379,7 @@
         frames.pixelCamera=pixelAudit.capture(b,graphB);
         frames.pair=pair;frames.id=config.id;
         measurements._frames=frames;
+        geometryCases.push({id:config.id,variants:geometry});
       }
       if(cancelled())return;
       // Oracle A is computed only after the full GPU candidate family.
@@ -4382,7 +4388,10 @@
         usePair(pair);phase='CPU f64 reference '+measurement.id;
         probeStatus('Algorithm attribution: measuring independent CPU '+measurement.id+'…');
         state.probeField=null;state.probeForceColdA=true;clear('A');
+        state.probeGeometryAudit=geometryAudit.collector(measurement.id,'cpu');
         var cpuStart=profileNow();graphA.Redraw();
+        geometryCases[index].variants.cpu=state.probeGeometryAudit.result();
+        state.probeGeometryAudit=null;
         if(!state.compareLast.A)throw Error('Missing CPU A reference frame');
         var cpuFrame=parity.canvasCapture(graphA.Canvas),cpuMs=profileNow()-cpuStart;
         clear('A');graphA.Redraw();
@@ -4434,12 +4443,17 @@
         totalElapsedMs:profileNow()-started,
         originalModelsUnaffected:true,shimmerDisabled:true,
         horizonGuidesDisabled:true});
+      phase='geometry attribution';
+      var geometryReport=geometryAudit.compareAll(geometryCases,cases);
+      report.geometryAttribution=geometryReport;
       phase='visual ZIP export';
       var visualZip=root.CurvatureAttributionVisualZip141236,zipWriter=root.GeometryDiagnosticsZip;
       if(!visualZip||!zipWriter)throw Error('Visual ZIP modules missing');
-      var zip=zipWriter.build(visualZip.entries(visualCases,report,document));
+      var zipEntries=visualZip.entries(visualCases,report,document);
+      zipEntries.push.apply(zipEntries,geometryAudit.entries(geometryCases,document));
+      var zip=zipWriter.build(zipEntries);
       var zipUrl=root.URL.createObjectURL(zip),zipLink=document.createElement('a');
-      zipLink.href=zipUrl;zipLink.download='curvature-compare-140.12.36-visual-attribution.zip';
+      zipLink.href=zipUrl;zipLink.download='curvature-compare-140.12.37-geometry-attribution.zip';
       try{zipLink.click();}finally{if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(zipUrl);},1000);else root.URL.revokeObjectURL(zipUrl);}
       state.probeFrameLast=report;state.probeExportLast=report;
       var line=probeUi('ModernGpuFrameMetrics'),one=cases[3].variants,
@@ -4456,7 +4470,7 @@
       state.probeFrameLast=null;
       probeStatus('Algorithm attribution failed: '+String(error&&error.message||error));
     }}finally{
-      state.probeField=null;state.probeForceColdA=false;
+      state.probeField=null;state.probeForceColdA=false;state.probeGeometryAudit=null;
       if(state.comparePair===lastPair)state.comparePair=original;
       if(!cancelled()){
         state.compareHorizon=oldHorizon;state.compareEyeLevel=oldEye;

@@ -1,3 +1,8 @@
+## Patch 140.12.37 — Source-linked optical geometry differences (2026-10-31)
+- Extended the existing single Compare diagnostic button / ZIP export, preserving all 44 #140.12.36 PNGs and numerical JSON. Added eight CPU/GPU geometry-edge PNGs and four physical rejected-query trace JSONs (one per camera). The new ZIP is `curvature-compare-140.12.37-geometry-attribution.zip`.
+- Opt-in pre-painter captures of projected physical fill triangles / outline segments, mapped to authored `(objectLayer, opticalSourceIndex)`. Per-source counts and angular-vertex signatures (~2e-6 rad resolution) are a **diagnostic proxy**, not proof of missing triangle sets or causal pixel contribution. Per-source screen edge bounding boxes link candidates to the 4x3 difference-tile grid (correlation only).
+- Opt-in rejected-leaf hooks report physical sample coordinates and status/reasons for outlines/fills, with explicit `fieldQueried` distinction. Exported sample details limited to 500 rejected leaves per render; per-source counts unbounded. No f32/DS/shooting/rasterizer policy changed. Browser WebGPU still requires a user run. See `docs/GPU_GEOMETRY_DIFFERENCE_ATTRIBUTION_140_12_37.md`.
+
 
 ## Patch 140.12.36 — Visual ZIP attribution (2026-10-31)
 - The #140.12.35 algorithm attribution action now downloads a single `curvature-compare-140.12.36-visual-attribution.zip` containing the full numerical JSON and 44 PNG snapshots (four camera views × CPU, three GPU variants, three overlays, three CPU/GPU difference maps, and one baseline/direct difference map). Frames are taken from the same RGBA snapshots used by the pixel metrics; no rerendering or GPU changes. Difference colors are occupancy proxies, not physical sky/terrain labels.
