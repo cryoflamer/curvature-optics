@@ -73,6 +73,7 @@
 <script src="src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js?v=140.12.32.2"></script>
 <script src="src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js?v=140.12.33"></script>
 <script src="src/diagnostics/CurvatureGpuFullFrameParity141234.js?v=140.12.34"></script>
+<script src="src/diagnostics/CurvatureGpuAlgorithmAttribution141235.js?v=140.12.35"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.30"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
@@ -341,6 +342,7 @@
             <button id="ModernGpuHighPrecisionShootingRun" type="button">Audit GPU DS shooting · Bouguer 256 / 512 nodes</button>
             <button id="ModernGpuPixelSpaceAuditRun" type="button">Audit pixel-space DS shooting · real Compare camera</button>
             <button id="ModernGpuFullFrameParityRun" type="button">Audit full-frame CPU/GPU pixel parity · 4 camera views</button>
+            <button id="ModernGpuAlgorithmAttributionRun" type="button">Audit algorithm attribution · baseline / strict / direct GPU</button>
             <button id="ModernGpuProbeExport" type="button">Export JSON</button></div>
           <p class="modern-compare-note">Frame A is the CPU reference. Use <strong>Build CPU replay + GPU frame B</strong> to discover the actual adaptive optical-ray requests in A, first build a <strong>CPU replay control frame B</strong> with the same selected original CPU answers, compare its pixels with A, then batch the identical targets asynchronously on WebGPU and repaint the <strong>real physical B frame</strong> with GPU-seeded rays and explicit CPU fallback for unsampled/failed rays. This is <strong>not</strong> a GPU-only frame: painting, adaptive refinement, ground guides and missing rays still use CPU. Requires WebGPU and standard atmosphere; production backend stays unchanged.</p>
           <p class="modern-compare-note"><strong>GPU-first speed experiment (#140.12.12):</strong> the separate <strong>Benchmark GPU-first full frame</strong> action prepares a distance/height grid from authored objects, computes it asynchronously on WebGPU, and paints a real model B frame without first rendering A or tracing CPU rays to discover targets. A fresh CPU A frame is timed <em>afterwards</em> as an independent cold reference. The grid interpolates GPU data, including visibility classification near boundaries; it is intentionally approximate and must pass real frame comparisons before any production use. The end-to-end GPU number includes preparation, GPU setup/readback and frame painting. The older replay button is retained for controlled diagnostics.</p>
@@ -366,6 +368,7 @@
             <em>This GPU renderer path does not use the 48-ray DS shooting shader and is not DS frame parity;
             neither an edge proxy nor painted/background pixel is certified sky/ground classification.</em>
             JSON downloads automatically, production remains unchanged.</p>
+          <p class="modern-note">#140.12.35: <strong>algorithmic error attribution</strong> (diagnostic only). One shared 4096-ray GPU f32 predictor field is repainted as baseline (nearest-status), conservative strict-status gate (mixed / missing / out-of-grid becomes <code>indeterminate</code>) and strict + up to 192 sparse direct GPU f32 predictor answers chosen from real baseline B renderer queries. All three frames are measured against independent CPU f64 reference at four camera positions. A separate CPU f64 oracle checks exactly the selected GPU query coordinates after the GPU variants. These ablations change recursive geometry paths, so differences are not additive causal percentages. No DS full-frame integration, CPU-guided sample selection, CPU fallback, or production changes. JSON downloads automatically.</p>
           <div id="ModernGpuFullFrameParityVisual" hidden>
             <div class="modern-compare-note"><strong>Current-camera significant pixel differences</strong> · red: RGB change beyond 8; purple: painted/background classification differs; gray: within tolerance</div>
             <canvas id="ModernGpuFullFrameDiffHeatmap" width="408" height="272" style="max-width:100%;height:auto" aria-label="Actual CPU versus GPU predictor full-frame significant pixel difference heatmap"></canvas>

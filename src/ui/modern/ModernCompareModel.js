@@ -297,6 +297,7 @@
       throw TypeError('Invalid GPU-first response');
     var r=grid.request,points=response.results,failures=0,lookupCount=0,
       exactCount=0,mixedCells=0,extrapolated=0,uncertain=0,cache=new Map(),
+      strictRejected=0,strictMixed=0,strictOutOfDomain=0,strictInvalid=0,
       candidates=[],refinements=new Map(),refinementHits=0,refinementFailures=0;
     // Opt-in #140.12.18 sparse GPU answers are selected by the FIRST GPU B
     // frame's own queries, never by CPU pixels or CPU shooting. An exact
@@ -377,6 +378,18 @@
         cache.set(key,failure);return failure;}
       var classes=new Set(valid.map(function(a){return a.point.status;}));
       if(classes.size>1)mixedCells++;
+      // #140.12.35 opt-in *diagnostic* strict gate: no implied visibility
+      // across mixed/failed/uncertain/out-of-domain grid cells. This never
+      // estimates the true boundary and must not be used as production proof.
+      var outside=extrapolatedHeight||d<d0||d>d1,
+        invalid=valid.length!==4||classes.has('indeterminate')||
+          classes.has('solver_failed')||
+          Array.from(classes).some(function(status){return status!=='visible'&&status!=='blocked';}),
+        unsafe=outside||invalid||classes.size!==1;
+      if(options.strictVisibility&&unsafe){
+        strictRejected++;if(outside)strictOutOfDomain++;
+        if(classes.size!==1)strictMixed++;if(invalid)strictInvalid++;
+      }
       var nearest=valid.reduce(function(best,item){return !best||item.weight>best.weight?item:best;},null);
       var status=classes.size===1?valid[0].point.status:nearest.point.status;
       // Subtract the geometric arrival angle before interpolation; this
@@ -391,10 +404,17 @@
         total+=item.weight;
       });
       var angle=direct(d,h)+(total?correction/total:0);
+      if(options.strictVisibility&&unsafe)status='indeterminate';
       if(status==='indeterminate')uncertain++;
+      var riskFlags=[];if(classes.size!==1)riskFlags.push('mixed-status');
+      if(outside)riskFlags.push('out-of-grid-clamp');
+      if(invalid)riskFlags.push('invalid-or-uncertain-node');
       var record=Object.freeze({status:status,angle:angle,residual:null,
-        method:'gpu-first-grid-approximation',reason:classes.size>1?
-          'Mixed GPU visibility nodes; nearest status, NOT certified':'Interpolated GPU grid'});
+        method:options.strictVisibility?'gpu-first-strict-diagnostic':'gpu-first-grid-approximation',
+        riskFlags:riskFlags,reason:options.strictVisibility&&unsafe?
+          'Uncertified grid cell: refinement required; NOT physical blocked':
+          classes.size>1?'Mixed GPU visibility nodes; nearest status, NOT certified':
+          'Interpolated GPU grid'});
       cache.set(key,record);
       if(options.collectCandidates){
         var causes=[];
@@ -422,7 +442,10 @@
         refinementHits:refinementHits,gpuHits:lookupCount,
         gpuExactHits:exactCount,cpuFallbackRequests:0,mixedStatusLookups:mixedCells,
         extrapolatedLookups:extrapolated,uncertainLookups:uncertain,
-        uniqueRequests:cache.size,approximate:true,productionAuthorized:false}};}
+        uniqueRequests:cache.size,strictVisibility:options.strictVisibility===true,
+        strictRejected:strictRejected,strictMixed:strictMixed,
+        strictOutOfDomain:strictOutOfDomain,strictInvalid:strictInvalid,
+        approximate:true,productionAuthorized:false}};}
     function refinementCandidates(limit){
       if(!Number.isInteger(limit)||limit<0||limit>1024)
         throw RangeError('Invalid GPU refinement budget');
@@ -470,6 +493,7 @@
         var key=d+','+h,entry=unique.get(key);
         if(!entry){entry={d:d,h:h,kind:h===0?'ground-height':'low-height',
           gridStatus:result.status,gridAngle:result.angle,
+          riskFlags:Array.isArray(result.riskFlags)?result.riskFlags.slice():[],
           sampleCalls:0,exactCalls:0};unique.set(key,entry);}
         if(method==='exact')entry.exactCalls++;else entry.sampleCalls++;
       }

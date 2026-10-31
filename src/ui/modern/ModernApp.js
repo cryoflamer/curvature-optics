@@ -730,7 +730,7 @@
   // Export only completed numerical audits, never ordinary rendered frames.
   function downloadNumericAudit(report,failed){
     if(!report||!root.Blob||!root.URL||!root.URL.createObjectURL)return false;
-    var nameByVersion={'140.12.34':'curvature-compare-140.12.34-full-frame-pixel-parity.json','140.12.33':'curvature-compare-140.12.33-pixel-space-audit.json','140.12.32':'curvature-compare-140.12.32-gpu-ds-shooting.json','140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
+    var nameByVersion={'140.12.35':'curvature-compare-140.12.35-algorithm-attribution.json','140.12.34':'curvature-compare-140.12.34-full-frame-pixel-parity.json','140.12.33':'curvature-compare-140.12.33-pixel-space-audit.json','140.12.32':'curvature-compare-140.12.32-gpu-ds-shooting.json','140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
       '140.12.29':'curvature-compare-140.12.29-gpu-precision-geometry.json','140.12.28':'gpu-arithmetic',
       '140.12.27':'bouguer-invariant','140.12.26':'gpu-ground-contact',
       '140.12.25':'gpu-precision-limit','140.12.24':'gpu-numerical-floor',
@@ -3014,6 +3014,8 @@
     if(highPrecisionShootingButton)highPrecisionShootingButton.addEventListener('click',runGpuHighPrecisionShooting141232);
     var frameParityButton=probeUi('ModernGpuFullFrameParityRun');
     if(frameParityButton)frameParityButton.addEventListener('click',runGpuFullFrameParity141234);
+    var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
+    if(attributionButton)attributionButton.addEventListener('click',runGpuAlgorithmAttribution141235);
     var pixelSpaceButton=probeUi('ModernGpuPixelSpaceAuditRun');
     if(pixelSpaceButton)pixelSpaceButton.addEventListener('click',function(){
       return runGpuHighPrecisionShooting141232({pixelSpace:true});
@@ -3046,7 +3048,7 @@
       'ModernGpuBouguerAuditRun','ModernGpuPrecisionFoundationRun',
       'ModernGpuPrecisionGeometryRun','ModernGpuBouguerPrecisionRun',
       'ModernGpuBouguerQuadratureRun','ModernGpuHighPrecisionShootingRun','ModernGpuPixelSpaceAuditRun',
-      'ModernGpuFullFrameParityRun'].forEach(function(id){
+      'ModernGpuFullFrameParityRun','ModernGpuAlgorithmAttributionRun'].forEach(function(id){
       var button=probeUi(id);if(button)button.addEventListener('click',function(){
         var maps=probeUi('ModernGpuDiffMaps');if(maps)maps.hidden=true;
       });
@@ -4105,6 +4107,8 @@
     function cancelled(){return generation!==state.probeGeneration||state.mode!=='compare'||!state.compareGpuProbe;}
     function clear(side){if(state.compareCache[side])state.compareCache[side].clearCache();state.compareLast[side]=null;}
     state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    var staleHeatmap=probeUi('ModernGpuFullFrameParityVisual');
+    if(staleHeatmap)staleHeatmap.hidden=true;
     if(button)button.disabled=true;
     try{
       state.compareHorizon=false;state.compareEyeLevel=false; // omit guides and keep both painters identical
@@ -4229,6 +4233,224 @@
       }
       state.probeBusy=false;if(button)button.disabled=false;
     }
+  }
+  // #140.12.35: controlled algorithmic ablations on ONE GPU grid.
+  // B renders first for every mode and camera. CPU pixels / oracle come last;
+  // they never select samples, patch grid nodes or guide the refinements.
+  async function runGpuAlgorithmAttribution141235(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var attribution=root.CurvatureGpuAlgorithmAttribution141235,
+      parity=root.CurvatureGpuFullFrameParity141234,
+      pixelAudit=root.CurvatureGpuPixelSpaceAudit141233,
+      contract=root.CurvatureOpticalBatchContract1411,
+      gpu=root.CurvatureWebGPUBatchShooting1412,
+      graphA=state.compareGraphs.A,graphB=state.compareGraphs.B,
+      original=state.comparePair,sourceA=original&&original.A,
+      spec=state.compareConfig&&state.compareConfig.A,
+      button=probeUi('ModernGpuAlgorithmAttributionRun'),session=null;
+    if(!attribution||!parity||!pixelAudit||!contract||!gpu||
+       !graphA||!graphB||!sourceA||!root.navigator||!root.navigator.gpu||
+       !root.CurvatureIndependentComposition||!root.CurvatureOpticalTowerSilhouette||
+       !root.CurvatureSurfaceGeometry){
+      probeStatus('Algorithm attribution unavailable: WebGPU or scene module missing.');return;
+    }
+    if(!spec||spec.atmosphere!=='standard'||spec.surface!=='globe'||
+       state.geometryBackend!=='canvas'||!compareAdapter.invariant(original)){
+      probeStatus('Algorithm attribution requires identical Globe/standard A/B models and Canvas 2D.');return;
+    }
+    if(atmosphericPresentation&&(atmosphericPresentation.enabled('A')||
+       atmosphericPresentation.enabled('B'))){
+      probeStatus('Disable Atmospheric Turbulence for A and B before attribution.');return;
+    }
+    var generation=state.probeGeneration,oldHorizon=state.compareHorizon,
+      oldEye=state.compareEyeLevel,started=profileNow(),phase='initialize',
+      lastPair=null,cases=[],pairs=[],captured=null,selected=[],batchMs=[];
+    function cancelled(){return generation!==state.probeGeneration||
+      state.mode!=='compare'||!state.compareGpuProbe;}
+    function clear(which){if(state.compareCache[which])state.compareCache[which].clearCache();
+      state.compareLast[which]=null;}
+    function usePair(pair){lastPair=pair;state.comparePair=pair;}
+    function ensureGpuResult(){var r=state.compareLast.B,
+      stats=r&&r.fieldStats&&r.fieldStats.experimentalGpu;
+      if(!stats||stats.kind!=='gpu-first-grid'||stats.cpuFallbackRequests!==0)
+        throw Error('Optical GPU field was not consumed by physical B renderer');
+      return stats;
+    }
+    state.probeBusy=true;state.probeField=null;state.probeFrameLast=null;
+    var staleHeatmap=probeUi('ModernGpuFullFrameParityVisual');
+    if(staleHeatmap)staleHeatmap.hidden=true;
+    if(button)button.disabled=true;
+    try{
+      state.compareHorizon=false;state.compareEyeLevel=false;
+      var deps={composition:root.CurvatureIndependentComposition,
+        silhouette:root.CurvatureOpticalTowerSilhouette,
+        surfaces:root.CurvatureSurfaceGeometry,branch:contract.BRANCH};
+      phase='independent GPU grid';
+      probeStatus('Algorithm attribution: computing one scene-derived 4096-ray GPU f32 grid…');
+      var grid=compareAdapter.gpuFirstGrid(sourceA,4096,deps,{layout:'distance-focused'}),
+        requests=compareAdapter.gpuFirstBatchRequests(grid,1024),results=[];
+      requests.forEach(function(r){r.controls.step=500;gpu.checked(r);});
+      session=await gpu.createSession(1024,null,{algorithm:'predictor',refinement:'residual-stop'});
+      if(cancelled())return;
+      for(var i=0;i<requests.length;i++){
+        phase='GPU grid batch '+(i+1);
+        var answer=await session.solve(requests[i],{warmRepeats:0});
+        if(cancelled())return;
+        results.push.apply(results,answer.response.results);
+        batchMs.push(answer.timing.gpuUploadToReadbackMs);
+      }
+      var gridFinished=profileNow(),shared={results:results};
+      phase='GPU renderer query discovery';
+      // The discovery uses only the original GPU field and original camera;
+      // it neither consults the CPU reference nor reclassifies the field.
+      var baselineDiscovery=compareAdapter.gpuFirstRayField(grid,shared,deps.surfaces);
+      captured=compareAdapter.captureGpuRendererQueries(baselineDiscovery,
+        {maximumDistance:6000,maximumHeight:20});
+      state.probeField=captured;clear('B');graphB.Redraw();ensureGpuResult();
+      if(cancelled())return;
+      selected=captured.select(192);
+      if(!selected.length)throw Error('No actual B renderer queries were captured');
+      var metric=deps.surfaces.createFromCurvature(1/grid.request.radius),
+        targets=selected.map(function(r){return metric.surfacePoint2(r.d,r.h);}),
+        directRequest=Object.assign({},grid.request,{targets:targets,
+          controls:Object.assign({},grid.request.controls,{step:500})});
+      gpu.checked(directRequest);
+      phase='direct GPU refinement of captured queries';
+      probeStatus('Algorithm attribution: '+selected.length+' real B queries · independent direct GPU…');
+      var directStarted=profileNow(),direct=await session.solve(directRequest,{warmRepeats:0}),
+        directElapsed=profileNow()-directStarted;
+      if(cancelled())return;
+      var refinements=selected.map(function(row,i){return {d:row.d,h:row.h,
+        result:direct.response.results[i]};});
+      // All modes share the same GPU nodes. Sparse replacements are *only*
+      // the selected exact physical renderer coordinates. No CPU fallback.
+      var fields={
+        baseline:compareAdapter.gpuFirstRayField(grid,shared,deps.surfaces),
+        strict:compareAdapter.gpuFirstRayField(grid,shared,deps.surfaces,{strictVisibility:true}),
+        strictDirect:compareAdapter.gpuFirstRayField(grid,shared,deps.surfaces,
+          {strictVisibility:true,refinements:refinements})
+      };
+      var verticalFov=2*Math.atan(Math.tan(sourceA.camViewAngle/2)/
+          Math.sqrt(1+sourceA.deviceRatio*sourceA.deviceRatio)),
+        offset=verticalFov*180/Math.PI*.3,
+        configurations=[
+          {id:'tilt-up',nickOffset:offset,focalMultiplier:1},
+          {id:'tilt-down',nickOffset:-offset,focalMultiplier:1},
+          {id:'narrow-field',nickOffset:0,focalMultiplier:1.5},
+          {id:'actual-camera',nickOffset:0,focalMultiplier:1}
+        ];
+      // First paint *all* GPU B variants in all four camera positions.
+      for(var j=0;j<configurations.length;j++){
+        var config=configurations[j],a=compareAdapter.clone(sourceA);
+        a.Nick=sourceA.Nick+config.nickOffset;
+        a.FocalLengthField=sourceA.FocalLengthField*config.focalMultiplier;a.Update();
+        var b=compareAdapter.clone(a);b.Update();
+        if(!compareAdapter.invariant({A:a,B:b}))throw Error('Physical camera/scene mismatch');
+        var pair={A:a,B:b};pairs.push(pair);usePair(pair);
+        var measurements={id:config.id,camera:null,variants:{}},frames={};
+        for(var name of ['baseline','strict','strictDirect']){
+          if(cancelled())return;
+          phase='paint '+config.id+' / '+name;
+          probeStatus('Algorithm attribution: '+config.id+' · GPU '+name+'…');
+          state.probeField=fields[name];clear('B');
+          var t=profileNow();graphB.Redraw(),elapsed=profileNow()-t,
+            stats=ensureGpuResult(),frame=parity.canvasCapture(graphB.Canvas);
+          frames[name]=frame;
+          measurements.variants[name]={paintMs:elapsed,fieldStats:stats,
+            renderer:{contours:state.compareLast.B.drawn,
+              fillTriangles:state.compareLast.B.fillTriangles,
+              unresolved:state.compareLast.B.unresolved,
+              fillUnresolved:state.compareLast.B.fillUnresolved,
+              fillUnresolvedReasons:state.compareLast.B.fillUnresolvedReasons||{}}};
+        }
+        cases.push(measurements);
+        frames.pixelCamera=pixelAudit.capture(b,graphB);
+        frames.pair=pair;frames.id=config.id;
+        measurements._frames=frames;
+      }
+      if(cancelled())return;
+      // Oracle A is computed only after the full GPU candidate family.
+      for(var index=0;index<cases.length;index++){
+        var measurement=cases[index],stored=measurement._frames,pair=stored.pair;
+        usePair(pair);phase='CPU f64 reference '+measurement.id;
+        probeStatus('Algorithm attribution: measuring independent CPU '+measurement.id+'…');
+        state.probeField=null;state.probeForceColdA=true;clear('A');
+        var cpuStart=profileNow();graphA.Redraw();
+        if(!state.compareLast.A)throw Error('Missing CPU A reference frame');
+        var cpuFrame=parity.canvasCapture(graphA.Canvas),cpuMs=profileNow()-cpuStart;
+        clear('A');graphA.Redraw();
+        var repeat=parity.canvasCapture(graphA.Canvas),camera=pixelAudit.capture(pair.A,graphA),
+          row=pixelAudit.project(camera,0).yPx;
+        if(!pixelAudit.sameCamera(camera,stored.pixelCamera))
+          throw Error('A/B camera mismatch for '+measurement.id);
+        if(parity.analyze(cpuFrame,repeat,{zeroElevationRowPx:row}).significantPixels)
+          throw Error('Unstable CPU reference on '+measurement.id);
+        measurement.camera={nickDegrees:pair.A.Nick,
+          diagonalFovRadians:pair.A.camViewAngle,
+          verticalFovRadians:camera.verticalFovRadians,
+          widthPx:repeat.width,heightPx:repeat.height,zeroElevationRowPx:row};
+        measurement.cpuColdFrameMs=cpuMs;
+        for(var key of ['baseline','strict','strictDirect']){
+          var variant=measurement.variants[key];
+          variant.pixelDiff=parity.analyze(repeat,stored[key],{zeroElevationRowPx:row});
+          variant.pixelChangeFromBaseline=key==='baseline'?null:
+            parity.analyze(stored.baseline,stored[key],{zeroElevationRowPx:row});
+        }
+        delete measurement._frames; // never put raw pixels in JSON
+      }
+      state.probeForceColdA=false;
+      if(cancelled())return;
+      phase='CPU f64 same-target oracle';
+      probeStatus('Algorithm attribution: independent CPU f64 oracle for '+selected.length+' selected B queries…');
+      var physicalStep=Math.max(20,Math.min(2000,grid.request.radius/3000)),
+        cpuRequest=Object.assign({},directRequest,{controls:Object.assign({},
+          directRequest.controls,{step:physicalStep,targetTolerance:1e-6})}),
+        cpuTargetStart=profileNow(),cpuTargets=await contract.solveCpuBatch(cpuRequest),
+        cpuTargetMs=profileNow()-cpuTargetStart;
+      if(cancelled())return;
+      // Compare physical camera pixels for matched robust statuses only.
+      var actual=pairs[3],actualCamera=pixelAudit.capture(actual.A,graphA);
+      // capture() reads the graph's canvas dimensions, not its last painted pixels.
+      var oracle=attribution.comparison(selected,cpuTargets,direct.response,
+        actualCamera,pixelAudit.project);
+      var report=attribution.report(cases,oracle,{
+        geometry:grid.request.geometry,atmosphere:'standard',
+        cameraCases:cases.length,gpuGridNodes:grid.request.targets.length,
+        gpuBatchReadbackMs:batchMs,gpuSetupMs:session.setupMs,
+        gpuGridElapsedMs:gridFinished-started,
+        gpuDirectTargetCount:selected.length,
+        gpuDirectReadbackMs:direct.timing.gpuUploadToReadbackMs,
+        gpuDirectElapsedMs:directElapsed,selectedFrom:'actual-camera baseline B physical queries d<=6000m, h<=20m',
+        capture:captureSummary(captured),cpuTargetStepMetres:physicalStep,
+        cpuTargetToleranceMetres:1e-6,cpuOracleWallMs:cpuTargetMs,
+        totalElapsedMs:profileNow()-started,
+        originalModelsUnaffected:true,shimmerDisabled:true,
+        horizonGuidesDisabled:true});
+      state.probeFrameLast=report;numericAuditComplete(report);
+      var line=probeUi('ModernGpuFrameMetrics'),one=cases[3].variants,
+        fmt=function(v){return v.pixelDiff.significantPixels;};
+      if(line)line.textContent='Actual camera significant px: baseline '+fmt(one.baseline)+
+        ' / strict '+fmt(one.strict)+' / strict+direct '+fmt(one.strictDirect)+
+        ' · CPU robust status mismatches: grid '+oracle.summary.gridStatusMismatches+
+        ' / direct '+oracle.summary.directStatusMismatches+
+        ' · attribution (not DS, not production) · Export JSON';
+      probeStatus('Algorithm attribution finished · 4 views, three GPU modes, independent CPU oracle · Export JSON');
+    }catch(error){if(!cancelled()){
+      numericAuditFailed('140.12.35','runGpuAlgorithmAttribution141235',error,
+        {phase:phase,finishedCases:cases.length,totalElapsedMs:profileNow()-started});
+      state.probeFrameLast=null;
+      probeStatus('Algorithm attribution failed: '+String(error&&error.message||error));
+    }}finally{
+      state.probeField=null;state.probeForceColdA=false;
+      if(state.comparePair===lastPair)state.comparePair=original;
+      if(!cancelled()){
+        state.compareHorizon=oldHorizon;state.compareEyeLevel=oldEye;
+        try{clear('B');graphB.Redraw();clear('A');graphA.Redraw();}catch(_){/* preserve report */}
+      }
+      if(session)session.close();state.probeBusy=false;
+      if(button)button.disabled=false;
+    }
+    function captureSummary(c){return c.audit();}
   }
   function bind(){
     bindCameraDrag();
