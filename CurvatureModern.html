@@ -68,7 +68,8 @@
 <script src="src/diagnostics/CurvatureBouguerInvariant141227.js"></script>
 <script src="src/diagnostics/CurvatureGpuPrecisionFoundation141228.js"></script>
 <script src="src/diagnostics/CurvatureGpuPrecisionGeometry141229.js"></script>
-<script src="src/ui/modern/ModernCompareModel.js?v=140.12.29"></script>
+<script src="src/diagnostics/CurvatureGpuBouguerPrecision141230.js"></script>
+<script src="src/ui/modern/ModernCompareModel.js?v=140.12.30"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
@@ -285,7 +286,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.29"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.30"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
@@ -330,6 +331,7 @@
             <button id="ModernGpuBouguerAuditRun" type="button">Audit Bouguer invariant · analytic ground angle</button>
             <button id="ModernGpuPrecisionFoundationRun" type="button">Audit GPU arithmetic · f32 / double-single / integer residuals</button>
             <button id="ModernGpuPrecisionGeometryRun" type="button">Audit GPU precision geometry · Globe / Flat / hi+lo inputs</button>
+            <button id="ModernGpuBouguerPrecisionRun" type="button">Audit Bouguer precision · f32 d/R vs double-single</button>
             <button id="ModernGpuProbeExport" type="button">Export JSON</button></div>
           <p class="modern-compare-note">Frame A is the CPU reference. Use <strong>Build CPU replay + GPU frame B</strong> to discover the actual adaptive optical-ray requests in A, first build a <strong>CPU replay control frame B</strong> with the same selected original CPU answers, compare its pixels with A, then batch the identical targets asynchronously on WebGPU and repaint the <strong>real physical B frame</strong> with GPU-seeded rays and explicit CPU fallback for unsampled/failed rays. This is <strong>not</strong> a GPU-only frame: painting, adaptive refinement, ground guides and missing rays still use CPU. Requires WebGPU and standard atmosphere; production backend stays unchanged.</p>
           <p class="modern-compare-note"><strong>GPU-first speed experiment (#140.12.12):</strong> the separate <strong>Benchmark GPU-first full frame</strong> action prepares a distance/height grid from authored objects, computes it asynchronously on WebGPU, and paints a real model B frame without first rendering A or tracing CPU rays to discover targets. A fresh CPU A frame is timed <em>afterwards</em> as an independent cold reference. The grid interpolates GPU data, including visibility classification near boundaries; it is intentionally approximate and must pass real frame comparisons before any production use. The end-to-end GPU number includes preparation, GPU setup/readback and frame painting. The older replay button is retained for controlled diagnostics.</p>
@@ -342,6 +344,7 @@
           <p class="modern-compare-note"><strong>#140.12.21 · GPU status qualification:</strong> the first 4096-ray grid frame captures its own indeterminate optical requests within 6 km and 20 m height. Two independently selectable diagnostic variants change <em>only</em> those uncertain visibility statuses: a certified direct GPU predictor result (500 m step), and, for still-uncertain direct results, a repeat GPU integration at 50 m. No already-visible or blocked grid status and no original grid angle are changed; unresolved fine-step results stay unresolved. Both enabled also tests their combination. The complete first paint, direct GPU workload, optional fine GPU workload, and every experimental repaint are reported separately; the CPU frame runs last for pixel comparisons. No CPU fallback or production authorization.</p>
           <p class="modern-compare-note"><strong>#140.12.28 · GPU arithmetic foundation:</strong> the independent numerical stand runs the same finite test vectors through separate f32, classic double-single, and integer-residual double-single WGSL pipelines, measuring original f64 input errors and warmed readback-inclusive times. The classic implementation is WGSL-optimizer-sensitive; the integer-residual implementation is a bounded hybrid, <em>not</em> IEEE binary64 or a certified optical solver. It works independently of Globe/Flat and never changes shooting, contact classifications, or painting. Export the JSON for comparison.</p>
           <p class="modern-compare-note"><strong>#140.12.29 · precision geometry &amp; inputs:</strong> an isolated 48-target Globe/Flat coordinate audit compares the actual surfacePoint2-based #140.12.27 normalized f32 atan2 with direct high-precision arc angle d/R and a separate double-single Cartesian atan approximation. It separately compares prepacked absolute coordinates R+h and origin+d with constructing them from independent hi/lo radius, origin, height and distance. This distinguishes input quantization from GPU arithmetic and retains all shooting, contact status and painting unchanged. The polynomial is valid only on the tested small, forward-angle branch; the result is non-certified. Export JSON.</p>
+          <p class="modern-compare-note"><strong>#140.12.30 · Bouguer precision recheck:</strong> shoots 48 independent Globe / standard-atmosphere GPU angles once, then uses the unchanged #140.12.27 GPU 256-node log-invariant quadrature as a legacy control and compares three isolated variants: target arc angle from direct f32 d/R, classic double-single d/R and integer-residual double-single d/R. The double-single variants retain the low angle limb in the final ground-contact margin, but do <em>not</em> promote quadrature or atmosphere to double-single. An independent CPU f64 Bouguer quadrature and same-angle RK4 reference run only after the GPU variants. Not a certified visibility test; no shooting, renderer, contact classification or painting changes. Export JSON.</p>
           <p id="ModernGpuProbeStatus" role="status" aria-live="polite">Select Run to measure current scene.</p>
           <div class="modern-gpu-probe-maps"><div><strong>CPU f64 · reference rays</strong><canvas id="ModernGpuProbeCanvasCPU" width="460" height="200" aria-label="CPU angular sample map"></canvas></div>
             <div><strong>WebGPU f32 · experimental rays</strong><canvas id="ModernGpuProbeCanvasGPU" width="460" height="200" aria-label="GPU angular sample map"></canvas></div></div>

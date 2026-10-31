@@ -83,7 +83,7 @@ test('140.12.28: decoder checks real f32 words; analysis does not overclaim cert
 test('140.12.28: UI is a separate diagnostic with export and no scene mutation',()=>{
   assert.match(html,/src\/diagnostics\/CurvatureGpuPrecisionFoundation141228\.js/);
   assert.match(html,/ModernGpuPrecisionFoundationRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.29/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
   assert.match(app,/addEventListener\('click',runGpuPrecisionFoundation141228\)/);
   assert.match(app,/curvature-compare-140\.12\.28-gpu-arithmetic\.json/);
   const body=app.slice(app.indexOf('async function runGpuPrecisionFoundation141228(){'),

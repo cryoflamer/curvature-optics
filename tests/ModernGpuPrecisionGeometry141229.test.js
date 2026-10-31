@@ -101,7 +101,7 @@ test('140.12.29: analysis isolates input split floor from geometry calculation a
 test('140.12.29: Compare action is isolated and exposes its own JSON export',()=>{
   assert.match(html,/CurvatureGpuPrecisionGeometry141229\.js/);
   assert.match(html,/ModernGpuPrecisionGeometryRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.29/);
+  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
   assert.match(app,/addEventListener\('click',runGpuPrecisionGeometry141229\)/);
   assert.match(app,/curvature-compare-140\.12\.29-gpu-precision-geometry\.json/);
   const body=app.slice(app.indexOf('async function runGpuPrecisionGeometry141229(){'),
