@@ -3019,6 +3019,8 @@
     if(highPrecisionShootingButton)highPrecisionShootingButton.addEventListener('click',runGpuHighPrecisionShooting141232);
     var frameParityButton=probeUi('ModernGpuFullFrameParityRun');
     if(frameParityButton)frameParityButton.addEventListener('click',runGpuFullFrameParity141234);
+    var cameraFirstButton=probeUi('ModernCameraFirstOracleRun');
+    if(cameraFirstButton)cameraFirstButton.addEventListener('click',runCameraFirstOracle141238);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
     if(attributionButton)attributionButton.addEventListener('click',runGpuAlgorithmAttribution141235);
     var pixelSpaceButton=probeUi('ModernGpuPixelSpaceAuditRun');
@@ -4499,6 +4501,76 @@
       if(button)button.disabled=false;
     }
     function captureSummary(c){return c.audit();}
+  }
+  // #140.12.38: opt-in camera-first FIRST GROUND contact. No GPU, shooting,
+  // interpolated optical field or polygon scene. This diagnostic NEVER changes
+  // Compare A/B models, field, renderer, camera or production settings.
+  async function runCameraFirstOracle141238(){
+    if(state.probeBusy||state.mode!=='compare'||!state.compareGpuProbe)return;
+    var oracle=root.CurvatureCameraFirstOracle141238,
+      pixelAudit=root.CurvatureGpuPixelSpaceAudit141233,
+      visual=root.CurvatureAttributionVisualZip141236,
+      zipWriter=root.GeometryDiagnosticsZip,
+      pair=state.comparePair,source=pair&&pair.A,
+      graph=state.compareGraphs&&state.compareGraphs.A,
+      button=probeUi('ModernCameraFirstOracleRun'),
+      generation=state.probeGeneration,phase='initial camera';
+    if(!oracle||!pixelAudit||!visual||!zipWriter||!source||!graph){
+      probeStatus('Camera-first CPU oracle unavailable: missing physical modules / Compare A.');return;
+    }
+    if(state.compareConfig&&state.compareConfig.A&&
+        (state.compareConfig.A.surface!=='globe'||state.compareConfig.A.atmosphere!=='standard')){
+      probeStatus('Camera-first oracle requires Compare A Globe and standard atmosphere.');return;
+    }
+    if(source.showModel===2||!(source.Height>0)){
+      probeStatus('Camera-first oracle requires Globe and positive eye height.');return;
+    }
+    var interrupted=function(){return state.probeGeneration!==generation||
+      state.mode!=='compare'||!state.compareGpuProbe;};
+    var started=profileNow();state.probeBusy=true;if(button)button.disabled=true;
+    try{
+      var camera=pixelAudit.capture(source,graph),config={model:source,snapshot:camera};
+      oracle.check(config);
+      var vacuum=[],standard=[],modes=['vacuum','standard'];
+      for(var m=0;m<modes.length;m++){
+        var name=modes[m],rows=name==='vacuum'?vacuum:standard;
+        for(var row=0;row<oracle.SIZE;row++){
+          if(interrupted())return;
+          phase=name+' row '+row;
+          rows.push(oracle.sampleRow(config,row,name));
+          if(row%4===3){
+            probeStatus('Camera-first CPU f64 '+name+': '+(row+1)+'/64 rows…');
+            await new Promise(function(resolve){root.setTimeout(resolve,0);});
+          }
+        }
+      }
+      if(interrupted())return;
+      phase='horizon convergence sweep';
+      probeStatus('Camera-first: 41 same-angle standard-atmosphere RK4 convergence rays…');
+      var sweep=oracle.horizonSweep(config);
+      if(interrupted())return;
+      phase='report and PNG ZIP';
+      var report=oracle.report(config,vacuum,standard,sweep);
+      report.wallTimeMs=profileNow()-started;
+      var entries=oracle.entries(config,report,vacuum,standard,document,visual),
+        zip=zipWriter.build(entries),url=root.URL.createObjectURL(zip),
+        link=document.createElement('a');
+      link.href=url;link.download='curvature-compare-140.12.38-camera-first-cpu-oracle.zip';
+      try{link.click();}finally{
+        if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
+        else root.URL.revokeObjectURL(url);
+      }
+      state.probeExportLast=report;
+      var metrics=probeUi('ModernGpuFrameMetrics');
+      if(metrics)metrics.textContent='Camera-first CPU ground-only: vacuum analytic disagreements '+
+        report.vacuum.analyticDisagreements+'/4096 · 41-ray standard convergence status changes '+
+        sweep.sameAngleClassificationDisagreements+' · ZIP exported';
+      probeStatus('Camera-first CPU f64 ground-only diagnostic complete · 64×64 vacuum and standard, horizon sweep · ZIP exported');
+    }catch(error){if(!interrupted()){
+      numericAuditFailed('140.12.38','runCameraFirstOracle141238',error,
+        {phase:phase,elapsedMs:profileNow()-started});
+      probeStatus('Camera-first CPU oracle failed: '+String(error&&error.message||error));
+    }}finally{state.probeBusy=false;if(button)button.disabled=false;}
   }
   function bind(){
     bindCameraDrag();
