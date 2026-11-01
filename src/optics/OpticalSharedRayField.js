@@ -70,6 +70,7 @@
     delete solverOptions.shootingOptimization;
     delete solverOptions.onExactTarget;
     delete solverOptions.onExactResult;
+    delete solverOptions.profileShootingStages;
     delete solverOptions.experimentalRayField;
     if (solverOptions.profileOptions)
       solverOptions.profileOptions=Object.assign({},solverOptions.profileOptions);
@@ -82,7 +83,9 @@
     // global default or profile-specific inference may enable this path.
     // #140.12.46: selectable reference/gradient/scalar implementations,
     // all strictly opt-in and all certified by the same Globe RK4 solver.
-    var conformalEngine=options.shootingOptimization==='conformal-reference'?'reference':
+    var conformalHybrid=options.shootingOptimization==='conformal-hybrid';
+    var conformalEngine=conformalHybrid?'fast':
+      options.shootingOptimization==='conformal-reference'?'reference':
       options.shootingOptimization==='conformal-gradient'?'gradient':
       options.shootingOptimization==='conformal-experimental'?'fast':null;
     var conformalExperimental=!!conformalEngine&&geometry==='globe'&&
@@ -108,6 +111,8 @@
       conformalAttempts:0,conformalCandidates:0,conformalWarmAccepted:0,
       conformalFallbacks:0,conformalPredictionMs:0,conformalGradientCalls:0,
       conformalStepsHistogram:{},
+      hybridBaselineSolved:0,hybridLateAttempts:0,hybridLateAccepted:0,
+      shootingStageMs:{},shootingStageRK4:{},shootingStageEvaluations:{},
       clearGroundSteps:0,fullGroundEventSteps:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
       maxDepthUsed:0,gpuSeedUses:0};
@@ -142,7 +147,7 @@
       // are substantially nonlinear in height. Engineered seeds are ONLY
       // consumed by the explicit benchmark opt-in above.
       var seedKey=Math.round(d*10000),conformalCandidate=null;
-      if(conformalExperimental){
+      if(conformalExperimental&&!conformalHybrid){
         statistics.conformalAttempts++;
         var predictionStart=clock();
         // Candidate generation has no physical authority; invalid or
@@ -160,7 +165,27 @@
           statistics.conformalStepsHistogram[steps]=(statistics.conformalStepsHistogram[steps]||0)+1;
         }
       }
-      var seedKey=Math.round(d*10000);
+      if(conformalExperimental&&conformalHybrid){
+        // Lazily perform the costly conformal integration ONLY if the cheap
+        // production predictor did not converge. Never classify a ray here.
+        shootOpts.shootingLateWarmStart=function(){
+          statistics.conformalAttempts++;
+          var predictionStart=clock(),candidate=null;
+          try{candidate=conformal.adaptiveCandidate(conformalConstants,shootOpts.target,
+            {mode:'richardson',engine:'fast'});}
+          catch(_){candidate=null;}
+          statistics.conformalPredictionMs+=clock()-predictionStart;
+          if(candidate&&candidate.status==='candidate'&&Number.isFinite(candidate.angle)){
+            statistics.conformalCandidates++;
+            statistics.conformalGradientCalls+=candidate.coarseCalls||0;
+            var steps=String(candidate.stepsUsed||0);
+            statistics.conformalStepsHistogram[steps]=(statistics.conformalStepsHistogram[steps]||0)+1;
+            return candidate.angle;
+          }
+          return null;
+        };
+      }
+      if(options.profileShootingStages===true)shootOpts.profileShootingStages=true;
       var seeds=d>=5000&&solverOptions.shootingPredictor===true&&
         options.shootingWarmStart!==false?
         heightSeeds.get(seedKey):null;
@@ -180,7 +205,23 @@
       statistics.warmStartAttempts+=result.warmStartAttempts||0;
       statistics.warmStartAccepted+=result.warmStartAccepted||0;
       statistics.warmStartMisses+=result.warmStartMisses||0;
-      if(conformalExperimental){
+      if(conformalHybrid){
+        statistics.hybridLateAttempts+=result.lateWarmAttempts||0;
+        statistics.hybridLateAccepted+=result.lateWarmAccepted||0;
+        if(result.lateWarmAccepted)statistics.conformalWarmAccepted++;
+        else if(result.predictorAccepted||result.warmStartAccepted||
+            (result.evaluations===1&&!result.lateWarmAttempts))
+          statistics.hybridBaselineSolved++;
+        if(result.lateWarmAttempts&&!result.lateWarmAccepted)statistics.conformalFallbacks++;
+      }
+      if(result.shootingStages){
+        for(var group of [['ms','shootingStageMs'],['rk4','shootingStageRK4'],
+            ['evaluations','shootingStageEvaluations']]){
+          var dest=statistics[group[1]],from=result.shootingStages[group[0]];
+          Object.keys(from).forEach(function(key){dest[key]=(dest[key]||0)+from[key];});
+        }
+      }
+      if(conformalExperimental&&!conformalHybrid){
         if(conformalCandidate&&conformalCandidate.status==='candidate'&&result.warmStartAccepted)
           statistics.conformalWarmAccepted++;
         else statistics.conformalFallbacks++;

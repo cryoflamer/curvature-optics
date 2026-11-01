@@ -1,3 +1,10 @@
+## Patch 140.12.47 — Lazy hybrid shooting / attributed hot frame A/B (2026-11-01)
+
+- Explicit-only `shootingOptimization: 'conformal-hybrid'`: the cheap standard Globe RK4 shooting predictor runs first; only a failed predictor invokes a lazy conformal candidate, which is *again integrated and certified* by unchanged RK4. Original angular bracket and strict ground-contact classification remain final authorities. Standard production default, nonstandard profiles, Flat, vacuum, and painter are unchanged.
+- Optional per-stage RK4-call, evaluation and timing instrumentation; separate on-demand conformal prediction time and acceptance/fallback counters. No default instrumentation overhead without explicit `profileShootingStages`.
+- Modern Compare **Audit lazy hybrid shooting · baseline / hybrid / conformal · 8 hot frames · ZIP** renders three actual independently recomputed physical Canvas frames per round, rotates order, exports JSON with all stage timing/count medians and real PNGs with pixel-difference maps. Strict last-frame pixel parity and structural counts reported independently; this is not a physical multipath proof or production promotion.
+- Local 100-target sweeps showed the cheap standard predictor almost always succeeded (98/100), with zero late conformal acceptances on two difficult ground cases; a faster full frame is NOT assumed. See `docs/CPU_HYBRID_SHOOTING_140_12_47.md`. Browser export needs user verification if local Chromium navigation is blocked. No WGSL changes or new tools HTML page.
+
 ## Patch 140.12.45 — Guarded CPU conformal production shooting + frame parity (2026-11-01)
 
 - Explicit-only `shootingOptimization: 'conformal-experimental'` enables adaptive Richardson conformal **angle candidates** for standard Globe / positive observer height. Disabled by default in ordinary Scene and Compare. Custom, Flat, vacuum and engineered atmospheres are not enabled. Candidate implementation is shared with the #140.12.44 benchmark via `src/optics/OpticalConformalPredictor.js`.

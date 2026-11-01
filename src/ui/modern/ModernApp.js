@@ -3056,6 +3056,8 @@
     if(conformalFrameButton)conformalFrameButton.addEventListener('click',runConformalFrameParity141245);
     var profileButton=probeUi('ModernConformalProfile141246Run');
     if(profileButton)profileButton.addEventListener('click',runConformalFrameProfile141246);
+    var hybridButton=probeUi('ModernHybridShooting141247Run');
+    if(hybridButton)hybridButton.addEventListener('click',runHybridShootingAudit141247);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4719,6 +4721,175 @@
       if(root.console&&root.console.error)root.console.error('Conformal profile:',error);
     }}finally{
       state.probeBusy=false;button.disabled=false;
+      if(!interrupted()){if(graphs.A&&graphs.A.Redraw)graphs.A.Redraw();
+        if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}
+    }
+  }
+  // #140.12.47: Compare the real baseline, lazy hybrid and always-conformal
+  // field using independent hot, cold-optics Canvas frames. No toggle or
+  // production default is changed by this diagnostic button.
+  async function runHybridShootingAudit141247(){
+    var button=probeUi('ModernHybridShooting141247Run'),zip=root.GeometryDiagnosticsZip,
+      renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
+      source=state.comparePair&&state.comparePair.A,graphs=state.compareGraphs,
+      phase='input',started=profileNow();
+    if(state.probeBusy)return;
+    if(!button||!zip||!renderer||!optics||!compareAdapter||!source||!graphs||
+        !graphs.A||!graphs.B||!graphs.A.Canvas||!graphs.B.Canvas){
+      probeStatus('Hybrid shooting audit: missing Compare A/B or renderer');return;
+    }
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(source.showModel!==1||!(source.Height>0)||spec&&spec.atmosphere!=='standard'){
+      probeStatus('Hybrid shooting audit requires standard Globe Compare A with positive eye height');return;
+    }
+    var generation=state.probeGeneration,original=source,
+      modes=['baseline','hybrid','conformal'],modeSettings={hybrid:'conformal-hybrid',
+        conformal:'conformal-experimental'},rounds=8,warmups=1,
+      runs={baseline:[],hybrid:[],conformal:[]},last={},frames={},orderLog=[],
+      common={atmosphere:'standard',geometryBackend:'canvas',interactive:false,
+        deferDecorations:true,forceColdOptics:true};
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||
+      state.comparePair.A!==original;}
+    function median(items){var v=items.slice().sort(function(a,b){return a-b;}),n=v.length;
+      return n?(v[(n-1)>>1]+v[n>>1])/2:null;}
+    function screenshot(canvas){
+      var c=document.createElement('canvas');c.width=canvas.width;c.height=canvas.height;
+      var ctx=c.getContext('2d');if(!ctx)throw Error('Hybrid audit canvas unavailable');
+      ctx.drawImage(canvas,0,0);return c;
+    }
+    function png(c){var url=c.toDataURL('image/png');
+      if(!url.startsWith('data:image/png;base64,'))throw Error('PNG encoder unavailable');
+      var raw=root.atob(url.slice(url.indexOf(',')+1)),buf=new Uint8Array(raw.length);
+      for(var i=0;i<raw.length;i++)buf[i]=raw.charCodeAt(i);
+      return buf;
+    }
+    function diff(a,b){
+      var c=document.createElement('canvas');c.width=a.width;c.height=a.height;
+      var ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height),
+        x=a.getContext('2d').getImageData(0,0,c.width,c.height).data,
+        y=b.getContext('2d').getImageData(0,0,c.width,c.height).data;
+      for(var i=0;i<x.length;i+=4){
+        var max=Math.max(Math.abs(x[i]-y[i]),Math.abs(x[i+1]-y[i+1]),
+          Math.abs(x[i+2]-y[i+2]),Math.abs(x[i+3]-y[i+3]));
+        pixels.data[i]=max>8?255:0;pixels.data[i+1]=max>8?40:0;
+        pixels.data[i+2]=max>8?40:0;pixels.data[i+3]=255;
+      }
+      ctx.putImageData(pixels,0,0);return c;
+    }
+    var countKeys=['drawn','fillTriangles','fillUnresolved','fillHidden','unresolved',
+      'guideSegments','guideSolves','towerSolves','primitiveCount'];
+    function detail(result){var stats=result.fieldStats||{},times=result.timings||{};
+      return {totalMs:times.totalMs,exactSolveMs:stats.exactSolveMs||0,
+        conformalPredictionMs:stats.conformalPredictionMs||0,
+        shootRK4Calls:stats.shootRK4Calls||0,shootEvaluations:stats.shootEvaluations||0,
+        predictorAttempts:stats.predictorAttempts||0,predictorAccepted:stats.predictorAccepted||0,
+        predictorFallbacks:stats.predictorFallbacks||0,
+        warmStartAccepted:stats.warmStartAccepted||0,
+        conformalAttempts:stats.conformalAttempts||0,
+        conformalWarmAccepted:stats.conformalWarmAccepted||0,
+        conformalFallbacks:stats.conformalFallbacks||0,
+        hybridBaselineSolved:stats.hybridBaselineSolved||0,
+        hybridLateAttempts:stats.hybridLateAttempts||0,
+        hybridLateAccepted:stats.hybridLateAccepted||0,
+        conformalStepsHistogram:stats.conformalStepsHistogram||{},
+        stageMs:stats.shootingStageMs||{},stageRK4:stats.shootingStageRK4||{},
+        stageEvaluations:stats.shootingStageEvaluations||{},
+        structural:Object.fromEntries(countKeys.map(function(k){return [k,result[k]];}))};
+    }
+    function frame(mode){
+      var settings={profileShootingStages:true};
+      if(modeSettings[mode])settings.shootingOptimization=modeSettings[mode];
+      var args=Object.assign({},common,{cacheSession:optics.create(),settings:settings}),
+        canvas=mode==='baseline'?graphs.A.Canvas:graphs.B.Canvas,
+        graph=mode==='baseline'?graphs.A:graphs.B,
+        result=renderer.renderPhysical(graph,compareAdapter.clone(source),args);
+      return {result:result,canvas:canvas};
+    }
+    state.probeBusy=true;button.disabled=true;
+    try{
+      for(var w=0;w<warmups;w++)for(var i=0;i<modes.length;i++){
+        if(interrupted())return;
+        phase='warm-up '+modes[i];probeStatus('Hybrid shooting: warming '+modes[i]);
+        await new Promise(function(done){root.setTimeout(done,0);});frame(modes[i]);
+      }
+      for(var r=0;r<rounds;r++){
+        var shift=r%modes.length,order=modes.slice(shift).concat(modes.slice(0,shift));
+        orderLog.push(order.slice());
+        for(var j=0;j<order.length;j++){
+          if(interrupted())return;
+          var mode=order[j];phase='round '+(r+1)+' '+mode;
+          probeStatus('Hybrid shooting: '+(r+1)+'/'+rounds+' · '+mode);
+          await new Promise(function(done){root.setTimeout(done,0);});
+          var rendered=frame(mode),info=detail(rendered.result);
+          runs[mode].push(info);last[mode]=info;frames[mode]=screenshot(rendered.canvas);
+        }
+      }
+      if(interrupted())return;
+      phase='frame parity and ZIP';
+      var pixels={},structural={},allParity=true;
+      ['hybrid','conformal'].forEach(function(mode){
+        pixels[mode]=compareAdapter.compareFramePixels(frames.baseline,frames[mode]);
+        structural[mode]={};countKeys.forEach(function(k){
+          structural[mode][k]={baseline:last.baseline.structural[k],
+            variant:last[mode].structural[k],equal:JSON.stringify(last.baseline.structural[k])===
+              JSON.stringify(last[mode].structural[k])};
+        });
+        if(pixels[mode].status!=='measured'||pixels[mode].strictPixels!==0||
+            !countKeys.every(function(k){return structural[mode][k].equal;}))allParity=false;
+      });
+      pixels.hybridVsConformal=compareAdapter.compareFramePixels(frames.hybrid,frames.conformal);
+      var summary={};modes.forEach(function(mode){
+        var values=runs[mode];summary[mode]={};
+        ['totalMs','exactSolveMs','conformalPredictionMs','shootRK4Calls',
+          'shootEvaluations','predictorAttempts','predictorFallbacks',
+          'conformalAttempts','hybridLateAttempts','hybridLateAccepted'].forEach(function(k){
+          summary[mode]['median'+k[0].toUpperCase()+k.slice(1)]=
+            median(values.map(function(v){return v[k];}));
+        });
+        ['stageMs','stageRK4','stageEvaluations'].forEach(function(k){
+          summary[mode][k]={};var keys={};values.forEach(function(v){
+            Object.keys(v[k]).forEach(function(name){keys[name]=true;});
+          });
+          Object.keys(keys).forEach(function(name){summary[mode][k][name]=
+            median(values.map(function(v){return v[k][name]||0;}));});
+        });
+      });
+      var report={version:'140.12.47',kind:'lazy hybrid conformal full-frame shooting attribution',
+        source:'actual Compare A Globe standard scene; independent cold optical sessions',
+        experimentalOnly:true,productionDefaultUnchanged:true,
+        modes:modes,framesPerMode:rounds,warmupsPerMode:warmups,
+        orderRotation:orderLog,timingScope:'8 warm JS rounds; independent cold optics every render',
+        browserElapsedMs:profileNow()-started,summary:summary,runs:runs,
+        lastFrame:{pixels:pixels,structural:structural},strictParityOnLastFrame:allParity,
+        limitations:'Stage timings measure per-shot RK4 and ray trace plus separate candidate cost, not every overhead. '+
+          'A late proposal is integrated and residual-checked by original RK4 before unchanged bracket/ground verification. '+
+          'One camera, strict last-frame pixels, no global branch equivalence; timings are non-isolated browser CPU.'};
+      var archive=zip.build([{name:'results.json',data:JSON.stringify(report,null,2)},
+        {name:'baseline-real-frame.png',data:png(frames.baseline)},
+        {name:'hybrid-real-frame.png',data:png(frames.hybrid)},
+        {name:'conformal-real-frame.png',data:png(frames.conformal)},
+        {name:'baseline-vs-hybrid-diff.png',data:png(diff(frames.baseline,frames.hybrid))},
+        {name:'baseline-vs-conformal-diff.png',data:png(diff(frames.baseline,frames.conformal))},
+        {name:'README.txt',data:'#140.12.47 · Lazy hybrid shooting A/B audit\n'+
+          '8 order-rotated hot Canvas frames per mode; cold independent optical fields.\n'+
+          'Hybrid runs original cheap shooting predictor first; only failures invoke expensive conformal angle.\n'+
+          'All rays retain original RK4 and ground/contact certification.\n'+
+          'Pixel differences >8 shown red; exact strict pixel metrics are in results.json.\n'}]);
+      var url=root.URL.createObjectURL(archive),a=document.createElement('a');
+      a.href=url;a.download='curvature-compare-140.12.47-hybrid-production-shooting.zip';
+      try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var view=probeUi('ModernGpuFrameMetrics');
+      if(view)view.textContent='Hybrid hot frames · baseline '+summary.baseline.medianTotalMs.toFixed(1)+
+        ' / hybrid '+summary.hybrid.medianTotalMs.toFixed(1)+
+        ' / conformal '+summary.conformal.medianTotalMs.toFixed(1)+
+        ' ms · strict parity '+(allParity?'PASS':'FAIL')+' · ZIP exported';
+      probeStatus('Hybrid shooting ZIP exported · parity '+(allParity?'PASS':'FAIL')+
+        ' · 8 hot rounds / mode');
+    }catch(error){if(!interrupted()){
+      probeStatus('Hybrid shooting failed ('+phase+'): '+String(error.message||error));
+      if(root.console&&root.console.error)root.console.error('Hybrid shooting:',error);
+    }}finally{state.probeBusy=false;button.disabled=false;
       if(!interrupted()){if(graphs.A&&graphs.A.Redraw)graphs.A.Redraw();
         if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}
     }

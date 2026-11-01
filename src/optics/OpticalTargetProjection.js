@@ -59,8 +59,27 @@
     var evaluations = 0,shootRK4Calls=0;
     var predictorAttempts=0,predictorAccepted=0,predictorFallbacks=0;
     var warmStartAttempts=0,warmStartAccepted=0,warmStartMisses=0;
+    // #140.12.47: optional late, untrusted candidate AFTER the inexpensive
+    // built-in predictor failed, BEFORE the original bracket search. The
+    // original RK4 oracle still certifies every proposal and ground event.
+    var lateWarmAttempts=0,lateWarmAccepted=0,lateWarmMisses=0;
+    var profileStages=options.profileShootingStages===true;
+    var shootingStage='direction',stageTimes={},stageRK4={},stageEvaluations={};
+    function clock(){return typeof performance!=='undefined'&&performance.now?
+      performance.now():Date.now();}
+    function stageCount(name,elapsed,calls){
+      stageTimes[name]=(stageTimes[name]||0)+elapsed;
+      stageRK4[name]=(stageRK4[name]||0)+calls;
+      stageEvaluations[name]=(stageEvaluations[name]||0)+1;
+    }
 
     function shoot(angle) {
+      if(!profileStages)return integrateShot(angle);
+      var started=clock(),before=shootRK4Calls;
+      try{return integrateShot(angle);}
+      finally{stageCount(shootingStage,clock()-started,shootRK4Calls-before);}
+    }
+    function integrateShot(angle) {
       evaluations++;
       if (Math.abs(angle) >= HALF_PI - 0.001) return null;
       var state = [0,observerHeight,Math.cos(angle),Math.sin(angle)];
@@ -106,7 +125,10 @@
         residual:null,evaluations:evaluations,shootRK4Calls:shootRK4Calls,predictorAttempts:predictorAttempts,
         predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,
         warmStartAttempts:warmStartAttempts,warmStartAccepted:warmStartAccepted,
-        warmStartMisses:warmStartMisses,reason:reason,
+        warmStartMisses:warmStartMisses,lateWarmAttempts:lateWarmAttempts,
+        lateWarmAccepted:lateWarmAccepted,lateWarmMisses:lateWarmMisses,
+        shootingStages:profileStages?{ms:stageTimes,rk4:stageRK4,evaluations:stageEvaluations}:undefined,
+        reason:reason,
         scope:'Only a forward-x single shooting branch was searched; no global multipath guarantee'};
     }
 
@@ -125,12 +147,14 @@
       Math.abs(options.shootingWarmStartAngle-directionAngle)<0.02;
     var warmShot=null;
     if(!vacuum&&warmStart){
+      shootingStage='warm';
       warmStartAttempts++;
       warmShot=shoot(options.shootingWarmStartAngle);
       if(warmShot&&Math.abs(warmShot.residual)<=solveTolerance)
         warmStartAccepted++;
       else warmStartMisses++;
     }
+    shootingStage='direction';
     var best = vacuum ? {
       angle:directionAngle,residual:0,
       pathLength:Math.hypot(xGoal,zGoal-observerHeight),
@@ -149,6 +173,7 @@
       var origin=best,previous=null,current=best;
       var guessSlope=xGoal/(Math.cos(directionAngle)*Math.cos(directionAngle));
       var converged=false;
+      shootingStage='predictor';
       for(var p=0;p<3;p++) {
         if(!(Number.isFinite(guessSlope)&&guessSlope>0))break;
         var correction=-current.residual/guessSlope;
@@ -170,7 +195,26 @@
       }
       if(!converged){best=origin;predictorFallbacks=1;}
     }
+    if(!vacuum&&options.shootingPredictor===true&&
+        Math.abs(best.residual)>solveTolerance&&
+        typeof options.shootingLateWarmStart==='function'){
+      // A callback is permitted only to propose an angle. Failure, exception,
+      // out-of-range angle, or non-convergent physical shot leaves the original
+      // bracket-first path completely intact.
+      var lateAngle=null;
+      try{lateAngle=options.shootingLateWarmStart();}catch(_){lateAngle=null;}
+      if(Number.isFinite(lateAngle)&&Math.abs(lateAngle)<HALF_PI-0.001&&
+          Math.abs(lateAngle-directionAngle)<0.02){
+        shootingStage='late';
+        lateWarmAttempts++;
+        var lateShot=shoot(lateAngle);
+        if(lateShot&&Math.abs(lateShot.residual)<=solveTolerance){
+          best=lateShot;lateWarmAccepted++;
+        }else lateWarmMisses++;
+      }
+    }
     if (!vacuum && Math.abs(best.residual) > solveTolerance) {
+      shootingStage='bracket';
       var atStart=best, span=initialSpan, lower, upper;
       var sign = atStart.residual > 0 ? -1 : 1;
       // The forward-x solver excludes near-vertical launch angles. At a
@@ -225,7 +269,7 @@
 
     // The geometric path length, not horizontal range, is the finite-ray
     // endpoint. In particular, contact *at* the target is not prior occlusion.
-    var ray;
+    var ray,traceStarted=profileStages?clock():0;
     try {
       ray=rt.trace({geometry:geometry,radius:radius,curvature:resolved.curvature,
         surfaceArithmetic:resolved.surfaceArithmetic,profile:profile,
@@ -234,6 +278,8 @@
         fastClearGround:options.shootingPredictor===true});
     } catch (error) {
       return failed('Ground-event verification failed: '+error.message);
+    } finally {
+      if(profileStages)stageTimes.trace=(stageTimes.trace||0)+clock()-traceStarted;
     }
     var prior = ray.hitGround && ray.travelled < best.pathLength - 1e-6;
     var status = prior ? (ray.event.contact === 'grazing' ? 'indeterminate' : 'blocked') : 'visible';
@@ -269,7 +315,10 @@
       pathLength:best.pathLength,target:target.slice(),ray:ray,evaluations:evaluations,shootRK4Calls:shootRK4Calls,
       predictorAttempts:predictorAttempts,predictorAccepted:predictorAccepted,predictorFallbacks:predictorFallbacks,
       warmStartAttempts:warmStartAttempts,warmStartAccepted:warmStartAccepted,
-      warmStartMisses:warmStartMisses,reason:status==='indeterminate'?'Possible grazing or endpoint contact within numerical tolerance':null,
+      warmStartMisses:warmStartMisses,lateWarmAttempts:lateWarmAttempts,
+      lateWarmAccepted:lateWarmAccepted,lateWarmMisses:lateWarmMisses,
+      shootingStages:profileStages?{ms:stageTimes,rk4:stageRK4,evaluations:stageEvaluations}:undefined,
+      reason:status==='indeterminate'?'Possible grazing or endpoint contact within numerical tolerance':null,
       scope:'Single forward-x shooting branch; a blocked branch does not exclude unsearched paths'};
   }
 
