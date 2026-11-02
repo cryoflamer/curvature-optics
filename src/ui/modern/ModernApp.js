@@ -3060,6 +3060,8 @@
     if(hybridButton)hybridButton.addEventListener('click',runHybridShootingAudit141247);
     var traceButton=probeUi('ModernTraceOptimize141248Run');
     if(traceButton)traceButton.addEventListener('click',runTraceOptimizationAudit141248);
+    var fusedGateButton=probeUi('ModernFusedProductionGate141249Run');
+    if(fusedGateButton)fusedGateButton.addEventListener('click',runFusedProductionGate141249);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4899,6 +4901,160 @@
   // #140.12.48: independent 8-round hot full-frame attribution for the
   // *existing* production RK4 path. Only experiments with gradient reuse and
   // proven-clear first-event checks; the default trace is never changed.
+  // #140.12.49: candidate-promotion gate for the bitwise-equivalent common
+  // exponential. This deliberately DOES NOT promote an unverified browser
+  // optimisation to the default production setting. Compare four independently
+  // rendered Globe scenes with no shared optical cache and equal painter inputs.
+  async function runFusedProductionGate141249(){
+    var button=probeUi('ModernFusedProductionGate141249Run'),zip=root.GeometryDiagnosticsZip,
+      renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
+      graphs=state.compareGraphs,source=state.comparePair&&state.comparePair.A,
+      phase='input',started=profileNow();
+    if(state.probeBusy)return;
+    if(!button||!zip||!renderer||!optics||!compareAdapter||!source||!graphs||
+        !graphs.A||!graphs.B||!graphs.A.Canvas||!graphs.B.Canvas){
+      probeStatus('Fused gate: Compare A/B Canvas and physical renderer are required');return;
+    }
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(source.showModel!==1||!(source.Height>0)||spec&&spec.atmosphere!=='standard'){
+      probeStatus('Fused gate: select standard atmosphere and Globe in Compare A');return;
+    }
+    var generation=state.probeGeneration,original=source,rounds=4,warmups=1,
+      structuralKeys=['drawn','fillTriangles','fillUnresolved','fillHidden','unresolved',
+        'guideSegments','guideSolves','towerSolves','primitiveCount'],
+      common={atmosphere:'standard',geometryBackend:'canvas',interactive:false,
+        deferDecorations:true,forceColdOptics:true};
+    // Clones only: never mutate Compare A, its nested object arrays, or camera.
+    // Distances change both groups of real tower foundations; they are not
+    // artificial target samples or an approximate image-space substitute.
+    var cases=[
+      {id:'authored',label:'Unmodified authored Globe camera',adjust:function(){}},
+      {id:'near-ground',label:'Eye 2 m, tower foundations 50 m and 3.5 km',
+        adjust:function(m){m.Height=2;m.ObjDist=[50,3500];m.ObjDeltaDist=[300,400];}},
+      {id:'horizon',label:'Eye 15 m, foundations 9 km and 22 km',
+        adjust:function(m){m.Height=15;m.ObjDist=[9000,22000];m.ObjDeltaDist=[700,850];}},
+      {id:'far-field',label:'Eye 100 m, foundations 25 km and 65 km',
+        adjust:function(m){m.Height=100;m.ObjDist=[25000,65000];m.ObjDeltaDist=[750,900];}}
+    ];
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||
+      state.comparePair.A!==original;}
+    function median(items){var a=items.slice().sort(function(x,y){return x-y;}),n=a.length;
+      return n?(a[(n-1)>>1]+a[n>>1])/2:null;}
+    function copy(canvas){var c=document.createElement('canvas');c.width=canvas.width;c.height=canvas.height;
+      var ctx=c.getContext('2d');if(!ctx)throw Error('Fused gate: no Canvas 2D context');
+      ctx.drawImage(canvas,0,0);return c;}
+    function png(canvas){var url=canvas.toDataURL('image/png');
+      if(!url.startsWith('data:image/png;base64,'))throw Error('Fused gate: PNG unavailable');
+      var raw=root.atob(url.substring(url.indexOf(',')+1)),bytes=new Uint8Array(raw.length);
+      for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+      return bytes;}
+    function diff(a,b){var c=document.createElement('canvas');c.width=a.width;c.height=a.height;
+      var ctx=c.getContext('2d'),out=ctx.createImageData(c.width,c.height),
+        aa=a.getContext('2d').getImageData(0,0,c.width,c.height).data,
+        bb=b.getContext('2d').getImageData(0,0,c.width,c.height).data;
+      for(var i=0;i<aa.length;i+=4){var difference=Math.max(Math.abs(aa[i]-bb[i]),
+        Math.abs(aa[i+1]-bb[i+1]),Math.abs(aa[i+2]-bb[i+2]),Math.abs(aa[i+3]-bb[i+3]));
+        out.data[i]=difference>0?255:0;out.data[i+1]=0;
+        out.data[i+2]=difference>0?255:0;out.data[i+3]=255;}
+      ctx.putImageData(out,0,0);return c;}
+    function render(model,mode){var graph=mode==='baseline'?graphs.A:graphs.B,
+      args=Object.assign({},common,{cacheSession:optics.create(),
+        settings:{profileShootingStages:true}});
+      if(mode==='fused')args.settings.traceOptimization='fused-gradient';
+      var result=renderer.renderPhysical(graph,compareAdapter.clone(model),args),
+        stats=result.fieldStats||{},timings=result.timings||{};
+      return {canvas:graph.Canvas,detail:{totalMs:timings.totalMs,
+        exactSolveMs:stats.exactSolveMs||0,shootRK4Calls:stats.shootRK4Calls||0,
+        shootEvaluations:stats.shootEvaluations||0,stageMs:stats.shootingStageMs||{},
+        structural:Object.fromEntries(structuralKeys.map(function(k){return [k,result[k]];}))}};
+    }
+    state.probeBusy=true;button.disabled=true;
+    try{
+      var outcomes=[],files=[],allParity=true;
+      for(var c=0;c<cases.length;c++){
+        var scenario=cases[c],model=compareAdapter.clone(source);
+        scenario.adjust(model);
+        if(!Number.isFinite(model.Height)||!(model.Height>0)||model.showModel!==1)
+          throw Error('Fused gate: invalid Globe scene '+scenario.id);
+        var runs={baseline:[],fused:[]},orders=[],frames={},last={};
+        for(var w=0;w<warmups;w++)for(var m=0;m<2;m++){
+          if(interrupted())return;
+          phase=scenario.id+' warm-up';probeStatus('Fused gate: warming '+scenario.id);
+          await new Promise(function(done){root.setTimeout(done,0);});
+          render(model,m===0?'baseline':'fused');
+        }
+        for(var r=0;r<rounds;r++){
+          var order=r%2===0?['baseline','fused']:['fused','baseline'];orders.push(order.slice());
+          for(var j=0;j<order.length;j++){
+            if(interrupted())return;
+            var mode=order[j];phase=scenario.id+' round '+(r+1)+' '+mode;
+            probeStatus('Fused gate: '+(c+1)+'/'+cases.length+' '+scenario.id+' · '+
+              (r+1)+'/'+rounds+' '+mode);
+            await new Promise(function(done){root.setTimeout(done,0);});
+            var current=render(model,mode);
+            runs[mode].push(current.detail);last[mode]=current.detail;
+            frames[mode]=copy(current.canvas);
+          }
+        }
+        if(interrupted())return;
+        phase=scenario.id+' strict pixel and structure parity';
+        var pixels=compareAdapter.compareFramePixels(frames.baseline,frames.fused),
+          structural={},structureEqual=true;
+        structuralKeys.forEach(function(k){
+          var a=last.baseline.structural[k],b=last.fused.structural[k];
+          structural[k]={baseline:a,fused:b,equal:JSON.stringify(a)===JSON.stringify(b)};
+          if(!structural[k].equal)structureEqual=false;
+        });
+        var parity=pixels.status==='measured'&&pixels.strictPixels===0&&structureEqual;
+        if(!parity)allParity=false;
+        function summarize(mode){var samples=runs[mode];return {
+          medianTotalMs:median(samples.map(function(s){return s.totalMs;})),
+          medianExactSolveMs:median(samples.map(function(s){return s.exactSolveMs;})),
+          medianRK4Calls:median(samples.map(function(s){return s.shootRK4Calls;})),
+          medianEvaluations:median(samples.map(function(s){return s.shootEvaluations;})),
+          medianTraceStageMs:median(samples.map(function(s){return s.stageMs.trace||0;}))};}
+        outcomes.push({id:scenario.id,label:scenario.label,
+          observerHeight:model.Height,objectDistances:model.ObjDist.slice(),
+          iterationsPerMode:rounds,orderRotation:orders,
+          baseline:summarize('baseline'),fused:summarize('fused'),
+          pixels:pixels,structural:structural,strictParity:parity,runs:runs});
+        files.push({name:scenario.id+'-baseline.png',data:png(frames.baseline)},
+          {name:scenario.id+'-fused.png',data:png(frames.fused)},
+          {name:scenario.id+'-strict-diff.png',data:png(diff(frames.baseline,frames.fused))});
+      }
+      if(interrupted())return;
+      var report={version:'140.12.49',kind:'fused standard RK4 multi-scene production gate',
+        source:'actual Globe Canvas scenes, same authored model and varied cameras/ranges',
+        productionDefaultUnchanged:true,candidateOnly:true,
+        roundsPerModePerScene:rounds,warmupsPerModePerScene:warmups,
+        timingScope:'rotated hot Canvas renders with separate cold optical sessions',
+        browserElapsedMs:profileNow()-started,scenes:outcomes,
+        strictParityAcrossScenes:allParity,
+        limitations:'Only these four finite first-contact Globe scenes were tested; '+
+          'custom profiles, multiple ray branches and other viewports are not certified. '+
+          'Shooting stage instrumentation adds measurement overhead. No automatic promotion.'};
+      files.unshift({name:'results.json',data:JSON.stringify(report,null,2)});
+      files.push({name:'README.txt',data:'#140.12.49 fused-gradient multi-scene gate\n'+
+        'All PNGs are real independently rendered Globe Canvas frames.\n'+
+        'Strict diffs are magenta for any nonzero RGBA channel difference.\n'+
+        'Each case alternates baseline/fused order, independent optical caches.\n'+
+        'No automatic enabling of the experimental kernel; inspect results.json.\n'});
+      phase='ZIP export';var blob=zip.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download='curvature-compare-140.12.49-fused-production-gate.zip';
+      try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var view=probeUi('ModernGpuFrameMetrics');
+      if(view)view.textContent='Fused standard RK4 gate · '+outcomes.length+' scenes · '+
+        (allParity?'strict pixel+structure PASS':'parity FAILED')+' · ZIP exported';
+      probeStatus('Fused gate ZIP exported · '+(allParity?'all scenes match':'one or more scenes differ'));
+    }catch(error){if(!interrupted()){
+      probeStatus('Fused gate failed ('+phase+'): '+String(error.message||error));
+      if(root.console&&root.console.error)root.console.error('Fused gate:',error);
+    }}finally{state.probeBusy=false;button.disabled=false;
+      if(!interrupted()){if(graphs.A&&graphs.A.Redraw)graphs.A.Redraw();
+        if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}}
+  }
+
   async function runTraceOptimizationAudit141248(){
     var button=probeUi('ModernTraceOptimize141248Run'),zip=root.GeometryDiagnosticsZip,
       renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
