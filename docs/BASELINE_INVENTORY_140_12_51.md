@@ -59,6 +59,10 @@ An archive should distinguish **hypothesis → method → environment/scene → 
 | Standard RK4 optimization | `docs/CPU_TRACE_OPTIMIZATION_140_12_48.md`, `docs/FUSED_GRADIENT_PRODUCTION_GATE_140_12_49.md`, `docs/FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md`, `tools/benchmark-trace-140-12-48.js`, `tools/benchmark-fused-multiscene-140-12-49.js` | Four-scene browser gate, strict RGBA parity **on those scenes**, baseline and optimized timings, exact scope of production promotion, original-path rollback. |
 | Historical migration / reference | `docs/MIGRATION_*.md`, `tools/reference/`, Legacy capture/verification tools | Which old behavior is a scientific comparison oracle versus obsolete UI, and how to reproduce differences. |
 
+## Retrospective archive completed in #140.12.52
+
+See [the experiment archive index](experiments/README.md) and track-specific [GPU](experiments/gpu.md), [conformal / Bouguer / hybrid CPU](experiments/conformal.md), and [CPU RK4 optimization](experiments/rk4.md) records. They differentiate logged user-browser evidence from proposed protocols and unbundled exports. This documentation-only archive is a prerequisite for evaluating #140.12.53; **no retirement has occurred**.
+
 ## Verification contract before any retirement
 
 - **Baseline behavior:** run `node --test tests/OpticalFusedProductionPromotion141250.test.js`, then the related `OpticalFusedProductionGate141249.test.js` and `OpticalTraceOptimization141248.test.js` (check exact filenames before running) and representative Modern Scene/Compare tests. Preserve exact trace and rendering classifications, not merely “page loads.”
