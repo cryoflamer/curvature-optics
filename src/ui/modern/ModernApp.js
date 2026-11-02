@@ -3058,6 +3058,8 @@
     if(profileButton)profileButton.addEventListener('click',runConformalFrameProfile141246);
     var hybridButton=probeUi('ModernHybridShooting141247Run');
     if(hybridButton)hybridButton.addEventListener('click',runHybridShootingAudit141247);
+    var traceButton=probeUi('ModernTraceOptimize141248Run');
+    if(traceButton)traceButton.addEventListener('click',runTraceOptimizationAudit141248);
     var dsRk4Button=probeUi('ModernGpuDsRk4Run');
     if(dsRk4Button)dsRk4Button.addEventListener('click',runGpuDsRk4Audit141241);
     var attributionButton=probeUi('ModernGpuAlgorithmAttributionRun');
@@ -4894,6 +4896,153 @@
         if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}
     }
   }
+  // #140.12.48: independent 8-round hot full-frame attribution for the
+  // *existing* production RK4 path. Only experiments with gradient reuse and
+  // proven-clear first-event checks; the default trace is never changed.
+  async function runTraceOptimizationAudit141248(){
+    var button=probeUi('ModernTraceOptimize141248Run'),zip=root.GeometryDiagnosticsZip,
+      renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
+      source=state.comparePair&&state.comparePair.A,graphs=state.compareGraphs,
+      started=profileNow(),phase='input';
+    if(state.probeBusy)return;
+    if(!button||!zip||!renderer||!optics||!compareAdapter||!source||
+        !graphs||!graphs.A||!graphs.B||!graphs.A.Canvas||!graphs.B.Canvas){
+      probeStatus('Trace RK4 audit: Compare A/B Canvas or renderer missing');return;
+    }
+    var spec=state.compareConfig&&state.compareConfig.A;
+    if(source.showModel!==1||!(source.Height>0)||spec&&spec.atmosphere!=='standard'){
+      probeStatus('Trace RK4 audit needs standard Globe Compare A and positive observer height');return;
+    }
+    var generation=state.probeGeneration,original=source,
+      modes=['baseline','fused','preflight','scalar'],
+      settingsByMode={baseline:{},fused:{traceOptimization:'fused-gradient'},
+        preflight:{traceOptimization:'fused-preflight'},
+        scalar:{traceOptimization:'scalar-rk4'}},
+      rounds=8,warmups=1,runs={baseline:[],fused:[],preflight:[],scalar:[]},
+      frames={},last={},orders=[],common={atmosphere:'standard',geometryBackend:'canvas',
+        interactive:false,deferDecorations:true,forceColdOptics:true},
+      keys=['drawn','fillTriangles','fillUnresolved','fillHidden','unresolved',
+        'guideSegments','guideSolves','towerSolves','primitiveCount'];
+    function interrupted(){return generation!==state.probeGeneration||state.mode!=='compare'||
+      state.comparePair.A!==original;}
+    function median(items){var a=items.slice().sort(function(x,y){return x-y;}),n=a.length;
+      return n?(a[(n-1)>>1]+a[n>>1])/2:null;}
+    function copy(canvas){var c=document.createElement('canvas');c.width=canvas.width;c.height=canvas.height;
+      var ctx=c.getContext('2d');if(!ctx)throw Error('Trace audit: Canvas context missing');
+      ctx.drawImage(canvas,0,0);return c;}
+    function png(canvas){var url=canvas.toDataURL('image/png');
+      if(!url.startsWith('data:image/png;base64,'))throw Error('Trace audit: PNG unavailable');
+      var str=root.atob(url.substring(url.indexOf(',')+1)),result=new Uint8Array(str.length);
+      for(var i=0;i<str.length;i++)result[i]=str.charCodeAt(i);
+      return result;}
+    function diff(a,b){var c=document.createElement('canvas');c.width=a.width;c.height=a.height;
+      var ctx=c.getContext('2d'),out=ctx.createImageData(c.width,c.height),
+        aa=a.getContext('2d').getImageData(0,0,c.width,c.height).data,
+        bb=b.getContext('2d').getImageData(0,0,c.width,c.height).data;
+      for(var i=0;i<aa.length;i+=4){var d=Math.max(Math.abs(aa[i]-bb[i]),
+          Math.abs(aa[i+1]-bb[i+1]),Math.abs(aa[i+2]-bb[i+2]),Math.abs(aa[i+3]-bb[i+3]));
+        out.data[i]=d>8?255:0;out.data[i+1]=d>8?40:0;
+        out.data[i+2]=d>8?40:0;out.data[i+3]=255;}
+      ctx.putImageData(out,0,0);return c;}
+    function frame(mode){var args=Object.assign({},common,{cacheSession:optics.create(),
+        settings:Object.assign({profileShootingStages:true},settingsByMode[mode])}),
+        graph=mode==='baseline'?graphs.A:graphs.B,
+        result=renderer.renderPhysical(graph,compareAdapter.clone(source),args),
+        stats=result.fieldStats||{},timings=result.timings||{};
+      return {canvas:graph.Canvas,detail:{totalMs:timings.totalMs,
+        exactSolveMs:stats.exactSolveMs||0,shootRK4Calls:stats.shootRK4Calls||0,
+        shootEvaluations:stats.shootEvaluations||0,clearGroundSteps:stats.clearGroundSteps||0,
+        fullGroundEventSteps:stats.fullGroundEventSteps||0,
+        preflightGroundSteps:stats.preflightGroundSteps||0,
+        stageMs:stats.shootingStageMs||{},stageRK4:stats.shootingStageRK4||{},
+        structural:Object.fromEntries(keys.map(function(k){return [k,result[k]];}))}};}
+    state.probeBusy=true;button.disabled=true;
+    try{
+      for(var w=0;w<warmups;w++)for(var i=0;i<modes.length;i++){
+        if(interrupted())return;
+        phase='warm-up '+modes[i];probeStatus('Trace RK4 audit: warming '+modes[i]);
+        await new Promise(function(done){root.setTimeout(done,0);});frame(modes[i]);
+      }
+      for(var r=0;r<rounds;r++){
+        var order=modes.slice(r%modes.length).concat(modes.slice(0,r%modes.length));
+        orders.push(order.slice());
+        for(var j=0;j<order.length;j++){
+          if(interrupted())return;
+          var mode=order[j];phase='round '+(r+1)+' '+mode;
+          probeStatus('Trace RK4: '+(r+1)+'/'+rounds+' · '+mode);
+          await new Promise(function(done){root.setTimeout(done,0);});
+          var current=frame(mode);
+          runs[mode].push(current.detail);last[mode]=current.detail;
+          frames[mode]=copy(current.canvas);
+        }
+      }
+      if(interrupted())return;
+      phase='pixel parity';var pixels={},structural={},allParity=true;
+      ['fused','preflight','scalar'].forEach(function(mode){
+        pixels[mode]=compareAdapter.compareFramePixels(frames.baseline,frames[mode]);
+        structural[mode]={};keys.forEach(function(k){
+          structural[mode][k]={baseline:last.baseline.structural[k],variant:last[mode].structural[k],
+            equal:JSON.stringify(last.baseline.structural[k])===JSON.stringify(last[mode].structural[k])};
+        });
+        if(pixels[mode].status!=='measured'||pixels[mode].strictPixels!==0||
+            !keys.every(function(k){return structural[mode][k].equal;}))allParity=false;
+      });
+      var summary={};modes.forEach(function(mode){var values=runs[mode];summary[mode]={};
+        ['totalMs','exactSolveMs','shootRK4Calls','shootEvaluations',
+          'clearGroundSteps','fullGroundEventSteps','preflightGroundSteps'].forEach(function(k){
+          summary[mode]['median'+k[0].toUpperCase()+k.slice(1)]=
+            median(values.map(function(v){return v[k];}));
+        });
+        ['stageMs','stageRK4'].forEach(function(k){var names={};
+          values.forEach(function(v){Object.keys(v[k]).forEach(function(name){names[name]=true;});});
+          summary[mode][k]={};Object.keys(names).forEach(function(name){
+            summary[mode][k][name]=median(values.map(function(v){return v[k][name]||0;}));
+          });
+        });
+      });
+      var report={version:'140.12.48',kind:'production RK4 gradient and ground-clearance audit',
+        source:'actual standard Globe Compare A, independent cold optical sessions',
+        productionDefaultUnchanged:true,experimentalOnly:true,modes:modes,
+        framesPerMode:rounds,warmupsPerMode:warmups,orderRotation:orders,
+        timingScope:'8 warmed order-rotated Canvas frames; independent cold ray fields',
+        browserElapsedMs:profileNow()-started,summary:summary,runs:runs,
+        lastFrames:last,pixels:pixels,structural:structural,strictParityOnLastFrame:allParity,
+        limitations:'One camera, finite-sampled first-contact detection. This is not a proof of global ' +
+          'multipath correctness. Stage timing instrumentation affects measured durations.'};
+      phase='ZIP export';var files=[
+        {name:'results.json',data:JSON.stringify(report,null,2)},
+        {name:'baseline-real-frame.png',data:png(frames.baseline)},
+        {name:'fused-real-frame.png',data:png(frames.fused)},
+        {name:'preflight-real-frame.png',data:png(frames.preflight)},
+        {name:'scalar-real-frame.png',data:png(frames.scalar)},
+        {name:'baseline-vs-fused-diff.png',data:png(diff(frames.baseline,frames.fused))},
+        {name:'baseline-vs-preflight-diff.png',data:png(diff(frames.baseline,frames.preflight))},
+        {name:'baseline-vs-scalar-diff.png',data:png(diff(frames.baseline,frames.scalar))},
+        {name:'README.txt',data:'#140.12.48 · Trace RK4 optimisation audit\n'+
+          'Baseline, fused standard gradient, fused + clearance preflight, scalar standard RK4.\n'+
+          '8 hot Canvas frames per mode; cold independent ray fields, rotating execution order.\n'+
+          'Ground and shooting certifications remain unchanged; trace fast proof is opt-in.\n'+
+          'Red diff marks channel differences >8; strict pixel counts are in results.json.\n'}];
+      var blob=zip.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download='curvature-compare-140.12.48-trace-production-profile.zip';
+      try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
+      state.probeFrameLast=report;state.probeExportLast=report;
+      var view=probeUi('ModernGpuFrameMetrics');
+      if(view)view.textContent='Trace RK4 hot frames · baseline '+summary.baseline.medianTotalMs.toFixed(1)+
+        ' / fused '+summary.fused.medianTotalMs.toFixed(1)+
+        ' / preflight '+summary.preflight.medianTotalMs.toFixed(1)+
+        ' / scalar '+summary.scalar.medianTotalMs.toFixed(1)+
+        ' ms · strict parity '+(allParity?'PASS':'FAIL')+' · ZIP exported';
+      probeStatus('Trace RK4 ZIP exported · strict last-frame parity '+(allParity?'PASS':'FAIL'));
+    }catch(error){if(!interrupted()){
+      probeStatus('Trace RK4 audit failed ('+phase+'): '+String(error.message||error));
+      if(root.console&&root.console.error)root.console.error('Trace RK4 audit:',error);
+    }}finally{state.probeBusy=false;button.disabled=false;
+      if(!interrupted()){if(graphs.A&&graphs.A.Redraw)graphs.A.Redraw();
+        if(graphs.B&&graphs.B.Redraw)graphs.B.Redraw();}
+    }
+  }
+
   async function runConformalFrameParity141245(){
     var button=probeUi('ModernConformalFrameParityRun'),zipWriter=root.GeometryDiagnosticsZip,
       renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,

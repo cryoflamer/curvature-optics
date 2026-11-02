@@ -220,6 +220,7 @@
           adaptiveDepth:settings.fieldAdaptiveDepth,
           maxAdaptiveCells:settings.fieldMaxAdaptiveCells,
           shootingOptimization:settings.shootingOptimization,
+          traceOptimization:settings.traceOptimization,
           profileShootingStages:settings.profileShootingStages,
           shootingWarmStart:settings.shootingWarmStart,
           surfaceArithmetic:settings.surfaceArithmetic,

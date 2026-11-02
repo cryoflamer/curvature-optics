@@ -275,7 +275,8 @@
         surfaceArithmetic:resolved.surfaceArithmetic,profile:profile,
         observerHeight:observerHeight,angle:best.angle,length:best.pathLength,
         step:step,eventSubsteps:eventSubsteps,contactTolerance:contactTolerance,
-        fastClearGround:options.shootingPredictor===true});
+        fastClearGround:options.shootingPredictor===true,
+        preflightClearGround:options.traceOptimization==='fused-preflight'});
     } catch (error) {
       return failed('Ground-event verification failed: '+error.message);
     } finally {
@@ -328,7 +329,13 @@
   function preparedOptions(options){
     options=options||{};
     if(options.profile!==undefined||options.atmosphere===undefined)return Object.assign({},options);
-    var prepared=Object.assign({},options,{profile:rt.atmosphere(options.atmosphere,options.profileOptions)});
+    var profileOptions=options.profileOptions;
+    if(options.atmosphere==='standard' &&
+        (options.traceOptimization==='fused-gradient'||options.traceOptimization==='fused-preflight'||
+         options.traceOptimization==='scalar-rk4'))
+      profileOptions=Object.assign({},profileOptions,{experimentalFusedGradient:true,
+        experimentalScalarRK4:options.traceOptimization==='scalar-rk4'});
+    var prepared=Object.assign({},options,{profile:rt.atmosphere(options.atmosphere,profileOptions)});
     delete prepared.atmosphere;
     delete prepared.profileOptions;
     return prepared;

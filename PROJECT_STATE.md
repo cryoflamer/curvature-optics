@@ -1726,3 +1726,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   canonical `tools/webgpu-optics.html` and the existing Modern Compare page.
   Validate WGSL compilation (not just JavaScript syntax) for any shader edits,
   or explicitly state when actual GPU shader compilation was not performed.
+
+### #140.12.48 — production RK4 trace optimisation experiment (2026-11-03)
+
+Three explicit **standard-atmosphere-only** experiments (`traceOptimization: 'fused-gradient'` and `'fused-preflight'`) was added to `OpticalRayTracer` / `OpticalTargetProjection` / `OpticalSharedRayField` without changing the default shooting/ground detector. The first reuses one standard exponential while preserving arithmetic; the second additionally proves some above-ground RK4 segments clear using a conservative curvature and altitude-slope bound before falling back to the existing chord/event check; the third runs scalar RK4 staging to reduce temporary array allocation. Per-frame `preflightGroundSteps` instrumentation and an order-rotating 8-frame Modern Compare PNG+JSON ZIP audit were added. Details and limitations: `docs/CPU_TRACE_OPTIMIZATION_140_12_48.md`. The experiment is not production-promoted; review strict browser pixel parity and median full-frame duration first.

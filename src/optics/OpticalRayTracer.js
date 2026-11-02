@@ -11,6 +11,9 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function (surfaces) {
   'use strict';
   var DEFAULT_RADIUS = 6371000;
+  // Private marker: an arbitrary caller-supplied n(h),dn(h) profile must never
+  // accidentally opt into the standard-exponential kernel by naming a field.
+  var EXPERIMENTAL_STANDARD = Symbol('experimental standard RK4');
   if (!surfaces) throw Error('Continuous-curvature surface geometry dependency required');
 
   function atmosphere(kind, options) {
@@ -23,7 +26,7 @@
       var H = options.scaleHeight === undefined ? 7350 : options.scaleHeight;
       if (!(H > 0) || !(N0 >= 0) || !Number.isFinite(H) || !Number.isFinite(N0))
         throw Error('Invalid atmospheric constants');
-      return {
+      var standard = {
         n: function (h) { return 1 + N0 * Math.exp(-h / H); },
         dn: function (h) { return -N0 * Math.exp(-h / H) / H; },
         // Conservative upper bound on |d(n)/dh / n| for altitudes >= h.
@@ -33,6 +36,20 @@
           return N0 * Math.exp(-lowestHeight / H) / H;
         }
       };
+      // #140.12.48: experimental, opt-in common-subexpression elimination.
+      // Preserve the exact original n(), dn(), validation and dn/n arithmetic.
+      // Custom profiles and the default standard profile retain the old path.
+      if (options.experimentalFusedGradient === true) {
+        standard[EXPERIMENTAL_STANDARD]=true;
+        standard.scalarRK4=options.experimentalScalarRK4 === true;
+        standard.fusedGradient = function(h) {
+          var e=Math.exp(-h/H),n=1+N0*e,dn=-N0*e/H;
+          if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))
+            throw Error('Invalid refractive index');
+          return dn/n;
+        };
+      }
+      return standard;
     }
     // Mathematical flat-surface occlusion models. The parameter
     // occlusionRadius is the radius of the *comparison sphere*, not the
@@ -124,10 +141,16 @@
   }
   function derivative(s, surface, profile) {
     var metric=surface.metric2(s[0],s[1]);
-    var n=profile.n(metric[0]),dn=profile.dn(metric[0]);
-    if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))throw Error('Invalid refractive index');
+    var q;
+    if (profile[EXPERIMENTAL_STANDARD]) {
+      q=profile.fusedGradient(metric[0]);
+    } else {
+      var n=profile.n(metric[0]),dn=profile.dn(metric[0]);
+      if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))throw Error('Invalid refractive index');
+      q=dn/n;
+    }
     var nx=metric[1],nz=metric[2];
-    var dot=s[2]*nx+s[3]*nz,q=dn/n;
+    var dot=s[2]*nx+s[3]*nz;
     return [s[2],s[3],q*(nx-dot*s[2]),q*(nz-dot*s[3])];
   }
   function add(s, k, dt) {
@@ -149,6 +172,43 @@
         !Number.isFinite(out[0]) || !Number.isFinite(out[1]))
       throw Error('Non-finite ray state');
     out[2] /= norm; out[3] /= norm;
+    return out;
+  }
+
+  // #140.12.48: optional scalar recurrence for standard atmosphere only.
+  // The four RK4 derivatives and stage states have the same evaluation
+  // order as step(), but no intermediate [state] or [derivative] arrays.
+  // The surface still supplies its authoritative stable metric2() at each
+  // stage; ray normalization, tolerance and ground events remain unchanged.
+  function stepScalar(s,ds,surface,profile) {
+    var half=ds/2,metric=surface.metric2(s[0],s[1]);
+    var q=profile.fusedGradient(metric[0]);
+    var dot=s[2]*metric[1]+s[3]*metric[2];
+    var ax=s[2],az=s[3],avx=q*(metric[1]-dot*s[2]),avz=q*(metric[2]-dot*s[3]);
+
+    var bx=s[2]+half*avx,bz=s[3]+half*avz;
+    metric=surface.metric2(s[0]+half*ax,s[1]+half*az);
+    q=profile.fusedGradient(metric[0]);dot=bx*metric[1]+bz*metric[2];
+    var bvx=q*(metric[1]-dot*bx),bvz=q*(metric[2]-dot*bz);
+
+    var cx=s[2]+half*bvx,cz=s[3]+half*bvz;
+    metric=surface.metric2(s[0]+half*bx,s[1]+half*bz);
+    q=profile.fusedGradient(metric[0]);dot=cx*metric[1]+cz*metric[2];
+    var cvx=q*(metric[1]-dot*cx),cvz=q*(metric[2]-dot*cz);
+
+    var dx=s[2]+ds*cvx,dz=s[3]+ds*cvz;
+    metric=surface.metric2(s[0]+ds*cx,s[1]+ds*cz);
+    q=profile.fusedGradient(metric[0]);dot=dx*metric[1]+dz*metric[2];
+    var dvx=q*(metric[1]-dot*dx),dvz=q*(metric[2]-dot*dz);
+
+    var out=[s[0]+ds*(ax+2*bx+2*cx+dx)/6,
+      s[1]+ds*(az+2*bz+2*cz+dz)/6,
+      s[2]+ds*(avx+2*bvx+2*cvx+dvx)/6,
+      s[3]+ds*(avz+2*bvz+2*cvz+dvz)/6];
+    var norm=Math.hypot(out[2],out[3]);
+    if(!(norm>0)||!Number.isFinite(norm)||!Number.isFinite(out[0])||!Number.isFinite(out[1]))
+      throw Error('Non-finite ray state');
+    out[2]/=norm;out[3]/=norm;
     return out;
   }
 
@@ -183,12 +243,13 @@
   // This is only an internal solver optimization, not an alternate integrator.
   function prepareStepper(options, trustedSolverState) {
     var setup=validateSetup(options);
+    var advance=setup.profile[EXPERIMENTAL_STANDARD]&&setup.profile.scalarRK4?stepScalar:step;
     return function(state, distance) {
       if(!trustedSolverState&&(!Array.isArray(state)||state.length!==4||!state.every(Number.isFinite)||
           Math.abs(Math.hypot(state[2],state[3])-1)>1e-8||!Number.isFinite(distance)))
         throw Error('Invalid ray state or signed step');
       if(!Number.isFinite(distance))throw Error('Invalid ray step');
-      return step(state,distance,setup.surface,setup.profile);
+      return advance(state,distance,setup.surface,setup.profile);
     };
   }
 
@@ -287,6 +348,28 @@
     return surface.height2(a[0]+t*dx,a[1]+t*dz);
   }
 
+  // #140.12.48: a strictly conservative, no-RK4 clearance preflight.
+  // Distance-to-ground is 1-Lipschitz along a unit-speed ray, hence the
+  // altitude over the next ds cannot fall below h0-ds. For a sphere, its
+  // signed radial-height second derivative is bounded below by
+  // -(max |d log n/dh| + 1/r_min), and by -max |d log n/dh| on a plane.
+  // Therefore h(s) >= h0+h'(0)s-C*s*s/2. The concave lower bound takes
+  // its minimum at an endpoint. An uncertain segment always falls back to
+  // the ORIGINAL chord/event detector, including grazing/tangencies.
+  function preflightClear(state,ds,surface,curvature,profile) {
+    var h=surface.height2(state[0],state[1]);
+    if(!(h>0))return false;
+    var lowest=h-ds;
+    var bend=profile.rayCurvatureUpperBound(lowest);
+    var radial=curvature>0?curvature/(1+curvature*lowest):0;
+    if(!Number.isFinite(bend)||!Number.isFinite(radial)||radial<0)return false;
+    var n=surface.normal2(state[0],state[1]);
+    var slope=n[0]*state[2]+n[1]*state[3];
+    var lower=h+Math.min(0,slope*ds)-(bend+radial)*ds*ds/2;
+    // Keep a 1 mm cushion, as in the existing chord clearance proof.
+    return Number.isFinite(lower)&&lower>0.001;
+  }
+
   function trace(options) {
     options = options || {};
     var setup=validateSetup(options);
@@ -308,15 +391,24 @@
     var state = [0, observerHeight, Math.cos(angle), Math.sin(angle)];
     var points = options.collect ? [[state[0], state[1]]] : null;
     var hitGround = false, travelled = 0, event = null;
-    var fastGroundSkips=0,fullGroundChecks=0;
+    var fastGroundSkips=0,fullGroundChecks=0,preflightGroundSkips=0;
+    var advance=profile[EXPERIMENTAL_STANDARD]&&profile.scalarRK4?stepScalar:step;
     var fastGround=options.fastClearGround===true &&
       typeof profile.rayCurvatureUpperBound==='function';
     for (var i = 0; i < count; i++) {
       var delta = Math.min(ds, length - travelled);
       var clearNext=null,provedClear=false;
       if(fastGround && options.stopAtGround!==false &&
+          options.preflightClearGround===true &&
+          preflightClear(state,delta,surface,setup.curvature,profile)) {
+        // This avoids chord/ground-event probes. The actual ray state is
+        // still advanced by the identical RK4 recurrence below.
+        provedClear=true;
+        preflightGroundSkips++;
+        fastGroundSkips++;
+      } else if(fastGround && options.stopAtGround!==false &&
           surface.height2(state[0],state[1])>0) {
-        clearNext=step(state,delta,surface,profile);
+        clearNext=advance(state,delta,surface,profile);
         var h=surface.height2(state[0],state[1]);
         var curvature=profile.rayCurvatureUpperBound(h-delta);
         // The additional factor of 2 and 1 mm cushion make the shortcut
@@ -338,7 +430,7 @@
           x:state[0],z:state[1],height:surface.height2(state[0],state[1]),
           tolerance:contactTolerance};
       } else {
-        state=provedClear?clearNext:step(state,delta,surface,profile);
+        state=provedClear&&clearNext?clearNext:advance(state,delta,surface,profile);
         travelled+=delta;
       }
       if (points) points.push([state[0], state[1]]);
@@ -349,7 +441,7 @@
       hitGround: hitGround, travelled: travelled, points: points,
       termination:hitGround?'ground':(options.stopAtGround===false?'range-unchecked':'range'),
       fastGroundSkips:fastGroundSkips,fullGroundChecks:fullGroundChecks,
-      event:event };
+      preflightGroundSkips:preflightGroundSkips,event:event };
   }
 
   // A deliberately restricted target-point visibility query. Since n=1,

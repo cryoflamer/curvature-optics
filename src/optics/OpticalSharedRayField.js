@@ -83,6 +83,13 @@
     // global default or profile-specific inference may enable this path.
     // #140.12.46: selectable reference/gradient/scalar implementations,
     // all strictly opt-in and all certified by the same Globe RK4 solver.
+    // #140.12.48: opt-in standard-profile RK4/common-gradient and guarded
+    // ground-clearance experiment; never enable for custom/engineered rays.
+    if(options.atmosphere==='standard' && options.profile===undefined &&
+       (options.traceOptimization==='fused-gradient'||options.traceOptimization==='fused-preflight'||
+        options.traceOptimization==='scalar-rk4'))
+      solverOptions.traceOptimization=options.traceOptimization;
+    else delete solverOptions.traceOptimization;
     var conformalHybrid=options.shootingOptimization==='conformal-hybrid';
     var conformalEngine=conformalHybrid?'fast':
       options.shootingOptimization==='conformal-reference'?'reference':
@@ -113,7 +120,7 @@
       conformalStepsHistogram:{},
       hybridBaselineSolved:0,hybridLateAttempts:0,hybridLateAccepted:0,
       shootingStageMs:{},shootingStageRK4:{},shootingStageEvaluations:{},
-      clearGroundSteps:0,fullGroundEventSteps:0,
+      clearGroundSteps:0,fullGroundEventSteps:0,preflightGroundSteps:0,
       refinements:0,acceptedCells:0,rejectedCells:0,adaptiveLimits:0,
       maxDepthUsed:0,gpuSeedUses:0};
     // Bounded history per 0.1 mm distance bucket, owned by this field alone.
@@ -228,6 +235,7 @@
       }
       statistics.clearGroundSteps+=result.ray&&result.ray.fastGroundSkips||0;
       statistics.fullGroundEventSteps+=result.ray&&result.ray.fullGroundChecks||0;
+      statistics.preflightGroundSteps+=result.ray&&result.ray.preflightGroundSkips||0;
       var record={status:result.status,angle:result.angle,
         residual:result.residual,method:'exact',reason:result.reason};
       Object.freeze(record);
