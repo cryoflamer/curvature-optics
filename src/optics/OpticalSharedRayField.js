@@ -83,13 +83,17 @@
     // global default or profile-specific inference may enable this path.
     // #140.12.46: selectable reference/gradient/scalar implementations,
     // all strictly opt-in and all certified by the same Globe RK4 solver.
-    // #140.12.48: opt-in standard-profile RK4/common-gradient and guarded
-    // ground-clearance experiment; never enable for custom/engineered rays.
-    if(options.atmosphere==='standard' && options.profile===undefined &&
-       (options.traceOptimization==='fused-gradient'||options.traceOptimization==='fused-preflight'||
-        options.traceOptimization==='scalar-rk4'))
-      solverOptions.traceOptimization=options.traceOptimization;
-    else delete solverOptions.traceOptimization;
+    // #140.12.50: built-in standard profile uses the tested fused gradient by
+    // default. Explicit 'legacy' opts back into the original pair of n()/dn()
+    // calls; preflight/scalar remain opt-in. A supplied profile, including an
+    // arbitrary custom one, must never acquire a standard-profile kernel.
+    if(options.atmosphere==='standard' && options.profile===undefined){
+      var traceMode=options.traceOptimization===undefined?'fused-gradient':options.traceOptimization;
+      if(traceMode!=='legacy'&&traceMode!=='fused-gradient'&&
+         traceMode!=='fused-preflight'&&traceMode!=='scalar-rk4')
+        throw Error('Unknown standard trace optimization');
+      solverOptions.traceOptimization=traceMode;
+    }else delete solverOptions.traceOptimization;
     var conformalHybrid=options.shootingOptimization==='conformal-hybrid';
     var conformalEngine=conformalHybrid?'fast':
       options.shootingOptimization==='conformal-reference'?'reference':
@@ -111,7 +115,9 @@
     solverOptions=projection.preparedOptions(solverOptions);
     var cache=new Map();
     function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
-    var statistics={solves:0,hits:0,interpolations:0,fallbacks:0,
+    var statistics={traceOptimizationApplied:options.atmosphere==='standard'&&
+        options.profile===undefined?solverOptions.traceOptimization:'not-applicable',
+      solves:0,hits:0,interpolations:0,fallbacks:0,
       exactSolveMs:0,shootRK4Calls:0,shootEvaluations:0,
       predictorAttempts:0,predictorAccepted:0,predictorFallbacks:0,
       warmStartAttempts:0,warmStartAccepted:0,warmStartMisses:0,

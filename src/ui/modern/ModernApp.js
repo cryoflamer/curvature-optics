@@ -4960,12 +4960,18 @@
     function render(model,mode){var graph=mode==='baseline'?graphs.A:graphs.B,
       args=Object.assign({},common,{cacheSession:optics.create(),
         settings:{profileShootingStages:true}});
-      if(mode==='fused')args.settings.traceOptimization='fused-gradient';
+      // Since #140.12.50, the implicit standard kernel is fused. Preserve an
+      // actual legacy reference rather than comparing fused against itself.
+      args.settings.traceOptimization=mode==='baseline'?'legacy':'fused-gradient';
       var result=renderer.renderPhysical(graph,compareAdapter.clone(model),args),
         stats=result.fieldStats||{},timings=result.timings||{};
+      if(stats.traceOptimizationApplied!==args.settings.traceOptimization)
+        throw Error('RK4 audit: requested kernel was not used');
       return {canvas:graph.Canvas,detail:{totalMs:timings.totalMs,
         exactSolveMs:stats.exactSolveMs||0,shootRK4Calls:stats.shootRK4Calls||0,
-        shootEvaluations:stats.shootEvaluations||0,stageMs:stats.shootingStageMs||{},
+        shootEvaluations:stats.shootEvaluations||0,
+        traceOptimizationApplied:stats.traceOptimizationApplied||'not-reported',
+        stageMs:stats.shootingStageMs||{},
         structural:Object.fromEntries(structuralKeys.map(function(k){return [k,result[k]];}))}};
     }
     state.probeBusy=true;button.disabled=true;
@@ -5025,7 +5031,8 @@
       if(interrupted())return;
       var report={version:'140.12.49',kind:'fused standard RK4 multi-scene production gate',
         source:'actual Globe Canvas scenes, same authored model and varied cameras/ranges',
-        productionDefaultUnchanged:true,candidateOnly:true,
+        productionDefaultUnchanged:false,candidateOnly:false,
+        baselineTraceOptimization:'legacy',fusedTraceOptimization:'fused-gradient',
         roundsPerModePerScene:rounds,warmupsPerModePerScene:warmups,
         timingScope:'rotated hot Canvas renders with separate cold optical sessions',
         browserElapsedMs:profileNow()-started,scenes:outcomes,
@@ -5038,7 +5045,7 @@
         'All PNGs are real independently rendered Globe Canvas frames.\n'+
         'Strict diffs are magenta for any nonzero RGBA channel difference.\n'+
         'Each case alternates baseline/fused order, independent optical caches.\n'+
-        'No automatic enabling of the experimental kernel; inspect results.json.\n'});
+        'After #140.12.50, production defaults to fused for built-in standard; baseline explicitly uses legacy.\n'});
       phase='ZIP export';var blob=zip.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download='curvature-compare-140.12.49-fused-production-gate.zip';
       try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
@@ -5071,7 +5078,7 @@
     }
     var generation=state.probeGeneration,original=source,
       modes=['baseline','fused','preflight','scalar'],
-      settingsByMode={baseline:{},fused:{traceOptimization:'fused-gradient'},
+      settingsByMode={baseline:{traceOptimization:'legacy'},fused:{traceOptimization:'fused-gradient'},
         preflight:{traceOptimization:'fused-preflight'},
         scalar:{traceOptimization:'scalar-rk4'}},
       rounds=8,warmups=1,runs={baseline:[],fused:[],preflight:[],scalar:[]},
@@ -5105,9 +5112,13 @@
         graph=mode==='baseline'?graphs.A:graphs.B,
         result=renderer.renderPhysical(graph,compareAdapter.clone(source),args),
         stats=result.fieldStats||{},timings=result.timings||{};
+      if(stats.traceOptimizationApplied!==args.settings.traceOptimization)
+        throw Error('RK4 audit: requested kernel was not used');
       return {canvas:graph.Canvas,detail:{totalMs:timings.totalMs,
         exactSolveMs:stats.exactSolveMs||0,shootRK4Calls:stats.shootRK4Calls||0,
-        shootEvaluations:stats.shootEvaluations||0,clearGroundSteps:stats.clearGroundSteps||0,
+        shootEvaluations:stats.shootEvaluations||0,
+        traceOptimizationApplied:stats.traceOptimizationApplied||'not-reported',
+        clearGroundSteps:stats.clearGroundSteps||0,
         fullGroundEventSteps:stats.fullGroundEventSteps||0,
         preflightGroundSteps:stats.preflightGroundSteps||0,
         stageMs:stats.shootingStageMs||{},stageRK4:stats.shootingStageRK4||{},
@@ -5158,7 +5169,8 @@
       });
       var report={version:'140.12.48',kind:'production RK4 gradient and ground-clearance audit',
         source:'actual standard Globe Compare A, independent cold optical sessions',
-        productionDefaultUnchanged:true,experimentalOnly:true,modes:modes,
+        productionDefaultUnchanged:false,experimentalOnly:true,modes:modes,
+        baselineTraceOptimization:'legacy',
         framesPerMode:rounds,warmupsPerMode:warmups,orderRotation:orders,
         timingScope:'8 warmed order-rotated Canvas frames; independent cold ray fields',
         browserElapsedMs:profileNow()-started,summary:summary,runs:runs,

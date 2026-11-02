@@ -1,5 +1,7 @@
 # #140.12.48 — standard RK4 trace: fused exponential and clearance preflight
 
+> **Historical scope (superseded by #140.12.50):** this document describes the pre-promotion experiment. The built-in standard atmosphere now defaults to `fused-gradient` in the prepared/physical shooting paths; use `traceOptimization: 'legacy'` to reproduce the original RK4. See `FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md`.
+
 ## Scope and default behavior
 
 The default renderer, shooting predictor, integration recurrence, opaque-ground event detector, painter, and existing WebGPU/conformal experiments are unchanged. Two **opt-in** modes are available only when the shared ray field builds a **standard exponential** atmospheric profile; custom, vacuum, engineered and inverse profiles do not opt in:

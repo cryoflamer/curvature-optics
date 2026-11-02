@@ -1,5 +1,7 @@
 # #140.12.49 — Fused standard RK4: promotion gate, not promotion
 
+> **Historical scope (superseded by #140.12.50):** this document describes the pre-promotion experiment. The built-in standard atmosphere now defaults to `fused-gradient` in the prepared/physical shooting paths; use `traceOptimization: 'legacy'` to reproduce the original RK4. See `FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md`.
+
 ## Scope
 
 `fused-gradient` is a **candidate** to become the standard RK4 gradient kernel. It combines the `Math.exp(-h/H)` shared by the standard exponential profile's `n(h)` and `dn/dh`, without altering the integration method, the original first-ground-contact detector, target-shooting tolerances or painting. The original implementation remains the **default** and is an explicit control.

@@ -102,7 +102,7 @@ test('140.12.49: multi-scene browser gate is opt-in and exports strict pixel/str
   assert.match(ui,/cacheSession:optics\.create\(\)/);
   assert.match(ui,/pixels\.strictPixels===0&&structureEqual/);
   assert.match(ui,/strictParityAcrossScenes:allParity/);
-  assert.match(ui,/productionDefaultUnchanged:true,candidateOnly:true/);
+  assert.match(ui,/productionDefaultUnchanged:false,candidateOnly:false/);
   assert.match(ui,/curvature-compare-140\.12\.49-fused-production-gate\.zip/);
-  assert.doesNotMatch(ui,/traceOptimization:\s*'fused-gradient'.*productionDefaultEnabled:true/);
+  assert.match(ui,/args\.settings\.traceOptimization=mode==='baseline'\?'legacy':'fused-gradient'/);
 });

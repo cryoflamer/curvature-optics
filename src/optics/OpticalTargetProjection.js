@@ -330,11 +330,20 @@
     options=options||{};
     if(options.profile!==undefined||options.atmosphere===undefined)return Object.assign({},options);
     var profileOptions=options.profileOptions;
-    if(options.atmosphere==='standard' &&
-        (options.traceOptimization==='fused-gradient'||options.traceOptimization==='fused-preflight'||
-         options.traceOptimization==='scalar-rk4'))
-      profileOptions=Object.assign({},profileOptions,{experimentalFusedGradient:true,
-        experimentalScalarRK4:options.traceOptimization==='scalar-rk4'});
+    if(options.atmosphere==='standard'){
+      // Keep this decision in the preparation boundary: the independent raw
+      // ray-tracer API stays an unchanged diagnostic reference, while the
+      // physical shared-field and prepared shooting default to fused gradient.
+      // Force both internal flags so 'legacy' always means the old RK4 path,
+      // even if a caller supplied old experimental atmosphere options.
+      var mode=options.traceOptimization===undefined?'fused-gradient':options.traceOptimization;
+      if(mode!=='legacy'&&mode!=='fused-gradient'&&
+         mode!=='fused-preflight'&&mode!=='scalar-rk4')
+        throw Error('Unknown standard trace optimization');
+      profileOptions=Object.assign({},profileOptions,{
+        experimentalFusedGradient:mode!=='legacy',
+        experimentalScalarRK4:mode==='scalar-rk4'});
+    }
     var prepared=Object.assign({},options,{profile:rt.atmosphere(options.atmosphere,profileOptions)});
     delete prepared.atmosphere;
     delete prepared.profileOptions;
