@@ -12,7 +12,7 @@
     {
       "demo": "TransLine",
       "sourceIndex": 0,
-      "legacyQuery": "?demo=TransLine&pos=0",
+      "legacyQuery": "?demo=TransLine&pos=1",
       "observables": {
         "refraction": {
           "syncMode": 2,
@@ -62,7 +62,7 @@
     {
       "demo": "TransLine",
       "sourceIndex": 4,
-      "legacyQuery": "?demo=TransLine&pos=4",
+      "legacyQuery": "?demo=TransLine&pos=5",
       "observables": {
         "refraction": {
           "syncMode": 2,
@@ -112,7 +112,7 @@
     {
       "demo": "TransLine",
       "sourceIndex": 7,
-      "legacyQuery": "?demo=TransLine&pos=7",
+      "legacyQuery": "?demo=TransLine&pos=8",
       "observables": {
         "refraction": {
           "syncMode": 1,
@@ -162,7 +162,7 @@
     {
       "demo": "Bedford",
       "sourceIndex": 0,
-      "legacyQuery": "?demo=Bedford&pos=0",
+      "legacyQuery": "?demo=Bedford&pos=1",
       "observables": {
         "refraction": {
           "syncMode": 1,
@@ -212,7 +212,7 @@
     {
       "demo": "Bedford",
       "sourceIndex": 3,
-      "legacyQuery": "?demo=Bedford&pos=3",
+      "legacyQuery": "?demo=Bedford&pos=4",
       "observables": {
         "refraction": {
           "syncMode": 1,
@@ -262,7 +262,7 @@
     {
       "demo": "Bedford",
       "sourceIndex": 6,
-      "legacyQuery": "?demo=Bedford&pos=6",
+      "legacyQuery": "?demo=Bedford&pos=7",
       "observables": {
         "refraction": {
           "syncMode": 1,

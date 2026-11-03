@@ -49,7 +49,7 @@ function buildFixtures() {
         totalStates: states.length,
         samples: indices.map(index => ({
           sourceIndex: index,
-          legacyQuery: `?demo=${encodeURIComponent(demo)}&pos=${index}`,
+          legacyQuery: `?demo=${encodeURIComponent(demo)}&pos=${index + 1}`,
           state: states[index],
         })),
       };

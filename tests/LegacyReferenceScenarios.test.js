@@ -23,7 +23,7 @@ test('fixture is an exact, complete projection of real serialized Legacy demo st
       assert.ok(Object.keys(sample.state).length >= 20, 'full state is retained, not selected fields');
       const params = new URLSearchParams(sample.legacyQuery);
       assert.equal(params.get('demo'), scenario.demo);
-      assert.equal(Number(params.get('pos')), sample.sourceIndex);
+      assert.equal(Number(params.get('pos')), sample.sourceIndex + 1, 'Legacy URL pos is one-based');
       assert.equal(params.has('experiment'), false, 'Legacy routes are not Modern experiments');
     }
   }

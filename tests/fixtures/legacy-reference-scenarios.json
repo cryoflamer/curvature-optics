@@ -9,7 +9,7 @@
       "samples": [
         {
           "sourceIndex": 0,
-          "legacyQuery": "?demo=TransLine&pos=0",
+          "legacyQuery": "?demo=TransLine&pos=1",
           "state": {
             "DemoText": "Lake Pontchartrain Transmission Line",
             "Description": "This Transmission Line crosses Lake Pontchartrain in 25.9 km.",
@@ -75,7 +75,7 @@
         },
         {
           "sourceIndex": 4,
-          "legacyQuery": "?demo=TransLine&pos=4",
+          "legacyQuery": "?demo=TransLine&pos=5",
           "state": {
             "DemoText": "Lake Pontchartrain Transmission Line",
             "Description": "Zooming shows the Curvature clearly:",
@@ -141,7 +141,7 @@
         },
         {
           "sourceIndex": 7,
-          "legacyQuery": "?demo=TransLine&pos=7",
+          "legacyQuery": "?demo=TransLine&pos=8",
           "state": {
             "DemoText": "Lake Pontchartrain Transmission Line",
             "Description": "Here is the Curvature!",
@@ -217,7 +217,7 @@
       "samples": [
         {
           "sourceIndex": 0,
-          "legacyQuery": "?demo=Bedford&pos=0",
+          "legacyQuery": "?demo=Bedford&pos=1",
           "state": {
             "DemoText": "Bedford Level Experiment",
             "Description": "",
@@ -287,7 +287,7 @@
         },
         {
           "sourceIndex": 3,
-          "legacyQuery": "?demo=Bedford&pos=3",
+          "legacyQuery": "?demo=Bedford&pos=4",
           "state": {
             "DemoText": "Bedford Level Experiment",
             "Description": "but both Markers appear below Eye-Level",
@@ -357,7 +357,7 @@
         },
         {
           "sourceIndex": 6,
-          "legacyQuery": "?demo=Bedford&pos=6",
+          "legacyQuery": "?demo=Bedford&pos=7",
           "state": {
             "DemoText": "Bedford Level Experiment",
             "Description": "The Curvature of the Globe Earth is clearly visible",

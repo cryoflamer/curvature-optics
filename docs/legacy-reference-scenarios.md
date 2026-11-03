@@ -17,7 +17,7 @@ node tools/extract-legacy-demo-fixtures.js --check
 node --test tests/LegacyReferenceScenarios.test.js tests/LegacyMigrationPlan.test.js
 ```
 
-The `legacyQuery` strings are **navigation hints** for the historical `?demo=` and `?pos=` conventions, not complete serialized `?state=` streams, and were not verified in a browser. Use them against the Legacy page, not `CurvatureModern.html`. The JSON `state` object is the parsed payload of the exact Legacy `CurveApp = {...}` literal, not a native Modern experiment and not a supported transparent URL conversion.
+The `legacyQuery` strings are **navigation hints** for the historical `?demo=` and **one-based** `?pos=` URL convention (unlike zero-based `sourceIndex`), not complete serialized `?state=` streams, and were not verified in a browser. Use them against the Legacy page, not `CurvatureModern.html`. The JSON `state` object is the parsed payload of the exact Legacy `CurveApp = {...}` literal, not a native Modern experiment and not a supported transparent URL conversion.
 
 ## Selected samples
 
@@ -29,6 +29,8 @@ The `legacyQuery` strings are **navigation hints** for the historical `?demo=` a
 The selected states include Legacy `ObjType` values 3 (tower) and 0 (Bedford marker). Equal integer IDs in Modern are not sufficient evidence of geometry equivalence. A geometry-specific comparison must account for both models' meanings and full camera/atmosphere semantics. Values are copied from the code without rounding; no claims are made about real-world survey accuracy.
 
 ## Capture manifest (not yet populated)
+
+A [browser capture tool and evidence contract](legacy-browser-reference.md) are now available; **no completed image capture has been obtained or approved**.
 
 For **each** of the six samples above, future browser-based reference collection must still record at least (the separate [numeric model snapshots](legacy-headless-reference.md) do not replace these browser captures):
 

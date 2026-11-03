@@ -76,3 +76,7 @@ Required checks before any routing cutover: bare URL; `?ui=legacy`; `?ui=modern&
 - Shared modules, WebGL2, CPU optical solver and rollback path remain covered. No runtime code is removed before these gates.
 
 **Current decision:** Legacy stays. Source-state fixtures and limited headless numerical regressions for `TransLine` and `Bedford` now exist; **independent physical/optical and rendered browser evidence remain missing**. The next gate is a properly recorded browser reference capture and comparison contract, not Legacy deletion or a large Modern UI port.
+
+## Browser evidence follow-up
+
+The [Legacy browser capture contract](legacy-browser-reference.md) implements a fail-closed, per-state Chromium capture of the existing original Canvas and UI screenshot, with environment and SHA-256 provenance. **It has not produced accepted browser references** in this repository; Legacy cannot yet be retired. The source-state `legacyQuery` hints now use the actual one-based `?pos=` URL convention.

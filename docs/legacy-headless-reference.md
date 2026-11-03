@@ -60,3 +60,5 @@ Review the JSON diff and explain why each changed observable is correct **before
 4. Preservation or replacement of diagnostics on the actual renderer path (tower 21, optical occlusion, geometry and frame output). These measurements are not a renderer substitute.
 
 For those reasons, `CurvatureApp.html`, legacy routing, reference drawing code and existing visual validation requirements **remain in place**.
+
+The follow-up [Legacy browser capture tool](legacy-browser-reference.md) prepares real Canvas PNG evidence but cannot replace these model-number checks or establish physics parity. No browser goldens have been accepted.
