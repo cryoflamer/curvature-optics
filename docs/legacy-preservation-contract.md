@@ -65,4 +65,4 @@ A browser failure must be investigated before deleting or relocating affected co
 
 This patch adds test tooling, the reviewed contract fixture and documentation **only**. It does not edit `CurvatureApp.html`, `CurvatureModern.html`, old demos, physics algorithms, script ownership, route semantics, or WebGPU research. It does not create new versioned HTML files. The Browser acceptance checklist is an explicit remaining manual gate, not a claim that Legacy has been successfully animated in the current Linux headless environment.
 
-**Next:** #140.12.66 may inventory *candidates* for dead-code cleanup. No file is approved for deletion merely because it is research-only or absent from one HTML page.
+**Follow-up:** [#140.12.66 dead-code candidate audit](dead-code-candidate-audit.md) now inventories 38 source files with explicit consumers and **zero approved deletions**. The manual Legacy browser acceptance gate still precedes any move or removal.

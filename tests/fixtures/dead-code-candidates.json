@@ -1,0 +1,811 @@
+{
+  "schemaVersion": 1,
+  "policy": "Review evidence only; no deletion authorized. Static entrypoints, commented HTML and literal CommonJS/build refs are incomplete reachability evidence.",
+  "counts": {
+    "sourceJs": 162,
+    "activeInLegacy": 96,
+    "activeInModern": 62,
+    "activeInWebgpuResearch": 14,
+    "commentedLegacySources": 10,
+    "testAndModuleLinkedNotLoaded": 17,
+    "researchLoaded": 11,
+    "totalReviewCandidates": 38,
+    "deletionApproved": 0
+  },
+  "historicalBuild": {
+    "file": "src/make.bat",
+    "sources": [
+      {
+        "file": "src/x.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/jsg.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/jsgx3d.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/tabs.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/xtc.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/DataX.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/slider.js",
+        "exactCaseExists": false
+      },
+      {
+        "file": "src/NumFormatter.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/ControlPanel.js",
+        "exactCaseExists": true
+      },
+      {
+        "file": "src/ModelAnimation.js",
+        "exactCaseExists": true
+      }
+    ]
+  },
+  "protectedFiles": [
+    {
+      "file": "src/legacy/GraphX3DX.js",
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ]
+    },
+    {
+      "file": "src/app/CurvatureModel.js",
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ]
+    },
+    {
+      "file": "src/optics/OpticalRayTracer.js",
+      "directHtmlLoads": [
+        "legacy",
+        "modern",
+        "webgpuResearch"
+      ]
+    },
+    {
+      "file": "src/renderers/CurvatureWebGLGeometryRenderer.js",
+      "directHtmlLoads": [
+        "modern"
+      ]
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+      "directHtmlLoads": [
+        "modern"
+      ]
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js",
+      "directHtmlLoads": [
+        "modern"
+      ]
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuFullFrameParity141234.js",
+      "directHtmlLoads": [
+        "modern"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "file": "src/ControlPanel.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/ControlPanel.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/DataX.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/DataX.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/ModelAnimation.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/ModelAnimation.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/NumFormatter.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/NumFormatter.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/Slider.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/slider.js",
+        "exactCaseExists": false
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureBouguerInvariant141227.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernBouguerInvariant141227.test.js",
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGeometryDifferenceAttribution141237.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGeometryCaptureCache1412372.test.js",
+        "tests/ModernGeometryDifferenceAttribution141237.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuAlgorithmAttribution141235.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuAlgorithmAttribution141235.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerPrecision141230.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuDsRk4Audit141241.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/GpuDsRk4Shooting141241.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/GpuDsRk4Shooting141241.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuGroundContact141226.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureBouguerInvariant141227.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuGroundContact141226.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/GpuDsPainterGate141240.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuNumericalFloor141224.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuNumericalFloor141224.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuPrecisionAudit141222.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuPrecisionFoundation141228.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js",
+        "src/diagnostics/CurvatureGpuPrecisionGeometry141229.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuPrecisionFoundation141228.test.js",
+        "tests/ModernGpuPrecisionGeometry141229.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuPrecisionGeometry141229.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuPrecisionGeometry141229.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuPrecisionLimit141225.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuPrecisionLimit141225.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureGpuRootConvergence141223.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuRootConvergence141223.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureMigrationInventory.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureMigrationInventory.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureOpticalBatchContract1411.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+        "src/diagnostics/CurvatureGpuDsRk4Audit141241.js",
+        "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/GpuDsPainterGate141240.test.js",
+        "tests/GpuDsRk4Shooting141241.test.js",
+        "tests/ModernBouguerInvariant141227.test.js",
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuGroundContact141226.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js",
+        "tests/ModernGpuNumericalFloor141224.test.js",
+        "tests/ModernGpuPrecisionLimit141225.test.js",
+        "tests/OpticalBatchContract1411.test.js",
+        "tests/WebGPUBatchDiagnostics14121.test.js",
+        "tests/WebGPUBatchShooting1412.test.js",
+        "tests/WebGPUEventGuard141214.test.js",
+        "tests/WebGPUPhysicalTolerance14123.test.js",
+        "tests/WebGPUPredictor141213.test.js",
+        "tests/WebGPURootRefinement14122.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureSeparationAudit.js",
+      "kind": "not-loaded-but-statically-referenced",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureSeparationAudit.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "review-static-and-dynamic-consumers-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUBatchDiagnostics14121.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureBouguerInvariant141227.js",
+        "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js",
+        "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuAdaptive141218.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuGridABC141217.test.js",
+        "tests/ModernGpuGroundContact141226.test.js",
+        "tests/ModernGpuNearGround141216.test.js",
+        "tests/ModernGpuNumericalFloor141224.test.js",
+        "tests/ModernGpuPrecisionLimit141225.test.js",
+        "tests/ModernGpuPredictorFrame141215.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/WebGPUBatchDiagnostics14121.test.js",
+        "tests/WebGPUBatchShooting1412.test.js",
+        "tests/WebGPUEventGuard141214.test.js",
+        "tests/WebGPUPhysicalTolerance14123.test.js",
+        "tests/WebGPUPredictor141213.test.js",
+        "tests/WebGPURootRefinement14122.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/WebGPUEventGuard141214.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUOpticsBenchmark.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+        "src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js",
+        "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js",
+        "src/diagnostics/CurvatureWebGPUSceneSpike14010.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUOpticalBenchmark1408.test.js",
+        "tests/WebGPUOpticalBrowser14081.test.js",
+        "tests/WebGPUOpticalMatrix1409.test.js",
+        "tests/WebGPUOpticalPrecision14091.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUOpticalMatrix1409.test.js",
+        "tests/WebGPUOpticalPrecision14091.test.js",
+        "tests/WebGPUSceneSpike14010.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/WebGPUOpticalPrecision14091.test.js",
+        "tests/WebGPUSceneSpike14010.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUPhysicalTolerance14123.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUEventGuard141214.test.js",
+        "tests/WebGPUPredictor141213.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPURootRefinement14122.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/WebGPURootRefinement14122.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/diagnostics/CurvatureWebGPUSceneSpike14010.js",
+      "kind": "research-harness-loaded",
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commentedHtmlReferences": [],
+      "historicalBuildInput": null,
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUSceneSpike14010.test.js"
+      ],
+      "commonJsToolCallers": [],
+      "disposition": "retain-until-explicit-research-retirement",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/jsg.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/jsg.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/jsgx3d.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/jsgx3d.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/tabs.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/tabs.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/x.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/x.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    },
+    {
+      "file": "src/xtc.js",
+      "kind": "commented-legacy-debug-source",
+      "directHtmlLoads": [],
+      "commentedHtmlReferences": [
+        "CurvatureApp.html"
+      ],
+      "historicalBuildInput": {
+        "script": "src/make.bat",
+        "writtenPath": "src/xtc.js",
+        "exactCaseExists": true
+      },
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": [],
+      "disposition": "review-source-bundle-provenance-before-removal",
+      "deletionApproved": false
+    }
+  ]
+}
