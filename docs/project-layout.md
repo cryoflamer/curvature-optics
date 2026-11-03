@@ -33,3 +33,7 @@ Modern UI implementation and the shared-physics contract are specified in
 Legacy default; only `?ui=modern` routes to `CurvatureModern.html`. The
 standalone Modern entry loads the **same physics/scene/renderer modules**,
 without starting the old control/animation/diagnostic UI.
+
+## Legacy retirement boundary
+
+Before removing the default Legacy entry point or Legacy-only UI modules, consult the [Legacy UI retirement assessment](legacy-ui-assessment.md). Modern routing, old saved-state links and scientific comparison oracles require independent compatibility decisions.

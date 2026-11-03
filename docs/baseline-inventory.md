@@ -90,3 +90,7 @@ See [the experiment archive index](experiments/README.md) and track-specific [GP
 - Which historical reference implementation is necessary as an *oracle* rather than merely as preserved source history? Avoid removing `tools/reference/` by pathname.
 
 **Decision for this step:** no deletion or architecture moves have been approved. Preserve the tagged CPU baseline and use the above gates to make subsequent, independently reviewable Compatсhes.
+
+## Legacy UI assessment after documentation normalization
+
+The originally planned #140.12.54 Legacy assessment was deferred: #140.12.54 normalized documentation filenames instead. The assessment was completed as #140.12.55, without deleting the Legacy entry point or modifying runtime behavior. See [Legacy UI retirement assessment](legacy-ui-assessment.md) for the feature matrix, canonical URLs, shared script ownership, scientific-oracle constraints, test dependencies and exit criteria. The earlier sequence above is historical, not authorization to remove Legacy.

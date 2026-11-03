@@ -21,6 +21,7 @@ test('production modules, tests and migration notes are grouped by responsibilit
   const groups = ['geometry', 'scene', 'renderers', 'legacy', 'diagnostics', 'optics', 'ui'];
   for (const group of groups) assert.ok(fs.statSync(path.join(root, 'src', group)).isDirectory());
   assert.ok(fs.readdirSync(__dirname).some(name => name.endsWith('.test.js')));
-  assert.ok(fs.readdirSync(path.join(root, 'docs')).some(name => name.startsWith('MIGRATION_')));
+  assert.ok(fs.readdirSync(path.join(root, 'docs')).some(name => /^migration-[a-z0-9-]+\.md$/.test(name)),
+    'descriptive migration notes should be kept under docs/');
   assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith('.js')), []);
 });
