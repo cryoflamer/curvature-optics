@@ -47,3 +47,7 @@ The matrix describes **observed HTML, script wiring and test contracts**; it doe
 ## Feature-level follow-up
 
 The [Legacy migration plan](legacy-migration-plan.md) inventories all nine demonstration scripts (80 state snapshots), distinguishes archived storyboards from candidate physical fixtures, details the incompatible state/URL formats, and defines acceptance gates. Its classifications are proposals, not evidence of feature parity or authorization to delete Legacy.
+
+## Schema-level compatibility follow-up
+
+The [read-only Legacy / Modern state boundary audit](legacy-modern-compatibility.md) classifies all nine demos / 80 literal states using the Modern validator, and preserves a reproducible [per-state report](../tests/fixtures/legacy-modern-boundary.json). The presence of six original-Canvas Opera PNGs does not establish Modern renderer parity. No import, navigation, Legacy-delete or optical behavior changed.

@@ -1,0 +1,4670 @@
+{
+  "schemaVersion": 1,
+  "source": "src/animation/CurvatureDemos.js",
+  "modernSchema": "src/ui/modern/ModernExperimentState.js",
+  "policy": "read-only; no URL rewriting, model import, optical equivalence or deletion approval",
+  "totalDemos": 9,
+  "totalStates": 80,
+  "browserReferenceStates": 6,
+  "demos": [
+    {
+      "demo": "Curve",
+      "totalStates": 12,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Curve&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Curve&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Curve&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Curve&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Curve&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Curve&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Curve&pos=7",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Curve&pos=8",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Curve&pos=9",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 9,
+          "legacyQuery": "?demo=Curve&pos=10",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 10,
+          "legacyQuery": "?demo=Curve&pos=11",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 11,
+          "legacyQuery": "?demo=Curve&pos=12",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Causeway",
+      "totalStates": 6,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Causeway&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Causeway&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Causeway&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Causeway&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Causeway&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Causeway&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "TransLine",
+      "totalStates": 8,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=TransLine&pos=1",
+          "selectedVisualFixture": true,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "rFEarth",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=TransLine&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "rFEarth",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=TransLine&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "rFEarth",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=TransLine&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "rFEarth",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=TransLine&pos=5",
+          "selectedVisualFixture": true,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "rFEarth",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=TransLine&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "rFEarth",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=TransLine&pos=7",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=TransLine&pos=8",
+          "selectedVisualFixture": true,
+          "showModel": 1,
+          "geometryTypes": [
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [],
+          "structuralStatus": "review-only",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Grace",
+      "totalStates": 9,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Grace&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 2,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjDeltaDist",
+              "value": [
+                20,
+                0
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Grace&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 2,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjDeltaDist",
+              "value": [
+                20,
+                0
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Grace&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 2,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjDeltaDist",
+              "value": [
+                20,
+                0
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Grace&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 2,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjDeltaDist",
+              "value": [
+                20,
+                0
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Grace&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 2,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjDeltaDist",
+              "value": [
+                20,
+                0
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Grace&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 2,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Grace&pos=7",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Grace&pos=8",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Grace&pos=9",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            5,
+            6
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                6,
+                5
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Bedford",
+      "totalStates": 7,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Bedford&pos=1",
+          "selectedVisualFixture": true,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjDist",
+              "value": [
+                -8600,
+                0
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Bedford&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Bedford&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Bedford&pos=4",
+          "selectedVisualFixture": true,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Bedford&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Bedford&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Bedford&pos=7",
+          "selectedVisualFixture": true,
+          "showModel": 3,
+          "geometryTypes": [
+            0,
+            3
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "ObjType",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Tensas",
+      "totalStates": 6,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Tensas&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            7
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                7,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Tensas&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            7
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                7,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Tensas&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            7
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                7,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Tensas&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            7
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                7,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Tensas&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            7
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                7,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Tensas&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            7
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                7,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Soundly",
+      "totalStates": 18,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Soundly&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Soundly&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Soundly&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Soundly&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Soundly&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Soundly&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Soundly&pos=7",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Soundly&pos=8",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Soundly&pos=9",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 9,
+          "legacyQuery": "?demo=Soundly&pos=10",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 10,
+          "legacyQuery": "?demo=Soundly&pos=11",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 11,
+          "legacyQuery": "?demo=Soundly&pos=12",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 12,
+          "legacyQuery": "?demo=Soundly&pos=13",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 13,
+          "legacyQuery": "?demo=Soundly&pos=14",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 14,
+          "legacyQuery": "?demo=Soundly&pos=15",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 15,
+          "legacyQuery": "?demo=Soundly&pos=16",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 16,
+          "legacyQuery": "?demo=Soundly&pos=17",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 17,
+          "legacyQuery": "?demo=Soundly&pos=18",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            8
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                8,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Chicago",
+      "totalStates": 6,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Chicago&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            4
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                4,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Chicago&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            4
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                4,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Chicago&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            4
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                4,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Chicago&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            4
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                4,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Chicago&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            4
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                4,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Chicago&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            4
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                4,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    },
+    {
+      "demo": "Canigou",
+      "totalStates": 8,
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Canigou&pos=1",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Canigou&pos=2",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Canigou&pos=3",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Canigou&pos=4",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Canigou&pos=5",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Canigou&pos=6",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Canigou&pos=7",
+          "selectedVisualFixture": false,
+          "showModel": 1,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Canigou&pos=8",
+          "selectedVisualFixture": false,
+          "showModel": 3,
+          "geometryTypes": [
+            3,
+            5
+          ],
+          "mappedFields": [
+            "DemoText",
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "NObjects",
+            "Nick",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideType",
+            "ObjSideVar",
+            "ObjSize",
+            "ObjSizeType",
+            "ObjSizeVar",
+            "Pan",
+            "Roll",
+            "deviceRatio",
+            "rEarth",
+            "showGrid",
+            "viewcenterHorizon"
+          ],
+          "unmappedFields": [
+            "nLines",
+            "pressure",
+            "rFEarth",
+            "refractionCoeff",
+            "refractionFactMax",
+            "refractionFactMin",
+            "refractionSync",
+            "showData",
+            "showEyeLevel",
+            "showTangent",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "blockers": [
+            {
+              "code": "modern-schema-rejected",
+              "field": "ObjType",
+              "value": [
+                5,
+                3
+              ]
+            },
+            {
+              "code": "modern-schema-rejected",
+              "field": "showModel",
+              "value": 3
+            }
+          ],
+          "structuralStatus": "blocked",
+          "conversionStatus": "not-supported"
+        }
+      ]
+    }
+  ]
+}

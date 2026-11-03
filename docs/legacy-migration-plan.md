@@ -80,3 +80,7 @@ Required checks before any routing cutover: bare URL; `?ui=legacy`; `?ui=modern&
 ## Browser evidence follow-up
 
 The [Legacy browser capture contract](legacy-browser-reference.md) documents the separate Playwright route. A **real user-supplied Opera original-Canvas ZIP of all six states** is now frozen in `tests/fixtures/` and checked by the [offline visual validator](legacy-visual-validation.md) (integrity, applied state and configurable per-frame pixel metrics). No full-page screenshots or Modern comparisons have been collected; Legacy cannot yet be retired. The source-state `legacyQuery` hints use the actual one-based `?pos=` URL convention.
+
+## Structural compatibility inventory (follow-up)
+
+The [Legacy / Modern compatibility boundary](legacy-modern-compatibility.md) now audits **all 80 literal demo states** against the actual Modern experiment allowlist, with a [deterministic machine-readable report](../tests/fixtures/legacy-modern-boundary.json) and regression tests. It identifies transferable field *names*, rejected shapes/ranges/combined views and unrepresented Legacy optics/overlays. This is **not a converter** and does not change the routing, physical models or the deletion gates above. Even the structurally reviewable TransLine states require independent numerical and visual acceptance.
