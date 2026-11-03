@@ -23,3 +23,5 @@ This patch changes tests, their helper, and documentation only. The Legacy prese
 A broad 230-file Node test run was attempted but was not completed as a passing suite. Independently on the **unchanged #140.12.67 baseline**, four assertions failed across `tests/ModernGeometryDifferenceAttribution141237.test.js` and `tests/ModernGpuAutomaticAuditExport1412311.test.js` (old script-version / retired Modern GPU-export assumptions). They are not fixed in this test-only patch, and should receive separate triage before future deletion gates.
 
 The project-specific targeted Legacy/Modern/CPU optics/WebGL2/research tests and isolation fixtures should be run in addition to the direct repair tests. Node-only GPU mocks are never evidence of shader compilation.
+
+**Follow-up #140.12.69:** The four previously reproduced failures were repaired by updating stale UI assumptions and directly testing retained JSON export helpers; see [the follow-up test repair](regression-test-repairs-140.12.69.md). These patches do not constitute a complete passing browser or GPU suite.

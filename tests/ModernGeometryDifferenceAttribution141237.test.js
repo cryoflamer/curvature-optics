@@ -91,19 +91,22 @@ test('140.12.37: ZIP includes source diagnostics and per-camera geometry overlay
   assert.equal(files.filter(x=>x.name.endsWith('unresolved-queries.json')).length,4);
   assert.ok(files.some(x=>x.name==='geometry/README.txt'));
 });
-test('140.12.37: new callback is strictly opt-in and browser runs candidate geometry before CPU',()=>{
+test('140.12.37: archived geometry collector stays testable without a retired Modern UI hook',()=>{
   const root=path.resolve(__dirname,'..');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
-  assert.match(html,/CurvatureGeometryDifferenceAttribution141237\.js\?v=140\.12\.37/);
-  assert.match(app,/state\.probeGeometryAudit=geometryAudit\.collector\(config\.id,name\)/);
-  assert.match(app,/state\.probeGeometryAudit=geometryAudit\.collector\(measurement\.id,'cpu'\)/);
-  assert.match(app,/geometryAudit\.compareAll\(geometryCases,cases\)/);
-  assert.match(app,/curvature-compare-140\.12\.37-geometry-attribution\.zip/);
-  assert.match(app,/state\.probeGeometryAudit=null;/);
+  // #140.12.53 retired this experiment from Modern, not its standalone
+  // collector, source-linked comparison, or the optional CPU painter hooks.
+  assert.doesNotMatch(html,/\bsrc="[^"]*CurvatureGeometryDifferenceAttribution141237\.js/);
+  assert.doesNotMatch(app,/state\.probeGeometryAudit=geometryAudit\.collector\(/);
+  assert.equal(typeof audit.collector,'function');
+  assert.equal(typeof audit.compareAll,'function');
+  assert.equal(typeof audit.entries,'function');
   const opticsSource=fs.readFileSync(path.join(root,'src/optics/CurvaturePhysicalSceneOptics.js'),'utf8');
   assert.match(opticsSource,/if\(options\.geometryAudit&&typeof options\.geometryAudit\.onScene/);
   assert.match(opticsSource,/onUnresolved:options\.geometryAudit&&/);
+  const renderer=fs.readFileSync(path.join(root,'src/app/CurvatureMainCanvasRenderer.js'),'utf8');
+  assert.match(renderer,/options\.geometryAudit\.onScene\(opticalFrame\.composition\.scene,opticalFrame\.stats\)/);
 });
 test('140.12.37.1: physical painter binds captured scene after optical transform, even on cache reuse',()=>{
   const src=fs.readFileSync(path.resolve(__dirname,'../src/app/CurvatureMainCanvasRenderer.js'),'utf8');
