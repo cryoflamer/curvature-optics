@@ -131,6 +131,12 @@ For a full Description see <a href="http://walter.bislins.ch/bloge/index.asp?pag
     <span id="PhysicalCanvasProfileHelp" style="font-size:0.85em;color:#555;">Straight rays; no atmospheric refraction.</span>
   </div>
   <div id="MainCanvasRendererStatus" role="status" aria-live="polite" style="margin-top:0.4em;font-size:0.88em;line-height:1.5;"></div>
+  <div id="LegacyReferenceExportToolbar" style="margin-top:0.5em;padding-top:0.45em;border-top:1px solid #ddd;display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;">
+    <strong>Legacy reference capture</strong>
+    <button type="button" id="LegacyReferenceCurrentButton">Export current PNG + JSON (ZIP)</button>
+    <button type="button" id="LegacyReferenceAllButton">Export all 6 references (ZIP)</button>
+    <span id="LegacyReferenceExportStatus" role="status" aria-live="polite" style="font-size:0.85em;"></span>
+  </div>
 </div>
 <details id="OpticsAdvancedDiagnostics" style="margin:0.4em 0;">
   <summary style="cursor:pointer;user-select:none;">Advanced diagnostics (optics tests)</summary>
@@ -266,6 +272,10 @@ Click a Button to Start a Demo. Click again to skip one step. Click the Animatio
 <script src="src/app/CurvatureCanvasFrameScheduler.js"></script>
 <script src="src/app/CurvatureHeightChangeScheduler.js"></script>
 <script src="src/app/CurvatureAppRuntime.js"></script>
+<script src="src/diagnostics/LegacyBrowserReferenceExport.js"></script>
+<script>
+  xOnLoad(function() { LegacyBrowserReferenceExport.install(window); });
+</script>
 
 
 <ul id="CurveSettingsTabs" class="TabSelectors Top MarginTop">
