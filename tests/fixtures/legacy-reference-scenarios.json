@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 1,
+  "source": "src/animation/CurvatureDemos.js",
+  "description": "Literal CurveApp states from Legacy demos; not rendered or numerical baselines",
+  "scenarios": [
+    {
+      "demo": "TransLine",
+      "totalStates": 8,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=TransLine&pos=0",
+          "state": {
+            "DemoText": "Lake Pontchartrain Transmission Line",
+            "Description": "This Transmission Line crosses Lake Pontchartrain in 25.9 km.",
+            "Height": 100,
+            "FocalLengthField": 100,
+            "Roll": 0,
+            "Nick": 0,
+            "Pan": -10,
+            "nLines": 45,
+            "showModel": 1,
+            "showGrid": 0,
+            "showData": false,
+            "showTangent": false,
+            "showEyeLevel": false,
+            "deviceRatio": 1.5,
+            "viewcenterHorizon": 0,
+            "ObjType": [
+              3,
+              3
+            ],
+            "NObjects": [
+              85,
+              2
+            ],
+            "ObjDist": [
+              50,
+              25550
+            ],
+            "ObjDeltaDist": [
+              297.55,
+              373
+            ],
+            "ObjSideType": [
+              0,
+              0
+            ],
+            "ObjSidePos": [
+              -500,
+              -509.6
+            ],
+            "ObjSideVar": [
+              0,
+              0
+            ],
+            "ObjSizeType": [
+              0,
+              0
+            ],
+            "ObjSize": [
+              23,
+              64
+            ],
+            "ObjSizeVar": [
+              0,
+              0
+            ],
+            "refractionSync": 2,
+            "refractionFactMin": 0.5,
+            "refractionFactMax": 10000,
+            "rEarth": 6371000,
+            "rFEarth": 10007543
+          }
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=TransLine&pos=4",
+          "state": {
+            "DemoText": "Lake Pontchartrain Transmission Line",
+            "Description": "Zooming shows the Curvature clearly:",
+            "Height": 15,
+            "FocalLengthField": 2000,
+            "Roll": 0,
+            "Nick": 0,
+            "Pan": 0,
+            "nLines": 45,
+            "showModel": 1,
+            "showGrid": 1,
+            "showData": false,
+            "showTangent": false,
+            "showEyeLevel": false,
+            "deviceRatio": 1.5,
+            "viewcenterHorizon": 0,
+            "ObjType": [
+              3,
+              3
+            ],
+            "NObjects": [
+              85,
+              2
+            ],
+            "ObjDist": [
+              50,
+              25550
+            ],
+            "ObjDeltaDist": [
+              297.55,
+              373
+            ],
+            "ObjSideType": [
+              0,
+              0
+            ],
+            "ObjSidePos": [
+              35,
+              25.4
+            ],
+            "ObjSideVar": [
+              0,
+              0
+            ],
+            "ObjSizeType": [
+              0,
+              0
+            ],
+            "ObjSize": [
+              23,
+              64
+            ],
+            "ObjSizeVar": [
+              0,
+              0
+            ],
+            "refractionSync": 2,
+            "refractionFactMin": 0.5,
+            "refractionFactMax": 10000,
+            "rEarth": 6371000,
+            "rFEarth": 10007543
+          }
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=TransLine&pos=7",
+          "state": {
+            "DemoText": "Lake Pontchartrain Transmission Line",
+            "Description": "Here is the Curvature!",
+            "Height": 15,
+            "FocalLengthField": 3500,
+            "Roll": 0,
+            "Nick": 0.052,
+            "Pan": 0.2,
+            "nLines": 45,
+            "showModel": 1,
+            "showGrid": 1,
+            "showData": false,
+            "showTangent": false,
+            "showEyeLevel": false,
+            "deviceRatio": 1.5,
+            "viewcenterHorizon": 0,
+            "ObjType": [
+              3,
+              3
+            ],
+            "NObjects": [
+              85,
+              2
+            ],
+            "ObjDist": [
+              50,
+              25550
+            ],
+            "ObjDeltaDist": [
+              297.55,
+              373
+            ],
+            "ObjSideType": [
+              0,
+              0
+            ],
+            "ObjSidePos": [
+              32,
+              22.4
+            ],
+            "ObjSideVar": [
+              0,
+              0
+            ],
+            "ObjSizeType": [
+              0,
+              0
+            ],
+            "ObjSize": [
+              23,
+              64
+            ],
+            "ObjSizeVar": [
+              0,
+              0
+            ],
+            "refractionCoeff": 0,
+            "tempGradient": -0.0343,
+            "refractionSync": 1,
+            "pressure": 1013.0098,
+            "temperatureC": 14.987,
+            "refractionFactMin": 0.5,
+            "refractionFactMax": 10000,
+            "rEarth": 6371000,
+            "rFEarth": 10007543
+          }
+        }
+      ]
+    },
+    {
+      "demo": "Bedford",
+      "totalStates": 7,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Bedford&pos=0",
+          "state": {
+            "DemoText": "Bedford Level Experiment",
+            "Description": "",
+            "Height": 7,
+            "FocalLengthField": 800,
+            "Roll": 0,
+            "Nick": 0,
+            "Pan": 0,
+            "nLines": 45,
+            "showModel": 3,
+            "showGrid": 0,
+            "showData": false,
+            "showTangent": false,
+            "showEyeLevel": false,
+            "deviceRatio": 1.5,
+            "viewcenterHorizon": 3,
+            "ObjType": [
+              0,
+              3
+            ],
+            "NObjects": [
+              3,
+              0
+            ],
+            "ObjDist": [
+              -8600,
+              0
+            ],
+            "ObjDeltaDist": [
+              4830,
+              100
+            ],
+            "ObjSideType": [
+              0,
+              0
+            ],
+            "ObjSidePos": [
+              0,
+              0
+            ],
+            "ObjSideVar": [
+              18,
+              0
+            ],
+            "ObjSizeType": [
+              0,
+              0
+            ],
+            "ObjSize": [
+              4.04,
+              10
+            ],
+            "ObjSizeVar": [
+              0,
+              0
+            ],
+            "refractionCoeff": 0,
+            "tempGradient": -0.0343,
+            "refractionSync": 1,
+            "pressure": 1013.0098,
+            "temperatureC": 14.987,
+            "refractionFactMin": 0.5,
+            "refractionFactMax": 10000,
+            "rEarth": 6371000,
+            "rFEarth": 10007543
+          }
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Bedford&pos=3",
+          "state": {
+            "DemoText": "Bedford Level Experiment",
+            "Description": "but both Markers appear below Eye-Level",
+            "Height": 4.04,
+            "FocalLengthField": 5000,
+            "Roll": 0,
+            "Nick": 0,
+            "Pan": 0,
+            "nLines": 45,
+            "showModel": 3,
+            "showGrid": 0,
+            "showData": false,
+            "showTangent": false,
+            "showEyeLevel": true,
+            "deviceRatio": 1.5,
+            "viewcenterHorizon": 3,
+            "ObjType": [
+              0,
+              3
+            ],
+            "NObjects": [
+              3,
+              0
+            ],
+            "ObjDist": [
+              124,
+              0
+            ],
+            "ObjDeltaDist": [
+              4830,
+              100
+            ],
+            "ObjSideType": [
+              0,
+              0
+            ],
+            "ObjSidePos": [
+              9.23,
+              0
+            ],
+            "ObjSideVar": [
+              18,
+              0
+            ],
+            "ObjSizeType": [
+              0,
+              0
+            ],
+            "ObjSize": [
+              4.04,
+              10
+            ],
+            "ObjSizeVar": [
+              0,
+              0
+            ],
+            "refractionCoeff": 0,
+            "tempGradient": -0.0343,
+            "refractionSync": 1,
+            "pressure": 1013.0098,
+            "temperatureC": 14.987,
+            "refractionFactMin": 0.5,
+            "refractionFactMax": 10000,
+            "rEarth": 6371000,
+            "rFEarth": 10007543
+          }
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Bedford&pos=6",
+          "state": {
+            "DemoText": "Bedford Level Experiment",
+            "Description": "The Curvature of the Globe Earth is clearly visible",
+            "Height": 4.04,
+            "FocalLengthField": 5000,
+            "Roll": 0,
+            "Nick": 0,
+            "Pan": 0,
+            "nLines": 45,
+            "showModel": 3,
+            "showGrid": 1,
+            "showData": false,
+            "showTangent": false,
+            "showEyeLevel": true,
+            "deviceRatio": 1.5,
+            "viewcenterHorizon": 3,
+            "ObjType": [
+              0,
+              3
+            ],
+            "NObjects": [
+              49,
+              0
+            ],
+            "ObjDist": [
+              124,
+              0
+            ],
+            "ObjDeltaDist": [
+              201.25,
+              100
+            ],
+            "ObjSideType": [
+              0,
+              0
+            ],
+            "ObjSidePos": [
+              5.63,
+              0
+            ],
+            "ObjSideVar": [
+              1.25,
+              0
+            ],
+            "ObjSizeType": [
+              0,
+              0
+            ],
+            "ObjSize": [
+              4.04,
+              10
+            ],
+            "ObjSizeVar": [
+              0,
+              0
+            ],
+            "refractionCoeff": 0,
+            "tempGradient": -0.0343,
+            "refractionSync": 1,
+            "pressure": 1013.0098,
+            "temperatureC": 14.987,
+            "refractionFactMin": 0.5,
+            "refractionFactMax": 10000,
+            "rEarth": 6371000,
+            "rFEarth": 10007543
+          }
+        }
+      ]
+    }
+  ]
+}
