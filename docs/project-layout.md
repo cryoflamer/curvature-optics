@@ -36,4 +36,4 @@ without starting the old control/animation/diagnostic UI.
 
 ## Legacy retirement boundary
 
-Before removing the default Legacy entry point or Legacy-only UI modules, consult the [Legacy UI retirement assessment](legacy-ui-assessment.md). Modern routing, old saved-state links and scientific comparison oracles require independent compatibility decisions.
+Before removing the default Legacy entry point or Legacy-only UI modules, consult the [Legacy UI retirement assessment](legacy-ui-assessment.md) and the [feature migration plan](legacy-migration-plan.md). Modern routing, old saved-state links and scientific comparison oracles require independent compatibility decisions.

@@ -43,3 +43,7 @@ The matrix describes **observed HTML, script wiring and test contracts**; it doe
 5. **Final removal:** delete `CurvatureApp.html` only after routing, bookmarks, demos, saved states, diagnostic oracles, numerical parity and browser acceptance are satisfied or consciously deprecated and documented.
 
 **Decision:** Legacy is **not yet safe to remove**. The next useful implementation unit is an evidence-backed demo/state/diagnostic **feature-parity matrix**, not a bulk deletion. This document is the pre-removal checkpoint and does not claim a completed migration.
+
+## Feature-level follow-up
+
+The [Legacy migration plan](legacy-migration-plan.md) inventories all nine demonstration scripts (80 state snapshots), distinguishes archived storyboards from candidate physical fixtures, details the incompatible state/URL formats, and defines acceptance gates. Its classifications are proposals, not evidence of feature parity or authorization to delete Legacy.
