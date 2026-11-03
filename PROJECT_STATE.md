@@ -3,7 +3,7 @@
 - Explicit-only `shootingOptimization: 'conformal-hybrid'`: the cheap standard Globe RK4 shooting predictor runs first; only a failed predictor invokes a lazy conformal candidate, which is *again integrated and certified* by unchanged RK4. Original angular bracket and strict ground-contact classification remain final authorities. Standard production default, nonstandard profiles, Flat, vacuum, and painter are unchanged.
 - Optional per-stage RK4-call, evaluation and timing instrumentation; separate on-demand conformal prediction time and acceptance/fallback counters. No default instrumentation overhead without explicit `profileShootingStages`.
 - Modern Compare **Audit lazy hybrid shooting · baseline / hybrid / conformal · 8 hot frames · ZIP** renders three actual independently recomputed physical Canvas frames per round, rotates order, exports JSON with all stage timing/count medians and real PNGs with pixel-difference maps. Strict last-frame pixel parity and structural counts reported independently; this is not a physical multipath proof or production promotion.
-- Local 100-target sweeps showed the cheap standard predictor almost always succeeded (98/100), with zero late conformal acceptances on two difficult ground cases; a faster full frame is NOT assumed. See `docs/CPU_HYBRID_SHOOTING_140_12_47.md`. Browser export needs user verification if local Chromium navigation is blocked. No WGSL changes or new tools HTML page.
+- Local 100-target sweeps showed the cheap standard predictor almost always succeeded (98/100), with zero late conformal acceptances on two difficult ground cases; a faster full frame is NOT assumed. See `docs/cpu-hybrid-shooting.md`. Browser export needs user verification if local Chromium navigation is blocked. No WGSL changes or new tools HTML page.
 
 ## Patch 140.12.45 — Guarded CPU conformal production shooting + frame parity (2026-11-01)
 
@@ -24,18 +24,18 @@
 - Added `CurvatureGpuDsRk4Shooting141241.js`: **separate** WGSL classic-double-single port of tangent-frame `[x,z,vx,vz]` RK4 and first-forward-x target shooting, with angular bracket/regula falsi and fixed-x endpoint correction. Uses a sampled DS first-ground crossing/grazing detector and endpoint ground uncertainty. The old Bouguer #140.12.32 solver is untouched. Input direct-angle seeds are **not CPU solved angles**.
 - Added `CurvatureGpuDsRk4Audit141241.js` and an opt-in Modern Compare button to run the 48 original physical points from #140.12.40 with independent CPU f64 reference. ZIP contains JSON, a real CPU Canvas screenshot, clearly labeled **sample-only** GPU/CPU point maps, status-error map, timing visualization, README; failure produces an error ZIP.
 - All output failures and indeterminate contacts are fail-closed. A 48-point sample match does not authorize replacing the production CPU painter: no full-frame DS reconstruction, no adaptive query scheduling, no cross-platform DS precision guarantee and no general multipath certification.
-- Exact scope and verification limitations: `docs/GPU_DS_RK4_SHOOTING_140_12_41.md`. Canonical `tools/webgpu-optics.html`, production CPU/GPU paths and painting remain unchanged. A real WebGPU runtime check is required for generated WGSL, in addition to Node/structural tests.
+- Exact scope and verification limitations: `docs/gpu-ds-rk4-shooting.md`. Canonical `tools/webgpu-optics.html`, production CPU/GPU paths and painting remain unchanged. A real WebGPU runtime check is required for generated WGSL, in addition to Node/structural tests.
 
 ## Patch 140.12.40 — GPU DS real-scene painter-equivalence feasibility gate (2026-10-31)
 
 - Added Modern Compare **Audit CPU f64 vs GPU DS · real-scene shooting gate · PNG + JSON ZIP** action. It samples 48 deterministic physically authored tower/foundation edge targets from the active Globe scene and compares existing DS radial Bouguer shooting (256/512 quadrature nodes) with CPU f64 RK4 shooting on the **same** targets, reporting angle and pixel-space displacement, candidate visibility disagreements, GPU compile/dispatch+readback vs CPU solver timing, source-lineage metadata, and an actual CPU Canvas reference screenshot alongside correctly labeled ray-only PNGs.
-- **Not a CPU-equivalent GPU DS renderer:** the existing #140.12.32 DS solver uses Bouguer quadrature rather than the reference RK4/bracket/contact algorithm; GPU visibility is uncertified and cannot be injected into the adaptive painter. A real `gpu-ds.png` full frame / image difference / 64–4096-target performance ladder is explicitly marked unsupported rather than fabricated. See `docs/GPU_DS_CPU_PAINTER_GATE_140_12_40.md`.
+- **Not a CPU-equivalent GPU DS renderer:** the existing #140.12.32 DS solver uses Bouguer quadrature rather than the reference RK4/bracket/contact algorithm; GPU visibility is uncertified and cannot be injected into the adaptive painter. A real `gpu-ds.png` full frame / image difference / 64–4096-target performance ladder is explicitly marked unsupported rather than fabricated. See `docs/gpu-ds-cpu-painter-gate.md`.
 - Existing production CPU/GPU renderer, optics, painter, WGSL and canonical `tools/webgpu-optics.html` remain unchanged. No new standalone HTML page was added.
 
 ## Patch 140.12.37 — Source-linked optical geometry differences (2026-10-31)
 - Extended the existing single Compare diagnostic button / ZIP export, preserving all 44 #140.12.36 PNGs and numerical JSON. Added eight CPU/GPU geometry-edge PNGs and four physical rejected-query trace JSONs (one per camera). The new ZIP is `curvature-compare-140.12.37-geometry-attribution.zip`.
 - Opt-in pre-painter captures of projected physical fill triangles / outline segments, mapped to authored `(objectLayer, opticalSourceIndex)`. Per-source counts and angular-vertex signatures (~2e-6 rad resolution) are a **diagnostic proxy**, not proof of missing triangle sets or causal pixel contribution. Per-source screen edge bounding boxes link candidates to the 4x3 difference-tile grid (correlation only).
-- Opt-in rejected-leaf hooks report physical sample coordinates and status/reasons for outlines/fills, with explicit `fieldQueried` distinction. Exported sample details limited to 500 rejected leaves per render; per-source counts unbounded. No f32/DS/shooting/rasterizer policy changed. Browser WebGPU still requires a user run. See `docs/GPU_GEOMETRY_DIFFERENCE_ATTRIBUTION_140_12_37.md`.
+- Opt-in rejected-leaf hooks report physical sample coordinates and status/reasons for outlines/fills, with explicit `fieldQueried` distinction. Exported sample details limited to 500 rejected leaves per render; per-source counts unbounded. No f32/DS/shooting/rasterizer policy changed. Browser WebGPU still requires a user run. See `docs/gpu-geometry-difference-attribution.md`.
 
 
 ## Patch 140.12.36 — Visual ZIP attribution (2026-10-31)
@@ -45,26 +45,26 @@
 
 - Added opt-in Compare action **Audit algorithm attribution · baseline / strict / direct GPU**, automatically exporting `curvature-compare-140.12.35-algorithm-attribution.json`. One 4096-ray scene-derived f32 predictor grid is reused across three real Canvas B variants for four fixed camera views. `baseline` retains nearest-weight visibility selection, `strict` reports mixed/invalid/out-of-domain responses as indeterminate (angle unchanged), and `strictDirect` replaces up to 192 exact original B renderer query coordinates with independent direct GPU f32 predictor results. No CPU-guided GPU sampling and no production changes.
 - Independently compare each variant with repeated cold CPU A reference images. Only *after* all GPU variants, solve the same selected renderer target coordinates with CPU f64 to report separate grid-vs-CPU and direct-GPU-vs-CPU status confusion, robust mismatches, camera-pixel angular offsets on status-agreed rays, renderer contour counts and **fillUnresolved**. Results are not additive causal contributions because changed statuses change adaptive geometry queries; an unknown/blocked status is not silently promoted to visible.
-- The existing 48-ray DS GPU shooting is **not** integrated into these frames. Tests include a 2×2 synthetic discontinuity and an actual physical scene transform using strict GPU field. No new WGSL; browser WebGPU execution of the new experiment remains to be verified. See `docs/GPU_ALGORITHM_ATTRIBUTION_140_12_35.md`.
+- The existing 48-ray DS GPU shooting is **not** integrated into these frames. Tests include a 2×2 synthetic discontinuity and an actual physical scene transform using strict GPU field. No new WGSL; browser WebGPU execution of the new experiment remains to be verified. See `docs/gpu-algorithm-attribution.md`.
 
 ## Patch 140.12.33 — Actual-camera pixel-space GPU DS shooting samples (2026-10-31)
 
 - Added Compare action **Audit pixel-space DS shooting · real Compare camera**, with automatic `curvature-compare-140.12.33-pixel-space-audit.json` export. It runs the unchanged independent 48-target GPU DS shooting (256/512 nodes), independent post-GPU CPU f64 RK4 shooting and Bouguer f64 2048-node root, then measures physical camera launch-ray differences in actual Compare A Canvas backing-store pixels. Camera/graph/viewport changes during execution invalidate the report; pixel projection is independently checked against the existing physical painter with nonzero pan, tilt and roll.
 - The primary metrics are projected GPU-vs-CPU RK4 displacement in pixels (max, average, RMS, p95, >0.5 px, >1 px), discrete sampled pixel-cell/row occupancy differences, field-of-view coverage and clear/blocked/uncertain classifications. The CPU Bouguer root is an additional separate error diagnostic. Ground contacts within 1 cm remain uncertain, not certified.
-- **Strict scope:** the underlying GPU program provides 48 isolated meridian rays, not a GPU-painted frame. No actual full-frame image pixel diff, 2D silhouette or renderer accuracy is established. JSON explicitly sets `actualRenderedImageCompared:false` and `fullFramePixelParityEstablished:false`; the report cannot authorize production promotion. See `docs/GPU_PIXEL_SPACE_AUDIT_140_12_33.md`. No changed physics, DS WGSL, production shooting or painting, or versioned HTML tools.
+- **Strict scope:** the underlying GPU program provides 48 isolated meridian rays, not a GPU-painted frame. No actual full-frame image pixel diff, 2D silhouette or renderer accuracy is established. JSON explicitly sets `actualRenderedImageCompared:false` and `fullFramePixelParityEstablished:false`; the report cannot authorize production promotion. See `docs/gpu-pixel-space-audit.md`. No changed physics, DS WGSL, production shooting or painting, or versioned HTML tools.
 
 ## Patch 140.12.30 — GPU Bouguer target-polar precision recheck (2026-10-31)
 
 - Added Compare action **Audit Bouguer precision · f32 d/R vs double-single**, exporting `curvature-compare-140.12.30-bouguer-precision.json`. One independently shot batch of 48 original Globe/standard targets is reused across four GPU variants. The original #140.12.27 256-node Bouguer shader is the unchanged f32 control; three new shaders replace only the target-angle evaluation with direct f32 `d/R` or classic/integer-residual double-single `d/R`. DS low target-angle limbs participate in the final surface margin. No GPU integrand, refraction, RK4, shooting, visibility, or production paint path was changed.
 - The independent CPU f64 2048-node invariant reference, 256-node convergence diagnostic and same-angle CPU f64 RK4 replay run **only after** all GPU submissions, preserving the #140.12.27 event/source analysis and allowing target-angle-versus-ground-angle error decomposition. Reports per-mode 48-row comparisons, contact sign mismatches, absolute margin differences, ground-angle invariance, and separate near-surface cases. Numerical results and actual WGSL compilation require a browser/WebGPU run; the new DS modes are not f64, error-bounded, or visibility-certified.
-- Added numerical, shader contract, mock WebGPU, lifecycle, CPU-vs-GPU ordering, and UI/export tests. See `docs/GPU_BOUGUER_PRECISION_140_12_30.md`.
+- Added numerical, shader contract, mock WebGPU, lifecycle, CPU-vs-GPU ordering, and UI/export tests. See `docs/gpu-bouguer-precision.md`.
 
 ## Patch 140.12.29 — Independent WebGPU Globe/Flat precision geometry and input-split audit (2026-10-31)
 
 - Added Compare action **Audit GPU precision geometry · Globe / Flat / hi+lo inputs**; it exports `curvature-compare-140.12.29-gpu-precision-geometry.json` without changing production shooting, ground contact, atmosphere or painting. Three real WebGPU compute pipelines reuse the exact #140.12.28 f32, classic double-single and integer-residual double-single arithmetic helper implementations and report per-mode errors and warmed dispatch/readback timings on 48 fixed distance/altitude targets.
 - The Globe probe uses actual `CurvatureSurfaceGeometry.surfacePoint2(d,h)` Cartesian coordinates and compares the #140.12.27 normalized f32 `atan2` baseline against high-precision direct `d/R` and an independently calculated Cartesian `atan(x/(R+y))` with a bounded small-positive-angle polynomial. CPU f64 references are evaluated independently for the exact arc angle and the Cartesian coordinate calculation; the report separates any source-geometry difference.
 - Distinguishes constructing `R+h` from separately packed hi/lo radius and local height from packing `R+h` as a large absolute coordinate **before** transmission; repeats the comparison for Flat global-to-local distance with 15,000,000.125 m origin. This isolates original-input two-limb quantization (including the observed 0.1 m / ~1.86 nm case) from GPU cancellation. Both GPU modes remain non-certified and bounded, NOT binary64.
-- New tests cover source packing, separate genuine geometry paths, shader contract, CPU reference, mock GPU readback, resource release and UI/JSON integration. **Actual WebGPU WGSL compilation and numeric results still require the user's browser export.** See `docs/GPU_PRECISION_GEOMETRY_140_12_29.md`.
+- New tests cover source packing, separate genuine geometry paths, shader contract, CPU reference, mock GPU readback, resource release and UI/JSON integration. **Actual WebGPU WGSL compilation and numeric results still require the user's browser export.** See `docs/gpu-precision-geometry.md`.
 
 ## Patch 140.12.26 — Fixed GPU-angle ground contact vs independent f64 (2026-10-31)
 
@@ -113,7 +113,7 @@
   classification**, rather than GPU warm starts re-solved on CPU; subsequent
   wavefront/batch scene integration would need new async orchestration,
   generation cancellation and per-configuration caching. See
-  `docs/WEBGPU_BATCH_SHOOTING_ARCHITECTURE_140_11.md` for interfaces, source
+  `docs/webgpu-batch-shooting-architecture.md` for interfaces, source
   points, precise limitations and prospective numerical/performance gates.
 - #140.10 `SCENE_PERFORMANCE_STOP` stays **CLOSED / PARKED**; #140.11 is
   an authorized design exploration, not a production promotion or automatic
@@ -133,7 +133,7 @@ increments before compensated f32 position accumulation while retaining the
 original shader as the unmodified default. A Vacuum f64 analytic straight-line
 reference separates CPU RK4 error from GPU drift. A browser-only 18-pair
 (36-run) diagnostic and hard stop gates are at `tools/webgpu-optics.html`
-and `docs/WEBGPU_OPTICAL_PRECISION_DIAGNOSTIC_140_9_1.md`.
+and `docs/webgpu-optical-precision-followup.md`.
 **No real WebGPU result for this correction is available yet.** If the fixed
 numerical/performance gates are met, stop isolated RK4 experiments and allow
 at most one real-scene integration spike. If not, stop this f32 GPU branch.
@@ -151,7 +151,7 @@ numerical gates, unavailable/errors and an explicit `INCONCLUSIVE`,
 Even a passing result permits only **one bounded real-scene integration spike**,
 not a GPU production switch. Explicit end-to-end correctness/performance and
 one-correction stop rules are documented at
-`docs/WEBGPU_OPTICAL_QUALIFICATION_MATRIX_140_9.md`.
+`docs/webgpu-optical-qualification-matrix.md`.
 No production solver/rendering defaults have changed; real browser hardware
 matrix results are still required.
 
@@ -170,7 +170,7 @@ matrix results are still required.
 - Added seven focused Node tests (including a mock GPU host path); real WGSL
   compilation and GPU parity require an actual browser GPU adapter.
 - Production shooting, geometry, profile and UI defaults are unchanged.
-  See `docs/WEBGPU_OPTICAL_RK4_BENCHMARK_140_8.md`.
+  See `docs/webgpu-optical-rk4-benchmark.md`.
 
 ## Patch 140.7 — Forward-x shooting bracket boundary repair (2026-10-30)
 
@@ -185,7 +185,7 @@ monotone Snell invariant applies. Repeating the complete #140.5 matrix gave
 **72/72** full scene pairs, including formerly divergent nonmetric guides.
 These are finite-sample CPU qualifications, **not** proof of global ray-branch
 completeness or approval for default predictor promotion. See
-`docs/ENGINEERED_SHOOTING_BRACKET_REPAIR_140_7.md`. The two HTML entry points
+`docs/engineered-shooting-bracket-repair.md`. The two HTML entry points
 now version the changed optical script to avoid stale browser caches.
 
 ## Patch 140.6 — Short-range shooting bracket and branch diagnostics (2026-10-30)
@@ -199,7 +199,7 @@ exponential atmosphere; quadrature for inverse-spherical). All 16 cases were
 locally recovered and 56/56 near-eye cases passed these local checks, but
 no Globe analytic branch oracle or global multipath certification is claimed.
 **No production solver defaults or rendering are changed.**
-See `docs/ENGINEERED_SHORT_RANGE_BRANCH_140_6.md`.
+See `docs/engineered-short-range-branch.md`.
 
 ## Patch 140.5 — Expanded engineered-shooting numerical qualification (2026-10-30)
 
@@ -211,7 +211,7 @@ and mismatched old nonmetric radial guide interpolation at half comparison
 radius, while modern physical metric scenes matched. Results are reported
 **fail-closed**: the engineered optimization remains offline-only and cannot
 be automatically promoted; no production changes or GPU compute were made.
-See `docs/ENGINEERED_OPTICAL_QUALIFICATION_140_5.md`.
+See `docs/engineered-optical-qualification.md`.
 
 ## Patch 140.4 — Opt-in engineered shooting qualification (2026-10-29)
 
@@ -224,7 +224,7 @@ ordinary physical scene rendering remains bracket-first, unchanged. Added
 paired full-scene benchmark with topology/visibility/coordinate comparisons,
 near-grazing numerical regression tests, and an explicit no-default-promotion
 decision gate. This is **not** GPU compute or production certification. See
-`docs/ENGINEERED_OPTICAL_SHOOTING_140_4.md`.
+`docs/engineered-optical-shooting.md`.
 
 ## Patch 140.3 — Cold/Warm optical profiling (2026-10-29)
 
@@ -235,7 +235,7 @@ warm requests preserve caches. The profile separates *actual* fresh builds and
 warm hits, excludes misses, and exports existing field/ground/outline/fill
 stage times, target solves, shooting evaluations and RK4 steps. Normal redraws,
 model state, tracing numerics and visual backends remain unchanged. See
-`docs/MODERN_OPTICAL_PROFILING_140_3.md` for the test protocol and caveats.
+`docs/modern-optical-profiling.md` for the test protocol and caveats.
 
 ## Patch 140.1.2 — Render profiler API compatibility and cache refresh (2026-10-29)
 
@@ -262,7 +262,7 @@ texture-upload/command-submission wall time, and, *only* when supported, nonbloc
 `EXT_disjoint_timer_query` WebGL GPU draw execution. Stale-generation/disjoint
 queries are excluded; absent GPU timings are reported as unknown. The scene
 backend remains Canvas 2D and optics/painter output is unchanged. See
-`docs/MODERN_RENDER_PERFORMANCE_140_1.md` for browser protocol and caveats.
+`docs/modern-render-performance.md` for browser protocol and caveats.
 
 ## Patch 138.3 — UI controls for atmospheric turbulence (2026-10-29)
 
@@ -273,7 +273,7 @@ On/Off causes a cached physical repaint to separate/restore canvas captions.
 Parameter edits and pause/resume do not retrace rays or upload scene textures.
 A per-view elapsed-time clock prevents a pause/resume phase jump. Shimmer is
 OFF by default and not serialized with physical experiment state. See
-`docs/MODERN_ATMOSPHERIC_UI_138_3.md` for browser checks and limitations.
+`docs/modern-atmospheric-ui.md` for browser checks and limitations.
 
 ## Patch 138.1 — optional atmospheric presentation boundary (2026-10-29)
 
@@ -282,7 +282,7 @@ Canvas pixels before eye-level/horizon annotations; diagnostic overlays remain
 separate and sharp when the optional identity compositor is enabled. Camera
 CSS preview temporarily exposes the source Canvas; ray tracing and the OFF
 path remain unchanged. No shader, physical turbulence model or UI controls yet.
-See `docs/MODERN_ATMOSPHERIC_PRESENTATION_138_1.md`.
+See `docs/modern-atmospheric-presentation.md`.
 
 ## Patch 137.4 — Perspective-correct cached raster preview (2026-10-29)
 
@@ -294,7 +294,7 @@ share the same target angle but use their own viewport dimensions. Large
 rotations behind the camera safely fall back to translation. Authoritative
 redraw on pointerup, pending-frame guard, compact PNG hand cursors, experiment
 serialization and separate A/B optical caches are unchanged. See
-`docs/MODERN_CAMERA_PERSPECTIVE_PREVIEW_137_4.md` for equations, limitations
+`docs/modern-camera-perspective-preview.md` for equations, limitations
 and browser checks.
 
 ## Patch 137.3 — Single-validated frame handoff (2026-10-29)
@@ -305,7 +305,7 @@ passed directly to the shared painter. The public `render(frame)` still fully
 revalidates untrusted/modified frames. No physical ray, guide, camera drag or
 ordering logic was changed. Paired *synthetic Node* median handoff savings
 were ~29–35% for 3653–10000 lines, **not an Opera FPS claim**. See
-`docs/MODERN_CAMERA_REDRAW_OPTIMIZATION_137_3.md` for stage semantics,
+`docs/modern-camera-redraw-optimization.md` for stage semantics,
 benchmarks and browser acceptance.
 
 ## Patch 137.2.4 — Compact hand cursors (2026-10-29)
@@ -336,7 +336,7 @@ Updated at compatpatch **128** (2026-10-28), after the first explicit event/visi
   this is a strong hypothesis, **not** confirmed by a browser UI test. An
   already active autoscroll mode must be dismissed manually with Esc.
 - Gesture preview, physics, persistence, and camera math are unchanged.
-- See `docs/MODERN_CAMERA_CURSOR_137_2_1.md`.
+- See `docs/modern-camera-drag-autoscroll.md`.
 
 ## Patch 137.2 — Cheap Scene/Compare camera drag preview (2026-10-29)
 
@@ -348,7 +348,7 @@ viewport. Cursor states are `grab` on hover and `grabbing` during a gesture.
 The preview is retained until the authoritative final redraw completes, then
 restored in `finally`; cancellation and mode changes restore it immediately.
 This is an approximate screen-space preview, not exact perspective remapping.
-See `docs/MODERN_CAMERA_DRAG_PREVIEW_137_2.md` for limitations and browser checks.
+See `docs/modern-camera-drag-preview.md` for limitations and browser checks.
 
 ## Patch 137.1 — Shared final-frame camera drag (2026-10-29)
 
@@ -358,7 +358,7 @@ CSS dimensions. Compare A/B always commit one camera and redraw both models.
 Only a light Pan/Nick HUD updates while the pointer moves; an authoritative
 full redraw occurs **once on release**, not every pointermove. No live image
 preview yet (planned for 137.2). Camera aim, optics, compare physics, and save
-format are unchanged. See `docs/MODERN_CAMERA_DRAG_137_1.md` for mapping,
+format are unchanged. See `docs/modern-camera-drag.md` for mapping,
 cancellation semantics, limits and test procedure.
 
 ## Patch 137 — Modern camera interaction groundwork (2026-10-29)
@@ -369,7 +369,7 @@ profiling separately for Scene, A and B. **No drag handlers or fast-preview
 rendering are enabled in 137**; existing physical rays and saved experiment
 formats are unchanged. Inspect measurements with
 `CurvatureModernApp.getRenderProfile()`; see
-`docs/MODERN_CAMERA_INTERACTION_BASELINE_137.md` for the contract, timing
+`docs/modern-camera-interaction-baseline.md` for the contract, timing
 limitations, browser measurement procedure and 137.1–137.4 plan.
 
 ## Patch 128 — physical continuous-surface verification (2026-10-28)
@@ -386,7 +386,7 @@ presented as physically blocked. Original non-metric SHA-256 golden references
 remain intact. Local 5-repeat Node benchmark: near-flat `R=10^16 m` changed
 from ~154 to ~71 ms median optics and from ~218k to ~40k RK4 calls, but this
 is not a frame-rate guarantee. Details and limitations:
-`docs/CONTINUOUS_PHYSICAL_VERIFICATION_128.md`.
+`docs/continuous-physical-verification.md`.
 
 ## Objective
 
@@ -394,11 +394,11 @@ An independently computed physical comparison of Globe and Flat observations: wo
 
 ## Current baseline
 
-- **109 atmospheric reliability**: fixed expensive RK4 target shooting (bracketed regula falsi + safeguarded Newton endpoint), qualified long smooth-profile steps against fine-step oracles, removed the default 3.5-second truncation (explicit diagnostic budget still supported), and introduced separate boundary/solver/budget counters and contextual Physical-mode controls. A full 85+2 Standard scene test retains both banks with 3560 visible pieces, 130 narrow boundary leaves and **no** solver/sample-budget failures. True polygon fills, refracted guides, asynchronous work and global error guarantees are not yet provided. See `docs/MIGRATION_ATMOSPHERIC_SCENE_RELIABILITY_109.md`.
+- **109 atmospheric reliability**: fixed expensive RK4 target shooting (bracketed regula falsi + safeguarded Newton endpoint), qualified long smooth-profile steps against fine-step oracles, removed the default 3.5-second truncation (explicit diagnostic budget still supported), and introduced separate boundary/solver/budget counters and contextual Physical-mode controls. A full 85+2 Standard scene test retains both banks with 3560 visible pieces, 130 narrow boundary leaves and **no** solver/sample-budget failures. True polygon fills, refracted guides, asynchronous work and global error guarantees are not yet provided. See `docs/migration-atmospheric-scene-reliability.md`.
 
-- **108 architecture correction**: the main Physical path no longer uses a separate Canvas painter; its backend `CurvaturePhysicalSceneOptics` transforms the same independent `CurvatureGeometryEngine` scene contract into ray-arrival line primitives and hands it to the existing `CurvatureFrameRenderer` painter, with the existing camera, style and decorations. `composeOpticalMain` preserves both object groups and reference surface/horizon guides **without inserting the legacy horizon occlusion mask**; physical Globe reference guides use `rEarth`, not `legacy-k`. Analytic vacuum fast path prevents old 3.5-second numerical starvation of 85+2 towers. Atmospheric modes still may have unresolved fringes and budgets. Geometric horizon guides are NOT refracted surfaces; object fills and mutual occlusion remain pending. See `docs/MIGRATION_SHARED_PHYSICAL_SCENE_108.md`.
+- **108 architecture correction**: the main Physical path no longer uses a separate Canvas painter; its backend `CurvaturePhysicalSceneOptics` transforms the same independent `CurvatureGeometryEngine` scene contract into ray-arrival line primitives and hands it to the existing `CurvatureFrameRenderer` painter, with the existing camera, style and decorations. `composeOpticalMain` preserves both object groups and reference surface/horizon guides **without inserting the legacy horizon occlusion mask**; physical Globe reference guides use `rEarth`, not `legacy-k`. Analytic vacuum fast path prevents old 3.5-second numerical starvation of 85+2 towers. Atmospheric modes still may have unresolved fringes and budgets. Geometric horizon guides are NOT refracted surfaces; object fills and mutual occlusion remain pending. See `docs/migration-shared-physical-scene.md`.
 
-- Latest migration milestone: **107**, opt-in **Physical tower outlines (preview)** Canvas engine (`docs/MIGRATION_PHYSICAL_CANVAS_107.md`). Uses physical angular tower lines from 106, actual camera perspective, separate profile/R controls, cold-result cache across camera redraws, and deliberate budget-limited omissions. **No Legacy mask is used on this path.** The physical Canvas still has **no ground/surface drawing, filled polygons, or mutual tower occlusion**. Real 85-tower sample reached the 3.5-second preview budget with unresolved edges: it is not yet a complete real-time renderer. `CurvatureTargetProjection.solve` remains the one-branch physical target oracle; `solver_failed` is never proof of blockage.
+- Latest migration milestone: **107**, opt-in **Physical tower outlines (preview)** Canvas engine (`docs/migration-physical-canvas.md`). Uses physical angular tower lines from 106, actual camera perspective, separate profile/R controls, cold-result cache across camera redraws, and deliberate budget-limited omissions. **No Legacy mask is used on this path.** The physical Canvas still has **no ground/surface drawing, filled polygons, or mutual tower occlusion**. Real 85-tower sample reached the 3.5-second preview budget with unresolved edges: it is not yet a complete real-time renderer. `CurvatureTargetProjection.solve` remains the one-branch physical target oracle; `solver_failed` is never proof of blockage.
 - Recent sequence: 95 runtime extraction, 96 render-frame/renderer contract, 97 main Canvas preview, 97.1 two active object groups, 97.2 horizon tessellation and stroke styles, 98 independent vacuum/geometry regression, 99 core audit, 100 RK4 tests and ground-impact accuracy, 101 bounded ground events and 2D vacuum target visibility, 102 engineered atmospheric profiles and analytic tangent/trajectory validation, 103 atmospheric target-angle shooting and ground-only visibility, 104 lazy/eager shared projection cells with conservative exact fallbacks.
 - Legacy DrawModel remains selectable/default; Independent painter preview handles Globe and Flat separately, both supported object groups, with some overlays/annotations absent. `Both` uses Legacy fallback.
 - Independent geometric composition uses an ordered horizon disk/mask for presentation; this is **not** physical ray-derived occlusion.
@@ -420,7 +420,7 @@ Only use the user-supplied `chatgpt-pack-*` archive (choose the explicitly named
 
 ## Open limitations
 
-2D/3D coupling, global completeness of ground-event isolation for rapidly varying profiles, lack of adaptive error control, global/multipath completeness of atmospheric target shooting (103 covers one forward-x branch), physical mesh intersections, and ray-driven main Canvas visibility for surfaces/fills (physical tower outlines only in 107). Details and proposed interface contracts: `docs/MIGRATION_OPTICS_AUDIT_99.md`.
+2D/3D coupling, global completeness of ground-event isolation for rapidly varying profiles, lack of adaptive error control, global/multipath completeness of atmospheric target shooting (103 covers one forward-x branch), physical mesh intersections, and ray-driven main Canvas visibility for surfaces/fills (physical tower outlines only in 107). Details and proposed interface contracts: `docs/migration-optics-audit.md`.
 
 ## Architectural decision after patch 101
 
@@ -432,11 +432,11 @@ The intended optics scope is standard exponential atmospheric refractivity and a
 
 ## Patch 110 — Physical ground guides and horizon
 
-Physical optics now projects ground guide lines through a radial optical field and supplies a ray-derived finite visible-ground horizon (Globe or engineered Flat atmosphere) to the **existing** shared `CurvatureFrameRenderer`. The previous geometric horizon is no longer copied in the Physical scene. Numerically, observer 15 m / radius 6,371 km gives Globe vacuum ~13.825 km, Globe standard ~16.004 km, and inverse-spherical Flat ~13.825 km. Flat standard/vacuum report no resolved finite horizon in this implementation. The Latin-1 page's UTF-8 middle dot has been replaced with `&middot;`; runtime status uses ASCII separators. See `docs/MIGRATION_PHYSICAL_GROUND_HORIZON_110.md`. Surface guides are approximate sampled curves, not physically filled ground, and tower polygon fills and boundary uncertainty remain future work.
+Physical optics now projects ground guide lines through a radial optical field and supplies a ray-derived finite visible-ground horizon (Globe or engineered Flat atmosphere) to the **existing** shared `CurvatureFrameRenderer`. The previous geometric horizon is no longer copied in the Physical scene. Numerically, observer 15 m / radius 6,371 km gives Globe vacuum ~13.825 km, Globe standard ~16.004 km, and inverse-spherical Flat ~13.825 km. Flat standard/vacuum report no resolved finite horizon in this implementation. The Latin-1 page's UTF-8 middle dot has been replaced with `&middot;`; runtime status uses ASCII separators. See `docs/migration-physical-ground-horizon.md`. Surface guides are approximate sampled curves, not physically filled ground, and tower polygon fills and boundary uncertainty remain future work.
 
 ## Patch 111 — Flat ground-guide drawing extent
 
-Before patch 111, Flat + Standard performed ~29,745 ground guide point shoots from world-radius grid segments up to 20,015 km, far beyond a 100 km radial lookup. Ground reference strokes now clip to a finite **rendering** disk before projection; this disk is not a new physical horizon and does not change tower visibility or the physical ground horizon result. It correctly keeps chords crossing the disk. Flat guide subdivision is bounded by retained segment length, and UI diagnostics include skipped/clipped guide edge counts. Tests: `PhysicalGroundGuideExtent111.test.js`. See `docs/MIGRATION_FLAT_GROUND_GUIDE_EXTENT_111.md`. Future: viewport-specific culling and screen-error based guide tessellation, plus the shared-prism field.
+Before patch 111, Flat + Standard performed ~29,745 ground guide point shoots from world-radius grid segments up to 20,015 km, far beyond a 100 km radial lookup. Ground reference strokes now clip to a finite **rendering** disk before projection; this disk is not a new physical horizon and does not change tower visibility or the physical ground horizon result. It correctly keeps chords crossing the disk. Flat guide subdivision is bounded by retained segment length, and UI diagnostics include skipped/clipped guide edge counts. Tests: `PhysicalGroundGuideExtent111.test.js`. See `docs/migration-flat-ground-guide-extent.md`. Future: viewport-specific culling and screen-error based guide tessellation, plus the shared-prism field.
 
 ## Patch 112 — lazy adaptive tower-prism optical field
 
@@ -453,7 +453,7 @@ unchanged visible strokes, and the same ground-guide calculations. This is a
 sampled, **not globally guaranteed**, interpolation error qualification.
 Current UI reports adaptive interpolations/fallbacks, qualified cells and the
 prism distance/height bounds. Benchmark: `tools/benchmark-adaptive-prism-112.js`.
-Full details and acceptance checks: `docs/MIGRATION_ADAPTIVE_TOWER_PRISM_112.md`.
+Full details and acceptance checks: `docs/migration-adaptive-tower-prism.md`.
 Next priority: instrument shared optical-field reuse across ground guides and
 other geometry, assess boundary completeness, then polygon fills. No new
 Canvas renderer, legacy mask or atmospheric model was introduced.
@@ -475,7 +475,7 @@ profiles. Flat Standard with 202 towers measured ~0.24 s cold and ~12 ms
 cached optics adapter on one Node run; Globe Standard with 202 towers remained
 ~4.7 s cold, with 276 explicitly unresolved near-horizon leaves. No new
 Canvas renderer, atmospheric model or clipping approximation was introduced.
-See `docs/MIGRATION_SHARED_SCENE_CACHE_113.md` and
+See `docs/migration-shared-scene-cache.md` and
 `tests/SharedSceneCache113.test.js`.
 
 ## Patch 114 — physical foundation polygon fills in the shared painter
@@ -493,7 +493,7 @@ outline uncertainty. All previously stroke-only lattice features remain
 stroke-only; the patch does not create bogus solid plates. Mutual 3D object
 occlusion, formal global/pixel error guarantees and physical ground **surface**
 fills are still out of scope. See
-`docs/MIGRATION_PHYSICAL_FOUNDATION_FILLS_114.md` and
+`docs/migration-physical-foundation-fills.md` and
 `tests/PhysicalPolygonFills114.test.js`. Next: independent optical/visual
 validation and remaining horizon boundary cases (115).
 
@@ -508,7 +508,7 @@ foundation fills and then its outlines. The common painter stays unchanged.
 `stats.perGroup` remains a bank aggregate, while `stats.perObject` exposes the
 individual object order. Camera-only Pan/Nick/Roll changes do not invalidate
 optical rays. No arbitrary intersecting-mesh Z buffer was added. See
-`docs/MIGRATION_TOWER_PAINTER_DEPTH_114_1.md` and
+`docs/migration-tower-painter-depth-order.md` and
 `tests/PhysicalTowerPainterOrder1141.test.js`.
 
 ## Compatpatch 115 — physical and shared-painter validation harness
@@ -526,7 +526,7 @@ or renderer code has been replaced. A sampled 1920px/60-degree angular metric
 found ~0.015 px maximum in selected cases (not a global pixel guarantee).
 Globe Standard at 87 and 202 towers still reports respectively ~130 and ~276
 **boundary** leaves. Full browser raster correctness and arbitrary intersecting
-mesh occlusion remain unverified. See `docs/MIGRATION_PHYSICAL_VALIDATION_115.md`
+mesh occlusion remain unverified. See `docs/migration-physical-validation.md`
 and `tests/PhysicalValidation115.test.js`. Next: review any real-browser issues
 and focus on horizon boundary closure before claiming full image completeness.
 
@@ -553,7 +553,7 @@ actual `fill()` operation. Original camera counts are separately available
 in JSON. On Globe/Flat scenes a targeted camera yields nonzero fill calls.
 The UI distinguishes genuine solver failures from grazing samples and shows
 measured conservative boundary-gap sizes. See
-`docs/MIGRATION_BOUNDARY_CLOSURE_116.md` and
+`docs/migration-boundary-closure.md` and
 `tests/PhysicalBoundaryClosure116.test.js`. No general pixel-exact guarantee,
 multiray completeness, or arbitrary 3D mesh z-buffer was introduced.
 
@@ -568,11 +568,11 @@ curves; 180 ms after the last model update the full guides are redrawn. Towers,
 physical horizon, fills, visibility and the underlying cached RK4 field are
 unchanged. Per-stage frame/Canvas metrics are now visible in Physical status.
 Stress tool: `tools/benchmark-physical-redraw-117.js` (synthetic 78k line
-primitives; no browser FPS claim). Details: `docs/MIGRATION_INTERACTIVE_CANVAS_117.md`.
+primitives; no browser FPS claim). Details: `docs/migration-interactive-canvas.md`.
 
 
 ## #118 — Opt-in Physical performance profile in existing geometry ZIP
-The existing Export geometry diagnostics ZIP now runs Physical cold/warm/grid-off/preview/Pan profiling with per-stage raw measurements, median and p95. The normal geometry audit is retained; the profiler does not modify the live model. Details: `docs/MIGRATION_PERFORMANCE_PROFILE_118.md`. No optics, occlusion or painting rules changed.
+The existing Export geometry diagnostics ZIP now runs Physical cold/warm/grid-off/preview/Pan profiling with per-stage raw measurements, median and p95. The normal geometry audit is retained; the profiler does not modify the live model. Details: `docs/migration-performance-profile.md`. No optics, occlusion or painting rules changed.
 
 ## Patch 119 — camera-aware screen-space ground guide LOD
 
@@ -592,7 +592,7 @@ A reproducible synthetic 77,600-line benchmark and regression tests accompany
 the change. **Browser performance must be measured on real user hardware**;
 0.5 px is a bound on sampled vertices relative to the prior polyline, not a
 proof against the original continuous optical curve. See
-`docs/MIGRATION_SCREEN_GUIDE_LOD_119.md`.
+`docs/migration-screen-guide-lod.md`.
 
 ## Compatpatch 120 — height-change RK4 efficiency, exact final scheduling, and profiling
 
@@ -609,7 +609,7 @@ counters. Full numerical scene hashes and 54 baseline projection points are
 regression-checked against #119 at two heights. A Node-only benchmark showed
 ~29% median cold-build improvement across three warmed height samples,
 **not** a browser FPS/latency guarantee. Details:
-`docs/MIGRATION_PHYSICAL_HEIGHT_CHANGE_120.md`,
+`docs/migration-physical-height-change.md`,
 `tools/benchmark-height-change-120.js`,
 `tests/PhysicalHeightChange120.test.js`.
 
@@ -631,7 +631,7 @@ original #120 exact pixel-source scene hashes. Paired Node cold-builds on
 For standard rays numerical arrival angles may differ by <1e-8 rad; exact
 bitwise equality is not claimed on the accelerated path. The ZIP profiler
 reports predictor and ground step statistics. See
-`docs/MIGRATION_SHOOTING_REDUCTION_121.md`,
+`docs/migration-shooting-reduction.md`,
 `tests/OpticalShootingReduction121.test.js` and
 `tools/benchmark-shooting-reduction-121.js`.
 
@@ -649,7 +649,7 @@ The ZIP profiler now also records per-ground/outline/fill increments of exact
 target solves, cache hits, shooting trials and RK4 steps. A Node benchmark
 observed assembly decrease from ~107–160 to ~13–19 ms on repeated warm
 runs; browser timing needs confirmation. See
-`docs/MIGRATION_PHYSICAL_SCENE_ASSEMBLY_122.md`,
+`docs/migration-physical-scene-assembly.md`,
 `tests/PhysicalAssemblyAndSolverAudit122.test.js` and
 `tools/benchmark-scene-assembly-122.js`.
 
@@ -673,7 +673,7 @@ scenes; tiny (<1.3e-7 m on the 1,000 m presentation sphere) residual-bounded
 coordinate differences mean accelerated scene hashes are not identical.
 Wall-clock Node runs have noticeable scheduling/JIT/GC variance; the browser
 ZIP is required to confirm end-to-end latency improvement. See
-`docs/MIGRATION_OPTICAL_WARM_START_123.md`,
+`docs/migration-optical-warm-start.md`,
 `tests/OpticalWarmStarts123.test.js` and
 `tools/benchmark-optical-warm-start-123.js`.
 
@@ -691,7 +691,7 @@ trips, exact plane, flat-limit convergence, altitude normals, centre
 singularity, extreme radii and UMD export. **This patch deliberately does
 not change any existing renderer, model, Optical Solver, ground grid, or UI.**
 Physical integration is reserved for #125–128. See
-`docs/MIGRATION_CONTINUOUS_SURFACE_GEOMETRY_124.md` and
+`docs/migration-continuous-surface-geometry.md` and
 `tests/CurvatureSurfaceGeometry124.test.js`.
 
 ## Compatpatch 125 — continuous-curvature optical solver integration
@@ -716,7 +716,7 @@ Atmospheric `occlusionRadius` is not linked to the physical surface
 curvature. The UI/model, common source grid and camera will be unified in
 #126–128, not in this patch.
 
-See `docs/MIGRATION_CONTINUOUS_OPTICAL_SOLVER_125.md` and
+See `docs/migration-continuous-optical-solver.md` and
 `tests/OpticalContinuousCurvature125.test.js`.
 
 ## Compatpatch 126 — shared physical surface world and metric grid
@@ -737,7 +737,7 @@ existing model controls and old compatibility hashes stay intact, with
 
 The UI still selects `Globe`/`Flat`; continuous curvature slider, infinity
 boundary and camera decoupling are reserved for #127. See
-`docs/MIGRATION_PHYSICAL_METRIC_WORLD_126.md` and
+`docs/migration-physical-metric-world.md` and
 `tests/PhysicalMetricWorld126.test.js`. Real browser grid appearance and
 end-to-end profiling require a fresh user Diagnostics ZIP after application.
 
@@ -755,7 +755,7 @@ coalesce before a new optical solve; no per-pointer heavy RK4 work.
 
 The huge-radius model reference dip is stabilized above 1e12 m; legacy
 ordinary-radius computations and diagnostics remain unchanged. See
-`docs/MIGRATION_PHYSICAL_CAMERA_CURVATURE_127.md` and
+`docs/migration-physical-camera-curvature.md` and
 `tests/PhysicalCurvatureCamera127.test.js`. Full regression and browser smoke
 verification cover Earth, 6000370000 m, 1e16 m and exact Flat with Standard
 atmosphere and 85+2 towers. Next: #128 end-to-end convergence, numerical,
@@ -987,7 +987,7 @@ purposefully committed extreme profile. Node regression: 566/566 passed.
 ## Patch 136 — atmospheric inverse physical requirements (research note)
 
 The future atmospheric inverse problem has been documented in
-`docs/ATMOSPHERIC_INVERSE_PHYSICAL_REQUIREMENTS_136.md`. The note separates
+`docs/atmospheric-inverse-physical-requirements.md`. The note separates
 hydrostatic mathematical existence, convective stability, and nonlinear
 mixing times; derives the dry-air inverse temperature relation for the
 engineered exponential `n(h)`; records the **illustrative local** ~188 K/km
@@ -1001,7 +1001,7 @@ implemented. For Vacuum, thermodynamic diagnostics are not applicable.
 PNG-backed open/closed hand cursors now replace browser-native `grab` and
 `grabbing` glyphs in the Modern Scene and Compare viewports, with native
 cursor keywords retained as fallbacks. See
-`docs/MODERN_CAMERA_CURSOR_137_2_2.md`. Camera interaction, physics and
+`docs/modern-camera-portable-cursors.md`. Camera interaction, physics and
 preview transforms are unchanged; Opera appearance requires manual verification.
 
 ### 138.4 — Atmospheric shimmer stability and frame budgeting
@@ -1009,7 +1009,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - A nonmoving shimmer (`Intensity = 0` or `Drift = 0`) now stops its continuous RAF/GPU cycle after an immediate single-frame update. Scene GPU presentation is capped at 60 Hz and the two Compare views at 30 Hz each; physical ray tracing and turbulence displacement math are unchanged.
 - Camera-drag resumption resets the shimmer phase clock; background-tab time is not accumulated into the next frame.
 - Recoverable WebGL context loss exposes the original physical Canvas and leaves undistorted annotations visible. The restored GPU program uploads the **cached physical Canvas** and resumes without rerunning the optical solver.
-- Browser script URLs were version-bumped for deterministic cache invalidation. Test procedures and caveats: `docs/ATMOSPHERIC_TURBULENCE_PERFORMANCE_138_4.md`.
+- Browser script URLs were version-bumped for deterministic cache invalidation. Test procedures and caveats: `docs/atmospheric-turbulence-performance.md`.
 
 ## #140.0 GPU Capability Diagnostics
 
@@ -1020,7 +1020,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   Hardware acceleration is not claimed as confirmed by context creation.
 - Uses temporary canvases only and does not alter Canvas 2D physical rendering,
   atmospheric shimmer, Scene/Compare state, or saved experiments.
-- See `docs/gpu-capability-diagnostics-1400.md` for browser verification and
+- See `docs/gpu-capability-diagnostics.md` for browser verification and
   interpretation. Automatic backend selection is intentionally not included.
 
 ## #140.2 — Experimental WebGL2 projected-geometry renderer
@@ -1039,7 +1039,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Profiling now records the backend of each physical redraw and labels painting
   as **CPU wall-clock raster/presentation time** rather than GPU execution.
   GPU timer queries in #140.1 continue to time shimmer only.
-- Details and Opera acceptance checklist: `docs/MODERN_GPU_GEOMETRY_140_2.md`.
+- Details and Opera acceptance checklist: `docs/modern-gpu-geometry.md`.
 
 ## #140.8.1 browser benchmark compatibility
 
@@ -1057,7 +1057,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Added 64 actual production-composed mesh targets each for 12-tower Flat and Globe scenes; deterministic generator and committed fixture.
 - Added opt-in WebGPU compensated shooting-angle candidate kernel; unchanged production CPU `OpticalTargetProjection.solve` performs all target and ground-event certification via the existing warm-start API.
 - Added standalone browser spike and JSON report: cold GPU setup, upload/readback, CPU certification, statuses and angle comparison, explicit stage-only 2x stop gate.
-- **No live production switch**; stage evidence excludes full scene assembly, outlines, fills, guides and painter. See `docs/WEBGPU_REAL_SCENE_SHOOTING_SPIKE_140_10.md`.
+- **No live production switch**; stage evidence excludes full scene assembly, outlines, fills, guides and painter. See `docs/webgpu-real-scene-shooting-spike.md`.
 
 ## #140.10.1 — Canonical WebGPU diagnostics UI and validation rule
 
@@ -1083,7 +1083,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - CPU-only shooting **27.3 ms**; GPU setup **26.7 ms**, upload/readback **13.6 ms**, CPU certification **27.6 ms**; cold hybrid **67.9 ms** (**0.402x**, ~2.49x slower). CPU shooting RK4 calls increased from **47,371** to **63,822**. Single cold run; Intel Gen-12LP, hardware acceleration unverified.
 - **Decision: `SCENE_PERFORMANCE_STOP` — CLOSED / PARKED.** Predeclared warm-start and 2x cold-stage gates were not met. Do not integrate this hybrid GPU shooting path into production or extend synthetic GPU tuning by default. Keep the CPU optical solver/ground events/renderer as the reference.
 - May be reopened later only for a materially different approach or new workload evidence, with a new explicit hypothesis, bounded scope and predeclared numerical/end-to-end speed gates. No claim that all GPU optical computation is intrinsically unhelpful.
-- Detailed measurement, limitations and reopening policy: `docs/WEBGPU_REAL_SCENE_SHOOTING_SPIKE_140_10.md`. Preserve the **single** `tools/webgpu-optics.html` rule from #140.10.1. No production changes in this closure patch.
+- Detailed measurement, limitations and reopening policy: `docs/webgpu-real-scene-shooting-spike.md`. Preserve the **single** `tools/webgpu-optics.html` rule from #140.10.1. No production changes in this closure patch.
 
 ## #140.12 — independent GPU shooting solver, diagnostic prototype
 
@@ -1109,7 +1109,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
   switch production based solely on WebGPU capability. Full async preparation
   and fallback only become relevant after independent stage qualification.
 - Detailed algorithm, limitations, gates and browser workflow:
-  `docs/WEBGPU_INDEPENDENT_BATCH_SHOOTING_140_12.md`. The earlier
+  `docs/webgpu-independent-batch-shooting.md`. The earlier
   `SCENE_PERFORMANCE_STOP / CLOSED / PARKED` verdict for the different
   #140.10 warm-start approach remains valid.
 
@@ -1119,7 +1119,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - New read-only diagnostic module `src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js` reports every target's CPU/GPU status, angle, residual, ground evidence and numerical discrepancy flags, reusing the #140.11 strict comparison gates. #140.12 WGSL now outputs selected sweep-bracket index/count, refinement-iteration count and final bracket bounds in previously unused buffer slots. **The root search, refinement math, event decisions, precision and tolerances are unchanged.**
 - Optional `solveBatch(..., ..., {warmRepeats:3})` reuses the same device, two pipelines and buffers for three further full workload runs, reporting first cold run, warm sample times, warm median and raw-output bitwise stability. CPU reference is measured separately. Warm timings include upload+dispatch+readback; these are diagnostic wall-clock numbers, **not full scene/FPS, kernel-only timings, or authorization to switch solvers**.
 - Sixth selector mode in the **existing** `tools/webgpu-optics.html` exports `curvature-webgpu-optics-140.12.1-diagnostics.json`. Historical #140.12 and older modes remain available. No new numbered HTML pages, no production changes.
-- Next: run #140.12.1 in a real WebGPU browser, inspect per-target differences before changing one algorithmic assumption (sampling density, f32 precision, event detector, etc.). WGSL runtime verification and performance require browser execution; mocked Node tests are not proof. Details: `docs/WEBGPU_SHOOTING_DIAGNOSTICS_140_12_1.md`.
+- Next: run #140.12.1 in a real WebGPU browser, inspect per-target differences before changing one algorithmic assumption (sampling density, f32 precision, event detector, etc.). WGSL runtime verification and performance require browser execution; mocked Node tests are not proof. Details: `docs/webgpu-shooting-diagnostics.md`.
 
 ## #140.12.2 — root-refinement numerical A/B and analytical vacuum gate
 
@@ -1128,7 +1128,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Added **opt-in `angle-bracket` GPU refinement**: continue bisecting until retained width ≤ **2e-8 rad**, f32 midpoint stall or 28-iteration cap; never shortcut on the 5 mm residual. Preserve the unchanged original `residual-stop` shader as default for historical experiments. Invalid intermediate arrival fails closed; final residual and existing ground classification remain mandatory. Sweep density, compensated integration and ground sampling are unchanged.
 - New research-only `CurvatureWebGPURootRefinement14122` compares original/refined GPU results against the **same** independent CPU oracle for all 128 real scene targets, with per-target bracket telemetry, independent warm/cold timings, and seven separate **Flat/vacuum analytic angle** checks (`atan2(Δh,x)`). Separate GPU sessions per variant; all times are browser wall-clock; no full scene/frame claim.
 - Seventh mode in the **existing** `tools/webgpu-optics.html`, exports `curvature-webgpu-optics-140.12.2-refinement.json`; no numbered HTML files. Tests cover numerical-model regression, output evidence, policy selection, fail-closed behavior and real inline UI wiring. **No production CPU solver, painter, Scene/Compare or backend selector changes.**
-- **Not yet verified in a real GPU browser after this change**; previous `BATCH_NUMERICAL_STOP` is retained. No production authorization is possible in this experiment. Next: obtain the browser JSON and distinguish fixed angle discrepancies from residual f32 and ground-event mismatch. See `docs/WEBGPU_SHOOTING_ROOT_REFINEMENT_140_12_2.md`.
+- **Not yet verified in a real GPU browser after this change**; previous `BATCH_NUMERICAL_STOP` is retained. No production authorization is possible in this experiment. Next: obtain the browser JSON and distinguish fixed angle discrepancies from residual f32 and ground-event mismatch. See `docs/webgpu-shooting-root-refinement.md`.
 
 ## #140.12.3 — intentional 5 mm target tolerance and physical GPU qualification
 
@@ -1136,7 +1136,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - New diagnostic-only `src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js` uses the **unchanged** original GPU `residual-stop` shader. It tests **individual** CPU and GPU target-height residuals <= 5 mm; their *difference* and angular parity remain diagnostics. Crucially, it also independently replays the **GPU angle** through the f64 CPU integrator at fixed target x (no new shooting search, **outside timed GPU work**) and demands <= 5 mm there. No self-certified f32 GPU hit is trusted as cross-model physical accuracy.
 - Keep visibility/ground correctness mandatory: matching statuses, matching first-event existence/type, <= 1 mm event path-length difference, no `indeterminate`/`solver_failed`, stable GPU repeats. GPU ground-level target classifications do not yet reproduce CPU's specially tightened endpoint tolerance. Only after these checks consider the **unchanged 2x cold GPU stage speed gate**, with production authorization always false. Warm runs reuse device/pipelines/buffers and remain separate from full-frame costs.
 - Reassessed *user-run* #140.12.1 report (2026-10-30): all 128 **GPU self-reported** residuals lie within 5 mm (max Flat 3.900 mm, Globe 3.633 mm), even though the strict diagnostic recorded 107 angular discrepancies. Independent CPU replay of the **recorded** GPU angles shows one >5 mm residual, Flat target #54 (~5.172 mm); none in Globe. Ground/status disagreements remain (Flat 4/4, Globe 3/6). The newer report's warm CPU/GPU ratios were 1.20x and 1.44x, cold 0.486x and 0.915x: not the required 2x cold gate. Historical `BATCH_NUMERICAL_STOP` applies to the older strict experiment; no retroactive stage pass is implied.
-- Eighth option in **single** `tools/webgpu-optics.html`: `#140.12.3 — physical 5 mm qualification`; exports `curvature-webgpu-optics-140.12.3-physical-tolerance.json`. Production shooting/renderer and all WGSL are unchanged. Node tests are not real-browser GPU verification. See `docs/WEBGPU_PHYSICAL_TOLERANCE_140_12_3.md`.
+- Eighth option in **single** `tools/webgpu-optics.html`: `#140.12.3 — physical 5 mm qualification`; exports `curvature-webgpu-optics-140.12.3-physical-tolerance.json`. Production shooting/renderer and all WGSL are unchanged. Node tests are not real-browser GPU verification. See `docs/webgpu-physical-tolerance.md`.
 
 ## #140.12.4 — visual-impact triage instead of strict millimetre parity
 
@@ -1662,7 +1662,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 
 - Added `src/diagnostics/CurvatureCameraFirstOracle141238.js`: an independent **forward** first-Earth-contact query for 64×64 actual Compare A camera directions, spherical-symmetry meridian reduction, vacuum independent analytic sphere intersections, standard-atmosphere RK4 with bounded 30 km range, and 41 same-angle horizon convergence rays (250 m/100 m). Uses shared physical ray ODE/RK4 but **not** target shooting, GPU grid, interpolated statuses, physical-scene polygons, or z-buffer.
 - Added opt-in `ModernCameraFirstOracleRun` alongside existing Modern Compare diagnostics; exports `curvature-compare-140.12.38-camera-first-cpu-oracle.zip` with complete sample JSON, 5 PNG visual diagnostics and README. No WebGPU requirement. Never modifies Compare A/B models or production rendering.
-- Added `tests/CameraFirstOracle141238.test.js` and `docs/CAMERA_FIRST_CPU_ORACLE_140_12_38.md`. Vacuum f64 output is checked against analytic line/sphere hit classification and near-side contact distance; the atmosphere is sampled at the exact same launch directions with different RK4 steps.
+- Added `tests/CameraFirstOracle141238.test.js` and `docs/camera-first-cpu-oracle.md`. Vacuum f64 output is checked against analytic line/sphere hit classification and near-side contact distance; the atmosphere is sampled at the exact same launch directions with different RK4 steps.
 - This is **not** a full 3D image (objects/towers are not intersected) or a proof of infinite-sky visibility. `range` means no first ground contact **within 30 km**. Do not interpret the result as pixel-perfect equivalence with the existing CPU scene renderer. Original GPU/WebGPU and canonical `tools/webgpu-optics.html` remain unchanged; never create per-experiment HTML pages.
 
 ## #140.12.39 — Camera-first CPU world-object intersection audit (diagnostic only)
@@ -1671,7 +1671,7 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Important scene fact: most existing towers are **outline-only**; first-hit against physically authored opaque fills cannot reproduce their Canvas strokes. Export separate **nonphysical outline-as-opaque proxy** maps and never treat those as certified visibility. Report triangulation failures and real object provenance (`sourceIndex`).
 - Fixed 100 m ray chord sampling, 30 km limit; bounded 50 m convergence replay on up to 128 object/proxy-hit pixels and neighbours. No claim of certified grazing or subpixel intersections, geometric thickness for lines, or full 3D coloured image equivalence.
 - Modern Compare adds opt-in `ModernCameraFirstObjectsRun`, exports `curvature-compare-140.12.39-camera-first-objects.zip` with full JSON, first-hit masks, focused ROI and a separately labelled direct sample of the **existing** Compare A CPU Canvas. No WebGPU / WGSL, no production painter or existing solver changes; original #140.12.38 audit remains available. Canonical `tools/webgpu-optics.html` unchanged.
-- Details: `docs/CAMERA_FIRST_OBJECT_INTERSECTIONS_140_12_39.md` and `tests/CameraFirstObjects141239.test.js`.
+- Details: `docs/camera-first-object-intersections.md` and `tests/CameraFirstObjects141239.test.js`.
 
 ## #140.12.42 — CPU f64 Flat/Globe quadrature shooting feasibility (diagnostic only)
 
@@ -1685,14 +1685,14 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 - Added `src/diagnostics/CurvatureCpuConformalGlobe141243.js` and the opt-in Modern Compare button **Benchmark Globe CPU f64 · effective radius vs conformal predictor · ZIP**. Reuse the same 48 authored physical Globe targets from #140.12.42 and compare **existing RK4+predictor**, **surface-matched inverse-exponential angle + unchanged strict RK4**, and **exact-conformal-medium 2-step RK4/2-Newton angle + unchanged strict RK4**. Report full predictor+RK4 time, acceptance, fallback and status/ground parity, with 5 warmed rounds.
 - Conformal variables `x=Rφ`, `u=R ln(r/R)` give an exact flat optical medium `m(u)=(r/R)n_s(r)` for a spherically stratified atmosphere, but the two-step numerical predictor and the single inverse-exponential replacement are approximations. Match near-surface `d ln(m)/du` to obtain `1/R_eff=1/R-N/(H(1+N))`, report analytical angle errors against original RK4 and classical `4R/3` separately. **Neither predictor decides visibility, ground contact or multipath; original RK4 remains sole authority.**
 - The downloaded `curvature-compare-140.12.43-cpu-f64-conformal-globe.zip` includes `results.json`, authored/stress/extended-distance CSVs, median-time SVG and README. Eight ground/equal-height stress cases and 40 long-range/altitude envelope cases are **not** mixed into the primary performance sample. The test does not represent a full frame.
-- No changes to production shooting, painter, WebGPU/WGSL, or canonical `tools/webgpu-optics.html`. See `docs/CPU_F64_CONFORMAL_GLOBE_140_12_43.md` and `tests/CpuConformalGlobe141243.test.js`.
+- No changes to production shooting, painter, WebGPU/WGSL, or canonical `tools/webgpu-optics.html`. See `docs/cpu-f64-conformal-globe.md` and `tests/CpuConformalGlobe141243.test.js`.
 
 ## #140.12.44 — Adaptive conformal Globe CPU f64 shooting (diagnostic only)
 
 - Added `src/diagnostics/CurvatureCpuAdaptiveConformal141244.js`. Reuses the existing exact-conformal, standard-atmosphere coarse shooting from #140.12.43; compares baseline RK4+predictor, fixed 2-step conformal, adaptive RK4 2/4/8/16-step shooting, and adaptive with **local Richardson angular extrapolation**. Adaptation uses observed step-doubling angular differences scaled to projected height, not a claim of physical contact or branch completeness. Short paths retain the two-step fast path; near-surface paths use a stricter numerical estimator.
 - Every candidate is fed only into **unchanged** `OpticalTargetProjection.solve` as a warm-start angle. That solver still decides whether a candidate meets the original endpoint/ground tolerance and executes its usual RK4 fallback and first-contact verification. No approximate predictor is permitted to decide visibility or ground contact.
 - The new Modern Compare button `ModernCpuAdaptiveConformalRun` exports `curvature-compare-140.12.44-cpu-f64-adaptive-conformal.zip`: five warmed rounds on **48 real physical Compare A object-edge targets**, plus eight independently reported surface/equal-height stress cases and two 20-target altitude/distance envelopes (eyes at 15 and 100 m, three rounds each). ZIP includes JSON, CSVs, SVG median-time plot and README; raw per-target acceptance, fallback, number of RK4 calls, prediction effort and parity are exposed.
-- This is diagnostic only. No new versioned HTML under `tools/`, no GPU/WGSL changes, no production renderer/shooting changes. No claim of full frame/pixel parity or correctness for all multipath branches. See `tests/CpuAdaptiveConformal141244.test.js` and `docs/CPU_F64_ADAPTIVE_CONFORMAL_140_12_44.md`.
+- This is diagnostic only. No new versioned HTML under `tools/`, no GPU/WGSL changes, no production renderer/shooting changes. No claim of full frame/pixel parity or correctness for all multipath branches. See `tests/CpuAdaptiveConformal141244.test.js` and `docs/cpu-f64-adaptive-conformal.md`.
 
 
 ## #140.12.46 · Conformal Globe CPU f64 performance profiling (experimental)
@@ -1729,17 +1729,17 @@ preview transforms are unchanged; Opera appearance requires manual verification.
 
 ### #140.12.48 — production RK4 trace optimisation experiment (2026-11-03)
 
-Three explicit **standard-atmosphere-only** experiments (`traceOptimization: 'fused-gradient'` and `'fused-preflight'`) was added to `OpticalRayTracer` / `OpticalTargetProjection` / `OpticalSharedRayField` without changing the default shooting/ground detector. The first reuses one standard exponential while preserving arithmetic; the second additionally proves some above-ground RK4 segments clear using a conservative curvature and altitude-slope bound before falling back to the existing chord/event check; the third runs scalar RK4 staging to reduce temporary array allocation. Per-frame `preflightGroundSteps` instrumentation and an order-rotating 8-frame Modern Compare PNG+JSON ZIP audit were added. Details and limitations: `docs/CPU_TRACE_OPTIMIZATION_140_12_48.md`. The experiment is not production-promoted; review strict browser pixel parity and median full-frame duration first.
+Three explicit **standard-atmosphere-only** experiments (`traceOptimization: 'fused-gradient'` and `'fused-preflight'`) was added to `OpticalRayTracer` / `OpticalTargetProjection` / `OpticalSharedRayField` without changing the default shooting/ground detector. The first reuses one standard exponential while preserving arithmetic; the second additionally proves some above-ground RK4 segments clear using a conservative curvature and altitude-slope bound before falling back to the existing chord/event check; the third runs scalar RK4 staging to reduce temporary array allocation. Per-frame `preflightGroundSteps` instrumentation and an order-rotating 8-frame Modern Compare PNG+JSON ZIP audit were added. Details and limitations: `docs/cpu-trace-optimization.md`. The experiment is not production-promoted; review strict browser pixel parity and median full-frame duration first.
 
 ### #140.12.49 — Fused-gradient standard RK4 production gate (diagnostic only)
 
 - Built-in standard-atmosphere `fused-gradient` is a candidate from #140.12.48, **not** yet enabled by default. Preserve original RK4 and all custom/engineered atmosphere paths.
 - Modern Compare includes **Gate fused gradient · 4 Globe scenes × baseline/fused · 4 hot frames · PNG + JSON ZIP**. Four independent Canvas scene configurations cover authored view, low eye/near foundations, horizon-distance foundations, and long-distance high-eye foundations. Each uses separate optical sessions, AB/BA order, full-image strict RGBA parity, structural counters, and actual PNGs.
-- Tests: `node --test tests/OpticalFusedProductionGate141249.test.js`; local CPU benchmark: `node tools/benchmark-fused-multiscene-140-12-49.js --rounds=4`. See `docs/FUSED_GRADIENT_PRODUCTION_GATE_140_12_49.md` for scope, acceptance criteria, and untested multipath/viewport limits. No new HTML page or automatic production promotion.
+- Tests: `node --test tests/OpticalFusedProductionGate141249.test.js`; local CPU benchmark: `node tools/benchmark-fused-multiscene-140-12-49.js --rounds=4`. See `docs/fused-gradient-production-gate.md` for scope, acceptance criteria, and untested multipath/viewport limits. No new HTML page or automatic production promotion.
 
 ### #140.12.50 — Built-in standard fused-gradient promotion with explicit legacy rollback (2026-11-03)
 
 - The physical shared-ray field and prepared point-to-point shooting now select the previously audited `fused-gradient` RK4 derivative **by default for the built-in `standard` exponential atmosphere**. `traceOptimization: 'legacy'` explicitly restores the old two-evaluation `n(h)`/`dn(h)` derivative and original RK4 step; the previous `fused-preflight` and `scalar-rk4` remain opt-in experiments. The original raw ray tracer's `atmosphere('standard')` function pair remains available unchanged as a diagnostic oracle.
 - Any externally provided `profile`, including `custom`, and all other atmospheres remain on their former paths; no implicit optimizations are injected there. Internal experimental flags are overridden by an explicit `legacy` request. Unknown standard trace modes fail clearly.
 - The #140.12.48 and #140.12.49 Modern Compare baselines are now **explicitly `legacy`** to avoid accidentally benchmarking fused vs fused after the promotion. Each frame still uses isolated optical sessions, rotated A/B timing and strict RGBA comparisons.
-- No shader, GPU, conformance/ground-event, painting or conformal shooting changes. See `docs/FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md` and `tests/OpticalFusedProductionPromotion141250.test.js`. The four browser gate scenes were pixel-identical and 10–19% faster in the user-supplied #140.12.49 report, but other profiles, viewports and multipath branches have not been certified by those scenes.
+- No shader, GPU, conformance/ground-event, painting or conformal shooting changes. See `docs/fused-gradient-production-promotion.md` and `tests/OpticalFusedProductionPromotion141250.test.js`. The four browser gate scenes were pixel-identical and 10–19% faster in the user-supplied #140.12.49 report, but other profiles, viewports and multipath branches have not been certified by those scenes.

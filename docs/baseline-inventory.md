@@ -6,8 +6,8 @@ Status: **inventory only**. No runtime, HTML, solver, test, or build changes are
 
 - Source: the supplied **full** `chatgpt-pack` of `curvature-optics`, branch `dev`, at commit `3785ad1` (`Fused gradient was enabled by default for standard RK4 shooting`). The source pack contains a shallow Git history; an absent older commit is **not** evidence that it never existed.
 - Baseline tag: `optics-baseline-2026-11`, verified to exist in this pack. This document describes the supplied snapshot, not an assertion about other branches or untracked local data.
-- The #140.12.50 production change concerns **CPU standard-atmosphere** RK4 in the prepared/shared-field path: the default is `fused-gradient`; `traceOptimization: 'legacy'` is the explicit original-path rollback. `fused-preflight` and `scalar-rk4` remain experiments. Explicit/custom atmospheric profiles are not silently promoted. See [promotion record](FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md).
-- Do not treat #140.12.49's historical description of the *pre-promotion* default as current behavior. See [gate record](FUSED_GRADIENT_PRODUCTION_GATE_140_12_49.md).
+- The #140.12.50 production change concerns **CPU standard-atmosphere** RK4 in the prepared/shared-field path: the default is `fused-gradient`; `traceOptimization: 'legacy'` is the explicit original-path rollback. `fused-preflight` and `scalar-rk4` remain experiments. Explicit/custom atmospheric profiles are not silently promoted. See [promotion record](fused-gradient-production-promotion.md).
+- Do not treat #140.12.49's historical description of the *pre-promotion* default as current behavior. See [gate record](fused-gradient-production-gate.md).
 
 ## Snapshot inventory and entry points
 
@@ -27,7 +27,7 @@ Script counts exclude HTML comments, include duplicate loads if any, and say not
 
 ### User-visible startup and routing
 
-Run `python3 -m http.server 8000` at the repository root, then open `http://localhost:8000/CurvatureModern.html` (or the canonical public `CurvatureApp.html?ui=modern`). `src/ui/modern/ModernRoute.js` redirects modern-mode requests from the old HTML and uses `history.replaceState` to display the canonical URL on the separate modern document. Direct legacy diagnostics are at `CurvatureApp.html?ui=legacy`. See the existing [layout record](PROJECT_LAYOUT_93.md) and [modern UI plan](modern-ui-plan.md).
+Run `python3 -m http.server 8000` at the repository root, then open `http://localhost:8000/CurvatureModern.html` (or the canonical public `CurvatureApp.html?ui=modern`). `src/ui/modern/ModernRoute.js` redirects modern-mode requests from the old HTML and uses `history.replaceState` to display the canonical URL on the separate modern document. Direct legacy diagnostics are at `CurvatureApp.html?ui=legacy`. See the existing [layout record](project-layout.md) and [modern UI plan](modern-ui-plan.md).
 
 **Retirement blocker:** removing `CurvatureApp.html` requires a considered migration of these URLs and links, not just deleting its markup. `CurvatureModern.html` contains explicit links to Legacy diagnostics. The Legacy page also owns controls and tests that require separate disposition.
 
@@ -54,9 +54,9 @@ An archive should distinguish **hypothesis → method → environment/scene → 
 
 | Track | Existing entry points | Evidence/decision to record |
 | --- | --- | --- |
-| WebGPU: batch, precision, geometry, raster parity, double-single/RK4 | `docs/WEBGPU_*.md`, `docs/GPU_*.md`, `docs/GPU_DS_*.md`, `docs/GPU_GEOMETRY_DIFFERENCE_ATTRIBUTION_140_12_37.md`, `tools/webgpu-optics.html`, Compare diagnostics | Which scene, grid, precision, GPU/browser, CPU reference, first-ground-contact behavior, mismatched pixels and costs; avoid the unsupported blanket assertion “GPU is always slower.” |
-| Conformal / Bouguer / hybrid CPU shooting | `docs/CPU_F64_CONFORMAL_GLOBE_140_12_43.md`, `docs/CPU_F64_ADAPTIVE_CONFORMAL_140_12_44.md`, `docs/CPU_HYBRID_SHOOTING_140_12_47.md`, `src/optics/OpticalConformalPredictor.js`, CPU diagnostic modules | Mathematical assumptions, branch restrictions, proof/qualification boundaries, why a proposed fast path was not necessarily promoted. |
-| Standard RK4 optimization | `docs/CPU_TRACE_OPTIMIZATION_140_12_48.md`, `docs/FUSED_GRADIENT_PRODUCTION_GATE_140_12_49.md`, `docs/FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md`, `tools/benchmark-trace-140-12-48.js`, `tools/benchmark-fused-multiscene-140-12-49.js` | Four-scene browser gate, strict RGBA parity **on those scenes**, baseline and optimized timings, exact scope of production promotion, original-path rollback. |
+| WebGPU: batch, precision, geometry, raster parity, double-single/RK4 | `docs/WEBGPU_*.md`, `docs/GPU_*.md`, `docs/GPU_DS_*.md`, `docs/gpu-geometry-difference-attribution.md`, `tools/webgpu-optics.html`, Compare diagnostics | Which scene, grid, precision, GPU/browser, CPU reference, first-ground-contact behavior, mismatched pixels and costs; avoid the unsupported blanket assertion “GPU is always slower.” |
+| Conformal / Bouguer / hybrid CPU shooting | `docs/cpu-f64-conformal-globe.md`, `docs/cpu-f64-adaptive-conformal.md`, `docs/cpu-hybrid-shooting.md`, `src/optics/OpticalConformalPredictor.js`, CPU diagnostic modules | Mathematical assumptions, branch restrictions, proof/qualification boundaries, why a proposed fast path was not necessarily promoted. |
+| Standard RK4 optimization | `docs/cpu-trace-optimization.md`, `docs/fused-gradient-production-gate.md`, `docs/fused-gradient-production-promotion.md`, `tools/benchmark-trace-140-12-48.js`, `tools/benchmark-fused-multiscene-140-12-49.js` | Four-scene browser gate, strict RGBA parity **on those scenes**, baseline and optimized timings, exact scope of production promotion, original-path rollback. |
 | Historical migration / reference | `docs/MIGRATION_*.md`, `tools/reference/`, Legacy capture/verification tools | Which old behavior is a scientific comparison oracle versus obsolete UI, and how to reproduce differences. |
 
 ## Retrospective archive completed in #140.12.52

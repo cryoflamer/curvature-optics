@@ -1,7 +1,7 @@
 > **Historical #140.6 results.** #140.7 subsequently fixed the production
 > bracket-domain overshoot. Rerunning the diagnostic on #140.7 reports **zero**
 > current failures and retains 16 *historical* overshoot risks as regression
-> cases. See `ENGINEERED_SHOOTING_BRACKET_REPAIR_140_7.md`.
+> cases. See `engineered-shooting-bracket-repair.md`.
 
 # #140.6 — Short-range bracket diagnosis and independent branch cross-check
 

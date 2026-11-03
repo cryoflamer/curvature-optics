@@ -1,6 +1,6 @@
 # #140.12.48 — standard RK4 trace: fused exponential and clearance preflight
 
-> **Historical scope (superseded by #140.12.50):** this document describes the pre-promotion experiment. The built-in standard atmosphere now defaults to `fused-gradient` in the prepared/physical shooting paths; use `traceOptimization: 'legacy'` to reproduce the original RK4. See `FUSED_GRADIENT_PRODUCTION_PROMOTION_140_12_50.md`.
+> **Historical scope (superseded by #140.12.50):** this document describes the pre-promotion experiment. The built-in standard atmosphere now defaults to `fused-gradient` in the prepared/physical shooting paths; use `traceOptimization: 'legacy'` to reproduce the original RK4. See `fused-gradient-production-promotion.md`.
 
 ## Scope and default behavior
 
