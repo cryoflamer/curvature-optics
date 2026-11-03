@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "evidence": "Static HTML/source preservation boundary; not browser timing, pixel or physics parity",
+  "entrypoint": "CurvatureApp.html",
+  "modernEntrypoint": "CurvatureModern.html",
+  "defaultCanvas": "legacy",
+  "demos": [
+    {
+      "name": "Curve",
+      "states": 12,
+      "animatedTransitions": 11
+    },
+    {
+      "name": "Causeway",
+      "states": 6,
+      "animatedTransitions": 5
+    },
+    {
+      "name": "TransLine",
+      "states": 8,
+      "animatedTransitions": 7
+    },
+    {
+      "name": "Grace",
+      "states": 9,
+      "animatedTransitions": 8
+    },
+    {
+      "name": "Bedford",
+      "states": 7,
+      "animatedTransitions": 6
+    },
+    {
+      "name": "Tensas",
+      "states": 6,
+      "animatedTransitions": 5
+    },
+    {
+      "name": "Soundly",
+      "states": 18,
+      "animatedTransitions": 17
+    },
+    {
+      "name": "Chicago",
+      "states": 6,
+      "animatedTransitions": 5
+    },
+    {
+      "name": "Canigou",
+      "states": 8,
+      "animatedTransitions": 7
+    }
+  ],
+  "demoButtonOrder": [
+    "Curve",
+    "Causeway",
+    "TransLine",
+    "Grace",
+    "Chicago",
+    "Canigou",
+    "Bedford",
+    "Tensas",
+    "Soundly"
+  ],
+  "animationControls": [
+    "BackButton",
+    "PlayButton",
+    "ForwButton",
+    "CountButton"
+  ],
+  "statePersistenceScript": "src/app/CurvatureStatePersistence.js",
+  "routeScript": "src/ui/modern/ModernRoute.js",
+  "archivedBrowserReferences": "tests/fixtures/legacy-browser-references.zip"
+}

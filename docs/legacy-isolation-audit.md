@@ -57,8 +57,8 @@ The Legacy animation and Modern high-quality CPU scene are deliberately distinct
 
 ## Next bounded changes
 
-1. **#140.12.65 — Legacy preservation contract.** Add/strengthen route and browser smoke gates for all nine demos, animation controls, old `?state=` and `?demo=` links, independent Legacy launch and six archived visuals. Preserve the existing Modern Scene/Compare/CPU baseline. Avoid copying or relocating shared modules without necessity.
+1. **#140.12.65 — Legacy preservation contract (completed).** The [reviewed Legacy contract](legacy-preservation-contract.md) adds a read-only source/HTML fixture gate and Node VM behavior tests for all nine demos, animation controls, `?state=` / `?demo=` routes and archived visuals. The separate Opera/Chromium browser acceptance checklist remains **manual and not yet executed**; no relocation or deletion is authorized by these tests.
 2. **#140.12.66 — Dead-code candidate audit.** For suspect files, manually inspect browser globals, actual callsites, dynamic/inline scripts, tests, tools, `git` history, diagnostic exports and alternate modes. Write a reasoned per-module *candidate* list; research-only does not mean dead.
 3. **#140.12.67+ — Controlled cleanup.** Only after explicit approval and replacement tests, remove or relocate demonstrably redundant experimental code in small independent commits, with both Legacy and Modern browser/regression checks. Preserve the `optics-baseline-2026-11` tag and archived reference evidence.
 
-**Gate status: isolation documented; no deletion approved.** Legacy is to be **maintained as an intentional separate mode**, not slowly erased through a supposed Modern parity migration.
+**Gate status: isolation documented; preservation contract automated with a remaining manual browser gate; no deletion approved.** Legacy is to be **maintained as an intentional separate mode**, not slowly erased through a supposed Modern parity migration.

@@ -2530,6 +2530,7 @@
         "tests/LegacyIsolationAudit.test.js",
         "tests/LegacyMigrationPlan.test.js",
         "tests/LegacyModernBoundary.test.js",
+        "tests/LegacyPreservationContract.test.js",
         "tests/ModernUiBootstrap.test.js"
       ],
       "commonJsToolCallers": []
