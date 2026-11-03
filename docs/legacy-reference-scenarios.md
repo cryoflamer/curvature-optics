@@ -1,6 +1,6 @@
 # Reproducible Legacy reference scenarios
 
-Status: **source-state fixtures only** (historical work item #140.12.57). These are **not a rendered oracle or pixel baseline**, not a numerical ray-tracing oracle, and not proof of Legacy/Modern equivalence. No reference screenshots, optical output arrays or browser captures were supplied in this repository for these snapshots. Their capture status is **missing**.
+Status: **source-state fixtures** (historical work item #140.12.57). These are **not a rendered oracle or pixel baseline**, not a numerical ray-tracing oracle, and not proof of Legacy/Modern equivalence. No reference screenshots, optical output arrays or browser captures were supplied in this repository for these snapshots. Their capture status is **missing**.
 
 ## Provenance and intended use
 
@@ -30,7 +30,7 @@ The selected states include Legacy `ObjType` values 3 (tower) and 0 (Bedford mar
 
 ## Capture manifest (not yet populated)
 
-For **each** of the six samples above, future browser-based reference collection must record at least:
+For **each** of the six samples above, future browser-based reference collection must still record at least (the separate [numeric model snapshots](legacy-headless-reference.md) do not replace these browser captures):
 
 | Required evidence | Current state |
 | --- | --- |
@@ -38,7 +38,7 @@ For **each** of the six samples above, future browser-based reference collection
 | Browser version, OS, device scale, viewport and canvas pixel dimensions | **Missing** |
 | Explicitly selected atmosphere, effective model defaults and Legacy UI configuration | **Missing** (source payloads only) |
 | Rendered Legacy screenshot/frame and its SHA-256 | **Missing** |
-| Numeric ray/visibility/angle observables with units and tolerances | **Missing** |
+| Numeric ray/visibility observables with units and tolerances | **Missing** (same-code model angle diagnostics exist separately; no optical ray/visibility captures) |
 | Comparable Modern scene representation, with documented unsupported fields and conversion loss | **Missing** |
 | Review of physical-model differences and acceptance decision | **Pending** |
 
@@ -46,4 +46,4 @@ Do not fill missing rows with synthetic data. Where a source snapshot omits atmo
 
 ## Retirement impact
 
-This is the first narrow *source-fixture* portion of [Legacy migration planning](legacy-migration-plan.md); it does **not** satisfy the full Legacy-retirement gate. Keep `CurvatureApp.html`, Legacy state serialization, scientific comparison tools, CPU reference methods and WebGL2 until browser captures, numerical oracles, compatibility behavior and actual Modern semantics have been verified. These fixtures allow headless source regression checks while that work continues.
+This is the first narrow *source-fixture* portion of [Legacy migration planning](legacy-migration-plan.md); it does **not** satisfy the full Legacy-retirement gate. Keep `CurvatureApp.html`, Legacy state serialization, scientific comparison tools, CPU reference methods and WebGL2 until browser captures, numerical oracles, compatibility behavior and actual Modern semantics have been verified. These fixtures allow headless source regression checks. The follow-up [same-code numerical adapter](legacy-headless-reference.md) now records six horizon/camera/atmosphere calculations, but does not provide a ray, image or independent physical oracle.

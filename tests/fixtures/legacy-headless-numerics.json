@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "same-code Legacy numerical regression snapshot; NOT independent physics, ray or pixel oracle",
+  "inputSource": "tests/fixtures/legacy-reference-scenarios.json",
+  "runtimeSources": [
+    "src/app/CurvatureModel.js",
+    "src/app/CurvatureAtmosphere.js"
+  ],
+  "relativeTolerance": 1e-12,
+  "absoluteTolerance": 1e-12,
+  "samples": [
+    {
+      "demo": "TransLine",
+      "sourceIndex": 0,
+      "legacyQuery": "?demo=TransLine&pos=0",
+      "observables": {
+        "refraction": {
+          "syncMode": 2,
+          "k": 0.16939432737429766,
+          "radiusFactor": 1.2039407301888634,
+          "effectiveRadiusMetres": 7670306.392033248,
+          "temperatureC": 14.350000000000023,
+          "pressureHpa": 1001.2943827704129,
+          "lapseRateKelvinPerMetre": -0.006499999999999999,
+          "standardAtmospherePressurePa": 100129.43827704129,
+          "standardAtmosphereTemperatureKelvin": 287.5
+        },
+        "horizon": {
+          "observerHeightMetres": 100,
+          "earthRadiusMetres": 6371000,
+          "geometryRadiusMetres": 7670306.392033248,
+          "dipRadians": 0.005106299483789603,
+          "horizonArcMetres": 39166.88157014747,
+          "horizonLineOfSightMetres": 39167.22198996512,
+          "horizonRadiusMetres": 39166.71136223579,
+          "horizonRefractionAngleDegrees": 0.028449775343954008
+        },
+        "camera": {
+          "fieldOfViewDegrees": 24.37726640386377,
+          "panRadians": -0.17453292519943295,
+          "viewCenter": [
+            -6801.228053258898,
+            38571.68100952114,
+            -199.99869628870604
+          ],
+          "up": [
+            -0.0008866957466422705,
+            0.00502870146746466,
+            0.999986962881119
+          ],
+          "sceneSizeLegacyUnits": 9385.66039252209
+        },
+        "firstObject": {
+          "apparentAngularSizeDegrees": 2.543212567772354,
+          "refractionAngleDegrees": 0.0003739645524053771,
+          "viewDistanceMetres": 510.23050011452983,
+          "liftAbsoluteMetres": 0.0033820156499374363,
+          "liftRelativeMetres": -0.25390864153020326
+        }
+      }
+    },
+    {
+      "demo": "TransLine",
+      "sourceIndex": 4,
+      "legacyQuery": "?demo=TransLine&pos=4",
+      "observables": {
+        "refraction": {
+          "syncMode": 2,
+          "k": 0.1704565179870846,
+          "radiusFactor": 1.205482318507845,
+          "effectiveRadiusMetres": 7680127.85121348,
+          "temperatureC": 14.902499999999975,
+          "pressureHpa": 1011.4493258324477,
+          "lapseRateKelvinPerMetre": -0.006500000000000002,
+          "standardAtmospherePressurePa": 101144.93258324476,
+          "standardAtmosphereTemperatureKelvin": 288.05249999999995
+        },
+        "horizon": {
+          "observerHeightMetres": 15,
+          "earthRadiusMetres": 6371000,
+          "geometryRadiusMetres": 7680127.85121348,
+          "dipRadians": 0.0019764054783569336,
+          "horizonArcMetres": 15179.046759619987,
+          "horizonLineOfSightMetres": 15179.066523673484,
+          "horizonRadiusMetres": 15179.036877610608,
+          "horizonRefractionAngleDegrees": 0.011091194201946904
+        },
+        "camera": {
+          "fieldOfViewDegrees": 1.2375407233957483,
+          "panRadians": 0,
+          "viewCenter": [
+            0,
+            15179.036877610608,
+            -29.9999707028497
+          ],
+          "up": [
+            0,
+            0.0019764041916583825,
+            0.9999980469113284
+          ],
+          "sceneSizeLegacyUnits": 181.86835347066577
+        },
+        "firstObject": {
+          "apparentAngularSizeDegrees": 21.275470735887275,
+          "refractionAngleDegrees": 0.00004599296937659094,
+          "viewDistanceMetres": 61.13306550080509,
+          "liftAbsoluteMetres": 0.000049721028916048355,
+          "liftRelativeMetres": -0.011940493890957974
+        }
+      }
+    },
+    {
+      "demo": "TransLine",
+      "sourceIndex": 7,
+      "legacyQuery": "?demo=TransLine&pos=7",
+      "observables": {
+        "refraction": {
+          "syncMode": 1,
+          "k": 0,
+          "radiusFactor": 1,
+          "effectiveRadiusMetres": 6371000,
+          "temperatureC": 14.902499999999975,
+          "pressureHpa": 1011.4493258324477,
+          "lapseRateKelvinPerMetre": -0.0343,
+          "standardAtmospherePressurePa": 101144.93258324476,
+          "standardAtmosphereTemperatureKelvin": 288.05249999999995
+        },
+        "horizon": {
+          "observerHeightMetres": 15,
+          "earthRadiusMetres": 6371000,
+          "geometryRadiusMetres": 6371000,
+          "dipRadians": 0.0021699833360113874,
+          "horizonArcMetres": 13824.963833728549,
+          "horizonLineOfSightMetres": 13824.985533560208,
+          "horizonRadiusMetres": 13824.952983835712,
+          "horizonRefractionAngleDegrees": 0
+        },
+        "camera": {
+          "fieldOfViewDegrees": 0.7071846434399423,
+          "panRadians": 0.003490658503988659,
+          "viewCenter": [
+            48.25816686400082,
+            13824.89029075417,
+            -17.45282472944466
+          ],
+          "up": [
+            0.0000044066395001716275,
+            0.0012624040986153177,
+            0.9999992031579189
+          ],
+          "sceneSizeLegacyUnits": 94.65394243815939
+        },
+        "firstObject": {
+          "apparentAngularSizeDegrees": 21.855872661299447,
+          "refractionAngleDegrees": 0,
+          "viewDistanceMetres": 59.46639333191331,
+          "liftAbsoluteMetres": 0,
+          "liftRelativeMetres": 0
+        }
+      }
+    },
+    {
+      "demo": "Bedford",
+      "sourceIndex": 0,
+      "legacyQuery": "?demo=Bedford&pos=0",
+      "observables": {
+        "refraction": {
+          "syncMode": 1,
+          "k": 0,
+          "radiusFactor": 1,
+          "effectiveRadiusMetres": 6371000,
+          "temperatureC": 14.954499999999996,
+          "pressureHpa": 1012.4093626397557,
+          "lapseRateKelvinPerMetre": -0.0343,
+          "standardAtmospherePressurePa": 101240.93626397557,
+          "standardAtmosphereTemperatureKelvin": 288.1045
+        },
+        "horizon": {
+          "observerHeightMetres": 7,
+          "earthRadiusMetres": 6371000,
+          "geometryRadiusMetres": 6371000,
+          "dipRadians": 0.0014823816027153883,
+          "horizonArcMetres": 9444.253190899739,
+          "horizonLineOfSightMetres": 9444.260108680297,
+          "horizonRadiusMetres": 9444.249732012879,
+          "horizonRefractionAngleDegrees": 0
+        },
+        "camera": {
+          "fieldOfViewDegrees": 3.0932205871692586,
+          "panRadians": 0,
+          "viewCenter": [
+            0,
+            9444.260108680297,
+            0
+          ],
+          "up": [
+            0,
+            0,
+            1
+          ],
+          "sceneSizeLegacyUnits": 282.89157851630154
+        },
+        "firstObject": {
+          "apparentAngularSizeDegrees": 0.02691568164053993,
+          "refractionAngleDegrees": 0,
+          "viewDistanceMetres": 8600.004150115963,
+          "liftAbsoluteMetres": 0,
+          "liftRelativeMetres": 0
+        }
+      }
+    },
+    {
+      "demo": "Bedford",
+      "sourceIndex": 3,
+      "legacyQuery": "?demo=Bedford&pos=3",
+      "observables": {
+        "refraction": {
+          "syncMode": 1,
+          "k": 0,
+          "radiusFactor": 1,
+          "effectiveRadiusMetres": 6371000,
+          "temperatureC": 14.97374000000002,
+          "pressureHpa": 1012.7647632129072,
+          "lapseRateKelvinPerMetre": -0.0343,
+          "standardAtmospherePressurePa": 101276.47632129071,
+          "standardAtmosphereTemperatureKelvin": 288.12374
+        },
+        "horizon": {
+          "observerHeightMetres": 4.04,
+          "earthRadiusMetres": 6371000,
+          "geometryRadiusMetres": 6371000,
+          "dipRadians": 0.0011261643188149471,
+          "horizonArcMetres": 7174.792875170028,
+          "horizonLineOfSightMetres": 7174.795908305863,
+          "horizonRadiusMetres": 7174.791358602976,
+          "horizonRefractionAngleDegrees": 0
+        },
+        "camera": {
+          "fieldOfViewDegrees": 0.4950324555104575,
+          "panRadians": 0,
+          "viewCenter": [
+            0,
+            7174.795908305863,
+            0
+          ],
+          "up": [
+            0,
+            0,
+            1
+          ],
+          "sceneSizeLegacyUnits": 34.38599643256234
+        },
+        "firstObject": {
+          "apparentAngularSizeDegrees": 1.8609281679840999,
+          "refractionAngleDegrees": 0,
+          "viewDistanceMetres": 124.35947170059154,
+          "liftAbsoluteMetres": 0,
+          "liftRelativeMetres": 0
+        }
+      }
+    },
+    {
+      "demo": "Bedford",
+      "sourceIndex": 6,
+      "legacyQuery": "?demo=Bedford&pos=6",
+      "observables": {
+        "refraction": {
+          "syncMode": 1,
+          "k": 0,
+          "radiusFactor": 1,
+          "effectiveRadiusMetres": 6371000,
+          "temperatureC": 14.97374000000002,
+          "pressureHpa": 1012.7647632129072,
+          "lapseRateKelvinPerMetre": -0.0343,
+          "standardAtmospherePressurePa": 101276.47632129071,
+          "standardAtmosphereTemperatureKelvin": 288.12374
+        },
+        "horizon": {
+          "observerHeightMetres": 4.04,
+          "earthRadiusMetres": 6371000,
+          "geometryRadiusMetres": 6371000,
+          "dipRadians": 0.0011261643188149471,
+          "horizonArcMetres": 7174.792875170028,
+          "horizonLineOfSightMetres": 7174.795908305863,
+          "horizonRadiusMetres": 7174.791358602976,
+          "horizonRefractionAngleDegrees": 0
+        },
+        "camera": {
+          "fieldOfViewDegrees": 0.4950324555104575,
+          "panRadians": 0,
+          "viewCenter": [
+            0,
+            7174.795908305863,
+            0
+          ],
+          "up": [
+            0,
+            0,
+            1
+          ],
+          "sceneSizeLegacyUnits": 34.38599643256234
+        },
+        "firstObject": {
+          "apparentAngularSizeDegrees": 1.864153693279531,
+          "refractionAngleDegrees": 0,
+          "viewDistanceMetres": 124.1441991584739,
+          "liftAbsoluteMetres": 0,
+          "liftRelativeMetres": 0
+        }
+      }
+    }
+  ]
+}
