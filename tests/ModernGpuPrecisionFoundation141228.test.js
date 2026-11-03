@@ -80,64 +80,6 @@ test('140.12.28: decoder checks real f32 words; analysis does not overclaim cert
   assert.throws(()=>p.analyze(v,{}),/Missing mode/);
 });
 
-test('140.12.28: UI is a separate diagnostic with export and no scene mutation',()=>{
-  assert.match(html,/src\/diagnostics\/CurvatureGpuPrecisionFoundation141228\.js/);
-  assert.match(html,/ModernGpuPrecisionFoundationRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(app,/addEventListener\('click',runGpuPrecisionFoundation141228\)/);
-  assert.match(app,/curvature-compare-140\.12\.28-gpu-arithmetic\.json/);
-  const body=app.slice(app.indexOf('async function runGpuPrecisionFoundation141228(){'),
-    app.indexOf('function bindCompareGpuProbe(){'));
-  assert.match(body,/precision\.makeVectors/);
-  assert.match(body,/session\.run\(vectors/);
-  assert.match(body,/state\.probeFrameLast=report/);
-  assert.doesNotMatch(body,/solveCpuBatch|renderComposition|renderPhysical|gpuRayField|Redraw\(/);
-});
-
-function mockedGpu(){
-  const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8},buffers=[],codes=[],writes=[];
-  let activePipeline=null,activeBind=null,dispatches=0,deviceDestroyed=false;
-  const device={limits:{maxStorageBufferBindingSize:1e8},
-    createShaderModule({code}){codes.push(code);return {code,getCompilationInfo:async()=>({messages:[]})};},
-    async createComputePipelineAsync({compute}){return {code:compute.module.code,getBindGroupLayout:()=>({})};},
-    createBindGroup({entries}){return entries;},
-    createBuffer({size}){const b={bytes:new ArrayBuffer(size),destroy(){this.destroyed=true;},
-      mapAsync:async()=>{},getMappedRange(offset,length){return this.bytes.slice(offset,offset+length);},
-      unmap(){}};buffers.push(b);return b;},
-    createCommandEncoder(){let copy;
-      return {beginComputePass(){return {setPipeline(v){activePipeline=v;},setBindGroup(i,v){activeBind=v;},
-        dispatchWorkgroups(){dispatches++;},end(){}};},
-        copyBufferToBuffer(from,fromOffset,to,toOffset,length){copy={from,fromOffset,to,toOffset,length};},
-        finish(){return {copy};}};},
-    queue:{writeBuffer(buffer,offset,values){writes.push(values.slice());
-      new Uint8Array(buffer.bytes,offset,values.byteLength).set(
-        new Uint8Array(values.buffer,values.byteOffset,values.byteLength));},
-      submit(commands){
-        const c=commands[0].copy,mode=Number(activePipeline.code.match(/const MODE:u32=(\d)u/)[1]);
-        const inputs=new Float32Array(activeBind[0].resource.buffer.bytes);
-        const operations=new Uint32Array(activeBind[1].resource.buffer.bytes);
-        const outputs=new Float32Array(activeBind[2].resource.buffer.bytes);
-        const config=new Uint32Array(activeBind[3].resource.buffer.bytes);
-        for(let i=0;i<config[0];i++){
-          const j=i*4, a=inputs[j]+inputs[j+1],b=inputs[j+2]+inputs[j+3];
-          let v;
-          switch(operations[i]){
-            case 0:v=a+b;break;case 1:v=a-b;break;case 2:v=a*b;break;
-            case 3:v=a/b;break;case 4:v=Math.sqrt(a);break;
-          }
-          const hi=Math.fround(v),lo=mode===0?0:Math.fround(v-hi);
-          outputs.set([hi,lo,1,0],j);
-        }
-        new Uint8Array(c.to.bytes,c.toOffset,c.length).set(
-          new Uint8Array(c.from.bytes,c.fromOffset,c.length));
-      }},destroy(){deviceDestroyed=true;}};
-  const deps={navigator:{gpu:{requestAdapter:async()=>({
-    info:{vendor:'mock'},requestDevice:async()=>device})}},
-    GPUBufferUsage:usage,GPUMapMode:{READ:1}};
-  return {deps,buffers,codes,writes,get dispatches(){return dispatches;},
-    get deviceDestroyed(){return deviceDestroyed;}};
-}
-
 test('140.12.28: three mocked GPU pipelines run serially, read back, export and release buffers',async()=>{
   const mock=mockedGpu(),vectors=p.makeVectors().slice(0,6),session=await p.createSession(vectors.length,mock.deps);
   try{

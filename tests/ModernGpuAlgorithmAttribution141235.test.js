@@ -92,25 +92,6 @@ test('140.12.35: report is explicitly non-certified and enforces three actual va
   assert.equal(r.cpuOracleInjectedIntoGpuFrame,false);
   assert.match(r.limitations.join(' '),/not additive|NOT additive/i);
 });
-test('140.12.35: browser path is opt-in, real GPU B paints occur before independent CPU targets',()=>{
-  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');
-  const start=app.indexOf('async function runGpuAlgorithmAttribution141235()'),end=app.indexOf('  function bind(){',start);
-  assert.ok(start>=0&&end>start);
-  const block=app.slice(start,end);
-  assert.match(block,/gpuFirstGrid\(sourceA,4096,deps,\{layout:'distance-focused'\}\)/);
-  assert.match(block,/captureGpuRendererQueries\(baselineDiscovery/);
-  assert.match(block,/strictVisibility:true/);
-  assert.match(block,/refinements:refinements/);
-  assert.match(block,/state\.probeField=fields\[name\]/);
-  assert.match(block,/graphB\.Redraw\(\)/);
-  assert.match(block,/graphA\.Redraw\(\)/);
-  assert.ok(block.indexOf('contract.solveCpuBatch(cpuRequest)')>block.indexOf('for(var j=0;j<configurations.length;j++)'));
-  assert.match(block,/numericAuditFailed\('140\.12\.35'/);
-  assert.match(app,/attributionButton\.addEventListener\('click',runGpuAlgorithmAttribution141235\)/);
-  assert.match(html,/CurvatureGpuAlgorithmAttribution141235\.js\?v=140\.12\.35/);
-  assert.match(html,/id="ModernGpuAlgorithmAttributionRun"/);
-});
 test('140.12.35: strict diagnostic field reaches real contours/fills without CPU fallback',()=>{
   const composition=require('../src/scene/CurvatureIndependentComposition');
   const silhouette=require('../src/optics/OpticalTowerSilhouette');
@@ -131,20 +112,4 @@ test('140.12.35: strict diagnostic field reaches real contours/fills without CPU
   assert.ok(Number.isInteger(out.stats.fillUnresolved));
   assert.ok(strict.stats().experimentalGpu.strictRejected>0);
   assert.equal(strict.stats().experimentalGpu.cpuFallbackRequests,0);
-});
-
-test('140.12.35.1: baseline paint timing declares elapsed in strict browser scope',()=>{
-  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  const start=app.indexOf('async function runGpuAlgorithmAttribution141235()');
-  const end=app.indexOf('  function bind(){',start);
-  const block=app.slice(start,end);
-  const match=block.match(/var t=profileNow\(\);graphB\.Redraw\(\);var elapsed=profileNow\(\)-t,\s*stats=ensureGpuResult\(\),frame=parity\.canvasCapture\(graphB\.Canvas\);/);
-  assert.ok(match,'paint duration must be declared locally rather than assigned as an undeclared identifier');
-  const run=new Function('profileNow','graphB','ensureGpuResult','parity',
-    '\"use strict\";'+match[0]+'return {elapsed,stats,frame};');
-  let now=100;const result=run(()=>{now+=5;return now;},
-    {Redraw(){},Canvas:{width:1}},()=>({ok:true}),{canvasCapture:()=>({width:1})});
-  assert.equal(result.elapsed,5);
-  assert.deepEqual(result.stats,{ok:true});
-  assert.deepEqual(result.frame,{width:1});
 });

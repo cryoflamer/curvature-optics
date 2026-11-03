@@ -163,23 +163,6 @@ test('140.12.7: CPU/GPU statuses remain reviewable despite subpixel angular prox
   assert.throws(()=>compare.probeReport(points,cpu,{results:[]}),/Mismatched/);
 });
 
-test('140.12.7: optional Compare-only GPU controls and research scripts are wired, no production backend switch',()=>{
-  const html=source('CurvatureModern.html'),app=source('src/ui/modern/ModernApp.js');
-  assert.match(html,/id="ModernCompareKind"/);
-  assert.match(html,/id="ModernGpuProbeRun"/);
-  assert.match(html,/id="ModernGpuProbeCanvasCPU"/);
-  assert.match(html,/id="ModernGpuProbeCanvasGPU"/);
-  assert.match(html,/id="ModernGpuProbeExport"/);
-  assert.match(html,/CurvatureWebGPUBatchShooting1412\.js/);
-  assert.match(app,/session=await gpu\.createSession/);
-  assert.match(app,/gpu\.checked\(request\)/);
-  assert.match(app,/generation!==state\.probeGeneration/);
-  assert.match(app,/result\.B=compareAdapter\.clone\(result\.A\)/);
-  assert.match(app,/spec=state\.compareConfig&&\(state\.compareGpuProbe\?state\.compareConfig\.A/);
-  assert.match(app,/actualRenderedImageCompared:false/);
-  assert.doesNotMatch(source('src/app/CurvatureMainCanvasRenderer.js'),/CurvatureWebGPUBatchShooting1412/);
-});
-
 test('140.12.8: disputed GPU ground contacts are independently replayed and never certified as frames',()=>{
   const request={geometry:'flat',radius:6371000,observerHeight:2,atmosphere:'standard',
     controls:{step:50,eventSubsteps:8},targets:[[100,0],[200,0],[300,0]]};
@@ -257,23 +240,6 @@ test('140.12.10: rendered frame comparison measures real pixels, not angular-ray
   assert.equal(compare.compareFramePixels({},{}).status,'unavailable');
 });
 
-test('140.12.10: full physical renderer and Compare wire GPU results into B and keep opt-in bounds',()=>{
-  const html=source('CurvatureModern.html'),app=source('src/ui/modern/ModernApp.js');
-  const optics=source('src/optics/CurvaturePhysicalSceneOptics.js'),field=source('src/optics/OpticalSharedRayField.js');
-  assert.match(html,/id="ModernGpuFrameRun"/);
-  assert.match(html,/GPU-seeded rays and explicit CPU fallback/);
-  assert.match(app,/runCompareGpuField/);
-  assert.match(app,/state\.compareGraphs\.B\.Redraw\(\)/);
-  assert.match(app,/options\.experimentalRayField=state\.probeField/);
-  assert.match(app,/options\.onExactTarget=function/);
-  assert.match(app,/gpuAssistedFrame:state\.probeFrameLast/);
-  assert.match(optics,/experimentalRayField:options.experimentalRayField/);
-  assert.match(field,/options\.experimentalRayField\.exact\(d,h\)/);
-  assert.match(field,/options\.onExactTarget\(d,h\)/);
-  assert.doesNotMatch(source('src/app/CurvatureMainCanvasRenderer.js'),/CurvatureWebGPUBatchShooting1412/);
-});
-
-
 test('140.12.11: CPU replay uses only original selected f64 oracle outputs and honest fallback',()=>{
   const surfaces=require('../src/geometry/CurvatureSurfaceGeometry');
   const model={showModel:2,rEarth:6371000,Height:15};
@@ -292,20 +258,6 @@ test('140.12.11: CPU replay uses only original selected f64 oracle outputs and h
   assert.throws(()=>compare.cpuReplayField({},null),/Invalid/);
 });
 
-test('140.12.11: Compare captures actual CPU answers and renders replay before GPU B',()=>{
-  const app=source('src/ui/modern/ModernApp.js');
-  const field=source('src/optics/OpticalSharedRayField.js');
-  const html=source('CurvatureModern.html');
-  assert.match(field,/options\.onExactResult\(d,h,record\)/);
-  assert.match(app,/options\.onExactResult=function\(d,h,result\)/);
-  assert.match(app,/compareAdapter\.cpuReplayField\(bundle,cpuRecords\)/);
-  assert.match(app,/replayFrameDiff=compareAdapter\.compareFramePixels/);
-  assert.match(app,/cpuReplayControl:/);
-  assert.match(html,/Build CPU replay \+ GPU frame B/);
-  assert.ok(app.indexOf('var cpuReplay=compareAdapter.cpuReplayField')<
-    app.indexOf('state.probeField=compareAdapter.gpuRayField(bundle,gpuResult.response)'));
-});
-
 test('140.12.11: CPU replay counts and source status are distinct from GPU work',()=>{
   const request={geometry:'flat',radius:6371000,observerHeight:15,atmosphere:'standard'};
   const selected=[{key:'500.0000000000,30.00000000000',d:500,h:30}];
@@ -322,17 +274,6 @@ test('140.12.11: CPU replay counts and source status are distinct from GPU work'
     {drawn:7,fillTriangles:10,unresolved:0}).sameCounts,false);
   assert.equal(compare.frameControlCounts(null,{drawn:1}).sameCounts,false);
 });
-
-test('140.12.11: replay control labels and exports strict pixel and adaptive work evidence',()=>{
-  const app=source('src/ui/modern/ModernApp.js');
-  assert.match(app,/replayFrameDiff\.strictPixels===0/);
-  assert.match(app,/referenceCounts\.sameCounts/);
-  assert.match(app,/cpuReplayControl:\{renderMs:replayMs/);
-  assert.match(app,/replayStats\.replayHits/);
-  assert.match(app,/CPU replay control/);
-  assert.match(app,/curvature-compare-140\.12\.11-cpu-replay-gpu-frame\.json/);
-});
-
 
 test('140.12.12: GPU-first scene grid is authored without discovering CPU ray solves',()=>{
   const composition=require('../src/scene/CurvatureIndependentComposition');
@@ -386,21 +327,4 @@ test('140.12.12: GPU-first field serves every sample with bounded GPU data and n
   const empty=compare.gpuFirstRayField(grid,{results:failed},surfaces);
   assert.equal(empty.sample(500,25).status,'solver_failed');
   assert.equal(empty.stats().experimentalGpu.cpuFallbackRequests,0);
-});
-
-test('140.12.12: GPU-first UI measures end-to-end BEFORE separately timed CPU cold reference',()=>{
-  const html=source('CurvatureModern.html'),app=source('src/ui/modern/ModernApp.js');
-  const physical=source('src/optics/CurvaturePhysicalSceneOptics.js');
-  assert.match(html,/id="ModernGpuFirstRun"/);
-  assert.match(html,/Benchmark GPU-first full frame/);
-  assert.match(app,/function runCompareGpuFirst\(/);
-  assert.match(app,/gpuFirstGrid\(state\.comparePair\.A/);
-  assert.match(app,/session\.solve\(requests\[batchIndex\],\{warmRepeats:0\}\)/);
-  assert.match(app,/gpuFirstRayField\(grid,/);
-  assert.match(app,/gpuFirstEndToEndMs:fullGpuMs/);
-  assert.match(app,/cpuColdReferenceMs:cpuMs/);
-  assert.ok(app.indexOf('var fullGpuMs=renderFinished-totalStarted')<
-    app.indexOf('state.probeForceColdA=true'));
-  assert.match(physical,/options\.experimentalRayField\.fullCoverageGrid/);
-  assert.match(app,/curvature-compare-140\.12\.12-gpu-first-frame\.json/);
 });

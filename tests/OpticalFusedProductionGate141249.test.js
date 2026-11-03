@@ -90,19 +90,3 @@ test('140.12.49: non-standard and custom profiles remain outside fused productio
   const flagged=projection.solve({...opts,profile});
   assert.deepEqual(flagged,direct);
 });
-
-test('140.12.49: multi-scene browser gate is opt-in and exports strict pixel/structure proof',()=>{
-  const root=path.join(__dirname,'..');
-  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
-  const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/id="ModernFusedProductionGate141249Run"/);
-  assert.match(ui,/function runFusedProductionGate141249\(/);
-  assert.match(ui,/fusedGateButton\.addEventListener\('click',runFusedProductionGate141249\)/);
-  for(const id of scenes().map(s=>s.id))assert.ok(ui.includes("id:'"+id+"'"));
-  assert.match(ui,/cacheSession:optics\.create\(\)/);
-  assert.match(ui,/pixels\.strictPixels===0&&structureEqual/);
-  assert.match(ui,/strictParityAcrossScenes:allParity/);
-  assert.match(ui,/productionDefaultUnchanged:false,candidateOnly:false/);
-  assert.match(ui,/curvature-compare-140\.12\.49-fused-production-gate\.zip/);
-  assert.match(ui,/args\.settings\.traceOptimization=mode==='baseline'\?'legacy':'fused-gradient'/);
-});

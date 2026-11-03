@@ -110,24 +110,3 @@ test('140.12.18: spatial pixel tiles reconstruct global significant count, with 
   assert.equal(compare.frameDifferenceTiles(a,canvas(b,8,24),4,3).status,'unavailable');
   assert.throws(()=>compare.frameDifferenceTiles(a,changed,0,3),/dimensions/);
 });
-test('140.12.18: Compare UI separates source-selected adaptive GPU from CPU-only comparison',()=>{
-  const app=source('src/ui/modern/ModernApp.js'),html=source('CurvatureModern.html');
-  assert.match(html,/id="ModernGpuAdaptiveRun"/);
-  assert.match(html,/id="ModernGpuAdaptiveHeatmap"/);
-  assert.match(html,/id="ModernGpuDenseHeatmap"/);
-  assert.match(html,/src\/ui\/modern\/ModernCompareModel.js\?v=140\.12\.30/);
-  assert.match(app,/addEventListener\('click',runCompareGpuAdaptive141218\)/);
-  const start=app.indexOf('async function runCompareGpuAdaptive141218()');
-  const end=app.indexOf('  function bindCompareGpuProbe(){',start);
-  const block=app.slice(start,end);
-  assert.match(block,/baseCount=4096,extraBudget=512/);
-  assert.match(block,/collectCandidates:true/);
-  assert.match(block,/baseField\.refinementCandidates\(extraBudget\)/);
-  assert.match(block,/gpu\.checked\(request\)/);
-  assert.match(block,/state\.probeForceColdA=true/);
-  assert.ok(block.indexOf('state.probeForceColdA=true')>block.indexOf("paint(denseField,'dense4608')"));
-  assert.match(block,/includesDiscoveryFrameInAdaptiveTime:true/);
-  assert.match(block,/cpuOracleDiscovery:false,cpuShootingFallback:false/);
-  assert.match(app,/curvature-compare-140\.12\.18-adaptive-vs-dense\.json/);
-  assert.match(block,/pixelHeatmap:compareAdapter\.frameDifferenceTiles/);
-});

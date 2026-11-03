@@ -108,16 +108,3 @@ test('140.12.33: camera changes, outside view and invalid measurements cannot ma
   const missing=stubReport();missing.perCase.pop();
   assert.throws(()=>pixel.analyze(missing,v),/Complete independent/);
 });
-test('140.12.33: UI wires one GPU-owned DS run, actual camera, versioned JSON and explicit non-frame caveat',()=>{
-  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');
-  assert.match(app,/runGpuHighPrecisionShooting141232\(\{pixelSpace:true\}\)/);
-  assert.match(app,/pixelAudit\.capture\(model,state\.compareGraphs\.A\)/);
-  assert.match(app,/pixelAudit\.sameCamera\(pixelCamera,current\)/);
-  assert.match(app,/pixelAudit\.analyze\(report,pixelCamera\)/);
-  assert.match(app,/curvature-compare-140\.12\.33-pixel-space-audit\.json/);
-  assert.match(app,/numericAuditFailed\(pixelMode\?'140\.12\.33'/);
-  assert.match(html,/CurvatureGpuPixelSpaceAudit141233\.js\?v=140\.12\.33/);
-  assert.match(html,/ModernGpuPixelSpaceAuditRun/);
-  assert.match(html,/not rendered CPU\/GPU images or a full-frame pixel diff/);
-});

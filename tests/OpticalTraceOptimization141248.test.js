@@ -139,17 +139,3 @@ test('140.12.48: whole physical scene keeps exact geometric classification',()=>
   }
   assert.ok(preflight.stats.fieldStats.preflightGroundSteps>0);
 });
-
-test('140.12.48: Modern Compare audit is opt-in, wired and exports strict parity data',()=>{
-  const root=path.join(__dirname,'..');
-  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
-  const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/ModernTraceOptimize141248Run/);
-  assert.match(ui,/function runTraceOptimizationAudit141248\(/);
-  assert.match(ui,/traceButton\.addEventListener\('click',runTraceOptimizationAudit141248\)/);
-  assert.match(ui,/strictParityOnLastFrame:allParity/);
-  assert.match(ui,/curvature-compare-140\.12\.48-trace-production-profile\.zip/);
-  assert.match(ui,/traceOptimization:'fused-gradient'/);
-  assert.match(ui,/traceOptimization:'fused-preflight'/);
-  assert.match(ui,/traceOptimization:'scalar-rk4'/);
-});

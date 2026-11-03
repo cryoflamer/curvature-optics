@@ -84,21 +84,3 @@ test('140.12.22: upper tower angle metric excludes ground without hiding solver 
   assert.ok(Math.abs(out.variants.standard500.maxAbsoluteAngleDeltaArcsec-1)<1e-8);
   assert.equal(out.variants.vacuum500.statusMismatches,0);
 });
-test('140.12.22: browser audit uses GPU predictor first, CPU oracle last, no frame edits',()=>{
-  const app=src('src/ui/modern/ModernApp.js'),html=src('CurvatureModern.html');
-  assert.match(html,/CurvatureGpuPrecisionAudit141222\.js/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.30/);
-  assert.match(html,/id="ModernGpuPrecisionAuditRun"/);
-  assert.match(app,/addEventListener\('click',runGpuPrecisionAudit141222\)/);
-  assert.match(app,/curvature-compare-140\.12\.22-gpu-f32-precision\.json/);
-  const body=app.slice(app.indexOf('async function runGpuPrecisionAudit141222(){'),
-    app.indexOf('function bindCompareGpuProbe(){'));
-  assert.match(body,/gpu\.createSession/);
-  assert.match(body,/session\.solve\(runs\[key\]/);
-  assert.match(body,/contract\.solveCpuBatch/);
-  assert.ok(body.indexOf('contract.solveCpuBatch')>body.indexOf('session.solve(runs[key]'));
-  assert.match(body,/report\.framePaintingChanged=false/);
-  assert.match(body,/cpuAnswersNotInjectedIntoGPU=true/);
-  assert.doesNotMatch(body,/\.Redraw\(/);
-});

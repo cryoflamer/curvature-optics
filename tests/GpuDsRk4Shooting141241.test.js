@@ -125,20 +125,6 @@ test('140.12.41: PNG ZIP export labels point images explicitly NOT-A-FRAME',()=>
  assert.ok(names.includes('performance-48-target-batch.png'));
  assert.ok(files.find(f=>f.name==='README.txt').data.includes('NOT GPU rendered object frames'));
 });
-test('140.12.41: Modern Compare button is connected to single opt-in GPU session',()=>{
- const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8'),
-   app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
- assert.match(html,/CurvatureGpuDsRk4Shooting141241.js\?v=140\.12\.41/);
- assert.match(html,/CurvatureGpuDsRk4Audit141241.js\?v=140\.12\.41/);
- assert.match(html,/id="ModernGpuDsRk4Run"/);
- assert.match(app,/addEventListener\('click',runGpuDsRk4Audit141241\)/);
- assert.match(app,/await rk4\.createSession\(inputs.request\)/);
- assert.match(app,/await session\.solve\(inputs.request\)/);
- assert.match(app,/await cpuContract\.solveCpuBatch\(inputs.request\)/);
- assert.match(app,/gpu-ds-rk4-shooting-error.zip/);
- assert.doesNotMatch(app,/state\.probeField\s*=\s*.*rk4/);
-});
-
 test('140.12.41: mocked WebGPU session packs DS targets, reads back unchanged order, releases resources',async()=>{
  const req={...inputs().request,targets:[[1000,10],[5000,15]]},buffers=[],sources=[],compiled=[];
  const USAGE={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};

@@ -71,23 +71,3 @@ test('140.12.34: exact count, four viewpoints, and non-DS limitations are enforc
   assert.match(result.gpuAlgorithm,/f32 RK4 predictor/);
   assert.match(result.limitations.join(' '),/NOT a double-single/);
 });
-test('140.12.34: browser wiring paints real A and B for four camera views without editing production',()=>{
-  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');
-  assert.match(app,/runGpuFullFrameParity141234\(\)/);
-  assert.match(app,/gpuFirstGrid\(sourceA,4096,deps,\{layout:'distance-focused'\}\)/);
-  assert.match(app,/algorithm:'predictor'/);
-  assert.match(app,/workingPair=\{A:a,B:b\};state\.comparePair=workingPair/);
-  assert.match(app,/state\.probeForceColdA=true/);
-  assert.match(app,/graphA\.Redraw\(\)/);
-  assert.match(app,/graphB\.Redraw\(\)/);
-  assert.match(app,/parity\.canvasCapture\(graphA\.Canvas\)/);
-  assert.match(app,/parity\.canvasCapture\(graphB\.Canvas\)/);
-  assert.match(app,/pixelAudit\.sameCamera\(cpuCamera,gpuCamera\)/);
-  assert.match(app,/parity\.analyze\(second,candidate,\{zeroElevationRowPx:eyeRow\}\)/);
-  assert.match(app,/numericAuditFailed\('140\.12\.34'/);
-  assert.match(app,/curvature-compare-140\.12\.34-full-frame-pixel-parity\.json/);
-  assert.match(html,/CurvatureGpuFullFrameParity141234\.js\?v=140\.12\.34/);
-  assert.match(html,/ModernGpuFullFrameParityRun/);
-  assert.match(html,/does not use the 48-ray DS shooting shader/);
-});

@@ -1,5 +1,7 @@
 # WebGPU optical research — outcomes and boundaries
 
+**Retirement update (#140.12.53):** WebGPU optical shooting is no longer loaded or selectable in Modern Compare. The standalone research page and GPU diagnostic sources remain available for historical reproduction; see [the retirement record](webgpu-retirement-140-12-53.md).
+
 **Baseline disposition:** The production optical solver remains CPU-based. This page is a curated historical map; **no GPU experiments were rerun for #140.12.52**. `WebGPU` compute for optics, `WebGL2` geometry drawing and GPU adapter capability checks are three separate things. The latter two do not inherit the WebGPU optics verdict.
 
 ## Experimental progression

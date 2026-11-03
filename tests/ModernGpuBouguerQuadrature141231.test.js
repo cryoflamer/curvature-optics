@@ -108,26 +108,6 @@ test('140.12.31: 48-case report keeps GPU angles, per-mode errors, CPU convergen
   variants.classic_ds_256.traces[0].angleRadians=0;
   assert.throws(()=>q.analyze(original,{request:req,coordinates:coords},f32,variants),/angle\/target mismatch/);
 });
-test('140.12.31: Compare UI has a separate experiment and computes all GPU modes before CPU oracle',()=>{
-  assert.match(html,/CurvatureGpuBouguerQuadrature141231\.js\?v=140\.12\.31\.3/);
-  assert.match(html,/ModernGpuBouguerQuadratureRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30&amp;quadrature=140\.12\.31\.3/);
-  assert.match(app,/addEventListener\('click',runGpuBouguerQuadrature141231\)/);
-  assert.match(app,/curvature-compare-140\.12\.31-bouguer-quadrature\.json/);
-  const body=app.slice(app.indexOf('async function runGpuBouguerQuadrature141231(){'),
-    app.indexOf('  // #140.12.34: four real, independent CPU A / GPU-first f32 B frame paints.',app.indexOf('async function runGpuBouguerQuadrature141231(){')));
-  const ordered=['return shooting.solve','audit.validateSolveInputs',
-    'return originalSession.solve','return oldSession.solve','return dsSession.solve',
-    'return groundSession.solve','return contract.solveCpuBatch'];
-  for(let i=1;i<ordered.length;i++)assert.ok(body.indexOf(ordered[i-1])>=0 &&
-    body.indexOf(ordered[i-1])<body.indexOf(ordered[i]),ordered[i-1]+' before '+ordered[i]);
-  assert.match(body,/compiling '\+\(includeIntegerResidual\?'2 DS arithmetic shaders'/);
-  assert.match(body,/ModernGpuBouguerIntegerResidualToggle/);
-  assert.match(body,/onCompileProgress/);
-  assert.match(body,/compilePhaseTimings/);
-  assert.match(body,/phaseTimings/);
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback|status='visible'/);
-});
 test('140.12.31: mocked WebGPU yields six independent readbacks, explicit DS inputs and cleanup',async()=>{
   const req=request(),angles=[.5280675292015076,-.05];
   const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};

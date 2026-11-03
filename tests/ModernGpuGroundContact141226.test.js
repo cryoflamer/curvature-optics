@@ -89,19 +89,6 @@ test('140.12.26: all 144 rows, six near-surface targets per mode; no status prom
   f.replays.step50Sub8.traces[0]=Object.assign({},f.replays.step50Sub8.traces[0],{angleRadians:0.8});
   assert.throws(()=>moduleUnderTest.analyze(f.ladder,f.source,f.replays,f.cpu),/identical GPU angle/);
 });
-test('140.12.26: Compare button, export, GPU-first before f64 replay, no painting',()=>{
-  assert.match(html,/CurvatureGpuGroundContact141226\.js/);
-  assert.match(html,/ModernGpuGroundAuditRun/);
-  assert.match(app,/addEventListener\('click',runGpuGroundAudit141226\)/);
-  assert.match(app,/curvature-compare-140\.12\.26-gpu-ground-contact\.json/);
-  const body=app.slice(app.indexOf('async function runGpuGroundAudit141226(){'),
-    app.indexOf('function bindCompareGpuProbe(){'));
-  assert.ok(body.indexOf('await contract.solveCpuBatch')>body.indexOf('await groundSession.solve'));
-  assert.ok(body.indexOf('await groundSession.solve')>body.indexOf('await shooting.solve'));
-  assert.match(body,/angles=source\.response\.results\.map/);
-  assert.match(body,/if\(!angles\.every/);
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback|status='visible'/);
-});
 test('140.12.26: WebGPU fake session writes GPU angles, reads only active rows and tears down',async()=>{
   const r=request(),angles=[0.003,0.004],usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8},
     copies=[],buffers=[],writes=[];

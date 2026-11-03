@@ -87,22 +87,3 @@ test('140.12.19: invalid boundary/field inputs fail closed',()=>{
     assert.throws(()=>near(base,m,bad),/Invalid near-geometric/);
   assert.throws(()=>near({},m,3000),/Invalid near-geometric/);
 });
-test('140.12.19: production code keeps paired GPU+CPU physics, exports diagnostic and does not promote geometry to default',()=>{
-  const html=src('CurvatureModern.html'),app=src('src/ui/modern/ModernApp.js');
-  assert.match(html,/id="ModernGpuNearGeometryRun"/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.30/);
-  assert.match(app,/addEventListener\('click',runCompareNearGeometry141219\)/);
-  assert.match(app,/curvature-compare-140\.12\.19-near-geometric-projection\.json/);
-  const block=app.slice(app.indexOf('async function runCompareNearGeometry141219()'),
-    app.indexOf('function bindCompareGpuProbe()'));
-  assert.match(block,/physical\.vacuumSample/);
-  assert.match(block,/\[1500,3000,6000\]/);
-  assert.match(block,/layout:'distance-focused'/);
-  assert.match(block,/gpuFirstRayField\(grid,sharedResponse,deps\.surfaces\)/);
-  assert.match(block,/compareFramePixels\(\s*cpuCanvas,snapshots\[key\],roi\)/);
-  assert.ok(block.indexOf('state.compareGraphs.A.Redraw()')>block.indexOf('paint(key,fields[key])'),
-    'CPU frame must not guide GPU variant selection');
-  assert.match(block,/cpuOracleDiscovery:false,cpuShootingFallback:false/);
-  assert.match(block,/productionAuthorized:false/);
-});

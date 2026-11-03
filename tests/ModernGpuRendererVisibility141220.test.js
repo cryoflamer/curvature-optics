@@ -94,30 +94,6 @@ test('140.12.20: invalid source fields and target response order are rejected',(
   assert.throws(()=>compare.compareRendererVisibility([a],{results:[result('visible',0.01)]},
     {results:[result('visible',0.01,900,1)]}),/target\/status mismatch/);
 });
-test('140.12.20: UI runs real GPU B renderer capture and independent CPU batch without fallback or frame substitution',()=>{
-  const html=src('CurvatureModern.html'),app=src('src/ui/modern/ModernApp.js'),
-    model=src('src/ui/modern/ModernCompareModel.js');
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.30/);
-  assert.match(html,/id="ModernGpuRendererVisibilityRun"/);
-  assert.match(app,/addEventListener\('click',runCompareRendererVisibility141220\)/);
-  assert.match(app,/curvature-compare-140\.12\.20-renderer-visibility\.json/);
-  assert.match(model,/captureGpuRendererQueries:captureGpuRendererQueries/);
-  assert.match(model,/compareRendererVisibility:compareRendererVisibility/);
-  const block=app.slice(app.indexOf('async function runCompareRendererVisibility141220()'),
-    app.indexOf('function bindCompareGpuProbe()'));
-  assert.match(block,/gpuFirstGrid\(state\.comparePair\.A,/);
-  assert.match(block,/captureGpuRendererQueries\(field,/);
-  assert.match(block,/state\.compareGraphs\.B\.Redraw\(\)/);
-  assert.match(block,/captured\.select\(targetBudget\)/);
-  assert.match(block,/session\.solve\(exactRequest/);
-  assert.match(block,/contract\.solveCpuBatch\(cpuRequest\)/);
-  assert.ok(block.indexOf('contract.solveCpuBatch(cpuRequest)')>
-    block.indexOf('captured.select(targetBudget)'), 'CPU cannot select GPU targets');
-  assert.match(block,/directGpuAnswersNotInjectedIntoFrame:true/);
-  assert.match(block,/cpuShootingFallback:false/);
-  assert.match(block,/productionAuthorized:false/);
-});
 test('140.12.20: real physical object outlines/fills produce auditable GPU B targets without CPU shooting',()=>{
   const composition=require('../src/scene/CurvatureIndependentComposition');
   const silhouette=require('../src/optics/OpticalTowerSilhouette');

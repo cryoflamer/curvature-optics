@@ -98,62 +98,6 @@ test('140.12.29: analysis isolates input split floor from geometry calculation a
   assert.throws(()=>p.analyze(rows,{}),/Missing geometry mode/);
 });
 
-test('140.12.29: Compare action is isolated and exposes its own JSON export',()=>{
-  assert.match(html,/CurvatureGpuPrecisionGeometry141229\.js/);
-  assert.match(html,/ModernGpuPrecisionGeometryRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(app,/addEventListener\('click',runGpuPrecisionGeometry141229\)/);
-  assert.match(app,/curvature-compare-140\.12\.29-gpu-precision-geometry\.json/);
-  const body=app.slice(app.indexOf('async function runGpuPrecisionGeometry141229(){'),
-    app.indexOf('function bindCompareGpuProbe(){'));
-  assert.match(body,/precision\.cases\(\)/);
-  assert.match(body,/await session\.run\(rows/);
-  assert.match(body,/state\.probeFrameLast=report/);
-  assert.doesNotMatch(body,/solveCpuBatch|renderComposition|renderPhysical|gpuRayField|cpuFallback|Redraw\(/);
-});
-
-function mockedGpu(){
-  const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8},buffers=[],codes=[];
-  let activePipeline,activeBind,dispatches=0,destroyed=false;
-  const device={limits:{maxStorageBufferBindingSize:1e8},
-    createShaderModule({code}){codes.push(code);return {code,getCompilationInfo:async()=>({messages:[]})};},
-    async createComputePipelineAsync({compute}){return {code:compute.module.code,getBindGroupLayout:()=>({})};},
-    createBindGroup({entries}){return entries;},
-    createBuffer({size}){const b={bytes:new ArrayBuffer(size),destroy(){this.destroyed=true;},
-      mapAsync:async()=>{},getMappedRange(offset,length){return this.bytes.slice(offset,offset+length);},unmap(){}};
-      buffers.push(b);return b;},
-    createCommandEncoder(){let copy;return {beginComputePass(){return {
-      setPipeline(v){activePipeline=v;},setBindGroup(i,v){activeBind=v;},
-      dispatchWorkgroups(){dispatches++;},end(){}};},
-      copyBufferToBuffer(from,fromOffset,to,toOffset,length){copy={from,fromOffset,to,toOffset,length};},
-      finish(){return {copy};}};},
-    queue:{writeBuffer(buffer,offset,values){new Uint8Array(buffer.bytes,offset,values.byteLength).set(
-      new Uint8Array(values.buffer,values.byteOffset,values.byteLength));},
-      submit(commands){
-        const copy=commands[0].copy;
-        const input=new Float32Array(activeBind[0].resource.buffer.bytes);
-        const output=new Float32Array(activeBind[1].resource.buffer.bytes);
-        const config=new Uint32Array(activeBind[2].resource.buffer.bytes);
-        const mode=Number(activePipeline.code.match(/const MODE:u32=(\d)u/)[1]);
-        for(let i=0;i<config[0];i++){
-          const j=i*16,d=input[j]+input[j+1],h=input[j+2]+input[j+3],
-            x=input[j+4]+input[j+5],y=input[j+6]+input[j+7],
-            absR=input[j+8]+input[j+9],absX=input[j+10]+input[j+11],
-            R=input[j+12]+input[j+13],O=input[j+14]+input[j+15];
-          const arc=d/R,hi=Math.fround(arc),cart=Math.atan2(x,R+y),cartHi=Math.fround(cart);
-          output.set([Math.fround(cart),hi,mode===0?0:Math.fround(arc-hi),Math.fround(arc),
-            cartHi,mode===0?0:Math.fround(cart-cartHi),Math.fround(cart),0,
-            Math.fround(h),0,Math.fround(absR-R),0,
-            Math.fround(d),0,Math.fround(absX-O),0],j);
-        }
-        new Uint8Array(copy.to.bytes,copy.toOffset,copy.length).set(
-          new Uint8Array(copy.from.bytes,copy.fromOffset,copy.length));
-      }},destroy(){destroyed=true;}};
-  return {deps:{navigator:{gpu:{requestAdapter:async()=>({requestDevice:async()=>device})}},
-    GPUBufferUsage:usage,GPUMapMode:{READ:1}},buffers,codes,
-    get dispatches(){return dispatches;},get destroyed(){return destroyed;}};
-}
-
 test('140.12.29: three pipelines dispatch and export separately, release GPU resources',async()=>{
   const mock=mockedGpu(),rows=p.cases().slice(0,5);
   const session=await p.createSession(rows.length,mock.deps);

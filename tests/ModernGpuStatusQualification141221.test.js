@@ -78,28 +78,6 @@ test('140.12.21: rejected misordered or non-direct-uncertain fine result cannot 
   assert.throws(()=>compare.gpuStatusQualificationField(requestField(),[sample,sample],
     {results:[good,good]},{surfaces}),/Duplicate/);
 });
-test('140.12.21: UI triggers both independent, GPU-only status experiments and CPU reference last',()=>{
-  const app=src('src/ui/modern/ModernApp.js'),html=src('CurvatureModern.html');
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(html,/ModernCompareModel\.js\?v=140\.12\.30/);
-  assert.match(html,/id="ModernGpuStatusQualificationRun"/);
-  assert.match(html,/id="ModernGpuStatusDirectToggle"/);
-  assert.match(html,/id="ModernGpuContactQualificationToggle"/);
-  assert.match(app,/addEventListener\('click',runGpuStatusQualification141221\)/);
-  assert.match(app,/curvature-compare-140\.12\.21-gpu-status-qualification\.json/);
-  const segment=app.slice(app.indexOf('async function runGpuStatusQualification141221()'),
-    app.indexOf('function bindCompareGpuProbe()'));
-  assert.match(segment,/selectIndeterminateRendererTargets\(capture,targetBudget\)/);
-  assert.match(segment,/step:500/);assert.match(segment,/step:50/);
-  assert.match(segment,/gpuStatusQualificationField\(base,selected,/);
-  assert.match(segment,/directOnly/);assert.match(segment,/fineOnly/);
-  assert.match(segment,/combined/);
-  assert.ok(segment.indexOf('state.compareGraphs.A.Redraw()')>
-    segment.indexOf('combinations.forEach(function(row)'));
-  assert.match(segment,/originalNonindeterminateGridStatusesPreserved:true/);
-  assert.match(segment,/cpuShootingFallback:false/);
-  assert.match(segment,/productionAuthorized:false/);
-});
 test('140.12.21: real tower outlines and fills can discover indeterminate GPU requests for status-only repaint',()=>{
   const composition=require('../src/scene/CurvatureIndependentComposition');
   const silhouette=require('../src/optics/OpticalTowerSilhouette');

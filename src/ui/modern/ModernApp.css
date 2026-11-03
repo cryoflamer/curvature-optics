@@ -218,10 +218,9 @@ button{cursor:pointer}
   white-space:pre;overflow:auto;max-height:360px;max-width:100%;padding:10px;
   border:1px solid #d7e4ef;border-radius:7px;background:#f7faff;color:#29415e}
 
-/* #140.12.7: Compare-only experimental ray maps. Never placed over the
-   physical frames: an angular point map is not a rendered GPU silhouette. */
-.modern-gpu-compare-probe{padding:14px;margin-top:14px;background:#f7fbff;border:1px solid #c8d9ee;border-radius:10px}
-.modern-gpu-compare-probe[hidden]{display:none!important}
+/* #140.12.53: CPU-only research tools are separate from physical A/B painting. */
+.modern-cpu-research{padding:14px;margin-top:14px;background:#f7fbff;border:1px solid #c8d9ee;border-radius:10px}
+.modern-cpu-research>summary{cursor:pointer}
 .modern-gpu-probe-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
 .modern-gpu-probe-head label{font-size:12px;display:flex;align-items:center;gap:7px}
 .modern-gpu-probe-head select,.modern-gpu-probe-head button{padding:6px 9px;border:1px solid #bbcde1;border-radius:6px;background:white;color:#294867}

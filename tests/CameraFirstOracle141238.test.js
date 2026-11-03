@@ -89,18 +89,3 @@ test('140.12.38: ZIP entries include report, 5 visuals and limitations',()=>{
     assert.ok(entries.find(x=>x.name.endsWith('README.txt')).data.includes('NOT certified sky'));
   }finally{global.atob=oldAtob;}
 });
-test('140.12.38: browser wiring is opt-in and never touches GPU or original compare renderer',()=>{
-  const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');
-  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/CurvatureCameraFirstOracle141238\.js\?v=140\.12\.38/);
-  assert.match(html,/id="ModernCameraFirstOracleRun"/);
-  assert.match(html,/cameraFirst=140\.12\.38/);
-  assert.match(app,/cameraFirstButton\.addEventListener\('click',runCameraFirstOracle141238\)/);
-  const begin=app.indexOf('async function runCameraFirstOracle141238()'),
-    end=app.indexOf('  function bind(){',begin),body=app.slice(begin,end);
-  assert.ok(begin>=0&&end>begin);
-  assert.match(body,/oracle\.sampleRow\(config,row,name\)/);
-  assert.match(body,/oracle\.horizonSweep\(config\)/);
-  assert.match(body,/zipWriter\.build\(entries\)/);
-  assert.doesNotMatch(body,/session\.solve|gpu\.createSession|gpuFirstGrid|state\.probeField\s*=/);
-});

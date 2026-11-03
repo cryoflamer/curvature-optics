@@ -51,3 +51,7 @@ Some archive output names above intentionally use **descriptions**, not guessed 
 - **#140.12.53:** inventory both static script tags and dynamic GPU call sites, export schemas, saved Compare experiments and shared CPU helpers; remove optical WebGPU only after the acceptance tests in [#140.12.51](../BASELINE_INVENTORY_140_12_51.md). Do **not** remove WebGL2 as part of this step.
 - **#140.12.54:** treat Legacy UI and historical CPU references as separate features/oracles, not as automatically obsolete dependencies.
 - If code is removed later, cite the tag and/or historical commit and mark reproduction as **historical checkout required** instead of pretending the deleted diagnostic still runs at HEAD.
+
+## Retirement milestones
+
+- [#140.12.53 — WebGPU optical retirement from Modern Compare](webgpu-retirement-140-12-53.md). Standalone research harness and GPU numerical tests are retained.

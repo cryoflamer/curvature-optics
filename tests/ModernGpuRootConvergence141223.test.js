@@ -5,17 +5,6 @@ const fs=require('node:fs');
 const audit=require('../src/diagnostics/CurvatureGpuRootConvergence141223');
 const html=fs.readFileSync('CurvatureModern.html','utf8');
 const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
-test('140.12.23: root audit is wired and exported without painting',()=>{
-  assert.match(html,/CurvatureGpuRootConvergence141223\.js/);
-  assert.match(html,/id="ModernGpuRootAuditRun"/);
-  assert.match(app,/addEventListener\('click',runGpuRootAudit141223\)/);
-  const body=app.slice(app.indexOf('async function runGpuRootAudit141223(){'),app.indexOf('function bindCompareGpuProbe(){'));
-  assert.match(body,/algorithm:job\[1\],refinement:job\[2\]/);
-  assert.match(body,/\['bracketStrict','sweep','angle-bracket',strict\]/);
-  assert.ok(body.indexOf('await contract.solveCpuBatch')>body.indexOf('await session.solve'));
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|CPU fallback/);
-  assert.match(app,/curvature-compare-140\.12\.23-gpu-root-convergence\.json/);
-});
 test('140.12.23: status failures and bracket telemetry are not hidden by angle statistics',()=>{
   const ladder={targetsCount:1,request:{targets:[[60,0]]},coordinates:[{distanceMetres:60,heightMetres:0}]};
   const cpu={results:[{target:[60,0],status:'visible',angle:0}]};

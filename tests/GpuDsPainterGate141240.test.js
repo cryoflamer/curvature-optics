@@ -83,12 +83,3 @@ test('140.12.40: PNG export contains a real CPU screenshot and only clearly labe
   const dots=gate.dotFrame(report,'classic_ds_512','gpu');
   assert.equal(dots.rgba.length,320*240*4);
 });
-test('140.12.40: button, script order and cache busting wired into Modern Compare',()=>{
-  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8'),
-    js=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/CurvatureGpuDsPainterGate141240\.js\?v=140\.12\.40/);
-  assert.match(html,/id="ModernGpuDsPainterGateRun"/);
-  assert.match(js,/addEventListener\('click',runGpuDsPainterGate141240\)/);
-  assert.match(js,/gpuDsFullFrameAvailable|FULL GPU DS frame NOT available/);
-  assert.doesNotMatch(js,/probeField\s*=\s*.*GpuDsPainterGate/);
-});

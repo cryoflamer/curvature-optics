@@ -98,16 +98,6 @@ test('140.12.25: widened trace and unsafe candidate are flagged, never silently 
   f.batches.precisionAware.telemetry[0].candidateResidualMetres=0.00001;
   assert.throws(()=>audit.measured(f.ladder,f.batches,f.cpu),/Unsafe or invalid/);
 });
-test('140.12.25: compare button, export and GPU before CPU oracle',()=>{
-  assert.match(html,/CurvatureGpuPrecisionLimit141225\.js/);
-  assert.match(html,/ModernGpuLimitAuditRun/);
-  assert.match(app,/addEventListener\('click',runGpuPrecisionLimit141225\)/);
-  assert.match(app,/curvature-compare-140\.12\.25-gpu-precision-limit\.json/);
-  const body=app.slice(app.indexOf('async function runGpuPrecisionLimit141225(){'),app.indexOf('function bindCompareGpuProbe(){'));
-  assert.match(body,/\['precisionAware','sweep','precision-aware',strict,true\]/);
-  assert.ok(body.indexOf('await contract.solveCpuBatch')>body.indexOf('await session.solve'));
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback/);
-});
 test('140.12.25: opt-in precision aware session composes trace bind group and tears down',async()=>{
   const r=request(),usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8},copies=[],buffers=[];
   const device={limits:{maxStorageBufferBindingSize:1e8},

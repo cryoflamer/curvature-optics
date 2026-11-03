@@ -99,18 +99,3 @@ test('140.12.39: diagnostic ZIP includes original canvas, strict vs hypothetical
   assert.ok(files.some(x=>x.name.endsWith('focused-production-cpu-sampled.png')));
   assert.match(files.find(x=>x.name.endsWith('README.txt')).data,/NOT PHYSICALLY AUTHORED/);
 });
-test('140.12.39: browser wiring remains opt-in and does not touch GPU shaders or the principal renderer',()=>{
-  const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');
-  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/CurvatureCameraFirstObjects141239\.js\?v=140\.12\.39/);
-  assert.match(html,/id="ModernCameraFirstObjectsRun"/);
-  assert.match(html,/objects=140\.12\.39/);
-  assert.match(app,/cameraObjectsButton\.addEventListener\('click',runCameraFirstObjects141239\)/);
-  const start=app.indexOf('async function runCameraFirstObjects141239()'),end=app.indexOf('  function bind(){',start);
-  const body=app.slice(start,end);
-  assert.ok(start>0&&end>start);
-  assert.match(body,/composition\.composeOpticalMain\(model,true,\{physicalWorld:true\}\)/);
-  assert.match(body,/objects\.sampleRow/);
-  assert.match(body,/objects\.focusedRoi/);
-  assert.doesNotMatch(body,/session\.solve|gpu\.createSession|gpuFirstGrid|state\.probeField\s*=/);
-});

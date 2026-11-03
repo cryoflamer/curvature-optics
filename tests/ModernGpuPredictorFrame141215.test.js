@@ -68,24 +68,6 @@ test('140.12.15: ordered GPU batches reconstruct a real interpolated ray field w
     /target order mismatch/);
 });
 
-test('140.12.15: batched predictor frame is opt-in, reports cold/warm full frames and exact pixel differences',()=>{
-  const html=src('CurvatureModern.html'),app=src('src/ui/modern/ModernApp.js');
-  assert.match(html,/id="ModernGpuFastRun"/);
-  assert.match(html,/id="ModernGpuFastGridCount"/);
-  assert.match(html,/value="4096" selected/);
-  assert.match(app,/algorithm:fast\?'predictor':'sweep'/);
-  assert.match(app,/request\.controls\.step=500/);
-  assert.match(app,/gpuFirstBatchRequests\(grid,1024\)/);
-  assert.match(app,/session\.solve\(requests\[batchIndex\],\{warmRepeats:0\}\)/);
-  assert.match(app,/gpuWarmFrameEndToEndMs:warmFrameMs/);
-  assert.match(app,/cpuColdReferenceMs:cpuMs/);
-  assert.match(app,/compareFramePixels\(state\.compareGraphs\.A\.Canvas/);
-  assert.match(app,/curvature-compare-140\.12\.15-fast-predictor-frame\.json/);
-  assert.ok(app.indexOf('warmFrameMs=profileNow()-warmStarted;')<app.indexOf('state.probeForceColdA=true'));
-  assert.match(html,/no CPU shooting fallback/);
-  assert.match(html,/not<\/em> a CPU-guided adaptive GPU renderer/);
-});
-
 test('140.12.15: batch capacity and grid structure are strictly bounded',()=>{
   const grid=gridFor(2048);
   for(const bad of [0,1025,1.5,-1])

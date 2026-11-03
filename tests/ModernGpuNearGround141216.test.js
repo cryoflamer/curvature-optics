@@ -105,15 +105,3 @@ test('140.12.16: lower-left ROI comparison differs from whole frame and validate
   assert.match(compare.compareFramePixels(a,b,{x:0.8,y:0,width:0.5,height:0.5}).reason,
     /normalized frame comparison/);
 });
-test('140.12.16: opt-in same-budget four-frame A/B and independent CPU reference are wired',()=>{
-  const html=src('CurvatureModern.html'),app=src('src/ui/modern/ModernApp.js');
-  assert.match(html,/id="ModernGpuNearRun"/);
-  assert.match(html,/same number/);
-  assert.match(app,/order=\['uniform','local','uniform','local'\]/);
-  assert.match(app,/session=await gpu.createSession/);
-  assert.match(app,/compareAdapter\.gpuFirstGrid\(state\.comparePair\.A,\s*count,deps,\{layout:variant\}\)/);
-  assert.match(app,/state\.probeForceColdA=true/);
-  assert.match(app,/nearLeftLowerFrameDiff:compareAdapter\.compareFramePixels/);
-  assert.match(app,/cpuOracleDiscovery:false,cpuShootingFallback:false/);
-  assert.match(app,/curvature-compare-140\.12\.16-near-ground-ab\.json/);
-});

@@ -90,20 +90,6 @@ test('140.12.30: comparison preserves the same GPU angles and separates target a
   runs.classic_ds.traces[0].angleRadians=0;
   assert.throws(()=>p.analyze(original,{request:req,coordinates:coords},runs),/angle\/target mismatch/);
 });
-test('140.12.30: Compare action stages every GPU pass before any CPU f64 oracle',()=>{
-  assert.match(html,/CurvatureGpuBouguerPrecision141230\.js/);
-  assert.match(html,/ModernGpuBouguerPrecisionRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(app,/addEventListener\('click',runGpuBouguerPrecision141230\)/);
-  assert.match(app,/curvature-compare-140\.12\.30-bouguer-precision\.json/);
-  const body=app.slice(app.indexOf('async function runGpuBouguerPrecision141230(){'),
-    app.indexOf('// #140.12.28: self-contained WebGPU arithmetic bench.'));
-  assert.ok(body.indexOf('await shooting.solve')<body.indexOf('await originalSession.solve'));
-  assert.ok(body.indexOf('await originalSession.solve')<body.indexOf('await precisionSession.solve'));
-  assert.ok(body.indexOf('await precisionSession.solve')<body.indexOf('await groundSession.solve'));
-  assert.ok(body.indexOf('await groundSession.solve')<body.indexOf('await contract.solveCpuBatch'));
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback|status='visible'/);
-});
 test('140.12.30: mocked WebGPU produces three independent readbacks and closes resources',async()=>{
   const req=request(),angles=[-.25,-.05];
   const usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};

@@ -93,19 +93,6 @@ test('140.12.27: GPU decode preserves raw signed surface-polar margins, includin
   assert.throws(()=>m.decode(r,[0,1],new Float32Array(3)),/mismatch/);
   assert.throws(()=>m.decode(r,[0,1],new Float32Array([3,0,0,0,1,0,0,0])),/Invalid Bouguer/);
 });
-test('140.12.27: UI GPU angle selection and two GPU audits precede f64 reference, no painting',()=>{
-  assert.match(html,/src\/diagnostics\/CurvatureBouguerInvariant141227\.js/);
-  assert.match(html,/ModernGpuBouguerAuditRun/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
-  assert.match(app,/addEventListener\('click',runGpuBouguerAudit141227\)/);
-  assert.match(app,/curvature-compare-140\.12\.27-bouguer-invariant\.json/);
-  const body=app.slice(app.indexOf('async function runGpuBouguerAudit141227(){'),app.indexOf('function bindCompareGpuProbe(){'));
-  assert.ok(body.indexOf('await shooting.solve')<body.indexOf('await analyticSession.solve'));
-  assert.ok(body.indexOf('await analyticSession.solve')<body.indexOf('await groundSession.solve'));
-  assert.ok(body.indexOf('await groundSession.solve')<body.indexOf('await contract.solveCpuBatch'));
-  assert.match(body,/angles=source\.response\.results\.map/);
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback|status='visible'/);
-});
 test('140.12.27: complete 48-target analysis never promotes visibility',()=>{
   const surface=surfaces.createFromCurvature(1/6371000),
     distances=[60,350,1250,2100,3900,5400],heights=[0,.000001,.01,.1,1,5,20,50],

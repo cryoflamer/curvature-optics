@@ -163,22 +163,6 @@ test('140.12.32: failure to build WGSL pipeline releases WebGPU device and propa
   await assert.rejects(()=>s.createSession(l.request,g.deps),/synthetic pipeline error/);
   assert.equal(g.device.destroyed,true);
 });
-test('140.12.32: isolated modern Compare UI wires versioned shader, GPU-first/CPU-last ordering and auto-export',()=>{
-  const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
-  const js=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/CurvatureGpuHighPrecisionShooting141232\.js\?v=140\.12\.32/);
-  assert.match(html,/id="ModernGpuHighPrecisionShootingRun"/);
-  assert.match(js,/runGpuHighPrecisionShooting141232/);
-  assert.match(js,/numericAuditFailed\(pixelMode\?'140\.12\.33':'140\.12\.32'/);
-  assert.match(js,/pixelMode\?'runGpuPixelSpaceAudit141233':'runGpuHighPrecisionShooting141232'/);
-  assert.match(js,/numericAuditComplete\(report\)/);
-  assert.match(js,/curvature-compare-140\.12\.32-gpu-ds-shooting\.json/);
-  const fn=js.slice(js.indexOf('async function runGpuHighPrecisionShooting141232('),js.indexOf('  // #140.12.34: four real, independent CPU A / GPU-first f32 B frame paints.',js.indexOf('async function runGpuHighPrecisionShooting141232(')));
-  for(const token of ['predictor.solve','shootingAudit.validate','shootingAudit.createSession','ds.solve','contract.solveCpuBatch','shootingAudit.analyze'])
-    assert.ok(fn.includes(token),token);
-  assert.ok(fn.indexOf('ds.solve')<fn.indexOf('contract.solveCpuBatch'));
-  assert.doesNotMatch(fn,/renderComposition|renderPhysical|cpuFallback|productionAuthorized:true/);
-});
 test('140.12.32: report compares GPU-owned outcomes with independent CPU root and keeps near-zero contact uncertain',()=>{
   const l=ladder(),a=angles();
   const predictor={response:{results:a.map((angle,i)=>({angle,target:l.request.targets[i]}))}};

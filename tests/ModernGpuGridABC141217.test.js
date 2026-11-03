@@ -127,24 +127,3 @@ test('140.12.17: lower-RIGHT ROI measures actual right-hand changes, not old lef
   assert.equal(right.region.x,11);
   assert.equal(right.region.y,11);
 });
-test('140.12.17: app wires six mirrored A/B/C frames, CPU-only-after, correct ROI and exported JSON',()=>{
-  const app=source('src/ui/modern/ModernApp.js');
-  const html=source('CurvatureModern.html');
-  assert.match(html,/id="ModernGpuGridABCRun"/);
-  assert.match(html,/lower-right 45%×45%/);
-  assert.match(app,/var order=\['nearGround256x16','vertical128x32','nearDistance256x16',\s*'nearDistance256x16','vertical128x32','nearGround256x16'\]/);
-  const start=app.indexOf('async function runCompareGpuGridABC()');
-  const end=app.indexOf('  function bindCompareGpuProbe(){',start);
-  const block=app.slice(start,end);
-  assert.match(block,/count=4096/);
-  assert.match(block,/session=await gpu\.createSession\(1024,null/);
-  assert.match(block,/request\.controls\.step=500/);
-  assert.match(block,/var roi=\{x:0\.55,y:0\.55,width:0\.45,height:0\.45\}/);
-  assert.match(block,/lowerRightFrameDiff:compareAdapter\.compareFramePixels/);
-  assert.match(block,/state\.probeForceColdA=true/);
-  assert.ok(block.indexOf('state.probeForceColdA=true')>block.indexOf('for(var round='));
-  assert.match(block,/cpuOracleDiscovery:false,cpuShootingFallback:false/);
-  assert.match(block,/state\.probeField=lastFields\.nearDistance256x16/);
-  assert.match(app,/addEventListener\('click',runCompareGpuGridABC\)/);
-  assert.match(app,/curvature-compare-140\.12\.17-grid-abc-lower-right\.json/);
-});

@@ -78,17 +78,6 @@ test('140.12.24: numerical floor is an audit label, never a visibility override'
   batches.sweepStrict.refinementTrace[0].trace[1].iteration=26;
   assert.throws(()=>audit.measured(ladder,batches,cpu),/Corrupt GPU refinement trace/);
 });
-test('140.12.24: Compare wiring uses GPU first, CPU oracle last, and exports without paint',()=>{
-  assert.match(html,/CurvatureGpuNumericalFloor141224\.js/);
-  assert.match(html,/id="ModernGpuFloorAuditRun"/);
-  assert.match(app,/addEventListener\('click',runGpuNumericalFloor141224\)/);
-  assert.match(app,/curvature-compare-140\.12\.24-gpu-numerical-floor\.json/);
-  const body=app.slice(app.indexOf('async function runGpuNumericalFloor141224(){'),
-    app.indexOf('function bindCompareGpuProbe(){'));
-  assert.match(body,/traceRefinement:job\[4\]/);
-  assert.ok(body.indexOf('await contract.solveCpuBatch')>body.indexOf('await session.solve'));
-  assert.doesNotMatch(body,/renderComposition|renderPhysical|cpuFallback/);
-});
 test('140.12.24: optional trace allocates and reads only active target bytes',async()=>{
   const r=request(),usage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8},copies=[],buffers=[];
   const device={limits:{maxStorageBufferBindingSize:1e8},

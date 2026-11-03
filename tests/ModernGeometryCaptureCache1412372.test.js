@@ -32,27 +32,6 @@ function graph(){
     SetCamera(c){this.Camera={...c,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(n){this.Camera.Zoom=n;}};
 }
-test('140.12.37.2: browser shell cache-busts BOTH geometry-hook providers and app together',()=>{
-  const html=source('CurvatureModern.html'),revision='140.12.37.2';
-  for(const target of [
-    'src/optics/CurvaturePhysicalSceneOptics.js?v=',
-    'src/optics/OpticalTowerSilhouette.js?v=',
-    'src/optics/CurvaturePhysicalPolygonFills.js?v=',
-    'src/app/CurvatureMainCanvasRenderer.js?v=',
-    'src/diagnostics/CurvatureGeometryDifferenceAttribution141237.js?v='
-  ])assert.ok(html.includes(target+revision),target+' has stale URL');
-  assert.match(html,/ModernApp\.js\?[^"\n]*geometry=140\.12\.37\.2/);
-  assert.equal(optics.geometryAuditRevision,revision);
-  assert.equal(main.geometryAuditRevision,revision);
-  assert.equal(tower.geometryAuditRevision,revision);
-  assert.equal(fills.geometryAuditRevision,revision);
-  const app=source('src/ui/modern/ModernApp.js');
-  assert.match(app,/CurvatureMainCanvasRenderer\.geometryAuditRevision!=='140\.12\.37\.2'/);
-  assert.match(app,/CurvaturePhysicalSceneOptics\.geometryAuditRevision!=='140\.12\.37\.2'/);
-  assert.match(app,/CurvatureOpticalTowerSilhouette\.geometryAuditRevision!=='140\.12\.37\.2'/);
-  assert.match(app,/CurvaturePhysicalPolygonFills\.geometryAuditRevision!=='140\.12\.37\.2'/);
-  assert.match(app,/if\(state\.probeGeometryAudit\)throw error/);
-});
 test('140.12.37.2: real physical Canvas painter feeds geometry collector camera AND scene',()=>{
   const m=model(),g=graph(),session=optics.create();
   for(const variant of ['cpu','baseline']){
