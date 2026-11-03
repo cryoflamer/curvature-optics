@@ -1,13 +1,13 @@
 # Reproducible Legacy reference scenarios
 
-Status: **source-state fixtures** (historical work item #140.12.57). These are **not a rendered oracle or pixel baseline**, not a numerical ray-tracing oracle, and not proof of Legacy/Modern equivalence. No reference screenshots, optical output arrays or browser captures were supplied in this repository for these snapshots. Their capture status is **missing**.
+Status: **source-state fixtures** (historical work item #140.12.57). The source fixture itself is **not a rendered oracle or pixel baseline**. A separate [actual six-frame Opera browser export](legacy-visual-validation.md) now provides original-Canvas **regression observations**, not a numerical ray-tracing oracle or proof of Legacy/Modern equivalence. A Modern translation and independent optical output remain **missing**.
 
 ## Provenance and intended use
 
 - Source: [`src/animation/CurvatureDemos.js`](../src/animation/CurvatureDemos.js), `Demos.New('TransLine')` and `Demos.New('Bedford')` plus their literal `Demos.AddState('CurveApp = {...}')` arguments.
 - Fixtures: [`tests/fixtures/legacy-reference-scenarios.json`](../tests/fixtures/legacy-reference-scenarios.json). These retain **all JSON fields as written** in the selected source states, including old fields absent from Modern. Missing fields (for example, `refractionCoeff` in early `TransLine` states) are *not* interpreted as zero or filled in with inferred defaults.
 - Extraction: [`tools/extract-legacy-demo-fixtures.js`](../tools/extract-legacy-demo-fixtures.js), a deterministic, data-only Node extractor. It parses exact JSON literals; it does not load the old page, execute its scripts, or evaluate input as JavaScript.
-- Validation: [`tests/LegacyReferenceScenarios.test.js`](../tests/LegacyReferenceScenarios.test.js) checks every selected field against source, source ordering, Legacy query hints, and a few important *input* invariants. It does not test optical correctness or match frame buffers.
+- Validation: [`tests/LegacyReferenceScenarios.test.js`](../tests/LegacyReferenceScenarios.test.js) checks every selected field against source, source ordering, Legacy query hints, and a few important *input* invariants. It does not test optical correctness or compare frame buffers; the independent [visual validator](legacy-visual-validation.md) now checks archived original-Canvas PNGs.
 
 Regenerate and check after deliberate edits to the source demos:
 
@@ -23,28 +23,28 @@ The `legacyQuery` strings are **navigation hints** for the historical `?demo=` a
 
 | Demo | Source state indices (0-based) | Why selected | Evidence status |
 | --- | --- | --- | --- |
-| `TransLine` (8 states) | 0, 4, 7 | Introductory transmission-line layout, closer view with grid, final no-refraction/tower curvature view | Full source states captured; rendered frames and numerical ray or pixel output **missing** |
-| `Bedford` (7 states) | 0, 3, 6 | Initial markers, eye-level observation, dense marker sequence | Full source states captured; rendered frames and numerical ray or pixel output **missing** |
+| `TransLine` (8 states) | 0, 4, 7 | Introductory transmission-line layout, closer view with grid, final no-refraction/tower curvature view | Full source states and three original-Canvas Opera PNGs **archived**; Modern/numerical-ray comparisons missing |
+| `Bedford` (7 states) | 0, 3, 6 | Initial markers, eye-level observation, dense marker sequence | Full source states and three original-Canvas Opera PNGs **archived**; Modern/numerical-ray comparisons missing |
 
 The selected states include Legacy `ObjType` values 3 (tower) and 0 (Bedford marker). Equal integer IDs in Modern are not sufficient evidence of geometry equivalence. A geometry-specific comparison must account for both models' meanings and full camera/atmosphere semantics. Values are copied from the code without rounding; no claims are made about real-world survey accuracy.
 
-## Capture manifest (not yet populated)
+## Capture manifest and remaining gaps
 
-A [browser capture tool and evidence contract](legacy-browser-reference.md) are now available; **no completed image capture has been obtained or approved**.
+A [browser capture tool and evidence contract](legacy-browser-reference.md) are available. **Six actual Opera original-Canvas PNGs have been captured, reviewed for integrity and archived** with a complete manifest and SHA-256 lock. See [visual validation](legacy-visual-validation.md). No independent ray oracle or Modern scene comparison has been accepted.
 
 For **each** of the six samples above, future browser-based reference collection must still record at least (the separate [numeric model snapshots](legacy-headless-reference.md) do not replace these browser captures):
 
 | Required evidence | Current state |
 | --- | --- |
 | Original source index, full parameter payload and query hint | **Available** in JSON fixture |
-| Browser version, OS, device scale, viewport and canvas pixel dimensions | **Missing** |
-| Explicitly selected atmosphere, effective model defaults and Legacy UI configuration | **Missing** (source payloads only) |
-| Rendered Legacy screenshot/frame and its SHA-256 | **Missing** |
+| Browser version, OS, device scale, viewport and canvas pixel dimensions | **Available** (Opera user agent, Windows, DPR, Canvas dimensions; viewport not independently captured by browser-native export) |
+| Explicitly selected atmosphere, effective model defaults and Legacy UI configuration | **Partial** (applied atmosphere and model recorded; no full UI screenshot) |
+| Rendered Legacy screenshot/frame and its SHA-256 | **Available** for all six original Canvas PNGs, not full-page screenshots |
 | Numeric ray/visibility observables with units and tolerances | **Missing** (same-code model angle diagnostics exist separately; no optical ray/visibility captures) |
 | Comparable Modern scene representation, with documented unsupported fields and conversion loss | **Missing** |
 | Review of physical-model differences and acceptance decision | **Pending** |
 
-Do not fill missing rows with synthetic data. Where a source snapshot omits atmosphere fields, obtain the values actually applied by the Legacy loader and record that separately. Capture dimensions and tolerances should be decided **before** comparisons; do not select thresholds after looking at mismatches. Any new renders must be treated as measurements, not automatically accepted goldens.
+Do not fill still-missing rows with synthetic data. Where a source snapshot omits atmosphere fields, obtain the values actually applied by the Legacy loader and record that separately. Capture dimensions and tolerances should be decided **before** comparisons; do not select thresholds after looking at mismatches. Any new renders must be treated as measurements, not automatically accepted goldens.
 
 ## Retirement impact
 

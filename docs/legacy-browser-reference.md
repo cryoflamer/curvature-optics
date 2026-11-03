@@ -1,12 +1,16 @@
 # Legacy browser reference capture contract
 
-Historical work item: **#140.12.59**. Status: **capture tool and offline contract tests implemented; browser captures NOT YET obtained or reviewed**. Neither the six original-canvas PNGs nor the six full-page screenshots are committed. Do not describe this as pixel parity with Modern or an independent physics oracle.
+Historical work item: **#140.12.59**. Status: **six real Opera browser-native original-Canvas PNGs accepted as Legacy regression observations**, archived and verified by [Legacy visual validation](legacy-visual-validation.md). The Playwright-based tool described below remains an **alternative, unverified local capture path**; no full-page screenshots are committed. This is neither Modern pixel parity nor an independent physics oracle.
 
 ## Why a browser capture is needed
 
 The [source-state fixtures](legacy-reference-scenarios.md) preserve six literal inputs (TransLine indices 0/4/7; Bedford indices 0/3/6). The [headless numerical fixtures](legacy-headless-reference.md) record old-model numbers but do not execute the drawing pipeline. The old `CurvatureApp.html` renderer has its own pixel transforms, text, objects and clipping. **Only an actual browser observation** can establish what the Legacy canvas produces for a chosen state and environment. An observation still says nothing about physical truth or semantic compatibility with Modern.
 
-## Local capture, no source or baseline overwrite
+## Browser-native observations already archived
+
+The original user-supplied six-frame Opera export is committed unchanged as `tests/fixtures/legacy-browser-references.zip`, with a SHA-256 lock, full source/effective state and decoded pixel checks. Run `python3 tools/validate-legacy-visual-reference.py` to verify it, or supply `--candidate` to compare future Opera exports. See [validation procedure and limits](legacy-visual-validation.md). The browser-native exporter records **Canvas only**, not browser full-page screenshots; it is a distinct capture path from the Playwright script below.
+
+## Alternative local Playwright capture, no source or baseline overwrite
 
 From the repository root, with Python Playwright and Chromium installed:
 
@@ -31,9 +35,9 @@ Example semantic filenames: `transline-state-0.canvas.png`, `transline-state-0.p
 
 ## Comparison and acceptance gates
 
-- **Evidence status here is incomplete.** The repository currently contains neither accepted Legacy screenshots nor a comparable Modern translation. A screenshot hash validates identity of one capture; it is not an expectation that different browsers/DPRs produce byte-identical PNGs.
+- **Original Canvas observation evidence is now available** for six Legacy states from Opera; full-page screenshots and a comparable Modern translation remain **missing**. A screenshot hash validates identity of one capture; it is not an expectation that different browsers/DPRs produce byte-identical PNGs.
 - Set pixel metrics and tolerances *before* reviewing Modern differences; compare the same canvas crop, color space and dimensions. Report both absolute differing-pixel counts and visibility/occlusion by region; a blank or uniform canvas must be considered a capture failure. Use separate numerical ray observations for physical-model comparisons.
 - `TransLine` source `ObjType=3` (towers) and Bedford `ObjType=0` (markers) have no automatically verified equivalence to Modern's types. A scene mapping or explicit unsupported-geometry report must come first. Do not silently convert the stored `CurveApp` payload to Modern `?experiment=`.
 - Browser capture is not a `WGSL` compilation test and does not exercise the WebGPU optical experiment. It does not remove the need for Legacy URL compatibility tests and historical diagnostic preservation.
 
-**Blocked in the patch-generation environment:** Chromium returned `net::ERR_BLOCKED_BY_ADMINISTRATOR` for both loopback HTTP and local `file://` navigation. The full capture was therefore **not executed** there. The offline plan, contract tests and existing Node numerical regression checks can be run without browser access. A developer must run the command above locally, inspect the images/manifest and explicitly approve their use before any Legacy removal or pixel-baseline assertions.
+**Historical Playwright limitation (separate from the successful Opera export):** Chromium returned `net::ERR_BLOCKED_BY_ADMINISTRATOR` for both loopback HTTP and local `file://` navigation. The Playwright full-page capture was therefore **not executed** there. The **browser-native Opera six-frame Canvas archive was subsequently obtained**, reviewed for integrity, and frozen as a limited Legacy rendering reference. This still does not approve Legacy deletion or Modern pixel parity.

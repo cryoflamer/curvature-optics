@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "archive": "tests/fixtures/legacy-browser-references.zip",
+  "sha256": "efe2ad7c08adf54b541e48de25647df4e52c9bf8c8fc964c3f24adc8147752f9",
+  "provenance": "User-supplied browser-native export from Opera on Windows, 2026-11-03; original six PNGs and manifest, no generated replacements",
+  "evidenceStatus": "Accepted as an immutable Legacy rendering regression observation, NOT a Modern/physics oracle",
+  "fixture": "tests/fixtures/legacy-reference-scenarios.json",
+  "sampleCount": 6
+}

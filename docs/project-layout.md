@@ -37,3 +37,12 @@ without starting the old control/animation/diagnostic UI.
 ## Legacy retirement boundary
 
 Before removing the default Legacy entry point or Legacy-only UI modules, consult the [Legacy UI retirement assessment](legacy-ui-assessment.md) and the [feature migration plan](legacy-migration-plan.md). Modern routing, old saved-state links and scientific comparison oracles require independent compatibility decisions.
+
+## Browser-native Legacy rendering evidence
+
+The six actual Opera original-Canvas frames for TransLine/Bedford are preserved,
+unchanged, in `tests/fixtures/legacy-browser-references.zip` with an archive SHA-256
+lock and a separate offline verification/comparison tool,
+`tools/validate-legacy-visual-reference.py`. See
+[`legacy-visual-validation.md`](legacy-visual-validation.md). Their existence does
+not establish Modern parity or justify deleting Legacy.
