@@ -13,6 +13,24 @@ var STABLE_FIELDS = ['Height','FocalLengthField','Roll','Nick','Pan','showModel'
 function assert(condition, message) { if (!condition) throw new Error(message); }
 function nextFrame(win) { return new Promise(function(resolve) { win.requestAnimationFrame(resolve); }); }
 function sleep(win, ms) { return new Promise(function(resolve) { win.setTimeout(resolve, ms); }); }
+function retryable(message, code) {
+  var error = new Error(message);
+  error.code = code;
+  return error;
+}
+function describeGraph(win) {
+  var g = win.graph, canvas = g && g.Canvas;
+  return 'canvas=' + (canvas ? canvas.width + 'x' + canvas.height : 'missing') +
+    ', drawing=' + !!(g && g.IsDrawing && g.IsDrawing()) +
+    ', drawPending=' + !!(g && g.IsDrawPending && g.IsDrawPending()) +
+    ', onLoadFinished=' + (win.xOnLoadFinished === undefined ? 'unknown' : win.xOnLoadFinished);
+}
+function assertDemoState(win, options) {
+  assert(!win.Demos.IsPlaying(), 'Stop the demo animation before capture (demo started moving)');
+  if (options.demo) assert(win.Demos.CurrDemo && win.Demos.CurrDemo.Name === options.demo &&
+    win.Demos.GetCurrPos() === options.sourceIndex, 'Unexpected Legacy demo state');
+  return options.sourceState ? effectiveFields(win.CurveApp, options.sourceState) : null;
+}
 function hex(bytes) { return Array.from(bytes, function(b) { return b.toString(16).padStart(2, '0'); }).join(''); }
 async function sha256(win, bytes) {
   assert(win.crypto && win.crypto.subtle, 'SHA-256 requires a secure context (serve via http://localhost)');
@@ -54,7 +72,9 @@ function inspectCanvas(canvas) {
     if (rgba[i + 3]) opaqueSamples++;
     colors.add(rgba[i] + ',' + rgba[i+1] + ',' + rgba[i+2] + ',' + rgba[i+3]);
   }
-  assert(opaqueSamples > 0 && colors.size > 1, 'Blank or uniform Legacy Canvas refused');
+  if (!opaqueSamples || colors.size <= 1) throw retryable(
+    'Blank or uniform Legacy Canvas refused (' + canvas.width + 'x' + canvas.height +
+    ', sampled colors=' + colors.size + ', opaque samples=' + opaqueSamples + ')', 'LEGACY_BLANK_CANVAS');
   var rect = canvas.getBoundingClientRect();
   return {rgba: rgba, width: canvas.width, height: canvas.height,
     cssWidth: rect.width, cssHeight: rect.height,
@@ -71,25 +91,58 @@ async function capture(win, options) {
     assert(win.Demos.Find(options.demo) >= 0, 'Missing Legacy demo ' + options.demo);
     win.Demos.SetDemo(options.demo, false, options.sourceIndex);
   }
-  assert(!win.Demos.IsPlaying(), 'Stop the demo animation before capture');
-  if (options.demo) {
-    assert(win.Demos.CurrDemo && win.Demos.CurrDemo.Name === options.demo &&
-      win.Demos.GetCurrPos() === options.sourceIndex, 'Unexpected Legacy demo state');
-  }
-  var applied = options.sourceState ? effectiveFields(win.CurveApp, options.sourceState) : null;
-  // Original mode has synchronous graph.Redraw semantics, even with the Physical scheduler installed.
-  win.graph.Redraw();
+  assertDemoState(win, options);
   await win.document.fonts.ready;
-  await nextFrame(win); await nextFrame(win);
-  assert(!win.Demos.IsPlaying(), 'Legacy demo started moving during capture');
-  var canvas = win.graph.Canvas;
-  var pixel = inspectCanvas(canvas);
-  var png = await pngBlob(canvas);
-  var pngBytes = new Uint8Array(await png.arrayBuffer());
-  assert(pngBytes[0] === 137 && pngBytes[1] === 80 && pngBytes[2] === 78 && pngBytes[3] === 71,
-    'Invalid PNG signature');
-  var imageSha = await sha256(win, pngBytes);
-  var rgbaSha = await sha256(win, pixel.rgba);
+  var attempts = options.maxRenderAttempts || (options.selectDemo ? 6 : 1);
+  assert(Number.isInteger(attempts) && attempts >= 1 && attempts <= 10, 'Invalid capture attempt count');
+  var pixel, pngBytes, imageSha, rgbaSha, applied, canvas;
+  for (var attempt = 1; attempt <= attempts; attempt++) {
+    if (options.onAttempt) options.onAttempt(attempt, attempts);
+    try {
+      // GraphX3DX silently catches DrawFunc exceptions; surface those for diagnostics.
+      // The wrapper is temporary and restores the original renderer even on failure.
+      var graph = win.graph, drawError = null, originalDraw = graph.DrawFunc;
+      assert(typeof originalDraw === 'function', 'Original Legacy renderer unavailable');
+      graph.DrawFunc = function() {
+        try {return originalDraw.apply(this, arguments);}
+        catch (err) {drawError = err; throw err;}
+      };
+      try {graph.Redraw();} finally {graph.DrawFunc = originalDraw;}
+      if (drawError) throw retryable('Legacy renderer threw: ' + (drawError.message || drawError),
+        'LEGACY_DRAW_ERROR');
+      await nextFrame(win); await nextFrame(win);
+      applied = assertDemoState(win, options);
+      if ((graph.IsDrawing && graph.IsDrawing()) ||
+          (graph.IsDrawPending && graph.IsDrawPending()))
+        throw retryable('Legacy graph is still drawing (' + describeGraph(win) + ')',
+          'LEGACY_DRAW_PENDING');
+      canvas = graph.Canvas;
+      pixel = inspectCanvas(canvas);
+      var png = await pngBlob(canvas);
+      pngBytes = new Uint8Array(await png.arrayBuffer());
+      assert(pngBytes[0] === 137 && pngBytes[1] === 80 && pngBytes[2] === 78 &&
+        pngBytes[3] === 71, 'Invalid PNG signature');
+      imageSha = await sha256(win, pngBytes);
+      rgbaSha = await sha256(win, pixel.rgba);
+      // Canvas can be resized or redrawn while toBlob/crypto.subtle is pending.
+      // Never associate a PNG with metadata from a different frame.
+      var after = inspectCanvas(canvas);
+      assertDemoState(win, options);
+      if (after.width !== pixel.width || after.height !== pixel.height ||
+          await sha256(win, after.rgba) !== rgbaSha)
+        throw retryable('Canvas changed while encoding PNG (' + describeGraph(win) + ')',
+          'LEGACY_FRAME_CHANGED');
+      break;
+    } catch (err) {
+      if (attempt === attempts || !['LEGACY_BLANK_CANVAS','LEGACY_DRAW_PENDING',
+        'LEGACY_FRAME_CHANGED'].includes(err.code)) {
+        err.message += ' [attempt ' + attempt + '/' + attempts + '; ' + describeGraph(win) + ']';
+        throw err;
+      }
+      // Allow asynchronous initial layout and the GraphX3DX resize loop to settle.
+      await sleep(win, 100 + 100 * attempt);
+    }
+  }
   var fields = win.CurveApp;
   return {pngBytes: pngBytes, record: {
     demo: options.demo || (win.Demos.CurrDemo && win.Demos.CurrDemo.Name) || null,
@@ -168,18 +221,37 @@ async function loadFixture(win) {
 }
 function freshPage(win, timeoutMs) {
   return new Promise(function(resolve, reject) {
+    // A fully transparent/hidden iframe can have its painting deferred by Opera.
+    // Keep a small, genuinely visible capture preview with a fixed child viewport.
+    // This changes no state in the user's own Legacy page.
+    var preview = win.document.createElement('div');
+    preview.style.cssText = 'position:fixed;right:12px;bottom:12px;width:360px;height:253px;' +
+      'overflow:hidden;z-index:2147483000;pointer-events:none;background:white;' +
+      'border:1px solid #777;box-shadow:0 2px 8px #666;';
+    var heading = win.document.createElement('div');
+    heading.textContent = 'Legacy reference capture (temporary preview)';
+    heading.style.cssText = 'height:27px;line-height:27px;padding-left:8px;' +
+      'font:13px Arial,sans-serif;background:#eee;';
+    preview.appendChild(heading);
     var frame = win.document.createElement('iframe');
     frame.title = 'Temporary Legacy reference capture';
-    frame.style.cssText = 'position:fixed;left:0;top:0;width:1440px;height:900px;opacity:0;pointer-events:none;z-index:-1;border:0;';
-    var done = false, timer = win.setTimeout(function() {finish(new Error('Timed out loading Legacy capture frame'));}, timeoutMs);
-    function finish(error) { if (done) return; done = true; win.clearTimeout(timer);
-      if (error) {frame.remove(); reject(error);} else resolve(frame);
+    frame.style.cssText = 'position:absolute;left:0;top:28px;width:1440px;height:900px;' +
+      'transform:scale(0.25);transform-origin:top left;border:0;background:white;';
+    preview.appendChild(frame);
+    var done = false, timer = win.setTimeout(function() {
+      finish(new Error('Timed out loading Legacy capture frame'));}, timeoutMs);
+    function finish(error) {
+      if (done) return;
+      done = true;
+      win.clearTimeout(timer);
+      if (error) {preview.remove(); reject(error);} else resolve({frame:frame, preview:preview});
     }
     frame.onerror = function() {finish(new Error('Failed to load Legacy capture frame'));};
     frame.onload = async function() {
       try {
         var child = frame.contentWindow, started = Date.now();
-        while (!(child.Demos && child.Demos.DemoList && child.Demos.DemoList.length === 9 &&
+        while (!(child.xOnLoadFinished && child.document.readyState === 'complete' &&
+          child.Demos && child.Demos.DemoList && child.Demos.DemoList.length === 9 &&
           child.graph && child.graph.Canvas && child.graph.Canvas.width >= 16 && child.CurveApp)) {
           assert(Date.now() - started < timeoutMs, 'Legacy frame did not initialize');
           await sleep(win, 50);
@@ -187,23 +259,31 @@ function freshPage(win, timeoutMs) {
         finish(null);
       } catch (err) {finish(err);}
     };
-    win.document.body.appendChild(frame);
     frame.src = new win.URL('CurvatureApp.html', win.location.href).href;
+    win.document.body.appendChild(preview);
   });
 }
 async function exportAll(win, update) {
   var fixture = await loadFixture(win), captures = [];
   for (var i = 0; i < fixture.items.length; i++) {
-    var sample = fixture.items[i], frame = null;
-    if (update) update('Capturing ' + (i + 1) + '/6: ' + sample.demo + ' state ' + sample.sourceIndex);
+    var sample = fixture.items[i], page = null;
+    var label = (i + 1) + '/6 ' + sample.demo + ' state ' + sample.sourceIndex;
+    if (update) update('Loading ' + label);
     try {
-      frame = await freshPage(win, 20000);
-      var child = frame.contentWindow;
+      page = await freshPage(win, 20000);
+      var child = page.frame.contentWindow;
       var result = await capture(child, {selectDemo: true, demo: sample.demo,
-        sourceIndex: sample.sourceIndex, sourceState: sample.sourceState});
+        sourceIndex: sample.sourceIndex, sourceState: sample.sourceState,
+        onAttempt: function(attempt, count) {
+          if (update) update('Rendering ' + label + ' (attempt ' + attempt + '/' + count + ')');
+        }});
       result.record.sourceQueryHint = sample.sourceQueryHint;
       captures.push(result);
-    } finally {if (frame) frame.remove();}
+      if (update) update('Captured ' + label + ' (' + result.record.canvas.width + 'x' +
+        result.record.canvas.height + ', ' + result.record.canvas.sampleDistinctColors + ' sampled colors)');
+    } catch (err) {
+      throw new Error('Capture ' + label + ' FAILED: ' + (err.message || err));
+    } finally {if (page) page.preview.remove();}
   }
   // No partial ZIP is ever published if a frame failed.
   assert(captures.length === 6, 'Incomplete reference set');
