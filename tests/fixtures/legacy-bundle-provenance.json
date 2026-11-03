@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "policy": "Evidence only: no deletion, relocation, rebuild replacement, or runtime parity authorized",
+  "tool": {
+    "path": "src/jsmin.exe",
+    "format": "PE32 Windows executable",
+    "bytes": 11776,
+    "sha256": "8b178569fcd45d36bc9ab55ae7216ff04231361efb8b76a18867d81f97fce309",
+    "executed": false
+  },
+  "counts": {
+    "legacySourceFiles": 10,
+    "activeBundles": 3,
+    "lexicalMatches": 3,
+    "recipeCaseMismatches": 1,
+    "historicalOutputsNotActive": 3,
+    "approvedDeletions": 0
+  },
+  "recipe": [
+    {
+      "input": "x.js",
+      "append": false,
+      "output": "GraphX3DX.js"
+    },
+    {
+      "input": "jsg.js",
+      "append": true,
+      "output": "GraphX3DX.js"
+    },
+    {
+      "input": "jsgx3d.js",
+      "append": true,
+      "output": "GraphX3DX.js"
+    },
+    {
+      "input": "tabs.js",
+      "append": false,
+      "output": "ControlPanelX.js"
+    },
+    {
+      "input": "xtc.js",
+      "append": true,
+      "output": "ControlPanelX.js"
+    },
+    {
+      "input": "DataX.js",
+      "append": true,
+      "output": "ControlPanelX.js"
+    },
+    {
+      "input": "slider.js",
+      "append": true,
+      "output": "ControlPanelX.js"
+    },
+    {
+      "input": "NumFormatter.js",
+      "append": true,
+      "output": "ControlPanelX.js"
+    },
+    {
+      "input": "ControlPanel.js",
+      "append": true,
+      "output": "ControlPanelX.js"
+    },
+    {
+      "input": "ModelAnimation.js",
+      "append": false,
+      "output": "ModelAnimationX.js"
+    }
+  ],
+  "bundles": [
+    {
+      "bundle": "src/legacy/GraphX3DX.js",
+      "historicalOutput": "GraphX3DX.js",
+      "activeEntrypoints": [
+        "legacy",
+        "modern"
+      ],
+      "inputs": [
+        {
+          "file": "src/x.js",
+          "bytes": 48978,
+          "sha256": "f36fed2ccdb1f1a933781abee932898a0d2a4197d23c194ee0138f254b84ff6a",
+          "recipeSpelling": "x.js",
+          "exactCaseInRecipe": true
+        },
+        {
+          "file": "src/jsg.js",
+          "bytes": 206810,
+          "sha256": "2e8676c68a2c802e83f1f80cff42eedadb09aa3fd5dd1aca6798cd4e80ea8639",
+          "recipeSpelling": "jsg.js",
+          "exactCaseInRecipe": true
+        },
+        {
+          "file": "src/jsgx3d.js",
+          "bytes": 77298,
+          "sha256": "5d005ab5ffb6a5dc2bc450664cf7520563ac3a961569a20ca9e12d440de3463d",
+          "recipeSpelling": "jsgx3d.js",
+          "exactCaseInRecipe": true
+        }
+      ],
+      "sourceBytes": 333086,
+      "bundleBytes": 194649,
+      "bundleSha256": "15b31221b5b86094cc768480eca2142fa630ff145f409d94c1b7f9e05b15a822",
+      "tokenCount": 66561,
+      "tokenSha256": "d57fe938339e91722175865328b8b452468dfe0dbefe40a52b5a92aa01d46c6a",
+      "comparison": "identical-lexical-token-streams; syntax-checked; historical jsmin executable not run"
+    },
+    {
+      "bundle": "src/ui/ControlPanelX.js",
+      "historicalOutput": "ControlPanelX.js",
+      "activeEntrypoints": [
+        "legacy"
+      ],
+      "inputs": [
+        {
+          "file": "src/tabs.js",
+          "bytes": 30343,
+          "sha256": "5af7af501897acd192b9f636fe6c0de30df9c328bac17853b7c1bf1d833e26a4",
+          "recipeSpelling": "tabs.js",
+          "exactCaseInRecipe": true
+        },
+        {
+          "file": "src/xtc.js",
+          "bytes": 7936,
+          "sha256": "070b89e2ac51844afd18eb7f3cb7cdf55051605a482fa4e38ceb17b62405ef2b",
+          "recipeSpelling": "xtc.js",
+          "exactCaseInRecipe": true
+        },
+        {
+          "file": "src/DataX.js",
+          "bytes": 19506,
+          "sha256": "500886d0080c9047a90625a3c3342605fd74b85e190430dea43501beed6d651a",
+          "recipeSpelling": "DataX.js",
+          "exactCaseInRecipe": true
+        },
+        {
+          "file": "src/Slider.js",
+          "bytes": 19233,
+          "sha256": "5c7ca43dbbe35fbc3430892fa9618f608d5235eda2507068ab2c6f2f1203226c",
+          "recipeSpelling": "slider.js",
+          "exactCaseInRecipe": false
+        },
+        {
+          "file": "src/NumFormatter.js",
+          "bytes": 15754,
+          "sha256": "53d982b9b877435a73e679e6f3b343d9b47de1d301029bd7fb1d8bd077cd2d2d",
+          "recipeSpelling": "NumFormatter.js",
+          "exactCaseInRecipe": true
+        },
+        {
+          "file": "src/ControlPanel.js",
+          "bytes": 76362,
+          "sha256": "5834a197d397e7ccd2fd7c8592cea78ea301342e7d53e862fa362926082e1e0b",
+          "recipeSpelling": "ControlPanel.js",
+          "exactCaseInRecipe": true
+        }
+      ],
+      "sourceBytes": 169134,
+      "bundleBytes": 97925,
+      "bundleSha256": "e4440e77829767f24a056a5f52443ccca121963ed7b5c0c13ece1e01e36a8501",
+      "tokenCount": 29119,
+      "tokenSha256": "f3c40967d511402ef321f235421fdc4784ec46588b35410109e479fc486de76e",
+      "comparison": "identical-lexical-token-streams; syntax-checked; historical jsmin executable not run"
+    },
+    {
+      "bundle": "src/ui/ModelAnimationX.js",
+      "historicalOutput": "ModelAnimationX.js",
+      "activeEntrypoints": [
+        "legacy"
+      ],
+      "inputs": [
+        {
+          "file": "src/ModelAnimation.js",
+          "bytes": 34944,
+          "sha256": "1e574a8a13d9bb2fcad5b3b47e4638ff69063f9f152c5583d6f4279e82de86b7",
+          "recipeSpelling": "ModelAnimation.js",
+          "exactCaseInRecipe": true
+        }
+      ],
+      "sourceBytes": 34944,
+      "bundleBytes": 24900,
+      "bundleSha256": "3783deb3fa7e89b93065513ce2d87939cfc443f65b8c755552302f2d229f692c",
+      "tokenCount": 7380,
+      "tokenSha256": "b09db0542c2256effae2817395037e0c8a11f4840649a21435a91ad741755639",
+      "comparison": "identical-lexical-token-streams; syntax-checked; historical jsmin executable not run"
+    }
+  ]
+}

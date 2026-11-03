@@ -62,3 +62,7 @@ The Legacy animation and Modern high-quality CPU scene are deliberately distinct
 3. **#140.12.67+ — Controlled cleanup.** Only after explicit approval and replacement tests, remove or relocate demonstrably redundant experimental code in small independent commits, with both Legacy and Modern browser/regression checks. Preserve the `optics-baseline-2026-11` tag and archived reference evidence.
 
 **Gate status: isolation documented; preservation contract automated with a remaining manual browser gate; no deletion approved.** Legacy is to be **maintained as an intentional separate mode**, not slowly erased through a supposed Modern parity migration.
+
+## Historical source/bundle provenance
+
+The [#140.12.67 provenance review](legacy-bundle-provenance.md) confirms token-stream correspondence between ten disabled original Legacy sources and three compact bundles, including `src/legacy/GraphX3DX.js` loaded by **both** apps. It does not authorize deleting originals, using the obsolete Windows build, or replacing a live bundle.
