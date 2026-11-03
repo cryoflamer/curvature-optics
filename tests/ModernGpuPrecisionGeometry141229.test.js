@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const p=require('../src/diagnostics/CurvatureGpuPrecisionGeometry141229');
 const arithmetic=require('../src/diagnostics/CurvatureGpuPrecisionFoundation141228');
+const {mockedGpu:makeMockedGpu}=require('./helpers/mockPrecisionGpu');
 const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
 const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
 
@@ -98,12 +99,28 @@ test('140.12.29: analysis isolates input split floor from geometry calculation a
   assert.throws(()=>p.analyze(rows,{}),/Missing geometry mode/);
 });
 
+function mockedGpu(){
+  return makeMockedGpu({wordsPerRow:16,readback({row,input}){
+    const i=row*16,pair=offset=>input[i+offset]+input[i+offset+1];
+    const distance=pair(0),height=pair(2),x=pair(4),y=pair(6);
+    const absoluteHeight=pair(8),absoluteX=pair(10),radius=pair(12),origin=pair(14);
+    const polar=Math.atan2(x,radius+y),arc=distance/radius;
+    return [Math.fround(polar),Math.fround(arc),0,Math.fround(arc),
+      Math.fround(polar),0,Math.fround(polar),0,
+      Math.fround(height),0,Math.fround(absoluteHeight-radius),0,
+      Math.fround(distance),0,Math.fround(absoluteX-origin),0];
+  }});
+}
+
 test('140.12.29: three pipelines dispatch and export separately, release GPU resources',async()=>{
   const mock=mockedGpu(),rows=p.cases().slice(0,5);
   const session=await p.createSession(rows.length,mock.deps);
   try{
     const result=await session.run(rows,{warmRepeats:2,benchmarkIterations:8});
     assert.equal(result.perCase.length,15);
+    assert.ok(result.perCase.every(entry=>entry.gpu.directPolarAngle>0),
+      'synthetic readback must depend on packed geometry');
+    assert.deepEqual(mock.copies,Array(12).fill(rows.length*64));
     assert.equal(mock.codes.length,3);
     assert.equal(mock.dispatches,12);
     assert.equal(result.summary.integer_residual_ds.benchmarkIterations,8);

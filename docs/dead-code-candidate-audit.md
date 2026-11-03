@@ -54,9 +54,9 @@ The independent research shell directly loads `CurvatureOpticalBatchContract1411
 - `src/legacy/GraphX3DX.js` is actually loaded by **both** Legacy and Modern. The shared `src/app/CurvatureModel.js` and `src/optics/OpticalRayTracer.js` are protected. Do not apply folder-wide `src/legacy/` or `src/diagnostics/` cleanup.
 - `tests/fixtures/legacy-browser-references.zip` (six genuine Opera Canvas images), `tests/fixtures/legacy-headless-numerics.json`, old routes/demos and the `optics-baseline-2026-11` tag remain preserved.
 
-## Baseline test debt encountered during this audit
+## Baseline test debt encountered during this audit (resolved in #140.12.68)
 
-Two independently verified failures already exist **unchanged** in the clean #140.12.65 baseline: `tests/WebGLGeometry1402.test.js` expects the old `ModernApp.js?v=140.12.30` URL while `CurvatureModern.html` now loads version `140.12.53`; `tests/ModernGpuPrecisionGeometry141229.test.js` invokes an undefined `mockedGpu()` in one test. These are **not** caused or repaired by this read-only audit. They must not be interpreted as physics or GPU browser results, and should be repaired with narrow follow-up changes before using the entire suite as a removal gate. The otherwise selected 92 Node tests (including the new candidate audit) passed.
+Two independently verified failures already exist **unchanged** in the clean #140.12.65 baseline: `tests/WebGLGeometry1402.test.js` expects the old `ModernApp.js?v=140.12.30` URL while `CurvatureModern.html` now loads version `140.12.53`; `tests/ModernGpuPrecisionGeometry141229.test.js` invokes an undefined `mockedGpu()` in one test. These were **not** caused by the read-only audit. In #140.12.68, the version-pinned WebGL2 assertion was replaced with unique script/load-order checks, and synthetic GPU execution fixtures were restored for both precision arithmetic and geometry tests. These tests remain **Node mocks, not browser WebGL2 or actual WGSL/GPU execution**. See [regression test repairs](regression-test-repairs-140.12.68.md). The otherwise selected 92 Node tests (including the new candidate audit) passed.
 
 ## Limitations and acceptance gates
 

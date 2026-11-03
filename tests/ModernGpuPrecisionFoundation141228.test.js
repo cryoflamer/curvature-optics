@@ -4,6 +4,8 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const p=require('../src/diagnostics/CurvatureGpuPrecisionFoundation141228');
+const {mockedGpu:makeMockedGpu}=require('./helpers/mockPrecisionGpu');
+
 const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
 const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
 
@@ -80,6 +82,14 @@ test('140.12.28: decoder checks real f32 words; analysis does not overclaim cert
   assert.throws(()=>p.analyze(v,{}),/Missing mode/);
 });
 
+function mockedGpu(){
+  return makeMockedGpu({wordsPerRow:4,readback({row,input,operations}){
+    const start=row*4,a=input[start]+input[start+1],b=input[start+2]+input[start+3];
+    const values=[a+b,a-b,a*b,a/b,Math.sqrt(a)];
+    return [Math.fround(values[operations[row]]),0,1,0];
+  }});
+}
+
 test('140.12.28: three mocked GPU pipelines run serially, read back, export and release buffers',async()=>{
   const mock=mockedGpu(),vectors=p.makeVectors().slice(0,6),session=await p.createSession(vectors.length,mock.deps);
   try{
@@ -87,6 +97,8 @@ test('140.12.28: three mocked GPU pipelines run serially, read back, export and 
     assert.equal(mock.codes.length,3);
     assert.equal(mock.dispatches,3*(1+1+2));
     assert.equal(report.perCase.length,18);
+    assert.ok(report.perCase.some(entry=>entry.actual!==0),'mock readback must be nontrivial');
+    assert.deepEqual(mock.copies,Array(12).fill(vectors.length*16));
     assert.ok(report.summary.integer_residual_ds.benchmarkWarmMedianMs>=0);
     assert.equal(report.productionAuthorized,false);
     assert.ok(mock.writes.some(v=>v instanceof Float32Array));
@@ -97,4 +109,20 @@ test('140.12.28: three mocked GPU pipelines run serially, read back, export and 
   assert.equal(mock.deviceDestroyed,true);
   await assert.rejects(()=>session.run(vectors),/closed/);
   await assert.rejects(()=>p.createSession(1,{navigator:{}}),/unavailable/);
+});
+
+test('synthetic precision mock rejects malformed readback instead of reporting a passing GPU result',async()=>{
+  const mock=makeMockedGpu({wordsPerRow:4,readback:()=>[Infinity,0,1,0]});
+  const session=await p.createSession(1,mock.deps);
+  try{
+    await assert.rejects(()=>session.run(p.makeVectors().slice(0,1),
+      {warmRepeats:0,benchmarkIterations:2}),/Invalid synthetic GPU readback/);
+  }finally{session.close();}
+  assert.equal(mock.deviceDestroyed,true);
+  assert.ok(mock.buffers.length>0&&mock.buffers.every(b=>b.destroyed));
+});
+
+test('synthetic precision mock requires explicit valid row width and readback contract',()=>{
+  assert.throws(()=>makeMockedGpu({wordsPerRow:8,readback:()=>[]}),/supported row width/);
+  assert.throws(()=>makeMockedGpu({wordsPerRow:4}),/synthetic readback/);
 });

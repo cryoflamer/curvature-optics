@@ -45,9 +45,18 @@ test('GPU context failure triggers CPU fallback without repainting unvalidated f
 test('Modern UI loads GPU module before the shared frame renderer and exposes explicit selection',()=>{
   const base=path.join(__dirname,'..');
   const html=fs.readFileSync(path.join(base,'CurvatureModern.html'),'utf8');
-  assert.ok(html.indexOf('CurvatureWebGLGeometryRenderer.js')<html.indexOf('CurvatureFrameRenderer.js'));
+  // Cache-busting version numbers can change independently of the WebGL2 wiring.
+  // Assert actual, unique script dependencies and their required load order.
+  const scripts=[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)]
+    .map(m=>m[1].split('?')[0]);
+  const webgl='src/renderers/CurvatureWebGLGeometryRenderer.js';
+  const frame='src/renderers/CurvatureFrameRenderer.js';
+  const appScript='src/ui/modern/ModernApp.js';
+  for(const script of [webgl,frame,appScript])
+    assert.equal(scripts.filter(s=>s===script).length,1,`${script} must load exactly once`);
+  assert.ok(scripts.indexOf(webgl)<scripts.indexOf(frame));
+  assert.ok(scripts.indexOf(frame)<scripts.indexOf(appScript));
   assert.match(html,/id="ModernGeometryBackend"/);
-  assert.match(html,/ModernApp\.js\?v=140\.12\.30/);
   const app=fs.readFileSync(path.join(base,'src/ui/modern/ModernApp.js'),'utf8');
   assert.match(app,/geometryBackend:state\.geometryBackend/);
   assert.match(app,/bindGeometryBackend\(\)/);
