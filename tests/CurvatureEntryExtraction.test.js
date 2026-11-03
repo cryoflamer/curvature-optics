@@ -11,8 +11,13 @@ const scriptSources = [...html.matchAll(/<script\s+src="([^"]+)"\s*><\/script>/g
 // Browser cache-busting query strings are not filesystem path components.
 const scripts = scriptSources.map(source => source.split('?')[0]);
 
-test('HTML entrypoint contains no inline JavaScript, script attributes, or page CSS blocks', () => {
-  assert.doesNotMatch(html, /<script\b(?![^>]*\bsrc=)/i);
+test('HTML entrypoint keeps only the reviewed Legacy reference-export inline install hook', () => {
+  // #140.12.60 introduced a deliberate parser-time hook for browser-native exports.
+  // Reject additional inline JavaScript rather than permanently expecting zero hooks.
+  const inline = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+  assert.equal(inline.length, 1, 'only the reviewed reference-export install hook is allowed');
+  assert.match(inline[0][1], /^\s*xOnLoad\(function\(\) \{ LegacyBrowserReferenceExport\.install\(window\); \}\);\s*$/);
+  assert.doesNotMatch(html.replace(inline[0][0], ''), /<script\b(?![^>]*\bsrc=)/i);
   assert.doesNotMatch(html, /\bon(?:click|change|load|submit)\s*=/i);
   assert.doesNotMatch(html, /href=["']javascript:/i);
   assert.doesNotMatch(html, /<style\b/i);

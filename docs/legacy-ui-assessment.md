@@ -51,3 +51,7 @@ The [Legacy migration plan](legacy-migration-plan.md) inventories all nine demon
 ## Schema-level compatibility follow-up
 
 The [read-only Legacy / Modern state boundary audit](legacy-modern-compatibility.md) classifies all nine demos / 80 literal states using the Modern validator, and preserves a reproducible [per-state report](../tests/fixtures/legacy-modern-boundary.json). The presence of six original-Canvas Opera PNGs does not establish Modern renderer parity. No import, navigation, Legacy-delete or optical behavior changed.
+
+## Status update — #140.12.64
+
+The wholesale-retirement plan above is historical and **not an active removal decision**. Legacy will remain a distinct fast animated interface alongside Modern's CPU physical-optics/Compare application. The [isolation audit](legacy-isolation-audit.md) records the actual static script and CommonJS boundaries; its categories are **not** dead-code classifications. Keep both entrypoints, both route contracts, old demo playback/state, and shared model/renderer code. No UI or solver changes were introduced by this audit.

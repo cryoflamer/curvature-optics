@@ -84,3 +84,9 @@ The [Legacy browser capture contract](legacy-browser-reference.md) documents the
 ## Structural compatibility inventory (follow-up)
 
 The [Legacy / Modern compatibility boundary](legacy-modern-compatibility.md) now audits **all 80 literal demo states** against the actual Modern experiment allowlist, with a [deterministic machine-readable report](../tests/fixtures/legacy-modern-boundary.json) and regression tests. It identifies transferable field *names*, rejected shapes/ranges/combined views and unrepresented Legacy optics/overlays. This is **not a converter** and does not change the routing, physical models or the deletion gates above. Even the structurally reviewable TransLine states require independent numerical and visual acceptance.
+
+## Updated direction after #140.12.64: preserve Legacy as a separate mode
+
+The preceding feature-by-feature migration/retirement steps describe an earlier *conditional* removal plan. That product goal has been **superseded**, not met: Legacy's fast narrated animation and Modern's more expensive CPU RK4 scenes serve different purposes. Do **not** interpret the preceding deletion checklist as the next implementation request, and do not attempt a wholesale TransLine animation port to Modern.
+
+See the [Legacy / Modern isolation audit](legacy-isolation-audit.md), its static HTML/CommonJS boundary fixture, and its preservation-first sequence. Keep old demo/state URLs, independent Legacy playback, shared geometry/optics, WebGL2, real Opera reference PNGs, and the CPU fused-gradient baseline. Future cleanup may remove code only after a separate per-module investigation and explicit retained-behavior tests.

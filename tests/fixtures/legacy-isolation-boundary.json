@@ -1,0 +1,2628 @@
+{
+  "schemaVersion": 1,
+  "policy": "Static evidence only: no ownership, runtime reachability, parity, or deletion approval",
+  "entrypoints": {
+    "legacy": {
+      "file": "CurvatureApp.html",
+      "scriptTags": 96,
+      "uniqueScripts": 96,
+      "inlineScriptBlocks": 1,
+      "inlineScriptSha256": [
+        "3fc2b54d19b92e11fdb98a5d55557674d8bb92d6a6f609f4df08bcd1c1e9d9d4"
+      ],
+      "scripts": [
+        "src/ui/modern/ModernRoute.js",
+        "src/legacy/GraphX3DX.js",
+        "src/legacy/LegacySceneAdapter.js",
+        "src/scene/SceneFrame.js",
+        "src/scene/CurvatureSceneContract.js",
+        "src/scene/CurvatureRenderFrame.js",
+        "src/geometry/CurvatureSurfaceGeometry.js",
+        "src/geometry/CurvaturePhysicalWorldGeometry.js",
+        "src/geometry/CurvatureGeometryEngine.js",
+        "src/legacy/LegacyGeometryExtractor.js",
+        "src/legacy/LegacyGeometryFrameVerification.js",
+        "src/renderers/CurvatureScenePreview.js",
+        "src/renderers/CurvatureCanvasProjection.js",
+        "src/renderers/CurvaturePerspectivePreview.js",
+        "src/renderers/CurvatureViewportReference.js",
+        "src/renderers/CurvatureNearPlaneReference.js",
+        "src/diagnostics/CurvaturePerspectiveDiagnostics.js",
+        "src/renderers/CurvatureFilledPreview.js",
+        "src/renderers/CurvatureViewportPolygonClip.js",
+        "src/renderers/CurvatureZBufferPreview.js",
+        "src/renderers/CurvatureStrokePreview.js",
+        "src/renderers/CurvatureStyledCombinedPreview.js",
+        "src/renderers/CurvatureLegacyOrderPreview.js",
+        "src/diagnostics/CurvaturePixelComparison.js",
+        "src/scene/CurvatureIndependentComposition.js",
+        "src/diagnostics/CurvatureCompositionComparison.js",
+        "src/diagnostics/CurvatureGrayOccluderAudit.js",
+        "src/geometry/CurvatureEarClip.js",
+        "src/renderers/CurvatureFrameRenderer.js",
+        "src/renderers/CurvatureScreenSpaceGuides.js",
+        "src/scene/CurvatureFullSceneDecorations.js",
+        "src/diagnostics/CurvatureRegionComparison.js",
+        "src/diagnostics/CurvatureCompositionCapture.js",
+        "src/diagnostics/CurvatureDiagnosticPresets.js",
+        "src/diagnostics/CurvatureControlledLegacyCapture.js",
+        "src/diagnostics/CurvatureControlledCamera.js",
+        "src/diagnostics/CurvatureControlledGeometryParity.js",
+        "src/diagnostics/CurvatureWorldTopologyAudit.js",
+        "src/diagnostics/CurvatureContourDiagnostics.js",
+        "src/diagnostics/CurvatureCameraVerification.js",
+        "src/diagnostics/CurvatureVisibilityOracle.js",
+        "src/diagnostics/CurvatureVisibilityVerification.js",
+        "src/diagnostics/GeometryDiagnosticsZip.js",
+        "src/diagnostics/CurvaturePerformanceProfile.js",
+        "src/scene/SceneFrameRenderer.js",
+        "src/legacy/LegacySceneAudit.js",
+        "src/legacy/LegacyReplayProbe.js",
+        "src/legacy/LegacyCanvasReplayProbe.js",
+        "src/ui/ControlPanelX.js",
+        "src/ui/ModelAnimationX.js",
+        "src/optics/OpticalRayTracer.js",
+        "src/optics/OpticsBackendUI.js",
+        "src/optics/OpticalTowerDiagnostics.js",
+        "src/optics/OpticalTowerOverlay.js",
+        "src/renderers/CurvatureInverseOpticsBridge.js",
+        "src/optics/OpticalProjectionCalibration.js",
+        "src/optics/OpticalRenderedVertexAudit.js",
+        "src/optics/OpticalTargetProjection.js",
+        "src/optics/OpticalSharedRayField.js",
+        "src/optics/OpticalTowerSilhouette.js",
+        "src/renderers/CurvaturePhysicalTowerCanvas.js",
+        "src/optics/CurvaturePhysicalGroundGuides.js",
+        "src/optics/CurvaturePhysicalPolygonFills.js",
+        "src/optics/CurvaturePhysicalSceneOptics.js",
+        "src/ui/OpticsTowerAuditHandlers.js",
+        "src/ui/OpticsTowerAtmosphereHandlers.js",
+        "src/ui/OpticsLineAtmosphereHandlers.js",
+        "src/ui/OpticsVacuumToggle.js",
+        "src/ui/OpticsTowerFraming.js",
+        "src/ui/OpticsSceneComparison.js",
+        "src/ui/OpticsTestPresets.js",
+        "src/ui/OpticsOverlayControls.js",
+        "src/legacy/CurvatureLegacyDrawing.js",
+        "src/app/CurvatureModel.js",
+        "src/diagnostics/CurvaturePhysicalSanity.js",
+        "src/diagnostics/CurvatureLegacyFrameCaptureController.js",
+        "src/app/CurvaturePhysicalCamera.js",
+        "src/app/CurvaturePhysicalCurvature.js",
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/app/CurvatureCanvasFrameScheduler.js",
+        "src/app/CurvatureHeightChangeScheduler.js",
+        "src/app/CurvatureAppRuntime.js",
+        "src/diagnostics/LegacyBrowserReferenceExport.js",
+        "src/ui/panels/ViewSliders.js",
+        "src/ui/panels/ViewOptions.js",
+        "src/ui/panels/ObjectSliders0.js",
+        "src/ui/panels/ObjectOptions0.js",
+        "src/ui/panels/ObjectSliders1.js",
+        "src/ui/panels/ObjectOptions1.js",
+        "src/animation/CurvatureAnimations.js",
+        "src/animation/CurvatureDemos.js",
+        "src/app/CurvatureAtmosphere.js",
+        "src/ui/LengthCalculator.js",
+        "src/ui/panels/LengthCalculatorPanel.js",
+        "src/app/CurvatureStatePersistence.js",
+        "src/ui/panels/ComputedValuesPanel.js"
+      ],
+      "duplicatedLoads": []
+    },
+    "modern": {
+      "file": "CurvatureModern.html",
+      "scriptTags": 63,
+      "uniqueScripts": 62,
+      "inlineScriptBlocks": 0,
+      "inlineScriptSha256": [],
+      "scripts": [
+        "src/ui/modern/ModernRoute.js",
+        "src/legacy/GraphX3DX.js",
+        "src/scene/CurvatureSceneContract.js",
+        "src/scene/CurvatureRenderFrame.js",
+        "src/geometry/CurvatureSurfaceGeometry.js",
+        "src/geometry/CurvaturePhysicalWorldGeometry.js",
+        "src/geometry/CurvatureGeometryEngine.js",
+        "src/renderers/CurvatureCanvasProjection.js",
+        "src/renderers/CurvaturePerspectivePreview.js",
+        "src/renderers/CurvatureViewportReference.js",
+        "src/renderers/CurvatureNearPlaneReference.js",
+        "src/renderers/CurvatureFilledPreview.js",
+        "src/renderers/CurvatureViewportPolygonClip.js",
+        "src/renderers/CurvatureZBufferPreview.js",
+        "src/renderers/CurvatureStrokePreview.js",
+        "src/renderers/CurvatureStyledCombinedPreview.js",
+        "src/renderers/CurvatureLegacyOrderPreview.js",
+        "src/scene/CurvatureIndependentComposition.js",
+        "src/geometry/CurvatureEarClip.js",
+        "src/renderers/CurvatureWebGLGeometryRenderer.js",
+        "src/renderers/CurvatureFrameRenderer.js",
+        "src/renderers/CurvatureScreenSpaceGuides.js",
+        "src/scene/CurvatureFullSceneDecorations.js",
+        "src/optics/OpticalRayTracer.js",
+        "src/optics/OpticalRayHorizon.js",
+        "src/optics/OpticalTargetProjection.js",
+        "src/optics/OpticalConformalPredictor.js",
+        "src/optics/OpticalSharedRayField.js",
+        "src/optics/OpticalTowerSilhouette.js",
+        "src/optics/CurvaturePhysicalGroundGuides.js",
+        "src/optics/CurvaturePhysicalPolygonFills.js",
+        "src/optics/CurvaturePhysicalSceneOptics.js",
+        "src/app/CurvatureModel.js",
+        "src/app/CurvaturePhysicalCamera.js",
+        "src/app/CurvaturePhysicalCurvature.js",
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/ui/modern/ModernSceneState.js",
+        "src/ui/modern/ModernCameraInteraction.js",
+        "src/ui/modern/ModernCameraPerspectiveWarp.js",
+        "src/ui/modern/ModernCameraDragPreview.js",
+        "src/ui/modern/ModernRenderProfiler.js",
+        "src/ui/modern/ModernPerformanceReport.js",
+        "src/ui/modern/ModernGpuCapabilities.js",
+        "src/ui/modern/ModernAtmosphericPresentation.js",
+        "src/ui/modern/ModernAtmosphericShimmer.js",
+        "src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js",
+        "src/diagnostics/CurvatureGpuFullFrameParity141234.js",
+        "src/diagnostics/GeometryDiagnosticsZip.js",
+        "src/diagnostics/CurvatureAttributionVisualZip141236.js",
+        "src/diagnostics/CurvatureCameraFirstOracle141238.js",
+        "src/diagnostics/CurvatureCameraFirstObjects141239.js",
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+        "src/diagnostics/CurvatureCpuQuadratureFeasibility141242.js",
+        "src/diagnostics/CurvatureCpuConformalGlobe141243.js",
+        "src/diagnostics/CurvatureCpuAdaptiveConformal141244.js",
+        "src/diagnostics/CurvatureConformalProfile141246.js",
+        "src/ui/modern/ModernCompareModel.js",
+        "src/ui/modern/ModernCompareState.js",
+        "src/ui/modern/ModernExperimentState.js",
+        "src/ui/modern/ModernExperimentLibrary.js",
+        "src/ui/modern/ModernApp.js",
+        "src/ui/modern/ModernCompareGraph.js",
+        "src/ui/modern/ModernCompareGraph.js"
+      ],
+      "duplicatedLoads": [
+        {
+          "file": "src/ui/modern/ModernCompareGraph.js",
+          "count": 2
+        }
+      ]
+    },
+    "webgpuResearch": {
+      "file": "tools/webgpu-optics.html",
+      "scriptTags": 14,
+      "uniqueScripts": 14,
+      "inlineScriptBlocks": 1,
+      "inlineScriptSha256": [
+        "d30968286339719a53431c9725689df0b6247ea8e99e55bc1492b6b8a0452bb0"
+      ],
+      "scripts": [
+        "src/geometry/CurvatureSurfaceGeometry.js",
+        "src/optics/OpticalRayTracer.js",
+        "src/diagnostics/CurvatureWebGPUOpticsBenchmark.js",
+        "src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js",
+        "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js",
+        "src/optics/OpticalTargetProjection.js",
+        "src/diagnostics/CurvatureWebGPUSceneSpike14010.js",
+        "src/diagnostics/CurvatureOpticalBatchContract1411.js",
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+        "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js",
+        "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js"
+      ],
+      "duplicatedLoads": []
+    }
+  },
+  "matrix": {
+    "loadedByLegacyAndModern": [
+      "src/app/CurvatureMainCanvasRenderer.js",
+      "src/app/CurvatureModel.js",
+      "src/app/CurvaturePhysicalCamera.js",
+      "src/app/CurvaturePhysicalCurvature.js",
+      "src/diagnostics/GeometryDiagnosticsZip.js",
+      "src/geometry/CurvatureEarClip.js",
+      "src/geometry/CurvatureGeometryEngine.js",
+      "src/geometry/CurvaturePhysicalWorldGeometry.js",
+      "src/geometry/CurvatureSurfaceGeometry.js",
+      "src/legacy/GraphX3DX.js",
+      "src/optics/CurvaturePhysicalGroundGuides.js",
+      "src/optics/CurvaturePhysicalPolygonFills.js",
+      "src/optics/CurvaturePhysicalSceneOptics.js",
+      "src/optics/OpticalRayTracer.js",
+      "src/optics/OpticalSharedRayField.js",
+      "src/optics/OpticalTargetProjection.js",
+      "src/optics/OpticalTowerSilhouette.js",
+      "src/renderers/CurvatureCanvasProjection.js",
+      "src/renderers/CurvatureFilledPreview.js",
+      "src/renderers/CurvatureFrameRenderer.js",
+      "src/renderers/CurvatureLegacyOrderPreview.js",
+      "src/renderers/CurvatureNearPlaneReference.js",
+      "src/renderers/CurvaturePerspectivePreview.js",
+      "src/renderers/CurvatureScreenSpaceGuides.js",
+      "src/renderers/CurvatureStrokePreview.js",
+      "src/renderers/CurvatureStyledCombinedPreview.js",
+      "src/renderers/CurvatureViewportPolygonClip.js",
+      "src/renderers/CurvatureViewportReference.js",
+      "src/renderers/CurvatureZBufferPreview.js",
+      "src/scene/CurvatureFullSceneDecorations.js",
+      "src/scene/CurvatureIndependentComposition.js",
+      "src/scene/CurvatureRenderFrame.js",
+      "src/scene/CurvatureSceneContract.js",
+      "src/ui/modern/ModernRoute.js"
+    ],
+    "loadedByLegacyNotModern": [
+      "src/animation/CurvatureAnimations.js",
+      "src/animation/CurvatureDemos.js",
+      "src/app/CurvatureAppRuntime.js",
+      "src/app/CurvatureAtmosphere.js",
+      "src/app/CurvatureCanvasFrameScheduler.js",
+      "src/app/CurvatureHeightChangeScheduler.js",
+      "src/app/CurvatureStatePersistence.js",
+      "src/diagnostics/CurvatureCameraVerification.js",
+      "src/diagnostics/CurvatureCompositionCapture.js",
+      "src/diagnostics/CurvatureCompositionComparison.js",
+      "src/diagnostics/CurvatureContourDiagnostics.js",
+      "src/diagnostics/CurvatureControlledCamera.js",
+      "src/diagnostics/CurvatureControlledGeometryParity.js",
+      "src/diagnostics/CurvatureControlledLegacyCapture.js",
+      "src/diagnostics/CurvatureDiagnosticPresets.js",
+      "src/diagnostics/CurvatureGrayOccluderAudit.js",
+      "src/diagnostics/CurvatureLegacyFrameCaptureController.js",
+      "src/diagnostics/CurvaturePerformanceProfile.js",
+      "src/diagnostics/CurvaturePerspectiveDiagnostics.js",
+      "src/diagnostics/CurvaturePhysicalSanity.js",
+      "src/diagnostics/CurvaturePixelComparison.js",
+      "src/diagnostics/CurvatureRegionComparison.js",
+      "src/diagnostics/CurvatureVisibilityOracle.js",
+      "src/diagnostics/CurvatureVisibilityVerification.js",
+      "src/diagnostics/CurvatureWorldTopologyAudit.js",
+      "src/diagnostics/LegacyBrowserReferenceExport.js",
+      "src/legacy/CurvatureLegacyDrawing.js",
+      "src/legacy/LegacyCanvasReplayProbe.js",
+      "src/legacy/LegacyGeometryExtractor.js",
+      "src/legacy/LegacyGeometryFrameVerification.js",
+      "src/legacy/LegacyReplayProbe.js",
+      "src/legacy/LegacySceneAdapter.js",
+      "src/legacy/LegacySceneAudit.js",
+      "src/optics/OpticalProjectionCalibration.js",
+      "src/optics/OpticalRenderedVertexAudit.js",
+      "src/optics/OpticalTowerDiagnostics.js",
+      "src/optics/OpticalTowerOverlay.js",
+      "src/optics/OpticsBackendUI.js",
+      "src/renderers/CurvatureInverseOpticsBridge.js",
+      "src/renderers/CurvaturePhysicalTowerCanvas.js",
+      "src/renderers/CurvatureScenePreview.js",
+      "src/scene/SceneFrame.js",
+      "src/scene/SceneFrameRenderer.js",
+      "src/ui/ControlPanelX.js",
+      "src/ui/LengthCalculator.js",
+      "src/ui/ModelAnimationX.js",
+      "src/ui/OpticsLineAtmosphereHandlers.js",
+      "src/ui/OpticsOverlayControls.js",
+      "src/ui/OpticsSceneComparison.js",
+      "src/ui/OpticsTestPresets.js",
+      "src/ui/OpticsTowerAtmosphereHandlers.js",
+      "src/ui/OpticsTowerAuditHandlers.js",
+      "src/ui/OpticsTowerFraming.js",
+      "src/ui/OpticsVacuumToggle.js",
+      "src/ui/panels/ComputedValuesPanel.js",
+      "src/ui/panels/LengthCalculatorPanel.js",
+      "src/ui/panels/ObjectOptions0.js",
+      "src/ui/panels/ObjectOptions1.js",
+      "src/ui/panels/ObjectSliders0.js",
+      "src/ui/panels/ObjectSliders1.js",
+      "src/ui/panels/ViewOptions.js",
+      "src/ui/panels/ViewSliders.js"
+    ],
+    "loadedByModernNotLegacy": [
+      "src/diagnostics/CurvatureAttributionVisualZip141236.js",
+      "src/diagnostics/CurvatureCameraFirstObjects141239.js",
+      "src/diagnostics/CurvatureCameraFirstOracle141238.js",
+      "src/diagnostics/CurvatureConformalProfile141246.js",
+      "src/diagnostics/CurvatureCpuAdaptiveConformal141244.js",
+      "src/diagnostics/CurvatureCpuConformalGlobe141243.js",
+      "src/diagnostics/CurvatureCpuQuadratureFeasibility141242.js",
+      "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+      "src/diagnostics/CurvatureGpuFullFrameParity141234.js",
+      "src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js",
+      "src/optics/OpticalConformalPredictor.js",
+      "src/optics/OpticalRayHorizon.js",
+      "src/renderers/CurvatureWebGLGeometryRenderer.js",
+      "src/ui/modern/ModernApp.js",
+      "src/ui/modern/ModernAtmosphericPresentation.js",
+      "src/ui/modern/ModernAtmosphericShimmer.js",
+      "src/ui/modern/ModernCameraDragPreview.js",
+      "src/ui/modern/ModernCameraInteraction.js",
+      "src/ui/modern/ModernCameraPerspectiveWarp.js",
+      "src/ui/modern/ModernCompareGraph.js",
+      "src/ui/modern/ModernCompareModel.js",
+      "src/ui/modern/ModernCompareState.js",
+      "src/ui/modern/ModernExperimentLibrary.js",
+      "src/ui/modern/ModernExperimentState.js",
+      "src/ui/modern/ModernGpuCapabilities.js",
+      "src/ui/modern/ModernPerformanceReport.js",
+      "src/ui/modern/ModernRenderProfiler.js",
+      "src/ui/modern/ModernSceneState.js"
+    ],
+    "researchOnlyNotEitherApp": [
+      "src/diagnostics/CurvatureOpticalBatchContract1411.js",
+      "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+      "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+      "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+      "src/diagnostics/CurvatureWebGPUOpticsBenchmark.js",
+      "src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js",
+      "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js",
+      "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+      "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+      "src/diagnostics/CurvatureWebGPURootRefinement14122.js",
+      "src/diagnostics/CurvatureWebGPUSceneSpike14010.js"
+    ],
+    "notDirectlyLoadedByTheseEntrypoints": [
+      "src/ControlPanel.js",
+      "src/DataX.js",
+      "src/ModelAnimation.js",
+      "src/NumFormatter.js",
+      "src/Slider.js",
+      "src/diagnostics/CurvatureBouguerInvariant141227.js",
+      "src/diagnostics/CurvatureGeometryDifferenceAttribution141237.js",
+      "src/diagnostics/CurvatureGpuAlgorithmAttribution141235.js",
+      "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+      "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+      "src/diagnostics/CurvatureGpuDsRk4Audit141241.js",
+      "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+      "src/diagnostics/CurvatureGpuGroundContact141226.js",
+      "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js",
+      "src/diagnostics/CurvatureGpuNumericalFloor141224.js",
+      "src/diagnostics/CurvatureGpuPrecisionAudit141222.js",
+      "src/diagnostics/CurvatureGpuPrecisionFoundation141228.js",
+      "src/diagnostics/CurvatureGpuPrecisionGeometry141229.js",
+      "src/diagnostics/CurvatureGpuPrecisionLimit141225.js",
+      "src/diagnostics/CurvatureGpuRootConvergence141223.js",
+      "src/diagnostics/CurvatureMigrationInventory.js",
+      "src/diagnostics/CurvatureSeparationAudit.js",
+      "src/jsg.js",
+      "src/jsgx3d.js",
+      "src/tabs.js",
+      "src/x.js",
+      "src/xtc.js"
+    ]
+  },
+  "sourceJsCount": 162,
+  "sourceModules": {
+    "src/ControlPanel.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/DataX.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ModelAnimation.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/NumFormatter.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/Slider.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/animation/CurvatureAnimations.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/animation/CurvatureDemos.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvatureAppRuntime.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvatureAtmosphere.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvatureCanvasFrameScheduler.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/PhysicalCanvasInteraction117.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-physical-redraw-117.js"
+      ]
+    },
+    "src/app/CurvatureHeightChangeScheduler.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/PhysicalHeightChange120.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvatureMainCanvasRenderer.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureMainCanvasRenderer.test.js",
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/CurvaturePhysicalTowerCanvas107.test.js",
+        "tests/ModernAtmosphericPresentation13822.test.js",
+        "tests/ModernGeometryCaptureCache1412372.test.js",
+        "tests/ModernSceneControls.test.js",
+        "tests/ModernUiBootstrap.test.js",
+        "tests/OpticalColdWarm1403.test.js",
+        "tests/PhysicalCanvasInteraction117.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvatureModel.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvaturePhysicalCamera.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureCameraFirstObjects141239.js",
+        "src/diagnostics/CurvatureCameraFirstOracle141238.js",
+        "src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraFirstOracle141238.test.js",
+        "tests/ModernAngularGuide.test.js",
+        "tests/ModernCameraPerspectiveWarp1374.test.js",
+        "tests/ModernGpuPixelSpaceAudit141233.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalCurvatureCamera127.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvaturePhysicalCurvature.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernIndependentCompare.test.js",
+        "tests/ModernSceneControls.test.js",
+        "tests/ModernSharedCompareControls.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalCurvatureCamera127.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/app/CurvatureStatePersistence.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureAttributionVisualZip141236.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+        "src/diagnostics/CurvatureGpuDsRk4Audit141241.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernAttributionVisualZip141236.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureBouguerInvariant141227.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernBouguerInvariant141227.test.js",
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCameraFirstObjects141239.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CameraFirstObjects141239.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCameraFirstOracle141238.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCameraFirstObjects141239.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraFirstObjects141239.test.js",
+        "tests/CameraFirstOracle141238.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCameraVerification.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureCameraVerification.test.js",
+        "tests/CurvatureCanvasProjection.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCompositionCapture.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureCompositionCapture.test.js",
+        "tests/CurvatureFullCompositionCapture.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCompositionComparison.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCompositionCapture.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCompositionComparison.test.js",
+        "tests/CurvatureControlledCamera.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureConformalProfile141246.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ConformalProfile141246.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureContourDiagnostics.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureContourDiagnostics.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureControlledCamera.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureControlledCamera.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureControlledGeometryParity.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureControlledGeometryParity.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureControlledLegacyCapture.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureControlledLegacyCapture.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCpuAdaptiveConformal141244.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ConformalProduction141245.test.js",
+        "tests/CpuAdaptiveConformal141244.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCpuConformalGlobe141243.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCpuAdaptiveConformal141244.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ConformalHybrid141247.test.js",
+        "tests/ConformalProfile141246.test.js",
+        "tests/CpuAdaptiveConformal141244.test.js",
+        "tests/CpuConformalGlobe141243.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureCpuQuadratureFeasibility141242.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CpuQuadratureFeasibility141242.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureDiagnosticPresets.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureDiagnosticPresets.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGeometryDifferenceAttribution141237.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGeometryCaptureCache1412372.test.js",
+        "tests/ModernGeometryDifferenceAttribution141237.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuAlgorithmAttribution141235.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuAlgorithmAttribution141235.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuBouguerPrecision141230.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerPrecision141230.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuDsPainterGate141240.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsRk4Audit141241.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/GpuDsPainterGate141240.test.js",
+        "tests/GpuDsRk4Shooting141241.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuDsRk4Audit141241.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/GpuDsRk4Shooting141241.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/GpuDsRk4Shooting141241.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuFullFrameParity141234.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuFullFrameParity141234.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuGroundContact141226.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureBouguerInvariant141227.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuGroundContact141226.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/GpuDsPainterGate141240.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuNumericalFloor141224.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuNumericalFloor141224.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+        "src/diagnostics/CurvatureGpuDsRk4Audit141241.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuPixelSpaceAudit141233.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuPrecisionAudit141222.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuPrecisionFoundation141228.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js",
+        "src/diagnostics/CurvatureGpuPrecisionGeometry141229.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuPrecisionFoundation141228.test.js",
+        "tests/ModernGpuPrecisionGeometry141229.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuPrecisionGeometry141229.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuPrecisionGeometry141229.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuPrecisionLimit141225.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuPrecisionLimit141225.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGpuRootConvergence141223.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuRootConvergence141223.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureGrayOccluderAudit.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureGrayOccluderAudit.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureLegacyFrameCaptureController.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureMigrationInventory.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureMigrationInventory.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureOpticalBatchContract1411.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+        "src/diagnostics/CurvatureGpuDsRk4Audit141241.js",
+        "src/diagnostics/CurvatureGpuDsRk4Shooting141241.js",
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/GpuDsPainterGate141240.test.js",
+        "tests/GpuDsRk4Shooting141241.test.js",
+        "tests/ModernBouguerInvariant141227.test.js",
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuGroundContact141226.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js",
+        "tests/ModernGpuNumericalFloor141224.test.js",
+        "tests/ModernGpuPrecisionLimit141225.test.js",
+        "tests/OpticalBatchContract1411.test.js",
+        "tests/WebGPUBatchDiagnostics14121.test.js",
+        "tests/WebGPUBatchShooting1412.test.js",
+        "tests/WebGPUEventGuard141214.test.js",
+        "tests/WebGPUPhysicalTolerance14123.test.js",
+        "tests/WebGPUPredictor141213.test.js",
+        "tests/WebGPURootRefinement14122.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvaturePerformanceProfile.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/PerformanceProfile118.test.js",
+        "tests/PhysicalAssemblyAndSolverAudit122.test.js",
+        "tests/PhysicalHeightChange120.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvaturePerspectiveDiagnostics.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvaturePerspectiveDiagnostics.test.js",
+        "tests/CurvatureViewportReference.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvaturePhysicalSanity.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/PhysicalSanity129.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvaturePixelComparison.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCompositionComparison.js",
+        "src/diagnostics/CurvatureVisibilityVerification.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasParity.test.js",
+        "tests/CurvaturePixelComparison.test.js",
+        "tests/CurvatureRenderingFixes.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureRegionComparison.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCompositionCapture.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureRegionComparison.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureSeparationAudit.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureSeparationAudit.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureVisibilityOracle.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureVisibilityVerification.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureVisibilityOracle.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureVisibilityVerification.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureVisibilityVerification.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUBatchDiagnostics14121.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUBatchShooting1412.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureBouguerInvariant141227.js",
+        "src/diagnostics/CurvatureGpuBouguerPrecision141230.js",
+        "src/diagnostics/CurvatureGpuBouguerQuadrature141231.js",
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureGpuHighPrecisionShooting141232.js",
+        "src/diagnostics/CurvatureWebGPUBatchDiagnostics14121.js",
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+        "src/diagnostics/CurvatureWebGPURootRefinement14122.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGpuAdaptive141218.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuGridABC141217.test.js",
+        "tests/ModernGpuGroundContact141226.test.js",
+        "tests/ModernGpuNearGround141216.test.js",
+        "tests/ModernGpuNumericalFloor141224.test.js",
+        "tests/ModernGpuPrecisionLimit141225.test.js",
+        "tests/ModernGpuPredictorFrame141215.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/WebGPUBatchDiagnostics14121.test.js",
+        "tests/WebGPUBatchShooting1412.test.js",
+        "tests/WebGPUEventGuard141214.test.js",
+        "tests/WebGPUPhysicalTolerance14123.test.js",
+        "tests/WebGPUPredictor141213.test.js",
+        "tests/WebGPURootRefinement14122.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUEventGuard141214.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/WebGPUEventGuard141214.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUOpticsBenchmark.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js",
+        "src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js",
+        "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js",
+        "src/diagnostics/CurvatureWebGPUSceneSpike14010.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUOpticalBenchmark1408.test.js",
+        "tests/WebGPUOpticalBrowser14081.test.js",
+        "tests/WebGPUOpticalMatrix1409.test.js",
+        "tests/WebGPUOpticalPrecision14091.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUOpticsMatrix1409.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUOpticalMatrix1409.test.js",
+        "tests/WebGPUOpticalPrecision14091.test.js",
+        "tests/WebGPUSceneSpike14010.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUOpticsPrecision14091.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/WebGPUOpticalPrecision14091.test.js",
+        "tests/WebGPUSceneSpike14010.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUPhysicalTolerance14123.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUPredictor141213.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUEventGuard141214.test.js",
+        "tests/WebGPUPredictor141213.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPURootRefinement14122.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/WebGPURootRefinement14122.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWebGPUSceneSpike14010.js": {
+      "directHtmlLoads": [
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureWebGPUBatchShooting1412.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGPUSceneSpike14010.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/CurvatureWorldTopologyAudit.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureWorldTopologyAudit.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/GeometryDiagnosticsZip.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacyBrowserReferenceExport.test.js",
+        "tests/ModernAttributionVisualZip141236.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/LegacyBrowserReferenceExport.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacyBrowserReferenceExport.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/geometry/CurvatureEarClip.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureVisibilityOracle.js",
+        "src/diagnostics/CurvatureVisibilityVerification.js",
+        "src/diagnostics/CurvatureWorldTopologyAudit.js",
+        "src/optics/CurvaturePhysicalPolygonFills.js",
+        "src/renderers/CurvatureFrameRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureEarClip.test.js",
+        "tests/CurvatureModeSemantics.test.js",
+        "tests/CurvatureRenderingFixes.test.js",
+        "tests/CurvatureTopologyStages.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/geometry/CurvatureGeometryEngine.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/optics/OpticalTowerSilhouette.js",
+        "src/renderers/CurvaturePhysicalTowerCanvas.js",
+        "src/scene/CurvatureIndependentComposition.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureBedford.test.js",
+        "tests/CurvatureControlledGeometryParity.test.js",
+        "tests/CurvatureFlatSurfaceGuides.test.js",
+        "tests/CurvatureFullLayerParity.test.js",
+        "tests/CurvatureGeometryEngine.test.js",
+        "tests/CurvatureGlobeHorizonGuides.test.js",
+        "tests/CurvatureGlobeSurfaceGuides.test.js",
+        "tests/CurvatureHorizonGeometry.test.js",
+        "tests/CurvatureIndependentComposition.test.js",
+        "tests/CurvatureObjectHorizonPartition.test.js",
+        "tests/CurvatureObjectSequence.test.js",
+        "tests/CurvaturePhysicalTowerCanvas107.test.js",
+        "tests/CurvaturePhysicsRegression.test.js",
+        "tests/CurvatureSimpleObjects.test.js",
+        "tests/CurvatureTowerHorizonPartition.test.js",
+        "tests/CurvatureTowerPlacement.test.js",
+        "tests/CurvatureTowerSequence.test.js",
+        "tests/CurvatureTowerType1.test.js",
+        "tests/OpticalTowerSilhouette106.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalGroundGuideExtent111.test.js",
+        "tests/PhysicalMetricWorld126.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/geometry/CurvaturePhysicalWorldGeometry.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/geometry/CurvatureGeometryEngine.js",
+        "src/scene/CurvatureIndependentComposition.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalMetricWorld126.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/geometry/CurvatureSurfaceGeometry.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern",
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvaturePhysicalCamera.js",
+        "src/diagnostics/CurvatureGpuDsPainterGate141240.js",
+        "src/diagnostics/CurvatureGpuPrecisionGeometry141229.js",
+        "src/diagnostics/CurvaturePhysicalSanity.js",
+        "src/diagnostics/CurvatureWebGPUSceneSpike14010.js",
+        "src/geometry/CurvaturePhysicalWorldGeometry.js",
+        "src/optics/CurvaturePhysicalGroundGuides.js",
+        "src/optics/CurvaturePhysicalPolygonFills.js",
+        "src/optics/CurvaturePhysicalSceneOptics.js",
+        "src/optics/OpticalRayTracer.js",
+        "src/optics/OpticalSharedRayField.js",
+        "src/optics/OpticalTowerSilhouette.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/CurvatureSurfaceGeometry124.test.js",
+        "tests/ModernBouguerInvariant141227.test.js",
+        "tests/ModernGpuAdaptive141218.test.js",
+        "tests/ModernGpuAlgorithmAttribution141235.test.js",
+        "tests/ModernGpuBouguerPrecision141230.test.js",
+        "tests/ModernGpuBouguerQuadrature141231.test.js",
+        "tests/ModernGpuF32Precision141222.test.js",
+        "tests/ModernGpuGridABC141217.test.js",
+        "tests/ModernGpuHighPrecisionShooting141232.test.js",
+        "tests/ModernGpuNearGeometry141219.test.js",
+        "tests/ModernGpuNearGround141216.test.js",
+        "tests/ModernGpuPredictorFrame141215.test.js",
+        "tests/ModernGpuRendererVisibility141220.test.js",
+        "tests/ModernGpuStatusQualification141221.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/OpticalBatchContract1411.test.js",
+        "tests/OpticalContinuousCurvature125.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalCurvatureCamera127.test.js",
+        "tests/PhysicalMetricWorld126.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/generate-webgpu-scene-targets-14010.js"
+      ]
+    },
+    "src/jsg.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/jsgx3d.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/CurvatureLegacyDrawing.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/GraphX3DX.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/LegacyCanvasReplayProbe.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacyCanvasReplayProbe.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/LegacyGeometryExtractor.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureRenderingFixes.test.js",
+        "tests/LegacyGeometryExtractor.test.js",
+        "tests/LegacyGeometryFrameVerification.test.js",
+        "tests/LegacyGeometryReference.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/LegacyGeometryFrameVerification.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacyGeometryFrameVerification.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/LegacyReplayProbe.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacyReplayProbe.test.js",
+        "tests/SceneFrame.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/LegacySceneAdapter.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureSeparationAudit.js",
+        "src/legacy/LegacyCanvasReplayProbe.js",
+        "src/legacy/LegacyReplayProbe.js",
+        "src/legacy/LegacySceneAudit.js",
+        "src/scene/SceneFrame.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/LegacyReplayProbe.test.js",
+        "tests/LegacySceneAdapter.test.js",
+        "tests/LegacySceneAudit.test.js",
+        "tests/SceneFrame.test.js",
+        "tests/SceneFrameRenderer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/legacy/LegacySceneAudit.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacySceneAudit.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/CurvaturePhysicalGroundGuides.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/optics/CurvaturePhysicalSceneOptics.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalGroundGuideExtent111.test.js",
+        "tests/PhysicalGroundGuides110.test.js",
+        "tests/PhysicalMetricWorld126.test.js",
+        "tests/SharedSceneCache113.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/CurvaturePhysicalPolygonFills.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCameraFirstObjects141239.js",
+        "src/optics/CurvaturePhysicalSceneOptics.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernGeometryCaptureCache1412372.test.js",
+        "tests/ModernGeometryDifferenceAttribution141237.test.js",
+        "tests/PhysicalPolygonFills114.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/CurvaturePhysicalSceneOptics.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/AdaptiveTowerPrism112.test.js",
+        "tests/AtmosphericSceneReliability109.test.js",
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernGeometryCaptureCache1412372.test.js",
+        "tests/ModernGeometryDifferenceAttribution141237.test.js",
+        "tests/ModernGpuAlgorithmAttribution141235.test.js",
+        "tests/ModernGpuNearGeometry141219.test.js",
+        "tests/ModernGpuRendererVisibility141220.test.js",
+        "tests/ModernGpuStatusQualification141221.test.js",
+        "tests/OpticalColdWarm1403.test.js",
+        "tests/OpticalContinuousCurvature125.test.js",
+        "tests/OpticalFusedProductionGate141249.test.js",
+        "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalShootingReduction121.test.js",
+        "tests/OpticalTraceOptimization141248.test.js",
+        "tests/OpticalWarmStarts123.test.js",
+        "tests/PhysicalAssemblyAndSolverAudit122.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalGroundGuideExtent111.test.js",
+        "tests/PhysicalGroundGuides110.test.js",
+        "tests/PhysicalHeightChange120.test.js",
+        "tests/PhysicalMetricWorld126.test.js",
+        "tests/PhysicalPolygonFills114.test.js",
+        "tests/PhysicalScreenSpaceGuideLod119.test.js",
+        "tests/PhysicalTowerPainterOrder1141.test.js",
+        "tests/SharedSceneCache113.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-adaptive-prism-112.js",
+        "tools/benchmark-continuous-physical-128.js",
+        "tools/benchmark-engineered-shooting-1404.js",
+        "tools/benchmark-fused-multiscene-140-12-49.js",
+        "tools/benchmark-height-change-120.js",
+        "tools/benchmark-optical-warm-start-123.js",
+        "tools/benchmark-scene-assembly-122.js",
+        "tools/benchmark-shared-scene-113.js",
+        "tools/benchmark-shooting-reduction-121.js",
+        "tools/benchmark-trace-140-12-48.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/optics/OpticalConformalPredictor.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureConformalProfile141246.js",
+        "src/diagnostics/CurvatureCpuAdaptiveConformal141244.js",
+        "src/optics/OpticalSharedRayField.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ConformalHybrid141247.test.js",
+        "tests/ConformalProduction141245.test.js",
+        "tests/ConformalProfile141246.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/OpticalProjectionCalibration.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/OpticalProjectionCalibration.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/OpticalRayHorizon.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/OpticalRayHorizon.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/OpticalRayTracer.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern",
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCameraFirstObjects141239.js",
+        "src/diagnostics/CurvatureCameraFirstOracle141238.js",
+        "src/diagnostics/CurvatureGpuGroundContact141226.js",
+        "src/diagnostics/CurvatureWebGPUEventGuard141214.js",
+        "src/diagnostics/CurvatureWebGPUOpticsBenchmark.js",
+        "src/diagnostics/CurvatureWebGPUPhysicalTolerance14123.js",
+        "src/optics/OpticalRayHorizon.js",
+        "src/optics/OpticalTargetProjection.js",
+        "src/optics/OpticalTowerDiagnostics.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraFirstOracle141238.test.js",
+        "tests/CurvatureSurfaceGeometry124.test.js",
+        "tests/ForwardRayBundle.test.js",
+        "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/OpticalAtmosphericProfiles102.test.js",
+        "tests/OpticalContinuousCurvature125.test.js",
+        "tests/OpticalEngineeredExperiment1404.test.js",
+        "tests/OpticalEngineeredQualification1405.test.js",
+        "tests/OpticalFusedProductionGate141249.test.js",
+        "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalGroundEvents101.test.js",
+        "tests/OpticalNumericalQualification100.test.js",
+        "tests/OpticalRayHorizon.test.js",
+        "tests/OpticalRayTracer.test.js",
+        "tests/OpticalShootingReduction121.test.js",
+        "tests/OpticalShortRangeBranch1406.test.js",
+        "tests/OpticalTargetProjection103.test.js",
+        "tests/OpticalTraceOptimization141248.test.js",
+        "tests/PhysicalHeightChange120.test.js",
+        "tests/WebGPUOpticalBenchmark1408.test.js",
+        "tests/WebGPUPhysicalTolerance14123.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/diagnose-short-range-shooting-1406.js"
+      ]
+    },
+    "src/optics/OpticalRenderedVertexAudit.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/OpticalFootingFaces.test.js",
+        "tests/OpticalRenderedVertexAudit.test.js",
+        "tests/OpticalTowerSectionCenter.test.js",
+        "tests/OpticalVacuumCalibration.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/OpticalSharedRayField.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/optics/CurvaturePhysicalSceneOptics.js",
+        "src/renderers/CurvaturePhysicalTowerCanvas.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/AdaptiveTowerPrism112.test.js",
+        "tests/ConformalHybrid141247.test.js",
+        "tests/ConformalProduction141245.test.js",
+        "tests/ConformalProfile141246.test.js",
+        "tests/OpticalContinuousCurvature125.test.js",
+        "tests/OpticalEngineeredExperiment1404.test.js",
+        "tests/OpticalEngineeredQualification1405.test.js",
+        "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalSharedRayField104.test.js",
+        "tests/OpticalSharedRayField105.test.js",
+        "tests/OpticalTowerSilhouette106.test.js",
+        "tests/OpticalTraceOptimization141248.test.js",
+        "tests/OpticalWarmStarts123.test.js",
+        "tests/SharedSceneCache113.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-shared-optical-field.js",
+        "tools/qualify-engineered-shooting-1405.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/optics/OpticalTargetProjection.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern",
+        "webgpuResearch"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureCpuAdaptiveConformal141244.js",
+        "src/diagnostics/CurvatureCpuConformalGlobe141243.js",
+        "src/diagnostics/CurvatureCpuQuadratureFeasibility141242.js",
+        "src/diagnostics/CurvatureOpticalBatchContract1411.js",
+        "src/diagnostics/CurvaturePhysicalSanity.js",
+        "src/diagnostics/CurvatureWebGPUPredictor141213.js",
+        "src/diagnostics/CurvatureWebGPUSceneSpike14010.js",
+        "src/optics/CurvaturePhysicalGroundGuides.js",
+        "src/optics/OpticalSharedRayField.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/AtmosphericSceneReliability109.test.js",
+        "tests/ConformalHybrid141247.test.js",
+        "tests/ConformalProduction141245.test.js",
+        "tests/ConformalProfile141246.test.js",
+        "tests/CpuAdaptiveConformal141244.test.js",
+        "tests/CpuConformalGlobe141243.test.js",
+        "tests/CpuQuadratureFeasibility141242.test.js",
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/OpticalBatchContract1411.test.js",
+        "tests/OpticalContinuousCurvature125.test.js",
+        "tests/OpticalEngineeredExperiment1404.test.js",
+        "tests/OpticalEngineeredQualification1405.test.js",
+        "tests/OpticalFusedProductionGate141249.test.js",
+        "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalShootingBracket1407.test.js",
+        "tests/OpticalShootingReduction121.test.js",
+        "tests/OpticalShortRangeBranch1406.test.js",
+        "tests/OpticalTargetProjection103.test.js",
+        "tests/OpticalTraceOptimization141248.test.js",
+        "tests/OpticalWarmStarts123.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalHeightChange120.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/diagnose-short-range-shooting-1406.js",
+        "tools/qualify-engineered-shooting-1405.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/optics/OpticalTowerDiagnostics.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/AdaptiveOpticalMap.test.js",
+        "tests/AnalyticP4.test.js",
+        "tests/AnalyticP4Flat.test.js",
+        "tests/FastRayPreview.test.js",
+        "tests/ForwardRayBundle.test.js",
+        "tests/OpticalTowerDiagnostics.integration.test.js",
+        "tests/OpticalTowerDiagnostics.test.js",
+        "tests/OpticalTowerOverlay.test.js",
+        "tests/PolynomialApproximation.test.js",
+        "tests/PolynomialGuardRegression.test.js",
+        "tests/PolynomialNearRange.test.js",
+        "tests/PolynomialProfiling.test.js",
+        "tests/PolynomialShortVacuum.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/check-clearance-tolerance.js",
+        "tools/check-effective-radius.js",
+        "tools/check-zero-clearance.js",
+        "tools/compare-raytracers.js"
+      ]
+    },
+    "src/optics/OpticalTowerOverlay.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/OpticalCanvasStrokeAudit.test.js",
+        "tests/OpticalProjectionCalibration.test.js",
+        "tests/OpticalRenderedVertexAudit.test.js",
+        "tests/OpticalTowerDiagnostics.integration.test.js",
+        "tests/OpticalTowerMarkerConsistency.test.js",
+        "tests/OpticalTowerOverlay.test.js",
+        "tests/OpticalVacuumSceneReference.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/optics/OpticalTowerSilhouette.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/optics/CurvaturePhysicalPolygonFills.js",
+        "src/optics/CurvaturePhysicalSceneOptics.js",
+        "src/renderers/CurvaturePhysicalTowerCanvas.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/AtmosphericSceneReliability109.test.js",
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/ModernGeometryCaptureCache1412372.test.js",
+        "tests/ModernGeometryDifferenceAttribution141237.test.js",
+        "tests/ModernGpuAdaptive141218.test.js",
+        "tests/ModernGpuAlgorithmAttribution141235.test.js",
+        "tests/ModernGpuGridABC141217.test.js",
+        "tests/ModernGpuNearGeometry141219.test.js",
+        "tests/ModernGpuNearGround141216.test.js",
+        "tests/ModernGpuPredictorFrame141215.test.js",
+        "tests/ModernGpuRendererVisibility141220.test.js",
+        "tests/ModernGpuStatusQualification141221.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/OpticalTowerSilhouette106.test.js",
+        "tests/PhysicalBoundaryClosure116.test.js",
+        "tests/PhysicalMetricWorld126.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/generate-webgpu-scene-targets-14010.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/optics/OpticsBackendUI.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureCanvasProjection.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js",
+        "src/renderers/CurvatureFilledPreview.js",
+        "src/renderers/CurvatureLegacyOrderPreview.js",
+        "src/renderers/CurvaturePerspectivePreview.js",
+        "src/renderers/CurvaturePhysicalTowerCanvas.js",
+        "src/renderers/CurvatureScreenSpaceGuides.js",
+        "src/renderers/CurvatureStrokePreview.js",
+        "src/renderers/CurvatureStyledCombinedPreview.js",
+        "src/renderers/CurvatureWebGLGeometryRenderer.js",
+        "src/renderers/CurvatureZBufferPreview.js",
+        "src/scene/CurvatureFullSceneDecorations.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/ModernGpuPixelSpaceAudit141233.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureFilledPreview.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/CurvatureFilledPreview.test.js",
+        "tests/CurvatureModeSemantics.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureFrameRenderer.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureCompositionCapture.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraRedraw1373.test.js",
+        "tests/CurvatureFrameRenderer.test.js",
+        "tests/PhysicalPolygonFills114.test.js",
+        "tests/PhysicalTowerPainterOrder1141.test.js",
+        "tests/WebGLGeometry1402.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-camera-redraw-1373.js",
+        "tools/benchmark-ground-screen-lod-119.js",
+        "tools/benchmark-physical-redraw-117.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/renderers/CurvatureInverseOpticsBridge.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/AdaptiveOpticalMap.test.js",
+        "tests/AnalyticP4.test.js",
+        "tests/AnalyticP4Flat.test.js",
+        "tests/AtmosphereLine.test.js",
+        "tests/AtmosphereLineRayCache.test.js",
+        "tests/AtmosphereLineSelection.test.js",
+        "tests/CameraObserverCoincidence.test.js",
+        "tests/CurvatureInverseOpticsBridge.test.js",
+        "tests/FastRayPreview.test.js",
+        "tests/ForwardRayBundle.test.js",
+        "tests/OpticalFootingClip.test.js",
+        "tests/OpticalFootingFaces.test.js",
+        "tests/OpticalFootingPainterOrder.test.js",
+        "tests/OpticalP4Horizon.test.js",
+        "tests/PolynomialApproximation.test.js",
+        "tests/PolynomialGuardRegression.test.js",
+        "tests/PolynomialNearRange.test.js",
+        "tests/PolynomialProfiling.test.js",
+        "tests/PolynomialShortVacuum.test.js",
+        "tests/Shape21Audit.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureLegacyOrderPreview.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureVisibilityVerification.js",
+        "src/renderers/CurvatureFrameRenderer.js",
+        "src/renderers/CurvatureWebGLGeometryRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasParity.test.js",
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/CurvatureIndependentComposition.test.js",
+        "tests/CurvatureLegacyOrderPreview.test.js",
+        "tests/CurvatureRenderingFixes.test.js",
+        "tests/PhysicalCanvasInteraction117.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureNearPlaneReference.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureNearPlaneReference.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvaturePerspectivePreview.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureGeometryDifferenceAttribution141237.js",
+        "src/renderers/CurvaturePhysicalTowerCanvas.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCameraVerification.test.js",
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/CurvatureNearPlaneReference.test.js",
+        "tests/CurvaturePerspectiveClipping.test.js",
+        "tests/CurvaturePerspectiveDiagnostics.test.js",
+        "tests/CurvaturePhysicalTowerCanvas107.test.js",
+        "tests/CurvatureRenderingFixes.test.js",
+        "tests/CurvatureViewportReference.test.js",
+        "tests/ModernAngularGuide.test.js",
+        "tests/ModernGpuPixelSpaceAudit141233.test.js",
+        "tests/PhysicalCurvatureCamera127.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvaturePhysicalTowerCanvas.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvaturePhysicalTowerCanvas107.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-physical-tower-canvas.js"
+      ]
+    },
+    "src/renderers/CurvatureScenePreview.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureScenePreview.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureScreenSpaceGuides.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/PhysicalScreenSpaceGuideLod119.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-ground-screen-lod-119.js"
+      ]
+    },
+    "src/renderers/CurvatureStrokePreview.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureVisibilityVerification.js",
+        "src/renderers/CurvatureLegacyOrderPreview.js",
+        "src/renderers/CurvatureStyledCombinedPreview.js",
+        "src/scene/CurvatureFullSceneDecorations.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/CurvatureRenderingFixes.test.js",
+        "tests/CurvatureStrokePreview.test.js",
+        "tests/PhysicalScreenSpaceGuideLod119.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureStyledCombinedPreview.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasParity.test.js",
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/CurvatureRenderingFixes.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureViewportPolygonClip.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/renderers/CurvatureZBufferPreview.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureRenderingFixes.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureViewportReference.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvatureViewportReference.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureWebGLGeometryRenderer.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/renderers/CurvatureFrameRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/WebGLGeometry1402.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/renderers/CurvatureZBufferPreview.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/diagnostics/CurvatureVisibilityOracle.js",
+        "src/diagnostics/CurvatureVisibilityVerification.js",
+        "src/renderers/CurvatureFrameRenderer.js",
+        "src/renderers/CurvatureStyledCombinedPreview.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCanvasProjection.test.js",
+        "tests/CurvatureEarClip.test.js",
+        "tests/CurvatureModeSemantics.test.js",
+        "tests/CurvatureRenderingFixes.test.js",
+        "tests/CurvatureTopologyStages.test.js",
+        "tests/CurvatureTriangulationAudit.test.js",
+        "tests/CurvatureZBufferPreview.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/scene/CurvatureFullSceneDecorations.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureCompositionCapture.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureFullSceneDecorations.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/scene/CurvatureIndependentComposition.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureCompositionCapture.js",
+        "src/diagnostics/CurvatureCompositionComparison.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/AdaptiveTowerPrism112.test.js",
+        "tests/AtmosphericSceneReliability109.test.js",
+        "tests/CameraFirstObjects141239.test.js",
+        "tests/CurvatureControlledGeometryParity.test.js",
+        "tests/CurvatureFullComposition.test.js",
+        "tests/CurvatureFullLayerParity.test.js",
+        "tests/CurvatureIndependentComposition.test.js",
+        "tests/CurvatureMainCanvasRenderer.test.js",
+        "tests/CurvatureObjectHorizonPartition.test.js",
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/CurvaturePhysicsRegression.test.js",
+        "tests/GpuDsPainterGate141240.test.js",
+        "tests/GpuDsRk4Shooting141241.test.js",
+        "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernGeometryDifferenceAttribution141237.test.js",
+        "tests/ModernGpuAdaptive141218.test.js",
+        "tests/ModernGpuAlgorithmAttribution141235.test.js",
+        "tests/ModernGpuGridABC141217.test.js",
+        "tests/ModernGpuNearGeometry141219.test.js",
+        "tests/ModernGpuNearGround141216.test.js",
+        "tests/ModernGpuPredictorFrame141215.test.js",
+        "tests/ModernGpuRendererVisibility141220.test.js",
+        "tests/ModernGpuStatusQualification141221.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/OpticalContinuousCurvature125.test.js",
+        "tests/OpticalFusedProductionGate141249.test.js",
+        "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalShootingReduction121.test.js",
+        "tests/OpticalTraceOptimization141248.test.js",
+        "tests/OpticalWarmStarts123.test.js",
+        "tests/PhysicalAssemblyAndSolverAudit122.test.js",
+        "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalGroundGuideExtent111.test.js",
+        "tests/PhysicalHeightChange120.test.js",
+        "tests/PhysicalMetricWorld126.test.js",
+        "tests/PhysicalPolygonFills114.test.js",
+        "tests/PhysicalScreenSpaceGuideLod119.test.js",
+        "tests/PhysicalTowerPainterOrder1141.test.js",
+        "tests/SharedSceneCache113.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-adaptive-prism-112.js",
+        "tools/benchmark-continuous-physical-128.js",
+        "tools/benchmark-engineered-shooting-1404.js",
+        "tools/benchmark-fused-multiscene-140-12-49.js",
+        "tools/benchmark-height-change-120.js",
+        "tools/benchmark-optical-warm-start-123.js",
+        "tools/benchmark-scene-assembly-122.js",
+        "tools/benchmark-shared-scene-113.js",
+        "tools/benchmark-shooting-reduction-121.js",
+        "tools/benchmark-trace-140-12-48.js",
+        "tools/generate-webgpu-scene-targets-14010.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/scene/CurvatureRenderFrame.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureCompositionCapture.js",
+        "src/renderers/CurvatureFrameRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraRedraw1373.test.js",
+        "tests/CurvatureFrameRenderer.test.js",
+        "tests/CurvaturePhysicsRegression.test.js",
+        "tests/CurvatureRenderFrame.test.js",
+        "tests/PhysicalPolygonFills114.test.js",
+        "tests/PhysicalScreenSpaceGuideLod119.test.js",
+        "tests/PhysicalTowerPainterOrder1141.test.js",
+        "tests/WebGLGeometry1402.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-camera-redraw-1373.js",
+        "tools/benchmark-ground-screen-lod-119.js",
+        "tools/benchmark-physical-redraw-117.js",
+        "tools/validate-physical-scene-115.js"
+      ]
+    },
+    "src/scene/CurvatureSceneContract.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/diagnostics/CurvatureSeparationAudit.js",
+        "src/geometry/CurvatureGeometryEngine.js",
+        "src/legacy/LegacyGeometryExtractor.js",
+        "src/optics/CurvaturePhysicalSceneOptics.js",
+        "src/renderers/CurvatureScreenSpaceGuides.js",
+        "src/scene/CurvatureIndependentComposition.js",
+        "src/scene/CurvatureRenderFrame.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraRedraw1373.test.js",
+        "tests/CurvatureFrameRenderer.test.js",
+        "tests/CurvatureRenderFrame.test.js",
+        "tests/CurvatureSceneContract.test.js",
+        "tests/CurvatureSeparationAudit.test.js",
+        "tests/PhysicalAssemblyAndSolverAudit122.test.js",
+        "tests/PhysicalGroundGuides110.test.js",
+        "tests/PhysicalPolygonFills114.test.js",
+        "tests/PhysicalScreenSpaceGuideLod119.test.js",
+        "tests/WebGLGeometry1402.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/benchmark-camera-redraw-1373.js",
+        "tools/benchmark-ground-screen-lod-119.js",
+        "tools/benchmark-physical-redraw-117.js"
+      ]
+    },
+    "src/scene/SceneFrame.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/legacy/LegacyCanvasReplayProbe.js",
+        "src/legacy/LegacyReplayProbe.js",
+        "src/scene/SceneFrameRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureRenderFrame.test.js",
+        "tests/SceneFrame.test.js",
+        "tests/SceneFrameRenderer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/scene/SceneFrameRenderer.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [
+        "src/legacy/LegacyCanvasReplayProbe.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/SceneFrameRenderer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/tabs.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/ControlPanelX.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/LengthCalculator.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/ModelAnimationX.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsLineAtmosphereHandlers.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsOverlayControls.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsSceneComparison.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTestPresets.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTowerAtmosphereHandlers.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTowerAuditHandlers.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTowerFraming.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsVacuumToggle.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernApp.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernAtmosphericPresentation.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAtmosphericPresentation1381.test.js",
+        "tests/ModernAtmosphericShimmer1382.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernAtmosphericShimmer.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernAtmosphericPresentation13822.test.js",
+        "tests/ModernAtmosphericShimmer1382.test.js",
+        "tests/ModernPerformanceDiagnostics1401.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCameraDragPreview.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraCursor13721.test.js",
+        "tests/ModernCameraCursor13722.test.js",
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraDragPreview1372.test.js",
+        "tests/ModernCameraPerspectiveWarp1374.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCameraInteraction.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraInteraction137.test.js",
+        "tests/ModernCameraPerspectiveWarp1374.test.js",
+        "tests/ModernIndependentCompare.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCameraPerspectiveWarp.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraPerspectiveWarp1374.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCompareGraph.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCompareModel.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/ModernAngularGuide.test.js",
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernExperimentState.test.js",
+        "tests/ModernGpuAdaptive141218.test.js",
+        "tests/ModernGpuAlgorithmAttribution141235.test.js",
+        "tests/ModernGpuGridABC141217.test.js",
+        "tests/ModernGpuNearGeometry141219.test.js",
+        "tests/ModernGpuNearGround141216.test.js",
+        "tests/ModernGpuPredictorFrame141215.test.js",
+        "tests/ModernGpuRendererVisibility141220.test.js",
+        "tests/ModernGpuStatusQualification141221.test.js",
+        "tests/ModernIndependentCompare.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/ModernSharedCompareControls.test.js",
+        "tests/OpticalRayHorizon.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCompareState.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAngularGuide.test.js",
+        "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernExperimentLibrary.test.js",
+        "tests/ModernExperimentState.test.js",
+        "tests/ModernIndependentCompare.test.js",
+        "tests/ModernSharedCompareControls.test.js",
+        "tests/OpticalRayHorizon.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernExperimentLibrary.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernExperimentLibrary.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernExperimentState.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernExperimentLibrary.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/LegacyModernBoundary.test.js",
+        "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/ModernExperimentLibrary.test.js",
+        "tests/ModernExperimentState.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/audit-legacy-modern-boundary.js"
+      ]
+    },
+    "src/ui/modern/ModernGpuCapabilities.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernGpuCapabilities1400.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernPerformanceReport.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernIndependentCompare.test.js",
+        "tests/ModernPerformanceDiagnostics1401.test.js",
+        "tests/OpticalColdWarm1403.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernRenderProfiler.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernIndependentCompare.test.js",
+        "tests/ModernPerformanceDiagnostics1401.test.js",
+        "tests/ModernRenderProfiler137.test.js",
+        "tests/OpticalColdWarm1403.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernRoute.js": {
+      "directHtmlLoads": [
+        "legacy",
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/LegacyIsolationAudit.test.js",
+        "tests/LegacyMigrationPlan.test.js",
+        "tests/LegacyModernBoundary.test.js",
+        "tests/ModernUiBootstrap.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernSceneState.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernAtmosphericPresentation13822.test.js",
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernSceneControls.test.js",
+        "tests/ModernSharedCompareControls.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ComputedValuesPanel.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/LengthCalculatorPanel.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ObjectOptions0.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ObjectOptions1.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ObjectSliders0.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ObjectSliders1.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ViewOptions.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/panels/ViewSliders.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/x.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/xtc.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    }
+  }
+}
