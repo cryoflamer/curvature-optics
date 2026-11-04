@@ -710,39 +710,27 @@
   // WebGPU path supplies angular point samples, not a painter or silhouette.
   function probeUi(id){return typeof document.querySelector==='function'?document.querySelector('#'+id):null;}
   function probeStatus(message){var node=probeUi('ModernCpuResearchStatus');if(node)node.textContent=message;}
-  // Export only completed numerical audits, never ordinary rendered frames.
-  function downloadNumericAudit(report,failed){
-    if(!report||!root.Blob||!root.URL||!root.URL.createObjectURL)return false;
-    var nameByVersion={'140.12.35':'curvature-compare-140.12.35-algorithm-attribution.json','140.12.34':'curvature-compare-140.12.34-full-frame-pixel-parity.json','140.12.33':'curvature-compare-140.12.33-pixel-space-audit.json','140.12.32':'curvature-compare-140.12.32-gpu-ds-shooting.json','140.12.31':'curvature-compare-140.12.31-bouguer-quadrature.json','140.12.30':'curvature-compare-140.12.30-bouguer-precision.json',
-      '140.12.29':'curvature-compare-140.12.29-gpu-precision-geometry.json','140.12.28':'gpu-arithmetic',
-      '140.12.27':'bouguer-invariant','140.12.26':'gpu-ground-contact',
-      '140.12.25':'gpu-precision-limit','140.12.24':'gpu-numerical-floor',
-      '140.12.23':'gpu-root-convergence','140.12.22':'gpu-f32-precision',
-      '140.12.21':'gpu-status-qualification'};
-    var version=String(report.version||'unknown');
-    var filename=nameByVersion[version]||('curvature-compare-'+version+'-diagnostic.json');
-    var url=root.URL.createObjectURL(new root.Blob([JSON.stringify(report,null,2)],
+  // Export failure evidence from retained CPU diagnostics only. Retired WebGPU
+  // success exporters and their version-specific filenames are not UI routes.
+  function downloadNumericAuditError(failure){
+    if(!failure||!root.Blob||!root.URL||!root.URL.createObjectURL)return false;
+    var version=String(failure.version||'unknown');
+    var filename='curvature-compare-'+version+'-diagnostic-error.json';
+    var url=root.URL.createObjectURL(new root.Blob([JSON.stringify(failure,null,2)],
       {type:'application/json'}));
-    var link=document.createElement('a');link.href=url;
-    link.download=failed?filename.replace(/\.json$/,'-error.json'):filename;
+    var link=document.createElement('a');link.href=url;link.download=filename;
     try{link.click();return true;}catch(error){return false;}finally{
       if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
       else root.URL.revokeObjectURL(url);
     }
-  }
-  function numericAuditComplete(report){
-    state.probeExportLast=report;
-    if(!downloadNumericAudit(report,false))
-      probeStatus('Automatic JSON download failed; use Export JSON to retry.');
   }
   function numericAuditFailed(version,stage,error,details){
     var failure={version:version,kind:'numerical-audit-error',ok:false,stage:stage,
       message:String(error&&error.message||error),
       stack:error&&error.stack?String(error.stack):null,timestamp:new Date().toISOString()};
     if(details)failure.details=details;
-    state.probeExportLast=failure;
-    if(!downloadNumericAudit(failure,true))
-      probeStatus('Diagnostic JSON download failed; use Export JSON to retry.');
+    if(!downloadNumericAuditError(failure))
+      probeStatus('Diagnostic JSON download failed; check browser download permissions.');
   }
 
   function bindCpuResearch(){
@@ -1647,7 +1635,6 @@
       var blob=zipWriter.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download='curvature-compare-140.12.46-conformal-production-profile.zip';
       try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
-      state.probeFrameLast=report;state.probeExportLast=report;
       var view=probeUi('ModernCpuResearchMetrics');
       if(view)view.textContent='Conformal hot frame · baseline '+summary.baseline.medianTotalMs.toFixed(1)+
         ' / old '+summary.reference.medianTotalMs.toFixed(1)+' / scalar '+
@@ -1817,7 +1804,6 @@
       var url=root.URL.createObjectURL(archive),a=document.createElement('a');
       a.href=url;a.download='curvature-compare-140.12.47-hybrid-production-shooting.zip';
       try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
-      state.probeFrameLast=report;state.probeExportLast=report;
       var view=probeUi('ModernCpuResearchMetrics');
       if(view)view.textContent='Hybrid hot frames · baseline '+summary.baseline.medianTotalMs.toFixed(1)+
         ' / hybrid '+summary.hybrid.medianTotalMs.toFixed(1)+
@@ -1984,7 +1970,6 @@
       phase='ZIP export';var blob=zip.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download='curvature-compare-140.12.49-fused-production-gate.zip';
       try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
-      state.probeFrameLast=report;state.probeExportLast=report;
       var view=probeUi('ModernCpuResearchMetrics');
       if(view)view.textContent='Fused standard RK4 gate · '+outcomes.length+' scenes · '+
         (allParity?'strict pixel+structure PASS':'parity FAILED')+' · ZIP exported';
@@ -2129,7 +2114,6 @@
       var blob=zip.build(files),url=root.URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download='curvature-compare-140.12.48-trace-production-profile.zip';
       try{a.click();}finally{root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);}
-      state.probeFrameLast=report;state.probeExportLast=report;
       var view=probeUi('ModernCpuResearchMetrics');
       if(view)view.textContent='Trace RK4 hot frames · baseline '+summary.baseline.medianTotalMs.toFixed(1)+
         ' / fused '+summary.fused.medianTotalMs.toFixed(1)+
@@ -2249,7 +2233,6 @@
           'Both timings are single cold frames, not statistical speedup claims.\n'+
           'Pixel-difference.png: red marks channel differences >8/255.\n'}],
         'curvature-compare-140.12.45-conformal-production-frame.zip');
-      state.probeFrameLast=report;state.probeExportLast=report;
       var metric=probeUi('ModernCpuResearchMetrics');
       if(metric)metric.textContent='Conformal cold frames · baseline '+base.timings.totalMs.toFixed(1)+
         ' / experimental '+variant.timings.totalMs.toFixed(1)+' ms · strict pixel changes '+
@@ -2376,7 +2359,6 @@
         {name:'performance.svg',data:chart(main)},
         {name:'README.txt',data:guide.join('\n')+'\n'}],
         'curvature-compare-140.12.44-cpu-f64-adaptive-conformal.zip');
-      state.probeFrameLast=report;state.probeExportLast=report;
       var metric=probeUi('ModernCpuResearchMetrics');
       if(metric)metric.textContent='Globe f64 · predictor '+main.mediansMs.baselineTotalMs.toFixed(2)+
         ' / fixed '+main.mediansMs.fixed2TotalMs.toFixed(2)+
@@ -2515,7 +2497,6 @@
         {name:'performance.svg',data:chart(main)},
         {name:'README.txt',data:guide.join('\n')+'\n'}],
         'curvature-compare-140.12.43-cpu-f64-conformal-globe.zip');
-      state.probeFrameLast=result;state.probeExportLast=result;
       var metric=probeUi('ModernCpuResearchMetrics');
       if(metric)metric.textContent='CPU f64 Globe · existing predictor '+main.mediansMs.predictorOnlyMs.toFixed(2)+
         ' ms / inverse exponential '+main.mediansMs.analyticTotalMs.toFixed(2)+
@@ -2660,7 +2641,6 @@
         {name:'performance.svg',data:svgBars()},
         {name:'README.txt',data:summary.join('\n')+'\n'}],
         'curvature-compare-140.12.42-cpu-f64-quadrature-feasibility.zip');
-      state.probeFrameLast=result;state.probeExportLast=result;
       var metric=probeUi('ModernCpuResearchMetrics');
       if(metric)metric.textContent='CPU f64 quadrature · Flat '+flat.summary.quadratureCandidates+'/48 · '+
         flat.mediansMs.hybridTotalMs.toFixed(1)+' ms hybrid / '+flat.mediansMs.rk4Ms.toFixed(1)+' ms RK4; Globe '+
@@ -2739,7 +2719,6 @@
         if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
         else root.URL.revokeObjectURL(url);
       }
-      state.probeExportLast=report;
       var metrics=probeUi('ModernCpuResearchMetrics');
       if(metrics)metrics.textContent='Camera-first CPU ground-only: vacuum analytic disagreements '+
         report.vacuum.analyticDisagreements+'/4096 · 41-ray standard convergence status changes '+
@@ -2847,7 +2826,6 @@
         if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
         else root.URL.revokeObjectURL(url);
       }
-      state.probeExportLast=report;
       var metrics=probeUi('ModernCpuResearchMetrics');
       if(metrics)metrics.textContent='Camera-first 64×64 f64: '+report.summary.counts.object+
         ' object / '+report.summary.counts.ground+' Earth / '+report.summary.counts.range+

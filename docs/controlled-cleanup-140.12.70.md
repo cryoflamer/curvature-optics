@@ -47,3 +47,10 @@ Browser acceptance: open `CurvatureModern.html`, expand **Compare → CPU optics
 research diagnostics**, verify button wrapping and run a CPU diagnostic; then
 verify the separate **Check GPU** capability panel and WebGL2 geometry option
 are still accessible. `CurvatureApp.html` animations should remain unchanged.
+
+## Follow-up #140.12.71
+
+The next bounded cleanup is documented in
+[unused Modern diagnostic JavaScript cleanup](controlled-cleanup-140.12.71.md).
+It removes a dead Modern GPU success-export helper, historical live filename
+lookup, and private write-only state while retaining CPU error JSON exports.

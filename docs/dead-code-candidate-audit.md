@@ -77,3 +77,11 @@ selectors from Modern's retired visual WebGPU probe, and renames the still-live
 CPU research action wrapper in HTML/CSS. No source-module candidate from this
 38-file audit was deleted or approved for deletion. The live WebGPU research
 page, WebGL2 geometry renderer and CPU RK4 baseline are untouched.
+
+## Subsequent Modern JavaScript cleanup (#140.12.71)
+
+The [bounded dead-handler cleanup](controlled-cleanup-140.12.71.md) removed a
+single unreachable Modern GPU success-export helper, a deprecated filename
+lookup and writes to two private, unread state properties. No module from the
+38-file candidate inventory was deleted; standalone WebGPU research, Legacy
+animation and CPU physical rendering remain retained.

@@ -33,3 +33,13 @@ node tools/check-legacy-preservation.js --check
 A previously attempted whole-suite execution in #140.12.68 did not complete successfully and must not be described as passing. This patch fixes only the four specifically reproduced failures. Full browser/manual Opera animation, Modern Scene/Compare and shader-compilation smoke tests remain separate acceptance gates for code deletion.
 
 **Deletion approved:** none. **New HTML files:** none. **Source/runtime modifications:** none.
+
+## Follow-up #140.12.71
+
+The purpose of this test-only repair was to replace invented GPU callbacks with
+real implementation checks. A subsequent
+[bounded JavaScript cleanup](controlled-cleanup-140.12.71.md) established that
+`numericAuditComplete()` had no runtime callers and removed it, along with the
+obsolete filename map and write-only state. The export test now exercises only
+the retained CPU **failure** handler; the success-export assertions above
+describe #140.12.69's historical test state, not the current Modern runtime.
