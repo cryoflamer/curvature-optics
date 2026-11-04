@@ -26,14 +26,11 @@ test('140.12.71: dead-handler guard detects accidental reintroductions', () => {
   }
 });
 
-test('140.12.71: CPU diagnostics, GPU capability check and WebGL2 remain wired', () => {
-  assert.match(app, /function numericAuditFailed\(/);
-  assert.match(app, /function downloadNumericAuditError\(/);
-  assert.match(app, /\['ModernCameraFirstOracleRun',runCameraFirstOracle141238\]/);
-  assert.match(app, /\['ModernCpuQuadratureRun',runCpuQuadratureBenchmark141242\]/);
-  assert.match(app, /\['ModernFusedProductionGate141249Run',runFusedProductionGate141249\]/);
-  assert.match(app, /function bindGpuDiagnostics\(/);
-  assert.match(app, /function bindGeometryBackend\(/);
-  assert.match(html, /id="ModernGpuCheck"/);
-  assert.match(html, /src="src\/renderers\/CurvatureWebGLGeometryRenderer\.js\?v=/);
+test('140.12.74: diagnostic handlers are archived; GPU capability and WebGL2 remain live',()=>{
+  assert.doesNotMatch(app,/function numericAuditFailed\(|function downloadNumericAuditError\(/);
+  assert.doesNotMatch(app,/function bindCpuResearch\(/);
+  assert.match(app,/function bindGpuDiagnostics\(/);
+  assert.match(app,/function bindGeometryBackend\(/);
+  assert.match(html,/id="ModernGpuCheck"/);
+  assert.match(html,/src="src\/renderers\/CurvatureWebGLGeometryRenderer\.js\?v=/);
 });

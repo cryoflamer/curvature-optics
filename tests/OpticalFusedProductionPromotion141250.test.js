@@ -117,13 +117,12 @@ test('140.12.50: four complete physical compositions match legacy after producti
   }
 });
 
-test('140.12.50: Modern browser reference frames explicitly select legacy instead of silent fused self-comparison',()=>{
+test('140.12.74: Modern runs the promoted default CPU RK4 without experimental frame controls',()=>{
   const ui=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(ui,/args\.settings\.traceOptimization=mode==='baseline'\?'legacy':'fused-gradient'/);
-  assert.match(ui,/settingsByMode=\{baseline:\{traceOptimization:'legacy'\}/);
-  assert.match(ui,/baselineTraceOptimization:'legacy',fusedTraceOptimization:'fused-gradient'/);
-  assert.match(ui,/traceOptimizationApplied:stats\.traceOptimizationApplied/);
-  assert.match(ui,/strictParityAcrossScenes:allParity/);
+  const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
+  assert.doesNotMatch(ui,/conformalCompareB|conformal-experimental|runFusedProductionGate141249/);
+  assert.doesNotMatch(html,/ModernCpuResearch|ModernConformalProductionToggle/);
+  assert.match(ui,/CurvatureMainCanvasRenderer\.renderPhysical\(g,m,options\)/);
 });
 
 test('140.12.50: physical-scene optical cache separates default fused and explicit legacy settings',()=>{

@@ -8,20 +8,13 @@ const gate = require('../tools/check-refactor-closure');
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'src/ui/modern/ModernApp.js'), 'utf8');
 
-test('140.12.73: removed timing local was write-only in the conformal frame audit', () => {
-  const start = app.indexOf('async function runConformalFrameParity141245(){');
-  const end = app.indexOf('async function runCpuAdaptiveConformalBenchmark141244(){', start);
-  assert.ok(start >= 0 && end > start, 'the diagnostic implementation must remain present');
-  const body = app.slice(start, end);
-  assert.doesNotMatch(body, /\bstarted\b/);
-  assert.match(body, /phase='cold baseline physical frame'/);
-  assert.match(body, /phase='cold experimental physical frame'/);
-  assert.match(body, /compareAdapter\.compareFramePixels\(imageA,imageB\)/);
-  assert.match(body, /'curvature-compare-140\.12\.45-conformal-production-frame\.zip'/);
+test('140.12.74: frozen research is absent without dropping production Compare', () => {
+  assert.doesNotMatch(app, /runConformalFrameParity141245|bindCpuResearch|probeGeneration/);
+  assert.match(app, /CurvatureMainCanvasRenderer\.renderPhysical\(g,m,options\)/);
 });
 
 test('140.12.73: acceptance checks use existing read-only entrypoints', () => {
-  assert.equal(gate.checks.length, 7);
+  assert.equal(gate.checks.length, 6);
   for (const [, exec, args] of gate.checks) {
     assert.ok(exec === process.execPath || exec === 'python3');
     assert.ok(args.length > 0);

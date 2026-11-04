@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Read-only acceptance gate for the #140.12.56–73 cleanup series.
+ * Read-only acceptance gate after #140.12.74 research archival.
  * Browser behavior and actual GPU compilation are deliberately NOT certified here.
  * Run from any working directory: node tools/check-refactor-closure.js
  * Use --list to inspect the exact checks without running them.
@@ -21,6 +21,7 @@ const tests = [
   'tests/ModernUiBootstrap.test.js',
   'tests/ModernPhysicalCompare.test.js',
   'tests/ModernWebGPURetirement141253.test.js',
+  'tests/ResearchArchive141274.test.js',
   'tests/CurvaturePhysicsRegression.test.js',
   'tests/OpticalFusedProductionGate141249.test.js',
   'tests/WebGLGeometry1402.test.js',
@@ -29,7 +30,6 @@ const tests = [
 const checks = [
   ['Legacy preservation', node, ['tools/check-legacy-preservation.js', '--check']],
   ['Legacy/Modern isolation', node, ['tools/audit-legacy-isolation.js', '--check']],
-  ['Dead-code candidate classification', node, ['tools/audit-dead-code-candidates.js', '--check']],
   ['Legacy bundle provenance', node, ['tools/audit-legacy-bundle-provenance.js', '--check']],
   ['Legacy/Modern compatibility boundaries', node, ['tools/audit-legacy-modern-boundary.js', '--check']],
   ['Opera PNG integrity', 'python3', ['tools/validate-legacy-visual-reference.py']],

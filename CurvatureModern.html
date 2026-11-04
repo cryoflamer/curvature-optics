@@ -55,20 +55,7 @@
 <script src="src/ui/modern/ModernGpuCapabilities.js?v=140.0"></script>
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
-<!-- CPU research helpers remain available. Standalone WebGPU shooting is archived
-     in git and is no longer loaded by Modern Compare. -->
-<script src="src/diagnostics/CurvatureGpuPixelSpaceAudit141233.js?v=140.12.33"></script>
-<script src="src/diagnostics/CurvatureGpuFullFrameParity141234.js?v=140.12.34"></script>
-<script src="src/diagnostics/GeometryDiagnosticsZip.js"></script>
-<script src="src/diagnostics/CurvatureAttributionVisualZip141236.js?v=140.12.36"></script>
-<script src="src/diagnostics/CurvatureCameraFirstOracle141238.js?v=140.12.38"></script>
-<script src="src/diagnostics/CurvatureCameraFirstObjects141239.js?v=140.12.39"></script>
-<script src="src/diagnostics/CurvatureGpuDsPainterGate141240.js?v=140.12.40"></script>
-<script src="src/diagnostics/CurvatureCpuQuadratureFeasibility141242.js?v=140.12.42"></script>
-<script src="src/diagnostics/CurvatureCpuConformalGlobe141243.js?v=140.12.43"></script>
-<script src="src/diagnostics/CurvatureCpuAdaptiveConformal141244.js?v=140.12.44"></script>
-<script src="src/diagnostics/CurvatureConformalProfile141246.js?v=140.12.46"></script>
-<script src="src/ui/modern/ModernCompareModel.js?v=140.12.30"></script>
+<script src="src/ui/modern/ModernCompareModel.js?v=140.12.74"></script>
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
@@ -303,25 +290,6 @@
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>
         </div>
-        <details id="ModernCpuResearch" class="modern-cpu-research" aria-label="CPU optics research diagnostics">
-          <summary><strong>CPU optics research diagnostics (optional)</strong></summary>
-          <p class="modern-compare-note">These are CPU-only regression and numerical research tools. They do not replace the normal A/B rendering backend. For retired WebGPU experiments and their evidence, see <code>docs/experiments/gpu.md</code>.</p>
-          <div class="modern-cpu-research-actions">
-            <button id="ModernCameraFirstOracleRun" type="button">Camera-first CPU f64 ground contact · ZIP</button>
-            <button id="ModernCameraFirstObjectsRun" type="button">Camera-first CPU f64 object intersections · ZIP</button>
-            <button id="ModernCpuQuadratureRun" type="button">CPU f64 quadrature benchmark · ZIP</button>
-            <button id="ModernCpuConformalRun" type="button">CPU f64 conformal benchmark · ZIP</button>
-            <button id="ModernCpuAdaptiveConformalRun" type="button">CPU f64 adaptive conformal benchmark · ZIP</button>
-            <label><input id="ModernConformalProductionToggle" type="checkbox"> Experimental CPU conformal predictor on Compare B (off by default)</label>
-            <button id="ModernConformalFrameParityRun" type="button">CPU conformal frame parity · ZIP</button>
-            <button id="ModernConformalProfile141246Run" type="button">CPU conformal RK4 profile · ZIP</button>
-            <button id="ModernHybridShooting141247Run" type="button">CPU hybrid shooting audit · ZIP</button>
-            <button id="ModernTraceOptimize141248Run" type="button">CPU RK4 trace optimization audit · ZIP</button>
-            <button id="ModernFusedProductionGate141249Run" type="button">CPU fused-gradient production gate · ZIP</button>
-          </div>
-          <p id="ModernCpuResearchStatus" role="status" aria-live="polite">Choose a CPU diagnostic to run on the current Compare A/B scene.</p>
-          <p id="ModernCpuResearchMetrics" class="modern-compare-note" aria-live="polite"></p>
-        </details>
         <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. The orange horizon marker, when resolved, is derived from forward-traced first-ground-contact rays and is not a guarantee of unique global visibility.</p>
       </section>
       <div class="modern-compare-message" id="ModernCompareMessage" hidden>

@@ -32,17 +32,10 @@ test('140.12.70: obsolete-style guard rejects an accidental reintroduction', () 
     ['ModernGpuProbeStatus in fixture']);
 });
 
-test('140.12.70: retained CPU research actions keep a matching HTML class and button styles', () => {
-  assert.match(html, /<details id="ModernCpuResearch"[^>]*>/);
-  assert.equal((html.match(/class="modern-cpu-research-actions"/g) || []).length, 1);
-  assert.match(css, /\.modern-cpu-research-actions\{display:flex;/);
-  assert.match(css, /\.modern-cpu-research-actions label\{font-size:12px;/);
-  assert.match(css, /\.modern-cpu-research-actions button\{padding:6px 9px;/);
-  for (const id of ['ModernCameraFirstOracleRun','ModernCpuQuadratureRun',
-    'ModernCpuConformalRun','ModernTraceOptimize141248Run','ModernFusedProductionGate141249Run']) {
-    assert.match(html, new RegExp(`\\bid="${id}"`));
-  }
-  assert.match(app, /function bindCpuResearch\(\)/);
+test('140.12.74: archived CPU research panel and CSS hooks no longer ship',()=>{
+  assert.doesNotMatch(html,/ModernCpuResearch|ModernCpuQuadratureRun|modern-cpu-research/);
+  assert.doesNotMatch(css,/modern-cpu-research/);
+  assert.doesNotMatch(app,/bindCpuResearch|runFusedProductionGate141249/);
 });
 
 test('140.12.70: live GPU capability probe and WebGL2 renderer remain present', () => {
@@ -54,7 +47,6 @@ test('140.12.70: live GPU capability probe and WebGL2 renderer remain present', 
   assert.match(app, /document\.getElementById\('ModernGpuCheck'\)/);
 });
 
-test('140.12.70: standalone WebGPU research entrypoint is still retained', () => {
-  const research = read('tools/webgpu-optics.html');
-  assert.match(research, /CurvatureWebGPUBatchShooting1412\.js/);
+test('140.12.74: archived standalone WebGPU page is absent',()=>{
+  assert.equal(fs.existsSync(path.join(root,'tools/webgpu-optics.html')),false);
 });

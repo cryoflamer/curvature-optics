@@ -18,7 +18,7 @@ These 16 files cannot be considered unused merely because they are in an
 auxiliary directory or expose APIs called only from the page. In particular,
 removing or deduplicating `ModernCompareGraph.js` would break the independent
 A/B Canvas contract. The existing static [isolation inventory](legacy-isolation-audit.md)
-and [candidate audit](dead-code-candidate-audit.md) remain the larger sources
+and [candidate audit](research-archive.md) remain the larger sources
 of truth. This review does **not** authorize deleting a complete module.
 
 The `ModernApp.js` closure initialized `state.graph` to `null`, then set

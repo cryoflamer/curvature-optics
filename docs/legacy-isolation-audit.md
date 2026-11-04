@@ -1,5 +1,10 @@
 # Legacy / Modern isolation boundary (#140.12.64)
 
+**Current status (#140.12.74):** this is a historical three-entrypoint audit.
+The WebGPU research entrypoint and experimental modules were archived.
+The current two-entrypoint inventory is `tests/fixtures/legacy-isolation-boundary.json`;
+see [research archival](research-archive.md).
+
 **Decision: keep both applications. No deletion, migration of animations, route change, or physical-solver change is approved by this audit.** Legacy is a separately supported, fast interactive/animated educational application; Modern is a separate, more computationally expensive physical-optics and comparison instrument. We should preserve their distinct purposes rather than force pixel or animation parity.
 
 This supersedes the *proposed wholesale Legacy retirement* in [legacy-ui-assessment.md](legacy-ui-assessment.md) and [legacy-migration-plan.md](legacy-migration-plan.md). Those older inventories and browser evidence remain useful historical records, **not a mandate to remove Legacy**. The 80-state [schema compatibility audit](legacy-modern-compatibility.md) establishes neither a working converter nor a need to make one.
@@ -16,7 +21,7 @@ node tools/audit-legacy-isolation.js --json > tests/fixtures/legacy-isolation-bo
 node --test tests/LegacyIsolationAudit.test.js
 ```
 
-The audited sources are the active literal `<script src>` tags in [`CurvatureApp.html`](../CurvatureApp.html), [`CurvatureModern.html`](../CurvatureModern.html), and the **single canonical** research shell [`tools/webgpu-optics.html`](../tools/webgpu-optics.html); plus relative **literal** `require('...')` references inside `.js` files in `src/`, `tests/`, and `tools/`. HTML comment blocks are excluded; existing inline script blocks are counted and SHA-256 fingerprinted (**one Legacy reference-export installer**, **none in Modern**, **one in the WebGPU research harness**) but **not** dependency-traced. Browser cache-busting query parameters and `&amp;` are normalized for file identity, but script order and duplicate loads are retained. Every active path must resolve to a local repository file, or the audit fails. The [JSON boundary inventory](../tests/fixtures/legacy-isolation-boundary.json) records the per-file direct entrypoints, CommonJS callers by source/test/tool category, and explicitly non-loaded modules; `--check` rejects drift.
+The audited sources are the active literal `<script src>` tags in [`CurvatureApp.html`](../CurvatureApp.html), [`CurvatureModern.html`](../CurvatureModern.html), and the **single canonical** research shell [`tools/webgpu-optics.html`](research-archive.md); plus relative **literal** `require('...')` references inside `.js` files in `src/`, `tests/`, and `tools/`. HTML comment blocks are excluded; existing inline script blocks are counted and SHA-256 fingerprinted (**one Legacy reference-export installer**, **none in Modern**, **one in the WebGPU research harness**) but **not** dependency-traced. Browser cache-busting query parameters and `&amp;` are normalized for file identity, but script order and duplicate loads are retained. Every active path must resolve to a local repository file, or the audit fails. The [JSON boundary inventory](../tests/fixtures/legacy-isolation-boundary.json) records the per-file direct entrypoints, CommonJS callers by source/test/tool category, and explicitly non-loaded modules; `--check` rejects drift.
 
 Observed after #140.12.63:
 
@@ -58,7 +63,7 @@ The Legacy animation and Modern high-quality CPU scene are deliberately distinct
 ## Next bounded changes
 
 1. **#140.12.65 — Legacy preservation contract (completed).** The [reviewed Legacy contract](legacy-preservation-contract.md) adds a read-only source/HTML fixture gate and Node VM behavior tests for all nine demos, animation controls, `?state=` / `?demo=` routes and archived visuals. The separate Opera/Chromium browser acceptance checklist remains **manual and not yet executed**; no relocation or deletion is authorized by these tests.
-2. **#140.12.66 — Dead-code candidate audit (completed).** The [source-backed candidate report](dead-code-candidate-audit.md) inventories 38 modules across commented Legacy build sources, Node-linked diagnostics and the live WebGPU research harness. All are review candidates; **zero deletions approved**. It also documents the historical `src/make.bat`/`Slider.js` casing and output-path mismatch.
+2. **#140.12.66 — Dead-code candidate audit (completed).** The [source-backed candidate report](research-archive.md) inventories 38 modules across commented Legacy build sources, Node-linked diagnostics and the live WebGPU research harness. All are review candidates; **zero deletions approved**. It also documents the historical `src/make.bat`/`Slider.js` casing and output-path mismatch.
 3. **#140.12.67+ — Controlled cleanup.** Only after explicit approval and replacement tests, remove or relocate demonstrably redundant experimental code in small independent commits, with both Legacy and Modern browser/regression checks. Preserve the `optics-baseline-2026-11` tag and archived reference evidence.
 
 **Gate status: isolation documented; preservation contract automated with a remaining manual browser gate; no deletion approved.** Legacy is to be **maintained as an intentional separate mode**, not slowly erased through a supposed Modern parity migration.

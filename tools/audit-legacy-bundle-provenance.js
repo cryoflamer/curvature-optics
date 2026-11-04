@@ -9,7 +9,25 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const vm = require('node:vm');
 const {extractScriptSources, resolveLocalScript} = require('./audit-legacy-isolation');
-const {commentedScriptSources} = require('./audit-dead-code-candidates');
+// The obsolete dead-code audit was archived with the research experiments.
+// Bundle provenance still needs the commented original source tags in Legacy.
+function commentedScriptSources(root, htmlFiles) {
+  const result = new Map();
+  for (const file of htmlFiles) {
+    const content = fs.readFileSync(path.join(root, file), 'latin1');
+    for (const comment of content.matchAll(/<!--[\s\S]*?-->/g)) {
+      for (const raw of extractScriptSources(comment[0].slice(4, -3))) {
+        const src = raw.split(/[?#]/, 1)[0];
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), src));
+        if (!resolved.startsWith('src/') || !resolved.endsWith('.js')) continue;
+        if (!result.has(resolved)) result.set(resolved, []);
+        result.get(resolved).push(file);
+      }
+    }
+  }
+  return new Map([...result.entries()].map(([file, callers]) =>
+    [file, [...new Set(callers)].sort()]));
+}
 
 const ROOT = path.resolve(__dirname, '..');
 const FIXTURE = 'tests/fixtures/legacy-bundle-provenance.json';

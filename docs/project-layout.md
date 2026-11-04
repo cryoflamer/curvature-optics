@@ -46,3 +46,12 @@ lock and a separate offline verification/comparison tool,
 `tools/validate-legacy-visual-reference.py`. See
 [`legacy-visual-validation.md`](legacy-visual-validation.md). Their existence does
 not establish Modern parity or justify deleting Legacy.
+
+## Research archive (#140.12.74)
+
+The WebGPU optical experiment page and the optional Modern CPU optics research
+panel have been archived. Only the two active HTML applications (Legacy and
+Modern) are considered by the current isolation audit. The production fused
+CPU RK4 solver, Scene/Compare, WebGL2, saved Experiment Library and Legacy
+references remain. See [research archival](research-archive.md) for the tag and
+recovery procedure.

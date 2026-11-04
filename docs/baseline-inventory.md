@@ -1,5 +1,9 @@
 # #140.12.51 — Baseline and retirement inventory
 
+**Historical snapshot:** the research-only WebGPU and CPU experiment tools described
+below were archived in #140.12.74. See [research archival](research-archive.md)
+for the current source layout and tag instructions.
+
 Status: **inventory only**. No runtime, HTML, solver, test, or build changes are part of this step.
 
 ## Reproducible starting point
@@ -61,7 +65,7 @@ An archive should distinguish **hypothesis → method → environment/scene → 
 
 ## Retrospective archive completed in #140.12.52
 
-See [the experiment archive index](experiments/README.md) and track-specific [GPU](experiments/gpu.md), [conformal / Bouguer / hybrid CPU](experiments/conformal.md), and [CPU RK4 optimization](experiments/rk4.md) records. They differentiate logged user-browser evidence from proposed protocols and unbundled exports. This documentation-only archive is a prerequisite for evaluating #140.12.53; **no retirement has occurred**.
+See [the experiment archive index](research-archive.md) and track-specific [GPU](research-archive.md), [conformal / Bouguer / hybrid CPU](research-archive.md), and [CPU RK4 optimization](research-archive.md) records. They differentiate logged user-browser evidence from proposed protocols and unbundled exports. This documentation-only archive is a prerequisite for evaluating #140.12.53; **no retirement has occurred**.
 
 ## Verification contract before any retirement
 

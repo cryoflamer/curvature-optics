@@ -1,3 +1,11 @@
+> **Current branch update #140.12.74 (2026-11-04):** Standalone WebGPU optics
+> experiments and the Modern CPU optics research panel have been retired from
+> the main tree. The full pre-removal state is meant to be preserved using the
+> annotated `optics-research-archive-2026-11` tag on #140.12.73. Production
+> CPU RK4 fused-gradient, WebGL2, Legacy, Scene/Compare and user-saved experiment
+> configurations remain. All older notes below describe historical versions;
+> see `docs/research-archive.md` for the current boundary and tag instructions.
+
 ## Patch 140.12.47 — Lazy hybrid shooting / attributed hot frame A/B (2026-11-01)
 
 - Explicit-only `shootingOptimization: 'conformal-hybrid'`: the cheap standard Globe RK4 shooting predictor runs first; only a failed predictor invokes a lazy conformal candidate, which is *again integrated and certified* by unchanged RK4. Original angular bracket and strict ground-contact classification remain final authorities. Standard production default, nonstandard profiles, Flat, vacuum, and painter are unchanged.

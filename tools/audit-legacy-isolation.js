@@ -13,7 +13,6 @@ const FIXTURE = 'tests/fixtures/legacy-isolation-boundary.json';
 const ENTRYPOINTS = Object.freeze({
   legacy: 'CurvatureApp.html',
   modern: 'CurvatureModern.html',
-  webgpuResearch: 'tools/webgpu-optics.html',
 });
 
 const toPosix = file => file.split(path.sep).join('/');
@@ -110,14 +109,13 @@ function buildReport(root = ROOT) {
   const entrypoints = Object.fromEntries(Object.entries(ENTRYPOINTS)
     .map(([key, file]) => [key, readEntryPoint(root, file)]));
   const members = Object.fromEntries(Object.entries(entrypoints).map(([name, e]) => [name, new Set(e.scripts)]));
-  const L = members.legacy, M = members.modern, W = members.webgpuResearch;
+  const L = members.legacy, M = members.modern;
   const allSrc = listJs(root, 'src');
-  const loadedAnywhere = new Set([...L, ...M, ...W]);
+  const loadedAnywhere = new Set([...L, ...M]);
   const matrix = {
     loadedByLegacyAndModern: ordered([...L].filter(p => M.has(p))),
     loadedByLegacyNotModern: ordered([...L].filter(p => !M.has(p))),
     loadedByModernNotLegacy: ordered([...M].filter(p => !L.has(p))),
-    researchOnlyNotEitherApp: ordered([...W].filter(p => !L.has(p) && !M.has(p))),
     notDirectlyLoadedByTheseEntrypoints: allSrc.filter(p => !loadedAnywhere.has(p)),
   };
   const srcModules = Object.fromEntries(allSrc.map(file => [file, {
@@ -144,7 +142,7 @@ function buildReport(root = ROOT) {
     }
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     policy: 'Static evidence only: no ownership, runtime reachability, parity, or deletion approval',
     entrypoints,
     matrix,
@@ -165,7 +163,7 @@ function main(args) {
     if (!fs.existsSync(filepath) || fs.readFileSync(filepath, 'utf8') !== serialized) {
       throw new Error(`${FIXTURE} is stale; review changes and regenerate via --json`);
     }
-    return process.stdout.write(`OK: Legacy ${report.entrypoints.legacy.scriptTags} tags; Modern ${report.entrypoints.modern.scriptTags} tags; research ${report.entrypoints.webgpuResearch.scriptTags} tags; ${report.sourceJsCount} src JS modules\n`);
+    return process.stdout.write(`OK: Legacy ${report.entrypoints.legacy.scriptTags} tags; Modern ${report.entrypoints.modern.scriptTags} tags; ${report.sourceJsCount} src JS modules\n`);
   }
   for (const [key, val] of Object.entries(report.entrypoints)) {
     process.stdout.write(`${key}: ${val.scriptTags} active script tags / ${val.uniqueScripts} unique files; ${val.duplicatedLoads.length} repeated files; ${val.inlineScriptBlocks} inline blocks\n`);
@@ -173,7 +171,7 @@ function main(args) {
   for (const [key, arr] of Object.entries(report.matrix)) {
     process.stdout.write(`${key}: ${arr.length}\n`);
   }
-  process.stdout.write('No deletion approved; static HTML loads and literal CommonJS references only.\n');
+  process.stdout.write('Static HTML loads and literal CommonJS references only; no runtime ownership inferred.\n');
 }
 
 if (require.main === module) {
