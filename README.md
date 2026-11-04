@@ -47,8 +47,9 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 - [User guide](docs/user-guide.md) — Legacy storyboards, Modern Scene/Compare, rendering, URLs and saved scenes.
 - [Development and tests](docs/development.md) — no-build workflow, test commands, preserved baselines and contribution rules.
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.
+- [Historical documentation](docs/historical-records.md) — superseded migration/patch notes and Git recovery instructions.
 
-The remaining `docs/migration-*`, `docs/controlled-cleanup-*` and `PROJECT_STATE.md` files are **historical records**; some describe features that no longer ship. They are not the recommended entry point for current usage. A later documentation-cleanup change can retire redundant historical files after reviewing their references.
+Superseded migration and patch-by-patch documents were retired from the active tree in #140.12.76. See [historical records and recovery](docs/historical-records.md) for the removal inventory and Git commands to read them. `PROJECT_STATE.md` remains a historical journal, not the current project specification. Focused technical evidence and documents used by regression tests were retained.
 
 ## Quick verification
 

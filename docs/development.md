@@ -77,4 +77,4 @@ See [Legacy reference validation](legacy-visual-validation.md), [Legacy preserva
 
 ## Documentation lifecycle
 
-`README.md`, `architecture.md`, `physics.md`, `user-guide.md` and this page are the **current entry points**. `research-archive.md` documents recovery of removed work. Existing historical migration/experiment/patched-step notes remain in Git for now; their cleanup is a **separate** reviewed change. Prefer updating these current guides when implemented behavior changes instead of adding a new “plan” document for every patch.
+`README.md`, `architecture.md`, `physics.md`, `user-guide.md` and this page are the **current entry points**. [Research archive](research-archive.md) documents recovery of removed CPU/WebGPU experiments. [Historical records](historical-records.md) inventories 71 retired migration/patch-note documents and explains how to recover them from Git; selected older scientific notes and test contracts remain tracked intentionally. Prefer updating current guides when implemented behavior changes instead of adding a new “plan” for every patch.

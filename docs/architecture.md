@@ -57,3 +57,13 @@ Not every module is solely owned by the listed layer. Verify **actual callers an
 **Archived in Git:** standalone `tools/webgpu-optics.html`, the Modern CPU research panel, dedicated CPU/WebGPU research modules and their research-only tests (removed in #140.12.74). The source can be inspected through the [research archive](research-archive.md), provided the pre-removal tag exists in the target clone. Do **not** mistake the retained `OpticalConformalPredictor.js` dependency or GPU capability panel for a revived user-facing experiment.
 
 A future refactor should begin with a specific defect or maintenance goal and pass the [development verification](development.md), rather than another speculative sweep for unused code.
+
+## Focused architectural references
+
+The general architecture above is the current entry point. Keep the following
+specialized evidence accessible where maintenance or regression analysis needs
+it: [Legacy bundle provenance](legacy-bundle-provenance.md),
+[Legacy / Modern compatibility limitations](legacy-modern-compatibility.md),
+[camera interaction baseline](modern-camera-interaction-baseline.md), and
+[WebGL2 renderer scope](modern-gpu-geometry.md). Earlier step-by-step migration
+and cleanup notes are recoverable through [historical records](historical-records.md).

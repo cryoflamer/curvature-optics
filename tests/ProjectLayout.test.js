@@ -17,11 +17,15 @@ test('every local HTML script and stylesheet resolves from project root', () => 
   assert.equal(new Set(scripts).size, scripts.length, 'duplicate script include');
 });
 
-test('production modules, tests and migration notes are grouped by responsibility', () => {
+test('production modules, tests and current documentation are grouped by responsibility', () => {
   const groups = ['geometry', 'scene', 'renderers', 'legacy', 'diagnostics', 'optics', 'ui'];
   for (const group of groups) assert.ok(fs.statSync(path.join(root, 'src', group)).isDirectory());
   assert.ok(fs.readdirSync(__dirname).some(name => name.endsWith('.test.js')));
-  assert.ok(fs.readdirSync(path.join(root, 'docs')).some(name => /^migration-[a-z0-9-]+\.md$/.test(name)),
-    'descriptive migration notes should be kept under docs/');
+  for (const file of ['README.md', 'docs/architecture.md', 'docs/physics.md',
+    'docs/user-guide.md', 'docs/development.md', 'docs/historical-records.md']) {
+    assert.ok(fs.statSync(path.join(root, file)).isFile(), `missing current documentation: ${file}`);
+  }
+  assert.ok(!fs.readdirSync(path.join(root, 'docs')).some(name => /^migration-[a-z0-9-]+\.md$/.test(name)),
+    'chronological migration documents should be recoverable from Git, not active docs/');
   assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith('.js')), []);
 });

@@ -1,5 +1,11 @@
 # Modern UI plan — compatibility patches 130–134
 
+> **Historical design record retained for regression tests.** Statements below
+> about future UI work or moving diagnostics into Legacy predate the current
+> separate Legacy/Modern applications and the #140.12.74 research archival.
+> Refer to [architecture](architecture.md) and [user guide](user-guide.md)
+> for implemented behavior.
+
 Decision date: 2026-10-28. Status: implementation in progress; **patch 130** introduces the separate Modern entry and a functional single Physical scene. This document is the design agreement, not a claim that patches 131–134 are complete.
 
 ## Purpose and separation of responsibilities

@@ -7,7 +7,7 @@ see [research archival](research-archive.md).
 
 **Decision: keep both applications. No deletion, migration of animations, route change, or physical-solver change is approved by this audit.** Legacy is a separately supported, fast interactive/animated educational application; Modern is a separate, more computationally expensive physical-optics and comparison instrument. We should preserve their distinct purposes rather than force pixel or animation parity.
 
-This supersedes the *proposed wholesale Legacy retirement* in [legacy-ui-assessment.md](legacy-ui-assessment.md) and [legacy-migration-plan.md](legacy-migration-plan.md). Those older inventories and browser evidence remain useful historical records, **not a mandate to remove Legacy**. The 80-state [schema compatibility audit](legacy-modern-compatibility.md) establishes neither a working converter nor a need to make one.
+This supersedes the *proposed wholesale Legacy retirement* in original Legacy assessment (now available via [historical records](historical-records.md)) and [legacy-migration-plan.md](legacy-migration-plan.md). Those older inventories and browser evidence remain useful historical records, **not a mandate to remove Legacy**. The 80-state [schema compatibility audit](legacy-modern-compatibility.md) establishes neither a working converter nor a need to make one.
 
 ## Reproducible static evidence
 

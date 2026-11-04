@@ -1,6 +1,11 @@
 # Legacy feature migration plan
 
-Status: **planning / evidence inventory, not a migration or deletion approval**. Prepared after the [Legacy assessment](legacy-ui-assessment.md), as historical Compatсh #140.12.56. This plan does not change runtime behavior or declare Legacy and Modern visually equivalent.
+> **Historical test-backed inventory, not an active migration plan.** Legacy is
+> preserved as an independent animated application. See current
+> [architecture](architecture.md) and [user guide](user-guide.md). The matrix
+> below is retained for regression coverage and historical analysis only.
+
+Status: **planning / evidence inventory, not a migration or deletion approval**. Prepared after the original Legacy assessment (now available via [historical records](historical-records.md)), as historical Compatсh #140.12.56. This plan does not change runtime behavior or declare Legacy and Modern visually equivalent.
 
 ## Scope and decision rule
 

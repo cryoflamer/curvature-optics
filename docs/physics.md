@@ -60,3 +60,16 @@ Compare deliberately uses a common, fixed eye-level camera for A and B. Changing
 | Manual browser smoke tests | Visible usability in the tested environment | Independent numerical or scientific validation |
 
 Useful commands are in [development](development.md); the exact six-frame verification scope is explained in [Legacy visual reference validation](legacy-visual-validation.md). For a scientific claim, specify the geometry, atmospheric profile and constants, observer/camera, step/tolerance settings, branch assumptions, error metric, source of reference data and uncertainty **before** comparing results.
+
+## Further technical evidence
+
+The following retained records have more detail than this overview and should
+be read as **scoped numerical or design evidence**, not universal physical
+validation: [production fused-gradient qualification](fused-gradient-production-promotion.md),
+[continuous physical-scene invariants](continuous-physical-verification.md),
+[engineered-ray qualification](engineered-optical-qualification.md),
+[WebGL2 geometry-painter boundaries](modern-gpu-geometry.md), and
+[Legacy visual reference limits](legacy-visual-validation.md).
+For superseded migration plans and experimental predictors, see
+[historical records](historical-records.md) and the
+[research archive](research-archive.md).
