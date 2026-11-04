@@ -70,3 +70,11 @@ Scene/Compare CPU diagnostics and Check GPU smoke test remains recommended.
 
 This change does **not** approve deletion of any of the 38 candidates in the
 original source-module inventory: no complete `src/**/*.js` module is removed.
+
+## Follow-up #140.12.72
+
+The [Modern helper reachability review](controlled-cleanup-140.12.72.md)
+confirmed that all 16 Modern UI helper modules are directly loaded by the
+active page; none was removed. Only the write-only private `state.graph`
+assignment/initializer was deleted, with an explicit Scene/Compare graph
+preservation regression guard.

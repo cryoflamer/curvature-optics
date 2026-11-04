@@ -5,7 +5,7 @@
 (function(root){
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
-    preset:'pontchartrain',timer:null,frame:null,graph:null,last:null,editTimeouts:{},
+    preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
     geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},
@@ -989,7 +989,6 @@
   }
   var graph=root.NewGraphX3D({Id:'ModernSceneGraph',Width:'100%',Height:'66.67%',
     DrawFunc:draw,AutoReset:true,AutoClear:true,AutoScalePix:true});
-  state.graph=graph;
   function cancelPending(){
     if(state.curvatureCommitTimer!==null){
       clearTimeout(state.curvatureCommitTimer);state.curvatureCommitTimer=null;
