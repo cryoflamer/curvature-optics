@@ -221,12 +221,6 @@ button{cursor:pointer}
 /* #140.12.53: CPU-only research tools are separate from physical A/B painting. */
 .modern-cpu-research{padding:14px;margin-top:14px;background:#f7fbff;border:1px solid #c8d9ee;border-radius:10px}
 .modern-cpu-research>summary{cursor:pointer}
-.modern-gpu-probe-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
-.modern-gpu-probe-head label{font-size:12px;display:flex;align-items:center;gap:7px}
-.modern-gpu-probe-head select,.modern-gpu-probe-head button{padding:6px 9px;border:1px solid #bbcde1;border-radius:6px;background:white;color:#294867}
-.modern-gpu-probe-head button{background:#e0f1ff;cursor:pointer}
-.modern-gpu-probe-maps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.modern-gpu-probe-maps>div{min-width:0;font-size:12px;color:#315475}
-.modern-gpu-probe-maps canvas{display:block;width:100%;height:auto;background:#fff;border:1px solid #dae4ef;border-radius:5px;margin-top:5px}
-#ModernGpuProbeStatus{font-size:12px;color:#315475}
-@media(max-width:720px){.modern-gpu-probe-maps{grid-template-columns:1fr}}
+.modern-cpu-research-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.modern-cpu-research-actions label{font-size:12px;display:flex;align-items:center;gap:7px}
+.modern-cpu-research-actions button{padding:6px 9px;border:1px solid #bbcde1;border-radius:6px;background:#e0f1ff;color:#294867;cursor:pointer}

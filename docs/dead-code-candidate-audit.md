@@ -69,3 +69,11 @@ The inventory reads only *literal* static `<script src>` entries (plus commented
 5. For any future approved removal, identify exactly which browser modes/tests/fixtures are affected, commit one small change, validate on a clean apply and preserve CPU fused-gradient + rollback, Legacy animation and WebGL2 painter. No automatic 'remove all unused files' operation is permitted.
 
 **Outcome:** a reviewable static inventory and a prioritized *investigation* plan. **No deletion**, no renamed HTML files, no changed physics/runtime/animation/renderer or GPU semantics.
+
+## First bounded cleanup (#140.12.70)
+
+The [first cleanup](controlled-cleanup-140.12.70.md) deletes only unused **CSS**
+selectors from Modern's retired visual WebGPU probe, and renames the still-live
+CPU research action wrapper in HTML/CSS. No source-module candidate from this
+38-file audit was deleted or approved for deletion. The live WebGPU research
+page, WebGL2 geometry renderer and CPU RK4 baseline are untouched.
