@@ -2133,7 +2133,7 @@
     var button=probeUi('ModernConformalFrameParityRun'),zipWriter=root.GeometryDiagnosticsZip,
       renderer=root.CurvatureMainCanvasRenderer,optics=root.CurvaturePhysicalSceneOptics,
       graphs=state.compareGraphs,source=state.comparePair&&state.comparePair.A,
-      phase='checking input',started=profileNow();
+      phase='checking input';
     if(state.probeBusy)return;
     if(!zipWriter||!renderer||!optics||!compareAdapter||!source||
         !graphs.A||!graphs.B||!graphs.A.Canvas||!graphs.B.Canvas){

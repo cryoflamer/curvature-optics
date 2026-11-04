@@ -61,9 +61,10 @@ checks do **not** render a real Opera browser viewport, measure performance,
 or compile WGSL. Manual Scene/Compare A/B and Legacy storyboard smoke tests
 remain necessary before broader module removal.
 
-## Follow-up
+## Follow-up / closure
 
-Continue investigating unreferenced **private** symbols in individual modules,
-while retaining all public helper APIs and archived scientific diagnostics
-unless their usage and reproducibility have been explicitly evaluated. Avoid
-claiming a whole JavaScript file is dead based on a static name search alone.
+The targeted private-symbol check in [#140.12.73](refactor-closure-140.12.73.md)
+removed one additional write-only local and introduced a single automated
+regression gate. Routine symbol scavenging is now closed: retain public helper
+APIs and archived scientific diagnostics unless a concrete problem justifies a
+specific change. A static name search alone cannot authorize module deletion.
