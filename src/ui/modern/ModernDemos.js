@@ -1,10 +1,12 @@
 /* Modern controls for the original Legacy demonstration catalog. The Legacy
- * engine has its own lightweight HTML host and isolated global namespace.
- * Scene/Compare do not import Legacy globals or serialized keyframes. */
+ * engine remains in a separate browser realm until its global model and Canvas
+ * can be instantiated safely in this document. Prefer a narrow, direct
+ * same-origin runtime port; retain the message bridge for older embed hosts. */
 (function(root){
   'use strict';
   var protocol='curvature-demos-v1';
   var frame,ready=false,started=false,selected='TransLine';
+  var directRuntime=null,unsubscribeDirect=null,directGeneration=0;
   var names=[];
   function el(id){return root.document.getElementById(id);}
   function status(message){var node=el('ModernDemoStatus');if(node)node.textContent=message;}
@@ -14,7 +16,9 @@
     });
   }
   function send(command,name){
-    if(frame&&ready&&frame.contentWindow)
+    if(!ready||!frame)return;
+    if(directRuntime){directRuntime.command(command,name);return;}
+    if(frame.contentWindow)
       frame.contentWindow.postMessage({protocol:protocol,type:'command',command:command,
         ...(name?{name:name}:{})},root.location.origin==='null'?'*':root.location.origin);
   }
@@ -57,10 +61,44 @@
     status(data.playing?'Playing original Legacy animation.':'Ready · Original Legacy renderer.');
   }
   function onMessage(event){
-    if(!trusted(event))return;
-    var data=event.data;
+    if(directRuntime||!trusted(event))return;
+    accept(event.data);
+  }
+  function accept(data){
+    if(!data||typeof data!=='object')return;
     if(data.type==='catalog')onCatalog(data);
     else if(data.type==='state')onState(data);
+  }
+  function attachDirect(){
+    // A replaced or reloaded host is a new engine instance, so no previous
+    // state or event stream may keep the controls enabled.
+    var generation=++directGeneration;
+    if(unsubscribeDirect){unsubscribeDirect();unsubscribeDirect=null;}
+    directRuntime=null;
+    ready=false;
+    names=[];
+    selected='TransLine';
+    enable(false);
+    var picker=el('ModernDemoSelect');if(picker)picker.disabled=true;
+    status('Connecting to the Legacy demonstration engine…');
+    if(!frame)return;
+    var candidate;
+    try{
+      // The dedicated host is same-origin. Never read the child's Legacy
+      // globals or inject its script bundle into Modern's own window.
+      candidate=frame.contentWindow&&frame.contentWindow.CurvatureLegacyDemosRuntime;
+    }catch(error){return;} // A foreign origin must not leak access.
+    if(!candidate||typeof candidate.subscribe!=='function'||
+       typeof candidate.command!=='function')return;
+    directRuntime=candidate;
+    try{
+      unsubscribeDirect=candidate.subscribe(function(data){
+        if(directGeneration===generation&&directRuntime===candidate)accept(data);
+      });
+    }catch(error){directRuntime=null;status('Unable to connect to Demos host.');return;}
+    // The child may initialize before or after iframe load. Subscription
+    // replays state when available; a not-yet-started manager publishes later.
+    if(ready)send('status');
   }
   function changeDemo(name){
     if(names.indexOf(name)<0||name===selected||!ready)return;
@@ -74,6 +112,7 @@
   function init(){
     frame=el('ModernDemoFrame');if(!frame)return;
     root.addEventListener('message',onMessage);
+    frame.addEventListener('load',attachDirect);
     [['ModernDemoPlay','play'],['ModernDemoPrev','previous'],
       ['ModernDemoNext','next'],['ModernDemoReset','reset']].forEach(function(pair){
       var node=el(pair[0]);if(node)node.addEventListener('click',function(){send(pair[1]);});

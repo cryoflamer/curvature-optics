@@ -79,17 +79,51 @@
      root.parent===root)return;
   root.document.documentElement.classList.add('legacy-demo-embed');
   var protocol='curvature-demos-v1';
+  // Modern's dedicated host uses a synchronous, same-origin instance port.
+  // The original CurvatureApp.html?embed=demos retains postMessage support.
+  var directHost=!!(root.document&&root.document.documentElement&&
+    typeof root.document.documentElement.hasAttribute==='function'&&
+    root.document.documentElement.hasAttribute('data-direct-demos-host'));
+  var observers=[],catalogSnapshot=null,stateSnapshot=null,disposed=false;
+  function notify(type,data){
+    if(disposed)return;
+    var snapshot=Object.assign({type:type},data);
+    if(type==='catalog')catalogSnapshot=snapshot;
+    if(type==='state')stateSnapshot=snapshot;
+    observers.slice().forEach(function(observer){
+      try{observer(snapshot);}catch(error){
+        // Presentation exceptions must not interrupt an authored animation.
+        if(root.console&&root.console.error)root.console.error(error);
+      }
+    });
+    if(!directHost)post(type,data);
+  }
   var controller=createController({
     getDemos:function(){return root.Demos;},
-    publish:function(data){post('state',data);},
-    catalog:function(names){post('catalog',{names:names});},
+    publish:function(data){notify('state',data);},
+    catalog:function(names){notify('catalog',{names:names});},
     redraw:function(){if(root.graph)root.graph.Redraw();}
   });
+  // No global Legacy model, Canvas or manager escapes through this API.
+  // The subscription replays the catalog and latest state for late binders.
+  root.CurvatureLegacyDemosRuntime={
+    subscribe:function(observer){
+      if(disposed||typeof observer!=='function')throw new TypeError('An active Demos observer is required');
+      observers.push(observer);
+      if(catalogSnapshot)observer(catalogSnapshot);
+      if(stateSnapshot)observer(stateSnapshot);
+      return function(){
+        var index=observers.indexOf(observer);
+        if(index>=0)observers.splice(index,1);
+      };
+    },
+    command:function(action,name){return controller.command(action,name);}
+  };
   function origin(){return root.location.origin==='null'?'*':root.location.origin;}
   function post(type,data){
     root.parent.postMessage(Object.assign({protocol:protocol,type:type},data),origin());
   }
-  root.addEventListener('message',function(event){
+  if(!directHost)root.addEventListener('message',function(event){
     if(event.source!==root.parent||
        (root.location.origin!=='null'&&event.origin!==root.location.origin)||
        !event.data||event.data.protocol!==protocol||event.data.type!=='command')return;
@@ -99,5 +133,9 @@
     // Demos are registered by original Legacy load callbacks before this turn.
     root.setTimeout(function(){controller.start('TransLine');},0);
   });
-  root.addEventListener('pagehide',function(){controller.dispose();});
+  root.addEventListener('pagehide',function(){
+    disposed=true;
+    observers.length=0;
+    controller.dispose();
+  });
 }(window));

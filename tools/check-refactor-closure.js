@@ -14,6 +14,7 @@ const node = process.execPath;
 const tests = [
   'tests/LegacyPreservationContract.test.js',
   'tests/LegacyDemosMountBoundary141280.test.js',
+  'tests/LegacyDemosDirectPort.test.js',
   'tests/LegacyHeadlessReference.test.js',
   'tests/LegacyReferenceScenarios.test.js',
   'tests/ModernHelperReachability141272.test.js',

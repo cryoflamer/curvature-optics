@@ -41,6 +41,7 @@ node --test tests/CurvaturePhysicsRegression.test.js
 node --test tests/ModernPhysicalCompare.test.js
 node --test tests/LegacyPreservationContract.test.js
 node --test tests/ResearchArchive141274.test.js
+node --test tests/LegacyDemosDirectPort.test.js
 python3 tools/validate-legacy-visual-reference.py
 ```
 
