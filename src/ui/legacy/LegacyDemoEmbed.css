@@ -1,5 +1,5 @@
-/* Presentation-only shell for the first Modern Demos prototype. The renderer,
-   demo transitions and original controls remain intact in the standalone page. */
+/* Display only the original Legacy drawing surface in the dedicated Demos host.
+   The same rule keeps the standalone CurvatureApp.html untouched unless opted in. */
 html.legacy-demo-embed,html.legacy-demo-embed body{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden}
 html.legacy-demo-embed #Layout-Root,html.legacy-demo-embed #Layout-MainSection,
 html.legacy-demo-embed #Layout-MainFrame,html.legacy-demo-embed #WikiPage,

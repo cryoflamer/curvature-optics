@@ -33,7 +33,7 @@ test('141.2.77: Demos is lazy and starts the real isolated Legacy page only when
   assert.equal(h.frame.src,'about:blank');
   assert.equal(h.elements.get('ModernDemoPlay').disabled,true);
   h.api.activate();
-  assert.equal(h.frame.src,'CurvatureApp.html?ui=legacy&embed=demos');
+  assert.equal(h.frame.src,'CurvatureDemosHost.html?embed=demos');
   assert.match(h.elements.get('ModernDemoStatus').textContent,/Loading/);
   demoState(h);
   assert.equal(h.elements.get('ModernDemoPlay').disabled,false);
@@ -41,7 +41,7 @@ test('141.2.77: Demos is lazy and starts the real isolated Legacy page only when
   h.api.deactivate();
   assert.equal(h.messages.at(-1).message.command,'pause');
   h.api.activate();
-  assert.equal(h.frame.src,'CurvatureApp.html?ui=legacy&embed=demos');
+  assert.equal(h.frame.src,'CurvatureDemosHost.html?embed=demos');
   assert.equal(h.messages.at(-1).message.command,'status');
 });
 test('141.2.77: Modern playback buttons send narrow commands without importing legacy globals',()=>{

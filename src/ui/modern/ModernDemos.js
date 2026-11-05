@@ -1,6 +1,6 @@
 /* Modern controls for the original Legacy demonstration catalog. The Legacy
- * renderer stays isolated in one lazily loaded frame; Scene/Compare do not
- * import its globals or convert its authored animation states. */
+ * engine has its own lightweight HTML host and isolated global namespace.
+ * Scene/Compare do not import Legacy globals or serialized keyframes. */
 (function(root){
   'use strict';
   var protocol='curvature-demos-v1';
@@ -86,8 +86,8 @@
     if(!frame)return;
     if(!started){
       started=true;
-      status('Loading original Legacy demonstrations…');
-      frame.src='CurvatureApp.html?ui=legacy&embed=demos';
+      status('Loading isolated Legacy demonstration engine…');
+      frame.src='CurvatureDemosHost.html?embed=demos';
     }else if(ready)send('status');
   }
   function deactivate(){send('pause');}

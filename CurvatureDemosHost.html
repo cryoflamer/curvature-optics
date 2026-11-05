@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Curvature · Legacy Demos Engine Host</title>
+<!-- Dedicated browser realm for the authored Legacy Demos runtime. Modern
+     loads this host, NOT CurvatureApp.html. It is not a public UI entrypoint. -->
+<link rel="stylesheet" href="src/ui/styles.css">
+<link rel="stylesheet" href="src/ui/ControlPanelStyles.css">
+<link rel="stylesheet" href="src/ui/CurvaturePage.css">
+<link rel="stylesheet" href="src/ui/legacy/LegacyDemoEmbed.css?v=140.12.79">
+<script src="src/ui/legacy/LegacyDemoEmbed.js?v=140.12.79"></script>
+<style>
+html,body{margin:0;padding:0;background:#fff;overflow:hidden}
+#Wiki{width:100%;margin:0;padding:0}
+#JsGraph1{width:100%;max-width:none;margin:0}
+</style>
+</head>
+<body>
+<div id="Wiki">
+<script src="src/legacy/GraphX3DX.js"></script>
+<script src="src/legacy/LegacySceneAdapter.js"></script>
+<script src="src/scene/SceneFrame.js"></script>
+<script src="src/scene/CurvatureSceneContract.js"></script>
+<script src="src/scene/CurvatureRenderFrame.js"></script>
+<script src="src/geometry/CurvatureSurfaceGeometry.js"></script>
+<script src="src/geometry/CurvaturePhysicalWorldGeometry.js"></script>
+<script src="src/geometry/CurvatureGeometryEngine.js"></script>
+<script src="src/legacy/LegacyGeometryExtractor.js"></script>
+<script src="src/legacy/LegacyGeometryFrameVerification.js"></script>
+<script src="src/renderers/CurvatureScenePreview.js"></script>
+<script src="src/renderers/CurvatureCanvasProjection.js"></script>
+<script src="src/renderers/CurvaturePerspectivePreview.js"></script>
+<script src="src/renderers/CurvatureViewportReference.js"></script>
+<script src="src/renderers/CurvatureNearPlaneReference.js"></script>
+<script src="src/diagnostics/CurvaturePerspectiveDiagnostics.js"></script>
+<script src="src/renderers/CurvatureFilledPreview.js"></script>
+<script src="src/renderers/CurvatureViewportPolygonClip.js"></script>
+<script src="src/renderers/CurvatureZBufferPreview.js"></script>
+<script src="src/renderers/CurvatureStrokePreview.js"></script>
+<script src="src/renderers/CurvatureStyledCombinedPreview.js"></script>
+<script src="src/renderers/CurvatureLegacyOrderPreview.js"></script>
+<script src="src/diagnostics/CurvaturePixelComparison.js"></script>
+<script src="src/scene/CurvatureIndependentComposition.js"></script>
+<script src="src/diagnostics/CurvatureCompositionComparison.js"></script>
+<script src="src/diagnostics/CurvatureGrayOccluderAudit.js"></script>
+<script src="src/geometry/CurvatureEarClip.js"></script>
+<script src="src/renderers/CurvatureFrameRenderer.js"></script>
+<script src="src/renderers/CurvatureScreenSpaceGuides.js"></script>
+<script src="src/scene/CurvatureFullSceneDecorations.js"></script>
+<script src="src/diagnostics/CurvatureRegionComparison.js"></script>
+<script src="src/diagnostics/CurvatureCompositionCapture.js"></script>
+<script src="src/diagnostics/CurvatureDiagnosticPresets.js"></script>
+<script src="src/diagnostics/CurvatureControlledLegacyCapture.js"></script>
+<script src="src/diagnostics/CurvatureControlledCamera.js"></script>
+<script src="src/diagnostics/CurvatureControlledGeometryParity.js"></script>
+<script src="src/diagnostics/CurvatureWorldTopologyAudit.js"></script>
+<script src="src/diagnostics/CurvatureContourDiagnostics.js"></script>
+<script src="src/diagnostics/CurvatureCameraVerification.js"></script>
+<script src="src/diagnostics/CurvatureVisibilityOracle.js"></script>
+<script src="src/diagnostics/CurvatureVisibilityVerification.js"></script>
+<script src="src/diagnostics/GeometryDiagnosticsZip.js"></script>
+<script src="src/diagnostics/CurvaturePerformanceProfile.js"></script>
+<script src="src/scene/SceneFrameRenderer.js"></script>
+<script src="src/legacy/LegacySceneAudit.js"></script>
+<script src="src/legacy/LegacyReplayProbe.js"></script>
+<script src="src/legacy/LegacyCanvasReplayProbe.js"></script>
+<script src="src/ui/ControlPanelX.js"></script>
+<script src="src/ui/ModelAnimationX.js"></script>
+<a id="App"></a>
+<script src="src/optics/OpticalRayTracer.js"></script>
+<script src="src/optics/OpticsBackendUI.js"></script>
+<script src="src/optics/OpticalTowerDiagnostics.js"></script>
+<script src="src/optics/OpticalTowerOverlay.js"></script>
+<script src="src/renderers/CurvatureInverseOpticsBridge.js"></script>
+<script src="src/optics/OpticalProjectionCalibration.js"></script>
+<script src="src/optics/OpticalRenderedVertexAudit.js"></script>
+<script src="src/optics/OpticalTargetProjection.js?v=140.7"></script>
+<script src="src/optics/OpticalSharedRayField.js"></script>
+<script src="src/optics/OpticalTowerSilhouette.js"></script>
+<script src="src/renderers/CurvaturePhysicalTowerCanvas.js"></script>
+<script src="src/optics/CurvaturePhysicalGroundGuides.js"></script>
+<script src="src/optics/CurvaturePhysicalPolygonFills.js"></script>
+<script src="src/optics/CurvaturePhysicalSceneOptics.js"></script>
+<script src="src/ui/OpticsTowerAuditHandlers.js"></script>
+<script src="src/ui/OpticsTowerAtmosphereHandlers.js"></script>
+<script src="src/ui/OpticsLineAtmosphereHandlers.js"></script>
+<script src="src/ui/OpticsVacuumToggle.js"></script>
+<script src="src/ui/OpticsTowerFraming.js"></script>
+<script src="src/ui/OpticsSceneComparison.js"></script>
+<script src="src/ui/OpticsTestPresets.js"></script>
+<script src="src/ui/OpticsOverlayControls.js"></script>
+<script src="src/legacy/CurvatureLegacyDrawing.js"></script>
+<script src="src/app/CurvatureModel.js"></script>
+<script src="src/diagnostics/CurvaturePhysicalSanity.js"></script>
+<script src="src/diagnostics/CurvatureLegacyFrameCaptureController.js"></script>
+<script src="src/app/CurvaturePhysicalCamera.js"></script>
+<script src="src/app/CurvaturePhysicalCurvature.js"></script>
+<script src="src/app/CurvatureMainCanvasRenderer.js"></script>
+<script src="src/app/CurvatureCanvasFrameScheduler.js"></script>
+<script src="src/app/CurvatureHeightChangeScheduler.js"></script>
+<script src="src/app/CurvatureAppRuntime.js"></script>
+<div id="MoreAnimationInfos" hidden></div>
+<div id="ModernDemosHostBootstrap" hidden>
+  <select id="MainCanvasRenderer"><option selected value="legacy">Legacy</option></select>
+  <span id="MainCanvasRendererStatus"></span>
+</div>
+<ul id="CurveDemosTabs" class="TabSelectors Top TopMargin">
+<li class="TabButton TabEnabled " id="CurveButton">Curve</li>
+<li class="TabButton TabEnabled " id="CausewayButton">Causeway</li>
+<li class="TabButton TabEnabled " id="TransLineButton">TrnsmLine</li>
+<li class="TabButton TabEnabled " id="GraceButton">Grace</li>
+<li class="TabButton TabEnabled " id="ChicagoButton">Chicago</li>
+<li class="TabButton TabEnabled " id="CanigouButton">Canigou</li>
+<li class="TabButton TabEnabled " id="BedfordButton">Bedford</li>
+<li class="TabButton TabEnabled " id="TensasButton">Tensas</li>
+<li class="TabButton TabEnabled " id="SoundlyButton">Soundly</li>
+<li class="TabButton TabEnabled " id="ResetButton">Reset</li>
+</ul>
+<ul id="CurveSettingsTabs" class="TabSelectors Top MarginTop">
+<li id="ViewsTab">Views</li>
+<li id="Obj1Tab">Objects 1</li>
+<li id="Obj2Tab">Objects 2</li>
+<li id="RefractionTab">Refraction</li>
+<li id="UnitsTab">Units</li>
+<li id="SaveRestoreTab">Save/Restore</li>
+<li id="BackButton" class="TabButton TabEnabled"> &lt;&lt; </li>
+<li id="PlayButton" class="TabButton TabEnabled"> Play </li>
+<li id="ForwButton" class="TabButton TabEnabled"> &gt;&gt; </li>
+<li id="CountButton" class="TabButton TabEnabled"> 0 </li>
+</ul>
+
+<div id="CurveSettingsTabsBoxes" class="TabBoxes"><div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas" style="min-width:600px">
+
+<script src="src/ui/panels/ViewSliders.js"></script>
+
+
+</div></div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas">
+
+<script src="src/ui/panels/ViewOptions.js"></script>
+
+
+</div></div>
+
+</div><div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas" style="min-width:600px">
+
+<script src="src/ui/panels/ObjectSliders0.js"></script>
+
+
+</div></div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas">
+
+<script src="src/ui/panels/ObjectOptions0.js"></script>
+
+
+</div></div>
+
+</div><div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas" style="min-width:600px">
+
+<script src="src/ui/panels/ObjectSliders1.js"></script>
+
+
+</div></div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas">
+
+<script src="src/ui/panels/ObjectOptions1.js"></script>
+
+
+</div></div>
+
+<script src="src/animation/CurvatureAnimations.js"></script>
+
+<script src="src/animation/CurvatureDemos.js"></script>
+
+</div><div>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas" style="min-width:600px">
+
+<script src="src/app/CurvatureAtmosphere.js"></script>
+
+
+</div></div>
+
+</div><div>
+
+<script src="src/ui/LengthCalculator.js"></script>
+
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas">
+
+<script src="src/ui/panels/LengthCalculatorPanel.js"></script>
+
+
+</div></div>
+
+<p>
+Use this Formular to convert between different lengh units. You can Copy/Paste the results into input fields in the other Forms.
+</p>
+
+</div><div>
+
+<textarea id="SaveRestorePanel" name="SaveRestorePanel" spellcheck="false" class="ListingDisplay" rows="8" cols="60">
+</textarea>
+
+
+<p>
+<a href="#" data-state-action="GetAppState" title="JavaScript"><span class="lbtn">Get App State</span></a> <a href="#" data-state-action="GetAppStateUrl" title="JavaScript"><span class="lbtn">Get App Url</span></a> <a href="#" data-state-action="SetAppState" title="JavaScript"><span class="lbtn lbtnGreen">Set App State</span></a> <a href="#" data-state-action="CompactJson" title="JavaScript"><span class="lbtn lbtnRed">Compact</span></a> <a href="#" data-state-action="ClearAppStatePanel" title="JavaScript"><span class="lbtn lbtnRed">Clear</span></a>
+</p>
+
+<p>
+Use this panel to save a certain App state by <strong>Get App State</strong> and use Copy/Paste to save the state in an external text file. Use Copy/Paste to copy a saved state from an external text file into this panel and click <strong>Set App State</strong> to activate this state. You can change the Parameters in this panel and apply them by pressing the RETURN button on the keyboard.
+</p>
+
+<p>
+Use <strong>Get App Url</strong> to get an URL containing the current App State. Click <strong>Set App State</strong> oder copy the URL into any browser address field to go to this page and display the current App State.
+</p>
+
+<script src="src/app/CurvatureStatePersistence.js"></script>
+
+
+</div></div>
+
+<h2 id="H_Computed_Values">Computed Values</h2>
+
+<div class="Scroller Paragraph"><div class="ScrollCanvas">
+
+<script src="src/ui/panels/ComputedValuesPanel.js"></script>
+
+
+</div></div>
+
+</div>
+</body>
+</html>

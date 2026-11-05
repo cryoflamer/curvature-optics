@@ -102,7 +102,7 @@ test('141.2.78: Modern populates its selector solely from the frame catalog',()=
   assert.equal(h.get('ModernDemoSelect').disabled,true);
   assert.equal(h.frame.src,'about:blank');
   h.api.activate();
-  assert.equal(h.frame.src,'CurvatureApp.html?ui=legacy&embed=demos');
+  assert.equal(h.frame.src,'CurvatureDemosHost.html?embed=demos');
   h.incoming('catalog',{names:families}, {},origin);
   assert.equal(h.get('ModernDemoSelect').disabled,true);
   h.incoming('catalog',{names:families},h.frame.contentWindow,'https://other.example');
@@ -145,7 +145,7 @@ test('141.2.78: selected demo survives tab navigation without resetting or autop
   assert.equal(h.out.length,before,'no repeated pause feedback loop');
   h.api.activate();
   assert.equal(h.out.at(-1).message.command,'status');
-  assert.equal(h.frame.src,'CurvatureApp.html?ui=legacy&embed=demos');
+  assert.equal(h.frame.src,'CurvatureDemosHost.html?embed=demos');
   assert.equal(picker.value,'Canigou');
   assert.equal(h.get('ModernDemoProgress').textContent,'Step 4 / 6');
 });
