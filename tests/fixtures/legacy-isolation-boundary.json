@@ -314,11 +314,12 @@
       "src/jsg.js",
       "src/jsgx3d.js",
       "src/tabs.js",
+      "src/ui/legacy/LegacyDemoDomMount.js",
       "src/x.js",
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 128,
+  "sourceJsCount": 129,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1670,6 +1671,12 @@
       "directHtmlLoads": [
         "legacy"
       ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/legacy/LegacyDemoDomMount.js": {
+      "directHtmlLoads": [],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
       "commonJsToolCallers": []

@@ -17,7 +17,8 @@ test('141.2.79: the dedicated host retains the authored Legacy runtime load orde
     'src/diagnostics/LegacyBrowserReferenceExport.js']);
   const baseline=sources(old).filter(src=>!exclude.has(src));
   assert.ok(baseline.length>80);
-  assert.deepEqual(sources(host).filter(src=>src!=='src/ui/legacy/LegacyDemoEmbed.js'),baseline);
+  assert.deepEqual(sources(host).filter(src=>!['src/ui/legacy/LegacyDemoEmbed.js',
+    'src/ui/legacy/LegacyDemoDomMount.js'].includes(src)),baseline);
   assert.ok(baseline.includes('src/animation/CurvatureDemos.js'));
   assert.ok(baseline.includes('src/app/CurvatureAppRuntime.js'));
   assert.ok(baseline.includes('src/legacy/GraphX3DX.js'));
