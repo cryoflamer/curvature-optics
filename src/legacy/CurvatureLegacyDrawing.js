@@ -1,7 +1,9 @@
 function DrawModel( g ) {
 
   var diagnosticOptions = arguments[1];
-  var m = CurveApp;
+  // A caller may supply the model as the third argument. Old standalone
+  // DrawModel(g) and diagnostic DrawModel(g, options) calls retain CurveApp.
+  var m = arguments[2] === undefined ? CurveApp : arguments[2];
   if (window.CurvatureRenderedVertexAudit) CurvatureRenderedVertexAudit.reset();
   g.MaxCurveSegments = 256;
   g.SetAngleMeasure( 'rad' );
@@ -25,10 +27,10 @@ function DrawModel( g ) {
     if (diagnosticOptions.towerOnlyIndex !== 1 || (m.showModel !== 1 && m.showModel !== 2))
       throw new RangeError('Controlled tower-only render requires Objects 2 and one Earth mode');
     if (m.showModel === 1) {
-      DrawObjectsBehindHorizon( 1, g );
-      DrawObjectsBeforeHorizon( 1, g, true );
+      DrawObjectsBehindHorizon( 1, g, m );
+      DrawObjectsBeforeHorizon( 1, g, true, m );
     } else {
-      DrawObjectsBeforeHorizon( 1, g, false );
+      DrawObjectsBeforeHorizon( 1, g, false, m );
     }
     return;
   }
@@ -135,9 +137,9 @@ function DrawModel( g ) {
     if (m.ObjDist[0] > m.ObjDist[1]) drawObjIx = 0;
     m.LastPosValid[0] = false;
     m.LastPosValid[1] = false;
-    DrawObjectsBeforeHorizon( drawObjIx, g, false );
+    DrawObjectsBeforeHorizon( drawObjIx, g, false, m );
     drawObjIx = (drawObjIx + 1) % 2;
-    DrawObjectsBeforeHorizon( drawObjIx, g, false );
+    DrawObjectsBeforeHorizon( drawObjIx, g, false, m );
 
     // reset clipping
     if (m.showModel & 1) {
@@ -161,9 +163,9 @@ function DrawModel( g ) {
     if (m.ObjDist[0] > m.ObjDist[1]) drawObjIx = 0;
     m.LastPosValid[0] = false;
     m.LastPosValid[1] = false;
-    DrawObjectsBehindHorizon( drawObjIx, g );
+    DrawObjectsBehindHorizon( drawObjIx, g, m );
     drawObjIx = (drawObjIx + 1) % 2;
-    DrawObjectsBehindHorizon( drawObjIx, g );
+    DrawObjectsBehindHorizon( drawObjIx, g, m );
 
     var alpha = 0.6 - 0.5 * (Math.log10( m.Height ) / 9);
     g.SetAlpha( alpha );
@@ -181,9 +183,9 @@ function DrawModel( g ) {
         var longStart = -( Math.floor( longMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
         for ( var long = longStart; long < longMax; long += m.aDelta ) {
-          g.AddPointToPoly3D( PointOnEarth( lat, long ) );
+          g.AddPointToPoly3D( PointOnEarth( lat, long, m ) );
         }
-        g.AddPointToPoly3D( PointOnEarth( lat, longMax ) );
+        g.AddPointToPoly3D( PointOnEarth( lat, longMax, m ) );
         g.DrawPoly3D( 1 );
       }
 
@@ -195,11 +197,11 @@ function DrawModel( g ) {
         var latMax = Math.acos( m.hDisk / rLong );
         var latStart = -( Math.floor( latMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
-        g.AddPointToPoly3D( PointOnEarth( -latMax, long ) );
+        g.AddPointToPoly3D( PointOnEarth( -latMax, long, m ) );
         for ( var lat = latStart; lat < latMax; lat += m.aDelta ) {
-          g.AddPointToPoly3D( PointOnEarth( lat, long ) );
+          g.AddPointToPoly3D( PointOnEarth( lat, long, m ) );
         }
-        g.AddPointToPoly3D( PointOnEarth( latMax, long ) );
+        g.AddPointToPoly3D( PointOnEarth( latMax, long, m ) );
         g.DrawPoly3D( 1 );
       }
 
@@ -219,9 +221,9 @@ function DrawModel( g ) {
         var longStart = -( Math.floor( longMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
         for ( var long = longStart; long < longMax; long += m.aDelta ) {
-          g.AddPointToPoly3D( PointOnPlane( lat, long ) );
+          g.AddPointToPoly3D( PointOnPlane( lat, long, m ) );
         }
-        g.AddPointToPoly3D( PointOnPlane( lat, longMax ) );
+        g.AddPointToPoly3D( PointOnPlane( lat, longMax, m ) );
         g.DrawPoly3D( 1 );
       }
 
@@ -233,11 +235,11 @@ function DrawModel( g ) {
         var latMax = Math.acos( m.hDisk / rLong );
         var latStart = -( Math.floor( latMax / m.aDelta ) * m.aDelta );
         g.NewPoly3D();
-        g.AddPointToPoly3D( PointOnPlane( -latMax, long ) );
+        g.AddPointToPoly3D( PointOnPlane( -latMax, long, m ) );
         for ( var lat = latStart; lat < latMax; lat += m.aDelta ) {
-          g.AddPointToPoly3D( PointOnPlane( lat, long ) );
+          g.AddPointToPoly3D( PointOnPlane( lat, long, m ) );
         }
-        g.AddPointToPoly3D( PointOnPlane( latMax, long ) );
+        g.AddPointToPoly3D( PointOnPlane( latMax, long, m ) );
         g.DrawPoly3D( 1 );
       }
 
@@ -268,9 +270,9 @@ function DrawModel( g ) {
     // draw all objects in the foreground
     var drawObjIx = 1;
     if (m.ObjDist[0] > m.ObjDist[1]) drawObjIx = 0;
-    DrawObjectsBeforeHorizon( drawObjIx, g, true );
+    DrawObjectsBeforeHorizon( drawObjIx, g, true, m );
     drawObjIx = (drawObjIx + 1) % 2;
-    DrawObjectsBeforeHorizon( drawObjIx, g, true );
+    DrawObjectsBeforeHorizon( drawObjIx, g, true, m );
 
     // reset clipping
     if (m.showModel & 2) {
@@ -531,8 +533,8 @@ function DrawModel( g ) {
 
 }
 
-function DrawObjectsBehindHorizon( objIx, g ) {
-  var m = CurveApp;
+function DrawObjectsBehindHorizon( objIx, g, model ) {
+  var m = model === undefined ? CurveApp : model;
 
   // init some loop variables used in DrawObjectsBeforeHorizon too
   if (m.NObjects[objIx] == 0) return;
@@ -580,8 +582,8 @@ function DrawObjectsBehindHorizon( objIx, g ) {
   }
 }
 
-function DrawObjectsBeforeHorizon( objIx, g, bOnGlobe ) {
-  var m = CurveApp;
+function DrawObjectsBeforeHorizon( objIx, g, bOnGlobe, model ) {
+  var m = model === undefined ? CurveApp : model;
   if (m.NObjects[objIx] == 0) return;
 
   // Init parameters for flat earth here, because DrawObjectsBehindHorizon is not caller in that case
@@ -1630,17 +1632,19 @@ function DrawShape( objIx, g, m ) {
   }
 }
 
-function PointOnEarth( lat, long ) {
-  var x = CurveApp.geometryRadius * Math.sin( long );
-  var rr = CurveApp.geometryRadius * Math.cos( long );
+function PointOnEarth( lat, long, model ) {
+  var m = model === undefined ? CurveApp : model;
+  var x = m.geometryRadius * Math.sin( long );
+  var rr = m.geometryRadius * Math.cos( long );
   var y = rr * Math.sin( lat );
   var z = rr * Math.cos( lat );
-  return [ x, y, z - (CurveApp.geometryRadius + CurveApp.Height) ];
+  return [ x, y, z - (m.geometryRadius + m.Height) ];
 }
 
-function PointOnPlane( lat, long ) {
-  var x = CurveApp.geometryRadius * Math.sin( long );
-  var rr = CurveApp.geometryRadius * Math.cos( long );
+function PointOnPlane( lat, long, model ) {
+  var m = model === undefined ? CurveApp : model;
+  var x = m.geometryRadius * Math.sin( long );
+  var rr = m.geometryRadius * Math.cos( long );
   var y = rr * Math.sin( lat );
-  return [ x, y, -CurveApp.Height ];
+  return [ x, y, -m.Height ];
 }

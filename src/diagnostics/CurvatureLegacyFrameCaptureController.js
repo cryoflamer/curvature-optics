@@ -106,8 +106,11 @@ var legacyGeometryAnalyzeRequested = false;
 var legacyFrameAuditInProgress = false;
 var previousLegacyFrameCapture = null;
 function DrawModelWithOptionalAudit(g) {
+  // Optional rendering model for normal frames. Diagnostic tower captures
+  // deliberately swap CurveApp and keep their original controlled path.
+  var renderingModel = arguments[1];
   if (!legacyFrameAuditRequested || legacyFrameAuditInProgress ||
-      !window.LegacySceneAudit) return DrawModel(g);
+      !window.LegacySceneAudit) return DrawModel(g, undefined, renderingModel);
   legacyFrameAuditRequested = false;
   legacyFrameAuditInProgress = true;
   var status = document.getElementById('LegacyFrameCaptureStatus');
@@ -115,10 +118,10 @@ function DrawModelWithOptionalAudit(g) {
     var compareCanvas = document.getElementById('LegacyFrameCompareCanvas').checked;
     var originalPipeline = null, originalPaint = null, originalClippingTrace = [];
     var result = window.LegacySceneAudit.captureFrame(g, function(graph) {
-      if (!compareCanvas || !window.LegacyCanvasReplayProbe) return DrawModel(graph);
+      if (!compareCanvas || !window.LegacyCanvasReplayProbe) return DrawModel(graph, undefined, renderingModel);
       originalPaint = window.LegacyCanvasReplayProbe.observePaint(graph.Context2D, function() {
         originalPipeline = window.LegacyCanvasReplayProbe.observePipeline(graph, function() {
-          DrawModel(graph);
+          DrawModel(graph, undefined, renderingModel);
         }, originalClippingTrace);
       });
     });
@@ -766,7 +769,7 @@ function DrawModelWithOptionalAudit(g) {
       '. Redrawing normally.';
     console.error('Legacy frame audit failed:', error);
     // A capture error must not leave the production scene blank.
-    DrawModel(g);
+    DrawModel(g, undefined, renderingModel);
   } finally {
     legacyFrameAuditInProgress = false;
   }

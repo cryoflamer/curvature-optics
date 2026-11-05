@@ -104,3 +104,23 @@ construct an isolated canvas/runtime without polluting Modern's global realm.
 Remove the iframe **only after** actual Opera playback and visual parity
 checks of all nine families. Do not delete `CurvatureApp.html` before this
 is verified against protected reference fixtures.
+
+## Legacy drawing model reference
+
+The existing `LegacyCanvasPresenter` now passes its owning
+`legacyAppContext.model` through `DrawModelWithOptionalAudit` to the original
+`DrawModel`. A **third, optional** `DrawModel(g, diagnosticOptions, model)`
+argument selects a model explicitly. The scene's horizon partitions and
+`PointOnEarth` / `PointOnPlane` helpers propagate that model instead of
+unconditionally reading global `CurveApp`. Older calls without a model are
+unchanged, including controlled capture tools that temporarily replace the
+compatibility alias. The nine authored scenarios and physical calculations are
+unchanged.
+
+`node --test tests/LegacyDrawingModelPorts.test.js` verifies two independent
+models in the same JavaScript realm, the original implicit-model path, and
+actual horizon/coordinate helper calls. This is a **model-reference boundary**:
+`DrawShape` still reads browser DOM and audit globals, and `ControlPanels`
+and the authoring/bootstrap scripts still rely on classic browser globals.
+Therefore the Demos host iframe remains required; no browser pixel-parity
+claim is made by these Node tests.

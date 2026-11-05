@@ -90,7 +90,9 @@ var legacyCanvasPresenter = window.CurvatureLegacyCanvasPresenter.create({
   getStatus: function(){return document.getElementById('MainCanvasRendererStatus');},
   getRenderer: function(){return window.CurvatureMainCanvasRenderer;},
   isAuditActive: function(){return legacyFrameAuditRequested||legacyFrameAuditInProgress;},
-  drawLegacy: function(g){return DrawModelWithOptionalAudit(g);},
+  // Pass this Canvas owner's model into the authored geometry, instead of
+  // asking DrawModel to read the process-wide CurveApp compatibility alias.
+  drawLegacy: function(g){return DrawModelWithOptionalAudit(g,legacyAppContext.model);},
   getPhysicalOptions: function(){
     var atmosphere=document.getElementById('PhysicalCanvasAtmosphere');
     var radius=document.getElementById('PhysicalCanvasOcclusionRadius');

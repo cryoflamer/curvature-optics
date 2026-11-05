@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const html=require('./helpers/readCurvatureSources')();
 assert.match(html,/DrawFunc:\s*DrawMainCanvasFrame/);
 assert.match(html,/function DrawModelWithOptionalAudit\(g\)/);
-assert.match(html,/return DrawModelWithOptionalAudit\(g\)/);
+assert.match(html,/return DrawModelWithOptionalAudit\(g,legacyAppContext\.model\)/);
 assert.match(html,/if \(!legacyFrameAuditRequested \|\| legacyFrameAuditInProgress/);
 assert.match(html,/LegacySceneAudit\.captureFrame\(g, function\(graph\)/);
 assert.match(html,/replayVerified: false/);
