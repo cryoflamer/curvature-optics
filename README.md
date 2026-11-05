@@ -66,6 +66,6 @@ This is an automated regression gate, **not** a substitute for checking animatio
 
 `optics-baseline-2026-11` is the historical CPU-optics baseline. The research archive is intended to be preserved as `optics-research-archive-2026-11`, an **annotated Git tag on the commit immediately before #140.12.74**; verify that it exists in **your** clone. A format-patch cannot create Git tags. Archived Legacy browser PNGs are **observations of Legacy output**, not measurements of physical correctness or proof of Modern pixel parity.
 
-## Modern Demos migration pilot (#140.12.77)
+## Modern Demos — all nine original animations (#140.12.78)
 
-In Modern, the **Demos** tab currently embeds the original **TransLine** Legacy animation with new Play/Pause, Previous/Next and Restart controls. This is an isolated, lazily loaded iframe backed by the original fast Legacy renderer—not a conversion to RK4. Scene/Compare and the standalone `CurvatureApp.html` continue to work. See [user guide](docs/user-guide.md).
+In Modern, the **Demos** tab embeds all nine original Legacy animation families. Choose a demonstration, then use Play/Pause, Previous/Next and Restart controls. This is one isolated, lazily loaded iframe backed by the original fast Legacy renderer—not a conversion to RK4. Switching families stops playback and starts the selected demonstration at its first key state. Scene/Compare and the standalone `CurvatureApp.html` continue to work. See [user guide](docs/user-guide.md).

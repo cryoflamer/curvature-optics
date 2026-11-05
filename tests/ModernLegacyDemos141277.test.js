@@ -72,12 +72,13 @@ function legacyHarness(search='?embed=demos',inFrame=true){
   const parent={postMessage:()=>{}};
   const replies=[];parent.postMessage=(message,origin)=>replies.push({message,origin});
   const listeners={};
-  const demos={name:null,position:0,playing:false,
-    Find(n){return n==='TransLine'?2:-1;},
+  const names=['Curve','Causeway','TransLine','Grace','Bedford','Tensas','Soundly','Chicago','Canigou'];
+  const demos={name:null,position:0,playing:false,CurrDemo:null,DemoList:names.map(Name=>({Name})),
+    Find(n){return names.indexOf(n);},
     IsCurrDemoName(n){return this.name===n;},
     GetCurrPos(){return this.position;},GetNStates(){return 8;},IsPlaying(){return this.playing;},
     UpdateDemoPanels(){},
-    SetDemo(name,play,pos){this.name=name;this.position=pos;this.playing=play;this.UpdateDemoPanels();},
+    SetDemo(name,play,pos){this.playing=false;this.name=name;this.CurrDemo=this.DemoList[this.Find(name)];this.position=pos;this.playing=play;this.UpdateDemoPanels();},
     Stop(){this.playing=false;this.UpdateDemoPanels();},
     Play(){this.playing=true;this.UpdateDemoPanels();},
     Next(){this.position++;this.UpdateDemoPanels();},

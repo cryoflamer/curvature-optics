@@ -1,9 +1,11 @@
-/* Minimal controller for one Legacy demo shown inside Modern. No Legacy globals
- * are imported into the physical Scene/Compare application. */
+/* Modern controls for the original Legacy demonstration catalog. The Legacy
+ * renderer stays isolated in one lazily loaded frame; Scene/Compare do not
+ * import its globals or convert its authored animation states. */
 (function(root){
   'use strict';
   var protocol='curvature-demos-v1';
-  var frame,ready=false,started=false,active=false;
+  var frame,ready=false,started=false,selected='TransLine';
+  var names=[];
   function el(id){return root.document.getElementById(id);}
   function status(message){var node=el('ModernDemoStatus');if(node)node.textContent=message;}
   function enable(available){
@@ -11,43 +13,83 @@
       var node=el(id);if(node)node.disabled=!available;
     });
   }
-  function send(command){
+  function send(command,name){
     if(frame&&ready&&frame.contentWindow)
-      frame.contentWindow.postMessage({protocol:protocol,type:'command',command:command},
-        root.location.origin==='null'?'*':root.location.origin);
+      frame.contentWindow.postMessage({protocol:protocol,type:'command',command:command,
+        ...(name?{name:name}:{})},root.location.origin==='null'?'*':root.location.origin);
   }
-  function onState(event){
-    if(!frame||event.source!==frame.contentWindow||
-       (root.location.origin!=='null'&&event.origin!==root.location.origin))return;
-    var data=event.data;
-    if(!data||data.protocol!==protocol||data.type!=='state'||data.demo!=='TransLine')return;
+  function trusted(event){
+    return frame&&event.source===frame.contentWindow&&
+      (root.location.origin==='null'||event.origin===root.location.origin)&&
+      event.data&&event.data.protocol===protocol;
+  }
+  function onCatalog(data){
+    if(!Array.isArray(data.names))return;
+    var seen=Object.create(null);
+    var available=data.names.filter(function(name){
+      if(typeof name!=='string'||!name||name.length>64||seen[name])return false;
+      seen[name]=true;return true;
+    });
+    if(!available.length||available.length>32||available.indexOf('TransLine')<0)return;
+    names=available;
+    var picker=el('ModernDemoSelect');
+    if(!picker)return;
+    while(picker.firstChild)picker.removeChild(picker.firstChild);
+    names.forEach(function(name){
+      var option=root.document.createElement('option');
+      option.value=name;option.textContent=name==='TransLine'?'TrnsmLine':name;
+      picker.appendChild(option);
+    });
+    picker.value=selected;
+    picker.disabled=false;
+  }
+  function onState(data){
+    if(typeof data.demo!=='string'||data.demo!==selected||
+       !Number.isInteger(data.position)||!Number.isInteger(data.total)||
+       data.total<=0||data.position<0||data.position>=data.total)return;
     ready=true;
     enable(true);
+    var picker=el('ModernDemoSelect');if(picker&&names.length)picker.value=selected;
+    var heading=el('ModernDemoTitle');if(heading)heading.textContent='Demos · '+(selected==='TransLine'?'Transmission Line':selected);
     var play=el('ModernDemoPlay');if(play)play.textContent=data.playing?'Pause':'Play';
     var count=el('ModernDemoProgress');
     if(count)count.textContent='Step '+(data.position+1)+' / '+data.total;
     status(data.playing?'Playing original Legacy animation.':'Ready · Original Legacy renderer.');
-    if(!active)send('pause');
+  }
+  function onMessage(event){
+    if(!trusted(event))return;
+    var data=event.data;
+    if(data.type==='catalog')onCatalog(data);
+    else if(data.type==='state')onState(data);
+  }
+  function changeDemo(name){
+    if(names.indexOf(name)<0||name===selected||!ready)return;
+    selected=name;
+    enable(false);
+    var heading=el('ModernDemoTitle');if(heading)heading.textContent='Demos · '+(name==='TransLine'?'Transmission Line':name);
+    var count=el('ModernDemoProgress');if(count)count.textContent='Loading first step…';
+    status('Switching to '+name+'…');
+    send('select',name);
   }
   function init(){
-    frame=el('ModernDemoFrame');
-    if(!frame)return;
-    root.addEventListener('message',onState);
+    frame=el('ModernDemoFrame');if(!frame)return;
+    root.addEventListener('message',onMessage);
     [['ModernDemoPlay','play'],['ModernDemoPrev','previous'],
       ['ModernDemoNext','next'],['ModernDemoReset','reset']].forEach(function(pair){
-      el(pair[0]).addEventListener('click',function(){send(pair[1]);});
+      var node=el(pair[0]);if(node)node.addEventListener('click',function(){send(pair[1]);});
     });
+    var picker=el('ModernDemoSelect');
+    if(picker){picker.disabled=true;picker.addEventListener('change',function(){changeDemo(picker.value);});}
     enable(false);
   }
   function activate(){
-    active=true;
     if(!frame)return;
     if(!started){
       started=true;
-      status('Loading original Legacy transmission-line renderer…');
+      status('Loading original Legacy demonstrations…');
       frame.src='CurvatureApp.html?ui=legacy&embed=demos';
     }else if(ready)send('status');
   }
-  function deactivate(){active=false;send('pause');}
+  function deactivate(){send('pause');}
   root.CurvatureModernDemos={init:init,activate:activate,deactivate:deactivate};
 }(window));

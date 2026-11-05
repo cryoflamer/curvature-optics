@@ -59,7 +59,7 @@
 <script src="src/ui/modern/ModernCompareState.js"></script>
 <script src="src/ui/modern/ModernExperimentState.js"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
-<script src="src/ui/modern/ModernDemos.js?v=140.12.77"></script>
+<script src="src/ui/modern/ModernDemos.js?v=140.12.78"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -83,17 +83,18 @@
   <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
   <div class="modern-workspace" id="ModernWorkspace">
     <section class="modern-demos-panel" id="ModernDemosPanel" aria-label="Legacy demonstrations" hidden>
-      <div class="modern-demos-heading"><div><h1>Demos · Transmission Line</h1><p>Original fast Legacy animation, controlled from Modern. First integration prototype.</p></div><span class="modern-mode-pill">FAST / LEGACY</span></div>
-      <div class="modern-demos-controls" role="group" aria-label="Transmission Line playback">
+      <div class="modern-demos-heading"><div><h1 id="ModernDemoTitle">Demos · Transmission Line</h1><p>Nine original fast Legacy animations, controlled from Modern.</p></div><span class="modern-mode-pill">FAST / LEGACY</span></div>
+      <div class="modern-demos-controls" role="group" aria-label="Legacy demonstration playback">
+        <label class="modern-demos-picker" for="ModernDemoSelect">Demonstration <select id="ModernDemoSelect" disabled><option>Loading demonstrations…</option></select></label>
         <button id="ModernDemoPrev" type="button" disabled>Previous step</button>
         <button id="ModernDemoPlay" type="button" disabled>Play</button>
         <button id="ModernDemoNext" type="button" disabled>Next step</button>
         <button id="ModernDemoReset" type="button" disabled>Restart</button>
         <output id="ModernDemoProgress" aria-live="polite">Not loaded</output>
       </div>
-      <div class="modern-demos-frame-wrap"><iframe id="ModernDemoFrame" title="Legacy Transmission Line simulation" loading="lazy" referrerpolicy="no-referrer" src="about:blank"></iframe></div>
+      <div class="modern-demos-frame-wrap"><iframe id="ModernDemoFrame" title="Legacy demonstration simulation" loading="lazy" referrerpolicy="no-referrer" src="about:blank"></iframe></div>
       <p class="modern-demos-status" id="ModernDemoStatus" role="status" aria-live="polite">Open Demos to load the original renderer.</p>
-      <p class="modern-note">This is the original Legacy Canvas inside an isolated frame, not an RK4 reproduction. Scene/Compare settings and saved experiments are unchanged. Only TransLine is migrated in this prototype.</p>
+      <p class="modern-note">This is the original Legacy Canvas inside an isolated frame, not an RK4 reproduction. Scene/Compare settings and saved experiments are unchanged. Select any of the nine Legacy demonstration families above.</p>
     </section>
     <aside class="modern-sidebar" aria-label="Experiment settings">
       <div class="modern-scene-settings" id="ModernSceneSettings">

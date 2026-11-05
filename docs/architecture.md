@@ -6,7 +6,7 @@ This page describes the **active post-#140.12.74 tree**, not the chronological m
 
 ```text
 CurvatureApp.html (Legacy)                  CurvatureModern.html (Modern)
-  Legacy animation/control UI                 Scene / Compare A-B UI
+  Legacy animation/control UI                 Scene / Compare A-B / Demos UI
   CurvatureDemos, ModelAnimation              ModernApp, Scene/Compare state
                |                                         |
         CurvatureModel.js                     CurvatureModel.js
@@ -17,6 +17,7 @@ CurvatureApp.html (Legacy)                  CurvatureModern.html (Modern)
 ```
 
 - `CurvatureApp.html` loads the original demo and playback stack, backed by `src/animation/CurvatureDemos.js`, `src/app/CurvatureModel.js` and browser controls. Its nine demonstrations contain **80 key states / 71 defined transitions**, as pinned by [the preservation contract](legacy-preservation-contract.md). Its fast animation should **not** be silently replaced with an RK4 per-frame animation.
+- **Modern Demos** uses one same-origin, lazily loaded Legacy iframe with a narrow catalog/state/command message bridge (`ModernDemos.js` and `LegacyDemoEmbed.js`). The nine demo families remain authored exclusively in `CurvatureDemos.js`; changing demos stops playback, with no conversion to RK4 or Modern experiment state.
 - `CurvatureModern.html` loads its own UI (`src/ui/modern/ModernApp.js`), state validators, scene composition and renderers. **Scene** has one viewport; **Compare** renders two physical configurations using separate A/B graphs with shared camera/object inputs. Compare A and B can use different surface and atmosphere settings.
 - `src/ui/modern/ModernRoute.js` recognizes `CurvatureApp.html?ui=modern`, redirects to the Modern document and can restore the canonical URL in browser history. Legacy `?state=` and Modern `?experiment=` are **different formats** and are not interchangeable.
 
