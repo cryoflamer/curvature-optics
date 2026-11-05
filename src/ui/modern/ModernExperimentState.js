@@ -115,8 +115,10 @@
     var url=new URL(href);
     url.searchParams.set('ui','modern');url.searchParams.delete('state');
     url.searchParams.set(PARAM,encode(value));
-    // Standalone Modern document and canonical URL refer to the same shell.
-    url.pathname=url.pathname.replace(/CurvatureModern\.html$/,'CurvatureApp.html');
+    // Shared links always point to the actual primary Modern document.
+    // Old canonical links via CurvatureApp.html?ui=modern still resolve through
+    // ModernRoute, but new links never depend on that compatibility redirect.
+    url.pathname=url.pathname.replace(/CurvatureApp\.html$/,'CurvatureModern.html');
     return url.href;
   }
   return Object.freeze({VERSION:VERSION,PARAM:PARAM,STORAGE_KEY:STORAGE_KEY,

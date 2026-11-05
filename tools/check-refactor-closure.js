@@ -26,6 +26,7 @@ const tests = [
   'tests/ModernDeadHandlerCleanup141271.test.js',
   'tests/ModernRetiredGpuStyleCleanup141270.test.js',
   'tests/ModernUiBootstrap.test.js',
+  'tests/ModernPrimaryEntry.test.js',
   'tests/ModernPhysicalCompare.test.js',
   'tests/ModernWebGPURetirement141253.test.js',
   'tests/ResearchArchive141274.test.js',

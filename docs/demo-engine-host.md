@@ -3,7 +3,7 @@
 The Modern **Demos** tab loads `CurvatureDemosHost.html?embed=demos`, not
 `CurvatureApp.html`. The new host owns the original `JsGraph1` Canvas, model,
 `Demos` catalog, `ModelAnimation` timeline and parser-time hidden control
-panels. The standalone Legacy page is still supported and unchanged.
+panels. The standalone Legacy diagnostic runtime is still supported by explicitly opening `CurvatureApp.html?ui=legacy` or a historical demo/state URL; bare `CurvatureApp.html` redirects to Modern.
 
 The host uses the **same script sequence as Legacy**, excluding the optional
 Legacy reference-export UI, the Modern redirector and the old embed entrypoint
@@ -43,7 +43,7 @@ From a local HTTP server, open `CurvatureModern.html`, choose **Demos**, and
 try all nine families. Verify Play/Pause, Next/Previous, Restart, switching
 families while playing and returning from Scene/Compare. Confirm that
 `CurvatureDemosHost.html?embed=demos` (not `CurvatureApp.html`) is the loaded
-iframe URL in developer tools. Finally open standalone `CurvatureApp.html` to
+iframe URL in developer tools. Finally open `CurvatureApp.html?ui=legacy` to
 check that its reference animations still work.
 
 ## #140.12.80: controller and DOM creation ports

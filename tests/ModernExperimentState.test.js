@@ -35,7 +35,7 @@ test('134: versioned experiment encodes and decodes all shared Scene and indepen
   assert.match(token,/^[A-Za-z0-9_-]+$/);
   assert.deepEqual(codec.decode(token),e);
   const url=codec.urlWithExperiment('https://example.org/demo/CurvatureModern.html?ui=modern&state=legacy&tab=View#App',e);
-  assert.match(url,/CurvatureApp\.html\?ui=modern/);
+  assert.match(url,/CurvatureModern\.html\?ui=modern/);
   const parsed=new URL(url);
   assert.equal(parsed.searchParams.has('state'),false);
   assert.equal(parsed.searchParams.get('tab'),'View');
@@ -98,7 +98,7 @@ test('134: browser integration restores URL over local state and keeps arriving 
   assert.equal(copied.compare.B.atmosphere,'vacuum');
   assert.equal(original.compare.B.atmosphere,'inverse-spherical');
 });
-test('134: local restore, URL auto-sync after edit and reset preserve Legacy URL namespace',()=>{
+test('134: local restore, URL auto-sync after edit and reset preserve Modern experiment namespace',()=>{
   const saved=experiment();saved.scene.camera.Height=40;saved.display.mode='scene';
   const h=boot('https://example.org/CurvatureApp.html?ui=modern',JSON.stringify(saved));
   assert.equal(h.app.getModel().Height,40);

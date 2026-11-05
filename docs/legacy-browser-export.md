@@ -10,7 +10,7 @@ From the project root:
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/CurvatureApp.html` in Opera. In the toolbar directly under **Canvas engine** and **Optical comparison**, use **Legacy reference capture**:
+Open `http://localhost:8000/CurvatureApp.html?ui=legacy` in Opera (the bare entry now routes to Modern). In the toolbar directly under **Canvas engine** and **Optical comparison**, use **Legacy reference capture**:
 
 - **Export current PNG + JSON (ZIP)**: export the presently displayed original Legacy Canvas and its current demo position plus numerical and browser metadata. This is an ad hoc observation, not one of the fixture-backed six references unless explicitly reviewed; stop playback first and select **Legacy** / **Original (legacy k)**.
 - **Export all 6 references (ZIP)**: read the existing six selected states from `tests/fixtures/legacy-reference-scenarios.json`, create six fresh temporary same-origin Legacy frames in a small visible capture preview at the lower-right of the window, select each state with the original `Demos.SetDemo(demo, false, sourceIndex)`, and export one ZIP containing six Canvas PNGs and `manifest.json`. The visible page's current model and demo are not changed. A failure cancels the entire download rather than publishing a partial archive.

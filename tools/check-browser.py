@@ -36,7 +36,7 @@ def main():
             browser = p.chromium.launch(headless=True, executable_path=args.browser or '/usr/bin/chromium', args=['--no-sandbox'])
             page = browser.new_page(viewport={'width': 1440, 'height': 1000}, device_scale_factor=1)
             page.on('pageerror', lambda error: errors.append(str(error)))
-            page.goto(f'http://127.0.0.1:{server.server_address[1]}/CurvatureApp.html', wait_until='load', timeout=30000)
+            page.goto(f'http://127.0.0.1:{server.server_address[1]}/CurvatureApp.html?ui=legacy', wait_until='load', timeout=30000)
             page.locator('#TransLineButton').click()
             page.evaluate("""() => {
                 const el = document.querySelector('#OpticsMethod');

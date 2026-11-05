@@ -3,6 +3,9 @@
 > **Historical design record retained for regression tests.** Statements below
 > about future UI work or moving diagnostics into Legacy predate the current
 > separate Legacy/Modern applications and the #140.12.74 research archival.
+> **Superseded by #140.12.87:** bare `CurvatureApp.html` now redirects to
+> the canonical `CurvatureModern.html`. The original Legacy UI is reached at
+> `CurvatureApp.html?ui=legacy` or via old demo/state URLs.
 > Refer to [architecture](architecture.md) and [user guide](user-guide.md)
 > for implemented behavior.
 

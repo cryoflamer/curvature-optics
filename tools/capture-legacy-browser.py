@@ -174,7 +174,7 @@ def capture_one(browser, base_url, stage, sample, timeout):
     page.on('response', lambda resp: local_http_errors.append(f'{resp.status} {resp.url}')
             if resp.status >= 400 and resp.url.startswith(base_url) else None)
     try:
-        page.goto(base_url + '/CurvatureApp.html', wait_until='load', timeout=timeout)
+        page.goto(base_url + '/CurvatureApp.html?ui=legacy', wait_until='load', timeout=timeout)
         page.wait_for_function("""() => typeof Demos === 'object' && Demos.DemoList.length === 9 &&
           typeof CurveApp === 'object' && typeof graph === 'object' && graph.Canvas &&
           graph.Canvas.width > 15 && graph.Canvas.height > 15""", timeout=timeout)

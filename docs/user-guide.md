@@ -8,8 +8,8 @@ Use a local HTTP server to open the two independent applications (see the root [
 python3 -m http.server 8000
 ```
 
-- **Legacy:** <http://localhost:8000/CurvatureApp.html>
-- **Modern Scene/Compare/Demos:** <http://localhost:8000/CurvatureModern.html> (or the canonical `CurvatureApp.html?ui=modern` URL)
+- **Legacy diagnostics:** <http://localhost:8000/CurvatureApp.html?ui=legacy> (the bare historical entry now opens Modern)
+- **Modern Scene/Compare/Demos:** <http://localhost:8000/CurvatureModern.html> (primary URL; old `CurvatureApp.html?ui=modern` links redirect here)
 
 No build step is required to serve the tracked HTML and JS. Browser settings, hardware acceleration and viewport size can affect appearance and performance.
 
@@ -56,7 +56,7 @@ Do **not** treat a matching silhouette or a pixel difference alone as proof of p
 
 ### Save and share Modern scenes
 
-- **Copy experiment URL** creates a versioned `?ui=modern&experiment=...` link. Its data format is different from Legacy `?state=`.
+- **Copy experiment URL** creates a direct `CurvatureModern.html?ui=modern&experiment=...` link. Its data format is different from Legacy `?state=`.
 - **Experiment library** saves and loads named browser-local configurations and can **Export current JSON** / **Import JSON**. A saved browser-library entry is not a portable backup until exported; local storage is browser/profile-specific.
 - Historical `gpuProbe` fields may still be accepted by the experiment validator for backward compatibility. They **do not** restore the removed research execution paths.
 

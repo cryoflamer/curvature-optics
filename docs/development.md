@@ -12,7 +12,7 @@ No `package.json` dependency installation, webpack build or generated HTML is ne
 
 ```sh
 python3 -m http.server 8000
-# Open http://localhost:8000/CurvatureApp.html
+# Open http://localhost:8000/CurvatureApp.html?ui=legacy for diagnostics
 # Open http://localhost:8000/CurvatureModern.html
 ```
 
@@ -55,7 +55,7 @@ node --test tests/*.test.js
 
 ## Manual browser acceptance before claiming release readiness
 
-1. **Legacy:** open `CurvatureApp.html`, run several demos (including TransLine and Bedford); pause/resume, step in both directions, test `?demo=TransLine&pos=5`, and try existing saved-state controls. Inspect the console.
+1. **Legacy:** open `CurvatureApp.html?ui=legacy`, run several demos (including TransLine and Bedford); pause/resume, step in both directions, test `?demo=TransLine&pos=5`, and try existing saved-state controls. Inspect the console.
 2. **Modern Scene:** try a preset in vacuum and standard atmosphere, change curvature to exact flat, recalculate and exercise camera interaction. Note any unresolved results as unresolved, **not** necessarily invisible.
 3. **Modern Compare:** verify A/B independent surface/atmosphere inputs, shared camera/objects, and scene export/import. Use **Canvas 2D** first; optionally check **WebGL2** and the capability report without assuming GPU optical computing.
 4. Record browser/OS, viewport size, DPR, input configuration and failure mode if reporting a bug. If exporting new Legacy references, use a **new ZIP**, never overwrite the frozen canonical archive without reviewed evidence.

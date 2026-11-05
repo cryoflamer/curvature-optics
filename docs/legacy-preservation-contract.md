@@ -50,14 +50,14 @@ The URL handler delays Legacy demo/state application by 1000 ms after initializa
 
 ## Browser acceptance checklist (manual, **not** claimed as executed by the Node tests)
 
-Serve the repository root in the usual way, for example `python3 -m http.server 8000` and open `http://localhost:8000/CurvatureApp.html` in Opera/Chromium. Use a fresh tab after changing the page. Confirm the following **before** a future module move or deletion:
+Serve the repository root in the usual way, for example `python3 -m http.server 8000` and open `http://localhost:8000/CurvatureApp.html?ui=legacy` in Opera/Chromium (the bare entry now routes to Modern). Use a fresh tab after changing the page. Confirm the following **before** a future module move or deletion:
 
-1. The default page opens Legacy, not Modern, with its drawing present and **Canvas engine = Legacy**. No blocking JavaScript errors appear in DevTools.
+1. The explicit `?ui=legacy` page opens Legacy, not Modern, with its drawing present and **Canvas engine = Legacy**. No blocking JavaScript errors appear in DevTools.
 2. Click each of the **nine** named demo tabs (`Curve`, `Causeway`, `TrnsmLine` / URL `TransLine`, `Grace`, `Chicago`, `Canigou`, `Bedford`, `Tensas`, `Soundly`). Each starts its own storyboard and draws its own objects; switching demos works. Look for actual motion and gradual field changes, not only a static last frame.
 3. In TransLine, use **Play/Stop**, **Back**, **Forward**, **Count** and a click on the **Canvas**. Verify pause/resume, both directions, first/last jump and Canvas playback toggle. Clicking the active demo while running should advance one step. Reset returns to the initial scene.
 4. Open the URL cases in the table above in fresh tabs. For `pos=5`, check the fifth TransLine state without autoplay. For `play=1` without `pos`, check that playback begins. Restore a real `Get App State URL` link and verify the state fields survived; don't use a fabricated `state` string.
 5. Click **Export all 6 references (ZIP)**. Validate the downloaded ZIP with `python3 tools/validate-legacy-visual-reference.py --candidate /path/to/new.zip` according to that tool's documented CLI. For pixel comparisons, consult [visual reference validation](legacy-visual-validation.md); don't assume identical PNGs across browser/DPR/platform settings.
-6. Open `http://localhost:8000/CurvatureApp.html?ui=modern` separately. Confirm Modern Scene and Compare still work, and its Legacy link returns to Legacy. Do **not** expect the Modern RK4 solver to animate at Legacy speed.
+6. Open `http://localhost:8000/CurvatureModern.html` separately (and confirm bare `CurvatureApp.html` redirects there). Confirm Modern Scene and Compare still work, and its Legacy link returns to Legacy. Do **not** expect the Modern RK4 solver to animate at Legacy speed.
 
 A browser failure must be investigated before deleting or relocating affected code, even when the static contract and VM tests pass. **The six archived reference images and the `optics-baseline-2026-11` tag are protected evidence.**
 

@@ -218,15 +218,16 @@ test('Legacy ?state= serialized URL remains independently restorable and subordi
   assert.equal(empty.jobs.length, 0);
 });
 
-test('shared entrypoint router keeps Legacy as default and redirects only explicit ui=modern', () => {
-  for (const q of ['', '?ui=legacy', '?state=s', '?demo=Curve&pos=12', '?play=1', '?experiment=s']) {
+test('primary Modern route preserves original Legacy deep links and explicitly requested diagnostics', () => {
+  for (const q of ['?ui=legacy', '?state=s', '?demo=Curve&pos=12', '?play=1',
+    '?tab=View', '?embed=demos', '?ui=other']) {
     assert.equal(route.isModern(q), false, q);
   }
-  assert.equal(route.isModern('?ui=modern&demo=Curve&pos=5'), true);
+  for (const q of ['', '?experiment=s', '?ui=modern&demo=Curve&pos=5']) {
+    assert.equal(route.isModern(q), true, q);
+  }
   const loc = {pathname:'/nested/CurvatureApp.html', search:'?ui=modern&experiment=x', hash:'#App'};
   assert.equal(route.target(loc), '/nested/CurvatureModern.html?ui=modern&experiment=x#App');
-  assert.equal(route.canonical({...loc, pathname:'/nested/CurvatureModern.html'}),
-    '/nested/CurvatureApp.html?ui=modern&experiment=x#App');
 });
 
 test('the archived Opera visual evidence is still readable by its existing independent validator', () => {

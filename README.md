@@ -1,9 +1,9 @@
 # Curvature Optics
 
-Browser-based Earth-curvature and atmospheric-refraction visualizations, with **two deliberately different interfaces**:
+Browser-based Earth-curvature and atmospheric-refraction visualizations, with **Modern as the primary interface**:
 
-- **Legacy** (`CurvatureApp.html`) — fast, interactive illustrated demonstrations and animated storyboards. Preserve its original behavior; it is not required to reproduce Modern's numerical optics.
-- **Modern** (`CurvatureModern.html`) — physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
+- **Demos** (Modern tab backed by `CurvatureDemosHost.html?embed=demos`) — nine original fast illustrated Legacy storyboards, running in their own isolated iframe. The historical `CurvatureApp.html?ui=legacy` page is retained for diagnostics and old saved links.
+- **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
 The former standalone WebGPU optics harness and Modern's optional CPU research panel were **removed from the active tree** in #140.12.74. Neither is required to run these applications. The **Check GPU** button only reports capabilities; it does **not** perform WebGPU optical calculations. See [research archive](docs/research-archive.md) for history and recovery.
 
@@ -16,15 +16,16 @@ cd curvature-optics
 python3 -m http.server 8000
 ```
 
-Open one of the following in a browser:
+Open the main interface in a browser; the older URL is a compatibility entry:
 
 | Purpose | URL |
 | --- | --- |
-| Legacy animations | <http://localhost:8000/CurvatureApp.html> |
-| Modern Scene/Compare | <http://localhost:8000/CurvatureModern.html> |
-| Canonical Modern link | <http://localhost:8000/CurvatureApp.html?ui=modern> |
+| **Modern Scene/Compare/Demos (primary)** | <http://localhost:8000/CurvatureModern.html> |
+| Historical entry (redirects to Modern) | <http://localhost:8000/CurvatureApp.html> |
+| Legacy diagnostics (explicit opt-in) | <http://localhost:8000/CurvatureApp.html?ui=legacy> |
+| Existing Legacy demo/state links | `CurvatureApp.html?demo=...` / `CurvatureApp.html?state=...` (still Legacy) |
 
-The canonical link redirects to the separate Modern document; the Modern document may rewrite the visible URL back to the canonical form. Direct file opening is not the recommended verification environment. A local server is also useful when testing saved links and loading scripts.
+Bare `CurvatureApp.html` and older `?ui=modern` bookmarks redirect to `CurvatureModern.html`. Modern now keeps its own URL and generates direct Modern experiment links; no history rewrite back to Legacy. Old `?tab=`, `?demo=`, `?pos=`, `?play=`, `?state=` and `?embed=` URLs still boot the original Legacy runtime for compatibility. Direct file opening is not the recommended verification environment. A local server is also useful when testing saved links and loading scripts.
 
 For first-time use, start with the [user guide](docs/user-guide.md). **Modern may take appreciably longer to recalculate** because it numerically traces refracted rays; it is not intended to animate every Legacy storyboard frame.
 
@@ -32,7 +33,7 @@ For first-time use, start with the [user guide](docs/user-guide.md). **Modern ma
 
 | Area | Primary code / contract |
 | --- | --- |
-| Legacy app and demonstrations | `CurvatureApp.html`, `src/animation/CurvatureDemos.js`, `src/app/CurvatureModel.js`, `src/legacy/` |
+| Legacy diagnostics and demonstrations | `CurvatureApp.html?ui=legacy`, `CurvatureDemosHost.html`, `src/animation/CurvatureDemos.js`, `src/app/CurvatureModel.js`, `src/legacy/` |
 | Modern UI, saved configurations, routing | `CurvatureModern.html`, `src/ui/modern/`, `src/ui/modern/ModernRoute.js` |
 | Physical optics | `src/optics/OpticalRayTracer.js`, `OpticalTargetProjection.js`, `OpticalSharedRayField.js`, `CurvaturePhysicalSceneOptics.js` |
 | Geometry, scene and rendering | `src/geometry/`, `src/scene/`, `src/renderers/`, `src/app/CurvatureMainCanvasRenderer.js` |
@@ -68,4 +69,4 @@ This is an automated regression gate, **not** a substitute for checking animatio
 
 ## Modern Demos — all nine original animations (#140.12.78)
 
-In Modern, the **Demos** tab embeds all nine original Legacy animation families. Choose a demonstration, then use Play/Pause, Previous/Next and Restart controls. This is one isolated, lazily loaded iframe backed by the original fast Legacy renderer—not a conversion to RK4. Switching families stops playback and starts the selected demonstration at its first key state. Scene/Compare and the standalone `CurvatureApp.html` continue to work. See [user guide](docs/user-guide.md).
+In Modern, the **Demos** tab embeds all nine original Legacy animation families. Choose a demonstration, then use Play/Pause, Previous/Next and Restart controls. This is one isolated, lazily loaded iframe backed by the original fast Legacy renderer—not a conversion to RK4. Switching families stops playback and starts the selected demonstration at its first key state. Scene/Compare and opt-in Legacy diagnostics (`CurvatureApp.html?ui=legacy`) continue to work. See [user guide](docs/user-guide.md).

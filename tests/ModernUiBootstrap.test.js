@@ -8,23 +8,22 @@ const root=path.resolve(__dirname,'..');
 const source=p=>fs.readFileSync(path.join(root,p),'utf8');
 const route=require('../src/ui/modern/ModernRoute');
 
-test('URL router keeps Legacy default and routes only explicit modern requests',()=>{
-  assert.equal(route.isModern(''),false);
+test('URL router defaults to Modern and retains explicit Legacy and historical deep links',()=>{
+  assert.equal(route.isModern(''),true);
   assert.equal(route.isModern('?ui=legacy'),false);
   assert.equal(route.isModern('?ui=compare'),false);
-  assert.equal(route.isModern('?model=modern'),false);
+  assert.equal(route.isModern('?model=modern'),true);
   assert.equal(route.isModern('?ui=modern'),true);
   assert.equal(route.isModern('?foo=1&ui=modern&foo=2'),true);
+  for(const query of ['?state=old', '?demo=TransLine&pos=5', '?play=1', '?tab=View',
+    '?embed=demos', '?pos=0', '?state=', '?ui=legacy&experiment=abc'])
+    assert.equal(route.isModern(query),false,query);
+  assert.equal(route.isModern('?ui=modern&demo=Curve'),true);
   const location={pathname:'/projects/CurvatureApp.html',search:'?ui=modern&x=1',hash:'#scene'};
   assert.equal(route.target(location),'/projects/CurvatureModern.html?ui=modern&x=1#scene');
-  assert.equal(route.canonical({...location,pathname:'/projects/CurvatureModern.html'}),
-    '/projects/CurvatureApp.html?ui=modern&x=1#scene');
   assert.equal(route.redirect({...location,search:'?ui=legacy',replace(){throw Error('Should not navigate');}}),false);
   let navigated='';route.redirect({...location,replace(url){navigated=url;}});
   assert.equal(navigated,'/projects/CurvatureModern.html?ui=modern&x=1#scene');
-  let canonical='';route.restoreCanonical({...location,pathname:'/projects/CurvatureModern.html'},
-    {state:null,replaceState(_state,_title,url){canonical=url;}});
-  assert.equal(canonical,'/projects/CurvatureApp.html?ui=modern&x=1#scene');
   assert.throws(()=>route.target({pathname:'/x/unknown.html'}),/Unrecognized/);
 });
 
