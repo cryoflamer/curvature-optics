@@ -6,14 +6,12 @@ var legacyAppContext = window.CurvatureLegacyAppContext.create({
   applyState: function(model,state){return JsonToAppState(state,model);}
 });
 var CurveApp = legacyAppContext.model;
-var UpdateAllRunning = false;
 // This flag affects only temporary ground-guide presentation, never optics or
 // tower visibility. After the last change the complete frame is restored.
 var physicalCanvasInteractive = false;
 var physicalCanvasSettleTimer = null;
 // Only changes to the observer height debounce the expensive RK4 cold build.
 // A pending height never triggers an incorrect/approximate Physical scene.
-var physicalCanvasPreviousHeight = null;
 var physicalHeightScheduler120 = null;
 function QueuePhysicalHeightChange(){
   if(!physicalHeightScheduler120&&window.CurvatureHeightChangeScheduler){
@@ -50,38 +48,30 @@ function SchedulePhysicalCanvasFinalFrame(){
 }
 
 
-function UpdateAll( stopAnimation ) {
-  if (UpdateAllRunning) return;
-  UpdateAllRunning = true;
-  try {
-    stopAnimation = xDefBool( stopAnimation, true );
-    if (stopAnimation) {
-      Demos.Reset();
-      CurveApp.DemoText = '';
-      CurveApp.Description = '';
-      ShowMoreInfos();
-    }
-    CurveApp.Update();
-    if (window.CurvatureOpticsUI) CurvatureOpticsUI.sync();
-    ControlPanels.Update();
-    if(typeof SyncPhysicalCurvatureControl127==='function')SyncPhysicalCurvatureControl127();
-    var currentHeight=CurveApp.Height;
-    var changedHeight=physicalCanvasPreviousHeight!==null&&
-      currentHeight!==physicalCanvasPreviousHeight;
-    physicalCanvasPreviousHeight=currentHeight;
-    var physicalSelector=document.getElementById('MainCanvasRenderer');
-    var heightPending=changedHeight&&physicalSelector&&physicalSelector.value==='physical'&&
-      QueuePhysicalHeightChange();
-    if(!heightPending){
-      if(physicalHeightScheduler120)physicalHeightScheduler120.cancel();
-      SchedulePhysicalCanvasFinalFrame();
-      graph.Redraw();
-    }
-    if (typeof ScheduleOpticalP4Refresh === 'function') ScheduleOpticalP4Refresh();
+// The standalone page and the Demos host retain the historical UpdateAll
+// entrypoint. The refresh sequence itself belongs to the instance-scoped
+// coordinator, not to the browser globals above.
+var legacyUpdateCoordinator = window.CurvatureLegacyUpdateCoordinator.create({
+  getModel: function(){return legacyAppContext.model;},
+  resetDemos: function(){Demos.Reset();},
+  showInfo: function(){ShowMoreInfos();},
+  syncOptics: function(){if(window.CurvatureOpticsUI)CurvatureOpticsUI.sync();},
+  updatePanels: function(){ControlPanels.Update();},
+  syncCurvature: function(){SyncPhysicalCurvatureControl127();},
+  isPhysical: function(){
+    var selector=document.getElementById('MainCanvasRenderer');
+    return !!selector&&selector.value==='physical';
+  },
+  queueHeightChange: function(){return QueuePhysicalHeightChange();},
+  cancelHeightChange: function(){if(physicalHeightScheduler120)physicalHeightScheduler120.cancel();},
+  scheduleFinalFrame: function(){SchedulePhysicalCanvasFinalFrame();},
+  redraw: function(){legacyAppContext.redraw();},
+  refreshOptics: function(){
+    if(typeof ScheduleOpticalP4Refresh==='function')ScheduleOpticalP4Refresh();
   }
-  finally {
-    UpdateAllRunning = false;
-  }
+});
+function UpdateAll(stopAnimation){
+  return legacyUpdateCoordinator.update(stopAnimation);
 }
 
 xOnLoad(
@@ -95,6 +85,7 @@ xOnLoad(
 // Never let the preview replace geometry exports, and do not conflate the
 // independent Canvas engine with the separate Optical P4 comparison selector.
 function DrawMainCanvasFrame(g) {
+  var model=legacyAppContext.model;
   var selector = document.getElementById('MainCanvasRenderer');
   var status = document.getElementById('MainCanvasRendererStatus');
   var independent = window.CurvatureMainCanvasRenderer;
@@ -104,7 +95,7 @@ function DrawMainCanvasFrame(g) {
     return DrawModelWithOptionalAudit(g);
   }
   var physicalMode = selector.value === 'physical';
-  var availability = physicalMode ? independent.supportPhysical(CurveApp) : independent.support(CurveApp);
+  var availability = physicalMode ? independent.supportPhysical(model) : independent.support(model);
   if (!availability.supported) {
     if (status) status.textContent = availability.reason;
     return DrawModelWithOptionalAudit(g);
@@ -114,7 +105,7 @@ function DrawMainCanvasFrame(g) {
     if (physicalMode) {
       var atmosphere = document.getElementById('PhysicalCanvasAtmosphere');
       var radius = document.getElementById('PhysicalCanvasOcclusionRadius');
-      result = independent.renderPhysical(g, CurveApp, {
+      result = independent.renderPhysical(g, model, {
         atmosphere:atmosphere ? atmosphere.value : 'vacuum',
         occlusionRadius:radius ? Number(radius.value) : 6371000,
         interactive:physicalCanvasInteractive
@@ -208,7 +199,7 @@ function DrawMainCanvasFrame(g) {
           pieces.join(' | ')+'. Physical ground grid/horizon; authored foundation fills, mutual object occlusion pending.';
       }
     } else {
-      result = independent.render(g, CurveApp);
+      result = independent.render(g, model);
       if (status) status.textContent = result.warning;
     }
   } catch (error) {
