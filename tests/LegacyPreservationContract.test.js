@@ -59,6 +59,9 @@ function makeDemosHarness() {
     InitCustomDemo(){},
     ShowMoreInfos(){},
   };
+  // The browser bootstrap supplies the Legacy model/state context before the
+  // authored storyboard is registered; mirror that ownership in this harness.
+  context.legacyAppContext = {model:context.CurveApp,applyState:context.JsonToAppState};
   vm.runInNewContext(source('src/animation/LegacyDemoManager.js'), context,
     {filename:'LegacyDemoManager.js', timeout:5000});
   vm.runInNewContext(source('src/animation/CurvatureDemos.js'), context,

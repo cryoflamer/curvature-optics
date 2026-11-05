@@ -16,6 +16,7 @@ const tests = [
   'tests/LegacyDemosMountBoundary141280.test.js',
   'tests/LegacyDemosDirectPort.test.js',
   'tests/LegacyDemoManagerInstances.test.js',
+  'tests/LegacyAppContextInstances.test.js',
   'tests/LegacyHeadlessReference.test.js',
   'tests/LegacyReferenceScenarios.test.js',
   'tests/ModernHelperReachability141272.test.js',

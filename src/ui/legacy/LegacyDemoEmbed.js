@@ -102,7 +102,11 @@
     getDemos:function(){return root.Demos;},
     publish:function(data){notify('state',data);},
     catalog:function(names){notify('catalog',{names:names});},
-    redraw:function(){if(root.graph)root.graph.Redraw();}
+    redraw:function(){
+      if(root.legacyAppContext)return root.legacyAppContext.redraw();
+      // Older embedded Legacy pages do not have an instance context.
+      if(root.graph)root.graph.Redraw();
+    }
   });
   // No global Legacy model, Canvas or manager escapes through this API.
   // The subscription replays the catalog and latest state for late binders.

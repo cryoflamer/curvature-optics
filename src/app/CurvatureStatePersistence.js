@@ -79,7 +79,8 @@ function CompactJson( ) {
   CurveApp.StateDisplay.focus();
 }
 
-function JsonToAppState( modelStateStr ) {
+function JsonToAppState( modelStateStr, targetModel ) {
+  var model = targetModel || CurveApp;
   var key1 = 'CurveApp = ';
   var p = modelStateStr.indexOf( key1 );
   if (p == -1) {
@@ -88,8 +89,8 @@ function JsonToAppState( modelStateStr ) {
   }
   var json = modelStateStr.substring( key1.length );
 
-  if (!DataX.FromJson( CurveApp, CurveAppMetaData, json )) return false;
-  CurveApp.AllStatesChanged = true;
+  if (!DataX.FromJson( model, CurveAppMetaData, json )) return false;
+  model.AllStatesChanged = true;
   return true;
 }
 

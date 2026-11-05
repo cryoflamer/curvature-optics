@@ -1,4 +1,11 @@
-var CurveApp = new CurveAppClass();
+// One model/Canvas owner per Legacy runtime. Keep the historical globals as
+// compatibility aliases until all authored modules accept instance ports.
+var legacyAppContext = window.CurvatureLegacyAppContext.create({
+  createModel: function(){return new CurveAppClass();},
+  createGraph: function(options){return NewGraphX3D(options);},
+  applyState: function(model,state){return JsonToAppState(state,model);}
+});
+var CurveApp = legacyAppContext.model;
 var UpdateAllRunning = false;
 // This flag affects only temporary ground-guide presentation, never optics or
 // tower visibility. After the last change the complete frame is restored.
@@ -213,7 +220,7 @@ function DrawMainCanvasFrame(g) {
   }
 }
 
-var graph = NewGraphX3D( {
+var graph = legacyAppContext.mountGraph( {
   Id: 'JsGraph1',
   Width: '100%',
   Height: '66.67%',

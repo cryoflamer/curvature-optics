@@ -13,9 +13,9 @@ var Demos = CurvatureLegacyDemoManager.create({
   removeClass: xRemoveClass,
   setHTML: xInnerHTML,
   createAnimation: NewModelAnimation,
-  getModel: function(){return CurveApp;},
+  getModel: function(){return legacyAppContext.model;},
   updateAll: function(stop){return UpdateAll(stop);},
-  applyState: function(state){return JsonToAppState(state);},
+  applyState: function(state){return legacyAppContext.applyState(state);},
   showInfo: function(info){return ShowMoreInfos(info);},
   initCustom: function(){return InitCustomDemo();}
 });

@@ -16,11 +16,12 @@ test('model, capture diagnostics, and bootstrap have explicit script ownership',
   assert.deepEqual(scripts.slice(scripts.indexOf(model), scripts.indexOf(runtime) + 1),
     [model, 'src/diagnostics/CurvaturePhysicalSanity.js', diagnostic, 'src/app/CurvaturePhysicalCamera.js',
       'src/app/CurvaturePhysicalCurvature.js', 'src/app/CurvatureMainCanvasRenderer.js',
-      'src/app/CurvatureCanvasFrameScheduler.js', 'src/app/CurvatureHeightChangeScheduler.js', runtime]);
+      'src/app/CurvatureCanvasFrameScheduler.js', 'src/app/CurvatureHeightChangeScheduler.js',
+      'src/app/LegacyAppContext.js', runtime]);
   assert.match(source(model), /function CurveAppClass\(\)/);
   assert.match(source(model), /CurveAppClass\.prototype\.UpdateObjectInput/);
   assert.match(source(diagnostic), /function DrawModelWithOptionalAudit\(g\)/);
-  assert.match(source(runtime), /var CurveApp = new CurveAppClass\(\)/);
+  assert.match(source(runtime), /var CurveApp = legacyAppContext\.model/);
   assert.match(source(runtime), /DrawFunc: DrawMainCanvasFrame/);
   assert.doesNotMatch(source(runtime), /GeometryDiagnosticsZip|function CurveAppClass|captureFrame\(/);
   assert.doesNotMatch(source(model), /document\.getElementById|NewGraphX3D\(/);
@@ -53,6 +54,7 @@ test('classic scripts initialize global handlers and graph without a module load
   // This test checks the startup contract, not the numerical Update algorithm.
   vm.runInContext('CurveAppClass.prototype.Update = function() { this.modelUpdates = (this.modelUpdates || 0) + 1; };', context);
   vm.runInContext(source(diagnostic), context, {filename:diagnostic});
+  vm.runInContext(source('src/app/LegacyAppContext.js'), context, {filename:'src/app/LegacyAppContext.js'});
   vm.runInContext(source(runtime), context, {filename:runtime});
   assert.ok(context.CurveApp instanceof context.CurveAppClass);
   assert.equal(context.CurveApp.modelUpdates, 1);
