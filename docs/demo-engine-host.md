@@ -72,12 +72,35 @@ into the Modern global realm. The DOM port and injected controller address
 **two prerequisites**, not complete isolation. Opera visual parity is not
 certified by Node tests; compare playback and switch behavior manually.
 
+## Instance-scoped Demos manager
+
+`src/animation/LegacyDemoManager.js` now owns the original playback manager
+methods behind `CurvatureLegacyDemoManager.create(ports)`. Each instance owns
+its own demo registry, selection, playback state and animation callbacks. The
+factory receives functions for model access, creating animations, applying
+serialized states, repainting, registering button handlers and updating UI.
+There are **no direct references to global `Demos`, `CurveApp`, `Tabs` or
+`document` inside the instance methods**. The original nine demo definitions
+remain in `CurvatureDemos.js` and are registered against its default instance.
+
+Both `CurvatureApp.html` and `CurvatureDemosHost.html` load the factory before
+the authored catalog. No Legacy storyboard strings or animation definitions
+were rewritten. `tests/LegacyDemoManagerInstances.test.js` exercises two
+managers with the same demo name in a single JS realm and checks that state,
+UI callbacks and playback do not cross between them. The Legacy-preservation
+test still evaluates the original authored demo catalog and its 80 states.
+
+**Remaining obstacle:** only the manager is instance-scoped, not the whole
+Legacy application. The original registration code, `CurveApp` model,
+`graph`, `Tabs`, `ControlPanels` and parser-time runtime bootstrapping still
+use globals. The iframe is still required in the working Modern Demos UI.
+Do not interpret factory tests as browser pixel parity or permission to
+remove the iframe.
+
 ## Next step, not included here
 
-Isolate the remaining Legacy global variables (`CurveApp`, `graph`, `Demos`,
-`ControlPanels`, `Tabs`), extract construction of a canvas/runtime instance
-without loading the historical script bundle into the Modern global realm,
-and bind that instance to the Modern Demos panel. The iframe may be removed
-**only after** browser playback and pixel parity checks of all nine families. Do not delete `CurvatureApp.html` until
-this is implemented and visually compared against the protected Opera
-reference fixtures.
+Make the remaining model/graph/panel dependencies instance-scoped, then
+construct an isolated canvas/runtime without polluting Modern's global realm.
+Remove the iframe **only after** actual Opera playback and visual parity
+checks of all nine families. Do not delete `CurvatureApp.html` before this
+is verified against protected reference fixtures.

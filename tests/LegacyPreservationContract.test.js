@@ -59,6 +59,8 @@ function makeDemosHarness() {
     InitCustomDemo(){},
     ShowMoreInfos(){},
   };
+  vm.runInNewContext(source('src/animation/LegacyDemoManager.js'), context,
+    {filename:'LegacyDemoManager.js', timeout:5000});
   vm.runInNewContext(source('src/animation/CurvatureDemos.js'), context,
     {filename:'CurvatureDemos.js', timeout:5000});
   // Browser load events are explicitly dispatched by the test; they are not
@@ -173,7 +175,7 @@ test('Legacy Canvas click retains its own animation toggle rather than Modern RK
   assert.match(source('src/app/CurvatureAppRuntime.js'), /OnClick:\s*function\(e\)\{\s*Demos\.PlayStop\(\);\s*\}/);
   assert.match(source('src/app/CurvatureAppRuntime.js'), /selector\.value\s*!==\s*'physical'/);
   assert.match(source('CurvatureApp.html'), /id="MainCanvasRenderer"[^>]*><option value="legacy" selected>/);
-  assert.match(source('src/animation/CurvatureDemos.js'), /PlayStop:\s*function\(/);
+  assert.match(source('src/animation/LegacyDemoManager.js'), /PlayStop:\s*function\(/);
 });
 
 test('Legacy demo URL with one-based pos positions the state without autoplay, even with play=1', () => {

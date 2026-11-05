@@ -28,7 +28,7 @@ test('HTML comments, query strings, entities, duplicate scripts and load orderin
   assert.deepEqual(extractScriptSources(html), ['src/a.js?v=1&amp;x=2', 'src/a.js?v=2']);
   assert.deepEqual(report.entrypoints.modern.duplicatedLoads,
     [{file:'src/ui/modern/ModernCompareGraph.js', count:2}]);
-  assert.equal(report.entrypoints.legacy.scriptTags, 97);
+  assert.equal(report.entrypoints.legacy.scriptTags, 98);
   assert.equal(report.entrypoints.legacy.inlineScriptBlocks, 1);
   assert.equal(report.entrypoints.modern.inlineScriptBlocks, 0);
   assert.equal(report.entrypoints.legacy.inlineScriptSha256[0].length, 64);
@@ -44,7 +44,7 @@ test('both live entrypoints have no missing or escaping static JS paths', () => 
       assert.ok(fs.statSync(path.join(root, file)).isFile(), file);
     }
   }
-  assert.equal(readEntryPoint(root, 'CurvatureApp.html').uniqueScripts, 97);
+  assert.equal(readEntryPoint(root, 'CurvatureApp.html').uniqueScripts, 98);
   assert.equal(resolveLocalScript(root, 'CurvatureModern.html', 'src/app/CurvatureModel.js?v=123&amp;b=5'),
     'src/app/CurvatureModel.js');
 });
@@ -105,7 +105,7 @@ test('isolation audit --check is read-only and agrees with checked-in JSON', () 
   const check = spawnSync(process.execPath, ['tools/audit-legacy-isolation.js', '--check'],
     {cwd:root, encoding:'utf8'});
   assert.equal(check.status, 0, check.stderr);
-  assert.match(check.stdout, /OK: Legacy 97 tags; Modern [0-9]+ tags/);
+  assert.match(check.stdout, /OK: Legacy 98 tags; Modern [0-9]+ tags/);
   assert.deepEqual(buildReport(), report);
 });
 

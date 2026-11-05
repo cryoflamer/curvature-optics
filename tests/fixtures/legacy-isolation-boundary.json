@@ -4,8 +4,8 @@
   "entrypoints": {
     "legacy": {
       "file": "CurvatureApp.html",
-      "scriptTags": 97,
-      "uniqueScripts": 97,
+      "scriptTags": 98,
+      "uniqueScripts": 98,
       "inlineScriptBlocks": 1,
       "inlineScriptSha256": [
         "3fc2b54d19b92e11fdb98a5d55557674d8bb92d6a6f609f4df08bcd1c1e9d9d4"
@@ -102,6 +102,7 @@
         "src/ui/panels/ObjectSliders1.js",
         "src/ui/panels/ObjectOptions1.js",
         "src/animation/CurvatureAnimations.js",
+        "src/animation/LegacyDemoManager.js",
         "src/animation/CurvatureDemos.js",
         "src/app/CurvatureAtmosphere.js",
         "src/ui/LengthCalculator.js",
@@ -219,6 +220,7 @@
     "loadedByLegacyNotModern": [
       "src/animation/CurvatureAnimations.js",
       "src/animation/CurvatureDemos.js",
+      "src/animation/LegacyDemoManager.js",
       "src/app/CurvatureAppRuntime.js",
       "src/app/CurvatureAtmosphere.js",
       "src/app/CurvatureCanvasFrameScheduler.js",
@@ -319,7 +321,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 129,
+  "sourceJsCount": 130,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -360,6 +362,14 @@
       "commonJsToolCallers": []
     },
     "src/animation/CurvatureDemos.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/animation/LegacyDemoManager.js": {
       "directHtmlLoads": [
         "legacy"
       ],
