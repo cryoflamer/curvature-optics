@@ -1154,9 +1154,29 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode){
-    if(mode!=='scene'&&mode!=='compare')throw RangeError('Invalid Modern UI mode');
+    if(mode!=='scene'&&mode!=='compare'&&mode!=='demos')throw RangeError('Invalid Modern UI mode');
     cancelCameraDrag();cancelEdits();stopShimmerFrame();
     if(atmosphericShimmer)atmosphericShimmer.resetClock();
+    var demos=root.CurvatureModernDemos;
+    var demosActive=mode==='demos';
+    var workspace=newUiEl('ModernWorkspace');
+    if(workspace)workspace.classList.toggle('is-demos',demosActive);
+    var demosPanel=newUiEl('ModernDemosPanel');if(demosPanel)demosPanel.hidden=!demosActive;
+    var demosTab=newUiEl('ModernDemosTab');
+    if(demosTab){demosTab.classList.toggle('is-active',demosActive);
+      demosTab.setAttribute('aria-pressed',String(demosActive));}
+    if(demosActive){
+      cancelPending();
+      state.demosActive=true;
+      el('ModernSceneTab').classList.remove('is-active');
+      el('ModernCompareTab').classList.remove('is-active');
+      el('ModernSceneTab').setAttribute('aria-pressed','false');
+      el('ModernCompareTab').setAttribute('aria-pressed','false');
+      if(demos)demos.activate();
+      return; // Never serialize Demos as a physical Scene/Compare mode.
+    }
+    if(state.demosActive&&demos)demos.deactivate();
+    state.demosActive=false;
     state.mode=mode;
     el('ModernSceneTab').classList.toggle('is-active',mode==='scene');
     el('ModernCompareTab').classList.toggle('is-active',mode==='compare');
@@ -1461,8 +1481,11 @@
     el('ModernRender').addEventListener('click',redraw);
     el('ModernSceneTab').addEventListener('click',function(){setMode('scene');});
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
+    var demosTab=newUiEl('ModernDemosTab');
+    if(demosTab)demosTab.addEventListener('click',function(){setMode('demos');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
     bindLibrary();
+    if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
     var restored=restoreExperiment();
     syncNumericInputs();
     if(restored){
@@ -1475,7 +1498,7 @@
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
-  root.CurvatureModernApp={getModel:function(){return model;},getMode:function(){return state.mode;},
+  root.CurvatureModernApp={getModel:function(){return model;},getMode:function(){return state.demosActive?'demos':state.mode;},
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
     getCompareModels:function(){return state.comparePair;},

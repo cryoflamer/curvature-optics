@@ -4,14 +4,15 @@
   "entrypoints": {
     "legacy": {
       "file": "CurvatureApp.html",
-      "scriptTags": 96,
-      "uniqueScripts": 96,
+      "scriptTags": 97,
+      "uniqueScripts": 97,
       "inlineScriptBlocks": 1,
       "inlineScriptSha256": [
         "3fc2b54d19b92e11fdb98a5d55557674d8bb92d6a6f609f4df08bcd1c1e9d9d4"
       ],
       "scripts": [
         "src/ui/modern/ModernRoute.js",
+        "src/ui/legacy/LegacyDemoEmbed.js",
         "src/legacy/GraphX3DX.js",
         "src/legacy/LegacySceneAdapter.js",
         "src/scene/SceneFrame.js",
@@ -112,8 +113,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 52,
-      "uniqueScripts": 51,
+      "scriptTags": 53,
+      "uniqueScripts": 52,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -166,6 +167,7 @@
         "src/ui/modern/ModernCompareState.js",
         "src/ui/modern/ModernExperimentState.js",
         "src/ui/modern/ModernExperimentLibrary.js",
+        "src/ui/modern/ModernDemos.js",
         "src/ui/modern/ModernApp.js",
         "src/ui/modern/ModernCompareGraph.js",
         "src/ui/modern/ModernCompareGraph.js"
@@ -270,6 +272,7 @@
       "src/ui/OpticsTowerAuditHandlers.js",
       "src/ui/OpticsTowerFraming.js",
       "src/ui/OpticsVacuumToggle.js",
+      "src/ui/legacy/LegacyDemoEmbed.js",
       "src/ui/panels/ComputedValuesPanel.js",
       "src/ui/panels/LengthCalculatorPanel.js",
       "src/ui/panels/ObjectOptions0.js",
@@ -292,6 +295,7 @@
       "src/ui/modern/ModernCompareGraph.js",
       "src/ui/modern/ModernCompareModel.js",
       "src/ui/modern/ModernCompareState.js",
+      "src/ui/modern/ModernDemos.js",
       "src/ui/modern/ModernExperimentLibrary.js",
       "src/ui/modern/ModernExperimentState.js",
       "src/ui/modern/ModernGpuCapabilities.js",
@@ -314,7 +318,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 126,
+  "sourceJsCount": 128,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1670,6 +1674,14 @@
       "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
+    "src/ui/legacy/LegacyDemoEmbed.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernApp.js": {
       "directHtmlLoads": [
         "modern"
@@ -1783,6 +1795,14 @@
         "tests/ModernSharedCompareControls.test.js",
         "tests/OpticalRayHorizon.test.js"
       ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernDemos.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
     "src/ui/modern/ModernExperimentLibrary.js": {

@@ -1,6 +1,6 @@
 # User guide — Legacy and Modern
 
-Use a local HTTP server to open the two independent applications (see the root [README](../README.md)). They are intentionally different tools, **not** interchangeable skins for the same animation engine.
+Use a local HTTP server to open the two independent applications (see the root [README](../README.md)). The standalone Legacy and Modern physical workspaces use different rendering and state models. **Modern Demos** embeds the original Legacy renderer for one pilot demonstration; it does not convert it into an RK4 scene.
 
 ## Start
 
@@ -9,7 +9,7 @@ python3 -m http.server 8000
 ```
 
 - **Legacy:** <http://localhost:8000/CurvatureApp.html>
-- **Modern Scene/Compare:** <http://localhost:8000/CurvatureModern.html> (or the canonical `CurvatureApp.html?ui=modern` URL)
+- **Modern Scene/Compare/Demos:** <http://localhost:8000/CurvatureModern.html> (or the canonical `CurvatureApp.html?ui=modern` URL)
 
 No build step is required to serve the tracked HTML and JS. Browser settings, hardware acceleration and viewport size can affect appearance and performance.
 
@@ -30,7 +30,13 @@ An explicit `pos` takes precedence over `play`; the `demo` branch takes preceden
 
 The original Legacy Canvas also offers **Export current PNG + JSON (ZIP)** and **Export all 6 references (ZIP)** for reproducibility. These capture browser output; they are **not** measurements or proofs of physical correctness. See [Legacy preservation](legacy-preservation-contract.md) and [visual references](legacy-visual-validation.md).
 
-## Modern — physical scene
+## Modern — physical scene and Demos
+
+### Demos (pilot: TransLine)
+
+Open **Demos** in the Modern header to load the original fast Transmission Line animation. This first migration prototype offers **Play/Pause**, **Previous step**, **Next step**, and **Restart**, with a live step indicator. The canvas remains the original Legacy `JsGraph1` drawing engine; the dedicated Legacy page still works unchanged. The first demo loads lazily inside an isolated iframe (`CurvatureApp.html?ui=legacy&embed=demos`) and pauses when you return to Scene or Compare. Other eight demonstration families have **not** been migrated.
+
+Demos uses **Legacy state and simplified refraction**, not the Scene/Compare optical RK4 model. It is deliberately outside Modern experiment URL/JSON persistence, so visiting Demos does not overwrite your saved Scene/Compare configuration. Use a local HTTP server rather than opening the HTML files directly, because the isolated playback controls require same-origin browser messaging.
 
 ### Scene
 

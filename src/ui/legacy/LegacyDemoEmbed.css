@@ -1,0 +1,9 @@
+/* Presentation-only shell for the first Modern Demos prototype. The renderer,
+   demo transitions and original controls remain intact in the standalone page. */
+html.legacy-demo-embed,html.legacy-demo-embed body{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden}
+html.legacy-demo-embed #Layout-Root,html.legacy-demo-embed #Layout-MainSection,
+html.legacy-demo-embed #Layout-MainFrame,html.legacy-demo-embed #WikiPage,
+html.legacy-demo-embed #Wiki{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important;border:0!important;background:#fff!important;box-shadow:none!important}
+html.legacy-demo-embed #WikiPage>:not(#Wiki),
+html.legacy-demo-embed #Wiki>:not(#JsGraph1){display:none!important}
+html.legacy-demo-embed #JsGraph1{width:100%!important;margin:0!important;max-width:none!important}

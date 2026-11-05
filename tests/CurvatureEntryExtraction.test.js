@@ -65,7 +65,7 @@ test('parser-time panel creation remains synchronous at its original DOM locatio
 
 test('all extracted classic scripts parse independently', () => {
   const extracted = scripts.filter(name => /^(?:src\/(?:app|animation)|src\/ui\/|src\/legacy\/CurvatureLegacyDrawing\.js|src\/diagnostics\/CurvatureLegacyFrameCaptureController\.js)/.test(name) && !['src/ui/ControlPanelX.js', 'src/ui/ModelAnimationX.js'].includes(name));
-  assert.equal(extracted.length, 31); // +1 separate-UI router; Legacy script order unchanged.
+  assert.equal(extracted.length, 32); // +1 opt-in Legacy Demos adapter; original script order remains intact.
   for (const file of extracted) assert.doesNotThrow(() => new vm.Script(read(file), {filename:file}), file);
 });
 
