@@ -108,6 +108,6 @@ test('Legacy entrypoints load coordinator before runtime without exposing it to 
   assert.doesNotMatch(read('CurvatureModern.html'),/LegacyUpdateCoordinator\.js/);
   const runtime=read('src/app/CurvatureAppRuntime.js');
   assert.match(runtime,/legacyUpdateCoordinator\.update\(stopAnimation\)/);
-  assert.match(runtime,/var model=legacyAppContext\.model;/);
+  assert.match(runtime,/getModel: function\(\)\{return legacyAppContext\.model;/);
   assert.match(runtime,/DrawFunc: DrawMainCanvasFrame/);
 });

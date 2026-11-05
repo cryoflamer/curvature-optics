@@ -71,6 +71,7 @@ test('runtime routes normal frames, Both fallback, errors, and audit captures in
     legacyFrameAuditRequested:false,legacyFrameAuditInProgress:false});
   vm.runInContext(source('src/app/LegacyAppContext.js'),context);
   vm.runInContext(source('src/app/LegacyUpdateCoordinator.js'),context);
+  vm.runInContext(source('src/app/LegacyCanvasPresenter.js'),context);
   vm.runInContext(source('src/app/CurvatureAppRuntime.js'),context);
   const g={Reset(){calls.push('reset')}};
   options.DrawFunc(g);assert.deepEqual(calls,['legacy']);calls.length=0;

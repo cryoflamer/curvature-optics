@@ -4,8 +4,8 @@
   "entrypoints": {
     "legacy": {
       "file": "CurvatureApp.html",
-      "scriptTags": 100,
-      "uniqueScripts": 100,
+      "scriptTags": 101,
+      "uniqueScripts": 101,
       "inlineScriptBlocks": 1,
       "inlineScriptSha256": [
         "3fc2b54d19b92e11fdb98a5d55557674d8bb92d6a6f609f4df08bcd1c1e9d9d4"
@@ -95,6 +95,7 @@
         "src/app/CurvatureHeightChangeScheduler.js",
         "src/app/LegacyAppContext.js",
         "src/app/LegacyUpdateCoordinator.js",
+        "src/app/LegacyCanvasPresenter.js",
         "src/app/CurvatureAppRuntime.js",
         "src/diagnostics/LegacyBrowserReferenceExport.js",
         "src/ui/panels/ViewSliders.js",
@@ -229,6 +230,7 @@
       "src/app/CurvatureHeightChangeScheduler.js",
       "src/app/CurvatureStatePersistence.js",
       "src/app/LegacyAppContext.js",
+      "src/app/LegacyCanvasPresenter.js",
       "src/app/LegacyUpdateCoordinator.js",
       "src/diagnostics/CurvatureCameraVerification.js",
       "src/diagnostics/CurvatureCompositionCapture.js",
@@ -325,7 +327,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 132,
+  "sourceJsCount": 133,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -487,6 +489,14 @@
       "commonJsToolCallers": []
     },
     "src/app/LegacyAppContext.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/app/LegacyCanvasPresenter.js": {
       "directHtmlLoads": [
         "legacy"
       ],

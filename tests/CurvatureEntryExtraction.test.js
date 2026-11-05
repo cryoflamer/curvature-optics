@@ -41,7 +41,8 @@ test('legacy drawing declarations load before application boot and diagnostics',
   assert.equal(scripts[diagnostics + 5], 'src/app/CurvatureHeightChangeScheduler.js');
   assert.equal(scripts[diagnostics + 6], 'src/app/LegacyAppContext.js');
   assert.equal(scripts[diagnostics + 7], 'src/app/LegacyUpdateCoordinator.js');
-  assert.equal(bootstrap, diagnostics + 8);
+  assert.equal(scripts[diagnostics + 8], 'src/app/LegacyCanvasPresenter.js');
+  assert.equal(bootstrap, diagnostics + 9);
   assert.match(read('src/legacy/CurvatureLegacyDrawing.js'), /function DrawModel\( g \)/);
   assert.match(read('src/legacy/CurvatureLegacyDrawing.js'), /function DrawShape\( objIx, g, m \)/);
   assert.match(read('src/app/CurvatureAppRuntime.js'), /DrawFunc: DrawMainCanvasFrame/);
@@ -67,7 +68,7 @@ test('parser-time panel creation remains synchronous at its original DOM locatio
 
 test('all extracted classic scripts parse independently', () => {
   const extracted = scripts.filter(name => /^(?:src\/(?:app|animation)|src\/ui\/|src\/legacy\/CurvatureLegacyDrawing\.js|src\/diagnostics\/CurvatureLegacyFrameCaptureController\.js)/.test(name) && !['src/ui/ControlPanelX.js', 'src/ui/ModelAnimationX.js'].includes(name));
-  assert.equal(extracted.length, 35); // Legacy Demos manager factory loads before authored registrations.
+  assert.equal(extracted.length, 36); // Instance presenter joins the Legacy runtime ports.
   for (const file of extracted) assert.doesNotThrow(() => new vm.Script(read(file), {filename:file}), file);
 });
 

@@ -99,6 +99,7 @@ test('109: main UI separates mode, atmosphere, help and runtime diagnostics',()=
   assert.match(html,/id="PhysicalCanvasOcclusionWrap"/);
   assert.match(html,/id="MainCanvasRendererStatus"/);
   assert.match(runtime,/RefreshPhysicalCanvasControls/);
-  assert.match(runtime,/exact ray solves/);
-  assert.match(runtime,/solver, /);
+  const presenter=fs.readFileSync(path.resolve(__dirname,'../src/app/LegacyCanvasPresenter.js'),'utf8');
+  assert.match(presenter,/exact ray solves/);
+  assert.match(presenter,/solver, /);
 });

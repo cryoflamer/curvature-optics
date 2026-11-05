@@ -18,6 +18,7 @@ const tests = [
   'tests/LegacyDemoManagerInstances.test.js',
   'tests/LegacyAppContextInstances.test.js',
   'tests/LegacyUpdateCoordinator.test.js',
+  'tests/LegacyCanvasPresenter.test.js',
   'tests/LegacyHeadlessReference.test.js',
   'tests/LegacyReferenceScenarios.test.js',
   'tests/ModernHelperReachability141272.test.js',

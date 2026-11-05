@@ -17,7 +17,7 @@ const removedResearch=/Curvature(?:WebGPU|Gpu(?:Ds|Precision|HighPrecision|Groun
 test('140.12.74: only the two supported HTML applications are inventoried',()=>{
   const report=audit.buildReport();
   assert.deepEqual(Object.keys(report.entrypoints),['legacy','modern']);
-  assert.equal(report.entrypoints.legacy.scriptTags,100);
+  assert.equal(report.entrypoints.legacy.scriptTags,101);
   assert.ok(report.entrypoints.modern.scriptTags>40);
   for(const entry of Object.values(report.entrypoints)){
     for(const filename of entry.scripts)

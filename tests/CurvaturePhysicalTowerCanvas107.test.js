@@ -120,6 +120,7 @@ test('107: runtime dispatches physical mode and preserves Legacy fallback and au
     legacyFrameAuditRequested:false,legacyFrameAuditInProgress:false});
   vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../src/app/LegacyAppContext.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../src/app/LegacyUpdateCoordinator.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../src/app/LegacyCanvasPresenter.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../src/app/CurvatureAppRuntime.js'),'utf8'),context);
   const g={Reset(){calls.push('reset')}};
   opts.DrawFunc(g);assert.deepEqual(calls,['legacy']);calls.length=0;

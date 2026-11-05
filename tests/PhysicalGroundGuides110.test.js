@@ -65,6 +65,7 @@ test('110: legacy Latin-1 page cannot display raw UTF-8 middle dot',()=>{
   const runtime=fs.readFileSync(path.resolve(__dirname,'../src/app/CurvatureAppRuntime.js'),'utf8');
   assert.match(html,/charset="iso-8859-1"/);
   assert.match(html,/Physical optics &middot; shared scene/);
-  assert.doesNotMatch(runtime,/pieces\.join\(' · '\)/);
-  assert.match(runtime,/Physical ground grid\/horizon/);
+  const presenter=fs.readFileSync(path.resolve(__dirname,'../src/app/LegacyCanvasPresenter.js'),'utf8');
+  assert.doesNotMatch(presenter,/pieces\.join\(' · '\)/);
+  assert.match(presenter,/Physical ground grid\/horizon/);
 });

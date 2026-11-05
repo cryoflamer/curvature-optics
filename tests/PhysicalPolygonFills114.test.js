@@ -95,7 +95,7 @@ test('114: Globe+Standard ground-hidden foundation pieces are clipped, not fille
 test('114: browser loads polygon fills before scene optics and status reports filled triangles',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureApp.html'),'utf8');
   assert.ok(html.indexOf('CurvaturePhysicalPolygonFills.js')<html.indexOf('CurvaturePhysicalSceneOptics.js'));
-  const status=fs.readFileSync(path.join(__dirname,'../src/app/CurvatureAppRuntime.js'),'utf8');
+  const status=fs.readFileSync(path.join(__dirname,'../src/app/LegacyCanvasPresenter.js'),'utf8');
   assert.match(status,/physical fill triangles/);
   assert.doesNotMatch(status,/fills pending/);
 });

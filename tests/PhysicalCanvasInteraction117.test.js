@@ -80,7 +80,8 @@ test('117: browser wiring coalesces only Physical and reports stage timings',()=
  assert.ok(html.indexOf('CurvatureCanvasFrameScheduler.js')<html.indexOf('CurvatureAppRuntime.js'));
  assert.match(runtime,/selector\.value==='physical'\)physicalCanvasFrameScheduler\.schedule\(\)/);
  assert.match(runtime,/physicalCanvasFrameScheduler\.cancel\(\);immediateGraphRedraw\(\)/);
- assert.match(runtime,/t\.canvasMs/);
+ const presenter=fs.readFileSync(path.join(root,'src/app/LegacyCanvasPresenter.js'),'utf8');
+ assert.match(presenter,/t\.canvasMs/);
  assert.match(main,/paintMs:paintOnlyMs/);
  assert.match(main,/renderer\.renderComposition\(g\.Canvas/);
 });
