@@ -123,6 +123,35 @@
       a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));});
     return placed;
   }
+  // The Legacy far/near palette is keyed to the base of an authored tower.
+  // In Physical the horizon is refracted: sample the very same qualified ray
+  // field used for the outlines/fills, never model.rDisk or a geometric dip.
+  // This classifies the tower's *footing*, not visibility of its upper parts;
+  // partially visible upper struts are still clipped by the physical adapter.
+  function opticalFootingVisibility(primitives,field,geometry,radius,eye,metricWorld){
+    var foundation=primitives.find(function(p){return p.type==='polygon'&&
+      p.style&&p.style.fill==='#a38d60'&&Array.isArray(p.points);});
+    if(!foundation||!field||typeof field.sample!=='function')return 'unresolved';
+    var surface=metricWorld&&surfaceApi?
+      surfaceApi.createFromCurvature(geometry==='globe'?1/radius:0):null;
+    var coords=foundation.points.map(function(point){
+      return silhouette.coordinate(point,geometry,radius,eye,surface);
+    });
+    var lowest=Math.min.apply(null,coords.map(function(p){return p.height;}));
+    // The authored foundation rests on h=0; small metric rounding errors
+    // must not move its ray query off the physical ground surface.
+    var feet=coords.filter(function(p){return Math.abs(p.height-lowest)<=0.01;});
+    if(!feet.length)return 'unresolved';
+    var distance=feet.reduce(function(sum,p){return sum+p.distance;},0)/feet.length;
+    var height=Math.max(0,Math.abs(lowest)<0.01?0:lowest);
+    if(!(distance>0)||(geometry==='globe'&&distance>=radius*Math.PI/2))return 'unresolved';
+    var shot;
+    try{shot=field.sample(distance,height);}catch(_error){return 'unresolved';}
+    if(!shot)return 'unresolved';
+    if(shot.status==='blocked')return 'blocked';
+    if(shot.status==='visible'&&Number.isFinite(shot.angle))return 'visible';
+    return 'unresolved';
+  }
   function assemble(composed,results,geometry,guides,timings){
     // Guides remain live presentation data. A pan may rotate the tangent
     // line without invalidating expensive, view-independent optical rays.
@@ -302,6 +331,8 @@
         if(!prim.length)return;
         if(!limited){stats.unresolved+=prim.length;return;}
         var beganOutline=clock();
+        var footing=opticalFootingVisibility(prim,limited,geometry,model.rEarth,
+          model.Height,physicalSurface);
         var projected=silhouette.projectPrimitives({primitives:prim,field:limited,
           geometry:geometry,radius:model.rEarth,observerHeight:model.Height,
           physicalSurface:physicalSurface,
@@ -332,7 +363,11 @@
         var afterFill=counters();
         addWork(phaseWork.fills,workDelta(workCheckpoint,afterFill));
         workCheckpoint=afterFill;
-        fills.primitives.forEach(function(p){results.push(p);});
+        fills.primitives.forEach(function(p){
+          if(footing==='blocked'&&p.style&&p.style.fill==='#a38d60')
+            p.style=Object.assign({},p.style,{fill:'#dcc493'});
+          results.push(p);
+        });
         stats.fillTriangles+=fills.stats.fillTriangles;
         stats.fillUnresolved+=fills.stats.unresolvedTriangles;
         stats.fillHidden+=fills.stats.hiddenTriangles;
@@ -341,10 +376,11 @@
         countInto(stats.fillUnresolvedReasons,fills.stats.unresolvedReasons);
         projected.segments.forEach(function(segment){
           var original=prim[segment.source.primitiveIndex];
+          var stroke=Object.assign({stroke:(original.style&&original.style.stroke)||
+            (original.style&&original.style.fill)||'black'},original.style);
+          if(footing==='blocked')stroke.stroke='#666';
           results.push({type:'line',mode:1,
-            points:segment.points.map(arrivalPoint),
-            style:Object.assign({stroke:(original.style&&original.style.stroke)||
-              (original.style&&original.style.fill)||'black'},original.style),
+            points:segment.points.map(arrivalPoint),style:stroke,
             metadata:{kind:'physical-object-stroke',objectLayer:r.name,
               opticalSourceIndex:original.commandIndex}});
         });
@@ -361,7 +397,7 @@
         // Public perGroup metrics remain aggregated by bank for the existing
         // diagnostics/tests. New perObject metrics expose painter Z ordering.
         var one={name:r.name,placedObjectIndex:r.id,distance:r.distance,
-          fillTriangles:fills.stats.fillTriangles,
+          footingVisibility:footing,fillTriangles:fills.stats.fillTriangles,
           fillUnresolved:fills.stats.unresolvedTriangles,sourcePrimitives:prim.length,
           visibleSegments:projected.segments.length,unresolved:projected.unresolved.length,
           boundaryClipped:projected.stats.boundaryClipped,
@@ -403,5 +439,6 @@
     return {transform:transform,clearCache:function(){cached=null;}};
   }
   return {geometryAuditRevision:'140.12.37.2',create:create,vacuumSample:vacuumSample,
-    arrivalPoint:arrivalPoint,placedObjects:placedObjects};
+    arrivalPoint:arrivalPoint,placedObjects:placedObjects,
+    opticalFootingVisibility:opticalFootingVisibility};
 }));

@@ -132,3 +132,72 @@ test('108: entrypoint loads scene optics before shared main renderer and keeps L
   assert.match(html,/<option value="legacy" selected>Legacy/);
   assert.match(html,/<option value="physical">Physical optics/);
 });
+test('108: Physical Globe palettes track optically blocked tower footings, not Legacy disk geometry',()=>{
+  const m=model(),source=compose.composeOpticalMain(m,true,{physicalWorld:true});
+  const result=optics.create().transform(source,m,{atmosphere:'vacuum'});
+  const bySource=new Map(source.scene.primitives.map(p=>[p.commandIndex,p]));
+  const objects=allLayers(result.composition,'objects');
+  const classified=new Map(result.stats.perObject.map(x=>[
+    x.name+':'+x.placedObjectIndex,x.footingVisibility]));
+  const strokes=objects.filter(p=>p.metadata.kind==='physical-object-stroke');
+  const fills=objects.filter(p=>p.metadata.kind==='physical-object-fill');
+  assert.ok(result.stats.perObject.some(x=>x.footingVisibility==='blocked'));
+  assert.ok(result.stats.perObject.some(x=>x.footingVisibility==='visible'));
+  assert.ok(strokes.some(p=>p.style.stroke==='#666'));
+  assert.ok(fills.some(p=>p.style.fill==='#dcc493'));
+  assert.equal(result.stats.unresolved,0);
+  assert.equal(result.stats.fillUnresolved,0);
+  for(const p of strokes){
+    const sourcePrimitive=bySource.get(p.metadata.opticalSourceIndex);
+    const id=p.metadata.objectLayer+':'+sourcePrimitive.metadata.placedObjectIndex;
+    assert.equal(p.style.stroke,classified.get(id)==='blocked'?'#666':'black');
+  }
+  for(const p of fills){
+    const sourcePrimitive=bySource.get(p.metadata.opticalSourceIndex);
+    const id=p.metadata.objectLayer+':'+sourcePrimitive.metadata.placedObjectIndex;
+    assert.equal(p.style.fill,classified.get(id)==='blocked'?'#dcc493':'#a38d60');
+  }
+  // Painted styles belong to the projected optical frame. The source geometry
+  // and the reference Legacy horizon-disk metadata remain unchanged.
+  assert.ok(allLayers(source,'objects').every(p=>!p.style||p.style.fill!=='#dcc493'));
+  const session=optics.create();
+  const first=session.transform(source,m,{atmosphere:'vacuum'});
+  const again=session.transform(source,{...m,Pan:0.2,rDisk:10e6,hDip:0},{atmosphere:'vacuum'});
+  assert.equal(again.reused,true);
+  assert.strictEqual(again.composition,first.composition);
+});
+
+test('108: a refracted Physical horizon changes tower colors; Flat Standard stays fully foreground',()=>{
+  const globe=model(),source=compose.composeOpticalMain(globe,true,{physicalWorld:true});
+  const session=optics.create();
+  const vacuum=session.transform(source,globe,{atmosphere:'vacuum'});
+  const standard=session.transform(source,globe,{atmosphere:'standard'});
+  const blocked=r=>r.stats.perObject.filter(x=>x.footingVisibility==='blocked').length;
+  assert.ok(blocked(vacuum)>blocked(standard),
+    'standard refraction moves the optical base-visibility boundary beyond vacuum');
+  assert.ok(blocked(standard)>0);
+  const flat={...globe,showModel:2},flatSource=compose.composeOpticalMain(flat,false,{physicalWorld:true});
+  const normal=session.transform(flatSource,flat,{atmosphere:'standard'});
+  assert.equal(blocked(normal),0);
+  assert.ok(allLayers(normal.composition,'objects').every(p=>
+    p.style.stroke!=='#666'&&p.style.fill!=='#dcc493'));
+  const inverse=session.transform(flatSource,flat,{atmosphere:'inverse-spherical'});
+  assert.ok(blocked(inverse)>0,'Flat inverse-spherical optics can block footings too');
+});
+
+test('108: footing palette requires qualified ray status, never falls back to a geometric horizon',()=>{
+  const m=model({NObjects:[1,0]}),source=compose.composeOpticalMain(m,true,{physicalWorld:true});
+  const base=allLayers(source,'objects').find(p=>p.style?.fill==='#a38d60');
+  assert.ok(base);
+  const classify=optics.opticalFootingVisibility;
+  const args=(field)=>classify([base],field,'globe',R,m.Height,true);
+  assert.equal(args({sample(){return {status:'blocked'};}}),'blocked',
+    'a genuinely blocked ray controls the palette even before the geometric horizon');
+  assert.equal(args({sample(){return {status:'visible',angle:-0.001};}}),'visible');
+  assert.equal(args({sample(){return {status:'solver_failed'};}}),'unresolved');
+  assert.equal(args({sample(){return {status:'indeterminate'};}}),'unresolved');
+  assert.equal(args({sample(){return {status:'visible',angle:NaN};}}),'unresolved');
+  assert.equal(args({sample(){throw Error('ray backend failed');}}),'unresolved');
+  assert.equal(classify([], {sample(){return {status:'blocked'};}},'globe',R,m.Height,true),'unresolved');
+  assert.equal(base.style.fill,'#a38d60','querying the field does not mutate source styles');
+});

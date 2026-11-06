@@ -12,6 +12,23 @@ const optical=require('../src/optics/CurvaturePhysicalSceneOptics');
 const {model}=require('../tools/benchmark-adaptive-prism-112');
 const R=6371000;
 
+// Strip ONLY the optically classified paint palette for historical #119/#121
+// hashes. The frozen oracle still certifies every projected coordinate, fill,
+// layer and metadata byte; newly required colors are tested independently.
+function withoutPhysicalFootingPalette(projected,source){
+  return projected.map(function(p){
+    const kind=p.metadata?.kind;
+    if(kind!=='physical-object-fill'&&kind!=='physical-object-stroke')return p;
+    const original=source[p.metadata.opticalSourceIndex];
+    const style={...p.style};
+    if(kind==='physical-object-fill'&&style.fill==='#dcc493')
+      style.fill=original.style.fill;
+    if(kind==='physical-object-stroke'&&style.stroke==='#666')
+      style.stroke=original.style?.stroke||original.style?.fill||'black';
+    return {...p,style};
+  });
+}
+
 test('120: prepared RK4 uses the same integration recurrence in both geometries',()=>{
   for(const geometry of ['globe','flat'])for(const atmosphere of ['vacuum','standard','inverse-spherical']){
     const setup={geometry,radius:R,profile:rt.atmosphere(atmosphere,
@@ -93,7 +110,7 @@ test('120: profiler captures three actual height-dependent cold renders',async()
   assert.deepEqual(original,{Height:15,showGrid:1,camViewCenter:[0,1,0]});
 });
 
-test('120: the unaccelerated reference retains #119 hashes at two eye heights',()=>{
+test('120: optical coordinates retain #119 hashes at both eye heights after stripping new palette',()=>{
   const crypto=require('node:crypto');
   const {atHeight}=require('../tools/benchmark-height-change-120');
   const oracle=require('./fixtures/physical-globe-height-oracle-120.json');
@@ -104,16 +121,23 @@ test('120: the unaccelerated reference retains #119 hashes at two eye heights',(
       settings:{shootingOptimization:false,surfaceArithmetic:'legacy'}});
     const stats=result.stats;
     const hash=crypto.createHash('sha256').update(
-      JSON.stringify(result.composition.scene.primitives)).digest('hex');
+      JSON.stringify(withoutPhysicalFootingPalette(result.composition.scene.primitives,
+        composed.scene.primitives))).digest('hex');
     assert.equal(hash,expected.primitiveHash,'physical painter primitives changed');
     assert.equal(stats.visibleSegments,expected.visibleSegments);
     assert.equal(stats.unresolved,expected.unresolved);
     assert.equal(stats.fillTriangles,expected.fillTriangles);
     assert.equal(stats.fillUnresolved,expected.fillUnresolved);
     assert.equal(stats.groundHorizon,expected.groundHorizon);
-    assert.equal(stats.fieldStats.solves,expected.solves);
-    assert.equal(stats.fieldStats.interpolations,expected.interpolations);
-    assert.equal(stats.fieldStats.fallbacks,expected.fallbacks);
+    // One extra qualified ray probe per authored tower footing can add field
+    // work, but must not modify the previous geometry/projection oracle.
+    const footings=m.NObjects[0]+m.NObjects[1];
+    assert.ok(stats.fieldStats.solves>=expected.solves&&
+      stats.fieldStats.solves<=expected.solves+footings);
+    assert.ok(stats.fieldStats.interpolations>=expected.interpolations&&
+      stats.fieldStats.interpolations<=expected.interpolations+footings);
+    assert.ok(stats.fieldStats.fallbacks>=expected.fallbacks&&
+      stats.fieldStats.fallbacks<=expected.fallbacks+footings);
     assert.equal(result.composition.scene.primitives.length,expected.primitives);
   }
 });

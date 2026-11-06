@@ -10,6 +10,23 @@ const {model}=require('../tools/benchmark-adaptive-prism-112');
 const {atHeight}=require('../tools/benchmark-height-change-120');
 const oracles=require('./fixtures/physical-scene-assembly-oracle-122.json');
 
+// Strip ONLY the optically classified paint palette for historical #119/#121
+// hashes. The frozen oracle still certifies every projected coordinate, fill,
+// layer and metadata byte; newly required colors are tested independently.
+function withoutPhysicalFootingPalette(projected,source){
+  return projected.map(function(p){
+    const kind=p.metadata?.kind;
+    if(kind!=='physical-object-fill'&&kind!=='physical-object-stroke')return p;
+    const original=source[p.metadata.opticalSourceIndex];
+    const style={...p.style};
+    if(kind==='physical-object-fill'&&style.fill==='#dcc493')
+      style.fill=original.style.fill;
+    if(kind==='physical-object-stroke'&&style.stroke==='#666')
+      style.stroke=original.style?.stroke||original.style?.fill||'black';
+    return {...p,style};
+  });
+}
+
 test('122: public createScene still deep-copies every nested property and validates it',()=>{
  const primitives=[{type:'line',mode:1,points:[[1,2,3],[4,5,6]],
    style:{stroke:'green',extensions:{layers:['a']}},
@@ -45,7 +62,7 @@ test('122: exclusive ownership adoption validates but does not deep-clone projec
  assert.equal(s.metadata.origin,'physical-adapter');
 });
 
-test('122: all projected physical primitive bytes equal the #121 oracle for four full scenes',()=>{
+test('122: projected physical geometry matches the frozen #121 oracle after stripping only footing palette',()=>{
  for(const expected of oracles){
   const m=atHeight(model(expected.towers,expected.geometry),expected.height);
   const source=compose.composeOpticalMain(m,expected.geometry==='globe');
@@ -58,8 +75,9 @@ test('122: all projected physical primitive bytes equal the #121 oracle for four
   assert.equal(p.scene.primitives.length,expected.projectedCount);
   assert.equal(r.stats.visibleSegments,expected.visible);
   assert.equal(r.stats.unresolved,expected.unresolved);
+  const baseline=withoutPhysicalFootingPalette(p.scene.primitives,source.scene.primitives);
   const hash=crypto.createHash('sha256').update(JSON.stringify({
-    primitives:p.scene.primitives,ranges:p.ranges,metadata:p.scene.metadata})).digest('hex');
+    primitives:baseline,ranges:p.ranges,metadata:p.scene.metadata})).digest('hex');
   assert.equal(hash,expected.hash,JSON.stringify(expected));
   assert.equal(JSON.stringify(source.scene.primitives),sourceOriginal,
     'the adopted physical scene must not modify any authored geometry');
