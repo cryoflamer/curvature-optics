@@ -7,7 +7,7 @@
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     visibility:{enabled:false,rangeKm:60},
     temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
-    showTemperatureProfile:false,
+    showTemperatureProfile:false,temperaturePlacement:'outside-right',
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
@@ -340,7 +340,8 @@
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
       horizon:state.compareHorizon,selected:state.compareSelected,
       gpuProbe:false,probeTargets:256,
-      showTemperatureProfile:state.showTemperatureProfile}); // Keep legacy schema; never re-enable retired WebGPU.
+      showTemperatureProfile:state.showTemperatureProfile,
+      temperaturePlacement:state.temperaturePlacement}); // Keep legacy schema; never re-enable retired WebGPU.
   }
   function storeExperiment(){
     if(!persistence.ready||!experiments||!root.location)return;
@@ -381,6 +382,7 @@
     state.visibility=Object.assign({},scene.visibility);
     state.temperatureProfile=Object.assign({},scene.temperatureProfile);
     state.showTemperatureProfile=data.display.showTemperatureProfile;
+    state.temperaturePlacement=data.display.temperaturePlacement;
     state.preset=scene.resetPreset;
     state.compareConfig=compareState.sharedVisibility({A:data.compare.A,B:data.compare.B,preset:data.compare.preset});
     state.compareSelected=data.compare.selected;
@@ -792,16 +794,29 @@
     var v=palette[i].map(function(a,j){return Math.round(a+(palette[i+1][j]-a)*f);});
     return 'rgb('+v.join(',')+')';
   }
-  function syncTemperatureColumn(side,kind,profile){
+  function syncTemperatureColumn(side,kind,profile,reserveStrip){
     var column=newUiEl('ModernTemperature'+side);
     if(!column)return;
     var visible=state.showTemperatureProfile&&kind==='temperature-lapse';
     column.hidden=!visible;
-    if(!visible)return;
+    // Reserve a real strip only for visible temperature-lapse columns.
+    // GraphX3DX measures its own .JsGraph width, so an outside strip keeps
+    // the camera angle unchanged while the graph is resized to fit.
+    var host=column.parentElement;
+    var previous=host&&host.getAttribute('data-temperature-placement');
+    var placement=(visible||reserveStrip)?state.temperaturePlacement:'hidden';
+    if(host)host.setAttribute('data-temperature-placement',placement);
+    var outsideChanged=false;
+    if(host){
+      var wasOutside=previous==='outside-right'||previous==='outside-left';
+      var nowOutside=placement==='outside-right'||placement==='outside-left';
+      outsideChanged=wasOutside!==nowOutside;
+    }
+    if(!visible)return outsideChanged;
     var tracer=root.CurvatureRayTracer;
-    if(!tracer||typeof tracer.atmosphere!=='function')return;
+    if(!tracer||typeof tracer.atmosphere!=='function')return outsideChanged;
     var atmosphere=tracer.atmosphere(kind,profile),ramp=column.querySelector('.modern-temperature-ramp');
-    if(!ramp)return;
+    if(!ramp)return outsideChanged;
     var stops=[];
     for(var i=0;i<=12;i++){
       var height=2000*(1-i/12);
@@ -813,6 +828,7 @@
     if(bottom)bottom.textContent=atmosphere.temperatureCAt(0).toFixed(1)+' °C';
     column.setAttribute('aria-label','Temperature from 0 to 2 km: '+
       atmosphere.temperatureCAt(0).toFixed(1)+' to '+atmosphere.temperatureCAt(2000).toFixed(1)+' degrees Celsius');
+    return outsideChanged;
   }
   function syncTemperatureControls(){
     var compare=state.compareConfig&&state.compareConfig[state.compareSelected];
@@ -826,11 +842,18 @@
       var wrap=newUiEl(prefix+'Fields');if(wrap)wrap.hidden=kind!=='temperature-lapse';
     });
     var show=newUiEl('ModernShowTemperatureProfile');if(show)show.checked=state.showTemperatureProfile;
-    syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile);
+    var select=newUiEl('ModernTemperaturePlacement');if(select)select.value=state.temperaturePlacement;
+    var wrap=newUiEl('ModernTemperaturePlacementWrap');if(wrap)wrap.hidden=!state.showTemperatureProfile;
+    var resize=!!syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile);
     if(state.compareConfig){
-      syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile);
-      syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile);
+      // Keep A/B Canvas dimensions identical even if only one atmosphere has
+      // a temperature legend. The other viewport reserves a blank strip.
+      var reserve=state.showTemperatureProfile&&state.temperaturePlacement.indexOf('outside-')===0&&
+        (state.compareConfig.A.atmosphere==='temperature-lapse'||state.compareConfig.B.atmosphere==='temperature-lapse');
+      resize=!!syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile,reserve)||resize;
+      resize=!!syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile,reserve)||resize;
     }
+    return resize;
   }
   function bindTemperatureControls(){
     [['Scene',false],['Compare',true]].forEach(function(row){
@@ -853,7 +876,15 @@
     });
     var toggle=newUiEl('ModernShowTemperatureProfile');
     if(toggle)toggle.addEventListener('change',function(){
-      state.showTemperatureProfile=toggle.checked;syncTemperatureControls();scheduleExperimentSave();
+      state.showTemperatureProfile=toggle.checked;
+      if(syncTemperatureControls())redraw();
+      else scheduleExperimentSave();
+    });
+    var select=newUiEl('ModernTemperaturePlacement');
+    if(select)select.addEventListener('change',function(){
+      state.temperaturePlacement=select.value;
+      if(syncTemperatureControls())redraw();
+      else scheduleExperimentSave();
     });
   }
   function syncCompareEditor(){

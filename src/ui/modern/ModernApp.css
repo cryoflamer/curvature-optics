@@ -237,13 +237,29 @@ button{cursor:pointer}
 .modern-demos-status{min-height:22px;color:#44668a;font-size:12px;margin:10px 0 0}
 @media(max-width:600px){.modern-demos-controls button{flex:1 0 40%}.modern-demos-controls output{margin:0;width:100%;text-align:center}}
 
-/* 140.12.94: temperature chart is a presentation-only overlay, not an optical pixel layer. */
+/* The temperature chart is a separate DOM layer, never an optical pixel layer. */
 .modern-graph-host{position:relative}
 .modern-temperature-column[hidden],.modern-temperature-fields[hidden]{display:none!important}
 .modern-temperature-column{position:absolute;right:9px;top:11px;bottom:11px;z-index:5;pointer-events:none;
   display:flex;align-items:center;flex-direction:column;gap:4px;padding:7px 7px 5px;
   font:10px/1.1 system-ui,sans-serif;color:#193148;background:#ffffffeb;
   border:1px solid #a6b7c8;border-radius:7px;box-shadow:0 2px 9px #10203025}
+/* Outside positions allocate a real grid track, avoiding overlap with scene
+   content or with the neighboring Compare viewport. The existing .JsGraph
+   retains a responsive width and its original camera aspect ratio. */
+.modern-graph-host[data-temperature-placement="outside-right"],
+.modern-graph-host[data-temperature-placement="outside-left"]{display:grid;grid-template-columns:minmax(0,1fr) 88px;align-items:stretch}
+.modern-graph-host[data-temperature-placement="outside-left"]{grid-template-columns:88px minmax(0,1fr)}
+.modern-graph-host[data-temperature-placement^="outside-"]>.JsGraph{grid-row:1;grid-column:1;min-width:0}
+.modern-graph-host[data-temperature-placement="outside-left"]>.JsGraph{grid-column:2}
+.modern-graph-host[data-temperature-placement^="outside-"]>.modern-temperature-column{
+  position:relative;top:auto;right:auto;bottom:auto;left:auto;grid-column:2;grid-row:1;
+  align-self:stretch;margin:8px 4px;min-height:0;box-shadow:none}
+.modern-graph-host[data-temperature-placement="outside-left"]>.modern-temperature-column{grid-column:1}
+.modern-graph-host[data-temperature-placement="inside-right"]>.modern-temperature-column{right:9px;left:auto}
+.modern-graph-host[data-temperature-placement="inside-left"]>.modern-temperature-column{right:auto;left:9px}
+.modern-temperature-placement{margin:10px 0 9px}
+.modern-temperature-placement[hidden]{display:none!important}
 .modern-temperature-column strong{white-space:nowrap;font-size:10px}
 .modern-temperature-column .modern-temperature-ramp{flex:1;min-height:56px;width:18px;
   border:1px solid #8297ad;border-radius:3px;background:#e0e6ec}

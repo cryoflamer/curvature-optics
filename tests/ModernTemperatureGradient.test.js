@@ -65,7 +65,7 @@ test('Compare keeps independent temperature profiles and shared A/B haze',()=>{
   assert.throws(()=>compare.update(initial,'A','temperatureProfile',{...base,pressureHpa:100}));
 });
 
-test('Temperature parameters, A/B, and column toggle survive old/new experiments',()=>{
+test('Temperature parameters, A/B, column visibility and placement survive old/new experiments',()=>{
   const m={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
     viewcenterHorizon:3,deviceRatio:1.5,showModel:1,rEarth:6371000,
     showGrid:1,DemoText:'',Description:'',
@@ -78,22 +78,36 @@ test('Temperature parameters, A/B, and column toggle survive old/new experiments
   const C=compare.update(B,'B','temperatureProfile',{...base,temperatureC:-8});
   const save=experiment.capture(m,{atmosphere:'temperature-lapse',occlusionRadius:6371000,
     temperatureProfile:{...base,pressureHpa:950},preset:'custom',resetPreset:'pontchartrain'},C,
-  {mode:'compare',eyeLevel:false,horizon:true,selected:'A',showTemperatureProfile:true});
+  {mode:'compare',eyeLevel:false,horizon:true,selected:'A',showTemperatureProfile:true,
+    temperaturePlacement:'inside-left'});
   assert.deepEqual(experiment.decode(experiment.encode(save)),save);
   assert.equal(save.scene.temperatureProfile.pressureHpa,950);
   assert.equal(save.compare.A.temperatureProfile.gradientKPerKm,14);
   assert.equal(save.compare.B.temperatureProfile.temperatureC,-8);
   assert.equal(save.display.showTemperatureProfile,true);
+  assert.equal(save.display.temperaturePlacement,'inside-left');
+  const url=experiment.urlWithExperiment('https://example.org/CurvatureModern.html',save);
+  assert.equal(experiment.readUrl(new URL(url).search).display.temperaturePlacement,'inside-left');
   const old=JSON.parse(JSON.stringify(save));
   delete old.scene.temperatureProfile;
   delete old.compare.A.temperatureProfile;
   delete old.compare.B.temperatureProfile;
   delete old.display.showTemperatureProfile;
+  delete old.display.temperaturePlacement;
   const migrated=experiment.validate(old);
   assert.deepEqual(migrated.scene.temperatureProfile,base);
   assert.deepEqual(migrated.compare.A.temperatureProfile,base);
   assert.deepEqual(migrated.compare.B.temperatureProfile,base);
   assert.equal(migrated.display.showTemperatureProfile,false);
+  assert.equal(migrated.display.temperaturePlacement,'outside-right');
+  for(const placement of ['outside-right','outside-left','inside-right','inside-left']){
+    const saved=JSON.parse(JSON.stringify(save));saved.display.temperaturePlacement=placement;
+    assert.equal(experiment.decode(experiment.encode(saved)).display.temperaturePlacement,placement);
+  }
+  for(const placement of ['middle','outside-top','',false,null]){
+    const saved=JSON.parse(JSON.stringify(save));saved.display.temperaturePlacement=placement;
+    assert.throws(()=>experiment.validate(saved));
+  }
   const invalid=JSON.parse(JSON.stringify(save));invalid.scene.temperatureProfile.gradientKPerKm=100;
   assert.throws(()=>experiment.validate(invalid));
 });
@@ -120,11 +134,19 @@ test('Modern UI exposes separate temperature controls and non-Canvas chart colum
   for(const id of ['ModernTemperatureSceneC','ModernTemperatureCompareC',
     'ModernTemperatureSceneGradient','ModernTemperatureCompareGradient',
     'ModernTemperatureScenePressure','ModernTemperatureComparePressure',
-    'ModernShowTemperatureProfile','ModernTemperatureScene','ModernTemperatureA','ModernTemperatureB'])
+    'ModernShowTemperatureProfile','ModernTemperaturePlacement','ModernTemperaturePlacementWrap',
+    'ModernTemperatureScene','ModernTemperatureA','ModernTemperatureB'])
     assert.ok(html.includes('id="'+id+'"'),`Missing ${id}`);
   assert.match(app,/syncTemperatureColumn\('A'/);
   assert.match(app,/syncTemperatureColumn\('B'/);
   assert.match(app,/root\.CurvatureRayTracer/);
   assert.match(app,/scheduleExperimentSave\(\)/);
-  assert.match(read('src/ui/modern/ModernApp.css'),/\.modern-temperature-column/);
+  const css=read('src/ui/modern/ModernApp.css');
+  assert.match(css,/\.modern-temperature-column/);
+  for(const placement of ['outside-right','outside-left','inside-right','inside-left']){
+    assert.match(html,new RegExp('value=\"'+placement+'\"'));
+    assert.ok(css.includes('data-temperature-placement=\"'+placement+'\"'));
+  }
+  assert.match(app,/syncTemperatureColumn\('Scene'/);
+  assert.match(app,/if\(syncTemperatureControls\(\)\)redraw\(\)/);
 });

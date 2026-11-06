@@ -14,6 +14,7 @@
   var ATMOSPHERE=['vacuum','standard','temperature-lapse','inverse-spherical','exponential-occlusion'];
   var SCENE_PRESETS=['pontchartrain','single','rows','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
+  var TEMPERATURE_PLACEMENTS=['outside-right','outside-left','inside-right','inside-left'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}
   function shape(value,keys,optional){
     if(!object(value)||Object.keys(value).some(function(k){return !keys.includes(k)&&!(optional||[]).includes(k);}))
@@ -43,7 +44,8 @@
       compare:{A:compare.A,B:compare.B,preset:compare.preset,selected:ui.selected},
       display:{mode:ui.mode,eyeLevel:ui.eyeLevel,horizon:ui.horizon,
         gpuProbe:ui.gpuProbe===true,probeTargets:ui.probeTargets||256,
-        showTemperatureProfile:ui.showTemperatureProfile===true}});
+        showTemperatureProfile:ui.showTemperatureProfile===true,
+        temperaturePlacement:ui.temperaturePlacement||'outside-right'}});
   }
   function validate(value){
     shape(value,['version','scene','compare','display']);
@@ -95,7 +97,7 @@
     compareB.visibility=Object.assign({},compareA.visibility);
     var d=value.display;
     // Probe fields are optional for links saved before the GPU Compare experiment.
-    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets','showTemperatureProfile'].includes(k);})||
+    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets','showTemperatureProfile','temperaturePlacement'].includes(k);})||
       !['mode','eyeLevel','horizon'].every(function(k){return Object.prototype.hasOwnProperty.call(d,k);}))
       throw RangeError('Invalid experiment display fields');
     return {version:VERSION,scene:{camera:camera,objects:objects,surface:surface,
@@ -109,7 +111,9 @@
       display:{mode:choice(d.mode,['scene','compare']),eyeLevel:bool(d.eyeLevel),horizon:bool(d.horizon),
         gpuProbe:d.gpuProbe===undefined?false:bool(d.gpuProbe),
         probeTargets:d.probeTargets===undefined?256:choice(d.probeTargets,[128,256,512,1024]),
-        showTemperatureProfile:d.showTemperatureProfile===undefined?false:bool(d.showTemperatureProfile)}};
+        showTemperatureProfile:d.showTemperatureProfile===undefined?false:bool(d.showTemperatureProfile),
+        temperaturePlacement:d.temperaturePlacement===undefined?'outside-right':
+          choice(d.temperaturePlacement,TEMPERATURE_PLACEMENTS)}};
   }
   function encode(value){
     var json=JSON.stringify(validate(value));

@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.94">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.95">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, animations, diagnostic UI or legacy runtime is loaded. -->
@@ -58,7 +58,7 @@
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.74"></script>
 <script src="src/ui/modern/ModernCompareState.js?v=140.12.94"></script>
-<script src="src/ui/modern/ModernExperimentState.js?v=140.12.94"></script>
+<script src="src/ui/modern/ModernExperimentState.js?v=140.12.95"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
@@ -246,7 +246,16 @@
         <h2>Display</h2>
         <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
         <label class="modern-check"><input id="ModernShowTemperatureProfile" type="checkbox"> Show temperature column (0–2 km)</label>
-        <p class="modern-note">The color scale appears beside each image using the temperature-gradient atmosphere. It does not change rays or canvas pixels.</p>
+        <div class="modern-field modern-temperature-placement" id="ModernTemperaturePlacementWrap">
+          <label for="ModernTemperaturePlacement">Temperature column position</label>
+          <select id="ModernTemperaturePlacement">
+            <option value="outside-right">Outside image · right</option>
+            <option value="outside-left">Outside image · left</option>
+            <option value="inside-right">On image · right</option>
+            <option value="inside-left">On image · left</option>
+          </select>
+        </div>
+        <p class="modern-note">Displayed only for the temperature-gradient atmosphere. Outside positions reserve a separate strip, without obscuring towers; on-image positions overlay the scene. Changing the display does not change atmospheric physics.</p>
         <div id="ModernCompareDisplayOptions">
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
@@ -314,7 +323,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.94&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.95&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
