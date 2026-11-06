@@ -330,6 +330,11 @@
     options=options||{};
     if(options.profile!==undefined||options.atmosphere===undefined)return Object.assign({},options);
     var profileOptions=options.profileOptions;
+    if(options.atmosphere==='inverse-temperature'){
+      // The independent raw tracer remains a reference. Only a prepared
+      // built-in inverse profile uses the non-thermodynamic RK4 hot path.
+      profileOptions=Object.assign({},profileOptions,{experimentalFusedGradient:true});
+    }
     if(options.atmosphere==='standard'){
       // Keep this decision in the preparation boundary: the independent raw
       // ray-tracer API stays an unchanged diagnostic reference, while the

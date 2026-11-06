@@ -82,3 +82,16 @@ For an engineered exponential ray field, **Atmosphere → Inverse atmosphere · 
 ### Inverse atmosphere slider responsiveness
 
 The **Inverse target strength** slider now previews the surface gradient, sampled temperatures and optional color column while it is moving. This draft updates **only** the controls/legend: the image is deliberately not traced until pointer release (keyboard edits coalesce after a short pause). In **Compare**, a changed A/B temperature or transition parameter redraws only the edited viewport when the layout is unchanged; shared camera/objects and layout changes still redraw both. The bottom-of-Compare timing message distinguishes a skipped unchanged view from computed work and reports CPU wall times. The existing **Display → Render profiler** provides a more detailed optics-vs-Canvas breakdown. The inverse RK4 solver, atmospheric formulas, numerical tolerances, and saved experiment schema are unchanged.
+
+### Inverse atmosphere optical performance
+
+The prepared Modern inverse-temperature tracer now evaluates `d(ln n)/dh` in
+one pass, omitting repeated inverse-temperature integral calculations on the
+RK4 hot path. At the engineered 100% endpoint, the exact gradient is `1/R`.
+The independent raw `n(h), dn(h)` diagnostic functions, integrator, precision,
+visibility tests and temperature display are preserved. On the local 200-tower
+Node benchmark the optics stage improved by about 8× at 100% and 3× at 50%.
+Actual Opera wall times may differ. Reproduce with
+`node tools/benchmark-inverse-optics.js --towers=200 --weight=1` or
+`--weight=0.5`; compare against **B optics** in Compare. Details and checks:
+[`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).

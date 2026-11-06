@@ -14,6 +14,9 @@
   // Private marker: an arbitrary caller-supplied n(h),dn(h) profile must never
   // accidentally opt into the standard-exponential kernel by naming a field.
   var EXPERIMENTAL_STANDARD = Symbol('experimental standard RK4');
+  // Internal factory markers: never trust external custom-profile properties.
+  var PREPARED_INVERSE = Symbol('prepared inverse temperature gradient');
+  var HYDRO_SAMPLE = Symbol('single-pass hydrostatic sample');
   if (!surfaces) throw Error('Continuous-curvature surface geometry dependency required');
 
   function atmosphere(kind, options) {
@@ -53,7 +56,8 @@
       return {
         n:function(h){return sample(h).n;},
         dn:function(h){return sample(h).dn;},
-        temperatureCAt:function(h){return sample(h).temperatureC;}
+        temperatureCAt:function(h){return sample(h).temperatureC;},
+        [HYDRO_SAMPLE]:sample
       };
     }
     if (kind === 'inverse-temperature') {
@@ -115,7 +119,32 @@
         }
         limit=(low+high)/2;
       }
-      return {
+      // Shooting and ground verification need ONLY d(log n)/dh. Computing
+      // the inverse-temperature integral J and the Kelvin interpretation on
+      // every one of millions of RK4 stages is unnecessary. This prepared,
+      // factory-owned kernel evaluates the same n/dn pair in one pass.
+      // The exact engineered endpoint has d(log n)/dh=1/R everywhere.
+      function opticalGradient(h){
+        if(w===1)return 1/R;
+        var N,dN;
+        if(inverse.source==='temperature-lapse'){
+          var measured=hydro[HYDRO_SAMPLE](h);
+          N=measured.n-1;dN=measured.dn;
+        }else{
+          var decay=Math.exp(-h/H);
+          N=N0*decay;dN=-N/H;
+        }
+        var n=1+N,dn=dN;
+        if(w!==0){
+          var growth=n0*Math.exp(h/R);
+          n=1+oneMinus*N+w*(growth-1);
+          dn=oneMinus*dN+w*growth/R;
+        }
+        if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))
+          throw Error('Invalid refractive index');
+        return dn/n;
+      }
+      var result={
         n:function(h){return sample(h).n;},
         dn:function(h){return sample(h).dN;},
         temperatureCAt:function(h){var r=sample(h);return h>=limit||!(r.kelvin>0)?NaN:r.kelvin-273.15;},
@@ -127,6 +156,11 @@
         targetGradientKPerKm:1000*(-a-T0*n0/(R*N0)),
         surfaceRefractivity:N0
       };
+      if(options.experimentalFusedGradient===true){
+        result[PREPARED_INVERSE]=true;
+        result.fusedGradient=opticalGradient;
+      }
+      return result;
     }
     if (kind === 'profile-transition') {
       // Exploratory mathematical interpolation, NOT a hydrostatic atmospheric
@@ -273,7 +307,7 @@
   function derivative(s, surface, profile) {
     var metric=surface.metric2(s[0],s[1]);
     var q;
-    if (profile[EXPERIMENTAL_STANDARD]) {
+    if (profile[EXPERIMENTAL_STANDARD]||profile[PREPARED_INVERSE]) {
       q=profile.fusedGradient(metric[0]);
     } else {
       var n=profile.n(metric[0]),dn=profile.dn(metric[0]);

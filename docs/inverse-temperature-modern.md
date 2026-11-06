@@ -140,3 +140,56 @@ state, and radiative transfer are not solved. The new **temperature bar
 is visualization of the required inverse T(h)**, not a measured weather
 profile. The separate legacy `Profile transition` remains a purely
 mathematical n(h) interpolation with no inferred full T(h).
+
+## Prepared inverse ray kernel — performance without relaxed tolerances
+
+Modern's shared-field shooting now prepares the built-in `inverse-temperature`
+profile with a factory-owned **single-pass optical gradient**. The raw tracer
+`atmosphere('inverse-temperature')` still exposes its original independent
+`n(h)` and `dn(h)` functions for diagnostics and scientific reference.
+
+The production RK4 only requires `q(h) = (dn/dh)/n`:
+
+- At **100% engineered target**, `q(h) = 1/R` is constant. Evaluating the
+  full inverse Kelvin/J-integral model at every RK4 derivative was wasted work.
+- At **0–99%**, the prepared kernel evaluates the starting atmospheric
+  refractivity/slope only once per derivative, combines it with the engineered
+  `n,dn`, and does **not** compute the temperature or its integral `J`.
+- The required temperature, lapse-rate readouts and physical-validity boundary
+  are still evaluated by the original inverse formula when the UI requests
+  them. No physical interpretation has been discarded.
+
+`step`, the RK4 recurrence, normalization, shooting brackets, ground-event
+checks, cache qualification, accepted error tolerances, and Scene/Compare
+interfaces are unchanged. Arbitrary custom profiles cannot opt into the
+private built-in gradient marker, and the unprepared diagnostic oracle is
+available for comparison.
+
+### Reproducing the CPU benchmark
+
+From the repository root:
+
+```
+node tools/benchmark-inverse-optics.js --towers=200 --weight=1
+node tools/benchmark-inverse-optics.js --towers=200 --weight=0.5
+node --test tests/InversePreparedGradient.test.js
+```
+
+In the Linux/Node test environment used during implementation, cold optical
+composition for 200 towers and a 2000 m maximum RK4 step improved from roughly
+**5.4 s to 0.67 s** at 100% (about **8×**), and **6.3 s to 2.0 s** at 50%
+(about **3×**). These are *local Node measurements*, not promises for Opera:
+CPU, JIT warm-up, scene state and browser overhead affect wall times.
+
+Full scene comparisons against the unmodified implementation on independent
+Node processes covered 200-tower Flat at 50%/100%, 85-tower Globe at 50%, and
+additional source/endpoint configurations. Primitive types, styles, counts,
+fill counts, unresolved status and topology were unchanged. The largest
+observed projected-coordinate difference was below `1e-14` in the renderer's
+unit-direction geometry. Regression tests independently compare ray endpoints,
+shooting classification, gradients and ground contacts over both surfaces.
+
+In Opera, switch only B's inverse slider between 50% and 100% and inspect the
+existing **B optics ... ms** timing under Compare. That measured wall time is
+the authoritative performance result on the user's computer. The slider's
+preview and A/B partial redraw from the previous patch remain intact.

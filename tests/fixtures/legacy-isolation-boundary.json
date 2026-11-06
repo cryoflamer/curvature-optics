@@ -835,6 +835,7 @@
       ],
       "commonJsTestCallers": [
         "tests/CurvatureSurfaceGeometry124.test.js",
+        "tests/InversePreparedGradient.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalCurvatureCamera127.test.js",
@@ -1014,6 +1015,7 @@
         "tools/benchmark-adaptive-prism-112.js",
         "tools/benchmark-engineered-shooting-1404.js",
         "tools/benchmark-height-change-120.js",
+        "tools/benchmark-inverse-optics.js",
         "tools/validate-physical-scene-115.js"
       ]
     },
@@ -1060,6 +1062,7 @@
       "commonJsTestCallers": [
         "tests/CurvatureSurfaceGeometry124.test.js",
         "tests/ForwardRayBundle.test.js",
+        "tests/InversePreparedGradient.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernInverseTemperature97.test.js",
@@ -1139,6 +1142,7 @@
       "commonJsTestCallers": [
         "tests/AtmosphericSceneReliability109.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
+        "tests/InversePreparedGradient.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalEngineeredExperiment1404.test.js",
         "tests/OpticalEngineeredQualification1405.test.js",
@@ -1565,6 +1569,7 @@
         "tools/benchmark-adaptive-prism-112.js",
         "tools/benchmark-engineered-shooting-1404.js",
         "tools/benchmark-height-change-120.js",
+        "tools/benchmark-inverse-optics.js",
         "tools/validate-physical-scene-115.js"
       ]
     },
