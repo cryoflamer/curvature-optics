@@ -95,3 +95,10 @@ Actual Opera wall times may differ. Reproduce with
 `node tools/benchmark-inverse-optics.js --towers=200 --weight=1` or
 `--weight=0.5`; compare against **B optics** in Compare. Details and checks:
 [`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).
+
+
+**Optimization status:** The inverse-atmosphere performance pass is complete
+for now. Opera measurements for 200 towers were 647 ms B optics at 100% and
+2462 ms at 50%; remaining intermediate-blend and non-optics overhead work is
+tracked as a **deferred, low-priority TODO** in
+[`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).

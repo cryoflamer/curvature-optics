@@ -193,3 +193,44 @@ In Opera, switch only B's inverse slider between 50% and 100% and inspect the
 existing **B optics ... ms** timing under Compare. That measured wall time is
 the authoritative performance result on the user's computer. The slider's
 preview and A/B partial redraw from the previous patch remain intact.
+
+## Deferred TODO — inverse-atmosphere performance follow-up
+
+**Status:** Deferred; the current performance is sufficient for interactive
+experiments. **Reference implementation:** the prepared inverse-gradient RK4
+path delivered in #140.12.99. No solver or tolerance changes are planned as
+part of this documentation update.
+
+### Observed Opera baseline (Lake Pontchartrain, 200 towers)
+
+The following numbers were read from the user's Compare screenshots with
+Model A unchanged and only flat Model B recomputed. These are individual
+wall-clock observations, **not** controlled benchmark medians.
+
+| Inverse target strength | B optics | Total B | Canvas |
+| --- | ---: | ---: | ---: |
+| 50% | 2462 ms | 2808 ms | 15 ms |
+| 100% | 647 ms | 1023 ms | 12 ms |
+
+Before the prepared-gradient optimization, the same user's 100% screenshot
+reported **9050 ms B optics** and **9452 ms total B**, giving an observed
+optics-stage speedup of approximately **14×**. Differences in scene, cache,
+JIT, machine load, and browser conditions may affect comparisons.
+
+### Follow-up investigations (low priority)
+
+- Profile the **1–99% inverse blends**, especially the 50% case, and look for
+  safe algebraic simplifications or reduced redundant gradient evaluation.
+- Attribute the **approximately 350–380 ms outside the reported optics stage**
+  in these screenshots; the small Canvas times alone do not explain it.
+- Investigate reuse of ray trajectories or shooting intermediates only where
+  cache keys and visibility/ground-contact classification remain correct.
+- Re-run cold and warmed 200-tower benchmarks at 0%, 50%, and 100%, then
+  verify the actual Opera Compare timings; do not assume Node and Opera match.
+
+**Acceptance gate:** demonstrate a repeatable wall-clock improvement on
+identical scenes, with unchanged primitive topology/counts, occlusion and
+horizon classification, and numerical agreement against the current RK4
+reference at both endpoints and intermediate strengths. Do not reduce RK4
+accuracy or loosen tolerances to meet a speed target. Revisit only if measured
+latency becomes a practical limitation.

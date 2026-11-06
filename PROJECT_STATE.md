@@ -1,3 +1,12 @@
+> **Current update — inverse atmosphere performance checkpoint (#140.12.100,
+> 2026-11-07):** The #140.12.99 prepared-gradient optimization is accepted as
+> the working baseline. User-observed Opera B optics times for 200 towers:
+> 647 ms at 100% and 2462 ms at 50%; 100% was 9050 ms before optimization.
+> Remaining performance investigations are deferred (low priority) in
+> `docs/inverse-temperature-modern.md`. This checkpoint changes documentation
+> only, not the physics engine, UI, or experiment format. Historical entries
+> below are retained unchanged.
+
 > **Current branch update #140.12.74 (2026-11-04):** Standalone WebGPU optics
 > experiments and the Modern CPU optics research panel have been retired from
 > the main tree. The full pre-removal state is meant to be preserved using the
