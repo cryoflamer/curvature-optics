@@ -66,6 +66,19 @@
     if(!choices.some(function(x){return Math.abs(x-value)<1e-8;}))throw RangeError('Unknown aspect ratio');
     model.deviceRatio=value;return value;
   }
+  // Keep the Pontchartrain caption tied to the *first* tower group shown
+  // by the Count control. The second group is an independent object group.
+  // Do not overwrite arbitrary user/imported descriptions.
+  function refreshDescription(model){
+    if(!model||model.DemoText!==PRESETS.pontchartrain.name||
+        !/^(?:\d+ transmission towers|\d+ (?:ships|measuring rods|Bedford markers)) across Lake Pontchartrain$/.test(model.Description||''))
+      return model&&model.Description;
+    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers'};
+    var kind=types[model.ObjType&&model.ObjType[0]];
+    if(kind&&model.NObjects&&Number.isInteger(model.NObjects[0]))
+      model.Description=model.NObjects[0]+' '+kind+' across Lake Pontchartrain';
+    return model.Description;
+  }
   function applyPreset(model,id){
     var p=PRESETS[id];if(!p)throw RangeError('Unknown Scene preset: '+id);
     Object.keys(p.camera).forEach(function(k){setCamera(model,k,p.camera[k]);});
@@ -83,6 +96,7 @@
   }
   return Object.freeze({PRESETS:PRESETS,CAMERA:CAMERA,OBJECT:OBJECT,
     finiteNumber:finiteNumber,setCamera:setCamera,setObject:setObject,
+    refreshDescription:refreshDescription,
     setRadiusKm:setRadiusKm,setAim:setAim,setDeviceRatio:setDeviceRatio,
     applyPreset:applyPreset});
 }));

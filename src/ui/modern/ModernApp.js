@@ -1100,6 +1100,9 @@
     if(activeCameraPointer)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
+    if(adapter&&adapter.refreshDescription)adapter.refreshDescription(model);
+    var liveDescription=el('ModernSceneDescription');
+    if(liveDescription)liveDescription.textContent=model.Description||'Custom physical scene';
     model.Update();refreshLabels();
     scheduleExperimentSave();
     if(state.mode==='compare'){
@@ -1277,6 +1280,7 @@
     var eye=newUiEl('ModernCompareEyeLevel');if(eye)eye.checked=state.compareEyeLevel;
     var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
+    if(adapter&&adapter.refreshDescription)adapter.refreshDescription(model);
     var description=el('ModernSceneDescription');if(description)description.textContent=model.Description||'Custom physical scene';
     for(var i=0;i<2;i++){
       Object.keys(adapter?adapter.OBJECT:{}).forEach(function(key){

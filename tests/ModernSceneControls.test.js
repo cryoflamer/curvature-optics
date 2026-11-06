@@ -72,6 +72,38 @@ test('131 presets reset every relevant object group field without duplicating Le
   assert.throws(()=>adapter.applyPreset(m,'missing'),/Unknown/);
 });
 
+test('140.12.88 Pontchartrain caption follows first group count without modifying unrelated captions',()=>{
+  const m=model();
+  adapter.applyPreset(m,'pontchartrain');
+  assert.equal(adapter.refreshDescription(m),'85 transmission towers across Lake Pontchartrain');
+  adapter.setObject(m,0,'NObjects',200);
+  assert.equal(adapter.refreshDescription(m),'200 transmission towers across Lake Pontchartrain');
+  adapter.setObject(m,1,'NObjects',0);
+  assert.equal(adapter.refreshDescription(m),'200 transmission towers across Lake Pontchartrain');
+  adapter.setObject(m,0,'ObjType',2);
+  assert.equal(adapter.refreshDescription(m),'200 ships across Lake Pontchartrain');
+  m.Description='Custom annotated scene';
+  adapter.setObject(m,0,'NObjects',12);
+  assert.equal(adapter.refreshDescription(m),'Custom annotated scene');
+  adapter.applyPreset(m,'rows');
+  adapter.setObject(m,0,'NObjects',44);
+  assert.equal(adapter.refreshDescription(m),'Illustrative near and distant rows for perspective study');
+});
+
+test('140.12.88 Scene and Compare caption updates on object edits and preset reset',()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  const caption=()=>r.nodes.get('ModernSceneDescription').textContent;
+  assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
+  r.fire('ModernObject0NObjects','change','200');
+  assert.equal(m.NObjects[0],200);
+  assert.equal(caption(),'200 transmission towers across Lake Pontchartrain');
+  assert.equal(m.Description,caption(),'canvas decorations and Compare copy read the same model description');
+  r.fire('ModernObject1NObjects','change','0');
+  assert.equal(caption(),'200 transmission towers across Lake Pontchartrain');
+  r.fire('ModernResetPreset','click');
+  assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
+});
+
 test('131 HTML controls and isolated module order are explicit and no Legacy handlers are loaded',()=>{
   const html=read('CurvatureModern.html');
   const ids=[...html.matchAll(/\sid="([^"]+)"/g)].map(x=>x[1]);
