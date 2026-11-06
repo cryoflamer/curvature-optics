@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.97">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, animations, diagnostic UI or legacy runtime is loaded. -->
@@ -186,6 +186,7 @@
           <div class="modern-field"><label for="ModernInverseSceneWeight">Inverse target strength: <output id="ModernInverseSceneWeightValue">0%</output></label><input type="range" id="ModernInverseSceneWeight" min="0" max="100" step="0.01" value="0"></div>
           <div class="modern-field"><label for="ModernInverseSceneGradient">Required surface gradient (K/km)</label><input type="number" id="ModernInverseSceneGradient" step="any" value="-6.5"></div>
           <div class="modern-inverse-status" id="ModernInverseSceneStatus" aria-live="polite"></div>
+          <p class="modern-note">Dragging previews the required temperature and color column without tracing rays. Release the slider to update optics. A single model edit leaves the other Compare image unchanged.</p>
           <p class="modern-note">Dry hydrostatic inverse: the displayed temperature and gradient are calculated from the target n(h). At 100% the optical rays match engineered exp(h/R), after scaling n(0) to match air density. Beyond the zero-K altitude the refractive field continues only as a mathematical target, NOT a physical atmosphere.</p>
         </div>
         <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
@@ -235,6 +236,7 @@
           <div class="modern-field"><label for="ModernInverseCompareWeight">Inverse target strength: <output id="ModernInverseCompareWeightValue">0%</output></label><input type="range" id="ModernInverseCompareWeight" min="0" max="100" step="0.01" value="0"></div>
           <div class="modern-field"><label for="ModernInverseCompareGradient">Required surface gradient (K/km)</label><input type="number" id="ModernInverseCompareGradient" step="any" value="-6.5"></div>
           <div class="modern-inverse-status" id="ModernInverseCompareStatus" aria-live="polite"></div>
+          <p class="modern-note">Dragging previews the required temperature and color column without tracing rays. Release the slider to update optics. A single model edit leaves the other Compare image unchanged.</p>
           <p class="modern-note">Dry hydrostatic inverse: the displayed temperature and gradient are calculated from the target n(h). At 100% the optical rays match engineered exp(h/R), after scaling n(0) to match air density. Beyond the zero-K altitude the refractive field continues only as a mathematical target, NOT a physical atmosphere.</p>
         </div>
         <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
@@ -347,7 +349,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.97&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
@@ -371,6 +373,7 @@
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>
         </div>
+        <p class="modern-compute-timing" id="ModernComputeTiming" role="status" aria-live="polite">Optics timing appears after recalculation.</p>
         <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. The orange horizon marker, when resolved, is derived from forward-traced first-ground-contact rays and is not a guarantee of unique global visibility.</p>
       </section>
       <div class="modern-compare-message" id="ModernCompareMessage" hidden>

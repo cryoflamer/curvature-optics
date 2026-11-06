@@ -871,6 +871,20 @@
       ' degrees Celsius'+(kind==='inverse-temperature'?' · below zero Kelvin beyond the validity limit':''));
     return outsideChanged;
   }
+  // One readout for both the saved model and the lightweight slider draft.
+  function showInverseReadout(prefix,result,draft){
+    var field=newUiEl(prefix+'Gradient'),status=newUiEl(prefix+'Status');
+    if(field){field.value=result.surfaceGradientKPerKm.toFixed(4);
+      field.min=Math.min(result.initialGradientKPerKm,result.targetGradientKPerKm).toFixed(4);
+      field.max=Math.max(result.initialGradientKPerKm,result.targetGradientKPerKm).toFixed(4);}
+    function show(h){var temp=result.temperatureCAt(h),grad=result.gradientKPerKmAt(h);
+      return h+' m: '+(Number.isFinite(temp)?temp.toFixed(1)+' °C; '+grad.toFixed(1)+' K/km':'invalid');}
+    if(status)status.textContent=(draft?'Preview — release slider to trace rays\n':'')+
+      'Surface: '+result.surfaceGradientKPerKm.toFixed(2)+' K/km\n'+
+      show(500)+'\n'+show(1000)+'\n'+show(2000)+'\n'+
+      (Number.isFinite(result.validUntilMetres)?'T = 0 K at '+(result.validUntilMetres/1000).toFixed(2)+' km':
+        'No finite zero-K altitude in the checked range')+'.';
+  }
   function syncTemperatureControls(){
     var compare=state.compareConfig&&state.compareConfig[state.compareSelected];
     [['Scene',state.temperatureProfile,state.atmosphere,state.transitionProfile,state.inverseProfile,state.occlusionRadius],
@@ -891,18 +905,9 @@
       var is=newUiEl('ModernInverse'+row[0]+'Source');if(is)is.value=inverse.source;
       var slider=newUiEl('ModernInverse'+row[0]+'Weight');if(slider)slider.value=String(100*inverse.weight);
       var value=newUiEl('ModernInverse'+row[0]+'WeightValue');if(value)value.textContent=(100*inverse.weight).toFixed(2)+'%';
-      var field=newUiEl('ModernInverse'+row[0]+'Gradient'),status=newUiEl('ModernInverse'+row[0]+'Status');
       if(kind==='inverse-temperature'&&root.CurvatureRayTracer){
         var result=root.CurvatureRayTracer.atmosphere(kind,{temperatureProfile:p,inverseProfile:inverse,occlusionRadius:radius});
-        if(field){field.value=result.surfaceGradientKPerKm.toFixed(4);
-          field.min=Math.min(result.initialGradientKPerKm,result.targetGradientKPerKm).toFixed(4);
-          field.max=Math.max(result.initialGradientKPerKm,result.targetGradientKPerKm).toFixed(4);}
-        function show(h){var temp=result.temperatureCAt(h),grad=result.gradientKPerKmAt(h);
-          return h+' m: '+(Number.isFinite(temp)?temp.toFixed(1)+' °C; '+grad.toFixed(1)+' K/km':'invalid');}
-        if(status)status.textContent='Surface: '+result.surfaceGradientKPerKm.toFixed(2)+' K/km\n'+
-          show(500)+'\n'+show(1000)+'\n'+show(2000)+'\n'+
-          (Number.isFinite(result.validUntilMetres)?'T = 0 K at '+(result.validUntilMetres/1000).toFixed(2)+' km':
-            'No finite zero-K altitude in the checked range')+'.';
+        showInverseReadout('ModernInverse'+row[0],result,false);
         var gradNode=newUiEl('ModernTemperature'+row[0]+'Gradient');
         if(gradNode&&gradNode.parentElement)gradNode.parentElement.hidden=inverse.source==='standard';
       }else{
@@ -936,7 +941,8 @@
           next=compareState.transitionProfile(next);
           if(inCompare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'transitionProfile',next);
           else{state.transitionProfile=next;markCustom();}
-          syncTemperatureControls();redraw();
+          var resized=syncTemperatureControls();
+          redraw(null,inCompare&&!resized?state.compareSelected:null);
         }catch(error){updateStatus('Invalid transition profile: '+error.message,true);syncTemperatureControls();}
       }
       var source=newUiEl(prefix+'Source');if(source)source.addEventListener('change',function(){setTransition('source',source.value);});
@@ -948,20 +954,63 @@
     });
     [['Scene',false],['Compare',true]].forEach(function(row){
       var suffix=row[0],inCompare=row[1],prefix='ModernInverse'+suffix;
-      function setInverse(field,value){
+      var commitTimer=null,pendingWeight=null,pendingSide=null;
+      function setInverse(field,value,targetSide){
         try{
-          var old=inCompare?state.compareConfig[state.compareSelected].inverseProfile:state.inverseProfile;
+          var side=inCompare?(targetSide||state.compareSelected):null;
+          var old=inCompare?state.compareConfig[side].inverseProfile:state.inverseProfile;
           var next=compareState.inverseProfile(Object.assign({},old,{[field]:value}));
-          if(inCompare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'inverseProfile',next);
+          if(next.source===old.source&&next.weight===old.weight){syncTemperatureControls();return;}
+          if(inCompare)state.compareConfig=compareState.update(state.compareConfig,side,'inverseProfile',next);
           else{state.inverseProfile=next;markCustom();}
-          syncTemperatureControls();redraw();
+          syncTemperatureControls();redraw(null,side);
         }catch(error){updateStatus('Invalid inverse profile: '+error.message,true);syncTemperatureControls();}
       }
       var source=newUiEl(prefix+'Source');if(source)source.addEventListener('change',function(){setInverse('source',source.value);});
       var weight=newUiEl(prefix+'Weight');
       if(weight){
-        weight.addEventListener('input',function(){var out=newUiEl(prefix+'WeightValue');if(out)out.textContent=Number(weight.value).toFixed(2)+'%';});
-        weight.addEventListener('change',function(){setInverse('weight',Number(weight.value)/100);});
+        // Draft input is thermodynamic math and a CSS legend only. The costly
+        // physical trace is committed once after release (or a keyboard pause).
+        function previewWeight(){
+          pendingWeight=Number(weight.value)/100;
+          pendingSide=inCompare?state.compareSelected:null;
+          var out=newUiEl(prefix+'WeightValue');
+          if(out)out.textContent=Number(weight.value).toFixed(2)+'%';
+          var config=inCompare?state.compareConfig[state.compareSelected]:state;
+          if(!config||config.atmosphere!=='inverse-temperature')return;
+          var draft=Object.assign({},config.inverseProfile,{weight:Number(weight.value)/100});
+          try{
+            var p=root.CurvatureRayTracer.atmosphere('inverse-temperature',{
+              temperatureProfile:config.temperatureProfile,inverseProfile:draft,
+              occlusionRadius:config.occlusionRadius});
+            showInverseReadout(prefix,p,true);
+            // This updates ONLY the 0–2 km CSS legend, never the physical graph.
+            syncTemperatureColumn(inCompare?state.compareSelected:'Scene','inverse-temperature',
+              config.temperatureProfile,false,config.transitionProfile,draft,config.occlusionRadius);
+          }catch(error){updateStatus('Inverse preview: '+error.message,true);}
+        }
+        function commitWeight(){
+          if(commitTimer!==null){clearTimeout(commitTimer);commitTimer=null;}
+          var value=pendingWeight===null?Number(weight.value)/100:pendingWeight;
+          var side=pendingSide;pendingWeight=null;pendingSide=null;
+          setInverse('weight',value,side);
+        }
+        weight.addEventListener('input',previewWeight);
+        // A range can emit change for every keyboard arrow in some browsers.
+        // Coalesce those commits; mouse/touch release flushes immediately.
+        weight.addEventListener('change',function(){
+          if(pendingWeight===null){pendingWeight=Number(weight.value)/100;pendingSide=inCompare?state.compareSelected:null;}
+          if(commitTimer!==null)clearTimeout(commitTimer);
+          commitTimer=setTimeout(function(){commitTimer=null;commitWeight();},180);
+        });
+        weight.addEventListener('pointerup',commitWeight);
+        weight.addEventListener('pointercancel',commitWeight);
+        weight.addEventListener('keyup',function(event){
+          if(['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(event.key)){
+            if(commitTimer!==null)clearTimeout(commitTimer);
+            commitTimer=setTimeout(function(){commitTimer=null;commitWeight();},180);
+          }
+        });
       }
       var gradient=newUiEl(prefix+'Gradient');if(gradient)gradient.addEventListener('change',function(){
         var config=inCompare?state.compareConfig[state.compareSelected]:state;
@@ -990,7 +1039,7 @@
             next=compareState.temperatureProfile(next);
             if(inCompare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'temperatureProfile',next);
             else{state.temperatureProfile=next;markCustom();}
-            syncTemperatureControls();redraw();
+            syncTemperatureControls();redraw(null,inCompare?state.compareSelected:null);
           }catch(error){updateStatus('Invalid temperature profile: '+error.message,true);syncTemperatureControls();}
         });
       });
@@ -1206,6 +1255,7 @@
     state.curvaturePending=false;
     if(state.timer!==null){clearTimeout(state.timer);state.timer=null;}
     if(state.frame!==null){cancelAnimationFrame(state.frame);state.frame=null;}
+    pendingCompareScope=null;
   }
   // 137.2: the existing raster Canvas is compositor-translated during drag.
   // The shared physical model remains untouched until the final pointerup.
@@ -1397,6 +1447,11 @@
       if(document.hidden)cancelCameraDrag();
     });
   }
+  var pendingCompareScope=null;
+  function showComputeTiming(message){
+    var status=newUiEl('ModernComputeTiming');
+    if(status)status.textContent=message;
+  }
   function measuredGraphRedraw(view){
     if(!view)return {};
     var start=profileNow();
@@ -1407,11 +1462,18 @@
     return {totalMs:finished-start,resizeMs:resized-start,
       redrawMs:finished-resized};
   }
-  function redraw(opticalSampleMode){
+  function redraw(opticalSampleMode,compareSide){
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
-    state.opticalSample=opticalSampleMode==='cold'||opticalSampleMode==='warm'?
-      opticalSampleMode:null;
+    var sample=opticalSampleMode==='cold'||opticalSampleMode==='warm';
+    state.opticalSample=sample?opticalSampleMode:null;
+    // A targeted physical-input edit cannot invalidate the other viewport.
+    // However, pending shared/both changes must retain their full redraw.
+    // No partial draws on first load, mode switch, or explicit cold/warm runs.
+    var selected=(compareSide==='A'||compareSide==='B')&&state.mode==='compare'&&
+      !sample&&state.compareLast.A&&state.compareLast.B?compareSide:null;
+    if(selected&&pendingCompareScope&&pendingCompareScope!==selected)selected=null;
+    if(selected&&state.timer!==null)selected=null;
     if(activeCameraPointer)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
@@ -1424,17 +1486,30 @@
       if(!prepareCompare()){state.opticalSample=null;if(cameraPreview)cameraPreview.clear();return;}
       ['A','B'].forEach(function(side){
         var status=el('ModernCompareStatus'+side);
-        if(status)status.textContent='Rendering current model '+side+'…';
+        if(status&&(!selected||side===selected))status.textContent='Rendering current model '+side+'…';
       });
+      showComputeTiming(selected?'Model '+(selected==='A'?'B':'A')+' unchanged · rendering '+selected+'…':
+        'Rendering both models…');
       var scheduledAt=profileNow();
+      pendingCompareScope=selected||'both';
       state.frame=requestAnimationFrame(function(){
-        state.frame=null;
+        state.frame=null;pendingCompareScope=null;
         var startedAt=profileNow();
         try{
-          var a=measuredGraphRedraw(state.compareGraphs.A);
-          var b=measuredGraphRedraw(state.compareGraphs.B);
+          var a=selected==='B'?null:measuredGraphRedraw(state.compareGraphs.A);
+          var b=selected==='A'?null:measuredGraphRedraw(state.compareGraphs.B);
+          var doneAt=profileNow();
+          var active=selected||'B',last=state.compareLast[active];
+          var stage=last&&last.timings||{};
+          var activeMs=selected==='A'?(a&&a.totalMs):(b&&b.totalMs);
+          var line=(selected?'Model '+(selected==='A'?'B':'A')+' unchanged · ':'A+B rendered · ')+
+            (selected?active: 'total')+' '+Math.round(selected?activeMs:doneAt-startedAt)+' ms';
+          if(Number.isFinite(stage.opticsMs))line+=' · '+active+' optics '+Math.round(stage.opticsMs)+' ms';
+          if(Number.isFinite(stage.canvasMs))line+=' · Canvas '+Math.round(stage.canvasMs)+' ms';
+          showComputeTiming(line);
           if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
-            setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:profileNow()-startedAt,A:a,B:b});
+            setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:doneAt-startedAt,
+            A:a||undefined,B:b||undefined});
         }finally{
           if(state.opticalSample){
             var kind=state.opticalSample;
@@ -1452,6 +1527,7 @@
         var startedAt=profileNow();
         try{
           var metrics=measuredGraphRedraw(graph);
+          showComputeTiming('Scene rendered · '+Math.round(metrics.totalMs)+' ms');
           if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
             setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
         }finally{

@@ -78,3 +78,7 @@ In **Scene/Compare → Atmosphere**, select **Temperature gradient · hydrostati
 ## #140.12.97 — Inverse temperature atmosphere (Modern)
 
 For an engineered exponential ray field, **Atmosphere → Inverse atmosphere · required temperature** derives the dry-hydrostatic `T(h)` and `dT/dh` that would be needed, including a zero-K validity boundary. The surface gradient can be edited directly or via an equivalent transition slider; A/B and experiment URLs are independent and backwards-compatible. Details, equations, warnings, and an Opera test guide: [`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).
+
+### Inverse atmosphere slider responsiveness
+
+The **Inverse target strength** slider now previews the surface gradient, sampled temperatures and optional color column while it is moving. This draft updates **only** the controls/legend: the image is deliberately not traced until pointer release (keyboard edits coalesce after a short pause). In **Compare**, a changed A/B temperature or transition parameter redraws only the edited viewport when the layout is unchanged; shared camera/objects and layout changes still redraw both. The bottom-of-Compare timing message distinguishes a skipped unchanged view from computed work and reports CPU wall times. The existing **Display → Render profiler** provides a more detailed optics-vs-Canvas breakdown. The inverse RK4 solver, atmospheric formulas, numerical tolerances, and saved experiment schema are unchanged.
