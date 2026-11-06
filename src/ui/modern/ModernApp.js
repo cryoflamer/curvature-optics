@@ -8,6 +8,7 @@
     visibility:{enabled:false,rangeKm:60},
     temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
     transitionProfile:{source:'standard',weight:0},
+    inverseProfile:{source:'temperature-lapse',weight:0},
     showTemperatureProfile:false,temperaturePlacement:'outside-right',
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
@@ -333,11 +334,11 @@
   }
   function experimentSnapshot(){
     if(!experiments||!compareState)return null;
-    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile);
+    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile,state.inverseProfile);
     return experiments.capture(model,{
       atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
       visibility:state.visibility,temperatureProfile:state.temperatureProfile,
-      transitionProfile:state.transitionProfile,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
+      transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
       resetPreset:state.preset
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
       horizon:state.compareHorizon,selected:state.compareSelected,
@@ -384,6 +385,7 @@
     state.visibility=Object.assign({},scene.visibility);
     state.temperatureProfile=Object.assign({},scene.temperatureProfile);
     state.transitionProfile=Object.assign({},scene.transitionProfile);
+    state.inverseProfile=Object.assign({},scene.inverseProfile);
     state.showTemperatureProfile=data.display.showTemperatureProfile;
     state.temperaturePlacement=data.display.temperaturePlacement;
     state.preset=scene.resetPreset;
@@ -526,7 +528,7 @@
       ' · '+(model.showModel===2?'Flat surface':'Globe');
     var pill=el('ModernModePill');if(pill)pill.textContent=state.mode.toUpperCase();
     var wrap=el('ModernOcclusionWrap');
-    if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition'].includes(state.atmosphere);
+    if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition','inverse-temperature'].includes(state.atmosphere);
     showLegacyOption('ModernAtmosphere',state.atmosphere);
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     syncTemperatureControls();
@@ -541,7 +543,7 @@
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
         visibility:state.visibility,temperatureProfile:state.temperatureProfile,
-        transitionProfile:state.transitionProfile,interactive:false,
+        transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
         forceColdOptics:state.opticalSample==='cold'
       });
@@ -555,7 +557,7 @@
       state.last=result;
       updateGeometryBackendStatus(result);
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-        temperatureProfile:state.temperatureProfile,transitionProfile:state.transitionProfile};
+        temperatureProfile:state.temperatureProfile,transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
       if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       scheduleShimmerFrame();
@@ -590,7 +592,8 @@
         occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,
         visibility:spec?spec.visibility:state.visibility,
         temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,
-        transitionProfile:spec?spec.transitionProfile:state.transitionProfile,interactive:false,
+        transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
+        inverseProfile:spec?spec.inverseProfile:state.inverseProfile,interactive:false,
         geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
@@ -666,6 +669,8 @@
       atmosphere:traceKind,profileOptions:traceKind==='temperature-lapse'?options.temperatureProfile:
         traceKind==='profile-transition'?{temperatureProfile:options.temperatureProfile,
           transitionProfile:options.transitionProfile,occlusionRadius:options.occlusionRadius}:
+        traceKind==='inverse-temperature'?{temperatureProfile:options.temperatureProfile,
+          inverseProfile:options.inverseProfile,occlusionRadius:options.occlusionRadius}:
         {occlusionRadius:options.occlusionRadius}};
     var key=JSON.stringify(arguments_),cached=state.horizonCache[side];
     if(!cached||cached.key!==key){
@@ -729,7 +734,7 @@
   function prepareCompare(){
     if(!compareAdapter){updateStatus('Compare adapter is unavailable',true);return false;}
     if(compareState&&!state.compareConfig)
-      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile);
+      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile,state.inverseProfile);
     var result=compareState?compareState.pair(model,state.compareConfig,compareAdapter):compareAdapter.pair(model);
     if(!compareAdapter.invariant(result))throw Error('Compare shared-scene invariant failed');
     state.comparePair=result;
@@ -772,6 +777,10 @@
         'n(h) = (1−w) n_start(h) + w exp(h/R)',
         'Interpolates refractive-index profiles, not meteorological parameters. This is NOT a physical evolution caused by a temperature gradient.',
         'Choose an exact Standard or temperature-dependent starting profile. 0% and 100% reproduce the chosen start and engineered exponential respectively.'],
+      'inverse-temperature':['Inverse atmosphere · required T(h) and gradient',
+        'dT/dh = −g/Rd − T d ln(n−1)/dh',
+        'An exact hydrostatic inverse temperature is solved from a density-compatible index profile. The 0–100% control connects the starting air model to the engineered increasing exponential; the surface gradient input controls the same family.',
+        'The legacy engineered n(0)=1 has zero surface refractivity. We rescale it to n(0)=1+N0, which leaves all ray trajectories unchanged. T(h) is invalid at and above zero Kelvin, while optical n(h) continues as a purely mathematical experiment.'],
       'exponential-occlusion':['Exponential refractive profile · hypothetical','n(h) = n₀ × exp(h / R)',
         'Engineered increasing refractive index; bends rays toward lower heights. Not an observed model of Earth’s atmosphere.',
         'R is the atmospheric comparison radius (metres), independent of the surface radius; n₀ = 1 in this UI.'],
@@ -794,6 +803,7 @@
       standard:'<i>n</i>(<i>h</i>) = 1 + 0.000293 <i>e</i><sup>−<span class="math-frac"><span><i>h</i></span><span>7350 m</span></span></sup>',
       'temperature-lapse':'<i>T</i>(<i>h</i>) = <i>T</i><sub>0</sub> + <i>L</i> × 1000 m (1 − <i>e</i><sup>−<i>h</i>/1000 m</sup>)',
       'profile-transition':'<i>n</i>(<i>h</i>) = (1 − <i>w</i>) <i>n</i><sub>start</sub>(<i>h</i>) + <i>w</i> <i>e</i><sup><i>h</i>/<i>R</i></sup>',
+      'inverse-temperature':'<span class="math-frac"><span>d<i>T</i></span><span>d<i>h</i></span></span> = −<i>g</i>/<i>R</i><sub>d</sub> − <i>T</i> d ln(<i>n</i>−1)/d<i>h</i>',
       'exponential-occlusion':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> <i>e</i><sup><span class="math-frac"><span><i>h</i></span><span><i>R</i></span></span></sup>',
       'inverse-spherical':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> √(1 + (1 + <i>h</i>/<i>R</i>)<sup>4</sup> − (1 + <i>h</i>/<i>R</i>)<sup>2</sup>)'
     };
@@ -804,18 +814,20 @@
   }
   // Temperature is an optical-input profile, not a screen-space distortion.
   // Both viewports use the identical RayTracer temperature(h) sampler for the
-  // legend; colors have a *fixed absolute* -40..60 C scale across Scene/A/B.
-  function temperatureColor(c){
+  // legend; absolute scales are shared by all currently compared views.
+  function temperatureColor(c,wide){
+    var low=wide?-273.15:-40,high=60;
     var palette=[[35,79,181],[99,177,210],[225,229,195],[233,164,86],[191,53,57]];
-    var t=Math.max(0,Math.min(3.999999,(c+40)/100*4)),i=Math.floor(t),f=t-i;
+    var t=Math.max(0,Math.min(3.999999,(c-low)/(high-low)*4)),i=Math.floor(t),f=t-i;
     var v=palette[i].map(function(a,j){return Math.round(a+(palette[i+1][j]-a)*f);});
     return 'rgb('+v.join(',')+')';
   }
-  function syncTemperatureColumn(side,kind,profile,reserveStrip,transition){
+  function syncTemperatureColumn(side,kind,profile,reserveStrip,transition,inverse,radius){
     var column=newUiEl('ModernTemperature'+side);
     if(!column)return;
     var visible=state.showTemperatureProfile&&(kind==='temperature-lapse'||
-      (kind==='profile-transition'&&transition&&transition.source==='temperature-lapse'));
+      (kind==='profile-transition'&&transition&&transition.source==='temperature-lapse')||
+      kind==='inverse-temperature');
     column.hidden=!visible;
     // Reserve a real strip only for visible temperature-lapse columns.
     // GraphX3DX measures its own .JsGraph width, so an outside strip keeps
@@ -833,52 +845,84 @@
     if(!visible)return outsideChanged;
     var tracer=root.CurvatureRayTracer;
     if(!tracer||typeof tracer.atmosphere!=='function')return outsideChanged;
-    var atmosphere=tracer.atmosphere('temperature-lapse',profile),ramp=column.querySelector('.modern-temperature-ramp');
+    var atmosphere=kind==='inverse-temperature'?tracer.atmosphere(kind,{temperatureProfile:profile,
+      inverseProfile:inverse,occlusionRadius:radius}):tracer.atmosphere('temperature-lapse',profile),
+      ramp=column.querySelector('.modern-temperature-ramp');
     if(!ramp)return outsideChanged;
+    var wide=kind==='inverse-temperature'||(state.mode==='compare'&&state.compareConfig&&
+      (state.compareConfig.A.atmosphere==='inverse-temperature'||state.compareConfig.B.atmosphere==='inverse-temperature'));
     var stops=[];
     for(var i=0;i<=12;i++){
       var height=2000*(1-i/12);
-      stops.push(temperatureColor(atmosphere.temperatureCAt(height))+' '+(100*i/12).toFixed(2)+'%');
+      var temperature=atmosphere.temperatureCAt(height);
+      stops.push((Number.isFinite(temperature)?temperatureColor(temperature,wide):'#707780')+
+        ' '+(100*i/12).toFixed(2)+'%');
     }
     ramp.style.background='linear-gradient(to bottom, '+stops.join(',')+')';
     var top=column.querySelector('.modern-temperature-top'),bottom=column.querySelector('.modern-temperature-bottom');
-    if(top)top.textContent=atmosphere.temperatureCAt(2000).toFixed(1)+' °C';
+    if(top)top.textContent=Number.isFinite(atmosphere.temperatureCAt(2000))?
+      atmosphere.temperatureCAt(2000).toFixed(1)+' °C':'invalid';
     var columnTitle=column.querySelector('strong');if(columnTitle)columnTitle.textContent=
       kind==='profile-transition'?'T start(h) · 2 km':'T(h) · 2 km';
     if(bottom)bottom.textContent=atmosphere.temperatureCAt(0).toFixed(1)+' °C';
     column.setAttribute('aria-label','Temperature from 0 to 2 km: '+
-      atmosphere.temperatureCAt(0).toFixed(1)+' to '+atmosphere.temperatureCAt(2000).toFixed(1)+' degrees Celsius');
+      atmosphere.temperatureCAt(0).toFixed(1)+' to '+
+      (Number.isFinite(atmosphere.temperatureCAt(2000))?atmosphere.temperatureCAt(2000).toFixed(1):'invalid')+
+      ' degrees Celsius'+(kind==='inverse-temperature'?' · below zero Kelvin beyond the validity limit':''));
     return outsideChanged;
   }
   function syncTemperatureControls(){
     var compare=state.compareConfig&&state.compareConfig[state.compareSelected];
-    [['Scene',state.temperatureProfile,state.atmosphere,state.transitionProfile],
-      ['Compare',compare&&compare.temperatureProfile,compare&&compare.atmosphere,compare&&compare.transitionProfile]].forEach(function(row){
-      var prefix='ModernTemperature'+row[0],p=row[1],kind=row[2],t=row[3];
+    [['Scene',state.temperatureProfile,state.atmosphere,state.transitionProfile,state.inverseProfile,state.occlusionRadius],
+      ['Compare',compare&&compare.temperatureProfile,compare&&compare.atmosphere,compare&&compare.transitionProfile,
+        compare&&compare.inverseProfile,compare&&compare.occlusionRadius]].forEach(function(row){
+      var prefix='ModernTemperature'+row[0],p=row[1],kind=row[2],t=row[3],inverse=row[4],radius=row[5];
       if(!p)return;
       var fields={C:'temperatureC',Gradient:'gradientKPerKm',Pressure:'pressureHpa'};
       Object.keys(fields).forEach(function(suffix){var node=newUiEl(prefix+suffix);
         if(node)node.value=String(p[fields[suffix]]);});
       var wrap=newUiEl(prefix+'Fields');if(wrap)wrap.hidden=!(kind==='temperature-lapse'||
-        (kind==='profile-transition'&&t.source==='temperature-lapse'));
+        (kind==='profile-transition'&&t.source==='temperature-lapse')||kind==='inverse-temperature');
       var tw=newUiEl('ModernTransition'+row[0]+'Fields');if(tw)tw.hidden=kind!=='profile-transition';
       var source=newUiEl('ModernTransition'+row[0]+'Source');if(source)source.value=t.source;
       var weight=newUiEl('ModernTransition'+row[0]+'Weight');if(weight)weight.value=String(100*t.weight);
       var weightValue=newUiEl('ModernTransition'+row[0]+'WeightValue');if(weightValue)weightValue.textContent=Math.round(100*t.weight)+'%';
+      var iw=newUiEl('ModernInverse'+row[0]+'Fields');if(iw)iw.hidden=kind!=='inverse-temperature';
+      var is=newUiEl('ModernInverse'+row[0]+'Source');if(is)is.value=inverse.source;
+      var slider=newUiEl('ModernInverse'+row[0]+'Weight');if(slider)slider.value=String(100*inverse.weight);
+      var value=newUiEl('ModernInverse'+row[0]+'WeightValue');if(value)value.textContent=(100*inverse.weight).toFixed(2)+'%';
+      var field=newUiEl('ModernInverse'+row[0]+'Gradient'),status=newUiEl('ModernInverse'+row[0]+'Status');
+      if(kind==='inverse-temperature'&&root.CurvatureRayTracer){
+        var result=root.CurvatureRayTracer.atmosphere(kind,{temperatureProfile:p,inverseProfile:inverse,occlusionRadius:radius});
+        if(field){field.value=result.surfaceGradientKPerKm.toFixed(4);
+          field.min=Math.min(result.initialGradientKPerKm,result.targetGradientKPerKm).toFixed(4);
+          field.max=Math.max(result.initialGradientKPerKm,result.targetGradientKPerKm).toFixed(4);}
+        function show(h){var temp=result.temperatureCAt(h),grad=result.gradientKPerKmAt(h);
+          return h+' m: '+(Number.isFinite(temp)?temp.toFixed(1)+' °C; '+grad.toFixed(1)+' K/km':'invalid');}
+        if(status)status.textContent='Surface: '+result.surfaceGradientKPerKm.toFixed(2)+' K/km\n'+
+          show(500)+'\n'+show(1000)+'\n'+show(2000)+'\n'+
+          (Number.isFinite(result.validUntilMetres)?'T = 0 K at '+(result.validUntilMetres/1000).toFixed(2)+' km':
+            'No finite zero-K altitude in the checked range')+'.';
+        var gradNode=newUiEl('ModernTemperature'+row[0]+'Gradient');
+        if(gradNode&&gradNode.parentElement)gradNode.parentElement.hidden=inverse.source==='standard';
+      }else{
+        var oldGradient=newUiEl('ModernTemperature'+row[0]+'Gradient');
+        if(oldGradient&&oldGradient.parentElement)oldGradient.parentElement.hidden=false;
+      }
     });
     var show=newUiEl('ModernShowTemperatureProfile');if(show)show.checked=state.showTemperatureProfile;
     var select=newUiEl('ModernTemperaturePlacement');if(select)select.value=state.temperaturePlacement;
     var wrap=newUiEl('ModernTemperaturePlacementWrap');if(wrap)wrap.hidden=!state.showTemperatureProfile;
-    var resize=!!syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile,false,state.transitionProfile);
+    var resize=!!syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile,false,state.transitionProfile,state.inverseProfile,state.occlusionRadius);
     if(state.compareConfig){
       // Keep A/B Canvas dimensions identical even if only one atmosphere has
       // a temperature legend. The other viewport reserves a blank strip.
       var reserve=state.showTemperatureProfile&&state.temperaturePlacement.indexOf('outside-')===0&&
         ['A','B'].some(function(side){var p=state.compareConfig[side];
           return p.atmosphere==='temperature-lapse'||(p.atmosphere==='profile-transition'&&
-            p.transitionProfile.source==='temperature-lapse');});
-      resize=!!syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile,reserve,state.compareConfig.A.transitionProfile)||resize;
-      resize=!!syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile,reserve,state.compareConfig.B.transitionProfile)||resize;
+            p.transitionProfile.source==='temperature-lapse')||p.atmosphere==='inverse-temperature';});
+      resize=!!syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile,reserve,state.compareConfig.A.transitionProfile,state.compareConfig.A.inverseProfile,state.compareConfig.A.occlusionRadius)||resize;
+      resize=!!syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile,reserve,state.compareConfig.B.transitionProfile,state.compareConfig.B.inverseProfile,state.compareConfig.B.occlusionRadius)||resize;
     }
     return resize;
   }
@@ -898,9 +942,40 @@
       var source=newUiEl(prefix+'Source');if(source)source.addEventListener('change',function(){setTransition('source',source.value);});
       var weight=newUiEl(prefix+'Weight');
       if(weight){
-        weight.addEventListener('input',function(){var out=newUiEl(prefix+'WeightValue');if(out)out.textContent=weight.value+'%';});
+        weight.addEventListener('input',function(){var out=newUiEl(prefix+'WeightValue');if(out)out.textContent=Number(weight.value).toFixed(2)+'%';});
         weight.addEventListener('change',function(){setTransition('weight',Number(weight.value)/100);});
       }
+    });
+    [['Scene',false],['Compare',true]].forEach(function(row){
+      var suffix=row[0],inCompare=row[1],prefix='ModernInverse'+suffix;
+      function setInverse(field,value){
+        try{
+          var old=inCompare?state.compareConfig[state.compareSelected].inverseProfile:state.inverseProfile;
+          var next=compareState.inverseProfile(Object.assign({},old,{[field]:value}));
+          if(inCompare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'inverseProfile',next);
+          else{state.inverseProfile=next;markCustom();}
+          syncTemperatureControls();redraw();
+        }catch(error){updateStatus('Invalid inverse profile: '+error.message,true);syncTemperatureControls();}
+      }
+      var source=newUiEl(prefix+'Source');if(source)source.addEventListener('change',function(){setInverse('source',source.value);});
+      var weight=newUiEl(prefix+'Weight');
+      if(weight){
+        weight.addEventListener('input',function(){var out=newUiEl(prefix+'WeightValue');if(out)out.textContent=Number(weight.value).toFixed(2)+'%';});
+        weight.addEventListener('change',function(){setInverse('weight',Number(weight.value)/100);});
+      }
+      var gradient=newUiEl(prefix+'Gradient');if(gradient)gradient.addEventListener('change',function(){
+        var config=inCompare?state.compareConfig[state.compareSelected]:state;
+        try{
+          if(gradient.value.trim()==='')throw RangeError('Enter a finite gradient');
+          var requested=Number(gradient.value),tracer=root.CurvatureRayTracer;
+          var p=tracer.atmosphere('inverse-temperature',{temperatureProfile:config.temperatureProfile,
+            inverseProfile:config.inverseProfile,occlusionRadius:config.occlusionRadius});
+          var a=p.initialGradientKPerKm,b=p.targetGradientKPerKm;
+          if(!Number.isFinite(requested)||requested<Math.min(a,b)-1e-8||requested>Math.max(a,b)+1e-8)
+            throw RangeError('Surface gradient must be between '+a.toFixed(2)+' and '+b.toFixed(2)+' K/km');
+          setInverse('weight',Math.max(0,Math.min(1,(requested-a)/(b-a))));
+        }catch(error){updateStatus('Invalid required gradient: '+error.message,true);syncTemperatureControls();}
+      });
     });
     [['Scene',false],['Compare',true]].forEach(function(row){
       var prefix='ModernTemperature'+row[0],inCompare=row[1];
@@ -949,7 +1024,7 @@
     Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
-      wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition'].includes(spec.atmosphere);
+      wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition','inverse-temperature'].includes(spec.atmosphere);
     syncShimmerControls();
     syncVisibilityControls();
     syncTemperatureControls();
@@ -1444,7 +1519,7 @@
     }
     if(mode==='compare'&&compareState){
       if(!state.compareConfig)
-        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile);
+        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile,state.inverseProfile);
       syncCompareEditor();
     }
     // Compare's source model retains Scene aiming for later, but the A/B clones
@@ -1581,6 +1656,7 @@
       state.preset=id;state.atmosphere='standard';state.occlusionRadius=6371000;
       state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
       state.transitionProfile={source:'standard',weight:0};
+      state.inverseProfile={source:'temperature-lapse',weight:0};
       model.Update();syncNumericInputs();
       var preset=el('ModernPreset');if(preset)preset.value=id;
       redraw();

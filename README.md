@@ -74,3 +74,7 @@ In Modern, the **Demos** tab embeds all nine original Legacy animation families.
 ### Temperature gradient in Modern (#140.12.94)
 
 In **Scene/Compare → Atmosphere**, select **Temperature gradient · hydrostatic** to control surface temperature (°C), local surface lapse rate (K/km) and pressure (hPa). In Compare, A and B have **independent** temperature atmospheres; atmospheric extinction/haze remains shared. **Display → Show temperature column (0–2 km)** overlays a switchable color column on each temperature-model image. It is a visual altitude legend, not a change to rays or a pixel-aligned height map. The settings and toggle are saved in experiment URLs/JSON. Existing fixed Standard and Legacy optics are unchanged. Read [the model's physics, validity domain and caveats](docs/temperature-gradient-modern.md) before interpreting inversion experiments.
+
+## #140.12.97 — Inverse temperature atmosphere (Modern)
+
+For an engineered exponential ray field, **Atmosphere → Inverse atmosphere · required temperature** derives the dry-hydrostatic `T(h)` and `dT/dh` that would be needed, including a zero-K validity boundary. The surface gradient can be edited directly or via an equivalent transition slider; A/B and experiment URLs are independent and backwards-compatible. Details, equations, warnings, and an Opera test guide: [`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).

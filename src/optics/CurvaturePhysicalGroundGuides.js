@@ -16,6 +16,8 @@
     var R=m.rEarth,eye=m.Height;
     var surface=surfaceApi.createFromCurvature(globe?1/R:0);
     var profile=kind==='temperature-lapse'?options.temperatureProfile:
+      kind==='inverse-temperature'?{temperatureProfile:options.temperatureProfile,
+        inverseProfile:options.inverseProfile,occlusionRadius:options.occlusionRadius}:
       kind==='profile-transition'?{temperatureProfile:options.temperatureProfile,
         transitionProfile:options.transitionProfile,occlusionRadius:options.occlusionRadius}:
       kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:options.occlusionRadius}:undefined;
@@ -53,7 +55,8 @@
     // A finite ground horizon exists on the globe and for engineered Flat
     // profiles. For Flat vacuum/standard we do not infer a finite horizon.
     var finite=globe||kind==='inverse-spherical'||kind==='exponential-occlusion'||
-      (kind==='profile-transition'&&options.transitionProfile&&options.transitionProfile.weight>0);
+      (kind==='profile-transition'&&options.transitionProfile&&options.transitionProfile.weight>0)||
+      (kind==='inverse-temperature'&&options.inverseProfile&&options.inverseProfile.weight>0);
     var upper=globe?Math.min(R*.1,Math.max(100,8*Math.sqrt(2*R*eye))):
       Math.min(options.occlusionRadius*.1,Math.max(100,8*Math.sqrt(2*options.occlusionRadius*eye)));
     var lastVisible=0,firstHidden=null;

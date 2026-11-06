@@ -11,7 +11,7 @@
   var CAMERA=['Height','FocalLengthField','Pan','Nick','Roll'];
   var OBJECT=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
-  var ATMOSPHERE=['vacuum','standard','temperature-lapse','profile-transition','inverse-spherical','exponential-occlusion'];
+  var ATMOSPHERE=['vacuum','standard','temperature-lapse','profile-transition','inverse-temperature','inverse-spherical','exponential-occlusion'];
   var SCENE_PRESETS=['pontchartrain','single','rows','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   var TEMPERATURE_PLACEMENTS=['outside-right','outside-left','inside-right','inside-left'];
@@ -40,6 +40,7 @@
       visibility:scene.visibility||{enabled:false,rangeKm:60},
       temperatureProfile:scene.temperatureProfile||{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
       transitionProfile:scene.transitionProfile||{source:'standard',weight:0},
+      inverseProfile:scene.inverseProfile||{source:'temperature-lapse',weight:0},
       showGrid:model.showGrid!==0,preset:scene.preset,resetPreset:scene.resetPreset,
       title:model.DemoText||'',description:model.Description||''},
       compare:{A:compare.A,B:compare.B,preset:compare.preset,selected:ui.selected},
@@ -52,7 +53,7 @@
     shape(value,['version','scene','compare','display']);
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
-    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile']);
+    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile','inverseProfile']);
     shape(s.camera,CAMERA.concat(['viewcenterHorizon','deviceRatio']));
     var camera={};
     var ranges={Height:[0.001,1e9],FocalLengthField:[1,100000],Pan:[-360,360],
@@ -89,14 +90,19 @@
       shape(v,['source','weight']);
       return {source:choice(v.source,['standard','temperature-lapse']),weight:num(v.weight,0,1)};
     }
+    function inverseProfile(v){
+      if(v===undefined)return {source:'temperature-lapse',weight:0};
+      shape(v,['source','weight']);
+      return {source:choice(v.source,['standard','temperature-lapse']),weight:num(v.weight,0,1)};
+    }
     var c=value.compare;
     shape(c,['A','B','preset','selected']);
     function physics(p){
-      shape(p,['surface','radiusKm','atmosphere','occlusionRadius'],['visibility','temperatureProfile','transitionProfile']);
+      shape(p,['surface','radiusKm','atmosphere','occlusionRadius'],['visibility','temperatureProfile','transitionProfile','inverseProfile']);
       return {surface:choice(p.surface,['globe','flat']),radiusKm:num(p.radiusKm,100,1e13),
         atmosphere:choice(p.atmosphere,ATMOSPHERE),occlusionRadius:num(p.occlusionRadius,1,1e16),
         visibility:visibility(p.visibility),temperatureProfile:temperatureProfile(p.temperatureProfile),
-        transitionProfile:transitionProfile(p.transitionProfile)};
+        transitionProfile:transitionProfile(p.transitionProfile),inverseProfile:inverseProfile(p.inverseProfile)};
     }
     // Historical links can have independent A/B haze settings. Compare now
     // uses a shared value: migrate deterministically from A on every import.
@@ -110,7 +116,7 @@
     return {version:VERSION,scene:{camera:camera,objects:objects,surface:surface,
       atmosphere:choice(s.atmosphere,ATMOSPHERE),occlusionRadius:num(s.occlusionRadius,1,1e16),
       visibility:visibility(s.visibility),temperatureProfile:temperatureProfile(s.temperatureProfile),
-      transitionProfile:transitionProfile(s.transitionProfile),
+      transitionProfile:transitionProfile(s.transitionProfile),inverseProfile:inverseProfile(s.inverseProfile),
       showGrid:bool(s.showGrid),preset:choice(s.preset,SCENE_PRESETS),
       resetPreset:choice(s.resetPreset,SCENE_PRESETS.slice(0,3)),
       title:title(s.title,160),description:title(s.description,500)},

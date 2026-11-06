@@ -56,6 +56,78 @@
         temperatureCAt:function(h){return sample(h).temperatureC;}
       };
     }
+    if (kind === 'inverse-temperature') {
+      // Inverse of dry hydrostatic + ideal-gas refractivity for N=n-1:
+      // (N*T)' = -g/Rd * N, so T(h)=[T0*N0 - g/Rd*integral(N,0,h)]/N(h).
+      // N(0)=N0>0 is indispensable: the legacy engineered n(0)=1 cannot
+      // represent any finite-pressure, finite-temperature dry atmosphere.
+      // Multiplying the engineered exponential by (1+N0) keeps dn/n, hence
+      // every geometric-optics ray, exactly unchanged.
+      var inverse=options.inverseProfile||{source:'temperature-lapse',weight:0};
+      if(!inverse||typeof inverse!=='object'||Array.isArray(inverse)||
+          Object.keys(inverse).some(function(k){return k!=='source'&&k!=='weight';})||
+          !['standard','temperature-lapse'].includes(inverse.source)||
+          typeof inverse.weight!=='number'||!Number.isFinite(inverse.weight)||
+          inverse.weight<0||inverse.weight>1)
+        throw RangeError('Invalid inverse-temperature configuration');
+      var surface=options.temperatureProfile||{};
+      var hydro=atmosphere('temperature-lapse',surface); // shared parameter validation
+      var T0=(surface.temperatureC===undefined?15:surface.temperatureC)+273.15;
+      var pressure=surface.pressureHpa===undefined?1013.25:surface.pressureHpa;
+      var N0=0.000293*(pressure/1013.25)*(288.15/T0);
+      var a=9.80665/287.05,H=7350,R=options.occlusionRadius;
+      if(!Number.isFinite(R)||R<=0)throw RangeError('Inverse target requires positive occlusionRadius');
+      var w=inverse.weight,oneMinus=1-w,n0=1+N0;
+      function base(h){
+        if(inverse.source==='temperature-lapse'){
+          var N=hydro.n(h)-1,T=hydro.temperatureCAt(h)+273.15;
+          return {N:N,dN:hydro.dn(h),J:(N0*T0-N*T)/a};
+        }
+        var N=N0*Math.exp(-h/H);
+        return {N:N,dN:-N/H,J:-N0*H*Math.expm1(-h/H)};
+      }
+      function sample(h){
+        var start=base(h),x=h/R,e=Math.exp(x);
+        var targetN=n0*e-1,targetD=n0*e/R;
+        // The small-h compensated form avoids subtracting two close O(h)
+        // terms in the integrated engineered refractivity.
+        var targetJ=N0*h+n0*R*(Math.expm1(x)-x);
+        var N=oneMinus*start.N+w*targetN;
+        var dN=oneMinus*start.dN+w*targetD;
+        var J=oneMinus*start.J+w*targetJ;
+        return {N:N,dN:dN,n:1+N,kelvin:N>0?(T0*N0-a*J)/N:NaN};
+      }
+      function positiveTemperature(h){var r=sample(h);return Number.isFinite(r.kelvin)&&r.kelvin>0;}
+      // The optical n(h) is continued formally beyond this point, but the
+      // inverse thermodynamic interpretation is NOT. Never silently clamp T.
+      var limit=Infinity;
+      // Pure hydrostatic baseline remains T>0 indefinitely in this boundary
+      // layer. The standard baseline has an exact all-altitude inverse.
+      if(w===0 && inverse.source==='standard' && T0<a*H){
+        limit=-H*Math.log1p(-T0/(a*H));
+      }else if(w>0 && !positiveTemperature(2e7)){
+        var low=0,high=1000;
+        while(high<2e7&&positiveTemperature(high)){low=high;high*=2;}
+        high=Math.min(high,2e7);
+        for(var step=0;step<55;step++){
+          var mid=(low+high)/2;
+          if(positiveTemperature(mid))low=mid;else high=mid;
+        }
+        limit=(low+high)/2;
+      }
+      return {
+        n:function(h){return sample(h).n;},
+        dn:function(h){return sample(h).dN;},
+        temperatureCAt:function(h){var r=sample(h);return h>=limit||!(r.kelvin>0)?NaN:r.kelvin-273.15;},
+        gradientKPerKmAt:function(h){var r=sample(h);return h>=limit||!(r.kelvin>0)?NaN:
+          1000*(-a-r.kelvin*r.dN/r.N);},
+        validUntilMetres:limit,
+        surfaceGradientKPerKm:1000*(-a-T0*sample(0).dN/N0),
+        initialGradientKPerKm:1000*(-a-T0*base(0).dN/N0),
+        targetGradientKPerKm:1000*(-a-T0*n0/(R*N0)),
+        surfaceRefractivity:N0
+      };
+    }
     if (kind === 'profile-transition') {
       // Exploratory mathematical interpolation, NOT a hydrostatic atmospheric
       // evolution. Both endpoints and their derivatives are the original

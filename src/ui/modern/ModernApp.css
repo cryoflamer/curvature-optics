@@ -268,3 +268,9 @@ button{cursor:pointer}
   border:1px solid #d1dfeb;border-radius:8px}
 .modern-temperature-fields .modern-field{margin:8px 0}
 .modern-temperature-fields .modern-note{margin-top:8px}
+/* #140.12.97: explicit inverse thermal diagnostics, not chart pixels. */
+.modern-inverse-status{background:#fff;border:1px solid #ccdae8;border-radius:6px;
+  color:#204565;font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;
+  padding:8px;margin:10px 0;white-space:pre-line;overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums}
+.modern-inverse-status[hidden]{display:none!important}
