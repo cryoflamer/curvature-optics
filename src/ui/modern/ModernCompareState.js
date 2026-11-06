@@ -7,6 +7,16 @@
   root.CurvatureModernCompareState=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  var VISIBILITY_DEFAULT={enabled:false,rangeKm:60};
+  function visibility(value){
+    if(value===undefined)return Object.assign({},VISIBILITY_DEFAULT);
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).some(function(k){return k!=='enabled'&&k!=='rangeKm';})||
+      typeof value.enabled!=='boolean'||typeof value.rangeKm!=='number'||
+      !Number.isFinite(value.rangeKm)||value.rangeKm<1||value.rangeKm>500)
+      throw RangeError('Invalid visibility configuration');
+    return {enabled:value.enabled,rangeKm:value.rangeKm};
+  }
   var ATMOSPHERES=['vacuum','standard','inverse-spherical','exponential-occlusion'];
   var PRESETS=Object.freeze({
     'globe-flat-vacuum':{name:'Globe vacuum / Flat vacuum',
@@ -32,7 +42,8 @@
     if(!spec||!['globe','flat'].includes(spec.surface))throw RangeError('Choose globe or exact flat');
     if(!ATMOSPHERES.includes(spec.atmosphere))throw RangeError('Unknown atmosphere');
     return {surface:spec.surface,radiusKm:finite(spec.radiusKm,100,1e13),
-      atmosphere:spec.atmosphere,occlusionRadius:finite(spec.occlusionRadius,1,1e16)};
+      atmosphere:spec.atmosphere,occlusionRadius:finite(spec.occlusionRadius,1,1e16),
+      visibility:visibility(spec.visibility)};
   }
   function fromScene(model,atmosphere,occlusionRadius){
     return validate({surface:model.showModel===2?'flat':'globe',radiusKm:model.rEarth/1000,
@@ -40,14 +51,15 @@
   }
   function initial(model,atmosphere,occlusionRadius){
     var base=fromScene(model,atmosphere,occlusionRadius);
-    return {A:Object.assign({},base),B:Object.assign({},base,{surface:'flat'}),preset:'custom'};
+    return {A:Object.assign({},base,{visibility:Object.assign({},base.visibility)}),
+      B:Object.assign({},base,{surface:'flat',visibility:Object.assign({},base.visibility)}),preset:'custom'};
   }
   function preset(id){
     var p=PRESETS[id];if(!p)throw RangeError('Unknown Compare preset');
     return {A:validate(p.A),B:validate(p.B),preset:id};
   }
   function update(current,side,field,raw){
-    if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius'].includes(field))
+    if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius','visibility'].includes(field))
       throw RangeError('Unknown comparison field');
     var next=Object.assign({},current[side]);next[field]=raw;
     var result=Object.assign({},current);result[side]=validate(next);result.preset='custom';
@@ -73,6 +85,6 @@
       ' · '+spec.atmosphere;
   }
   return Object.freeze({ATMOSPHERES:ATMOSPHERES,PRESETS:PRESETS,
-    finite:finite,validate:validate,fromScene:fromScene,initial:initial,
+    finite:finite,visibility:visibility,validate:validate,fromScene:fromScene,initial:initial,
     preset:preset,update:update,pair:pair,label:label});
 }));

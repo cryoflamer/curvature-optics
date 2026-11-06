@@ -15,8 +15,8 @@
   var SCENE_PRESETS=['pontchartrain','single','rows','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}
-  function shape(value,keys){
-    if(!object(value)||Object.keys(value).some(function(k){return !keys.includes(k);}))
+  function shape(value,keys,optional){
+    if(!object(value)||Object.keys(value).some(function(k){return !keys.includes(k)&&!(optional||[]).includes(k);}))
       throw RangeError('Invalid experiment object fields');
     keys.forEach(function(key){if(!Object.prototype.hasOwnProperty.call(value,key))throw RangeError('Missing '+key);});
   }
@@ -36,6 +36,7 @@
     return validate({version:VERSION,scene:{camera:camera,objects:objects,
       surface:{showModel:model.showModel,rEarth:model.rEarth},
       atmosphere:scene.atmosphere,occlusionRadius:scene.occlusionRadius,
+      visibility:scene.visibility||{enabled:false,rangeKm:60},
       showGrid:model.showGrid!==0,preset:scene.preset,resetPreset:scene.resetPreset,
       title:model.DemoText||'',description:model.Description||''},
       compare:{A:compare.A,B:compare.B,preset:compare.preset,selected:ui.selected},
@@ -46,7 +47,7 @@
     shape(value,['version','scene','compare','display']);
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
-    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description']);
+    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility']);
     shape(s.camera,CAMERA.concat(['viewcenterHorizon','deviceRatio']));
     var camera={};
     var ranges={Height:[0.001,1e9],FocalLengthField:[1,100000],Pan:[-360,360],
@@ -67,12 +68,18 @@
     });
     shape(s.surface,['showModel','rEarth']);
     var surface={showModel:choice(s.surface.showModel,[1,2]),rEarth:num(s.surface.rEarth,100000,1e16)};
+    function visibility(v){
+      if(v===undefined)return {enabled:false,rangeKm:60};
+      shape(v,['enabled','rangeKm']);
+      return {enabled:bool(v.enabled),rangeKm:num(v.rangeKm,1,500)};
+    }
     var c=value.compare;
     shape(c,['A','B','preset','selected']);
     function physics(p){
-      shape(p,['surface','radiusKm','atmosphere','occlusionRadius']);
+      shape(p,['surface','radiusKm','atmosphere','occlusionRadius'],['visibility']);
       return {surface:choice(p.surface,['globe','flat']),radiusKm:num(p.radiusKm,100,1e13),
-        atmosphere:choice(p.atmosphere,ATMOSPHERE),occlusionRadius:num(p.occlusionRadius,1,1e16)};
+        atmosphere:choice(p.atmosphere,ATMOSPHERE),occlusionRadius:num(p.occlusionRadius,1,1e16),
+        visibility:visibility(p.visibility)};
     }
     var d=value.display;
     // Probe fields are optional for links saved before the GPU Compare experiment.
@@ -81,6 +88,7 @@
       throw RangeError('Invalid experiment display fields');
     return {version:VERSION,scene:{camera:camera,objects:objects,surface:surface,
       atmosphere:choice(s.atmosphere,ATMOSPHERE),occlusionRadius:num(s.occlusionRadius,1,1e16),
+      visibility:visibility(s.visibility),
       showGrid:bool(s.showGrid),preset:choice(s.preset,SCENE_PRESETS),
       resetPreset:choice(s.resetPreset,SCENE_PRESETS.slice(0,3)),
       title:title(s.title,160),description:title(s.description,500)},

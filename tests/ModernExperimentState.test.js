@@ -182,3 +182,26 @@ test('140.12.9: GPU Compare mode and target count survive share URL and old link
     assert.throws(()=>codec.validate(candidate));
   }
 });
+
+test('Atmospheric visibility survives Modern share URLs, JSON and old omitted fields',()=>{
+  const saved=experiment();
+  saved.scene.visibility={enabled:true,rangeKm:55};
+  saved.compare.A.visibility={enabled:true,rangeKm:17};
+  saved.compare.B.visibility={enabled:false,rangeKm:90};
+  const encoded=codec.encode(saved);
+  assert.deepEqual(codec.decode(encoded),saved);
+  assert.deepEqual(codec.readUrl(new URL(codec.urlWithExperiment(
+    'https://example.org/CurvatureModern.html',saved)).search),saved);
+  const old=experiment();
+  delete old.scene.visibility;
+  delete old.compare.A.visibility;
+  delete old.compare.B.visibility;
+  const migrated=codec.validate(old);
+  assert.deepEqual(migrated.scene.visibility,{enabled:false,rangeKm:60});
+  assert.deepEqual(migrated.compare.A.visibility,{enabled:false,rangeKm:60});
+  assert.deepEqual(migrated.compare.B.visibility,{enabled:false,rangeKm:60});
+  for(const invalid of [0,501,NaN,'25']){
+    const bad=JSON.parse(JSON.stringify(saved));bad.scene.visibility.rangeKm=invalid;
+    assert.throws(()=>codec.validate(bad));
+  }
+});

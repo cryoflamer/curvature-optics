@@ -13,10 +13,11 @@
     root.CurvaturePhysicalSceneOptics||(typeof require==='function'?require('../optics/CurvaturePhysicalSceneOptics'):null),
     root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
     root.CurvatureScreenSpaceGuides||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides'):null),
-    root.CurvaturePhysicalCamera||(typeof require==='function'?require('./CurvaturePhysicalCamera'):null));
+    root.CurvaturePhysicalCamera||(typeof require==='function'?require('./CurvaturePhysicalCamera'):null),
+    root.CurvatureAtmosphericVisibility||(typeof require==='function'?require('../renderers/CurvatureAtmosphericVisibility'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility){
   'use strict';
   var opticalSession=optical.create();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
@@ -139,8 +140,11 @@
     if(options.geometryAudit&&typeof options.geometryAudit.onScene==='function')
       options.geometryAudit.onScene(opticalFrame.composition.scene,opticalFrame.stats);
     var opticalAt=now();
-    var drawSource=options.interactive?previewComposition(opticalFrame.composition):
-      {composition:opticalFrame.composition,preview:false};
+    var visibleComposition=options.visibility&&options.visibility.enabled?
+      visibility.apply(opticalFrame.composition,composed,opticalFrame.stats,options.visibility):
+      opticalFrame.composition;
+    var drawSource=options.interactive?previewComposition(visibleComposition):
+      {composition:visibleComposition,preview:false};
     var lodStarted=now();
     var guideLod=!options.interactive?screenGuides.simplify(drawSource.composition,
       camera,g.Canvas.width,g.Canvas.height,{tolerancePixels:0.5}):null;

@@ -7,6 +7,7 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const read=file=>fs.readFileSync(path.join(root,file),'utf8');
 const shimmer=require('../src/ui/modern/ModernAtmosphericShimmer');
+const visibility=require('../src/renderers/CurvatureAtmosphericVisibility');
 const sceneState=require('../src/ui/modern/ModernSceneState');
 const compareState=require('../src/ui/modern/ModernCompareState');
 const compareModel=require('../src/ui/modern/ModernCompareModel');
@@ -39,7 +40,7 @@ function boot(){
   nodes.get('ModernPreset').value='pontchartrain';
   nodes.get('ModernCameraAim').value='3';
   nodes.get('ModernCompareHorizon').checked=true;
-  const registered=[],frameTasks=new Map();let counter=0,physics=0,shimmerFrames=0;
+  const registered=[],frameTasks=new Map();let counter=0,physics=0,shimmerFrames=0;const renderOptions=[];
   const presentation={
     enabled(name){return !!this.active[name];},active:{Scene:false,A:false,B:false},
     captured:{Scene:false,A:false,B:false},
@@ -59,9 +60,9 @@ function boot(){
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
     CurvaturePhysicalCurvature:curvature,
     CurvaturePhysicalSceneOptics:{create(){return {};}},
-    CurvatureModernAtmosphericShimmer:shimmer,
+    CurvatureModernAtmosphericShimmer:shimmer,CurvatureAtmosphericVisibility:visibility,
     CurvatureModernAtmosphericPresentation:{create(){return presentation;}},
-    CurvatureMainCanvasRenderer:{renderPhysical(){physics++;
+    CurvatureMainCanvasRenderer:{renderPhysical(_graph,_model,options){physics++;renderOptions.push(options);
       return {drawn:12,fillTriangles:6,unresolved:0};}},
     NewGraphX3D(spec){return {Canvas:{},UpdateCanvasSize(){},Redraw(){spec.DrawFunc({Canvas:{}});}};},
     xOnLoad(fn){registered.push(fn);},
@@ -83,7 +84,7 @@ function boot(){
     batch.forEach(fn=>fn(timestamp));}
   function flush(){flushAt(1000+counter*16);}
   flush();
-  return {nodes,app,presentation,flush,flushAt,
+  return {nodes,app,presentation,flush,flushAt,renderOptions,
     get physics(){return physics;},get shimmerFrames(){return shimmerFrames;},
     get pendingFrames(){return frameTasks.size;}};
 }
@@ -253,4 +254,37 @@ test('138.4: Scene 60Hz and Compare 30Hz GPU draw caps leave physical optics unc
   t.flushAt(3033);
   assert.equal(t.shimmerFrames,before+4,'both draw again at 33ms');
   assert.equal(t.physics,optics,'the GPU scheduler never retraces physical rays');
+});
+
+test('Atmospheric extinction controls retain independent Scene and Compare A/B ranges',()=>{
+  const t=boot(),n=t.nodes;
+  for(const prefix of ['ModernVisibility','ModernModelVisibility']){
+    for(const suffix of ['Enabled','Range','Options'])assert.ok(n.has(prefix+suffix),prefix+suffix);
+  }
+  assert.equal(n.get('ModernVisibilityEnabled').checked,false,'default remains unchanged');
+  const sceneOn=n.get('ModernVisibilityEnabled');sceneOn.checked=true;sceneOn.dispatch('change');t.flush();
+  assert.equal(n.get('ModernVisibilityOptions').hidden,false);
+  assert.equal(t.renderOptions.at(-1).visibility.enabled,true);
+  const range=n.get('ModernVisibilityRange');range.value='25';range.dispatch('change');t.flush();
+  assert.equal(t.renderOptions.at(-1).visibility.rangeKm,25);
+  range.value='0';range.dispatch('change');
+  assert.equal(range.value,'25','invalid edit restores the accepted range');
+  n.get('ModernCompareTab').dispatch('click');t.flush();
+  assert.equal(n.get('ModernModelVisibilityEnabled').checked,false);
+  const compareOn=n.get('ModernModelVisibilityEnabled');compareOn.checked=true;compareOn.dispatch('change');t.flush();
+  const compareRange=n.get('ModernModelVisibilityRange');compareRange.value='12';compareRange.dispatch('change');t.flush();
+  assert.equal(t.app.getCompareConfig().A.visibility.rangeKm,12);
+  assert.equal(t.app.getCompareConfig().A.visibility.enabled,true);
+  n.get('ModernModelTabB').dispatch('click');
+  assert.equal(n.get('ModernModelVisibilityEnabled').checked,false);
+  assert.equal(n.get('ModernModelVisibilityRange').value,'60');
+  n.get('ModernModelVisibilityEnabled').checked=true;n.get('ModernModelVisibilityEnabled').dispatch('change');t.flush();
+  const config=t.app.getCompareConfig();
+  assert.equal(config.A.visibility.rangeKm,12);
+  assert.equal(config.B.visibility.rangeKm,60);
+  assert.equal(t.renderOptions.at(-1).visibility.rangeKm,60);
+  n.get('ModernModelTabA').dispatch('click');
+  assert.equal(n.get('ModernModelVisibilityRange').value,'12');
+  n.get('ModernSceneTab').dispatch('click');
+  assert.equal(n.get('ModernVisibilityRange').value,'25');
 });

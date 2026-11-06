@@ -68,3 +68,11 @@ Do **not** treat a matching silhouette or a pixel difference alone as proof of p
 4. For developer regressions, use the [test guide](development.md). The six Opera PNG references are protected test evidence and should not be overwritten simply to make a visual test pass.
 
 The archived CPU research panel and standalone WebGPU test page are **not** available in the active branch. For historical investigation use [research archival and Git worktrees](research-archive.md).
+
+### Atmospheric extinction / visibility (Modern Physical)
+
+Under **Scene → Atmosphere**, enable **Atmospheric extinction / haze** and select a **Visibility range** in kilometres (1–500; default 60 km). The range is the distance where object contrast is about 5% in a simplified homogeneous white-air model. More distant visible towers and their foundations blend toward the white background; shorter ranges create stronger haze. Disabled by default to retain the reference rendering.
+
+Under **Compare → Atmosphere**, select model **A** or **B** and set its extinction independently. Settings are included in saved experiments and copied experiment URLs; older links omit them and continue with extinction off. Haze works with both Globe and exact Flat, including Vacuum ray geometry (as a separate illustrative atmosphere), and can coexist with refraction and turbulence.
+
+**Limitations:** distance is a geometric approximation to refracted optical path length, not ray-integrated optical depth. Extinction does not change refraction, optical occlusion, clipped objects, ground grid colours or captions. This is a visual model, not a calibrated weather forecast or aerosol-scattering solver.

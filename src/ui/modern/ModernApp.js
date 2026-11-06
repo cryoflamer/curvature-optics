@@ -5,6 +5,7 @@
 (function(root){
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
+    visibility:{enabled:false,rangeKm:60},
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
@@ -332,7 +333,7 @@
     var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius);
     return experiments.capture(model,{
       atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-      preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
+      visibility:state.visibility,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
       resetPreset:state.preset
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
       horizon:state.compareHorizon,selected:state.compareSelected,
@@ -374,6 +375,7 @@
     model.showGrid=scene.showGrid?1:0;
     model.DemoText=scene.title;model.Description=scene.description;
     state.atmosphere=scene.atmosphere;state.occlusionRadius=scene.occlusionRadius;
+    state.visibility=Object.assign({},scene.visibility);
     state.preset=scene.resetPreset;
     state.compareConfig={A:data.compare.A,B:data.compare.B,preset:data.compare.preset};
     state.compareSelected=data.compare.selected;
@@ -526,7 +528,8 @@
       var startedAt=profileNow();
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
-        atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,interactive:false,
+        atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
+        visibility:state.visibility,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
         forceColdOptics:state.opticalSample==='cold'
       });
@@ -571,7 +574,8 @@
       // A and B invoke the actual Physical renderer separately, not copied pixels.
       var spec=state.compareConfig&&state.compareConfig[side];
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
-        occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,interactive:false,
+        occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,
+        visibility:spec?spec.visibility:state.visibility,interactive:false,
         geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
@@ -784,6 +788,7 @@
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
     syncShimmerControls();
+    syncVisibilityControls();
     var radiusWrap=newUiEl('ModernModelRadiusWrap');
     if(radiusWrap)radiusWrap.hidden=spec.surface==='flat';
     var curvature=root.CurvaturePhysicalCurvature;
@@ -806,6 +811,35 @@
   function radiusDraft(id,pending){
     var hint=newUiEl(id+'Draft');
     if(hint)hint.hidden=!pending;
+  }
+  function syncVisibilityControls(){
+    [['ModernVisibility',state.visibility],
+      ['ModernModelVisibility',state.compareConfig&&state.compareConfig[state.compareSelected]]].forEach(function(row){
+      var config=row[1]&&row[1].visibility||row[1],prefix=row[0];
+      if(!config)return;
+      var checkbox=newUiEl(prefix+'Enabled'),range=newUiEl(prefix+'Range'),options=newUiEl(prefix+'Options');
+      if(checkbox)checkbox.checked=config.enabled;
+      if(range)range.value=String(config.rangeKm);
+      if(options)options.hidden=!config.enabled;
+    });
+  }
+  function bindVisibilityControls(){
+    [['ModernVisibility',false],['ModernModelVisibility',true]].forEach(function(row){
+      var prefix=row[0],compare=row[1];
+      function change(field,value){
+        try{
+          var current=compare?state.compareConfig[state.compareSelected].visibility:state.visibility;
+          var next=Object.assign({},current);next[field]=value;
+          var validated=root.CurvatureAtmosphericVisibility.validate(next);
+          if(compare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'visibility',validated);
+          else state.visibility=validated;
+          syncVisibilityControls();redraw();
+        }catch(error){updateStatus('Invalid atmospheric visibility: '+error.message,true);syncVisibilityControls();}
+      }
+      var enabled=newUiEl(prefix+'Enabled'),range=newUiEl(prefix+'Range');
+      if(enabled)enabled.addEventListener('change',function(){change('enabled',enabled.checked);});
+      if(range)range.addEventListener('change',function(){change('rangeKm',Number(range.value));});
+    });
   }
   function bindCompareEditor(){
     if(!compareState)return; // 132 compatibility (older isolated test harness)
@@ -1276,6 +1310,7 @@
     var atmosphere=el('ModernAtmosphere');if(atmosphere){showLegacyOption('ModernAtmosphere',state.atmosphere);atmosphere.value=state.atmosphere;}
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius/1000);
+    syncVisibilityControls();
     var grid=el('ModernGrid');if(grid)grid.checked=model.showGrid!==0;
     var eye=newUiEl('ModernCompareEyeLevel');if(eye)eye.checked=state.compareEyeLevel;
     var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
@@ -1440,6 +1475,7 @@
     bindHelp();
     bindCompareEditor();
     bindShimmerControls();
+    bindVisibilityControls();
     bindGpuDiagnostics();
     bindPerformanceDiagnostics();
     bindGeometryBackend();
