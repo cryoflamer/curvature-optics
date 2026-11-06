@@ -9,6 +9,18 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(engine,contract,physicalWorld){
   'use strict';
   if(!engine||!contract)throw new Error('Geometry engine and scene contract required');
+  // Original DrawObjectsBehindHorizon/BeforeHorizon use distinct stroke
+  // palettes for *whole objects*, then the white disk masks the rear layer.
+  // Do not use this geometric cutoff in composeOpticalMain: physical ray
+  // tracing, not the legacy painter partition, owns optical visibility.
+  function copyIndependentPrimitive(primitive, commandIndex, stroke){
+    var copy=Object.assign({},primitive,{commandIndex:commandIndex});
+    if(primitive.style)copy.style=Object.assign({},primitive.style);
+    if(primitive.metadata)copy.metadata=Object.assign({},primitive.metadata);
+    if(stroke && (!copy.style || !copy.style.stroke))
+      copy.style=Object.assign({},copy.style,{stroke:stroke});
+    return copy;
+  }
   function compose(model,objIx,globe,options){
     var composition=engine.createObjectHorizonComposition(model,objIx,globe,options);
     var primitives=[],ranges=[],nextIndex=0;
@@ -18,9 +30,8 @@
         // The independent painter-order renderer joins projected triangles and
         // strokes by commandIndex. Without unique indices, fills are lost or
         // incorrectly attributed to a different polygon.
-        var copy=Object.assign({},primitive,{commandIndex:nextIndex++});
-        if(copy.style)copy.style=Object.assign({},copy.style);
-        primitives.push(copy);
+        var stroke=index===0?'#666':index===3?'black':null;
+        primitives.push(copyIndependentPrimitive(primitive,nextIndex++,stroke));
       });
       ranges.push({name:['behind','mask','outline','before'][index],
         role:['objects','occlusion','visual-aid','objects'][index],
@@ -69,10 +80,8 @@
     layers.forEach(function(layer){
       var start=primitives.length;
       layer.scene.primitives.forEach(function(p){
-        var copy=Object.assign({},p,{commandIndex:primitives.length});
-        if(p.style)copy.style=Object.assign({},p.style);
-        if(p.metadata)copy.metadata=Object.assign({},p.metadata);
-        primitives.push(copy);
+        var stroke=layer.role==='objects'?(layer.name==='behind'?'#666':'black'):null;
+        primitives.push(copyIndependentPrimitive(p,primitives.length,stroke));
       });
       ranges.push({name:layer.name,role:layer.role,start:start,
         end:primitives.length,count:primitives.length-start});
@@ -121,15 +130,9 @@
     layers.forEach(function(layer){
       var start=primitives.length;
       layer.scene.primitives.forEach(function(p){
-        var copy=Object.assign({},p,{commandIndex:primitives.length});
-        if(p.style)copy.style=Object.assign({},p.style);
-        if(p.metadata)copy.metadata=Object.assign({},p.metadata);
-        // The generic painter defaults to slate strokes for an unstyled
-        // primitive; legacy tower lines are black. Keep surface guide colors
-        // unchanged, including the blue projected horizon.
-        if(layer.role==='objects' && (!copy.style || !copy.style.stroke))
-          copy.style=Object.assign({},copy.style,{stroke:'black'});
-        primitives.push(copy);
+        var stroke=layer.role==='objects'?
+          (layer.name.indexOf('behind-')===0?'#666':'black'):null;
+        primitives.push(copyIndependentPrimitive(p,primitives.length,stroke));
       });
       ranges.push({name:layer.name,role:layer.role,start:start,
         end:primitives.length,count:primitives.length-start});
@@ -177,8 +180,9 @@
     if(horizon)layers.push({name:'horizon-guides',role:'visual-aid',scene:horizon});
     order.forEach(function(i){
       layers.push({name:'objects-'+i,role:'objects',
-        scene:engine.createObjectSequenceScene(model,i,globe,physical?
-          {physicalSurface:true,curvature:physicalCurvature}:undefined)});
+        scene:engine.createObjectSequenceScene(model,i,globe,Object.assign(
+          {opticsNeutral:true},physical?
+          {physicalSurface:true,curvature:physicalCurvature}:{}))});
     });
     var primitives=[],ranges=[];
     layers.forEach(function(layer){

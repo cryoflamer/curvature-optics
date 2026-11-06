@@ -17,7 +17,13 @@ for(const globe of [true,false])for(const segments of [8,64]){
     assert.equal(report.rendererReady,true);
     assert.deepEqual(report.layerCounts.map(x=>x.count),original.layers.map(x=>x.primitives.length));
     assert.deepEqual(composed.scene.primitives.map(p=>p.commandIndex),Array.from({length:report.primitiveCount},(_,i)=>i));
-    assert.deepEqual(composed.scene.primitives.map(({commandIndex,...rest})=>rest),original.layers.flatMap(x=>x.primitives));
+    const expected=original.layers.flatMap((layer,index)=>layer.primitives.map(p=>{
+      if(index!==0&&index!==3)return p;
+      return {...p,style:{...p.style,stroke:(p.style&&p.style.stroke)||
+        (index===0?'#666':'black')}};
+    }));
+    assert.deepEqual(composed.scene.primitives.map(({commandIndex,...rest})=>rest),expected,
+      'independent composition changes only the Legacy painter stroke palette');
     const built=painter.build(composed.scene,camera,64,64,[]);
     assert.equal(built.commands.length,report.primitiveCount);
     assert.deepEqual(built.commands.map(x=>x.commandIndex),composed.scene.primitives.map(x=>x.commandIndex));

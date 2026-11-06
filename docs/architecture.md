@@ -47,6 +47,7 @@ Not every module is solely owned by the listed layer. Verify **actual callers an
 2. **Canvas 2D** is the default/reference drawing backend in Modern. The selectable **WebGL2** geometry renderer rasterizes already projected geometry and may differ in line styling/antialiasing; selecting it does not move shooting to a GPU.
 3. **Check GPU** queries browser capabilities only. It is not the archived WebGPU optics solver. The optional render profiler is part of Modern diagnostics and is distinct from the removed ten-action CPU research panel.
 4. Legacy's animation is optimized for its own presentation/model; preserving it does not mean reproducing its frames with Modern's expensive physical optics.
+5. **Horizon palette parity:** Legacy paints behind-horizon towers with `#666` strokes and `#dcc493` foundations, masks them with a white horizon disk, then paints foreground towers with black strokes and `#a38d60` foundations. The independent geometric compositor reproduces this two-pass styling (in Scene/Compare where that compositor is selected); the optical/Physical path deliberately does **not** infer hidden colors from the Legacy geometric cutoff. Refracted visibility and ground clipping belong to the physical ray solver. The Legacy Demos iframe continues to use its original renderer.
 
 ## State persistence and compatibility
 

@@ -22,16 +22,16 @@
   ];
   var bars=[[-.0906,.28,.0906,.28],[-.0685,.43,.0685,.43],[-.0494,.56,.0494,.56]];
   function finite3(v){return Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);}
-  function localTowerType2(){
+  function localTowerType2(hidden){
     var primitives=shapes.slice(0,7).map(function(s){return {type:'polygon',points:s[0].map(function(x,i){return [x,s[1][i]];}),mode:s[2]};});
     bars.forEach(function(b){primitives.push({type:'line',points:[[b[0],b[1]],[b[2],b[3]]]});});
     var foundation=shapes[7];
-    primitives.push({type:'polygon',points:foundation[0].map(function(x,i){return [x,foundation[1][i]];}),mode:3,style:{fill:'#a38d60'}});
+    primitives.push({type:'polygon',points:foundation[0].map(function(x,i){return [x,foundation[1][i]];}),mode:3,style:{fill:hidden?'#dcc493':'#a38d60'}});
     return primitives;
   }
   // The first object bank uses a distinct T-Tower silhouette. Preserve
   // DrawShape's polygon order and closure, including the foundation fill.
-  function localTowerType1(){
+  function localTowerType1(hidden){
     var polygons=[
       [[.09,-.12,-.06,.14,.12,.12,.16,.16,.14,.06,-.06,-.14,-.12,-.12,-.16,-.16,-.14,.06,.12,-.09],
        [.31,.14,.48,.82,.89,.93,1,.89,.82,.48,.48,.82,.89,.93,1,.89,.82,.48,.14,.31]],
@@ -41,7 +41,7 @@
     ];
     return polygons.map(function(v,i){
       var p={type:'polygon',points:v[0].map(function(x,j){return [x,v[1][j]];}),mode:i===3?3:1};
-      if(i===3)p.style={fill:'#a38d60'};
+      if(i===3)p.style={fill:hidden?'#dcc493':'#a38d60'};
       return p;
     });
   }
@@ -137,7 +137,7 @@
         throw new TypeError('Bedford requires explicit drawn and total sequence context');
       return localBedford(options.drawn,options.total,!!hidden,options);
     }
-    if(objType===3)return localTower(objIx);
+    if(objType===3)return localTower(objIx,hidden);
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
     throw new RangeError('Object type has not been independently ported');
@@ -147,9 +147,9 @@
     return contract.createScene('legacy',placeOnPlane(localObject(objType,objIx,hidden,opts),towerPlacement(params)),
       Object.assign({generator:'CurvatureGeometryEngine',objectType:objType,objectIndex:objIx},opts));
   }
-  function localTower(objIx){
+  function localTower(objIx,hidden){
     if(objIx!==0&&objIx!==1)throw new RangeError('Tower bank must be 0 or 1');
-    return objIx===0?localTowerType1():localTowerType2();
+    return objIx===0?localTowerType1(hidden):localTowerType2(hidden);
   }
   function createPlacedTowerScene(params,objIx,metadata){
     return contract.createScene('legacy',placeOnPlane(localTower(objIx),towerPlacement(params)),
@@ -266,7 +266,9 @@
           // Legacy SetPlane uses [side,0,0] for cosine/sine side modes.
           planeOffset:(sideType===3||sideType===4)?side:0,
           physicalSurface:physical};
-        var hidden=!!globe&&!physical&&lng>cutoff;
+        // Optical scenes must not inherit Legacy's purely geometric painter
+        // classification: their visibility is resolved later by ray tracing.
+        var hidden=!!globe&&!physical&&!(options&&options.opticsNeutral)&&lng>cutoff;
         var legacyDrawn=drawn+(globe?n-max:0);
         var metadata={objectIndex:objIx,sequenceIndex:drawn,drawn:legacyDrawn,
           total:n,column:sideType===1?col+1:0,longitude:lng,latitude:lat,hidden:hidden};

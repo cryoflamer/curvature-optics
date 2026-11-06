@@ -114,7 +114,7 @@ test('unsupported populated object groups are not silently omitted',()=>{
   assert.equal(adapter.support({...model,showModel:1,NObjects:[85,0],ObjType:[3,99]}).supported,true);
 });
 
-test('main-frame horizon mask uses finer independent tessellation and object strokes stay black',()=>{
+test('main-frame horizon mask preserves Legacy before/behind palettes',()=>{
   const bridge=require('../src/scene/CurvatureIndependentComposition');
   const m={...model,ObjType:[3,3],NObjects:[85,2],ObjDist:[50,25550],
     ObjDeltaDist:[297.55,373],ObjSidePos:[32,22.4],ObjSize:[23,64]};
@@ -123,11 +123,68 @@ test('main-frame horizon mask uses finer independent tessellation and object str
   assert.ok(masks.length>0,'globe has an occluding horizon mask');
   assert.ok(masks.every(p=>p.points.length===512),'main Canvas uses a finer circular silhouette');
   for(const range of frame.ranges.filter(r=>r.role==='objects')){
-    for(const p of frame.scene.primitives.slice(range.start,range.end))
-      assert.equal(p.style.stroke,'black','objects retain legacy black strokes');
+    const behind=range.name.startsWith('behind-'),primitives=frame.scene.primitives.slice(range.start,range.end);
+    for(const p of primitives)
+      assert.equal(p.style.stroke,behind?'#666':'black',
+        'object strokes follow the original Legacy horizon partition');
+    const foundations=primitives.filter(p=>p.mode===3&&p.style.fill);
+    if(primitives.length)assert.ok(foundations.length>0,'populated tower layers contain foundations');
+    assert.ok(foundations.every(p=>p.style.fill===(behind?'#dcc493':'#a38d60')),
+      'the Legacy foundation palette follows the same horizon partition');
   }
   const flat=bridge.composeMain(m,false);
   assert.equal(flat.scene.primitives.some(p=>p.type==='polygon'&&p.mode===2&&p.style&&p.style.fill==='white'),false);
   const guide=frame.ranges.find(r=>r.name==='surface-guides');
   assert.ok(frame.scene.primitives.slice(guide.start,guide.end).some(p=>p.style&&p.style.stroke!=='black'));
+});
+
+test('independent partial/full and optical compositions keep distinct style semantics',()=>{
+  const bridge=require('../src/scene/CurvatureIndependentComposition');
+  const m={...model,ObjType:[3,3],NObjects:[5,0],ObjDist:[100,0],
+    ObjDeltaDist:[400,0],ObjSidePos:[0,0],ObjSize:[23,64],showModel:1,rEarth:6371000};
+  for(const result of [bridge.compose(m,0,true,{objectsOnly:true,segments:32}),
+    bridge.composeFull(m,0,true,{segments:32}),bridge.composeMain(m,true)]){
+    const layers=result.ranges.filter(r=>r.role==='objects');
+    assert.equal(layers.length,2);
+    for(const range of layers){
+      const behind=range.name.startsWith('behind'),objects=result.scene.primitives.slice(range.start,range.end);
+      assert.ok(objects.length>0);
+      assert.ok(objects.every(p=>p.style.stroke===(behind?'#666':'black')));
+      assert.ok(objects.filter(p=>p.mode===3).every(p=>p.style.fill===(behind?'#dcc493':'#a38d60')));
+    }
+    assert.ok(result.ranges.some(r=>r.role==='occlusion'&&r.count>0),
+      'the independently composed Globe still paints the white horizon mask');
+  }
+  for(const options of [{},{physicalWorld:true}]){
+    const optical=bridge.composeOpticalMain(m,true,options);
+    const objects=optical.ranges.filter(r=>r.role==='objects')
+      .flatMap(r=>optical.scene.primitives.slice(r.start,r.end));
+    assert.ok(objects.length>0);
+    assert.ok(objects.every(p=>p.style.stroke==='black'));
+    assert.ok(objects.filter(p=>p.mode===3).every(p=>p.style.fill==='#a38d60'),
+      'optical scenes do not inherit a geometric hidden-foundation color');
+    assert.ok(objects.every(p=>!p.metadata.hidden),
+      'optical visibility is left to the ray-tracing backend');
+    assert.equal(optical.ranges.filter(r=>r.role==='occlusion').length,0);
+  }
+});
+
+test('geometric horizon movement recolors towers without losing or moving them',()=>{
+  const bridge=require('../src/scene/CurvatureIndependentComposition');
+  const m={...model,showModel:1,rDisk:400,ObjType:[3,3],NObjects:[5,0],
+    ObjDist:[100,0],ObjDeltaDist:[400,0],ObjSidePos:[0,0],ObjSize:[23,64]};
+  const frames=[bridge.composeMain(m,true),bridge.composeMain({...m,rDisk:1400},true)];
+  function foundationColors(frame){
+    return frame.ranges.filter(r=>r.role==='objects')
+      .flatMap(r=>frame.scene.primitives.slice(r.start,r.end))
+      .filter(p=>p.mode===3&&p.style.fill)
+      .reduce((totals,p)=>{totals[p.style.fill]=(totals[p.style.fill]||0)+1;return totals;},{});
+  }
+  assert.deepEqual(foundationColors(frames[0]),{'#dcc493':4,'#a38d60':1});
+  assert.deepEqual(foundationColors(frames[1]),{'#dcc493':1,'#a38d60':4});
+  assert.equal(frames[0].scene.primitives.length,frames[1].scene.primitives.length,
+    'moving the horizon changes paint styles, not object geometry');
+  const flat=bridge.composeMain(m,false);
+  assert.deepEqual(foundationColors(flat),{'#a38d60':5},
+    'Flat Earth has no geometric behind-horizon layer');
 });
