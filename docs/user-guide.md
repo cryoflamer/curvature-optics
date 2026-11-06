@@ -48,6 +48,8 @@ Use **Scene** to display one configured physical model. The left settings tabs i
 - **Geometry renderer** offers **Canvas 2D · reference** and **WebGL2 · experimental**. WebGL2 affects drawing of projected geometry; it is **not** the retired WebGPU optical ray solver. **Check GPU** reports capabilities only.
 - **Atmospheric Turbulence** creates an optional screen-space animated shimmer; it is a visual approximation, not meteorological inference.
 
+**Camera zoom:** hold **Shift** and scroll the mouse wheel over the Scene image or either Compare image. Wheel up increases the focal length (narrows FOV), wheel down decreases it, by about 10% per normal notch. The zoom stays centred on the image; ordinary wheel scrolling without Shift remains page scrolling. The **Camera → Focal length** and **Field of view** controls update together. Compare always zooms A and B in lockstep; camera changes are included in saved experiments and copied URLs. Rapid wheel events are coalesced before a Physical redraw; visible image updates may therefore lag slightly behind the input field. The camera respects the model's 0.1°–160° FOV limits.
+
 ### Compare A/B
 
 Switch to **Compare** for two independently rendered physical configurations. The observer, objects and camera framing are shared; **Surface** and **Atmosphere** can be selected independently for **Model A** and **Model B**. Compare uses a fixed **eye-level** aim for both sides so the camera itself does not track a model-specific horizon. Choose a pair preset or edit A/B individually, then use **Recalculate A/B** if needed.
@@ -73,6 +75,6 @@ The archived CPU research panel and standalone WebGPU test page are **not** avai
 
 Under **Scene → Atmosphere**, enable **Atmospheric extinction / haze** and select a **Visibility range** in kilometres (1–500; default 60 km). The range is the distance where object contrast is about 5% in a simplified homogeneous white-air model. More distant visible towers and their foundations blend toward the white background; shorter ranges create stronger haze. Disabled by default to retain the reference rendering.
 
-Under **Compare → Atmosphere**, select model **A** or **B** and set its extinction independently. Settings are included in saved experiments and copied experiment URLs; older links omit them and continue with extinction off. Haze works with both Globe and exact Flat, including Vacuum ray geometry (as a separate illustrative atmosphere), and can coexist with refraction and turbulence.
+Under **Compare → Atmosphere**, extinction and visibility range are shared by **A** and **B**; refraction is still configured independently. Settings are included in saved experiments and copied experiment URLs; older links omit them and continue with extinction off. Haze works with both Globe and exact Flat, including Vacuum ray geometry (as a separate illustrative atmosphere), and can coexist with refraction and turbulence.
 
 **Limitations:** distance is a geometric approximation to refracted optical path length, not ray-integrated optical depth. Extinction does not change refraction, optical occlusion, clipped objects, ground grid colours or captions. This is a visual model, not a calibrated weather forecast or aerosol-scattering solver.

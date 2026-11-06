@@ -1891,6 +1891,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/LegacyModernBoundary.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/ModernCameraDrag1371.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js"
       ],

@@ -52,6 +52,30 @@
     return Object.freeze({Pan:Math.max(-360,Math.min(360,pan)),
       Nick:Math.max(-90,Math.min(90,nick)),Roll:sample.camera.Roll});
   }
+  // Focal length is the shared Scene/Compare camera parameter. Match the
+  // actual CurveApp.Update FOV limits, rather than accepting a focal value
+  // which the physical camera would immediately clamp to a different one.
+  var focalMin=43.2/(2*Math.tan(160*Math.PI/360));
+  var focalMax=43.2/(2*Math.tan(0.1*Math.PI/360));
+  function focalWheel(current,deltaY,deltaMode){
+    finite(current,'focal length');finite(deltaY,'wheel delta');
+    if(current<=0)throw RangeError('Invalid focal length');
+    if(deltaMode!==undefined&&![0,1,2].includes(deltaMode))
+      throw RangeError('Invalid wheel delta mode');
+    if(deltaY===0)return current;
+    // Opera/Chromium mice commonly report 100 px or three lines per notch.
+    // Trackpads can report fractional pixel deltas; cap one event at four
+    // notches so an unusually large OS delta cannot jump the whole range.
+    var steps=deltaY/(deltaMode===1?3:deltaMode===2?1:100);
+    steps=Math.max(-4,Math.min(4,steps));
+    var next=current*Math.pow(1.1,-steps);
+    return Math.max(focalMin,Math.min(focalMax,next));
+  }
+  function focalViewAngle(focal){
+    finite(focal,'focal length');
+    if(focal<=0)throw RangeError('Invalid focal length');
+    return 2*Math.atan(43.2/(2*focal))*180/Math.PI;
+  }
   function create(handlers){
     handlers=handlers||{};
     var active=null,latest=null;
@@ -96,5 +120,6 @@
       snapshot:function(){return latest;}
     });
   }
-  return Object.freeze({create:create,angles:angles});
+  return Object.freeze({create:create,angles:angles,focalWheel:focalWheel,
+    focalViewAngle:focalViewAngle,focalLimits:Object.freeze({min:focalMin,max:focalMax})});
 }));

@@ -65,6 +65,7 @@ function harness(options={}){
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
   const draws=[],onloads=[],canvases={},graphs={};
   const frames=new Map();let frameId=0;
+  const zoomTimers=new Map();let zoomTimerId=0;
   function classes(){const set=new Set();return {add:value=>set.add(value),
     remove:value=>set.delete(value),contains:value=>set.has(value)};}
   function requestFrame(fn){const id=++frameId;
@@ -74,7 +75,8 @@ function harness(options={}){
     const host={appendChild(node){this.child=node;node.parentNode=this;}};
     const canvas={name,parentNode:host,listeners:{},classList:classes(),style:{transform:'',willChange:''},captures:new Set(),
       getBoundingClientRect(){return {width,height};},
-      addEventListener(type,fn){this.listeners[type]=fn;},
+      addEventListener(type,fn,settings){this.listeners[type]=fn;
+        if(type==='wheel')this.wheelListenerOptions=settings;},
       setPointerCapture(id){this.captures.add(id);},releasePointerCapture(id){this.captures.delete(id);},
       hasPointerCapture(id){return this.captures.has(id);},
       emit(type,data){const event=Object.assign({button:0,isPrimary:true,pointerId:1,clientX:40,
@@ -104,7 +106,9 @@ function harness(options={}){
   const document={documentElement:{classList:classes()},getElementById(id){return nodes.get(id)||null;},
     createElement(){return {className:'',hidden:false,textContent:'',setAttribute(){}};}};
   const ctx={window,document,requestAnimationFrame:requestFrame,cancelAnimationFrame:cancelFrame,
-    setTimeout(fn){fn();return 1;},clearTimeout(){},console};
+    setTimeout(fn,delay){const id=++zoomTimerId;
+      if(options.deferredWheel&&delay===90)zoomTimers.set(id,fn);else fn();
+      return id;},clearTimeout(id){zoomTimers.delete(id);},console};
   window.window=window;
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),ctx);
   const app=window.CurvatureModernApp;
@@ -116,6 +120,8 @@ function harness(options={}){
   onloads[0]();
   return {app,window,nodes,draws,canvases,graphs,document,
     flush(){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn());},
+    flushZoom(){const callbacks=[...zoomTimers.values()];zoomTimers.clear();callbacks.forEach(fn=>fn());},
+    get queuedZoom(){return zoomTimers.size;},
     get queuedFrames(){return frames.size;}};
 }
 test('137.1: Scene drag commits both axes once; no physical redraw on pointermove',()=>{
@@ -282,4 +288,113 @@ test('137.4: Scene preview with roll restores prior raster orientation on pointe
   c.emit('pointercancel');
   assert.equal(c.style.transform,'');assert.equal(c.style.transformOrigin,'');
   assert.equal(h.draws.length,before);
+});
+
+test('140.12.93: focal wheel step is multiplicative, normalized, and respects physical FOV limits',()=>{
+  const zoom=interaction.focalWheel;
+  close(zoom(2000,-100,0),2200);
+  close(zoom(2000,100,0),2000/1.1);
+  close(zoom(2000,-3,1),2200);
+  close(zoom(2000,-1,2),2200);
+  close(zoom(zoom(2000,-100,0),100,0),2000);
+  assert.equal(zoom(2000,0,0),2000);
+  assert.equal(zoom(2000,-1e6,0),2000*Math.pow(1.1,4));
+  assert.equal(zoom(interaction.focalLimits.max/1.05,-1e6,0),interaction.focalLimits.max);
+  assert.equal(zoom(2000,1e6,0),Math.max(interaction.focalLimits.min,2000/Math.pow(1.1,4)));
+  assert.equal(zoom(interaction.focalLimits.min,100,0),interaction.focalLimits.min);
+  assert.equal(zoom(interaction.focalLimits.max,-100,0),interaction.focalLimits.max);
+  assert.ok(Math.abs(interaction.focalViewAngle(interaction.focalLimits.min)-160)<1e-9);
+  assert.ok(Math.abs(interaction.focalViewAngle(interaction.focalLimits.max)-0.1)<1e-9);
+  assert.throws(()=>zoom(0,-100,0),RangeError);
+  assert.throws(()=>zoom(2000,NaN,0),RangeError);
+  assert.throws(()=>zoom(2000,100,4),RangeError);
+});
+
+test('140.12.93: Shift+wheel on Scene zooms camera and updates both focal and field of view',()=>{
+  const h=harness(),c=h.canvases.Scene,model=h.app.getModel();
+  const initial=h.draws.length,oldFocal=model.FocalLengthField;
+  assert.equal(c.emit('wheel',{shiftKey:false,deltaY:-100,deltaMode:0}).prevented,undefined);
+  assert.equal(model.FocalLengthField,oldFocal);
+  assert.equal(h.draws.length,initial);
+  assert.equal(c.wheelListenerOptions.passive,false);
+  const gesture=c.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});
+  assert.equal(gesture.prevented,true);
+  close(model.FocalLengthField,oldFocal*1.1);
+  assert.equal(h.nodes.get('ModernFocal').value,String(model.FocalLengthField));
+  assert.equal(h.nodes.get('ModernViewAngle').value,
+    String(Number(interaction.focalViewAngle(model.FocalLengthField).toFixed(4))));
+  assert.equal(h.nodes.get('ModernPreset').value,'custom');
+  assert.equal(h.draws.length,initial+1);
+  c.emit('wheel',{shiftKey:true,deltaY:100,deltaMode:0});
+  close(model.FocalLengthField,oldFocal);
+  // Shift+wheel is mapped to horizontal scroll by some Opera/Windows setups.
+  c.emit('wheel',{shiftKey:true,deltaY:0,deltaX:-100,deltaMode:0});
+  close(model.FocalLengthField,oldFocal*1.1);
+});
+
+test('140.12.93: Shift+wheel over either Compare canvas zooms shared A/B and preserves optical pair',()=>{
+  const h=harness(),model=h.app.getModel();
+  h.nodes.get('ModernCompareTab').listeners.click();
+  const before=h.draws.length,original=model.FocalLengthField;
+  const config=h.app.getCompareConfig();
+  h.canvases.B.emit('wheel',{shiftKey:true,deltaY:-3,deltaMode:1});
+  assert.equal(h.draws.length,before+2);
+  close(model.FocalLengthField,original*1.1);
+  close(h.draws.at(-1).m.FocalLengthField,model.FocalLengthField);
+  close(h.draws.at(-2).m.FocalLengthField,model.FocalLengthField);
+  assert.deepEqual(h.app.getCompareConfig(),config);
+  h.canvases.A.emit('wheel',{shiftKey:true,deltaY:100,deltaMode:0});
+  close(model.FocalLengthField,original);
+  close(h.draws.at(-1).m.FocalLengthField,original);
+  close(h.draws.at(-2).m.FocalLengthField,original);
+});
+
+test('140.12.93: wheel is ignored on hidden viewports, other modifiers, and while dragging',()=>{
+  const h=harness(),c=h.canvases.Scene,model=h.app.getModel(),focal=model.FocalLengthField;
+  const initial=h.draws.length;
+  for(const ev of [{shiftKey:true,ctrlKey:true,deltaY:-100},
+    {shiftKey:true,altKey:true,deltaY:-100},{shiftKey:true,metaKey:true,deltaY:-100},
+    {shiftKey:true,deltaY:0}]){
+    assert.equal(c.emit('wheel',ev).prevented,undefined);
+  }
+  h.canvases.A.emit('wheel',{shiftKey:true,deltaY:-100});
+  c.emit('pointerdown');
+  assert.equal(c.emit('wheel',{shiftKey:true,deltaY:-100}).prevented,undefined);
+  c.emit('pointercancel');
+  h.nodes.get('ModernCompareTab').listeners.click();
+  assert.equal(c.emit('wheel',{shiftKey:true,deltaY:-100}).prevented,undefined);
+  assert.equal(model.FocalLengthField,focal);
+  assert.equal(h.draws.length,initial+2,'only the mode switch redraws Compare');
+});
+
+
+test('140.12.93: rapid wheel events are coalesced into one committed render',()=>{
+  const h=harness({deferred:true,deferredWheel:true});h.flush();
+  const c=h.canvases.Scene,initial=h.draws.length;
+  for(let n=0;n<3;n++)c.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});
+  assert.equal(h.draws.length,initial);
+  assert.equal(h.queuedZoom,1,'only the final wheel input is scheduled');
+  close(h.app.getModel().FocalLengthField,2000*Math.pow(1.1,3));
+  h.flushZoom();assert.equal(h.queuedFrames,1);
+  h.flush();assert.equal(h.draws.length,initial+1);
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const compareStart=h.draws.length;
+  h.canvases.B.emit('wheel',{shiftKey:true,deltaY:100});
+  h.canvases.A.emit('wheel',{shiftKey:true,deltaY:100});
+  assert.equal(h.queuedZoom,1);
+  h.flushZoom();h.flush();
+  assert.equal(h.draws.length,compareStart+2,'one A/B batch for two wheel inputs');
+});
+
+test('140.12.93: zoomed focal value round-trips through existing saved experiment schema',()=>{
+  const codec=require('../src/ui/modern/ModernExperimentState');
+  const h=harness(),model=h.app.getModel();
+  h.canvases.Scene.emit('wheel',{shiftKey:true,deltaY:-100});
+  const snapshot=codec.capture(model,{atmosphere:'standard',occlusionRadius:6371000,
+    preset:'custom',resetPreset:'pontchartrain'},
+    compareState.initial(model,'standard',6371000),
+    {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+  const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html',snapshot);
+  close(codec.readUrl(new URL(url).search).scene.camera.FocalLengthField,2200);
+  assert.equal(snapshot.scene.camera.Pan,model.Pan);
 });

@@ -1109,8 +1109,50 @@
         activeCameraPointer.id===event.pointerId)cancelCameraDrag();
     });
   }
+  // Shift+wheel zoom is scoped to the canvas under the pointer. No shift:
+  // leave the browser's ordinary page scrolling entirely untouched.
+  // Compare clones the common model in prepareCompare(), so one change here
+  // always reaches A and B without changing either one's optical profile.
+  function bindFocalWheel(view){
+    var g=cameraViewport(view),canvas=g&&g.Canvas;
+    var interaction=root.CurvatureModernCameraInteraction;
+    if(!canvas||typeof canvas.addEventListener!=='function'||
+       !interaction||typeof interaction.focalWheel!=='function')return;
+    canvas.addEventListener('wheel',function(event){
+      // Some Windows/Opera configurations remap Shift+vertical wheel to
+      // horizontal deltaX. Accept that delta only if deltaY is zero.
+      var delta=event.deltaY||event.deltaX||0;
+      if(!event.shiftKey||event.altKey||event.ctrlKey||event.metaKey||
+         delta===0||activeCameraPointer||
+         (view==='Scene'&&state.mode!=='scene')||
+         (view!=='Scene'&&state.mode!=='compare')||state.demosActive)return;
+      var next;
+      try{next=interaction.focalWheel(model.FocalLengthField,delta,event.deltaMode);}
+      catch(error){updateStatus('Camera zoom: '+error.message,true);return;}
+      if(event.preventDefault)event.preventDefault();
+      if(next===model.FocalLengthField)return;
+      cancelEdits();
+      if(adapter)adapter.setCamera(model,'FocalLengthField',next);
+      else model.FocalLengthField=next;
+      markCustom();
+      // Update the visible controls immediately, even when many wheel events
+      // arrive before the deferred physical projection redraw.
+      var input=el('ModernFocal');if(input)input.value=String(next);
+      var fov=el('ModernViewAngle');
+      if(fov&&interaction.focalViewAngle)
+        fov.value=String(Number(interaction.focalViewAngle(next).toFixed(4)));
+      scheduleFocalWheelRedraw();
+    },{passive:false});
+  }
+  function scheduleFocalWheelRedraw(){
+    cancelPending();
+    // Coalesce bursts of wheel input; the authoritative renderer, optical
+    // cache, shared Compare cameras and persistence all update in redraw().
+    state.timer=setTimeout(function(){state.timer=null;redraw();},90);
+  }
   function bindCameraDrag(){
     ['Scene','A','B'].forEach(bindCameraViewport);
+    ['Scene','A','B'].forEach(bindFocalWheel);
     if(root.addEventListener)root.addEventListener('blur',cancelCameraDrag);
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
       if(document.hidden)cancelCameraDrag();
@@ -1421,7 +1463,7 @@
   }
   var fieldHelp={
     ModernHeight:'Observer height above the local surface, in metres. Does not move the towers.',
-    ModernFocal:'Camera focal length in millimetres. This and field of view describe the same camera zoom.',
+    ModernFocal:'Camera focal length in millimetres. This and field of view describe the same camera zoom. Hold Shift and scroll over a Scene/Compare image to zoom both Compare models together.',
     ModernViewAngle:'Angular field of view in degrees, synchronized with focal length. Only the displayed number is rounded.',
     ModernPan:'Horizontal aiming angle in degrees. Changes the camera, not the object azimuths.',
     ModernNick:'Vertical camera pitch in degrees. Does not change observer height.',
