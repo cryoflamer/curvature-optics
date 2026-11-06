@@ -17,8 +17,19 @@
       throw RangeError('Invalid visibility configuration');
     return {enabled:value.enabled,rangeKm:value.rangeKm};
   }
-  var ATMOSPHERES=['vacuum','standard','temperature-lapse','inverse-spherical','exponential-occlusion'];
+  var ATMOSPHERES=['vacuum','standard','temperature-lapse','profile-transition','inverse-spherical','exponential-occlusion'];
   var TEMPERATURE_DEFAULT={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
+  var TRANSITION_DEFAULT={source:'standard',weight:0};
+  function transitionProfile(value){
+    if(value===undefined)return Object.assign({},TRANSITION_DEFAULT);
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+        Object.keys(value).some(function(k){return !Object.prototype.hasOwnProperty.call(TRANSITION_DEFAULT,k);})||
+        !['standard','temperature-lapse'].includes(value.source)||
+        typeof value.weight!=='number'||!Number.isFinite(value.weight)||
+        value.weight<0||value.weight>1)
+      throw RangeError('Invalid transition profile');
+    return {source:value.source,weight:value.weight};
+  }
   function temperatureProfile(value){
     if(value===undefined)return Object.assign({},TEMPERATURE_DEFAULT);
     if(!value||typeof value!=='object'||Array.isArray(value)||
@@ -57,18 +68,19 @@
     if(!ATMOSPHERES.includes(spec.atmosphere))throw RangeError('Unknown atmosphere');
     return {surface:spec.surface,radiusKm:finite(spec.radiusKm,100,1e13),
       atmosphere:spec.atmosphere,occlusionRadius:finite(spec.occlusionRadius,1,1e16),
-      visibility:visibility(spec.visibility),temperatureProfile:temperatureProfile(spec.temperatureProfile)};
+      visibility:visibility(spec.visibility),temperatureProfile:temperatureProfile(spec.temperatureProfile),
+      transitionProfile:transitionProfile(spec.transitionProfile)};
   }
-  function fromScene(model,atmosphere,occlusionRadius,temperature){
+  function fromScene(model,atmosphere,occlusionRadius,temperature,transition){
     return validate({surface:model.showModel===2?'flat':'globe',radiusKm:model.rEarth/1000,
-      atmosphere:atmosphere,occlusionRadius:occlusionRadius,temperatureProfile:temperature});
+      atmosphere:atmosphere,occlusionRadius:occlusionRadius,temperatureProfile:temperature,transitionProfile:transition});
   }
-  function initial(model,atmosphere,occlusionRadius,temperature){
-    var base=fromScene(model,atmosphere,occlusionRadius,temperature);
+  function initial(model,atmosphere,occlusionRadius,temperature,transition){
+    var base=fromScene(model,atmosphere,occlusionRadius,temperature,transition);
     return {A:Object.assign({},base,{visibility:Object.assign({},base.visibility),
-        temperatureProfile:Object.assign({},base.temperatureProfile)}),
+        temperatureProfile:Object.assign({},base.temperatureProfile),transitionProfile:Object.assign({},base.transitionProfile)}),
       B:Object.assign({},base,{surface:'flat',visibility:Object.assign({},base.visibility),
-        temperatureProfile:Object.assign({},base.temperatureProfile)}),preset:'custom'};
+        temperatureProfile:Object.assign({},base.temperatureProfile),transitionProfile:Object.assign({},base.transitionProfile)}),preset:'custom'};
   }
   // Compare shares one airlight setting. Older saved A/B experiments may
   // disagree: the former model A setting wins, regardless of the selected tab.
@@ -84,7 +96,7 @@
     return {A:validate(p.A),B:validate(p.B),preset:id};
   }
   function update(current,side,field,raw){
-    if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius','visibility','temperatureProfile'].includes(field))
+    if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius','visibility','temperatureProfile','transitionProfile'].includes(field))
       throw RangeError('Unknown comparison field');
     if(field==='visibility'){
       var common=visibility(raw);
@@ -117,6 +129,6 @@
       ' · '+spec.atmosphere;
   }
   return Object.freeze({ATMOSPHERES:ATMOSPHERES,PRESETS:PRESETS,
-    finite:finite,visibility:visibility,temperatureProfile:temperatureProfile,validate:validate,sharedVisibility:sharedVisibility,fromScene:fromScene,initial:initial,
+    finite:finite,visibility:visibility,temperatureProfile:temperatureProfile,transitionProfile:transitionProfile,validate:validate,sharedVisibility:sharedVisibility,fromScene:fromScene,initial:initial,
     preset:preset,update:update,pair:pair,label:label});
 }));

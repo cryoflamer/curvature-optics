@@ -7,6 +7,7 @@
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     visibility:{enabled:false,rangeKm:60},
     temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
+    transitionProfile:{source:'standard',weight:0},
     showTemperatureProfile:false,temperaturePlacement:'outside-right',
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
@@ -332,10 +333,11 @@
   }
   function experimentSnapshot(){
     if(!experiments||!compareState)return null;
-    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile);
+    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile);
     return experiments.capture(model,{
       atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-      visibility:state.visibility,temperatureProfile:state.temperatureProfile,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
+      visibility:state.visibility,temperatureProfile:state.temperatureProfile,
+      transitionProfile:state.transitionProfile,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
       resetPreset:state.preset
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
       horizon:state.compareHorizon,selected:state.compareSelected,
@@ -381,6 +383,7 @@
     state.atmosphere=scene.atmosphere;state.occlusionRadius=scene.occlusionRadius;
     state.visibility=Object.assign({},scene.visibility);
     state.temperatureProfile=Object.assign({},scene.temperatureProfile);
+    state.transitionProfile=Object.assign({},scene.transitionProfile);
     state.showTemperatureProfile=data.display.showTemperatureProfile;
     state.temperaturePlacement=data.display.temperaturePlacement;
     state.preset=scene.resetPreset;
@@ -523,7 +526,7 @@
       ' · '+(model.showModel===2?'Flat surface':'Globe');
     var pill=el('ModernModePill');if(pill)pill.textContent=state.mode.toUpperCase();
     var wrap=el('ModernOcclusionWrap');
-    if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(state.atmosphere);
+    if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition'].includes(state.atmosphere);
     showLegacyOption('ModernAtmosphere',state.atmosphere);
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     syncTemperatureControls();
@@ -537,7 +540,8 @@
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-        visibility:state.visibility,temperatureProfile:state.temperatureProfile,interactive:false,
+        visibility:state.visibility,temperatureProfile:state.temperatureProfile,
+        transitionProfile:state.transitionProfile,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
         forceColdOptics:state.opticalSample==='cold'
       });
@@ -551,7 +555,7 @@
       state.last=result;
       updateGeometryBackendStatus(result);
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-        temperatureProfile:state.temperatureProfile};
+        temperatureProfile:state.temperatureProfile,transitionProfile:state.transitionProfile};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
       if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       scheduleShimmerFrame();
@@ -585,7 +589,8 @@
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
         occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,
         visibility:spec?spec.visibility:state.visibility,
-        temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,interactive:false,
+        temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,
+        transitionProfile:spec?spec.transitionProfile:state.transitionProfile,interactive:false,
         geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
@@ -652,8 +657,15 @@
     var detector=root.CurvatureRayHorizon;
     if(!detector){if(readout)readout.textContent='Horizon: tracer unavailable';return;}
     var geometry=m.showModel===2?'flat':'globe';
+    var traceKind=options.atmosphere;
+    if(traceKind==='profile-transition'&&options.transitionProfile){
+      if(options.transitionProfile.weight===0)traceKind=options.transitionProfile.source;
+      else if(options.transitionProfile.weight===1)traceKind='exponential-occlusion';
+    }
     var arguments_={geometry:geometry,radius:m.rEarth,observerHeight:m.Height,
-      atmosphere:options.atmosphere,profileOptions:options.atmosphere==='temperature-lapse'?options.temperatureProfile:
+      atmosphere:traceKind,profileOptions:traceKind==='temperature-lapse'?options.temperatureProfile:
+        traceKind==='profile-transition'?{temperatureProfile:options.temperatureProfile,
+          transitionProfile:options.transitionProfile,occlusionRadius:options.occlusionRadius}:
         {occlusionRadius:options.occlusionRadius}};
     var key=JSON.stringify(arguments_),cached=state.horizonCache[side];
     if(!cached||cached.key!==key){
@@ -717,7 +729,7 @@
   function prepareCompare(){
     if(!compareAdapter){updateStatus('Compare adapter is unavailable',true);return false;}
     if(compareState&&!state.compareConfig)
-      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile);
+      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile);
     var result=compareState?compareState.pair(model,state.compareConfig,compareAdapter):compareAdapter.pair(model);
     if(!compareAdapter.invariant(result))throw Error('Compare shared-scene invariant failed');
     state.comparePair=result;
@@ -756,6 +768,10 @@
       standard:['Standard atmosphere · approximation','n(h) = 1 + 0.000293 × exp(−h / 7350 m)',
         'Simplified exponential decrease of refractivity with height; this is not a weather-dependent atmospheric model.',
         'Near-surface refractivity 293 ppm; scale height H = 7350 m.'],
+      'profile-transition':['Profile transition · mathematical experiment',
+        'n(h) = (1−w) n_start(h) + w exp(h/R)',
+        'Interpolates refractive-index profiles, not meteorological parameters. This is NOT a physical evolution caused by a temperature gradient.',
+        'Choose an exact Standard or temperature-dependent starting profile. 0% and 100% reproduce the chosen start and engineered exponential respectively.'],
       'exponential-occlusion':['Exponential refractive profile · hypothetical','n(h) = n₀ × exp(h / R)',
         'Engineered increasing refractive index; bends rays toward lower heights. Not an observed model of Earth’s atmosphere.',
         'R is the atmospheric comparison radius (metres), independent of the surface radius; n₀ = 1 in this UI.'],
@@ -777,6 +793,7 @@
       vacuum:'<i>n</i>(<i>h</i>) = 1',
       standard:'<i>n</i>(<i>h</i>) = 1 + 0.000293 <i>e</i><sup>−<span class="math-frac"><span><i>h</i></span><span>7350 m</span></span></sup>',
       'temperature-lapse':'<i>T</i>(<i>h</i>) = <i>T</i><sub>0</sub> + <i>L</i> × 1000 m (1 − <i>e</i><sup>−<i>h</i>/1000 m</sup>)',
+      'profile-transition':'<i>n</i>(<i>h</i>) = (1 − <i>w</i>) <i>n</i><sub>start</sub>(<i>h</i>) + <i>w</i> <i>e</i><sup><i>h</i>/<i>R</i></sup>',
       'exponential-occlusion':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> <i>e</i><sup><span class="math-frac"><span><i>h</i></span><span><i>R</i></span></span></sup>',
       'inverse-spherical':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> √(1 + (1 + <i>h</i>/<i>R</i>)<sup>4</sup> − (1 + <i>h</i>/<i>R</i>)<sup>2</sup>)'
     };
@@ -794,10 +811,11 @@
     var v=palette[i].map(function(a,j){return Math.round(a+(palette[i+1][j]-a)*f);});
     return 'rgb('+v.join(',')+')';
   }
-  function syncTemperatureColumn(side,kind,profile,reserveStrip){
+  function syncTemperatureColumn(side,kind,profile,reserveStrip,transition){
     var column=newUiEl('ModernTemperature'+side);
     if(!column)return;
-    var visible=state.showTemperatureProfile&&kind==='temperature-lapse';
+    var visible=state.showTemperatureProfile&&(kind==='temperature-lapse'||
+      (kind==='profile-transition'&&transition&&transition.source==='temperature-lapse'));
     column.hidden=!visible;
     // Reserve a real strip only for visible temperature-lapse columns.
     // GraphX3DX measures its own .JsGraph width, so an outside strip keeps
@@ -815,7 +833,7 @@
     if(!visible)return outsideChanged;
     var tracer=root.CurvatureRayTracer;
     if(!tracer||typeof tracer.atmosphere!=='function')return outsideChanged;
-    var atmosphere=tracer.atmosphere(kind,profile),ramp=column.querySelector('.modern-temperature-ramp');
+    var atmosphere=tracer.atmosphere('temperature-lapse',profile),ramp=column.querySelector('.modern-temperature-ramp');
     if(!ramp)return outsideChanged;
     var stops=[];
     for(var i=0;i<=12;i++){
@@ -825,6 +843,8 @@
     ramp.style.background='linear-gradient(to bottom, '+stops.join(',')+')';
     var top=column.querySelector('.modern-temperature-top'),bottom=column.querySelector('.modern-temperature-bottom');
     if(top)top.textContent=atmosphere.temperatureCAt(2000).toFixed(1)+' °C';
+    var columnTitle=column.querySelector('strong');if(columnTitle)columnTitle.textContent=
+      kind==='profile-transition'?'T start(h) · 2 km':'T(h) · 2 km';
     if(bottom)bottom.textContent=atmosphere.temperatureCAt(0).toFixed(1)+' °C';
     column.setAttribute('aria-label','Temperature from 0 to 2 km: '+
       atmosphere.temperatureCAt(0).toFixed(1)+' to '+atmosphere.temperatureCAt(2000).toFixed(1)+' degrees Celsius');
@@ -832,30 +852,56 @@
   }
   function syncTemperatureControls(){
     var compare=state.compareConfig&&state.compareConfig[state.compareSelected];
-    [['Scene',state.temperatureProfile,state.atmosphere],
-      ['Compare',compare&&compare.temperatureProfile,compare&&compare.atmosphere]].forEach(function(row){
-      var prefix='ModernTemperature'+row[0],p=row[1],kind=row[2];
+    [['Scene',state.temperatureProfile,state.atmosphere,state.transitionProfile],
+      ['Compare',compare&&compare.temperatureProfile,compare&&compare.atmosphere,compare&&compare.transitionProfile]].forEach(function(row){
+      var prefix='ModernTemperature'+row[0],p=row[1],kind=row[2],t=row[3];
       if(!p)return;
       var fields={C:'temperatureC',Gradient:'gradientKPerKm',Pressure:'pressureHpa'};
       Object.keys(fields).forEach(function(suffix){var node=newUiEl(prefix+suffix);
         if(node)node.value=String(p[fields[suffix]]);});
-      var wrap=newUiEl(prefix+'Fields');if(wrap)wrap.hidden=kind!=='temperature-lapse';
+      var wrap=newUiEl(prefix+'Fields');if(wrap)wrap.hidden=!(kind==='temperature-lapse'||
+        (kind==='profile-transition'&&t.source==='temperature-lapse'));
+      var tw=newUiEl('ModernTransition'+row[0]+'Fields');if(tw)tw.hidden=kind!=='profile-transition';
+      var source=newUiEl('ModernTransition'+row[0]+'Source');if(source)source.value=t.source;
+      var weight=newUiEl('ModernTransition'+row[0]+'Weight');if(weight)weight.value=String(100*t.weight);
+      var weightValue=newUiEl('ModernTransition'+row[0]+'WeightValue');if(weightValue)weightValue.textContent=Math.round(100*t.weight)+'%';
     });
     var show=newUiEl('ModernShowTemperatureProfile');if(show)show.checked=state.showTemperatureProfile;
     var select=newUiEl('ModernTemperaturePlacement');if(select)select.value=state.temperaturePlacement;
     var wrap=newUiEl('ModernTemperaturePlacementWrap');if(wrap)wrap.hidden=!state.showTemperatureProfile;
-    var resize=!!syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile);
+    var resize=!!syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile,false,state.transitionProfile);
     if(state.compareConfig){
       // Keep A/B Canvas dimensions identical even if only one atmosphere has
       // a temperature legend. The other viewport reserves a blank strip.
       var reserve=state.showTemperatureProfile&&state.temperaturePlacement.indexOf('outside-')===0&&
-        (state.compareConfig.A.atmosphere==='temperature-lapse'||state.compareConfig.B.atmosphere==='temperature-lapse');
-      resize=!!syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile,reserve)||resize;
-      resize=!!syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile,reserve)||resize;
+        ['A','B'].some(function(side){var p=state.compareConfig[side];
+          return p.atmosphere==='temperature-lapse'||(p.atmosphere==='profile-transition'&&
+            p.transitionProfile.source==='temperature-lapse');});
+      resize=!!syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile,reserve,state.compareConfig.A.transitionProfile)||resize;
+      resize=!!syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile,reserve,state.compareConfig.B.transitionProfile)||resize;
     }
     return resize;
   }
   function bindTemperatureControls(){
+    [['Scene',false],['Compare',true]].forEach(function(row){
+      var prefix='ModernTransition'+row[0],inCompare=row[1];
+      function setTransition(field,value){
+        var prev=inCompare?state.compareConfig[state.compareSelected].transitionProfile:state.transitionProfile;
+        try{
+          var next=Object.assign({},prev);next[field]=value;
+          next=compareState.transitionProfile(next);
+          if(inCompare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'transitionProfile',next);
+          else{state.transitionProfile=next;markCustom();}
+          syncTemperatureControls();redraw();
+        }catch(error){updateStatus('Invalid transition profile: '+error.message,true);syncTemperatureControls();}
+      }
+      var source=newUiEl(prefix+'Source');if(source)source.addEventListener('change',function(){setTransition('source',source.value);});
+      var weight=newUiEl(prefix+'Weight');
+      if(weight){
+        weight.addEventListener('input',function(){var out=newUiEl(prefix+'WeightValue');if(out)out.textContent=weight.value+'%';});
+        weight.addEventListener('change',function(){setTransition('weight',Number(weight.value)/100);});
+      }
+    });
     [['Scene',false],['Compare',true]].forEach(function(row){
       var prefix='ModernTemperature'+row[0],inCompare=row[1];
       var fields={C:'temperatureC',Gradient:'gradientKPerKm',Pressure:'pressureHpa'};
@@ -903,7 +949,7 @@
     Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
     var wrap=el('ModernModelOcclusionWrap');if(wrap)
-      wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
+      wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition'].includes(spec.atmosphere);
     syncShimmerControls();
     syncVisibilityControls();
     syncTemperatureControls();
@@ -1398,7 +1444,7 @@
     }
     if(mode==='compare'&&compareState){
       if(!state.compareConfig)
-        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile);
+        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile);
       syncCompareEditor();
     }
     // Compare's source model retains Scene aiming for later, but the A/B clones
@@ -1534,6 +1580,7 @@
       adapter.applyPreset(model,id);
       state.preset=id;state.atmosphere='standard';state.occlusionRadius=6371000;
       state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
+      state.transitionProfile={source:'standard',weight:0};
       model.Update();syncNumericInputs();
       var preset=el('ModernPreset');if(preset)preset.value=id;
       redraw();
@@ -1592,7 +1639,7 @@
     ModernCurvature:'Surface curvature is κ = 1/R. The far-right endpoint is exactly flat (κ = 0), not merely a very large sphere.',
     ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
     ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',
-    ModernAtmosphere:'Controls how light propagates. Vacuum has straight rays; Standard is fixed, Temperature gradient uses a hydrostatic boundary layer, and engineered profiles have separate parameters.',
+    ModernAtmosphere:'Controls how light propagates. Standard is a fixed exponential. Temperature gradient uses a dry hydrostatic boundary layer. Profile transition is a mathematical interpolation, not a temperature-driven physical transformation.',
     ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.',
     ModernGrid:'Metric guide lines are measured along the actual surface and do not determine the optical horizon.'
   };

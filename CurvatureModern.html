@@ -33,15 +33,15 @@
 <script src="src/renderers/CurvatureFrameRenderer.js?v=140.2"></script>
 <script src="src/renderers/CurvatureScreenSpaceGuides.js"></script>
 <script src="src/scene/CurvatureFullSceneDecorations.js"></script>
-<script src="src/optics/OpticalRayTracer.js?v=140.12.94"></script>
+<script src="src/optics/OpticalRayTracer.js?v=140.12.96"></script>
 <script src="src/optics/OpticalRayHorizon.js"></script>
 <script src="src/optics/OpticalTargetProjection.js?v=140.7"></script>
 <script src="src/optics/OpticalConformalPredictor.js?v=140.12.46"></script>
 <script src="src/optics/OpticalSharedRayField.js?v=140.12.46"></script>
 <script src="src/optics/OpticalTowerSilhouette.js?v=140.12.37.2"></script>
-<script src="src/optics/CurvaturePhysicalGroundGuides.js?v=140.12.94"></script>
+<script src="src/optics/CurvaturePhysicalGroundGuides.js?v=140.12.96"></script>
 <script src="src/optics/CurvaturePhysicalPolygonFills.js?v=140.12.37.2"></script>
-<script src="src/optics/CurvaturePhysicalSceneOptics.js?v=140.12.94"></script>
+<script src="src/optics/CurvaturePhysicalSceneOptics.js?v=140.12.96"></script>
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
@@ -57,8 +57,8 @@
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.74"></script>
-<script src="src/ui/modern/ModernCompareState.js?v=140.12.94"></script>
-<script src="src/ui/modern/ModernExperimentState.js?v=140.12.95"></script>
+<script src="src/ui/modern/ModernCompareState.js?v=140.12.96"></script>
+<script src="src/ui/modern/ModernExperimentState.js?v=140.12.96"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
@@ -172,10 +172,15 @@
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
-          <option value="standard" selected>Standard atmosphere</option><option value="temperature-lapse">Temperature gradient · hydrostatic</option><option value="vacuum">Vacuum · straight rays</option>
+          <option value="standard" selected>Standard atmosphere</option><option value="temperature-lapse">Temperature gradient · hydrostatic</option><option value="profile-transition">Profile transition · experimental</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option><option value="exponential-occlusion">Exponential refractive profile · engineered</option>
         </select></div>
         <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Refraction scale radius (km)</label><input id="ModernOcclusion" type="number" min="0.001" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
+        <div class="modern-temperature-fields" id="ModernTransitionSceneFields" hidden>
+          <div class="modern-field"><label for="ModernTransitionSceneSource">Start profile</label><select id="ModernTransitionSceneSource"><option value="standard">Standard · exact existing baseline</option><option value="temperature-lapse">Temperature gradient · dry hydrostatic</option></select></div>
+          <div class="modern-field"><label for="ModernTransitionSceneWeight">Engineered-profile blend: <output id="ModernTransitionSceneWeightValue">0%</output></label><input type="range" id="ModernTransitionSceneWeight" min="0" max="100" step="1" value="0"></div>
+          <p class="modern-note">Mathematical interpolation of n(h), NOT an atmospheric temperature law. 0% = selected start profile, 100% = exact engineered exponential n₀ exp(h/R). Temperature affects rays only when the hydrostatic start is selected and blend is below 100%.</p>
+        </div>
         <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
         <div class="modern-temperature-fields" id="ModernTemperatureSceneFields" hidden>
           <div class="modern-field"><label for="ModernTemperatureSceneC">Surface temperature (°C)</label><input type="number" id="ModernTemperatureSceneC" min="-30" max="40" step="0.5" value="15"></div>
@@ -206,13 +211,18 @@
         <div class="modern-field"><label for="ModernModelAtmosphere">Optical atmosphere</label>
           <select id="ModernModelAtmosphere"><option value="vacuum">Vacuum · straight rays</option>
             <option value="standard">Standard atmosphere</option>
-            <option value="temperature-lapse">Temperature gradient · hydrostatic</option>
+            <option value="temperature-lapse">Temperature gradient · hydrostatic</option><option value="profile-transition">Profile transition · experimental</option>
             <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option>
             <option value="exponential-occlusion">Exponential refractive profile · engineered</option></select></div>
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
           <label for="ModernModelOcclusion">Refraction scale radius (km)</label>
           <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any">
           <p class="modern-note modern-radius-draft" id="ModernModelOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
+        <div class="modern-temperature-fields" id="ModernTransitionCompareFields" hidden>
+          <div class="modern-field"><label for="ModernTransitionCompareSource">Start profile (selected A/B)</label><select id="ModernTransitionCompareSource"><option value="standard">Standard · exact existing baseline</option><option value="temperature-lapse">Temperature gradient · dry hydrostatic</option></select></div>
+          <div class="modern-field"><label for="ModernTransitionCompareWeight">Engineered-profile blend: <output id="ModernTransitionCompareWeightValue">0%</output></label><input type="range" id="ModernTransitionCompareWeight" min="0" max="100" step="1" value="0"></div>
+          <p class="modern-note">Mathematical n(h) blend, not a physical temperature transition. Settings are independent for A/B; 100% restores the existing engineered exponential exactly.</p>
+        </div>
         <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
         <div class="modern-temperature-fields" id="ModernTemperatureCompareFields" hidden>
           <div class="modern-field"><label for="ModernTemperatureCompareC">Surface temperature (°C)</label><input type="number" id="ModernTemperatureCompareC" min="-30" max="40" step="0.5" value="15"></div>
@@ -323,7 +333,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.95&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.96&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>

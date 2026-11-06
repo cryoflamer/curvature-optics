@@ -56,6 +56,28 @@
         temperatureCAt:function(h){return sample(h).temperatureC;}
       };
     }
+    if (kind === 'profile-transition') {
+      // Exploratory mathematical interpolation, NOT a hydrostatic atmospheric
+      // evolution. Both endpoints and their derivatives are the original
+      // forward tracer profiles. A temperature gradient only affects rays when
+      // the selected source is temperature-lapse and weight < 1.
+      var transition=options.transitionProfile||{source:'standard',weight:0};
+      if(!transition||typeof transition!=='object'||Array.isArray(transition)||
+          Object.keys(transition).some(function(k){return k!=='source'&&k!=='weight';})||
+          !['standard','temperature-lapse'].includes(transition.source)||
+          typeof transition.weight!=='number'||!Number.isFinite(transition.weight)||
+          transition.weight<0||transition.weight>1)
+        throw RangeError('Invalid atmospheric profile transition');
+      var start=atmosphere(transition.source,options.temperatureProfile);
+      var end=atmosphere('exponential-occlusion',{occlusionRadius:options.occlusionRadius});
+      var a=1-transition.weight,b=transition.weight;
+      var result={
+        n:function(h){return a*start.n(h)+b*end.n(h);},
+        dn:function(h){return a*start.dn(h)+b*end.dn(h);}
+      };
+      if(transition.source==='temperature-lapse')result.temperatureCAt=start.temperatureCAt;
+      return result;
+    }
     if (kind === 'standard') {
       // Exponential refractivity, representative near-surface standard profile.
       // Not a full meteorological model; both constants are configurable.

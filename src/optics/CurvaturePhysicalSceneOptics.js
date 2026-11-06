@@ -17,7 +17,7 @@
   'use strict';
   if(!contract||!fields||!silhouette||!groundGuides||!polygonFills)throw Error('Physical scene optics dependencies required');
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
-  var ATMOSPHERES=['vacuum','standard','temperature-lapse','exponential-occlusion','inverse-spherical'];
+  var ATMOSPHERES=['vacuum','standard','temperature-lapse','profile-transition','exponential-occlusion','inverse-spherical'];
   function arrivalPoint(pair){
     var az=pair[0],el=pair[1],ce=Math.cos(el),range=1000;
     return [range*Math.sin(az)*ce,range*Math.cos(az)*ce,range*Math.sin(el)];
@@ -50,6 +50,8 @@
       options.metricWorld?null:[model.aDelta,model.rFEarth,model.aDip],
       options.atmosphere,options.occlusionRadius,
       options.atmosphere==='temperature-lapse'?options.temperatureProfile:null,
+      options.atmosphere==='profile-transition'?options.transitionProfile:null,
+      options.atmosphere==='profile-transition'&&options.transitionProfile&&options.transitionProfile.source==='temperature-lapse'?options.temperatureProfile:null,
       options.settings||null]);
   }
   // Cache is keyed by the physically contributing scene as well as the model.
@@ -199,7 +201,7 @@
       var physicalSurface=composed.scene.metadata.physicalMetricWorld===true;
       if(!geometry||!(model.rEarth>0)||!Number.isFinite(model.Height)||model.Height<0)
         throw RangeError('Globe/Flat physical model required');
-      var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,settings:options.settings,
+      var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,transitionProfile:options.transitionProfile,settings:options.settings,
         metricWorld:composed.scene.metadata.physicalMetricWorld===true})+
         '\n'+sceneKey(composed);
       // The common frame/painter copies and validates its input scene. A
@@ -216,10 +218,18 @@
           options.experimentalRayField.request.observerHeight!==model.Height||
           options.experimentalRayField.request.atmosphere!==kind))
         throw RangeError('Experimental GPU ray field does not match the physical scene');
+      // At the exact endpoints, use the *original* named tracer paths, not
+      // merely equivalent n(h)/dn(h) functions. This retains the production
+      // Standard optimizations and preserves endpoint numerical behavior.
+      var traceKind=kind;
+      if(kind==='profile-transition'&&options.transitionProfile){
+        if(options.transitionProfile.weight===0)traceKind=options.transitionProfile.source;
+        else if(options.transitionProfile.weight===1)traceKind='exponential-occlusion';
+      }
       // Representative profiles are smooth over kilometre scales. RK4 at
       // 2 km was checked against the 200 m shooting oracle; cap the step
       // relative to smaller geometric or engineered curvature radii.
-      var characteristicRadius=kind==='standard'||kind==='temperature-lapse'?model.rEarth:Math.min(model.rEarth,R);
+      var characteristicRadius=traceKind==='standard'||traceKind==='temperature-lapse'?model.rEarth:Math.min(model.rEarth,R);
       var automaticStep=Math.max(20,Math.min(2000,characteristicRadius/3000));
       var began=Date.now(),settings=Object.assign({maxBuildMs:null,
         step:automaticStep,fieldTolerance:1e-5,fieldAdaptiveDepth:3,
@@ -243,9 +253,11 @@
         if(span&&options.experimentalRayField&&options.experimentalRayField.fullCoverageGrid)
           field=options.experimentalRayField;
         else if(span)field=fields.create({geometry:geometry,radius:model.rEarth,
-          observerHeight:model.Height,atmosphere:kind,
-          profileOptions:kind==='temperature-lapse'?options.temperatureProfile:
-            kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:R}:undefined,
+          observerHeight:model.Height,atmosphere:traceKind,
+          profileOptions:traceKind==='temperature-lapse'?options.temperatureProfile:
+            traceKind==='profile-transition'?{transitionProfile:options.transitionProfile,
+              temperatureProfile:options.temperatureProfile,occlusionRadius:R}:
+            traceKind==='inverse-spherical'||traceKind==='exponential-occlusion'?{occlusionRadius:R}:undefined,
           distances:span.distances,heights:span.heights,
           angleTolerance:settings.fieldTolerance,step:settings.step,
           adaptiveDepth:settings.fieldAdaptiveDepth,
@@ -294,7 +306,7 @@
       }
       var groundBefore=counters();
       var guideProjection=groundGuides.create({model:model,geometry:geometry,
-        atmosphere:kind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,step:settings.step,
+        atmosphere:traceKind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,transitionProfile:options.transitionProfile,step:settings.step,
         metricGrid:physicalSurface,
         maxDistance:Math.min(100000,model.rEarth*.1),
         sampleGround:kind!=='vacuum'&&field?function(d){return field.exact(d,0);}:null});

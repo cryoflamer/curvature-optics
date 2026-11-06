@@ -16,6 +16,8 @@
     var R=m.rEarth,eye=m.Height;
     var surface=surfaceApi.createFromCurvature(globe?1/R:0);
     var profile=kind==='temperature-lapse'?options.temperatureProfile:
+      kind==='profile-transition'?{temperatureProfile:options.temperatureProfile,
+        transitionProfile:options.transitionProfile,occlusionRadius:options.occlusionRadius}:
       kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:options.occlusionRadius}:undefined;
     var step=options.step||1000;
     // Rendering extent, NOT a physical horizon. Flat surfaces have no finite
@@ -50,7 +52,8 @@
     }
     // A finite ground horizon exists on the globe and for engineered Flat
     // profiles. For Flat vacuum/standard we do not infer a finite horizon.
-    var finite=globe||kind==='inverse-spherical'||kind==='exponential-occlusion';
+    var finite=globe||kind==='inverse-spherical'||kind==='exponential-occlusion'||
+      (kind==='profile-transition'&&options.transitionProfile&&options.transitionProfile.weight>0);
     var upper=globe?Math.min(R*.1,Math.max(100,8*Math.sqrt(2*R*eye))):
       Math.min(options.occlusionRadius*.1,Math.max(100,8*Math.sqrt(2*options.occlusionRadius*eye)));
     var lastVisible=0,firstHidden=null;
