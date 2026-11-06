@@ -17,7 +17,21 @@
       throw RangeError('Invalid visibility configuration');
     return {enabled:value.enabled,rangeKm:value.rangeKm};
   }
-  var ATMOSPHERES=['vacuum','standard','inverse-spherical','exponential-occlusion'];
+  var ATMOSPHERES=['vacuum','standard','temperature-lapse','inverse-spherical','exponential-occlusion'];
+  var TEMPERATURE_DEFAULT={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
+  function temperatureProfile(value){
+    if(value===undefined)return Object.assign({},TEMPERATURE_DEFAULT);
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).some(function(k){return !Object.prototype.hasOwnProperty.call(TEMPERATURE_DEFAULT,k);}))
+      throw RangeError('Invalid temperature profile');
+    var ranges={temperatureC:[-30,40],pressureHpa:[800,1100],gradientKPerKm:[-20,20]};
+    var result={};Object.keys(ranges).forEach(function(k){
+      if(typeof value[k]!=='number'||!Number.isFinite(value[k])||
+        value[k]<ranges[k][0]||value[k]>ranges[k][1])throw RangeError('Invalid '+k);
+      result[k]=value[k];
+    });
+    return result;
+  }
   var PRESETS=Object.freeze({
     'globe-flat-vacuum':{name:'Globe vacuum / Flat vacuum',
       A:{surface:'globe',radiusKm:6371,atmosphere:'vacuum',occlusionRadius:6371000},
@@ -43,16 +57,18 @@
     if(!ATMOSPHERES.includes(spec.atmosphere))throw RangeError('Unknown atmosphere');
     return {surface:spec.surface,radiusKm:finite(spec.radiusKm,100,1e13),
       atmosphere:spec.atmosphere,occlusionRadius:finite(spec.occlusionRadius,1,1e16),
-      visibility:visibility(spec.visibility)};
+      visibility:visibility(spec.visibility),temperatureProfile:temperatureProfile(spec.temperatureProfile)};
   }
-  function fromScene(model,atmosphere,occlusionRadius){
+  function fromScene(model,atmosphere,occlusionRadius,temperature){
     return validate({surface:model.showModel===2?'flat':'globe',radiusKm:model.rEarth/1000,
-      atmosphere:atmosphere,occlusionRadius:occlusionRadius});
+      atmosphere:atmosphere,occlusionRadius:occlusionRadius,temperatureProfile:temperature});
   }
-  function initial(model,atmosphere,occlusionRadius){
-    var base=fromScene(model,atmosphere,occlusionRadius);
-    return {A:Object.assign({},base,{visibility:Object.assign({},base.visibility)}),
-      B:Object.assign({},base,{surface:'flat',visibility:Object.assign({},base.visibility)}),preset:'custom'};
+  function initial(model,atmosphere,occlusionRadius,temperature){
+    var base=fromScene(model,atmosphere,occlusionRadius,temperature);
+    return {A:Object.assign({},base,{visibility:Object.assign({},base.visibility),
+        temperatureProfile:Object.assign({},base.temperatureProfile)}),
+      B:Object.assign({},base,{surface:'flat',visibility:Object.assign({},base.visibility),
+        temperatureProfile:Object.assign({},base.temperatureProfile)}),preset:'custom'};
   }
   // Compare shares one airlight setting. Older saved A/B experiments may
   // disagree: the former model A setting wins, regardless of the selected tab.
@@ -68,7 +84,7 @@
     return {A:validate(p.A),B:validate(p.B),preset:id};
   }
   function update(current,side,field,raw){
-    if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius','visibility'].includes(field))
+    if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius','visibility','temperatureProfile'].includes(field))
       throw RangeError('Unknown comparison field');
     if(field==='visibility'){
       var common=visibility(raw);
@@ -101,6 +117,6 @@
       ' · '+spec.atmosphere;
   }
   return Object.freeze({ATMOSPHERES:ATMOSPHERES,PRESETS:PRESETS,
-    finite:finite,visibility:visibility,validate:validate,sharedVisibility:sharedVisibility,fromScene:fromScene,initial:initial,
+    finite:finite,visibility:visibility,temperatureProfile:temperatureProfile,validate:validate,sharedVisibility:sharedVisibility,fromScene:fromScene,initial:initial,
     preset:preset,update:update,pair:pair,label:label});
 }));

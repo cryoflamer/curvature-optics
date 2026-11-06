@@ -15,7 +15,8 @@
     var m=options.model,kind=options.atmosphere,globe=options.geometry==='globe';
     var R=m.rEarth,eye=m.Height;
     var surface=surfaceApi.createFromCurvature(globe?1/R:0);
-    var profile=kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:options.occlusionRadius}:undefined;
+    var profile=kind==='temperature-lapse'?options.temperatureProfile:
+      kind==='inverse-spherical'||kind==='exponential-occlusion'?{occlusionRadius:options.occlusionRadius}:undefined;
     var step=options.step||1000;
     // Rendering extent, NOT a physical horizon. Flat surfaces have no finite
     // horizon in vacuum/standard; unbounded legacy grid geometry must never

@@ -176,7 +176,7 @@ test('140.12.9: GPU Compare mode and target count survive share URL and old link
   delete legacy.display.gpuProbe;
   delete legacy.display.probeTargets;
   assert.deepEqual(codec.validate(legacy).display,{mode:'compare',eyeLevel:true,horizon:true,
-    gpuProbe:false,probeTargets:256});
+    gpuProbe:false,probeTargets:256,showTemperatureProfile:false});
   for(const invalid of [0,64,2048,'1024',null]){
     const candidate=JSON.parse(JSON.stringify(e));candidate.display.probeTargets=invalid;
     assert.throws(()=>codec.validate(candidate));

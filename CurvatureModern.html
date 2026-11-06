@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.94">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, animations, diagnostic UI or legacy runtime is loaded. -->
@@ -33,15 +33,15 @@
 <script src="src/renderers/CurvatureFrameRenderer.js?v=140.2"></script>
 <script src="src/renderers/CurvatureScreenSpaceGuides.js"></script>
 <script src="src/scene/CurvatureFullSceneDecorations.js"></script>
-<script src="src/optics/OpticalRayTracer.js"></script>
+<script src="src/optics/OpticalRayTracer.js?v=140.12.94"></script>
 <script src="src/optics/OpticalRayHorizon.js"></script>
 <script src="src/optics/OpticalTargetProjection.js?v=140.7"></script>
 <script src="src/optics/OpticalConformalPredictor.js?v=140.12.46"></script>
 <script src="src/optics/OpticalSharedRayField.js?v=140.12.46"></script>
 <script src="src/optics/OpticalTowerSilhouette.js?v=140.12.37.2"></script>
-<script src="src/optics/CurvaturePhysicalGroundGuides.js"></script>
+<script src="src/optics/CurvaturePhysicalGroundGuides.js?v=140.12.94"></script>
 <script src="src/optics/CurvaturePhysicalPolygonFills.js?v=140.12.37.2"></script>
-<script src="src/optics/CurvaturePhysicalSceneOptics.js?v=140.12.37.2"></script>
+<script src="src/optics/CurvaturePhysicalSceneOptics.js?v=140.12.94"></script>
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
@@ -57,8 +57,8 @@
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.74"></script>
-<script src="src/ui/modern/ModernCompareState.js?v=140.12.92"></script>
-<script src="src/ui/modern/ModernExperimentState.js?v=140.12.92"></script>
+<script src="src/ui/modern/ModernCompareState.js?v=140.12.94"></script>
+<script src="src/ui/modern/ModernExperimentState.js?v=140.12.94"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
@@ -172,11 +172,17 @@
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
-          <option value="standard" selected>Standard atmosphere</option><option value="vacuum">Vacuum · straight rays</option>
+          <option value="standard" selected>Standard atmosphere</option><option value="temperature-lapse">Temperature gradient · hydrostatic</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option><option value="exponential-occlusion">Exponential refractive profile · engineered</option>
         </select></div>
         <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Refraction scale radius (km)</label><input id="ModernOcclusion" type="number" min="0.001" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
         <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
+        <div class="modern-temperature-fields" id="ModernTemperatureSceneFields" hidden>
+          <div class="modern-field"><label for="ModernTemperatureSceneC">Surface temperature (°C)</label><input type="number" id="ModernTemperatureSceneC" min="-30" max="40" step="0.5" value="15"></div>
+          <div class="modern-field"><label for="ModernTemperatureSceneGradient">Surface temperature gradient (K/km)</label><input type="number" id="ModernTemperatureSceneGradient" min="-20" max="20" step="0.5" value="-6.5"></div>
+          <div class="modern-field"><label for="ModernTemperatureScenePressure">Surface pressure (hPa)</label><input type="number" id="ModernTemperatureScenePressure" min="800" max="1100" step="1" value="1013.25"></div>
+          <p class="modern-note">Dry hydrostatic model. The specified gradient is local at the surface and decays above a 1 km boundary layer; no humidity or multi-layer inversions.</p>
+        </div>
         <div class="modern-visibility" aria-label="Atmospheric visibility">
           <label class="modern-check" for="ModernVisibilityEnabled"><input id="ModernVisibilityEnabled" type="checkbox"> Atmospheric extinction / haze</label>
           <div class="modern-field" id="ModernVisibilityOptions" hidden><label for="ModernVisibilityRange">Visibility range (km · 5% contrast)</label>
@@ -200,6 +206,7 @@
         <div class="modern-field"><label for="ModernModelAtmosphere">Optical atmosphere</label>
           <select id="ModernModelAtmosphere"><option value="vacuum">Vacuum · straight rays</option>
             <option value="standard">Standard atmosphere</option>
+            <option value="temperature-lapse">Temperature gradient · hydrostatic</option>
             <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option>
             <option value="exponential-occlusion">Exponential refractive profile · engineered</option></select></div>
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
@@ -207,6 +214,12 @@
           <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any">
           <p class="modern-note modern-radius-draft" id="ModernModelOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
         <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
+        <div class="modern-temperature-fields" id="ModernTemperatureCompareFields" hidden>
+          <div class="modern-field"><label for="ModernTemperatureCompareC">Surface temperature (°C)</label><input type="number" id="ModernTemperatureCompareC" min="-30" max="40" step="0.5" value="15"></div>
+          <div class="modern-field"><label for="ModernTemperatureCompareGradient">Surface temperature gradient (K/km)</label><input type="number" id="ModernTemperatureCompareGradient" min="-20" max="20" step="0.5" value="-6.5"></div>
+          <div class="modern-field"><label for="ModernTemperatureComparePressure">Surface pressure (hPa)</label><input type="number" id="ModernTemperatureComparePressure" min="800" max="1100" step="1" value="1013.25"></div>
+          <p class="modern-note">These inputs affect only the selected model A/B. The column shows T(h), not refraction strength.</p>
+        </div>
         <div class="modern-visibility" aria-label="Shared Compare atmospheric visibility for both models">
           <label class="modern-check" for="ModernModelVisibilityEnabled"><input id="ModernModelVisibilityEnabled" type="checkbox"> Atmospheric extinction / haze (both models)</label>
           <div class="modern-field" id="ModernModelVisibilityOptions" hidden><label for="ModernModelVisibilityRange">Visibility range (km · 5% contrast)</label>
@@ -232,6 +245,8 @@
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
         <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
+        <label class="modern-check"><input id="ModernShowTemperatureProfile" type="checkbox"> Show temperature column (0–2 km)</label>
+        <p class="modern-note">The color scale appears beside each image using the temperature-gradient atmosphere. It does not change rays or canvas pixels.</p>
         <div id="ModernCompareDisplayOptions">
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
@@ -299,7 +314,8 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.93&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.94&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
@@ -309,6 +325,7 @@
             <div class="modern-viewport-head"><span>Model A · Physical optics</span><span id="ModernCompareLabelA">Current curvature · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostA">
               <script src="src/ui/modern/ModernCompareGraph.js" data-compare-side="A"></script>
+              <div class="modern-temperature-column" id="ModernTemperatureA" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
             </div>
             <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span><span class="modern-horizon-readout" id="ModernHorizonStatusA">Horizon: not calculated</span></div>
           </section>
@@ -316,6 +333,7 @@
             <div class="modern-viewport-head"><span>Model B · Physical optics</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
             <div class="modern-graph-host" id="ModernCompareHostB">
               <script src="src/ui/modern/ModernCompareGraph.js" data-compare-side="B"></script>
+              <div class="modern-temperature-column" id="ModernTemperatureB" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
             </div>
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>

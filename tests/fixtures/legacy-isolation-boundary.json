@@ -988,6 +988,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernTemperatureGradient.test.js",
         "tests/OpticalColdWarm1403.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalFusedProductionGate141249.test.js",
@@ -1057,6 +1058,7 @@
         "tests/CurvatureSurfaceGeometry124.test.js",
         "tests/ForwardRayBundle.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/ModernTemperatureGradient.test.js",
         "tests/OpticalAtmosphericProfiles102.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalEngineeredExperiment1404.test.js",
@@ -1534,6 +1536,7 @@
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/CurvaturePhysicsRegression.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernTemperatureGradient.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalFusedProductionGate141249.test.js",
         "tests/OpticalFusedProductionPromotion141250.test.js",
@@ -1858,6 +1861,7 @@
         "tests/ModernExperimentState.test.js",
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernSharedCompareControls.test.js",
+        "tests/ModernTemperatureGradient.test.js",
         "tests/OpticalRayHorizon.test.js"
       ],
       "commonJsToolCallers": []
@@ -1893,7 +1897,8 @@
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernExperimentLibrary.test.js",
-        "tests/ModernExperimentState.test.js"
+        "tests/ModernExperimentState.test.js",
+        "tests/ModernTemperatureGradient.test.js"
       ],
       "commonJsToolCallers": [
         "tools/audit-legacy-modern-boundary.js"

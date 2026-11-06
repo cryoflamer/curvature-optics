@@ -19,6 +19,43 @@
   function atmosphere(kind, options) {
     options = options || {};
     if (kind === 'vacuum') return { n: function () { return 1; }, dn: function () { return 0; } };
+    if (kind === 'temperature-lapse') {
+      // Dry-air hydrostatic boundary-layer model. Inputs describe local air at
+      // h=0 and the *surface* dT/dh; the lapse relaxes as exp(-h/1000 m).
+      // This avoids an unphysical negative Kelvin temperature when tracing
+      // to high altitude. It is not an all-altitude or humidity model.
+      var tC = options.temperatureC === undefined ? 15 : options.temperatureC;
+      var p0 = options.pressureHpa === undefined ? 1013.25 : options.pressureHpa;
+      var gKm = options.gradientKPerKm === undefined ? -6.5 : options.gradientKPerKm;
+      if (!Number.isFinite(tC) || tC < -30 || tC > 40 ||
+          !Number.isFinite(p0) || p0 < 800 || p0 > 1100 ||
+          !Number.isFinite(gKm) || gKm < -20 || gKm > 20)
+        throw RangeError('Invalid temperature-lapse atmosphere');
+      var T0=tC+273.15,L=gKm/1000,layer=1000,B=L*layer,Tinf=T0+B;
+      var gravOverR=9.80665/287.05;
+      var refr0=0.000293*(p0/1013.25)*(288.15/T0);
+      function sample(height){
+        // RK4 can evaluate below ground before its first-hit event is refined.
+        // Extrapolation below -1 km has no atmospheric interpretation.
+        var h=Math.max(-1000,height),T,derivative,integral;
+        if(h<0){
+          T=T0+L*h;derivative=L;
+          integral=L===0?h/T0:Math.log(T/T0)/L;
+        } else {
+          var e=Math.exp(-h/layer);
+          T=Tinf-B*e;derivative=L*e;
+          integral=(h+layer*Math.log(T/T0))/Tinf;
+        }
+        var refr=refr0*Math.exp(-gravOverR*integral)*T0/T;
+        return {temperatureC:T-273.15,n:1+refr,
+          dn:-refr*(gravOverR+derivative)/T};
+      }
+      return {
+        n:function(h){return sample(h).n;},
+        dn:function(h){return sample(h).dn;},
+        temperatureCAt:function(h){return sample(h).temperatureC;}
+      };
+    }
     if (kind === 'standard') {
       // Exponential refractivity, representative near-surface standard profile.
       // Not a full meteorological model; both constants are configurable.

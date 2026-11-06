@@ -6,6 +6,8 @@
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     visibility:{enabled:false,rangeKm:60},
+    temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
+    showTemperatureProfile:false,
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
@@ -330,14 +332,15 @@
   }
   function experimentSnapshot(){
     if(!experiments||!compareState)return null;
-    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius);
+    var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile);
     return experiments.capture(model,{
       atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-      visibility:state.visibility,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
+      visibility:state.visibility,temperatureProfile:state.temperatureProfile,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
       resetPreset:state.preset
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
       horizon:state.compareHorizon,selected:state.compareSelected,
-      gpuProbe:false,probeTargets:256}); // Keep legacy schema; never re-enable retired WebGPU.
+      gpuProbe:false,probeTargets:256,
+      showTemperatureProfile:state.showTemperatureProfile}); // Keep legacy schema; never re-enable retired WebGPU.
   }
   function storeExperiment(){
     if(!persistence.ready||!experiments||!root.location)return;
@@ -376,6 +379,8 @@
     model.DemoText=scene.title;model.Description=scene.description;
     state.atmosphere=scene.atmosphere;state.occlusionRadius=scene.occlusionRadius;
     state.visibility=Object.assign({},scene.visibility);
+    state.temperatureProfile=Object.assign({},scene.temperatureProfile);
+    state.showTemperatureProfile=data.display.showTemperatureProfile;
     state.preset=scene.resetPreset;
     state.compareConfig=compareState.sharedVisibility({A:data.compare.A,B:data.compare.B,preset:data.compare.preset});
     state.compareSelected=data.compare.selected;
@@ -519,6 +524,7 @@
     if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(state.atmosphere);
     showLegacyOption('ModernAtmosphere',state.atmosphere);
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
+    syncTemperatureControls();
     var fov=el('ModernViewAngle');if(fov&&Number.isFinite(model.ViewAngle))
       fov.value=String(Number(model.ViewAngle.toFixed(4)));
   }
@@ -529,7 +535,7 @@
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
       var result=root.CurvatureMainCanvasRenderer.renderPhysical(g,model,{
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
-        visibility:state.visibility,interactive:false,
+        visibility:state.visibility,temperatureProfile:state.temperatureProfile,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
         forceColdOptics:state.opticalSample==='cold'
       });
@@ -542,7 +548,8 @@
           guideGraph.Canvas,model,result.decorationCamera);
       state.last=result;
       updateGeometryBackendStatus(result);
-      var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius};
+      var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
+        temperatureProfile:state.temperatureProfile};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
       if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       scheduleShimmerFrame();
@@ -575,7 +582,8 @@
       var spec=state.compareConfig&&state.compareConfig[side];
       var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
         occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,
-        visibility:spec?spec.visibility:state.visibility,interactive:false,
+        visibility:spec?spec.visibility:state.visibility,
+        temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,interactive:false,
         geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
@@ -643,7 +651,8 @@
     if(!detector){if(readout)readout.textContent='Horizon: tracer unavailable';return;}
     var geometry=m.showModel===2?'flat':'globe';
     var arguments_={geometry:geometry,radius:m.rEarth,observerHeight:m.Height,
-      atmosphere:options.atmosphere,profileOptions:{occlusionRadius:options.occlusionRadius}};
+      atmosphere:options.atmosphere,profileOptions:options.atmosphere==='temperature-lapse'?options.temperatureProfile:
+        {occlusionRadius:options.occlusionRadius}};
     var key=JSON.stringify(arguments_),cached=state.horizonCache[side];
     if(!cached||cached.key!==key){
       var measured;
@@ -706,7 +715,7 @@
   function prepareCompare(){
     if(!compareAdapter){updateStatus('Compare adapter is unavailable',true);return false;}
     if(compareState&&!state.compareConfig)
-      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius);
+      state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile);
     var result=compareState?compareState.pair(model,state.compareConfig,compareAdapter):compareAdapter.pair(model);
     if(!compareAdapter.invariant(result))throw Error('Compare shared-scene invariant failed');
     state.comparePair=result;
@@ -739,6 +748,9 @@
       vacuum:['Vacuum · idealized','n(h) = 1',
         'No atmospheric refraction; rays travel in straight lines in the chosen surface geometry.',
         'No refractive parameters.'],
+      'temperature-lapse':['Temperature gradient · dry hydrostatic boundary layer','T(h) = T₀ + L × 1000 m × (1 − exp(−h / 1000 m))',
+        'Ray tracing uses n(h) − 1 proportional to p(h)/T(h); pressure follows dry hydrostatic equilibrium. The surface gradient L relaxes exponentially rather than remaining linear to high altitudes.',
+        'L is a local surface gradient in K/km. Fixed transition length 1000 m; no humidity or layered meteorology.'],
       standard:['Standard atmosphere · approximation','n(h) = 1 + 0.000293 × exp(−h / 7350 m)',
         'Simplified exponential decrease of refractivity with height; this is not a weather-dependent atmospheric model.',
         'Near-surface refractivity 293 ppm; scale height H = 7350 m.'],
@@ -762,6 +774,7 @@
     var formulas={
       vacuum:'<i>n</i>(<i>h</i>) = 1',
       standard:'<i>n</i>(<i>h</i>) = 1 + 0.000293 <i>e</i><sup>−<span class="math-frac"><span><i>h</i></span><span>7350 m</span></span></sup>',
+      'temperature-lapse':'<i>T</i>(<i>h</i>) = <i>T</i><sub>0</sub> + <i>L</i> × 1000 m (1 − <i>e</i><sup>−<i>h</i>/1000 m</sup>)',
       'exponential-occlusion':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> <i>e</i><sup><span class="math-frac"><span><i>h</i></span><span><i>R</i></span></span></sup>',
       'inverse-spherical':'<i>n</i>(<i>h</i>) = <i>n</i><sub>0</sub> √(1 + (1 + <i>h</i>/<i>R</i>)<sup>4</sup> − (1 + <i>h</i>/<i>R</i>)<sup>2</sup>)'
     };
@@ -769,6 +782,79 @@
     var details=document.createElement('div');details.textContent=info[2];node.appendChild(details);
     var note=document.createElement('div');note.className='modern-atmosphere-note';
     note.textContent=info[3];node.appendChild(note);
+  }
+  // Temperature is an optical-input profile, not a screen-space distortion.
+  // Both viewports use the identical RayTracer temperature(h) sampler for the
+  // legend; colors have a *fixed absolute* -40..60 C scale across Scene/A/B.
+  function temperatureColor(c){
+    var palette=[[35,79,181],[99,177,210],[225,229,195],[233,164,86],[191,53,57]];
+    var t=Math.max(0,Math.min(3.999999,(c+40)/100*4)),i=Math.floor(t),f=t-i;
+    var v=palette[i].map(function(a,j){return Math.round(a+(palette[i+1][j]-a)*f);});
+    return 'rgb('+v.join(',')+')';
+  }
+  function syncTemperatureColumn(side,kind,profile){
+    var column=newUiEl('ModernTemperature'+side);
+    if(!column)return;
+    var visible=state.showTemperatureProfile&&kind==='temperature-lapse';
+    column.hidden=!visible;
+    if(!visible)return;
+    var tracer=root.CurvatureRayTracer;
+    if(!tracer||typeof tracer.atmosphere!=='function')return;
+    var atmosphere=tracer.atmosphere(kind,profile),ramp=column.querySelector('.modern-temperature-ramp');
+    if(!ramp)return;
+    var stops=[];
+    for(var i=0;i<=12;i++){
+      var height=2000*(1-i/12);
+      stops.push(temperatureColor(atmosphere.temperatureCAt(height))+' '+(100*i/12).toFixed(2)+'%');
+    }
+    ramp.style.background='linear-gradient(to bottom, '+stops.join(',')+')';
+    var top=column.querySelector('.modern-temperature-top'),bottom=column.querySelector('.modern-temperature-bottom');
+    if(top)top.textContent=atmosphere.temperatureCAt(2000).toFixed(1)+' °C';
+    if(bottom)bottom.textContent=atmosphere.temperatureCAt(0).toFixed(1)+' °C';
+    column.setAttribute('aria-label','Temperature from 0 to 2 km: '+
+      atmosphere.temperatureCAt(0).toFixed(1)+' to '+atmosphere.temperatureCAt(2000).toFixed(1)+' degrees Celsius');
+  }
+  function syncTemperatureControls(){
+    var compare=state.compareConfig&&state.compareConfig[state.compareSelected];
+    [['Scene',state.temperatureProfile,state.atmosphere],
+      ['Compare',compare&&compare.temperatureProfile,compare&&compare.atmosphere]].forEach(function(row){
+      var prefix='ModernTemperature'+row[0],p=row[1],kind=row[2];
+      if(!p)return;
+      var fields={C:'temperatureC',Gradient:'gradientKPerKm',Pressure:'pressureHpa'};
+      Object.keys(fields).forEach(function(suffix){var node=newUiEl(prefix+suffix);
+        if(node)node.value=String(p[fields[suffix]]);});
+      var wrap=newUiEl(prefix+'Fields');if(wrap)wrap.hidden=kind!=='temperature-lapse';
+    });
+    var show=newUiEl('ModernShowTemperatureProfile');if(show)show.checked=state.showTemperatureProfile;
+    syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile);
+    if(state.compareConfig){
+      syncTemperatureColumn('A',state.compareConfig.A.atmosphere,state.compareConfig.A.temperatureProfile);
+      syncTemperatureColumn('B',state.compareConfig.B.atmosphere,state.compareConfig.B.temperatureProfile);
+    }
+  }
+  function bindTemperatureControls(){
+    [['Scene',false],['Compare',true]].forEach(function(row){
+      var prefix='ModernTemperature'+row[0],inCompare=row[1];
+      var fields={C:'temperatureC',Gradient:'gradientKPerKm',Pressure:'pressureHpa'};
+      Object.keys(fields).forEach(function(suffix){
+        var node=newUiEl(prefix+suffix);if(!node)return;
+        node.addEventListener('change',function(){
+          var old=inCompare?state.compareConfig[state.compareSelected].temperatureProfile:state.temperatureProfile;
+          try{
+            if(node.value.trim()==='')throw RangeError('A number is required');
+            var next=Object.assign({},old);next[fields[suffix]]=Number(node.value);
+            next=compareState.temperatureProfile(next);
+            if(inCompare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'temperatureProfile',next);
+            else{state.temperatureProfile=next;markCustom();}
+            syncTemperatureControls();redraw();
+          }catch(error){updateStatus('Invalid temperature profile: '+error.message,true);syncTemperatureControls();}
+        });
+      });
+    });
+    var toggle=newUiEl('ModernShowTemperatureProfile');
+    if(toggle)toggle.addEventListener('change',function(){
+      state.showTemperatureProfile=toggle.checked;syncTemperatureControls();scheduleExperimentSave();
+    });
   }
   function syncCompareEditor(){
     if(!compareState||!state.compareConfig)return;
@@ -789,6 +875,7 @@
       wrap.hidden=!['inverse-spherical','exponential-occlusion'].includes(spec.atmosphere);
     syncShimmerControls();
     syncVisibilityControls();
+    syncTemperatureControls();
     var radiusWrap=newUiEl('ModernModelRadiusWrap');
     if(radiusWrap)radiusWrap.hidden=spec.surface==='flat';
     var curvature=root.CurvaturePhysicalCurvature;
@@ -1280,7 +1367,7 @@
     }
     if(mode==='compare'&&compareState){
       if(!state.compareConfig)
-        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius);
+        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile);
       syncCompareEditor();
     }
     // Compare's source model retains Scene aiming for later, but the A/B clones
@@ -1353,6 +1440,7 @@
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
     var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius/1000);
     syncVisibilityControls();
+    syncTemperatureControls();
     var grid=el('ModernGrid');if(grid)grid.checked=model.showGrid!==0;
     var eye=newUiEl('ModernCompareEyeLevel');if(eye)eye.checked=state.compareEyeLevel;
     var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
@@ -1414,6 +1502,7 @@
       cancelEdits();
       adapter.applyPreset(model,id);
       state.preset=id;state.atmosphere='standard';state.occlusionRadius=6371000;
+      state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
       model.Update();syncNumericInputs();
       var preset=el('ModernPreset');if(preset)preset.value=id;
       redraw();
@@ -1472,7 +1561,7 @@
     ModernCurvature:'Surface curvature is κ = 1/R. The far-right endpoint is exactly flat (κ = 0), not merely a very large sphere.',
     ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
     ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',
-    ModernAtmosphere:'Controls how light propagates. Vacuum has straight rays; Standard refracts; engineered profiles have separate parameters.',
+    ModernAtmosphere:'Controls how light propagates. Vacuum has straight rays; Standard is fixed, Temperature gradient uses a hydrostatic boundary layer, and engineered profiles have separate parameters.',
     ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.',
     ModernGrid:'Metric guide lines are measured along the actual surface and do not determine the optical horizon.'
   };
@@ -1518,6 +1607,7 @@
     bindCompareEditor();
     bindShimmerControls();
     bindVisibilityControls();
+    bindTemperatureControls();
     bindGpuDiagnostics();
     bindPerformanceDiagnostics();
     bindGeometryBackend();

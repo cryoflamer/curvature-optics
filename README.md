@@ -70,3 +70,7 @@ This is an automated regression gate, **not** a substitute for checking animatio
 ## Modern Demos — all nine original animations (#140.12.78)
 
 In Modern, the **Demos** tab embeds all nine original Legacy animation families. Choose a demonstration, then use Play/Pause, Previous/Next and Restart controls. This is one isolated, lazily loaded iframe backed by the original fast Legacy renderer—not a conversion to RK4. Switching families stops playback and starts the selected demonstration at its first key state. Scene/Compare and opt-in Legacy diagnostics (`CurvatureApp.html?ui=legacy`) continue to work. See [user guide](docs/user-guide.md).
+
+### Temperature gradient in Modern (#140.12.94)
+
+In **Scene/Compare → Atmosphere**, select **Temperature gradient · hydrostatic** to control surface temperature (°C), local surface lapse rate (K/km) and pressure (hPa). In Compare, A and B have **independent** temperature atmospheres; atmospheric extinction/haze remains shared. **Display → Show temperature column (0–2 km)** overlays a switchable color column on each temperature-model image. It is a visual altitude legend, not a change to rays or a pixel-aligned height map. The settings and toggle are saved in experiment URLs/JSON. Existing fixed Standard and Legacy optics are unchanged. Read [the model's physics, validity domain and caveats](docs/temperature-gradient-modern.md) before interpreting inversion experiments.

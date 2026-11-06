@@ -11,7 +11,7 @@
   var CAMERA=['Height','FocalLengthField','Pan','Nick','Roll'];
   var OBJECT=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
-  var ATMOSPHERE=['vacuum','standard','inverse-spherical','exponential-occlusion'];
+  var ATMOSPHERE=['vacuum','standard','temperature-lapse','inverse-spherical','exponential-occlusion'];
   var SCENE_PRESETS=['pontchartrain','single','rows','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}
@@ -37,17 +37,19 @@
       surface:{showModel:model.showModel,rEarth:model.rEarth},
       atmosphere:scene.atmosphere,occlusionRadius:scene.occlusionRadius,
       visibility:scene.visibility||{enabled:false,rangeKm:60},
+      temperatureProfile:scene.temperatureProfile||{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
       showGrid:model.showGrid!==0,preset:scene.preset,resetPreset:scene.resetPreset,
       title:model.DemoText||'',description:model.Description||''},
       compare:{A:compare.A,B:compare.B,preset:compare.preset,selected:ui.selected},
       display:{mode:ui.mode,eyeLevel:ui.eyeLevel,horizon:ui.horizon,
-        gpuProbe:ui.gpuProbe===true,probeTargets:ui.probeTargets||256}});
+        gpuProbe:ui.gpuProbe===true,probeTargets:ui.probeTargets||256,
+        showTemperatureProfile:ui.showTemperatureProfile===true}});
   }
   function validate(value){
     shape(value,['version','scene','compare','display']);
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
-    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility']);
+    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile']);
     shape(s.camera,CAMERA.concat(['viewcenterHorizon','deviceRatio']));
     var camera={};
     var ranges={Height:[0.001,1e9],FocalLengthField:[1,100000],Pan:[-360,360],
@@ -73,13 +75,19 @@
       shape(v,['enabled','rangeKm']);
       return {enabled:bool(v.enabled),rangeKm:num(v.rangeKm,1,500)};
     }
+    function temperatureProfile(v){
+      if(v===undefined)return {temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
+      shape(v,['temperatureC','pressureHpa','gradientKPerKm']);
+      return {temperatureC:num(v.temperatureC,-30,40),pressureHpa:num(v.pressureHpa,800,1100),
+        gradientKPerKm:num(v.gradientKPerKm,-20,20)};
+    }
     var c=value.compare;
     shape(c,['A','B','preset','selected']);
     function physics(p){
-      shape(p,['surface','radiusKm','atmosphere','occlusionRadius'],['visibility']);
+      shape(p,['surface','radiusKm','atmosphere','occlusionRadius'],['visibility','temperatureProfile']);
       return {surface:choice(p.surface,['globe','flat']),radiusKm:num(p.radiusKm,100,1e13),
         atmosphere:choice(p.atmosphere,ATMOSPHERE),occlusionRadius:num(p.occlusionRadius,1,1e16),
-        visibility:visibility(p.visibility)};
+        visibility:visibility(p.visibility),temperatureProfile:temperatureProfile(p.temperatureProfile)};
     }
     // Historical links can have independent A/B haze settings. Compare now
     // uses a shared value: migrate deterministically from A on every import.
@@ -87,12 +95,12 @@
     compareB.visibility=Object.assign({},compareA.visibility);
     var d=value.display;
     // Probe fields are optional for links saved before the GPU Compare experiment.
-    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets'].includes(k);})||
+    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets','showTemperatureProfile'].includes(k);})||
       !['mode','eyeLevel','horizon'].every(function(k){return Object.prototype.hasOwnProperty.call(d,k);}))
       throw RangeError('Invalid experiment display fields');
     return {version:VERSION,scene:{camera:camera,objects:objects,surface:surface,
       atmosphere:choice(s.atmosphere,ATMOSPHERE),occlusionRadius:num(s.occlusionRadius,1,1e16),
-      visibility:visibility(s.visibility),
+      visibility:visibility(s.visibility),temperatureProfile:temperatureProfile(s.temperatureProfile),
       showGrid:bool(s.showGrid),preset:choice(s.preset,SCENE_PRESETS),
       resetPreset:choice(s.resetPreset,SCENE_PRESETS.slice(0,3)),
       title:title(s.title,160),description:title(s.description,500)},
@@ -100,7 +108,8 @@
         selected:choice(c.selected,['A','B'])},
       display:{mode:choice(d.mode,['scene','compare']),eyeLevel:bool(d.eyeLevel),horizon:bool(d.horizon),
         gpuProbe:d.gpuProbe===undefined?false:bool(d.gpuProbe),
-        probeTargets:d.probeTargets===undefined?256:choice(d.probeTargets,[128,256,512,1024])}};
+        probeTargets:d.probeTargets===undefined?256:choice(d.probeTargets,[128,256,512,1024]),
+        showTemperatureProfile:d.showTemperatureProfile===undefined?false:bool(d.showTemperatureProfile)}};
   }
   function encode(value){
     var json=JSON.stringify(validate(value));
