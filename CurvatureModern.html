@@ -57,8 +57,8 @@
 <script src="src/ui/modern/ModernAtmosphericPresentation.js?v=138.4"></script>
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=140.12.74"></script>
-<script src="src/ui/modern/ModernCompareState.js?v=140.12.91"></script>
-<script src="src/ui/modern/ModernExperimentState.js?v=140.12.91"></script>
+<script src="src/ui/modern/ModernCompareState.js?v=140.12.92"></script>
+<script src="src/ui/modern/ModernExperimentState.js?v=140.12.92"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
@@ -206,8 +206,8 @@
           <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any">
           <p class="modern-note modern-radius-draft" id="ModernModelOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
         <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
-        <div class="modern-visibility" aria-label="Selected Compare model atmospheric visibility">
-          <label class="modern-check" for="ModernModelVisibilityEnabled"><input id="ModernModelVisibilityEnabled" type="checkbox"> Atmospheric extinction / haze</label>
+        <div class="modern-visibility" aria-label="Shared Compare atmospheric visibility for both models">
+          <label class="modern-check" for="ModernModelVisibilityEnabled"><input id="ModernModelVisibilityEnabled" type="checkbox"> Atmospheric extinction / haze (both models)</label>
           <div class="modern-field" id="ModernModelVisibilityOptions" hidden><label for="ModernModelVisibilityRange">Visibility range (km · 5% contrast)</label>
             <input id="ModernModelVisibilityRange" type="number" min="1" max="500" step="1" value="60"></div>
           <p class="modern-note">Optional distance-based airlight approximation. Independent of refraction; no change to ray paths or occlusion. White background, uniform extinction.</p>
@@ -298,7 +298,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.91&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.92&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>

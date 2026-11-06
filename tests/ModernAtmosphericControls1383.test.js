@@ -256,7 +256,7 @@ test('138.4: Scene 60Hz and Compare 30Hz GPU draw caps leave physical optics unc
   assert.equal(t.physics,optics,'the GPU scheduler never retraces physical rays');
 });
 
-test('Atmospheric extinction controls retain independent Scene and Compare A/B ranges',()=>{
+test('Atmospheric extinction controls retain independent Scene and shared Compare A/B ranges',()=>{
   const t=boot(),n=t.nodes;
   for(const prefix of ['ModernVisibility','ModernModelVisibility']){
     for(const suffix of ['Enabled','Range','Options'])assert.ok(n.has(prefix+suffix),prefix+suffix);
@@ -275,16 +275,32 @@ test('Atmospheric extinction controls retain independent Scene and Compare A/B r
   const compareRange=n.get('ModernModelVisibilityRange');compareRange.value='12';compareRange.dispatch('change');t.flush();
   assert.equal(t.app.getCompareConfig().A.visibility.rangeKm,12);
   assert.equal(t.app.getCompareConfig().A.visibility.enabled,true);
+  assert.equal(t.app.getCompareConfig().B.visibility.rangeKm,12);
+  assert.equal(t.app.getCompareConfig().B.visibility.enabled,true);
   n.get('ModernModelTabB').dispatch('click');
-  assert.equal(n.get('ModernModelVisibilityEnabled').checked,false);
-  assert.equal(n.get('ModernModelVisibilityRange').value,'60');
-  n.get('ModernModelVisibilityEnabled').checked=true;n.get('ModernModelVisibilityEnabled').dispatch('change');t.flush();
+  assert.equal(n.get('ModernModelVisibilityEnabled').checked,true);
+  assert.equal(n.get('ModernModelVisibilityRange').value,'12');
+  const compareOff=n.get('ModernModelVisibilityEnabled');
+  compareOff.checked=false;compareOff.dispatch('change');t.flush();
   const config=t.app.getCompareConfig();
   assert.equal(config.A.visibility.rangeKm,12);
-  assert.equal(config.B.visibility.rangeKm,60);
-  assert.equal(t.renderOptions.at(-1).visibility.rangeKm,60);
+  assert.equal(config.B.visibility.rangeKm,12);
+  assert.equal(config.A.visibility.enabled,false);
+  assert.equal(config.B.visibility.enabled,false);
+  assert.equal(t.renderOptions.at(-1).visibility.enabled,false);
   n.get('ModernModelTabA').dispatch('click');
+  assert.equal(n.get('ModernModelVisibilityEnabled').checked,false);
   assert.equal(n.get('ModernModelVisibilityRange').value,'12');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernModelVisibilityEnabled').checked=true;
+  n.get('ModernModelVisibilityEnabled').dispatch('change');t.flush();
+  n.get('ModernModelVisibilityRange').value='42';
+  n.get('ModernModelVisibilityRange').dispatch('change');t.flush();
+  assert.equal(t.app.getCompareConfig().A.visibility.rangeKm,42);
+  assert.equal(t.app.getCompareConfig().B.visibility.rangeKm,42);
+  assert.equal(t.renderOptions.at(-1).visibility.rangeKm,42);
+  n.get('ModernModelTabA').dispatch('click');
+  assert.equal(n.get('ModernModelVisibilityRange').value,'42');
   n.get('ModernSceneTab').dispatch('click');
   assert.equal(n.get('ModernVisibilityRange').value,'25');
 });

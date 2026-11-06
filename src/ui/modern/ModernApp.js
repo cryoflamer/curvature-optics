@@ -377,7 +377,7 @@
     state.atmosphere=scene.atmosphere;state.occlusionRadius=scene.occlusionRadius;
     state.visibility=Object.assign({},scene.visibility);
     state.preset=scene.resetPreset;
-    state.compareConfig={A:data.compare.A,B:data.compare.B,preset:data.compare.preset};
+    state.compareConfig=compareState.sharedVisibility({A:data.compare.A,B:data.compare.B,preset:data.compare.preset});
     state.compareSelected=data.compare.selected;
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
     state.mode=data.display.mode;
@@ -814,7 +814,7 @@
   }
   function syncVisibilityControls(){
     [['ModernVisibility',state.visibility],
-      ['ModernModelVisibility',state.compareConfig&&state.compareConfig[state.compareSelected]]].forEach(function(row){
+      ['ModernModelVisibility',state.compareConfig&&state.compareConfig.A]].forEach(function(row){
       var config=row[1]&&row[1].visibility||row[1],prefix=row[0];
       if(!config)return;
       var checkbox=newUiEl(prefix+'Enabled'),range=newUiEl(prefix+'Range'),options=newUiEl(prefix+'Options');
@@ -828,7 +828,7 @@
       var prefix=row[0],compare=row[1];
       function change(field,value){
         try{
-          var current=compare?state.compareConfig[state.compareSelected].visibility:state.visibility;
+          var current=compare?state.compareConfig.A.visibility:state.visibility;
           var next=Object.assign({},current);next[field]=value;
           var validated=root.CurvatureAtmosphericVisibility.validate(next);
           if(compare)state.compareConfig=compareState.update(state.compareConfig,state.compareSelected,'visibility',validated);

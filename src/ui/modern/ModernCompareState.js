@@ -54,6 +54,15 @@
     return {A:Object.assign({},base,{visibility:Object.assign({},base.visibility)}),
       B:Object.assign({},base,{surface:'flat',visibility:Object.assign({},base.visibility)}),preset:'custom'};
   }
+  // Compare shares one airlight setting. Older saved A/B experiments may
+  // disagree: the former model A setting wins, regardless of the selected tab.
+  function sharedVisibility(config){
+    if(!config||!config.A||!config.B)throw RangeError('Invalid comparison configuration');
+    var common=visibility(config.A.visibility);
+    return Object.assign({},config,{
+      A:Object.assign({},config.A,{visibility:Object.assign({},common)}),
+      B:Object.assign({},config.B,{visibility:Object.assign({},common)})});
+  }
   function preset(id){
     var p=PRESETS[id];if(!p)throw RangeError('Unknown Compare preset');
     return {A:validate(p.A),B:validate(p.B),preset:id};
@@ -61,8 +70,15 @@
   function update(current,side,field,raw){
     if(!current||!['A','B'].includes(side)||!['surface','radiusKm','atmosphere','occlusionRadius','visibility'].includes(field))
       throw RangeError('Unknown comparison field');
-    var next=Object.assign({},current[side]);next[field]=raw;
-    var result=Object.assign({},current);result[side]=validate(next);result.preset='custom';
+    if(field==='visibility'){
+      var common=visibility(raw);
+      return Object.assign({},sharedVisibility(current),{
+        A:Object.assign({},validate(current.A),{visibility:Object.assign({},common)}),
+        B:Object.assign({},validate(current.B),{visibility:Object.assign({},common)}),preset:'custom'});
+    }
+    var normalized=sharedVisibility(current);
+    var next=Object.assign({},normalized[side]);next[field]=raw;
+    var result=Object.assign({},normalized);result[side]=validate(next);result.preset='custom';
     return result;
   }
   function pair(scene,config,base){
@@ -85,6 +101,6 @@
       ' · '+spec.atmosphere;
   }
   return Object.freeze({ATMOSPHERES:ATMOSPHERES,PRESETS:PRESETS,
-    finite:finite,visibility:visibility,validate:validate,fromScene:fromScene,initial:initial,
+    finite:finite,visibility:visibility,validate:validate,sharedVisibility:sharedVisibility,fromScene:fromScene,initial:initial,
     preset:preset,update:update,pair:pair,label:label});
 }));

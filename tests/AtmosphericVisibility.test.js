@@ -64,7 +64,7 @@ test('Globe and Flat Physical visuals fade by authored object distance, not hori
   }
 });
 
-test('Visibility settings are independent across Compare models and old links default to OFF',()=>{
+test('Visibility is shared across Compare models and old links default to OFF',()=>{
   const model={showModel:1,rEarth:6371000};
   const initial=compare.initial(model,'standard',6371000);
   assert.notStrictEqual(initial.A.visibility,initial.B.visibility);
@@ -73,7 +73,7 @@ test('Visibility settings are independent across Compare models and old links de
   const next=compare.update(initial,'B','visibility',{enabled:true,rangeKm:15});
   assert.deepEqual(next.B.visibility,{enabled:true,rangeKm:15});
   assert.deepEqual(initial.B.visibility,{enabled:false,rangeKm:60});
-  assert.deepEqual(next.A.visibility,{enabled:false,rangeKm:60});
+  assert.deepEqual(next.A.visibility,{enabled:true,rangeKm:15});
   assert.throws(()=>compare.update(initial,'A','visibility',{enabled:true,rangeKm:-1}));
   assert.deepEqual(experiments.validate({version:1,
     scene:{camera:{Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,viewcenterHorizon:3,deviceRatio:1.5},

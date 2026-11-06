@@ -81,6 +81,10 @@
         atmosphere:choice(p.atmosphere,ATMOSPHERE),occlusionRadius:num(p.occlusionRadius,1,1e16),
         visibility:visibility(p.visibility)};
     }
+    // Historical links can have independent A/B haze settings. Compare now
+    // uses a shared value: migrate deterministically from A on every import.
+    var compareA=physics(c.A),compareB=physics(c.B);
+    compareB.visibility=Object.assign({},compareA.visibility);
     var d=value.display;
     // Probe fields are optional for links saved before the GPU Compare experiment.
     if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets'].includes(k);})||
@@ -92,7 +96,7 @@
       showGrid:bool(s.showGrid),preset:choice(s.preset,SCENE_PRESETS),
       resetPreset:choice(s.resetPreset,SCENE_PRESETS.slice(0,3)),
       title:title(s.title,160),description:title(s.description,500)},
-      compare:{A:physics(c.A),B:physics(c.B),preset:choice(c.preset,PAIR_PRESETS),
+      compare:{A:compareA,B:compareB,preset:choice(c.preset,PAIR_PRESETS),
         selected:choice(c.selected,['A','B'])},
       display:{mode:choice(d.mode,['scene','compare']),eyeLevel:bool(d.eyeLevel),horizon:bool(d.horizon),
         gpuProbe:d.gpuProbe===undefined?false:bool(d.gpuProbe),

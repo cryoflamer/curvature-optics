@@ -183,15 +183,17 @@ test('140.12.9: GPU Compare mode and target count survive share URL and old link
   }
 });
 
-test('Atmospheric visibility survives Modern share URLs, JSON and old omitted fields',()=>{
+test('Shared Compare atmospheric visibility survives URLs, JSON and A/B legacy migration',()=>{
   const saved=experiment();
   saved.scene.visibility={enabled:true,rangeKm:55};
   saved.compare.A.visibility={enabled:true,rangeKm:17};
   saved.compare.B.visibility={enabled:false,rangeKm:90};
   const encoded=codec.encode(saved);
-  assert.deepEqual(codec.decode(encoded),saved);
+  const shared=JSON.parse(JSON.stringify(saved));
+  shared.compare.B.visibility={enabled:true,rangeKm:17};
+  assert.deepEqual(codec.decode(encoded),shared);
   assert.deepEqual(codec.readUrl(new URL(codec.urlWithExperiment(
-    'https://example.org/CurvatureModern.html',saved)).search),saved);
+    'https://example.org/CurvatureModern.html',saved)).search),shared);
   const old=experiment();
   delete old.scene.visibility;
   delete old.compare.A.visibility;
@@ -204,4 +206,25 @@ test('Atmospheric visibility survives Modern share URLs, JSON and old omitted fi
     const bad=JSON.parse(JSON.stringify(saved));bad.scene.visibility.rangeKm=invalid;
     assert.throws(()=>codec.validate(bad));
   }
+});
+
+test('Compare haze edits synchronize A/B without changing independent optics or Scene values',()=>{
+  const source=experiment();
+  source.scene.visibility={enabled:true,rangeKm:91};
+  const originalA={...source.compare.A},originalB={...source.compare.B};
+  const migrated=codec.validate(source);
+  const updated=compare.update(migrated.compare,'B','visibility',{enabled:true,rangeKm:27});
+  assert.deepEqual(updated.A.visibility,{enabled:true,rangeKm:27});
+  assert.deepEqual(updated.B.visibility,{enabled:true,rangeKm:27});
+  assert.notStrictEqual(updated.A.visibility,updated.B.visibility,'separate copies prevent accidental side effects');
+  assert.equal(updated.A.surface,originalA.surface);
+  assert.equal(updated.B.surface,originalB.surface);
+  assert.equal(updated.A.atmosphere,originalA.atmosphere);
+  assert.equal(updated.B.atmosphere,originalB.atmosphere);
+  const saved=codec.validate({...migrated,compare:{...updated,selected:'B'}});
+  assert.deepEqual(saved.scene.visibility,{enabled:true,rangeKm:91});
+  assert.deepEqual(saved.compare.A.visibility,{enabled:true,rangeKm:27});
+  assert.deepEqual(saved.compare.B.visibility,{enabled:true,rangeKm:27});
+  const restored=codec.decode(codec.encode(saved));
+  assert.deepEqual(restored,saved);
 });
