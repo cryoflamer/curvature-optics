@@ -9,12 +9,14 @@ The former standalone WebGPU optics harness and Modern's optional CPU research p
 
 **Experimental Fast Preview:** In Modern → Scene/Compare → Display, choose
 **Optical ray field → Fast Preview** to draw with cheaper approximate ray
-angles. Accurate RK4 remains the default and is restored manually; the
+angles, or **Auto** to show a throttled Fast Preview while navigating and
+restore Accurate RK4 on release/idle. Accurate RK4 remains the default; the
 near-horizon image may be incorrect. Fast Preview object detail can be
 selected manually or adapted to measured redraw cost (`Auto`); full object
 geometry remains intact in Accurate. Some profiles are not qualified and
-show an explicit error instead of silently using RK4. Auto-switching during
-navigation is not implemented. See [limits and tests](docs/fast-optical-preview.md).
+show an explicit error instead of silently using RK4 in manual Fast mode.
+In Auto, unsupported profiles do not render intermediate optical frames and
+return to Accurate when motion stops. See [limits and tests](docs/fast-optical-preview.md).
 
 **Modern camera navigation:** Shift + left drag moves the observer sideways and
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or

@@ -1816,3 +1816,18 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
   ignored by Accurate, including when a Preview LOD option is supplied.
 - `tools/benchmark-preview-lod.js` measures cold optical composition only.
   Browser painter performance and pixel discrepancies are not yet certified.
+
+
+### Automatic Fast Preview during camera navigation
+
+- The Modern optical-quality selector now supports opt-in `Auto`: qualified
+  camera motion temporarily uses throttled Fast Ray Field (at most one queued
+  frame, nominal 120 ms between scheduling), while release/idle restores
+  complete Accurate RK4 rendering with full tower detail.
+- Keyboard W/A/S/D/Q/E, camera pointer drag and Alt/Shift-wheel support this
+  policy, including shared Compare A/B camera and stride. Camera pointer
+  cancellation restores its starting pose. Auto LOD starts at stride 8 and
+  adapts to measured full frame cost. Unsupported profiles skip intermediate
+  Fast renders and finish with Accurate; manual Fast still fails explicitly.
+- Both the quality mode and Preview LOD remain transient UI preferences; no
+  experiment/Legacy state is altered. Tests cover transitions and coalescing.

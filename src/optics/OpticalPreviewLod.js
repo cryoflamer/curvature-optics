@@ -51,7 +51,7 @@
     var stride=1,average=null,fast=0;
     return Object.freeze({
       stride:function(){return stride;},
-      reset:function(){stride=1;average=null;fast=0;},
+      reset:function(initial){stride=initial===undefined?1:validateStride(initial);average=null;fast=0;},
       observe:function(ms){
         if(!Number.isFinite(ms)||ms<0)return stride;
         average=average===null?ms:average*0.65+ms*0.35;

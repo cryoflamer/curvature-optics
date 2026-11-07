@@ -74,21 +74,71 @@
   // Preview LOD is an ephemeral display preference, NOT experiment physics.
   // The same stride is used by both Compare viewports, so A/B always show
   // identical tower subsets even when their optical atmospheres differ.
+  // Auto is an opt-in navigation policy, never an optical field handed to
+  // the renderer. Fast is used only for qualified camera-motion samples;
+  // idle renders and unsupported profiles always retain Accurate.
+  var autoCameraActive=false,autoCameraLastFrame=-Infinity,autoCameraSettleTimer=null;
+  var AUTO_FRAME_INTERVAL_MS=120,AUTO_WHEEL_IDLE_MS=220;
+  function qualifiedFastProfile(atmosphere,surface,inverse){
+    return atmosphere==='vacuum'||atmosphere==='standard'||
+      (surface==='flat'&&(atmosphere==='exponential-occlusion'||
+        (atmosphere==='inverse-temperature'&&inverse&&inverse.weight===1)));
+  }
+  function autoPreviewSupported(){
+    if(state.mode==='demos'||state.demosActive)return false;
+    if(state.mode==='compare'){
+      if(!state.compareConfig)return state.atmosphere==='standard'||state.atmosphere==='vacuum';
+      return ['A','B'].every(function(side){var spec=state.compareConfig[side];
+        return spec&&qualifiedFastProfile(spec.atmosphere,spec.surface,spec.inverseProfile);
+      });
+    }
+    return qualifiedFastProfile(state.atmosphere,model.showModel===2?'flat':'globe',state.inverseProfile);
+  }
+  function effectiveOpticalQuality(){
+    return state.opticalQuality==='auto'?(autoCameraActive&&autoPreviewSupported()?'fast':'accurate'):
+      state.opticalQuality;
+  }
+  function clearAutoCameraSettle(){
+    if(autoCameraSettleTimer!==null){clearTimeout(autoCameraSettleTimer);autoCameraSettleTimer=null;}
+  }
+  function stopAutoCameraPreview(){
+    clearAutoCameraSettle();autoCameraActive=false;autoCameraLastFrame=-Infinity;
+  }
+  function requestAutoCameraPreview(){
+    if(state.opticalQuality!=='auto'||!autoPreviewSupported())return false;
+    if(!autoCameraActive){
+      autoCameraActive=true;autoCameraLastFrame=-Infinity;
+      // The first dense-scene frame should be inexpensive. Auto LOD will
+      // subsequently tune the stride from measured complete frame times.
+      if(state.previewDetail==='auto'&&previewLodControllers){
+        var scope=state.mode==='compare'?'compare':'Scene';
+        previewLodControllers[scope].reset(8);
+      }
+    }
+    var now=profileNow();
+    if(now-autoCameraLastFrame>=AUTO_FRAME_INTERVAL_MS&&state.frame===null){
+      autoCameraLastFrame=now;
+      redraw('camera-motion');
+    }
+    return true;
+  }
   var previewLodApi=root.CurvatureOpticalPreviewLod;
   var previewLodControllers=previewLodApi?{
     Scene:previewLodApi.createController(45),
     compare:previewLodApi.createController(70)}:null;
   function previewStride(view){
-    if(state.opticalQuality!=='fast')return 1;
+    if(effectiveOpticalQuality()!=='fast')return 1;
     if(state.previewDetail!=='auto')return Number(state.previewDetail);
     return previewLodControllers?previewLodControllers[view==='Scene'?'Scene':'compare'].stride():1;
   }
   function updatePreviewDetailStatus(){
     var selector=geometryUi('ModernPreviewDetail'),note=geometryUi('ModernPreviewDetailStatus');
-    if(selector)selector.disabled=state.opticalQuality!=='fast';
+    if(selector)selector.disabled=effectiveOpticalQuality()!=='fast'&&state.opticalQuality!=='auto';
     if(!note)return;
-    if(state.opticalQuality!=='fast'){
-      note.textContent='Accurate: all authored towers retained.';return;
+    if(effectiveOpticalQuality()!=='fast'){
+      note.textContent=state.opticalQuality==='auto'?
+        'Auto at rest: all towers in Accurate; selected LOD applies during motion.':
+        'Accurate: all authored towers retained.';return;
     }
     var scope=state.mode==='compare'?'compare':'Scene';
     var stride=previewStride(scope),result=scope==='Scene'?state.last:state.compareLast.B;
@@ -105,7 +155,8 @@
     selector.addEventListener('change',function(){
       state.previewDetail=['auto','1','2','4','8','16','32'].includes(selector.value)?selector.value:'auto';
       if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
-      updatePreviewDetailStatus();redraw();
+      updatePreviewDetailStatus();
+      if(state.opticalQuality!=='auto'||autoCameraActive)redraw();
     });
     updatePreviewDetailStatus();
   }
@@ -114,7 +165,7 @@
       fullBatch&&state.compareLast.A&&state.compareLast.B&&
       state.compareLast.A.opticalQuality==='fast'&&state.compareLast.B.opticalQuality==='fast'&&
       state.compareLast.A.previewLod&&state.compareLast.B.previewLod;
-    if(state.opticalQuality==='fast'&&state.previewDetail==='auto'&&
+    if(effectiveOpticalQuality()==='fast'&&state.previewDetail==='auto'&&
         previewLodControllers&&valid)previewLodControllers[scope].observe(ms);
     updatePreviewDetailStatus();
   }
@@ -123,7 +174,8 @@
     if(!select)return;
     select.value=state.opticalQuality;
     select.addEventListener('change',function(){
-      state.opticalQuality=select.value==='fast'?'fast':'accurate';
+      stopAutoCameraPreview();
+      state.opticalQuality=['fast','auto'].includes(select.value)?select.value:'accurate';
       updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
     });
     updateOpticalQualityStatus();
@@ -131,7 +183,9 @@
   function updateOpticalQualityStatus(message){
     var target=geometryUi('ModernOpticalQualityStatus');
     if(target)target.textContent=message||('Active: '+
-      (state.opticalQuality==='fast'?'Fast Preview (approximate; no RK4 fallback)':'Accurate (RK4)'));
+      (effectiveOpticalQuality()==='fast'?'Fast Preview (approximate; no RK4 fallback)':
+        state.opticalQuality==='auto'?'Auto · Accurate (RK4) at rest'+
+          (!autoPreviewSupported()?' · Fast unsupported for this profile':''):'Accurate (RK4)'));
   }
   // An unsupported Fast Preview must not leave a previously calculated frame
   // masquerading as the new camera/atmosphere state.
@@ -634,7 +688,7 @@
         visibility:state.visibility,temperatureProfile:state.temperatureProfile,
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
-        opticalQuality:state.opticalQuality,
+        opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('Scene')},
         forceColdOptics:state.opticalSample==='cold'
       });
@@ -650,7 +704,7 @@
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
         temperatureProfile:state.temperatureProfile,transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
-      if(state.opticalQuality==='fast'){
+      if(effectiveOpticalQuality()==='fast'){
         var fastHorizon=el('ModernHorizonStatusScene');
         if(fastHorizon)fastHorizon.textContent='Exact horizon: disabled in Fast Preview';
       }else if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
@@ -662,7 +716,7 @@
         backend:result.geometryBackend,cacheReused:result.cacheReused,
         opticalSample:state.opticalSample,opticalStages:result.opticalStages,
         opticalWork:result.opticalWork,fieldStats:result.fieldStats});
-      var fullStatus=(state.opticalQuality==='fast'?'Fast Preview · approximate':
+      var fullStatus=(effectiveOpticalQuality()==='fast'?'Fast Preview · approximate':
         (result.cacheReused?'Cached optics':'Physical optics'))+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
         ' fill triangles · '+result.unresolved+' unresolved · '+(result.geometryBackend||'Canvas 2D')+
@@ -673,8 +727,8 @@
       updateOpticalQualityStatus();
     }catch(error){
       state.last=null;
-      if(state.opticalQuality==='fast')clearUnavailablePreview(g);
-      updateOpticalQualityStatus(state.opticalQuality==='fast'?'Fast Preview: '+error.message:undefined);
+      if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
+      updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined);
       updateStatus('Physical renderer: '+error.message,true);
       if(root.console&&root.console.error)root.console.error('Modern Scene render:',error);
     }
@@ -693,12 +747,12 @@
         temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,
         transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
         inverseProfile:spec?spec.inverseProfile:state.inverseProfile,interactive:false,
-        geometryBackend:state.geometryBackend,opticalQuality:state.opticalQuality,
+        geometryBackend:state.geometryBackend,opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('compare')},
         forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
-      if(state.opticalQuality==='fast'){
+      if(effectiveOpticalQuality()==='fast'){
         // Preview sessions are created lazily: Accurate remains the ordinary
         // startup path, and A/B cannot evict each other's ray fields.
         if(!state.compareFastCache[side]&&root.CurvaturePhysicalSceneOptics&&
@@ -718,7 +772,7 @@
       state.compareLast[side]=result;
       updateGeometryBackendStatus(result);
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
-      if(state.opticalQuality==='fast'){
+      if(effectiveOpticalQuality()==='fast'){
         var approximateHorizon=el('ModernHorizonStatus'+side);
         if(approximateHorizon)approximateHorizon.textContent='Exact horizon: disabled in Fast Preview';
       }else if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
@@ -733,7 +787,7 @@
         opticalWork:result.opticalWork,fieldStats:result.fieldStats});
       var node=el('ModernCompareStatus'+side);
       if(node){
-        node.textContent=(state.opticalQuality==='fast'?'Fast Preview · approximate':'Computed optics')+
+        node.textContent=(effectiveOpticalQuality()==='fast'?'Fast Preview · approximate':'Computed optics')+
           (result.cacheReused?' (cached)':'')+
           ' · '+result.drawn+' contours · '+result.fillTriangles+' fills · '+
           result.unresolved+' unresolved'+
@@ -742,8 +796,8 @@
       }
     }catch(error){
       state.compareLast[side]=null;
-      if(state.opticalQuality==='fast')clearUnavailablePreview(g);
-      updateOpticalQualityStatus(state.opticalQuality==='fast'?'Fast Preview: '+error.message:undefined);
+      if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
+      updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined);
       var status=el('ModernCompareStatus'+side);
       if(status){status.textContent='Physical model '+side+': '+error.message;status.classList.toggle('is-error',true);}
       if(root.console&&root.console.error)root.console.error('Modern Compare '+side+':',error);
@@ -1411,7 +1465,7 @@
   function applyCameraPose(pose){
     if(!pose)return;
     checkedCameraPosition(pose);
-    stopCameraKeyboard(true);cancelCameraDrag();cancelEdits();cancelPending();
+    stopCameraKeyboard(true);abortCameraDrag();cancelEdits();cancelPending();
     CAMERA_POSE_FIELDS.forEach(function(key){model[key]=pose[key];});
     model.Update();markCustom();syncNumericInputs();redraw();
   }
@@ -1517,10 +1571,13 @@
   }
   function navigationKeyActive(){return Object.keys(navigationKeys).length>0;}
   function stopCameraKeyboard(deferRender){
+    var wasPreviewing=autoCameraActive;
+    stopAutoCameraPreview();
     if(navigationFrame!==null){cancelAnimationFrame(navigationFrame);navigationFrame=null;}
     Object.keys(navigationKeys).forEach(function(key){delete navigationKeys[key];});
     navigationStamp=null;navigationModifiers={fast:false,precise:false};
     if(navigationMoved){navigationMoved=false;markCustom();if(!deferRender)redraw();}
+    else if(wasPreviewing&&!deferRender)redraw();
   }
   function navigationTick(now){
     navigationFrame=null;
@@ -1536,7 +1593,8 @@
         catch(error){updateStatus('Navigation limit: '+error.message,true);stopCameraKeyboard();return;}
         Object.keys(next).forEach(function(k){model[k]=next[k];});
         navigationMoved=true;refreshNavigationCameraInputs();
-        updateStatus('Moving camera · release keys to calculate physical optics');
+        if(!requestAutoCameraPreview())
+          updateStatus('Moving camera · release keys to calculate physical optics');
       }
     }
     navigationFrame=requestAnimationFrame(navigationTick);
@@ -1677,7 +1735,9 @@
             CameraEast:model.CameraEast,CameraNorth:model.CameraNorth},
           referenceDistance:cameraReferenceDistance(),
           fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
-        if(cameraPreview){
+        var liveCameraDrag=state.opticalQuality==='auto'&&autoPreviewSupported();
+        if(liveCameraDrag)cancelPending();
+        if(cameraPreview&&!liveCameraDrag){
           var sides=state.mode==='compare'?['A','B']:['Scene'];
           cameraPreview.begin({source:view,viewports:sides.map(function(side){
             var graph=cameraViewport(side);
@@ -1693,7 +1753,8 @@
           })});
         }
         if(atmosphericPresentation){stopShimmerFrame();atmosphericPresentation.suspend();}
-        activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud};
+        activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud,
+          autoLive:liveCameraDrag,moved:false,startPose:liveCameraDrag?captureCameraPose():null};
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
       }catch(error){cancelCameraDrag();updateStatus('Camera drag: '+error.message,true);}
@@ -1703,7 +1764,16 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.move({x:event.clientX,y:event.clientY});
       if(Math.hypot(sample.dx,sample.dy)<2)return;
-      if(cameraPreview)cameraPreview.move(cameraMovePreview(sample));
+      if(active.autoLive){
+        try{
+          var position=sample.mode==='translate'?checkedCameraPosition(
+            root.CurvatureModernCameraInteraction.translate(sample)):
+            root.CurvatureModernCameraInteraction.angles(sample);
+          Object.keys(position).forEach(function(key){model[key]=position[key];});
+          active.moved=true;refreshNavigationCameraInputs();
+          requestAutoCameraPreview();
+        }catch(error){updateStatus('Camera drag: '+error.message,true);return;}
+      }else if(cameraPreview)cameraPreview.move(cameraMovePreview(sample));
       if(hud){
         if(sample.mode==='translate'){
           var position=root.CurvatureModernCameraInteraction.translate(sample);
@@ -1722,6 +1792,19 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.end({x:event.clientX,y:event.clientY});
       var changed=sample&&Math.hypot(sample.dx,sample.dy)>=2;
+      if(active.autoLive){
+        cancelCameraDrag();stopAutoCameraPreview();
+        if(!changed&&!active.moved)return;
+        try{
+          var finalCamera=sample.mode==='translate'?checkedCameraPosition(
+            root.CurvatureModernCameraInteraction.translate(sample)):
+            root.CurvatureModernCameraInteraction.angles(sample);
+          Object.keys(finalCamera).forEach(function(key){model[key]=finalCamera[key];});
+          markCustom();syncNumericInputs();redraw();
+        }catch(error){updateStatus('Camera drag: '+error.message,true);}
+        if(event.preventDefault)event.preventDefault();
+        return;
+      }
       cancelCameraDrag(changed,sample);
       if(!changed)return;
       try{
@@ -1750,11 +1833,11 @@
     });
     canvas.addEventListener('pointercancel',function(event){
       if(activeCameraPointer&&activeCameraPointer.canvas===canvas&&
-        activeCameraPointer.id===event.pointerId)cancelCameraDrag();
+        activeCameraPointer.id===event.pointerId)abortCameraDrag();
     });
     canvas.addEventListener('lostpointercapture',function(event){
       if(activeCameraPointer&&activeCameraPointer.canvas===canvas&&
-        activeCameraPointer.id===event.pointerId)cancelCameraDrag();
+        activeCameraPointer.id===event.pointerId)abortCameraDrag();
     });
   }
   // Shift+wheel zoom and Alt+wheel surface-parallel dolly are scoped to the
@@ -1805,17 +1888,34 @@
     },{passive:false});
   }
   function scheduleCameraWheelRedraw(){
+    if(state.opticalQuality==='auto'&&autoPreviewSupported()){
+      requestAutoCameraPreview();
+      clearAutoCameraSettle();
+      autoCameraSettleTimer=setTimeout(function(){
+        autoCameraSettleTimer=null;stopAutoCameraPreview();redraw();
+      },AUTO_WHEEL_IDLE_MS);
+      return;
+    }
     cancelPending();
     // Coalesce bursts of wheel input; the authoritative renderer, optical
     // cache, shared Compare cameras and persistence all update in redraw().
     state.timer=setTimeout(function(){state.timer=null;redraw();},90);
   }
+  function abortCameraDrag(){
+    var active=activeCameraPointer;
+    if(active&&active.autoLive&&active.startPose){
+      CAMERA_POSE_FIELDS.forEach(function(field){model[field]=active.startPose[field];});
+      stopAutoCameraPreview();
+      cancelCameraDrag();
+      syncNumericInputs();redraw();
+    }else cancelCameraDrag();
+  }
   function bindCameraDrag(){
     ['Scene','A','B'].forEach(bindCameraViewport);
     ['Scene','A','B'].forEach(bindFocalWheel);
-    if(root.addEventListener)root.addEventListener('blur',cancelCameraDrag);
+    if(root.addEventListener)root.addEventListener('blur',abortCameraDrag);
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden)cancelCameraDrag();
+      if(document.hidden)abortCameraDrag();
     });
   }
   var pendingCompareScope=null;
@@ -1836,6 +1936,7 @@
   function redraw(opticalSampleMode,compareSide){
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
+    var liveMotion=opticalSampleMode==='camera-motion';
     var sample=opticalSampleMode==='cold'||opticalSampleMode==='warm';
     state.opticalSample=sample?opticalSampleMode:null;
     // A targeted physical-input edit cannot invalidate the other viewport.
@@ -1845,14 +1946,14 @@
       !sample&&state.compareLast.A&&state.compareLast.B?compareSide:null;
     if(selected&&pendingCompareScope&&pendingCompareScope!==selected)selected=null;
     if(selected&&state.timer!==null)selected=null;
-    if(activeCameraPointer)cancelCameraDrag();
+    if(activeCameraPointer&&!liveMotion)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
     if(adapter&&adapter.refreshDescription)adapter.refreshDescription(model);
     var liveDescription=el('ModernSceneDescription');
     if(liveDescription)liveDescription.textContent=model.Description||'Custom physical scene';
     model.Update();refreshLabels();
-    scheduleExperimentSave();
+    if(!liveMotion)scheduleExperimentSave();
     if(state.mode==='compare'){
       if(!prepareCompare()){state.opticalSample=null;if(cameraPreview)cameraPreview.clear();return;}
       ['A','B'].forEach(function(side){
@@ -1921,8 +2022,9 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode){
+    stopAutoCameraPreview();
     if(mode!=='scene'&&mode!=='compare'&&mode!=='demos')throw RangeError('Invalid Modern UI mode');
-    stopCameraKeyboard(true);cancelCameraDrag();cancelEdits();stopShimmerFrame();
+    stopCameraKeyboard(true);abortCameraDrag();cancelEdits();stopShimmerFrame();
     if(atmosphericShimmer)atmosphericShimmer.resetClock();
     var demos=root.CurvatureModernDemos;
     var demosActive=mode==='demos';
@@ -2316,6 +2418,7 @@
     getGpuCapabilities:function(){return gpuSnapshot;},
     getGeometryBackend:function(){return state.geometryBackend;},
     getOpticalQuality:function(){return state.opticalQuality;},
+    getEffectiveOpticalQuality:effectiveOpticalQuality,
     getPreviewDetail:function(){return state.previewDetail;},
     getPreviewStride:function(scope){return previewStride(scope||'Scene');}};
 }(window));

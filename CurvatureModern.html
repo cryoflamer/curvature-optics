@@ -326,8 +326,9 @@
           <div class="modern-gpu-heading"><strong>Optical quality · experimental</strong></div>
           <div class="modern-field"><label for="ModernOpticalQuality">Optical ray field</label>
             <select id="ModernOpticalQuality"><option value="accurate" selected>Accurate · RK4 (reference)</option>
-              <option value="fast">Fast Preview · approximate</option></select></div>
-          <p class="modern-note">Fast Preview reuses the Modern painter with analytic/local-gradient rays; ground visibility near the horizon is approximate. Only Vacuum, Standard and the qualified Flat exponential endpoints are supported. Unsupported profiles show an explicit error, never a hidden RK4 fallback. The exact traced horizon annotation is disabled in Fast Preview. This setting is not saved in experiments.</p>
+              <option value="fast">Fast Preview · approximate</option>
+              <option value="auto">Auto · Fast while moving, Accurate at rest</option></select></div>
+          <p class="modern-note">Fast Preview reuses the Modern painter with analytic/local-gradient rays; ground visibility near the horizon is approximate. Only Vacuum, Standard and the qualified Flat exponential endpoints are supported. Unsupported profiles show an explicit error, never a hidden RK4 fallback. The exact traced horizon annotation is disabled in Fast Preview. Auto uses Fast during supported camera movement, then Accurate on release/idle. Unsupported atmospheres remain Accurate at rest and do not trigger heavy re-tracing during motion. This setting is not saved in experiments.</p>
           <div class="modern-field"><label for="ModernPreviewDetail">Fast Preview object detail</label>
             <select id="ModernPreviewDetail"><option value="auto" selected>Auto · frame budget</option>
               <option value="1">All towers</option><option value="2">Every 2nd</option>

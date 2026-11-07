@@ -131,7 +131,9 @@ function boot(){
     CurvatureModernCompareState:compare,CurvatureModernCompareModel:compareModel,
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
-    CurvatureMainCanvasRenderer:{renderPhysical(g,m){renders.push({...pose,East:m.CameraEast,North:m.CameraNorth,Height:m.Height,Pan:m.Pan});
+    CurvatureOpticalPreviewLod:require('../src/optics/OpticalPreviewLod'),
+    CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){renders.push({...pose,East:m.CameraEast,North:m.CameraNorth,Height:m.Height,Pan:m.Pan,
+      quality:opt.opticalQuality,stride:opt.previewLod.stride});
       return {drawn:12,fillTriangles:3,unresolved:0,timings:{opticsMs:1,canvasMs:1}};}},
     localStorage:{getItem(k){return storage.get(k)||null;},setItem(k,v){storage.set(k,v);}},
     performance:{now:()=>clock},
@@ -155,7 +157,8 @@ function boot(){
     preventDefault(){this.prevented=true;},...evt};
     for(const listener of globalListeners[name]||[])listener(event);return event;}
   return {app,win,document,nodes,renders,storage,canvas:sceneCanvas,flushFrames,dispatchGlobal,
-    flushTimers(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
+    flushTimers(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());},
+    get pendingFrames(){return frames.size;}};
 }
 
 test('Modern UI saves, renames, updates, restores and deletes camera-only poses',()=>{
@@ -242,4 +245,101 @@ test('keyboard speed preferences are separate from captured camera poses',()=>{
   const entry=h.app.getCameraPositions()[0];
   assert.ok(!Object.hasOwn(entry.camera,'speed'));
   assert.deepEqual(Object.keys(entry.camera).sort(),Object.keys(pose).sort());
+});
+
+
+test('Auto navigation samples Fast with bounded RAF work and restores Accurate on key release',()=>{
+  const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
+  selector.value='auto';selector.dispatch('change');h.flushFrames();
+  assert.equal(h.app.getOpticalQuality(),'auto');
+  assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
+  assert.equal(r.at(-1).quality,'accurate');
+  const begin=r.length;
+  h.dispatchGlobal('keydown',{code:'KeyW'});
+  for(let i=0;i<15;i++){
+    h.flushFrames(25);
+    assert.ok(h.pendingFrames<=2,'navigation plus at most one pending render');
+  }
+  const fast=r.slice(begin).filter(x=>x.quality==='fast');
+  assert.ok(fast.length>=2,'camera motion should paint multiple optical Preview samples');
+  assert.ok(fast.length<15,'Fast frames must be throttled');
+  assert.equal(fast[0].stride,8,'Auto LOD must begin coarse on dense scenes');
+  assert.ok(h.app.getModel().CameraNorth>0);
+  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames(16);
+  assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
+  assert.equal(r.at(-1).quality,'accurate');
+  assert.equal(r.at(-1).stride,1,'final frame must retain all towers');
+});
+
+test('Auto wheel renders Fast before a single deferred Accurate settle frame',()=>{
+  const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
+  selector.value='auto';selector.dispatch('change');h.flushFrames();
+  const begin=r.length;
+  for(let i=0;i<3;i++)h.canvas.dispatch('wheel',{
+    deltaY:-100,deltaX:0,deltaMode:0,altKey:true});
+  h.flushFrames(16);
+  assert.ok(r.slice(begin).some(x=>x.quality==='fast'));
+  h.flushTimers();h.flushFrames(16);
+  assert.equal(r.at(-1).quality,'accurate');
+  assert.equal(r.at(-1).stride,1);
+});
+
+test('Auto pointer drag projects live Fast and commits an Accurate frame at release',()=>{
+  const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
+  selector.value='auto';selector.dispatch('change');h.flushFrames();
+  const pan=h.app.getModel().Pan,begin=r.length;
+  const pointer={button:0,pointerId:2,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:90,clientY:70});
+  h.flushFrames(16);
+  assert.notEqual(h.app.getModel().Pan,pan);
+  assert.ok(r.slice(begin).some(x=>x.quality==='fast'));
+  h.canvas.dispatch('pointerup',{...pointer,clientX:90,clientY:70});
+  h.flushFrames(16);
+  assert.equal(r.at(-1).quality,'accurate');
+  assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
+});
+
+test('Auto never draws Fast for unqualified atmospheric profiles',()=>{
+  const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
+  const atmosphere=h.nodes.get('ModernAtmosphere');
+  atmosphere.value='temperature-lapse';atmosphere.dispatch('change');h.flushFrames();
+  selector.value='auto';selector.dispatch('change');h.flushFrames();
+  const begin=r.length;
+  h.dispatchGlobal('keydown',{code:'KeyW'});
+  for(let i=0;i<8;i++)h.flushFrames(50);
+  assert.equal(r.length,begin,'no expensive rendering should run while an unsupported camera is moving');
+  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames(16);
+  assert.equal(r.at(-1).quality,'accurate');
+  assert.ok(r.slice(begin).every(x=>x.quality==='accurate'));
+});
+
+test('Auto Compare uses the same Fast LOD for both sides and restores both Accurate',()=>{
+  const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
+  h.nodes.get('ModernCompareTab').dispatch('click');h.flushFrames(16);
+  selector.value='auto';selector.dispatch('change');h.flushFrames(16);
+  const begin=r.length;
+  h.dispatchGlobal('keydown',{code:'KeyW'});
+  h.flushFrames(140);h.flushFrames(16);
+  const fast=r.slice(begin).filter(x=>x.quality==='fast');
+  assert.equal(fast.length,2,'A and B must render Fast in the same batch');
+  assert.equal(fast[0].stride,fast[1].stride);
+  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames(16);
+  assert.deepEqual(r.slice(-2).map(x=>x.quality),['accurate','accurate']);
+  assert.deepEqual(r.slice(-2).map(x=>x.stride),[1,1]);
+});
+
+test('Cancelling an Auto camera drag restores initial pose and Accurate optics',()=>{
+  const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
+  selector.value='auto';selector.dispatch('change');h.flushFrames();
+  const model=h.app.getModel(),originalPan=model.Pan;
+  const pointer={button:0,pointerId:2,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:140,clientY:100});
+  h.flushFrames(16);
+  assert.notEqual(model.Pan,originalPan);
+  h.canvas.dispatch('pointercancel',pointer);h.flushFrames(16);
+  assert.equal(model.Pan,originalPan);
+  assert.equal(r.at(-1).quality,'accurate');
+  assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
 });

@@ -39,10 +39,12 @@ uses this by default).
 
 Mouse movement sensitivity depends on the field of view and weighted scene
 object distances captured at the start of the drag. Alt + wheel moves a bounded
-fraction of this reference distance per notch. Preview drags are an approximate
+fraction of this reference distance per notch. With ordinary Accurate selected, preview drags are an approximate
 CSS image shift; actual perspective, parallax and refractive visibility are
-recomputed on release. A short sequence of wheel inputs is coalesced into one
-physical redraw.
+recomputed on release. In **Display → Optical ray field → Auto**, qualified
+profiles instead use throttled Fast optical projections while dragging, with
+Accurate recomputed on release. Wheel events are similarly coalesced and
+refined after a short idle period.
 
 The signed observer position is displayed in **Camera** settings and saved
 in the Modern experiment state, including URL sharing, JSON and the library.
@@ -73,9 +75,12 @@ Demos and Legacy never receive Modern navigation events.
 These keys can be held together. Translation in multiple directions is
 normalized so diagonals do not move faster. Keyboard movement is integrated
 from elapsed time with bounded steps, with numeric values updated immediately,
-but the **expensive optical redraw happens on key release**. This deliberately
-avoids attempting 60 optical recomputations per second. There is no live
-physical animation of intermediate keyboard positions yet. The browser/OS may
+and with **Accurate** selected the expensive optical redraw happens on key
+release. When **Auto** is selected, eligible profiles instead render Fast
+optical snapshots at a bounded cadence (at most one pending renderer frame),
+then one complete Accurate image after release. This is not 60 FPS physical
+rendering: frames may take longer than the requested 120 ms interval.
+Unsupported profiles retain the release-only Accurate workflow. The browser/OS may
 intercept certain Ctrl shortcuts before the application receives them.
 
 The Camera sidebar has `East` and `North` numeric fields, in metres, alongside

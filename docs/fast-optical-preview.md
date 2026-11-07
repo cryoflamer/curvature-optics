@@ -1,11 +1,12 @@
 # Fast optical preview — mathematical field and experimental Modern renderer
 
 `src/optics/OpticalFastRayField.js` is a cheap ray-field alternative to the
-Accurate RK4 implementation. **Modern Scene/Compare now offer an explicit
-Display → Optical ray field → Fast Preview** manual choice. The same physical
+Accurate RK4 implementation. **Modern Scene/Compare offer an explicit
+Display → Optical ray field → Fast Preview** manual choice and an **Auto**
+navigation mode. The same physical
 scene composer, camera, painter, foundation polygons and Canvas remain in use.
-The default is **Accurate · RK4**, and camera interactions do **not** yet
-switch to Fast automatically (Auto navigation is future work). Legacy is untouched.
+The default remains **Accurate · RK4**; selecting Auto enables temporary
+Fast optical frames while moving the camera and full Accurate after stopping. Legacy is untouched.
 
 ## API and units
 
@@ -149,3 +150,40 @@ should not be counted as an incorrect occlusion or silent success.
   automatic switching between Fast and Accurate during camera motion.
 - Keep exact caches, exact horizon/ground events and final offline animation
   rendering completely independent of Preview.
+
+
+## Auto navigation mode
+
+- **Optical ray field → Auto** is opt-in and not part of experiment JSON/URL.
+  At rest it uses Accurate (full towers, independent RK4 caches). For supported
+  Scene/Compare atmospheric profiles, pressing and holding camera navigation
+  keys, dragging the camera, or using Alt/Shift + wheel produces **Fast**
+  projections; the final released/idle camera is recomputed with Accurate.
+- The Fast path is limited to at most one pending physical repaint and a
+  nominal **120 ms** interval between newly scheduled frames. This is **not** a
+  guaranteed FPS: a synchronous Canvas/optical draw still blocks the UI while
+  it runs. The first frame of each Auto LOD navigation sequence starts with
+  every eighth tower to avoid a dense-scene cold-frame delay; the measured
+  budget controller then adapts subsequent images. A manually chosen LOD
+  stride is respected. Both Compare sides use a common stride.
+- Wheel bursts restore Accurate approximately **220 ms** after the last input.
+  A pointer drag restores Accurate on release; a cancelled pointer drag
+  restores the original pose. Keyboard movement completes with Accurate on
+  key release. The prior CSS-only drag preview is preserved for manual
+  Accurate and Fast modes.
+- Auto only activates Fast when **all** affected viewports are qualified:
+  Vacuum/Standard for either surface, or the qualified Flat engineered
+  exponential profiles (including inverse temperature at 100%). Unsupported
+  atmospheres **do not** trigger repeated RK4 during keyboard movement; the
+  final released pose is rendered Accurate. Manual Fast still reports an
+  explicit unsupported-profile error rather than falling back to RK4.
+- Preview-only unresolved rays near grazing contact remain approximate
+  and may cause missing silhouettes. The `unresolved` count is a number of
+  unresolved projected fragments, not a number of failed towers. It tends
+  to increase with full geometry; thinning reduces the number of candidate
+  fragments and must not change the physics or Accurate result.
+- Tests in `tests/ModernCameraNavigation.test.js` exercise Auto's frame
+  throttling, scene/Compare quality transitions, wheel settling, pointer
+  cancel, LOD restoration and unsupported profiles. Browser visual and
+  long-session interaction tests remain necessary before relying on an FPS
+  target, especially in high-object-count experiments.

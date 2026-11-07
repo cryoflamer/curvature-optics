@@ -40,6 +40,8 @@ test('auto frame-budget controller decreases density quickly but restores it wit
   for(let i=0;i<2;i++)assert.equal(c.observe(4),4);
   assert.equal(c.observe(4),2);
   assert.equal(c.observe(4),2);
+  c.reset(8);assert.equal(c.stride(),8,'Auto navigation can seed a cheap first frame');
+  assert.throws(()=>c.reset(3),/Invalid Fast Preview/);
   c.reset();assert.equal(c.stride(),1);
   assert.throws(()=>lod.createController(0),/budget/);
 });
