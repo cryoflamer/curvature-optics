@@ -309,6 +309,7 @@
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
     Height:15,FocalLengthField:2000,Roll:0,Nick:0.0121,Pan:0.0464,
+    CameraEast:0,CameraNorth:0,
     viewcenterHorizon:3,showModel:1,showGrid:1,showData:false,
     showTangent:false,showEyeLevel:false,deviceRatio:1.5,
     ObjType:[3,3],NObjects:[85,2],ObjDist:[50,25550],ObjDeltaDist:[297.55,373],
@@ -1257,6 +1258,35 @@
     if(state.frame!==null){cancelAnimationFrame(state.frame);state.frame=null;}
     pendingCompareScope=null;
   }
+  // A stable, scene-derived navigation scale keeps world movement usable at
+  // both near-field and kilometre-scale experiment distances. Mouse sensitivity
+  // is calibrated once at the start of a drag, never changed mid-gesture.
+  function cameraReferenceDistance(){
+    var sum=0,weight=0;
+    for(var i=0;i<2;i++){
+      var count=model.NObjects[i];
+      if(!(count>0))continue;
+      var midpoint=model.ObjDist[i]+(count-1)*model.ObjDeltaDist[i]/2;
+      if(!Number.isFinite(midpoint))continue;
+      sum+=Math.max(1,midpoint)*count;weight+=count;
+    }
+    return Math.max(10,Math.min(1e6,weight?sum/weight:1000));
+  }
+  function checkedCameraPosition(position){
+    var module=root.CurvatureCameraTranslation;
+    if(module&&typeof module.frame==='function')module.frame(position.CameraEast,position.CameraNorth,
+      position.Height===undefined?model.Height:position.Height,
+      model.showModel===2?0:1/model.rEarth);
+    else if(position.CameraEast!==0||position.CameraNorth!==0)
+      throw Error('Camera translation geometry is unavailable');
+    return position;
+  }
+  function cameraPositionText(){
+    return 'East '+model.CameraEast.toFixed(2)+' m · North '+model.CameraNorth.toFixed(2)+' m';
+  }
+  function cameraMovePreview(sample){
+    return sample&&sample.mode==='translate'?{mode:'translate',dx:-sample.dx,dy:-sample.dy}:sample;
+  }
   // 137.2: the existing raster Canvas is compositor-translated during drag.
   // The shared physical model remains untouched until the final pointerup.
   var activeCameraPointer=null;
@@ -1282,7 +1312,7 @@
     activeCameraPointer=null;
     if(cameraInteraction)cameraInteraction.cancel();
     if(cameraPreview){
-      if(keepPreview===true)cameraPreview.hold(sample);
+      if(keepPreview===true)cameraPreview.hold(cameraMovePreview(sample));
       else cameraPreview.clear();
     }
     if(keepPreview!==true&&atmosphericPresentation){
@@ -1328,7 +1358,10 @@
       try{
         cameraInteraction.begin({viewport:view,x:event.clientX,y:event.clientY,
           width:rect.width,height:rect.height,
-          camera:{Pan:model.Pan,Nick:model.Nick,Roll:model.Roll},
+          mode:event.shiftKey?'translate':'rotate',
+          camera:{Pan:model.Pan,Nick:model.Nick,Roll:model.Roll,Height:model.Height,
+            CameraEast:model.CameraEast,CameraNorth:model.CameraNorth},
+          referenceDistance:cameraReferenceDistance(),
           fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
         if(cameraPreview){
           var sides=state.mode==='compare'?['A','B']:['Scene'];
@@ -1356,10 +1389,16 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.move({x:event.clientX,y:event.clientY});
       if(Math.hypot(sample.dx,sample.dy)<2)return;
-      if(cameraPreview)cameraPreview.move(sample);
+      if(cameraPreview)cameraPreview.move(cameraMovePreview(sample));
       if(hud){
-        var target=root.CurvatureModernCameraInteraction.angles(sample);
-        hud.textContent='Pan '+target.Pan.toFixed(4)+'°  ·  Nick '+target.Nick.toFixed(4)+'°';
+        if(sample.mode==='translate'){
+          var position=root.CurvatureModernCameraInteraction.translate(sample);
+          hud.textContent='Height '+position.Height.toFixed(2)+' m · East '+
+            position.CameraEast.toFixed(2)+' m · North '+position.CameraNorth.toFixed(2)+' m';
+        }else{
+          var target=root.CurvatureModernCameraInteraction.angles(sample);
+          hud.textContent='Pan '+target.Pan.toFixed(4)+'°  ·  Nick '+target.Nick.toFixed(4)+'°';
+        }
         hud.hidden=false;
       }
       if(event.preventDefault)event.preventDefault();
@@ -1372,14 +1411,20 @@
       cancelCameraDrag(changed,sample);
       if(!changed)return;
       try{
-        var next=root.CurvatureModernCameraInteraction.angles(sample);
-        if(next.Pan===model.Pan&&next.Nick===model.Nick){
+        var next=sample.mode==='translate'?checkedCameraPosition(
+          root.CurvatureModernCameraInteraction.translate(sample)):
+          root.CurvatureModernCameraInteraction.angles(sample);
+        if(sample.mode==='translate'?next.Height===model.Height&&
+          next.CameraEast===model.CameraEast&&next.CameraNorth===model.CameraNorth:
+          next.Pan===model.Pan&&next.Nick===model.Nick){
           if(cameraPreview)cameraPreview.clear();
           if(atmosphericPresentation){atmosphericPresentation.resume();scheduleShimmerFrame();}
           return;
         }
         cancelEdits();
-        if(adapter){adapter.setCamera(model,'Pan',next.Pan);adapter.setCamera(model,'Nick',next.Nick);}
+        if(sample.mode==='translate'){
+          model.Height=next.Height;model.CameraEast=next.CameraEast;model.CameraNorth=next.CameraNorth;
+        }else if(adapter){adapter.setCamera(model,'Pan',next.Pan);adapter.setCamera(model,'Nick',next.Nick);}
         else{model.Pan=next.Pan;model.Nick=next.Nick;}
         markCustom();syncNumericInputs();redraw();
       }catch(error){
@@ -1398,7 +1443,9 @@
         activeCameraPointer.id===event.pointerId)cancelCameraDrag();
     });
   }
-  // Shift+wheel zoom is scoped to the canvas under the pointer. No shift:
+  // Shift+wheel zoom and Alt+wheel surface-parallel dolly are scoped to the
+  // canvas under the pointer. Neither combination changes Pan/Nick/Roll.
+  // No modifiers:
   // leave the browser's ordinary page scrolling entirely untouched.
   // Compare clones the common model in prepareCompare(), so one change here
   // always reaches A and B without changing either one's optical profile.
@@ -1411,14 +1458,24 @@
       // Some Windows/Opera configurations remap Shift+vertical wheel to
       // horizontal deltaX. Accept that delta only if deltaY is zero.
       var delta=event.deltaY||event.deltaX||0;
-      if(!event.shiftKey||event.altKey||event.ctrlKey||event.metaKey||
+      if((!event.shiftKey&&!event.altKey)||(event.shiftKey&&event.altKey)||
+         event.ctrlKey||event.metaKey||
          delta===0||activeCameraPointer||
          (view==='Scene'&&state.mode!=='scene')||
          (view!=='Scene'&&state.mode!=='compare')||state.demosActive)return;
       var next;
-      try{next=interaction.focalWheel(model.FocalLengthField,delta,event.deltaMode);}
-      catch(error){updateStatus('Camera zoom: '+error.message,true);return;}
+      try{
+        if(event.altKey){
+          next=checkedCameraPosition(Object.assign({Height:model.Height},
+            interaction.dolly(model,delta,event.deltaMode,cameraReferenceDistance())));
+        }else next=interaction.focalWheel(model.FocalLengthField,delta,event.deltaMode);
+      }catch(error){updateStatus('Camera movement: '+error.message,true);return;}
       if(event.preventDefault)event.preventDefault();
+      if(event.altKey){
+        if(next.CameraEast===model.CameraEast&&next.CameraNorth===model.CameraNorth)return;
+        cancelEdits();model.CameraEast=next.CameraEast;model.CameraNorth=next.CameraNorth;
+        markCustom();syncNumericInputs();scheduleCameraWheelRedraw();return;
+      }
       if(next===model.FocalLengthField)return;
       cancelEdits();
       if(adapter)adapter.setCamera(model,'FocalLengthField',next);
@@ -1430,10 +1487,10 @@
       var fov=el('ModernViewAngle');
       if(fov&&interaction.focalViewAngle)
         fov.value=String(Number(interaction.focalViewAngle(next).toFixed(4)));
-      scheduleFocalWheelRedraw();
+      scheduleCameraWheelRedraw();
     },{passive:false});
   }
-  function scheduleFocalWheelRedraw(){
+  function scheduleCameraWheelRedraw(){
     cancelPending();
     // Coalesce bursts of wheel input; the authoritative renderer, optical
     // cache, shared Compare cameras and persistence all update in redraw().
@@ -1660,6 +1717,8 @@
     });
   }
   function syncNumericInputs(){
+    var position=newUiEl('ModernCameraPositionInfo');
+    if(position)position.textContent=cameraPositionText();
     var pairs={ModernHeight:'Height',ModernFocal:'FocalLengthField',ModernPan:'Pan',
       ModernNick:'Nick',ModernRoll:'Roll'};
     Object.keys(pairs).forEach(function(id){var node=el(id);if(node)node.value=String(model[pairs[id]]);});

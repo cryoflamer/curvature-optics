@@ -14,10 +14,11 @@
     root.CurvatureSceneContract||(typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
     root.CurvatureScreenSpaceGuides||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides'):null),
     root.CurvaturePhysicalCamera||(typeof require==='function'?require('./CurvaturePhysicalCamera'):null),
-    root.CurvatureAtmosphericVisibility||(typeof require==='function'?require('../renderers/CurvatureAtmosphericVisibility'):null));
+    root.CurvatureAtmosphericVisibility||(typeof require==='function'?require('../renderers/CurvatureAtmosphericVisibility'):null),
+    root.CurvatureCameraTranslation||(typeof require==='function'?require('../geometry/CurvatureCameraTranslation'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility,cameraTranslation){
   'use strict';
   var opticalSession=optical.create();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
@@ -122,6 +123,12 @@
     var globe=m.showModel===1;
     var physicalModel=Object.assign({},m,{geometryRadius:m.rEarth});
     var composed=composition.composeOpticalMain(physicalModel,globe,{physicalWorld:true});
+    var east=m.CameraEast||0,north=m.CameraNorth||0;
+    if(east!==0||north!==0){
+      if(!cameraTranslation)throw Error('Camera translation module is unavailable');
+      composed=cameraTranslation.apply(composed,{east:east,north:north,height:m.Height,
+        curvature:globe?1/m.rEarth:0});
+    }
     var composedAt=now();
     // Explicit cold optical benchmark: discard only the camera-independent
     // ray/composition cache for THIS viewport. No physical parameters change.

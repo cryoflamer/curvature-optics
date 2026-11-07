@@ -30,7 +30,7 @@
   function invariant(pairResult){
     var a=pairResult.A,b=pairResult.B;
     var fields=['Height','FocalLengthField','Pan','Nick','Roll','deviceRatio',
-      'viewcenterHorizon','camViewAngle','showGrid'];
+      'viewcenterHorizon','camViewAngle','showGrid','CameraEast','CameraNorth'];
     var groups=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType',
       'ObjSidePos','ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
     return fields.every(function(key){return a[key]===b[key];})&&

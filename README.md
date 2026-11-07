@@ -7,6 +7,12 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 
 The former standalone WebGPU optics harness and Modern's optional CPU research panel were **removed from the active tree** in #140.12.74. Neither is required to run these applications. The **Check GPU** button only reports capabilities; it does **not** perform WebGPU optical calculations. See [research archive](docs/research-archive.md) for history and recovery.
 
+**Modern camera navigation:** Shift + left drag moves the observer sideways and
+changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or
+backward horizontally. Shift + wheel continues to zoom. The shared position is
+saved with Scene/Compare experiments. See [Modern camera navigation](docs/modern-camera-navigation.md)
+for coordinate semantics, spherical recentering and limitations.
+
 ## Run locally
 
 Serve the **repository root** with a static HTTP server (Python 3 is sufficient; no npm install or bundling is required for these entry points):

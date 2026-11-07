@@ -77,7 +77,7 @@
     function paint(){
       if(!entries)return;
       var target=null;
-      if(perspective&&angleMapping&&latestSample){
+      if(perspective&&angleMapping&&latestSample&&latestSample.mode!=='translate'){
         try{target=angleMapping(latestSample);}catch(ignore){target=null;}
       }
       entries.forEach(function(entry){

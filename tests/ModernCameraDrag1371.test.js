@@ -91,6 +91,7 @@ function harness(options={}){
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0],
     Update(){this.updated=(this.updated||0)+1;}});}
   const window={CurveAppClass:Model,
+    CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
     CurvatureModernSceneState:require('../src/ui/modern/ModernSceneState'),
     CurvatureModernCameraInteraction:interaction,
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
@@ -397,4 +398,77 @@ test('140.12.93: zoomed focal value round-trips through existing saved experimen
   const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html',snapshot);
   close(codec.readUrl(new URL(url).search).scene.camera.FocalLengthField,2200);
   assert.equal(snapshot.scene.camera.Pan,model.Pan);
+});
+
+
+test('Camera position: Shift+drag translates Scene without changing Pan/Nick/Roll or authored objects',()=>{
+  const h=harness({deferred:true,perspective:true});h.flush();
+  const canvas=h.canvases.Scene,model=h.app.getModel();
+  const before=h.draws.length,pan=model.Pan,nick=model.Nick,roll=model.Roll;
+  const originalDistance=model.ObjDist[0],originalSide=model.ObjSidePos[0];
+  canvas.emit('pointerdown',{shiftKey:true});
+  canvas.emit('pointermove',{clientX:100,clientY:30,shiftKey:false});
+  h.flush();
+  assert.equal(canvas.style.transform,'translate3d(-60px, 40px, 0)',
+    'translation preview is not the perspective rotation warp');
+  assert.match(canvas.parentNode.child.textContent,/Height .*East .*North/);
+  assert.equal(h.draws.length,before,'physical computation is deferred until release');
+  assert.equal(model.Height,15);
+  canvas.emit('pointerup',{clientX:100,clientY:30});
+  assert.ok(model.Height>15);
+  assert.ok(model.CameraEast>0);
+  assert.ok(model.CameraNorth<0);
+  assert.equal(model.Pan,pan);assert.equal(model.Nick,nick);assert.equal(model.Roll,roll);
+  assert.equal(model.ObjDist[0],originalDistance);assert.equal(model.ObjSidePos[0],originalSide);
+  h.flush();
+  assert.equal(h.draws.length,before+1);
+  assert.equal(canvas.style.transform,'');
+  assert.equal(h.nodes.get('ModernHeight').value,String(model.Height));
+  assert.equal(h.nodes.get('ModernPreset').value,'custom');
+});
+
+test('Camera position: Compare Shift+drag and Alt+wheel share translated observer across A/B',()=>{
+  const h=harness({deferred:true,deferredWheel:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const c=h.canvases.B,m=h.app.getModel();
+  const before=h.draws.length,pan=m.Pan,nick=m.Nick,roll=m.Roll,focal=m.FocalLengthField;
+  const compareSettings=h.app.getCompareConfig();
+  c.emit('pointerdown',{shiftKey:true});
+  c.emit('pointermove',{clientX:90,clientY:65});
+  c.emit('pointerup',{clientX:90,clientY:65});
+  h.flush();
+  assert.equal(h.draws.length,before+2);
+  assert.equal(h.draws.at(-1).m.CameraEast,h.draws.at(-2).m.CameraEast);
+  assert.equal(h.draws.at(-1).m.CameraNorth,h.draws.at(-2).m.CameraNorth);
+  assert.deepEqual(h.app.getCompareConfig(),compareSettings);
+  const oldNorth=m.CameraNorth;
+  const event=c.emit('wheel',{altKey:true,shiftKey:false,deltaY:-100,deltaMode:0});
+  assert.equal(event.prevented,true);
+  assert.ok(m.CameraNorth>oldNorth,'forward dolly advances along camera heading');
+  assert.equal(h.queuedZoom,1);
+  const after=h.draws.length;
+  h.flushZoom();h.flush();
+  assert.equal(h.draws.length,after+2);
+  assert.equal(h.draws.at(-1).m.CameraNorth,h.draws.at(-2).m.CameraNorth);
+  assert.equal(m.Pan,pan);assert.equal(m.Nick,nick);assert.equal(m.Roll,roll);
+  assert.equal(m.FocalLengthField,focal);
+});
+
+test('Camera position: legacy experiment without offset restores zero; new offset roundtrips',()=>{
+  const codec=require('../src/ui/modern/ModernExperimentState');
+  const h=harness(),model=h.app.getModel();
+  h.canvases.Scene.emit('wheel',{altKey:true,deltaY:-100,deltaMode:0});
+  const snapshot=codec.capture(model,{atmosphere:'standard',occlusionRadius:6371000,
+    preset:'custom',resetPreset:'pontchartrain'},
+    compareState.initial(model,'standard',6371000),
+    {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+  const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html',snapshot);
+  assert.equal(codec.readUrl(new URL(url).search).scene.camera.CameraNorth,model.CameraNorth);
+  assert.equal(snapshot.scene.camera.CameraEast,model.CameraEast);
+  const old=JSON.parse(JSON.stringify(snapshot));
+  delete old.scene.camera.CameraEast;delete old.scene.camera.CameraNorth;
+  assert.equal(codec.validate(old).scene.camera.CameraEast,0);
+  assert.equal(codec.validate(old).scene.camera.CameraNorth,0);
+  assert.throws(()=>codec.validate({...snapshot,scene:{...snapshot.scene,
+    camera:{...snapshot.scene.camera,CameraEast:1e8}}}),/range/);
 });

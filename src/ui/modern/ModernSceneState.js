@@ -9,7 +9,8 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var CAMERA={Height:[0.001,1e9],FocalLengthField:[1,100000],ViewAngleField:[0.1,160],
-    Pan:[-360,360],Nick:[-90,90],Roll:[-180,180]};
+    Pan:[-360,360],Nick:[-90,90],Roll:[-180,180],
+    CameraEast:[-1e7,1e7],CameraNorth:[-1e7,1e7]};
   var OBJECT={NObjects:[0,200,true],ObjType:[0,3,true],ObjDist:[0,1e7],
     ObjDeltaDist:[0.001,1e7],ObjSidePos:[-1e7,1e7],ObjSideVar:[-1e7,1e7],
     ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4],
@@ -82,6 +83,7 @@
   function applyPreset(model,id){
     var p=PRESETS[id];if(!p)throw RangeError('Unknown Scene preset: '+id);
     Object.keys(p.camera).forEach(function(k){setCamera(model,k,p.camera[k]);});
+    model.CameraEast=0;model.CameraNorth=0;
     Object.keys(p.objects).forEach(function(k){
       p.objects[k].forEach(function(v,i){setObject(model,i,k,v);});
     });

@@ -9,6 +9,7 @@
   'use strict';
   var VERSION=1,PARAM='experiment',STORAGE_KEY='curvature-modern-experiment-v1';
   var CAMERA=['Height','FocalLengthField','Pan','Nick','Roll'];
+  var CAMERA_POSITION=['CameraEast','CameraNorth'];
   var OBJECT=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
   var ATMOSPHERE=['vacuum','standard','temperature-lapse','profile-transition','inverse-temperature','inverse-spherical','exponential-occlusion'];
@@ -31,6 +32,7 @@
   function title(value,max){if(typeof value!=='string'||value.length>max)throw RangeError('Invalid experiment text');return value;}
   function capture(model,scene,compare,ui){
     var camera={};CAMERA.forEach(function(k){camera[k]=model[k];});
+    CAMERA_POSITION.forEach(function(k){camera[k]=model[k]||0;});
     camera.viewcenterHorizon=model.viewcenterHorizon;
     camera.deviceRatio=model.deviceRatio;
     var objects={};OBJECT.forEach(function(k){objects[k]=Array.from(model[k]);});
@@ -54,11 +56,12 @@
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
     shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile','inverseProfile']);
-    shape(s.camera,CAMERA.concat(['viewcenterHorizon','deviceRatio']));
+    shape(s.camera,CAMERA.concat(['viewcenterHorizon','deviceRatio']),CAMERA_POSITION);
     var camera={};
     var ranges={Height:[0.001,1e9],FocalLengthField:[1,100000],Pan:[-360,360],
       Nick:[-90,90],Roll:[-180,180]};
     CAMERA.forEach(function(k){camera[k]=num(s.camera[k],ranges[k][0],ranges[k][1]);});
+    CAMERA_POSITION.forEach(function(k){camera[k]=s.camera[k]===undefined?0:num(s.camera[k],-1e7,1e7);});
     camera.viewcenterHorizon=num(s.camera.viewcenterHorizon,0,3,true);
     camera.deviceRatio=num(s.camera.deviceRatio,0.1,10);
     if(![1.5,2/3,16/9,9/16].some(function(v){return Math.abs(v-camera.deviceRatio)<1e-8;}))

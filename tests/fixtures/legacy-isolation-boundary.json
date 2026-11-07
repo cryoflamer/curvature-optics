@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 54,
-      "uniqueScripts": 53,
+      "scriptTags": 55,
+      "uniqueScripts": 54,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -128,6 +128,7 @@
         "src/scene/CurvatureRenderFrame.js",
         "src/geometry/CurvatureSurfaceGeometry.js",
         "src/geometry/CurvaturePhysicalWorldGeometry.js",
+        "src/geometry/CurvatureCameraTranslation.js",
         "src/geometry/CurvatureGeometryEngine.js",
         "src/renderers/CurvatureCanvasProjection.js",
         "src/renderers/CurvaturePerspectivePreview.js",
@@ -292,6 +293,7 @@
       "src/ui/panels/ViewSliders.js"
     ],
     "loadedByModernNotLegacy": [
+      "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
       "src/optics/OpticalRayHorizon.js",
       "src/renderers/CurvatureAtmosphericVisibility.js",
@@ -329,7 +331,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 134,
+  "sourceJsCount": 135,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -746,6 +748,19 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/geometry/CurvatureCameraTranslation.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/app/CurvatureMainCanvasRenderer.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CurvatureCameraTranslation.test.js",
+        "tests/ModernCameraDrag1371.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/geometry/CurvatureEarClip.js": {
       "directHtmlLoads": [
         "legacy",
@@ -834,6 +849,7 @@
         "src/optics/OpticalTowerSilhouette.js"
       ],
       "commonJsTestCallers": [
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvatureSurfaceGeometry124.test.js",
         "tests/InversePreparedGradient.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
@@ -988,6 +1004,7 @@
         "tests/AdaptiveTowerPrism112.test.js",
         "tests/AtmosphericSceneReliability109.test.js",
         "tests/AtmosphericVisibility.test.js",
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernInverseTemperature97.test.js",
@@ -1218,6 +1235,7 @@
       ],
       "commonJsTestCallers": [
         "tests/AtmosphericSceneReliability109.test.js",
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/OpticalTowerSilhouette106.test.js",
         "tests/PhysicalBoundaryClosure116.test.js",
         "tests/PhysicalMetricWorld126.test.js"
@@ -1537,6 +1555,7 @@
         "tests/AdaptiveTowerPrism112.test.js",
         "tests/AtmosphericSceneReliability109.test.js",
         "tests/AtmosphericVisibility.test.js",
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvatureControlledGeometryParity.test.js",
         "tests/CurvatureFullComposition.test.js",
         "tests/CurvatureFullLayerParity.test.js",
@@ -1605,6 +1624,7 @@
       "commonJsSourceCallers": [
         "src/app/CurvatureMainCanvasRenderer.js",
         "src/diagnostics/CurvatureSeparationAudit.js",
+        "src/geometry/CurvatureCameraTranslation.js",
         "src/geometry/CurvatureGeometryEngine.js",
         "src/legacy/LegacyGeometryExtractor.js",
         "src/optics/CurvaturePhysicalSceneOptics.js",
@@ -1614,6 +1634,7 @@
       ],
       "commonJsTestCallers": [
         "tests/CameraRedraw1373.test.js",
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvatureFrameRenderer.test.js",
         "tests/CurvatureRenderFrame.test.js",
         "tests/CurvatureSceneContract.test.js",
@@ -1814,6 +1835,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraInteraction137.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
@@ -1910,6 +1932,7 @@
       ],
       "commonJsTestCallers": [
         "tests/AtmosphericVisibility.test.js",
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/LegacyModernBoundary.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
@@ -1982,6 +2005,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/AtmosphericVisibility.test.js",
+        "tests/CurvatureCameraTranslation.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernAtmosphericPresentation13822.test.js",
         "tests/ModernCameraDrag1371.test.js",
