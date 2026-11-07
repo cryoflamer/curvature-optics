@@ -348,175 +348,158 @@ test('Cancelling an Auto camera drag restores initial pose and Accurate optics',
   assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
 });
 
-function savedTransition(h){
+function addCurrent(h,overrides){
+  const model=h.app.getModel();Object.assign(model,overrides||{});
+  h.nodes.get('ModernSequenceAdd').dispatch('click');
+}
+function twoFrameAnimation(h){
+  addCurrent(h,{CameraNorth:0,CameraEast:0,Height:15,Pan:0,Nick:0,Roll:0,FocalLengthField:2000});
+  addCurrent(h,{CameraNorth:400,CameraEast:100,Height:100,Pan:30,Nick:-5,Roll:10,FocalLengthField:800});
+}
+test('new camera animation needs no saved positions or names and displays an ordered two-frame transition',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();
+  assert.equal(n.get('ModernSequenceAdd').disabled,false,'primary button must work with no saved views');
+  assert.equal(n.get('ModernSequenceEmpty').hidden,false);
+  twoFrameAnimation(h);
+  const frames=h.app.getCameraSequence();
+  assert.equal(frames.map(f=>f.name).join(','),'Frame 1,Frame 2');
+  assert.equal(frames[1].travelMs,5000);
+  assert.equal(h.app.getCameraPositions().length,0,'no saved-view dependency');
+  assert.equal(n.get('ModernSequenceEmpty').hidden,true);
+  assert.equal(n.get('ModernSequencePlay').disabled,false);
+  assert.match(n.get('ModernSequenceKeyframes').children.at(-1).textContent,/→ 5.0 s/);
+  const snapshots=JSON.stringify(frames);
+  n.get('ModernSequenceEasing').value='linear';n.get('ModernSequenceEasing').dispatch('change');
+  assert.equal(h.app.getCameraSequence()[1].easing,'linear');
+  n.get('ModernSequencePlay').dispatch('click');
+  assert.equal(h.app.getCameraAnimation().playing,true);
+  approx(m.CameraNorth,0);
+  h.flushFrames(2500);
+  approx(m.CameraNorth,200);approx(m.CameraEast,50);approx(m.Height,57.5);
+  approx(m.FocalLengthField,Math.sqrt(2000*800));
+  h.flushFrames();assert.ok(h.renders.some(r=>r.quality==='fast'));
+  h.flushFrames(2600);h.flushFrames();
+  assert.equal(h.app.getCameraAnimation().playing,false);
+  approx(m.CameraNorth,400);approx(m.Height,100);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+  assert.equal(h.renders.at(-1).stride,1);
+  assert.equal(n.get('ModernSequenceStop').disabled,true);
+  assert.notEqual(JSON.stringify(h.app.getCameraSequence()),snapshots,'timing edit was stored');
+});
+
+test('animation Stop holds interpolated pose, Cancel restores the pre-Play camera',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();twoFrameAnimation(h);
+  m.CameraNorth=23;
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(1250);h.flushFrames();
+  const held=m.CameraNorth;assert.ok(held>0&&held<400);
+  n.get('ModernSequenceStop').dispatch('click');h.flushFrames();
+  approx(m.CameraNorth,held);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+  h.flushFrames(6000);approx(m.CameraNorth,held);
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(2000);
+  n.get('ModernSequenceCancel').dispatch('click');h.flushFrames();
+  approx(m.CameraNorth,held);
+});
+
+test('unsupported optics and mismatched aim modes prevent animation without moving camera',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();twoFrameAnimation(h);
+  const original=m.CameraNorth;
+  n.get('ModernAtmosphere').value='temperature-lapse';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
+  n.get('ModernSequencePlay').dispatch('click');
+  assert.equal(h.app.getCameraAnimation().playing,false);
+  assert.match(n.get('ModernSequenceStatus').textContent,/Fast Preview/i);
+  n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
+  const mismatch=boot(),v=mismatch.app.getModel(),controls=mismatch.nodes;
+  mismatch.flushFrames();
+  addCurrent(mismatch,{CameraNorth:0,viewcenterHorizon:3});
+  addCurrent(mismatch,{CameraNorth:400,viewcenterHorizon:0});
+  assert.equal(mismatch.app.getCameraSequence().length,1,'a mismatched camera is rejected when adding it');
+  assert.match(controls.get('ModernSequenceStatus').textContent,/aim mode/i);
+  assert.equal(m.CameraNorth,original);
+});
+
+test('two-frame animation keeps Compare A/B poses and Fast LOD synchronized',()=>{
+  const h=boot(),n=h.nodes;h.flushFrames();twoFrameAnimation(h);
+  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(1500);h.flushFrames();
+  const pair=h.app.getCompareModels();
+  assert.equal(pair.A.CameraNorth,pair.B.CameraNorth);
+  assert.equal(pair.A.Pan,pair.B.Pan);
+  const fast=h.renders.filter(r=>r.quality==='fast');
+  assert.ok(fast.length>=2);assert.equal(fast.at(-1).stride,fast.at(-2).stride);
+  h.flushFrames(4000);h.flushFrames();
+  assert.equal(h.app.getCameraAnimation().playing,false);
+  approx(h.app.getCompareModels().A.CameraNorth,400);
+  approx(h.app.getCompareModels().B.CameraNorth,400);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('manual keyboard, pointer, wheel and workspace switches interrupt animation safely',()=>{
+  for(const gesture of ['keyboard','pointer','wheel','workspace']){
+    const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();twoFrameAnimation(h);
+    n.get('ModernSequencePlay').dispatch('click');h.flushFrames(1200);h.flushFrames();
+    const current=m.CameraNorth,renderCount=h.renders.length;
+    if(gesture==='keyboard'){
+      h.dispatchGlobal('keydown',{code:'KeyW'});
+      assert.equal(h.renders.length,renderCount);
+      h.flushFrames(100);h.dispatchGlobal('keyup',{code:'KeyW'});
+    }else if(gesture==='pointer'){
+      const pointer={button:0,pointerId:3,isPrimary:true,clientX:20,clientY:20};
+      h.canvas.dispatch('pointerdown',pointer);
+      h.canvas.dispatch('pointermove',{...pointer,clientX:90,clientY:60});
+      h.canvas.dispatch('pointerup',{...pointer,clientX:90,clientY:60});
+    }else if(gesture==='wheel'){
+      h.canvas.dispatch('wheel',{deltaY:-100,deltaX:0,deltaMode:0,shiftKey:true});h.flushTimers();
+    }else n.get('ModernCompareTab').dispatch('click');
+    assert.equal(h.app.getCameraAnimation().playing,false,gesture);
+    h.flushFrames();assert.equal(h.renders.at(-1).quality,'accurate');
+    const stopped=m.CameraNorth;h.flushFrames(8000);
+    approx(m.CameraNorth,stopped);
+    if(gesture==='workspace')approx(stopped,current);
+  }
+});
+
+test('losing browser focus stops playback and restores idle optics',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();twoFrameAnimation(h);
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(500);h.flushFrames();
+  const north=m.CameraNorth;
+  h.dispatchGlobal('blur',{});h.flushFrames();
+  assert.equal(h.app.getCameraAnimation().playing,false);
+  approx(m.CameraNorth,north);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('selected animation frame can be viewed and replaced with current camera without changing timing',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();twoFrameAnimation(h);
+  n.get('ModernSequenceKeyframes').value='0';n.get('ModernSequenceKeyframes').dispatch('change');
+  n.get('ModernSequenceGo').dispatch('click');approx(m.CameraNorth,0);
+  m.CameraNorth=850;
+  n.get('ModernSequenceReplace').dispatch('click');
+  const frames=h.app.getCameraSequence();
+  approx(frames[0].camera.CameraNorth,850);
+  assert.equal(frames[0].travelMs,0);assert.equal(frames[1].travelMs,5000);
+});
+
+function savedSequence(h){
   const n=h.nodes,m=h.app.getModel();
   n.get('ModernCameraPositionName').value='Bridge A';n.get('ModernCameraSave').dispatch('click');
   m.Height=100;m.CameraNorth=400;m.CameraEast=100;m.Pan=30;m.Nick=-5;
   m.FocalLengthField=800;m.Roll=10;
   n.get('ModernCameraPositionName').value='Bridge B';n.get('ModernCameraSave').dispatch('click');
-  n.get('ModernTransitionFrom').value='camera-1';
-  n.get('ModernTransitionTo').value='camera-2';
-  n.get('ModernTransitionDuration').value='5';
-  n.get('ModernTransitionEasing').value='linear';
-}
-
-test('transition plays deterministic Fast samples and finishes at the exact saved pose with Accurate',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();
-  savedTransition(h);
-  const before=JSON.stringify(h.app.getCameraPositions());
-  n.get('ModernTransitionPlay').dispatch('click');
-  assert.equal(h.app.getCameraTransition().playing,true);
-  assert.equal(m.CameraNorth,0);
-  assert.equal(n.get('ModernTransitionStop').disabled,false);
-  h.flushFrames(2500);
-  approx(m.CameraNorth,200);approx(m.CameraEast,50);approx(m.Height,57.5);
-  approx(m.FocalLengthField,Math.sqrt(2000*800));
-  h.flushFrames();
-  assert.ok(h.renders.some(r=>r.quality==='fast'),'Fast optical frame during movement');
-  h.flushFrames(2600);h.flushFrames();
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.equal(m.CameraNorth,400);assert.equal(m.Height,100);
-  assert.equal(h.renders.at(-1).quality,'accurate');
-  assert.equal(h.renders.at(-1).stride,1);
-  assert.equal(n.get('ModernTransitionPlay').disabled,false);
-  assert.equal(n.get('ModernTransitionStop').disabled,true);
-  assert.equal(JSON.stringify(h.app.getCameraPositions()),before,'saved keyframes remain untouched');
-});
-
-test('transition Stop holds interpolated pose and Cancel restores the pre-play pose',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1250);h.flushFrames();
-  const held=m.CameraNorth;assert.ok(held>0&&held<400);
-  n.get('ModernTransitionStop').dispatch('click');h.flushFrames();
-  assert.equal(h.app.getCameraTransition().playing,false);
-  approx(m.CameraNorth,held);
-  assert.equal(h.renders.at(-1).quality,'accurate');
-  h.flushFrames(6000);approx(m.CameraNorth,held);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(2000);
-  assert.ok(m.CameraNorth>0&&m.CameraNorth<400);
-  n.get('ModernTransitionCancel').dispatch('click');h.flushFrames();
-  approx(m.CameraNorth,held);
-  assert.equal(h.renders.at(-1).quality,'accurate');
-});
-
-test('keyboard interrupts playback and takes over camera without an expensive redraw on keydown',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1100);h.flushFrames();
-  const cameraBefore=m.CameraNorth,renders=h.renders.length;
-  h.dispatchGlobal('keydown',{code:'KeyW'});
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.equal(h.renders.length,renders);
-  h.flushFrames(100);
-  assert.ok(m.CameraNorth>cameraBefore);
-  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames();
-  assert.equal(h.renders.at(-1).quality,'accurate');
-});
-
-test('transition rejects unsupported optics, discrete pose mismatches and invalid durations without changing the camera',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  const original=m.CameraNorth;
-  n.get('ModernTransitionDuration').value='0';n.get('ModernTransitionPlay').dispatch('click');
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.match(n.get('ModernTransitionStatus').textContent,/duration/i);
-  n.get('ModernTransitionDuration').value='5';
-  n.get('ModernAtmosphere').value='temperature-lapse';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
-  n.get('ModernTransitionPlay').dispatch('click');
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.match(n.get('ModernTransitionStatus').textContent,/Fast Preview/i);
-  n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
-  const entries=h.app.getCameraPositions();entries[1].camera.viewcenterHorizon=2;
-  // Editing saved positions through the public UI respects the same validation.
-  m.viewcenterHorizon=2;n.get('ModernCameraPositions').value='camera-2';
-  n.get('ModernCameraUpdate').dispatch('click');
-  n.get('ModernTransitionPlay').dispatch('click');
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.match(n.get('ModernTransitionStatus').textContent,/aim mode/i);
-  assert.equal(m.CameraNorth,original);
-});
-
-test('Compare transition shares the same camera and Preview LOD in A/B, then restores Accurate',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1500);h.flushFrames();
-  assert.equal(h.app.getCameraTransition().playing,true);
-  const pair=h.app.getCompareModels();
-  assert.equal(pair.A.CameraNorth,pair.B.CameraNorth);
-  assert.equal(pair.A.Pan,pair.B.Pan);
-  const a=h.renders.filter(r=>r.quality==='fast');
-  assert.ok(a.length>=2);assert.equal(a.at(-1).stride,a.at(-2).stride);
-  h.flushFrames(4000);h.flushFrames();
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.equal(h.app.getCompareModels().A.CameraNorth,400);
-  assert.equal(h.app.getCompareModels().B.CameraNorth,400);
-  assert.equal(h.renders.at(-1).quality,'accurate');
-});
-
-test('switching workspaces or pressing Cancel clears stale transition frames',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1000);
-  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
-  assert.equal(h.app.getCameraTransition().playing,false);
-  const stopped=m.CameraNorth;h.flushFrames(8000);
-  assert.equal(m.CameraNorth,stopped,'cancelled RAF must not move the camera later');
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(2000);
-  n.get('ModernTransitionCancel').dispatch('click');h.flushFrames();
-  assert.equal(m.CameraNorth,stopped);
-  h.flushFrames(8000);assert.equal(m.CameraNorth,stopped);
-});
-
-
-test('pointer navigation interrupts transition and retains immediate manual control',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1000);h.flushFrames();
-  const before=m.Pan;
-  const pointer={button:0,pointerId:3,isPrimary:true,clientX:20,clientY:20};
-  h.canvas.dispatch('pointerdown',pointer);
-  assert.equal(h.app.getCameraTransition().playing,false);
-  h.canvas.dispatch('pointermove',{...pointer,clientX:90,clientY:60});
-  h.canvas.dispatch('pointerup',{...pointer,clientX:90,clientY:60});
-  h.flushFrames();
-  assert.notEqual(m.Pan,before);
-  assert.equal(h.renders.at(-1).quality,'accurate');
-});
-
-test('wheel input interrupts transition and the resulting viewport shows manual zoom',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1200);h.flushFrames();
-  const focal=m.FocalLengthField;
-  h.canvas.dispatch('wheel',{deltaY:-100,deltaX:0,deltaMode:0,shiftKey:true});
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.notEqual(m.FocalLengthField,focal);
-  h.flushTimers();h.flushFrames();
-  assert.equal(h.renders.at(-1).quality,'accurate');
-});
-
-test('losing browser focus stops transition and returns to idle optics',()=>{
-  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
-  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(500);h.flushFrames();
-  const north=m.CameraNorth;
-  h.dispatchGlobal('blur',{});h.flushFrames();
-  assert.equal(h.app.getCameraTransition().playing,false);
-  assert.equal(m.CameraNorth,north);
-  assert.equal(h.renders.at(-1).quality,'accurate');
-  h.flushFrames(10000);assert.equal(m.CameraNorth,north);
-});
-
-function savedSequence(h){
-  savedTransition(h);
-  const n=h.nodes,m=h.app.getModel();
   m.CameraNorth=800;m.CameraEast=250;m.Height=50;m.Pan=50;
   n.get('ModernCameraPositionName').value='Bridge C';n.get('ModernCameraSave').dispatch('click');
   n.get('ModernSequencePosition').value='camera-1';
-  n.get('ModernSequencePosition').dispatch('change');
-  n.get('ModernSequenceHold').value='1';
-  n.get('ModernSequenceAdd').dispatch('click');
+  n.get('ModernSequenceAddSaved').dispatch('click');
+  n.get('ModernSequenceHold').value='1';n.get('ModernSequenceHold').dispatch('change');
   n.get('ModernSequencePosition').value='camera-2';n.get('ModernSequencePosition').dispatch('change');
-  n.get('ModernSequenceTravel').value='4';n.get('ModernSequenceHold').value='2';
-  n.get('ModernSequenceEasing').value='linear';
-  n.get('ModernSequenceAdd').dispatch('click');
+  n.get('ModernSequenceAddSaved').dispatch('click');
+  n.get('ModernSequenceTravel').value='4';n.get('ModernSequenceTravel').dispatch('change');
+  n.get('ModernSequenceHold').value='2';n.get('ModernSequenceHold').dispatch('change');
+  n.get('ModernSequenceEasing').value='linear';n.get('ModernSequenceEasing').dispatch('change');
   n.get('ModernSequencePosition').value='camera-3';n.get('ModernSequencePosition').dispatch('change');
-  n.get('ModernSequenceTravel').value='3';n.get('ModernSequenceHold').value='0.5';
-  n.get('ModernSequenceAdd').dispatch('click');
+  n.get('ModernSequenceAddSaved').dispatch('click');
+  n.get('ModernSequenceTravel').value='3';n.get('ModernSequenceTravel').dispatch('change');
+  n.get('ModernSequenceHold').value='0.5';n.get('ModernSequenceHold').dispatch('change');
 }
 test('keyframe sequence UI snapshots positions and saves an independent timeline',()=>{
   const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
@@ -592,7 +575,7 @@ test('sequence editing can reorder, rename, retime and reject invalid edits atom
   const picker=n.get('ModernSequenceKeyframes');picker.value='1';picker.dispatch('change');
   n.get('ModernSequenceName').value='Middle';
   n.get('ModernSequenceTravel').value='2';n.get('ModernSequenceHold').value='0';
-  n.get('ModernSequenceUpdate').dispatch('click');
+  n.get('ModernSequenceTravel').dispatch('change');
   assert.equal(h.app.getCameraSequence()[1].travelMs,2000);
   assert.equal(h.app.getCameraSequence()[1].name,'Middle');
   n.get('ModernSequenceDown').dispatch('click');
@@ -602,7 +585,7 @@ test('sequence editing can reorder, rename, retime and reject invalid edits atom
   picker.value='2';picker.dispatch('change');
   n.get('ModernSequenceHold').value='-7';
   const before=JSON.stringify(h.app.getCameraSequence());
-  n.get('ModernSequenceUpdate').dispatch('click');
+  n.get('ModernSequenceHold').dispatch('change');
   assert.equal(JSON.stringify(h.app.getCameraSequence()),before);
   assert.match(n.get('ModernSequenceStatus').textContent,/pause/i);
   n.get('ModernSequenceRemove').dispatch('click');
@@ -626,7 +609,7 @@ test('restored camera sequence can be edited and persisted by the live Modern ap
   n.get('ModernSequenceKeyframes').value='2';
   n.get('ModernSequenceKeyframes').dispatch('change');
   n.get('ModernSequenceHold').value='1.5';
-  n.get('ModernSequenceUpdate').dispatch('click');
+  n.get('ModernSequenceHold').dispatch('change');
   h.flushTimers();
   const stored=codec.validate(JSON.parse(h.storage.get(codec.STORAGE_KEY)));
   assert.equal(stored.cameraSequence.keyframes.length,3);
@@ -645,6 +628,50 @@ test('invalid sequence inputs and unsupported atmosphere reject playback without
   n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');
   n.get('ModernSequenceKeyframes').value='2';n.get('ModernSequenceKeyframes').dispatch('change');
   const old=JSON.stringify(h.app.getCameraSequence());
-  n.get('ModernSequenceTravel').value='-1';n.get('ModernSequenceUpdate').dispatch('click');
+  n.get('ModernSequenceTravel').value='-1';n.get('ModernSequenceTravel').dispatch('change');
   assert.equal(JSON.stringify(h.app.getCameraSequence()),old);
+});
+
+test('three current-view captures play 1 → 2 → 3 without library or a required name',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();
+  addCurrent(h,{CameraNorth:0});
+  addCurrent(h,{CameraNorth:400});
+  addCurrent(h,{CameraNorth:800});
+  const frames=h.app.getCameraSequence();
+  assert.equal(frames.length,3);
+  assert.deepEqual(Array.from(frames,f=>f.name),['Frame 1','Frame 2','Frame 3']);
+  assert.equal(h.app.getCameraPositions().length,0);
+  assert.equal(sequence.totalMs(frames),10000);
+  n.get('ModernSequencePlay').dispatch('click');
+  h.flushFrames(2500);approx(m.CameraNorth,200);
+  h.flushFrames(5000);approx(m.CameraNorth,600);
+  h.flushFrames(2600);h.flushFrames();
+  approx(m.CameraNorth,800);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('saved-view names are optional and can be reused without linking to animation frames',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();
+  n.get('ModernCameraPositionName').value='';n.get('ModernCameraSave').dispatch('click');
+  assert.equal(h.app.getCameraPositions()[0].name,'View 1');
+  n.get('ModernSequencePosition').value='camera-1';
+  n.get('ModernSequenceAddSaved').dispatch('click');
+  assert.equal(h.app.getCameraSequence()[0].camera.CameraNorth,m.CameraNorth);
+  assert.equal(h.app.getCameraSequence()[0].name,'View 1');
+  m.CameraNorth=800;
+  n.get('ModernCameraPositions').value='camera-1';
+  n.get('ModernCameraUpdate').dispatch('click');
+  assert.equal(h.app.getCameraSequence()[0].camera.CameraNorth,0);
+});
+
+test('Camera Animation is the primary UI and the old two-position controls are retired',()=>{
+  const html=read('CurvatureModern.html');
+  assert.ok(html.indexOf('>Camera Animation<')<html.indexOf('>Saved views · optional library<'));
+  for(const id of ['ModernSequenceAdd','ModernSequenceGo','ModernSequenceReplace',
+    'ModernSequenceAddSaved','ModernSequencePlay','ModernCameraReset']){
+    assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);
+  }
+  for(const id of ['ModernTransitionPlay','ModernTransitionFrom','ModernTransitionTo','ModernSequenceUpdate'])
+    assert.doesNotMatch(html,new RegExp('id="'+id+'"'),id);
+  assert.match(html,/<details class="modern-camera-optional" id="ModernSavedCameraLibrary">/);
 });

@@ -1832,21 +1832,23 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
 - Both the quality mode and Preview LOD remain transient UI preferences; no
   experiment/Legacy state is altered. Tests cover transitions and coalescing.
 
-### Camera Transition Player (Modern)
+### Camera Animation (Modern)
 
-- Modern Camera panel can preview a deterministic, two-saved-position camera
-  transition with selectable 0.2–120 second duration and Linear/Smoothstep easing.
-  Pure `src/camera/ModernCameraInterpolator.js` is loaded by the Modern entrypoint.
-  No new persistence fields and no Legacy runtime/renderer dependencies.
-- The transition samples the absolute monotonic playback clock in a dedicated
-  animation loop; the optical render request is throttled independently using
-  existing Fast Preview and LOD. No missed optical frame can slow down the
-  camera path. Compare A/B receive one common camera and LOD.
-- Stop holds the intermediate pose; Cancel restores the pose before Play;
-  manual camera gestures, parameter edits, workspace/experiment change and
-  focus loss interrupt playback. Stale queued Fast frames are cancelled before
-  the final display reverts to the user's selected optical quality (Accurate
-  for the default / Auto at rest). Unsupported Fast profiles reject Play.
-- Discrete aim and aspect differences between saved poses are rejected without
-  changing the scene. Animation sequences, geodesic paths and video export
-  are future tasks. Browser visual playback remains to be verified manually.
+- A single **Camera Animation** panel replaces the separate Camera Transition
+  and Camera Sequence UI. The default workflow captures the live observer
+  pose through **Add current view** and assigns automatic `Frame N` labels.
+  A two-frame sequence is the former standalone transition. Named Saved views
+  remain available under an optional collapsible library, with a separate
+  **Add selected saved view** action for reusing them.
+- Selecting a frame allows **Go to frame** and **Use current view** to replace
+  its pose, reordering, removal and clearing. Incoming travel times (default
+  5 seconds), holds, easing and optional names save on change; the first
+  frame always has zero incoming travel.
+- Persistence remains the previous optional `cameraSequence.keyframes` format.
+  Legacy experiments, named sequences and JSON/URL links need no migration;
+  frames own their pose snapshots. Only the redundant two-position UI and
+  its redundant playback handlers were removed.
+- The pure `ModernCameraInterpolator` and `ModernCameraSequence` still sample
+  absolute time; browser playback uses the shared Fast Preview/LOD and idle
+  Accurate restoration. Stop/Cancel/manual interruption and Compare A/B remain
+  unchanged. Browser visual validation remains a separate step.

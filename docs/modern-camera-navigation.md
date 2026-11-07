@@ -93,45 +93,30 @@ notch); `Automatic` preserves the original scene-scaled wheel behavior. These
 navigation preferences are stored only in local browser preferences, *not* in
 saved experiment camera poses.
 
-## Saved camera positions
+## Camera Animation and saved views
 
-In **Camera → Saved camera positions**, name a pose and select **Save current**.
-Choose one from the list to **Go**, **Update** its stored pose, **Rename**, or
-**Delete** it. `Reset camera` returns to the starting camera pose of the
-currently loaded experiment (or the most recently selected named Scene preset),
-without changing objects, atmosphere, surface or Compare A/B settings.
+**Camera → Camera Animation** is the primary workflow for visual camera motion.
+Navigate to a view and click **Add current view**, then navigate to another
+and repeat. The camera is captured directly into an owned sequence frame;
+no saved-view name is needed. Two frames replace the former separate Camera
+transition controls. Three or more frames add further transitions, each with
+an adjustable inbound travel time, easing and optional arrival pause. See
+[`modern-camera-interpolation.md`](modern-camera-interpolation.md).
 
-Each pose stores `CameraEast`, `CameraNorth`, `Height`, `Pan`, `Nick`, `Roll`,
-`FocalLengthField`, `viewcenterHorizon`, and `deviceRatio`. This is a full
-camera pose, **not a complete experiment snapshot**. Up to 20 named poses are
-included as optional `cameraPositions` data in the existing Modern experiment
-JSON, copied links and experiment library. An older experiment without poses
-continues to load unchanged. The optional field does not modify the Legacy
-`?state=` contract. Selecting a fresh Scene preset starts a new pose list;
-loading a saved experiment restores its own list.
+**Saved views · optional library** is a collapsible secondary control. Its
+**Save current** action accepts an optional name (an empty name generates one).
+Selecting a saved view allows **Go**, **Update**, **Rename** and **Delete**;
+a selected view can also be added as a snapshot to Camera Animation. The
+**Reset camera** action remains available outside that optional library.
+Each stored view includes `CameraEast`, `CameraNorth`, `Height`, `Pan`, `Nick`,
+`Roll`, `FocalLengthField`, `viewcenterHorizon`, and `deviceRatio`. Up to 20
+views are persisted as optional `cameraPositions` in Modern experiments and
+links, without altering Legacy state. They are not required for animation.
 
-The list is ordered by creation. The **Camera transition** controls below it
-provide a single non-persistent transition between **two distinct saved poses**:
-select From/To, a duration from 0.2 to 120 seconds, and Linear or Ease in / out.
-Press **Play transition** for an actual moving camera preview. Fast optical
-samples are throttled and use the existing adaptive/selected tower LOD; when
-finished, the active optical-quality preference (normally Accurate or Auto at
-rest) renders the full endpoint. Compare A/B always receive the same camera
-and LOD. Some atmospheres are not qualified for Fast and cannot be animated by
-this player yet; no implicit RK4 renders are scheduled during a transition.
-
-**Stop here** keeps the latest intermediate camera pose. **Cancel / restore**
-returns to the camera pose that was active *before Play* (not to the chosen
-From position). Starting manual keyboard/pointer/wheel navigation or editing
-physical controls interrupts playback. Changing workspaces, experiments or
-browser focus also stops the active transition, without changing the authored
-scene. Discrete camera aim and aspect must match between the saved poses;
-otherwise Play reports a validation error before modifying the camera.
-
-Position is sampled from **absolute elapsed time**, not integrated per Fast
-frame: a slow optical frame may cause visual skipping but must not make camera
-motion run slow. Only local linear East/North, local height, shortest wrapped
-Pan/Roll, linear Nick and logarithmic focal length are used. Long-distance
-geodesic paths, multi-keyframe timelines, video export, and persistence of
-transition settings are intentionally out of scope. The existing experiment
-schema and saved poses remain unchanged.
+Sequence interpolation samples from **absolute elapsed time**, independent of
+Fast optical frames, and never changes authored objects, atmosphere or surface.
+Stop keeps the camera position at the last sample; Cancel restores the pre-Play
+view. Manual navigation, mode changes and focus loss stop playback. Compare
+receives a single common camera pose on both sides. Discrete camera aim and
+aspect ratio must agree across frames. Geodesic paths, fly-through splines
+and video export are deferred.

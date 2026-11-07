@@ -22,8 +22,9 @@ return to Accurate when motion stops. See [limits and tests](docs/fast-optical-p
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or
 backward horizontally. Shift + wheel continues to zoom. The shared position is
 saved with Scene/Compare experiments. See [Modern camera navigation](docs/modern-camera-navigation.md)
-for coordinate semantics, spherical recentering, a two-pose transition player
-(**Camera → Camera transition → Play / Stop / Cancel**) and limitations.
+for coordinate semantics, spherical recentering, and limitations.
+**Camera → Camera Animation** now creates transitions directly from current views,
+without requiring saved position names.
 
 ## Run locally
 
@@ -127,15 +128,19 @@ tracked as a **deferred, low-priority TODO** in
 Modern Scene and Compare support W/A/S/D horizontal movement, Q/E height, and
 arrow-key Pan/Nick after focusing the viewport. Shift/Ctrl adjust navigation
 speed; optical recomputation occurs on release. The Camera panel exposes exact
-East/North coordinates, movement/turn rates, Alt-wheel step and up to 20 named
-camera poses. Poses round-trip with Modern experiments and leave physical A/B
+East/North coordinates, movement/turn rates and Alt-wheel step. An optional
+Saved views library holds up to 20 reusable poses; none are required for camera
+animation. Poses round-trip with Modern experiments and leave physical A/B
 settings unchanged. See [`docs/modern-camera-navigation.md`](docs/modern-camera-navigation.md).
 
-### Modern camera sequences
+### Modern camera animation
 
-Scene / Compare → Camera → **Camera sequence** composes saved camera poses into
-an ordered series of keyframes with individual travel times, easing and pauses.
-Keyframes own pose snapshots and are preserved in JSON/URL experiments.
-Playback uses Fast Preview/LOD, with Accurate restored at rest. See
+Scene / Compare → Camera → **Camera Animation**: move the camera, click
+**Add current view**, move it again, and repeat. Two frames create a simple
+transition; three or more create an animation. Frames are named automatically;
+you can change travel duration, easing, and pause after selecting a frame.
+The optional Saved views library can also add existing poses. Frames always own
+independent snapshots preserved in JSON/URL experiments. Playback uses Fast
+Preview/LOD, with Accurate restored at rest. See
 [`docs/modern-camera-interpolation.md`](docs/modern-camera-interpolation.md)
 for timeline semantics, limits and tests.

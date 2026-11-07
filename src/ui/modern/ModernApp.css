@@ -286,10 +286,19 @@ button{cursor:pointer}
 
 .modern-transition-actions{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:8px}
 .modern-transition-actions button{min-width:0;overflow-wrap:anywhere}
-#ModernTransitionStatus.is-error{color:#ac3145}
 
 /* An ordered keyframe picker needs multiple visible rows despite the default
    single-row select height. Keep it readable in the narrow Camera sidebar. */
 #ModernSequenceKeyframes{height:132px;min-height:132px;padding:4px 8px}
 #ModernSequenceKeyframes option{padding:5px 3px}
 #ModernSequenceStatus.is-error{color:#ac3145}
+
+/* Animation is the primary camera workflow; saved positions are optional. */
+.modern-animation-add{display:block;width:100%;padding:11px 12px;border:1px solid #7eacd7;
+  border-radius:8px;background:#e7f2ff;color:#184c7c;font-size:13px;font-weight:650;cursor:pointer}
+.modern-animation-add:hover{background:#d8eafa}
+.modern-animation-add:disabled{opacity:.5;cursor:default}
+.modern-camera-optional{margin-top:12px;border-top:1px solid #dbe7f4;padding-top:10px}
+.modern-camera-optional summary{cursor:pointer;color:#24619d;font-size:12px;font-weight:600;margin-bottom:9px}
+#ModernSequenceEmpty{margin:5px 0 0}
+#ModernSequenceKeyframes{min-height:120px}

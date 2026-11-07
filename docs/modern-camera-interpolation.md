@@ -28,17 +28,32 @@ keyframes and intermediate aim/aspect constraints are validated before playback.
 Sampling is stateless; seeking to a time never requires calculating previous
 frames. Frames outside the timeline clamp to the respective endpoints.
 
-## Browser controls
+## Browser controls: direct camera animation
 
-In **Scene / Compare → Camera → Camera sequence**, choose a saved camera
-position, set a name and timings, then **Add keyframe**. The editor supports
-editing name/timing, replacing a keyframe's camera from a saved position,
-reordering, removing and clearing frames. When reordering makes a former first
-frame non-first, its incoming travel defaults to 5 seconds. A keyframe always
-contains an independent camera snapshot: later rename/update/delete operations
-on Camera Positions do not alter it.
+In **Scene / Compare → Camera → Camera Animation**:
 
-At least two keyframes are required to **Play sequence**. Playback uses Fast
+1. Navigate the live camera to the desired starting view and select **Add current view**.
+2. Move or turn the live camera to a second view; select **Add current view** again.
+3. Repeat to add more views, then select **Play animation**. Two frames are an
+   ordinary transition; three or more are an ordered sequence.
+
+Frames are automatically named `Frame 1`, `Frame 2`, etc. No name, saved
+position or separate transition player is required. A multi-row frame picker
+shows the playback order, incoming travel duration, optional pause and arrival
+clock time. Select a frame to edit its **incoming** travel (default 5 seconds),
+its pause and easing. Changes save automatically on change. The first frame
+always has travel time zero. The optional frame name can be changed under the
+collapsible advanced control. Use **Go to frame** to inspect its pose and
+**Use current view** to replace it with the live camera position without
+changing the frame's timing. Reorder, remove or clear frames as needed.
+
+The **Saved views · optional library** section is collapsible and independent.
+Saved views can be added to an animation, but the animation owns snapshots:
+updating/renaming/deleting a saved view never changes a sequence already made.
+Previously saved named sequences are loaded and edited in exactly the same
+format; the HTML-only legacy two-position player was retired.
+
+At least two frames are required to **Play animation**. Playback uses Fast
 Preview and the existing adaptive LOD, then restores the selected idle optical
 quality. Unsupported atmospheric profiles are rejected before playback.
 **Stop here** leaves the last sampled pose; **Cancel / restore** returns to the
