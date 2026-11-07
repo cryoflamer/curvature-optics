@@ -438,6 +438,7 @@
   // Saved camera poses belong to the experiment; navigation speed belongs to
   // the user's local preferences and is never mixed into a cinematic keyframe.
   var cameraPositions=[];
+  var cameraSequence=[];
   var initialCamera=null;
   var navigation=root.CurvatureModernCameraNavigation;
   var navigationPrefs=navigation?navigation.settings():{speed:10,turnRate:1,wheelStep:'auto'};
@@ -485,7 +486,7 @@
       gpuProbe:false,probeTargets:256,
       showTemperatureProfile:state.showTemperatureProfile,
       temperaturePlacement:state.temperaturePlacement,
-      cameraPositions:cameraPositions}); // Keep legacy schema; never re-enable retired WebGPU.
+      cameraPositions:cameraPositions,cameraSequence:cameraSequence}); // Keep legacy schema; never re-enable retired WebGPU.
   }
   function storeExperiment(){
     if(!persistence.ready||!experiments||!root.location)return;
@@ -536,13 +537,14 @@
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
     state.mode=data.display.mode;
     cameraPositions=data.cameraPositions||[];
+    cameraSequence=data.cameraSequence?data.cameraSequence.keyframes:[];
     initialCamera=null;
     // Older saved experiments may contain display.gpuProbe=true. The mode is
     // retired: load their A/B physical settings without invoking WebGPU.
     model.Update();
     var select=el('ModernPreset');if(select)select.value=scene.preset;
     initialCamera=captureCameraPose();
-    renderCameraPositions('');
+    renderCameraPositions('');renderCameraSequenceKeyframes(-1);
   }
   function restoreExperiment(){
     if(!experiments||!root.location)return false;
@@ -1536,8 +1538,10 @@
     stopAutoCameraPreview();cancelPending();
     if(restore)transitionPose(running.original);
     markCustom();syncNumericInputs();transitionControls();
-    transitionStatus(message||(restore?'Transition cancelled; starting view restored':
-      'Transition stopped at current camera position'));
+    var stoppedMessage=message||(restore?'Animation cancelled; starting view restored':
+      'Animation stopped at current camera position');
+    if(running.kind==='sequence')sequenceStatus(stoppedMessage);
+    else transitionStatus(stoppedMessage);
     if(renderNow)redraw();
     return true;
   }
@@ -1547,22 +1551,27 @@
     current.frame=null;
     var elapsed=Math.max(0,Number.isFinite(now)?now-current.startedAt:profileNow()-current.startedAt);
     try{
-      var position=cameraInterpolator.cameraAt(current.from,current.to,
-        elapsed,current.durationMs,current.easing);
+      var sequencePlayback=current.kind==='sequence';
+      var position=sequencePlayback?cameraSequenceApi.cameraAt(current.sequence,elapsed):
+        cameraInterpolator.cameraAt(current.from,current.to,elapsed,current.durationMs,current.easing);
       transitionPose(position);
       if(elapsed>=current.durationMs){
         // Drop any stale Fast redraw before the authoritative final sample.
-        stopCameraTransition(false,'Completed: '+current.fromName+' → '+current.toName,true);
+        stopCameraTransition(false,sequencePlayback?'Completed camera sequence':
+          'Completed: '+current.fromName+' → '+current.toName,true);
         return;
       }
       transitionInputPreview();
-      transitionStatus('Playing '+current.fromName+' → '+current.toName+' · '+
-        Math.round(100*elapsed/current.durationMs)+'% · '+(elapsed/1000).toFixed(1)+
-        ' / '+(current.durationMs/1000).toFixed(1)+' s');
+      var progress=' · '+Math.round(100*elapsed/current.durationMs)+'% · '+
+        (elapsed/1000).toFixed(1)+' / '+(current.durationMs/1000).toFixed(1)+' s';
+      if(sequencePlayback)sequenceStatus('Playing camera sequence'+progress);
+      else transitionStatus('Playing '+current.fromName+' → '+current.toName+progress);
       requestAutoCameraPreview();
       current.frame=requestAnimationFrame(cameraTransitionTick);
-    }catch(error){stopCameraTransition(false,'Transition failed: '+error.message,true);
-      transitionStatus('Transition failed: '+error.message,true);}
+    }catch(error){var sequenceFailed=current.kind==='sequence';
+      stopCameraTransition(false,'Animation failed: '+error.message,true);
+      if(sequenceFailed)sequenceStatus('Sequence failed: '+error.message,true);
+      else transitionStatus('Transition failed: '+error.message,true);}
   }
   function startCameraTransition(){
     if(!cameraInterpolator)throw Error('Camera interpolation module is unavailable');
@@ -1613,6 +1622,208 @@
     });
     renderCameraTransitionChoices();
   }
+  // Sequences own their keyframe snapshots. Camera Positions are only a convenient
+  // source when adding/replacing a pose; no saved-position IDs are serialized.
+  var cameraSequenceApi=root.CurvatureModernCameraSequence;
+  function sequenceStatus(text,problem){
+    var node=newUiEl('ModernSequenceStatus');
+    if(node){node.textContent=text||'';node.classList.toggle('is-error',!!problem);}
+  }
+  function selectedSequenceIndex(){
+    var list=newUiEl('ModernSequenceKeyframes');
+    return list&&/^\d+$/.test(String(list.value))&&Number(list.value)<cameraSequence.length?
+      Number(list.value):-1;
+  }
+  function sequenceControls(){
+    var selected=selectedSequenceIndex(),playing=!!cameraTransition;
+    var position=newUiEl('ModernSequencePosition');
+    var hasPosition=!!position&&cameraPositions.some(function(p){return p.id===position.value;});
+    var buttons={ModernSequenceAdd:!playing&&hasPosition&&cameraSequence.length<20&&!!cameraSequenceApi,
+      ModernSequenceReplace:!playing&&selected>=0&&hasPosition,
+      ModernSequenceUpdate:!playing&&selected>=0,
+      ModernSequenceUp:!playing&&selected>0,
+      ModernSequenceDown:!playing&&selected>=0&&selected<cameraSequence.length-1,
+      ModernSequenceRemove:!playing&&selected>=0,
+      ModernSequenceClear:!playing&&cameraSequence.length>0,
+      ModernSequencePlay:!playing&&cameraSequence.length>=2&&!!cameraSequenceApi&&!state.demosActive,
+      ModernSequenceStop:playing&&cameraTransition.kind==='sequence',
+      ModernSequenceCancel:playing&&cameraTransition.kind==='sequence'};
+    Object.keys(buttons).forEach(function(id){var button=newUiEl(id);if(button)button.disabled=!buttons[id];});
+    ['ModernSequenceKeyframes','ModernSequencePosition','ModernSequenceName',
+      'ModernSequenceTravel','ModernSequenceHold','ModernSequenceEasing'].forEach(function(id){
+      var node=newUiEl(id);if(node)node.disabled=playing;
+    });
+    // Travel is editable even while the first keyframe is selected: Add uses
+    // it as the inbound duration for the next frame; Update ignores it for #1.
+  }
+  function renderCameraSequencePositions(){
+    var list=newUiEl('ModernSequencePosition');
+    if(!list||typeof list.appendChild!=='function')return;
+    var previous=list.value;list.innerHTML='';
+    cameraPositions.forEach(function(entry){
+      var option=document.createElement('option');option.value=entry.id;
+      option.textContent=entry.name;list.appendChild(option);
+    });
+    list.value=cameraPositions.some(function(p){return p.id===previous;})?previous:
+      (cameraPositions[0]&&cameraPositions[0].id||'');
+    sequenceControls();
+  }
+  function sequenceEditFields(index){
+    var entry=cameraSequence[index];
+    if(!entry)return;
+    var fields={ModernSequenceName:entry.name,ModernSequenceTravel:entry.travelMs/1000,
+      ModernSequenceHold:entry.holdMs/1000,ModernSequenceEasing:entry.easing};
+    Object.keys(fields).forEach(function(id){var node=newUiEl(id);if(node)node.value=String(fields[id]);});
+  }
+  function renderCameraSequenceKeyframes(preferred){
+    var list=newUiEl('ModernSequenceKeyframes');
+    if(!list||typeof list.appendChild!=='function'||!cameraSequenceApi)return;
+    var index=preferred===undefined?selectedSequenceIndex():preferred;
+    list.innerHTML='';
+    var moments=cameraSequenceApi.timeline(cameraSequence);
+    cameraSequence.forEach(function(frame,i){
+      var option=document.createElement('option');option.value=String(i);
+      option.textContent=(i+1)+'. '+frame.name+' · '+(moments[i].arrivalMs/1000).toFixed(1)+' s';
+      list.appendChild(option);
+    });
+    index=index>=0&&index<cameraSequence.length?index:(cameraSequence.length?0:-1);
+    list.value=index<0?'':String(index);
+    if(index>=0)sequenceEditFields(index);
+    if(!cameraTransition){
+      var total=cameraSequenceApi.totalMs(cameraSequence);
+      sequenceStatus(cameraSequence.length+' keyframe(s) · '+(total/1000).toFixed(1)+' s total'+
+        (cameraSequence.length<2?' · add at least two to play':''));
+    }
+    sequenceControls();
+  }
+  function sequenceInputMilliseconds(id,min,max){
+    var node=newUiEl(id),raw=node?String(node.value).trim():'';
+    var number=Number(raw);
+    if(!raw||!Number.isFinite(number)||number<min||number>max)
+      throw RangeError((id==='ModernSequenceHold'?'Pause':'Travel')+' must be between '+min+' and '+max+' seconds');
+    return Math.round(number*1000);
+  }
+  function readSequenceFrame(position,first){
+    var input=newUiEl('ModernSequenceName');
+    var name=String(input&&input.value||position.name||'').trim();
+    if(!name||name.length>80)throw RangeError('Enter a keyframe name (up to 80 characters)');
+    var ease=newUiEl('ModernSequenceEasing'),easing=ease&&ease.value||'smoothstep';
+    if(!['linear','smoothstep'].includes(easing))throw RangeError('Invalid keyframe timing');
+    var travelMs=first?0:sequenceInputMilliseconds('ModernSequenceTravel',.2,120);
+    var holdMs=sequenceInputMilliseconds('ModernSequenceHold',0,120);
+    return {name:name,camera:Object.assign({},position.camera),travelMs:travelMs,holdMs:holdMs,easing:easing};
+  }
+  function commitCameraSequence(frames,index,message){
+    if(!cameraSequenceApi)throw Error('Camera sequence module is unavailable');
+    // Atomic validation: rejected edits must not mutate camera or persistence.
+    var verified=cameraSequenceApi.validate(frames);
+    cameraSequence=verified;renderCameraSequenceKeyframes(index);
+    scheduleExperimentSave();sequenceStatus(message+' · '+(cameraSequenceApi.totalMs(verified)/1000).toFixed(1)+' s total');
+  }
+  function reindexSequence(frames){
+    return frames.map(function(frame,i){
+      return Object.assign({},frame,{travelMs:i===0?0:(frame.travelMs||5000)});
+    });
+  }
+  function startCameraSequence(){
+    if(!cameraSequenceApi)throw Error('Camera sequence module is unavailable');
+    if(cameraTransition)throw RangeError('An animation is already playing');
+    if(state.demosActive||state.mode==='demos')throw RangeError('Switch to Scene or Compare first');
+    if(!autoPreviewSupported())throw RangeError('Fast Preview is unavailable for this atmosphere / surface combination');
+    var frames=cameraSequenceApi.validate(cameraSequence);
+    if(frames.length<2)throw RangeError('Add at least two keyframes');
+    var duration=cameraSequenceApi.totalMs(frames);
+    // Validate all segment midpoints and all arrivals before mutating any state.
+    var timeline=cameraSequenceApi.timeline(frames);
+    frames.forEach(function(frame,i){
+      checkedCameraPosition(frame.camera);
+      if(i>0){
+        var half=timeline[i-1].departureMs+frame.travelMs/2;
+        checkedCameraPosition(cameraSequenceApi.cameraAt(frames,half));
+      }
+    });
+    stopCameraKeyboard(true);abortCameraDrag();cancelEdits();cancelPending();stopAutoCameraPreview();
+    cameraTransition={kind:'sequence',original:captureCameraPose(),sequence:frames,
+      startedAt:profileNow(),durationMs:duration,frame:null};
+    transitionPose(frames[0].camera);transitionInputPreview();markCustom();transitionControls();
+    sequenceStatus('Playing camera sequence · 0%');
+    requestAutoCameraPreview();
+    cameraTransition.frame=requestAnimationFrame(cameraTransitionTick);
+  }
+  function bindCameraSequence(){
+    var picker=newUiEl('ModernSequenceKeyframes');
+    if(!picker||!cameraSequenceApi)return;
+    function safely(action){return function(){
+      try{action();}catch(error){sequenceStatus(error.message,true);}
+    };}
+    picker.addEventListener('change',function(){
+      sequenceEditFields(selectedSequenceIndex());sequenceControls();
+    });
+    var positionPicker=newUiEl('ModernSequencePosition');
+    if(positionPicker)positionPicker.addEventListener('change',function(){
+      var position=cameraPositions.find(function(p){return p.id===positionPicker.value;});
+      var name=newUiEl('ModernSequenceName');if(name&&position)name.value=position.name;
+      sequenceControls();
+    });
+    newUiEl('ModernSequenceAdd').addEventListener('click',safely(function(){
+      if(cameraTransition)throw RangeError('Stop playback before editing');
+      if(cameraSequence.length>=20)throw RangeError('Maximum 20 keyframes');
+      var position=cameraPositions.find(function(p){return p.id===positionPicker.value;});
+      if(!position)throw RangeError('Select a saved camera position');
+      // On an empty sequence the travel duration is necessarily zero. When
+      // appending after that first frame, restore the default inbound 5 s.
+      var first=cameraSequence.length===0;
+      var duration=newUiEl('ModernSequenceTravel');
+      if(!first&&String(duration.value)==='0')duration.value='5';
+      var frame=readSequenceFrame(position,first);
+      commitCameraSequence(cameraSequence.concat([frame]),cameraSequence.length,'Keyframe added: '+frame.name);
+    }));
+    newUiEl('ModernSequenceUpdate').addEventListener('click',safely(function(){
+      if(cameraTransition)throw RangeError('Stop playback before editing');
+      var index=selectedSequenceIndex();if(index<0)throw RangeError('Select a keyframe');
+      var old=cameraSequence[index];
+      var frame=readSequenceFrame({camera:old.camera,name:old.name},index===0);
+      var updated=cameraSequence.slice();updated[index]=frame;
+      commitCameraSequence(updated,index,'Updated keyframe: '+frame.name);
+    }));
+    newUiEl('ModernSequenceReplace').addEventListener('click',safely(function(){
+      if(cameraTransition)throw RangeError('Stop playback before editing');
+      var index=selectedSequenceIndex();if(index<0)throw RangeError('Select a keyframe');
+      var position=cameraPositions.find(function(p){return p.id===positionPicker.value;});
+      if(!position)throw RangeError('Select a saved camera position');
+      var updated=cameraSequence.slice();
+      updated[index]=Object.assign({},updated[index],{camera:Object.assign({},position.camera)});
+      commitCameraSequence(updated,index,'Replaced keyframe pose from: '+position.name);
+    }));
+    [['ModernSequenceUp',-1],['ModernSequenceDown',1]].forEach(function(pair){
+      newUiEl(pair[0]).addEventListener('click',safely(function(){
+        if(cameraTransition)throw RangeError('Stop playback before editing');
+        var index=selectedSequenceIndex(),other=index+pair[1];
+        if(index<0||other<0||other>=cameraSequence.length)throw RangeError('Cannot move keyframe');
+        var frames=cameraSequence.slice();
+        var item=frames[index];frames[index]=frames[other];frames[other]=item;
+        commitCameraSequence(reindexSequence(frames),other,'Keyframe reordered');
+      }));
+    });
+    newUiEl('ModernSequenceRemove').addEventListener('click',safely(function(){
+      if(cameraTransition)throw RangeError('Stop playback before editing');
+      var index=selectedSequenceIndex();if(index<0)throw RangeError('Select a keyframe');
+      var frames=cameraSequence.filter(function(_,i){return i!==index;});
+      commitCameraSequence(reindexSequence(frames),Math.min(index,frames.length-1),'Keyframe removed');
+    }));
+    newUiEl('ModernSequenceClear').addEventListener('click',safely(function(){
+      if(cameraTransition)throw RangeError('Stop playback before editing');
+      commitCameraSequence([],-1,'Sequence cleared');
+    }));
+    newUiEl('ModernSequencePlay').addEventListener('click',safely(startCameraSequence));
+    newUiEl('ModernSequenceStop').addEventListener('click',function(){
+      if(cameraTransition&&cameraTransition.kind==='sequence')stopCameraTransition(false,null,true);
+    });
+    newUiEl('ModernSequenceCancel').addEventListener('click',function(){
+      if(cameraTransition&&cameraTransition.kind==='sequence')stopCameraTransition(true,null,true);
+    });
+    renderCameraSequencePositions();renderCameraSequenceKeyframes(-1);
+  }
   function cameraPositionStatus(message,problem){
     var element=newUiEl('ModernCameraPositionsStatus');
     if(element){element.textContent=message||'';element.classList.toggle('is-error',!!problem);}
@@ -1638,7 +1849,7 @@
       var chosen=cameraPositions.find(function(entry){return entry.id===list.value;});
       var name=newUiEl('ModernCameraPositionName');if(name&&chosen)name.value=chosen.name;
     }
-    renderCameraTransitionChoices();
+    renderCameraTransitionChoices();renderCameraSequencePositions();
   }
   function selectedCameraPosition(){
     var list=newUiEl('ModernCameraPositions');
@@ -2367,8 +2578,8 @@
       state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
       state.transitionProfile={source:'standard',weight:0};
       state.inverseProfile={source:'temperature-lapse',weight:0};
-      cameraPositions=[];initialCamera=captureCameraPose();
-      renderCameraPositions();model.Update();syncNumericInputs();
+      cameraPositions=[];cameraSequence=[];initialCamera=captureCameraPose();
+      renderCameraPositions();renderCameraSequenceKeyframes(-1);model.Update();syncNumericInputs();
       var preset=el('ModernPreset');if(preset)preset.value=id;
       redraw();
     }catch(error){updateStatus(error.message,true);}
@@ -2471,6 +2682,7 @@
     bindCameraKeyboard();
     bindCameraPositions();
     bindCameraTransition();
+    bindCameraSequence();
     bindObjectFields();
     bindSettingsTabs();
     bindHelp();
@@ -2564,6 +2776,7 @@
     getPerformanceSnapshot:performanceSnapshot,
     getCameraInteraction:function(){return cameraInteraction;},
     getCameraPositions:function(){return cameraPositions.map(function(p){return {id:p.id,name:p.name,camera:Object.assign({},p.camera)};});},
+    getCameraSequence:function(){return cameraSequenceApi?cameraSequenceApi.validate(cameraSequence):[];},
     getCameraTransition:function(){return cameraTransition?{playing:true,from:cameraTransition.fromName,
       to:cameraTransition.toName,durationMs:cameraTransition.durationMs}: {playing:false};},
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},

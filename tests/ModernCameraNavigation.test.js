@@ -7,6 +7,7 @@ const vm=require('node:vm');
 const nav=require('../src/ui/modern/ModernCameraNavigation');
 const interaction=require('../src/ui/modern/ModernCameraInteraction');
 const interpolator=require('../src/camera/ModernCameraInterpolator');
+const sequence=require('../src/camera/ModernCameraSequence');
 const codec=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 const compareModel=require('../src/ui/modern/ModernCompareModel');
@@ -82,7 +83,7 @@ test('camera positions survive JSON/URL round-trip without changing legacy exper
   ])assert.throws(()=>codec.validate({...old,cameraPositions:invalid}),RangeError);
 });
 
-function boot(){
+function boot(savedExperiment){
   const ids=[...read('CurvatureModern.html').matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]);
   const nodes=new Map(),renders=[],globalListeners={},frames=new Map(),timers=new Map();
   let clock=100,seq=0,ons=[];
@@ -124,11 +125,11 @@ function boot(){
     ObjSideType:[0,0],ObjSidePos:[35,25.4],ObjSideVar:[0,0],
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0],
     Update(){this.FocalLength=this.FocalLengthField;this.ViewAngleField=1.2;this.camViewAngle=.02;}});}
-  const storage=new Map();
+  const storage=new Map(savedExperiment?[[codec.STORAGE_KEY,JSON.stringify(savedExperiment)]]:[]);
   const win={CurveAppClass:Model,CurvatureModernSceneState:scene,
     CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
     CurvatureModernCameraInteraction:interaction,CurvatureModernCameraNavigation:nav,
-    CurvatureModernCameraInterpolator:interpolator,
+    CurvatureModernCameraInterpolator:interpolator,CurvatureModernCameraSequence:sequence,
     CurvatureModernExperimentState:codec,
     CurvatureModernCompareState:compare,CurvatureModernCompareModel:compareModel,
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
@@ -142,8 +143,9 @@ function boot(){
     addEventListener(name,fn){(globalListeners[name]??=[]).push(fn);},
     NewGraphX3D(args){return {Canvas:sceneCanvas,UpdateCanvasSize(){},Redraw(){args.DrawFunc({Canvas:sceneCanvas});}};},
     xOnLoad(fn){ons.push(fn);},console};
+  if(savedExperiment)win.location={href:'https://example.org/CurvatureModern.html',search:''};
   win.window=win;
-  const context={window:win,document,console,
+  const context={window:win,document,console,URL,URLSearchParams,
     requestAnimationFrame(fn){const id=++seq;frames.set(id,fn);return id;},
     cancelAnimationFrame(id){frames.delete(id);},
     setTimeout(fn){const id=++seq;timers.set(id,fn);return id;},
@@ -497,4 +499,152 @@ test('losing browser focus stops transition and returns to idle optics',()=>{
   assert.equal(m.CameraNorth,north);
   assert.equal(h.renders.at(-1).quality,'accurate');
   h.flushFrames(10000);assert.equal(m.CameraNorth,north);
+});
+
+function savedSequence(h){
+  savedTransition(h);
+  const n=h.nodes,m=h.app.getModel();
+  m.CameraNorth=800;m.CameraEast=250;m.Height=50;m.Pan=50;
+  n.get('ModernCameraPositionName').value='Bridge C';n.get('ModernCameraSave').dispatch('click');
+  n.get('ModernSequencePosition').value='camera-1';
+  n.get('ModernSequencePosition').dispatch('change');
+  n.get('ModernSequenceHold').value='1';
+  n.get('ModernSequenceAdd').dispatch('click');
+  n.get('ModernSequencePosition').value='camera-2';n.get('ModernSequencePosition').dispatch('change');
+  n.get('ModernSequenceTravel').value='4';n.get('ModernSequenceHold').value='2';
+  n.get('ModernSequenceEasing').value='linear';
+  n.get('ModernSequenceAdd').dispatch('click');
+  n.get('ModernSequencePosition').value='camera-3';n.get('ModernSequencePosition').dispatch('change');
+  n.get('ModernSequenceTravel').value='3';n.get('ModernSequenceHold').value='0.5';
+  n.get('ModernSequenceAdd').dispatch('click');
+}
+test('keyframe sequence UI snapshots positions and saves an independent timeline',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
+  assert.equal(h.app.getCameraSequence().length,3);
+  assert.equal(sequence.totalMs(h.app.getCameraSequence()),10500);
+  assert.equal(h.app.getCameraSequence()[1].camera.CameraNorth,400);
+  n.get('ModernCameraPositions').value='camera-2';
+  m.CameraNorth=1550;n.get('ModernCameraUpdate').dispatch('click');
+  assert.equal(h.app.getCameraPositions()[1].camera.CameraNorth,1550);
+  assert.equal(h.app.getCameraSequence()[1].camera.CameraNorth,400,
+    'sequence owns an immutable snapshot independent of Camera Positions');
+  const saved=experiment([]);
+  saved.cameraSequence={keyframes:h.app.getCameraSequence()};
+  const roundtrip=codec.decode(codec.encode(saved));
+  assert.equal(roundtrip.cameraSequence.keyframes.length,3);
+  assert.equal(roundtrip.cameraSequence.keyframes[1].camera.CameraNorth,400);
+});
+
+test('camera sequence plays holds and travel using Fast, then restores Accurate in Scene',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
+  const initialPosition=m.CameraNorth;
+  n.get('ModernSequencePlay').dispatch('click');
+  assert.equal(h.app.getCameraTransition().playing,true);
+  approx(m.CameraNorth,0);
+  h.flushFrames(500);approx(m.CameraNorth,0);
+  h.flushFrames(2500);approx(m.CameraNorth,200);
+  h.flushFrames();assert.ok(h.renders.some(r=>r.quality==='fast'));
+  h.flushFrames(2000);approx(m.CameraNorth,400);
+  h.flushFrames(1000);approx(m.CameraNorth,400);
+  h.flushFrames(4500);h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  approx(m.CameraNorth,800);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+  assert.equal(h.renders.at(-1).stride,1);
+  assert.equal(initialPosition,800,'Play starts from the first snapshot regardless of the pre-play camera');
+});
+
+test('sequence Stop, Cancel and manual gesture preserve the same semantics as two-pose transition',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
+  m.CameraNorth=25;
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(3000);
+  const paused=m.CameraNorth;assert.ok(paused>0&&paused<400);
+  n.get('ModernSequenceStop').dispatch('click');h.flushFrames();
+  approx(m.CameraNorth,paused);assert.equal(h.renders.at(-1).quality,'accurate');
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(4500);
+  n.get('ModernSequenceCancel').dispatch('click');h.flushFrames();
+  approx(m.CameraNorth,paused);assert.equal(h.app.getCameraTransition().playing,false);
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(2000);
+  h.dispatchGlobal('keydown',{code:'KeyW'});
+  assert.equal(h.app.getCameraTransition().playing,false);
+  h.flushFrames(100);h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames();
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('Compare sequence shares its pose and LOD between A/B',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
+  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+  n.get('ModernSequencePlay').dispatch('click');h.flushFrames(3000);h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,true);
+  const models=h.app.getCompareModels();
+  assert.equal(models.A.CameraNorth,models.B.CameraNorth);
+  const fast=h.renders.filter(r=>r.quality==='fast');
+  assert.ok(fast.length>=2);assert.equal(fast.at(-1).stride,fast.at(-2).stride);
+  h.flushFrames(9000);h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  const finalModels=h.app.getCompareModels();
+  approx(finalModels.A.CameraNorth,800);approx(finalModels.B.CameraNorth,800);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('sequence editing can reorder, rename, retime and reject invalid edits atomically',()=>{
+  const h=boot(),n=h.nodes;h.flushFrames();savedSequence(h);
+  const picker=n.get('ModernSequenceKeyframes');picker.value='1';picker.dispatch('change');
+  n.get('ModernSequenceName').value='Middle';
+  n.get('ModernSequenceTravel').value='2';n.get('ModernSequenceHold').value='0';
+  n.get('ModernSequenceUpdate').dispatch('click');
+  assert.equal(h.app.getCameraSequence()[1].travelMs,2000);
+  assert.equal(h.app.getCameraSequence()[1].name,'Middle');
+  n.get('ModernSequenceDown').dispatch('click');
+  assert.equal(h.app.getCameraSequence()[2].name,'Middle');
+  n.get('ModernSequenceUp').dispatch('click');
+  assert.equal(h.app.getCameraSequence()[1].name,'Middle');
+  picker.value='2';picker.dispatch('change');
+  n.get('ModernSequenceHold').value='-7';
+  const before=JSON.stringify(h.app.getCameraSequence());
+  n.get('ModernSequenceUpdate').dispatch('click');
+  assert.equal(JSON.stringify(h.app.getCameraSequence()),before);
+  assert.match(n.get('ModernSequenceStatus').textContent,/pause/i);
+  n.get('ModernSequenceRemove').dispatch('click');
+  assert.equal(h.app.getCameraSequence().length,2);
+  n.get('ModernSequenceClear').dispatch('click');
+  assert.equal(h.app.getCameraSequence().length,0);
+});
+
+
+test('restored camera sequence can be edited and persisted by the live Modern app',()=>{
+  const original=experiment([]);
+  const first={...pose},middle={...pose,CameraNorth:200},final={...pose,CameraNorth:400};
+  original.cameraSequence={keyframes:[
+    {name:'A',camera:first,travelMs:0,holdMs:0,easing:'linear'},
+    {name:'B',camera:middle,travelMs:2000,holdMs:500,easing:'linear'},
+    {name:'C',camera:final,travelMs:3000,holdMs:0,easing:'smoothstep'}
+  ]};
+  const h=boot(original),n=h.nodes;
+  assert.equal(h.app.getCameraSequence().length,3);
+  assert.equal(h.app.getCameraSequence()[2].camera.CameraNorth,400);
+  n.get('ModernSequenceKeyframes').value='2';
+  n.get('ModernSequenceKeyframes').dispatch('change');
+  n.get('ModernSequenceHold').value='1.5';
+  n.get('ModernSequenceUpdate').dispatch('click');
+  h.flushTimers();
+  const stored=codec.validate(JSON.parse(h.storage.get(codec.STORAGE_KEY)));
+  assert.equal(stored.cameraSequence.keyframes.length,3);
+  assert.equal(stored.cameraSequence.keyframes[2].holdMs,1500);
+  assert.equal(stored.scene.camera.CameraNorth,0,'camera pose unchanged by keyframe editing');
+});
+
+test('invalid sequence inputs and unsupported atmosphere reject playback without camera mutation',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
+  const before=m.CameraNorth;
+  n.get('ModernAtmosphere').value='temperature-lapse';n.get('ModernAtmosphere').dispatch('change');
+  h.flushFrames();n.get('ModernSequencePlay').dispatch('click');
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.equal(m.CameraNorth,before);
+  assert.match(n.get('ModernSequenceStatus').textContent,/Fast Preview/i);
+  n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');
+  n.get('ModernSequenceKeyframes').value='2';n.get('ModernSequenceKeyframes').dispatch('change');
+  const old=JSON.stringify(h.app.getCameraSequence());
+  n.get('ModernSequenceTravel').value='-1';n.get('ModernSequenceUpdate').dispatch('click');
+  assert.equal(JSON.stringify(h.app.getCameraSequence()),old);
 });

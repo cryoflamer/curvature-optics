@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 59,
-      "uniqueScripts": 58,
+      "scriptTags": 60,
+      "uniqueScripts": 59,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -166,6 +166,7 @@
         "src/ui/modern/ModernCameraInteraction.js",
         "src/ui/modern/ModernCameraNavigation.js",
         "src/camera/ModernCameraInterpolator.js",
+        "src/camera/ModernCameraSequence.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
         "src/ui/modern/ModernCameraDragPreview.js",
         "src/ui/modern/ModernRenderProfiler.js",
@@ -298,6 +299,7 @@
     ],
     "loadedByModernNotLegacy": [
       "src/camera/ModernCameraInterpolator.js",
+      "src/camera/ModernCameraSequence.js",
       "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
       "src/optics/OpticalFastRayField.js",
@@ -339,7 +341,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 139,
+  "sourceJsCount": 140,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -530,10 +532,25 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/camera/ModernCameraSequence.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernCameraInterpolator.test.js",
         "tests/ModernCameraNavigation.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/camera/ModernCameraSequence.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernExperimentState.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCameraSequence.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1966,6 +1983,7 @@
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCameraSequence.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
@@ -2011,6 +2029,7 @@
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCameraSequence.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernInverseTemperature97.test.js",

@@ -130,3 +130,12 @@ speed; optical recomputation occurs on release. The Camera panel exposes exact
 East/North coordinates, movement/turn rates, Alt-wheel step and up to 20 named
 camera poses. Poses round-trip with Modern experiments and leave physical A/B
 settings unchanged. See [`docs/modern-camera-navigation.md`](docs/modern-camera-navigation.md).
+
+### Modern camera sequences
+
+Scene / Compare → Camera → **Camera sequence** composes saved camera poses into
+an ordered series of keyframes with individual travel times, easing and pauses.
+Keyframes own pose snapshots and are preserved in JSON/URL experiments.
+Playback uses Fast Preview/LOD, with Accurate restored at rest. See
+[`docs/modern-camera-interpolation.md`](docs/modern-camera-interpolation.md)
+for timeline semantics, limits and tests.

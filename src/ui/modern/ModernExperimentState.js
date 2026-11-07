@@ -2,10 +2,10 @@
  * controls. Legacy ?state= remains reserved for the original DataX stream.
  */
 (function(root,factory){
-  var api=factory();
+  var api=factory(root);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentState=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root){
   'use strict';
   var VERSION=1,PARAM='experiment',STORAGE_KEY='curvature-modern-experiment-v1';
   var CAMERA=['Height','FocalLengthField','Pan','Nick','Roll'];
@@ -52,10 +52,11 @@
         showTemperatureProfile:ui.showTemperatureProfile===true,
         temperaturePlacement:ui.temperaturePlacement||'outside-right'}};
     if(ui.cameraPositions&&ui.cameraPositions.length)snapshot.cameraPositions=ui.cameraPositions;
+    if(ui.cameraSequence&&ui.cameraSequence.length)snapshot.cameraSequence={keyframes:ui.cameraSequence};
     return validate(snapshot);
   }
   function validate(value){
-    shape(value,['version','scene','compare','display'],['cameraPositions']);
+    shape(value,['version','scene','compare','display'],['cameraPositions','cameraSequence']);
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
     shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile','inverseProfile']);
@@ -90,6 +91,14 @@
           throw RangeError('Invalid saved camera aspect ratio');
         return {id:id,name:name,camera:pose};
       });
+    }
+    var cameraSequence=null;
+    if(value.cameraSequence!==undefined){
+      shape(value.cameraSequence,['keyframes']);
+      var sequence=root.CurvatureModernCameraSequence||
+        (typeof require==='function'?require('../../camera/ModernCameraSequence'):null);
+      if(!sequence)throw Error('Camera sequence validator is unavailable');
+      cameraSequence=sequence.validate(value.cameraSequence.keyframes);
     }
     shape(s.objects,OBJECT);
     var objectLimits={NObjects:[0,200,true],ObjType:[0,3,true],ObjDist:[0,1e7],
@@ -157,6 +166,7 @@
         temperaturePlacement:d.temperaturePlacement===undefined?'outside-right':
           choice(d.temperaturePlacement,TEMPERATURE_PLACEMENTS)}};
     if(value.cameraPositions!==undefined&&cameraPositions.length)result.cameraPositions=cameraPositions;
+    if(cameraSequence&&cameraSequence.length)result.cameraSequence={keyframes:cameraSequence};
     return result;
   }
   function encode(value){

@@ -287,3 +287,9 @@ button{cursor:pointer}
 .modern-transition-actions{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:8px}
 .modern-transition-actions button{min-width:0;overflow-wrap:anywhere}
 #ModernTransitionStatus.is-error{color:#ac3145}
+
+/* An ordered keyframe picker needs multiple visible rows despite the default
+   single-row select height. Keep it readable in the narrow Camera sidebar. */
+#ModernSequenceKeyframes{height:132px;min-height:132px;padding:4px 8px}
+#ModernSequenceKeyframes option{padding:5px 3px}
+#ModernSequenceStatus.is-error{color:#ac3145}
