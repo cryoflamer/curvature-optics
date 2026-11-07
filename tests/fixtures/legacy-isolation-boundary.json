@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 56,
-      "uniqueScripts": 55,
+      "scriptTags": 57,
+      "uniqueScripts": 56,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -151,6 +151,7 @@
         "src/optics/OpticalTargetProjection.js",
         "src/optics/OpticalConformalPredictor.js",
         "src/optics/OpticalSharedRayField.js",
+        "src/optics/OpticalFastRayField.js",
         "src/optics/OpticalTowerSilhouette.js",
         "src/optics/CurvaturePhysicalGroundGuides.js",
         "src/optics/CurvaturePhysicalPolygonFills.js",
@@ -296,6 +297,7 @@
     "loadedByModernNotLegacy": [
       "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
+      "src/optics/OpticalFastRayField.js",
       "src/optics/OpticalRayHorizon.js",
       "src/renderers/CurvatureAtmosphericVisibility.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
@@ -327,7 +329,6 @@
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
       "src/jsgx3d.js",
-      "src/optics/OpticalFastRayField.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
       "src/x.js",
@@ -1012,6 +1013,7 @@
         "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernFastPreview.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
         "tests/ModernTemperatureGradient.test.js",
@@ -1052,8 +1054,12 @@
       "commonJsToolCallers": []
     },
     "src/optics/OpticalFastRayField.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/optics/CurvaturePhysicalSceneOptics.js"
+      ],
       "commonJsTestCallers": [
         "tests/OpticalFastRayField.test.js"
       ],
@@ -1176,6 +1182,7 @@
         "tests/AtmosphericSceneReliability109.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/InversePreparedGradient.test.js",
+        "tests/ModernFastPreview.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalEngineeredExperiment1404.test.js",
         "tests/OpticalEngineeredQualification1405.test.js",
@@ -1583,6 +1590,7 @@
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/CurvaturePhysicsRegression.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
+        "tests/ModernFastPreview.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
         "tests/ModernTemperatureGradient.test.js",
@@ -1903,6 +1911,7 @@
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentState.test.js",
+        "tests/ModernFastPreview.test.js",
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernPhysicalCompare.test.js",

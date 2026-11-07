@@ -1784,3 +1784,21 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
   `docs/fast-optical-preview.md`, `tests/OpticalFastRayField.test.js` and
   `tools/compare-fast-ray-field.js`. Production integration and camera Auto
   preview must follow separate pixel-accuracy and scheduling reviews.
+
+### Manual Fast Preview in Modern (next integration stage)
+
+- `CurvaturePhysicalSceneOptics` can now consume `OpticalFastRayField.sample()` for
+  object silhouettes, fills and physical ground guides with no hidden RK4
+  fallback. The ordinary Accurate field remains unchanged; the quality is
+  explicitly keyed and independent Scene/Compare A/B preview sessions are used.
+- Modern → Display offers manual `Accurate / Fast Preview` control. Accurate is
+  the default; this display choice does not enter experiment URLs/JSON. Exact
+  horizon overlays are disabled in Fast mode. Unsupported profiles are refused
+  and the corresponding viewport is cleared instead of retaining stale pixels.
+- Preview-specific contact margin is 0.1 m (versus 3 m in standalone Standard
+  diagnostics): this is a visual approximation, **not** a verified confidence
+  bound or a replacement for exact ground-contact detection. Browser pixel
+  parity, mixed-profile and end-to-end FPS audits remain for the next stage.
+- `tests/ModernFastPreview.test.js` covers the shared Modern geometry path,
+  scene/Compare UI selection, zero RK4 calls, failure isolation and cache
+  restoration. See `docs/fast-optical-preview.md`.

@@ -13,7 +13,7 @@
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    geometryBackend:'canvas',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null}};
+    geometryBackend:'canvas',opticalQuality:'accurate',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},compareFastCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -70,6 +70,33 @@
     if(status)status.textContent='Active: '+backend+
       (result&&result.geometryFallback?' · fallback: '+result.geometryFallback:'');
     if(active)active.textContent=backend;
+  }
+  function bindOpticalQuality(){
+    var select=geometryUi('ModernOpticalQuality');
+    if(!select)return;
+    select.value=state.opticalQuality;
+    select.addEventListener('change',function(){
+      state.opticalQuality=select.value==='fast'?'fast':'accurate';
+      updateOpticalQualityStatus();redraw();
+    });
+    updateOpticalQualityStatus();
+  }
+  function updateOpticalQualityStatus(message){
+    var target=geometryUi('ModernOpticalQualityStatus');
+    if(target)target.textContent=message||('Active: '+
+      (state.opticalQuality==='fast'?'Fast Preview (approximate; no RK4 fallback)':'Accurate (RK4)'));
+  }
+  // An unsupported Fast Preview must not leave a previously calculated frame
+  // masquerading as the new camera/atmosphere state.
+  function clearUnavailablePreview(graph){
+    var canvas=graph&&graph.Canvas,ctx=canvas&&canvas.getContext&&canvas.getContext('2d');
+    if(ctx&&typeof ctx.clearRect==='function'){
+      if(typeof ctx.save==='function')ctx.save();
+      try{
+        if(typeof ctx.setTransform==='function')ctx.setTransform(1,0,0,1,0,0);
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+      }finally{if(typeof ctx.restore==='function')ctx.restore();}
+    }
   }
   function bindGeometryBackend(){
     var select=geometryUi('ModernGeometryBackend');
@@ -560,6 +587,7 @@
         visibility:state.visibility,temperatureProfile:state.temperatureProfile,
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
+        opticalQuality:state.opticalQuality,
         forceColdOptics:state.opticalSample==='cold'
       });
       var renderedAt=profileNow();
@@ -574,7 +602,10 @@
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
         temperatureProfile:state.temperatureProfile,transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile};
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,model);
-      if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
+      if(state.opticalQuality==='fast'){
+        var fastHorizon=el('ModernHorizonStatusScene');
+        if(fastHorizon)fastHorizon.textContent='Exact horizon: disabled in Fast Preview';
+      }else if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
@@ -583,14 +614,18 @@
         backend:result.geometryBackend,cacheReused:result.cacheReused,
         opticalSample:state.opticalSample,opticalStages:result.opticalStages,
         opticalWork:result.opticalWork,fieldStats:result.fieldStats});
-      var fullStatus=(result.cacheReused?'Cached optics':'Physical optics')+
+      var fullStatus=(state.opticalQuality==='fast'?'Fast Preview · approximate':
+        (result.cacheReused?'Cached optics':'Physical optics'))+
         ' · '+result.drawn+' outline pieces · '+result.fillTriangles+
         ' fill triangles · '+result.unresolved+' unresolved · '+(result.geometryBackend||'Canvas 2D')+
         (result.geometryFallback?' (GPU fallback: '+result.geometryFallback+')':'')+
         (result.timings?' · '+Math.round(result.timings.totalMs)+' ms':'');
       var statusNode=el('ModernStatus');if(statusNode)statusNode.title=fullStatus;
       updateStatus(fullStatus,result.unresolved>0);
+      updateOpticalQualityStatus();
     }catch(error){
+      if(state.opticalQuality==='fast')clearUnavailablePreview(g);
+      updateOpticalQualityStatus(state.opticalQuality==='fast'?'Fast Preview: '+error.message:undefined);
       updateStatus('Physical renderer: '+error.message,true);
       if(root.console&&root.console.error)root.console.error('Modern Scene render:',error);
     }
@@ -609,10 +644,18 @@
         temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,
         transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
         inverseProfile:spec?spec.inverseProfile:state.inverseProfile,interactive:false,
-        geometryBackend:state.geometryBackend,forceColdOptics:state.opticalSample==='cold'};
+        geometryBackend:state.geometryBackend,opticalQuality:state.opticalQuality,
+        forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
-      if(state.compareCache[side])options.cacheSession=state.compareCache[side];
+      if(state.opticalQuality==='fast'){
+        // Preview sessions are created lazily: Accurate remains the ordinary
+        // startup path, and A/B cannot evict each other's ray fields.
+        if(!state.compareFastCache[side]&&root.CurvaturePhysicalSceneOptics&&
+            typeof root.CurvaturePhysicalSceneOptics.create==='function')
+          state.compareFastCache[side]=root.CurvaturePhysicalSceneOptics.create();
+        if(state.compareFastCache[side])options.cacheSession=state.compareFastCache[side];
+      }else if(state.compareCache[side])options.cacheSession=state.compareCache[side];
       // Production A/B never installs a WebGPU or replay optical field.
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled(side));
       if(separateDecorations)options.deferDecorations=true;
@@ -625,7 +668,10 @@
       state.compareLast[side]=result;
       updateGeometryBackendStatus(result);
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
-      if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
+      if(state.opticalQuality==='fast'){
+        var approximateHorizon=el('ModernHorizonStatus'+side);
+        if(approximateHorizon)approximateHorizon.textContent='Exact horizon: disabled in Fast Preview';
+      }else if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
       scheduleShimmerFrame();
       var finishedAt=profileNow();
@@ -637,12 +683,15 @@
         opticalWork:result.opticalWork,fieldStats:result.fieldStats});
       var node=el('ModernCompareStatus'+side);
       if(node){
-        node.textContent='Computed optics'+(result.cacheReused?' (cached)':'')+
+        node.textContent=(state.opticalQuality==='fast'?'Fast Preview · approximate':'Computed optics')+
+          (result.cacheReused?' (cached)':'')+
           ' · '+result.drawn+' contours · '+result.fillTriangles+' fills · '+
           result.unresolved+' unresolved';
         node.classList.toggle('is-error',!!result.unresolved);
       }
     }catch(error){
+      if(state.opticalQuality==='fast')clearUnavailablePreview(g);
+      updateOpticalQualityStatus(state.opticalQuality==='fast'?'Fast Preview: '+error.message:undefined);
       var status=el('ModernCompareStatus'+side);
       if(status){status.textContent='Physical model '+side+': '+error.message;status.classList.toggle('is-error',true);}
       if(root.console&&root.console.error)root.console.error('Modern Compare '+side+':',error);
@@ -2122,6 +2171,7 @@
     bindGpuDiagnostics();
     bindPerformanceDiagnostics();
     bindGeometryBackend();
+    bindOpticalQuality();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))
@@ -2209,5 +2259,6 @@
     // DevTools API remains available alongside the 138.3 Atmosphere controls.
     getAtmosphericShimmer:function(){return atmosphericShimmer;},
     getGpuCapabilities:function(){return gpuSnapshot;},
-    getGeometryBackend:function(){return state.geometryBackend;}};
+    getGeometryBackend:function(){return state.geometryBackend;},
+    getOpticalQuality:function(){return state.opticalQuality;}};
 }(window));

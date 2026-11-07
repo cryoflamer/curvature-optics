@@ -21,6 +21,7 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility,cameraTranslation){
   'use strict';
   var opticalSession=optical.create();
+  var fastOpticalSession=optical.create();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
   // During high-frequency camera interaction, only the presentation of dense
   // Globe ground guides is sampled by WHOLE source curves. Never sample
@@ -132,7 +133,8 @@
     var composedAt=now();
     // Explicit cold optical benchmark: discard only the camera-independent
     // ray/composition cache for THIS viewport. No physical parameters change.
-    var session=options.cacheSession||opticalSession;
+    var session=options.cacheSession||
+      (options.opticalQuality==='fast'?fastOpticalSession:opticalSession);
     if(options.forceColdOptics){
       if(!session||typeof session.clearCache!=='function')
         throw new TypeError('Cold optical sampling requires a clearable session');
@@ -185,7 +187,7 @@
       projectionMs:painted.timings.fillGeometryMs,canvasMs:painted.timings.canvasPaintMs,
       decorationsMs:finishedAt-lodFinished-painted.timings.totalMs,
       strokeCalls:painted.statistics.canvasStrokeCalls},
-      mode:'physical-scene',drawn:stats.visibleSegments,
+      mode:'physical-scene',opticalQuality:stats.opticalQuality,drawn:stats.visibleSegments,
       unresolved:stats.unresolved,buildMs:stats.buildMs,
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
       physicalMetricWorld:stats.physicalMetricWorld,
@@ -217,7 +219,7 @@
     try{ctx.setTransform(1,0,0,1,0,0);decorations.draw(canvas,model,camera);}
     finally{ctx.restore();}
   }
-  function resetPhysicalSession(){opticalSession=optical.create();}
+  function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();}
   return {geometryAuditRevision:'140.12.37.2',
     render:render,renderPhysical:renderPhysical,drawPresentationDecorations:drawPresentationDecorations,
     resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,

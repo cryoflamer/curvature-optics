@@ -10,10 +10,11 @@
     root.CurvatureOpticalTowerSilhouette||(typeof require==='function'?require('./OpticalTowerSilhouette'):null),
     root.CurvaturePhysicalGroundGuides||(typeof require==='function'?require('./CurvaturePhysicalGroundGuides'):null),
     root.CurvaturePhysicalPolygonFills||(typeof require==='function'?require('./CurvaturePhysicalPolygonFills'):null),
-    root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null));
+    root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null),
+    root.CurvatureOpticalFastRayField||(typeof require==='function'?require('./OpticalFastRayField'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalSceneOptics=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills,surfaceApi){
+}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills,surfaceApi,fastFields){
   'use strict';
   if(!contract||!fields||!silhouette||!groundGuides||!polygonFills)throw Error('Physical scene optics dependencies required');
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
@@ -197,6 +198,10 @@
           composed.scene.metadata.composition!=='optics-neutral-main')
         throw TypeError('Optics-neutral scene composition required');
       var kind=options.atmosphere||'vacuum',R=options.occlusionRadius===undefined?6371000:options.occlusionRadius;
+      var opticalQuality=options.opticalQuality===undefined?'accurate':options.opticalQuality;
+      if(opticalQuality!=='accurate'&&opticalQuality!=='fast')
+        throw RangeError('Unknown optical quality (accurate or fast expected)');
+      var preview=opticalQuality==='fast';
       if(!ATMOSPHERES.includes(kind)||!Number.isFinite(R)||R<=0)
         throw RangeError('Invalid physical atmospheric configuration');
       var geometry=model.showModel===1?'globe':model.showModel===2?'flat':null;
@@ -205,7 +210,7 @@
         throw RangeError('Globe/Flat physical model required');
       var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,transitionProfile:options.transitionProfile,inverseProfile:options.inverseProfile,settings:options.settings,
         metricWorld:composed.scene.metadata.physicalMetricWorld===true})+
-        '\n'+sceneKey(composed);
+        '\n'+sceneKey(composed)+'\noptical-quality='+opticalQuality;
       // The common frame/painter copies and validates its input scene. A
       // camera-only redraw may therefore reuse the optical composition itself
       // instead of rebuilding thousands of validated line primitives.
@@ -246,13 +251,32 @@
         objects.push(p);
       });});
       var field,fieldStats=null,span=null;
+      if(preview&&kind!=='vacuum'){
+        if(!fastFields||typeof fastFields.create!=='function')
+          throw Error('Fast Preview module is unavailable');
+        var fastProfileOptions=traceKind==='inverse-temperature'?{
+          inverseProfile:options.inverseProfile,temperatureProfile:options.temperatureProfile,
+          occlusionRadius:R}: {occlusionRadius:R};
+        var previewField=fastFields.create({geometry:geometry,radius:model.rEarth,
+          observerHeight:model.Height,atmosphere:traceKind,profileOptions:fastProfileOptions,
+          // In exploratory preview, keep narrow ground-contact uncertainty
+          // instead of erasing whole foundation fills. This is NOT a certified
+          // first-ground accuracy band: final Accurate RK4 remains authoritative.
+          contactMarginMeters:0.1});
+        // Never substitute an RK4 result for an unqualified preview profile.
+        // The UI shows the explicit error and leaves Accurate available.
+        if(previewField.mode==='unsupported')
+          throw RangeError('Fast Preview is unavailable for '+traceKind+' on '+geometry+
+            '; select Accurate (RK4).');
+      }
       if(kind==='vacuum')field={sample:function(d,h){return vacuumSample(geometry,model.rEarth,model.Height,d,h,physicalSurface);}};
       else {
         span=bounds(objects,geometry,model.rEarth,model.Height,physicalSurface);
         // #140.12.12: opt-in precomputed GPU-first grid serves both outlines
         // and fills directly. No CPU shooting is invoked to discover requests
         // or fill gaps. Failed GPU cells stay unresolved, not silently CPU-corrected.
-        if(span&&options.experimentalRayField&&options.experimentalRayField.fullCoverageGrid)
+        if(preview)field=previewField;
+        else if(span&&options.experimentalRayField&&options.experimentalRayField.fullCoverageGrid)
           field=options.experimentalRayField;
         else if(span)field=fields.create({geometry:geometry,radius:model.rEarth,
           observerHeight:model.Height,atmosphere:traceKind,
@@ -313,7 +337,9 @@
         atmosphere:traceKind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,transitionProfile:options.transitionProfile,inverseProfile:options.inverseProfile,step:settings.step,
         metricGrid:physicalSurface,
         maxDistance:Math.min(100000,model.rEarth*.1),
-        sampleGround:kind!=='vacuum'&&field?function(d){return field.exact(d,0);}:null});
+        sampleGround:kind!=='vacuum'&&field?function(d){
+          return preview?field.sample(d,0):field.exact(d,0);
+        }:null});
       var physicalGuides=guideProjection.transform(guideSource);
       var groundGuidesMs=clock()-startedProfile-fieldSetupMs;
       var groundAfter=counters();
@@ -329,7 +355,8 @@
           minDistance:span.distances[0],maxDistance:span.distances[span.distances.length-1],
           minHeight:span.heights[0],maxHeight:span.heights[span.heights.length-1]
         }:null,budgetExceeded:false,
-        atmosphere:kind,step:settings.step,guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
+        atmosphere:kind,opticalQuality:opticalQuality,step:settings.step,
+        guideIsGeometric:false,groundHorizon:guideProjection.horizonDistance,
         guideSolves:guideProjection.solves(),sharedGroundSolves:groundFieldSolves,
         sharedGroundCacheHits:groundCacheHits,guideSegments:physicalGuides.length,
         guideRenderExtent:guideProjection.renderExtent,guideCulling:guideProjection.cullingStats(),

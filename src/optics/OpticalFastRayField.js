@@ -112,7 +112,8 @@
     }
     function stats(){return Object.assign({geometry:geometry,atmosphere:atmosphere,
       mode:mode,gradient:mode==='unsupported'?null:gradient,
-      contactMarginMeters:contactMargin,shootRK4Calls:0},counters);}
+      contactMarginMeters:contactMargin,shootRK4Calls:0,
+      solves:counters.samples,hits:0,exactSolveMs:0},counters);}
     return {sample:sample,stats:stats,mode:mode};
   }
   return {create:create};

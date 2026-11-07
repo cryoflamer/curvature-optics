@@ -39,6 +39,7 @@
 <script src="src/optics/OpticalTargetProjection.js?v=140.12.99"></script>
 <script src="src/optics/OpticalConformalPredictor.js?v=140.12.46"></script>
 <script src="src/optics/OpticalSharedRayField.js?v=140.12.46"></script>
+<script src="src/optics/OpticalFastRayField.js"></script>
 <script src="src/optics/OpticalTowerSilhouette.js?v=140.12.37.2"></script>
 <script src="src/optics/CurvaturePhysicalGroundGuides.js?v=140.12.97"></script>
 <script src="src/optics/CurvaturePhysicalPolygonFills.js?v=140.12.37.2"></script>
@@ -319,6 +320,14 @@
         <div id="ModernCompareDisplayOptions">
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
         <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
+        </div>
+        <div class="modern-gpu-diagnostics" aria-label="Optical quality selection">
+          <div class="modern-gpu-heading"><strong>Optical quality · experimental</strong></div>
+          <div class="modern-field"><label for="ModernOpticalQuality">Optical ray field</label>
+            <select id="ModernOpticalQuality"><option value="accurate" selected>Accurate · RK4 (reference)</option>
+              <option value="fast">Fast Preview · approximate</option></select></div>
+          <p class="modern-note">Fast Preview reuses the Modern painter with analytic/local-gradient rays; ground visibility near the horizon is approximate. Only Vacuum, Standard and the qualified Flat exponential endpoints are supported. Unsupported profiles show an explicit error, never a hidden RK4 fallback. The exact traced horizon annotation is disabled in Fast Preview. This setting is not saved in experiments.</p>
+          <p id="ModernOpticalQualityStatus" class="modern-note" role="status" aria-live="polite">Active: Accurate (RK4)</p>
         </div>
         <div class="modern-gpu-diagnostics" aria-label="Experimental geometry renderer">
           <div class="modern-gpu-heading"><strong>Geometry renderer · experimental</strong></div>

@@ -1,9 +1,11 @@
-# Fast optical ray field — standalone research boundary
+# Fast optical preview — mathematical field and experimental Modern renderer
 
-The opt-in `src/optics/OpticalFastRayField.js` is a **mathematical candidate** for
-Modern interactive camera preview. It is not wired into Scene, Compare, Canvas,
-Modern navigation, or the production `OpticalSharedRayField`. This patch makes
-**no changes** to the Accurate renderer or to the existing Legacy renderer.
+`src/optics/OpticalFastRayField.js` is a cheap ray-field alternative to the
+Accurate RK4 implementation. **Modern Scene/Compare now offer an explicit
+Display → Optical ray field → Fast Preview** manual choice. The same physical
+scene composer, camera, painter, foundation polygons and Canvas remain in use.
+The default is **Accurate · RK4**, and camera interactions do **not** yet
+switch to Fast automatically (Auto navigation is future work). Legacy is untouched.
 
 ## API and units
 
@@ -19,8 +21,9 @@ atmosphere, profileOptions, contactMarginMeters })` returns
   result is **not** a visible image direction.
 - `accuracy` distinguishes `exact-model` from `approximation`; neither value
   certifies all possible multipath branches or pixel-perfect scene rendering.
-- There is deliberately no `exact()` method, no hidden RK4 call, no cross-frame
-  result cache, and no substitution into production `sample()`.
+- There is deliberately no `exact()` method or hidden RK4 call. The Modern
+  adapter uses `sample()` for objects **and** metric ground guides in Fast mode.
+  Accurate uses its original `.exact()` path and remains independently cached.
 - Unsupported atmosphere/geometry combinations are explicit. They must not be
   treated as vacuum, invisible, or clear. No custom profile is accepted.
 
@@ -86,16 +89,40 @@ camera, and sampled computation time. It does not compare finished Canvas
 images or validate global first-ground events. A reported `indeterminate`
 should not be counted as an incorrect occlusion or silent success.
 
-### Required work before enabling in Modern
+## Manual Modern integration and known limits
 
-1. Integrate the preview as an **explicitly selected** optical field in the
-   existing physical scene adapter; do not duplicate object geometry or
-   move Legacy renderer code into Modern.
-2. Add a conservative, testable policy for how `indeterminate` and
-   `unsupported` samples affect polygons, foundations and horizon rendering.
-3. Compare actual rasterized contours/fills with Accurate under Scene and
-   Compare A/B at varied camera poses and atmospheric configurations.
-4. Time end-to-end Canvas renders (including tessellation) and then decide
-   whether lower contour LOD and an Auto-preview scheduler are justified.
-5. Keep accurate caches, ground events and final offline animation rendering
-   independent of the unverified preview.
+1. Open **Modern → Scene or Compare → Display → Optical ray field**. Select
+   `Fast Preview · approximate` to draw a new scene through the cheap ray
+   field. `Accurate · RK4` restores the original full optical calculation.
+   Selection is session-local, **not** saved to the experiment URL or JSON.
+2. Qualifying atmospheres are Standard Globe/Flat, Flat exponential-occlusion,
+   Flat inverse-temperature **at exactly 100%** strength, and vacuum (which
+   continues to use the existing exact analytic vacuum geometry). A complete
+   Flat profile-transition endpoint may resolve to exponential-occlusion.
+   Other profiles deliberately produce **Fast Preview is unavailable**, with
+   a cleared viewport, rather than silently invoking RK4 or displaying stale
+   pixels. Compare A and B can qualify independently.
+3. **Fast Preview is approximate.** The standalone field's default 3 m
+   near-contact margin is retained for conservative mathematical diagnostics;
+   the *scene Preview adapter* explicitly uses a narrower **0.1 m band** to
+   avoid removing thousands of otherwise drawable foundation fragments. This
+   trades horizon confidence for speed and visual continuity, and is *not* a
+   measured error bound. Missing/incorrect near-horizon silhouettes remain
+   possible. An `indeterminate` is never promoted to a visible ray.
+4. The separate Scene and Compare A/B cache sessions, plus an explicit quality
+   key, prevent Approximate results from being mistaken for Accurate. Traced
+   horizon overlays are suppressed in Fast mode to avoid accidental RK4
+   work. Do not interpret the guide horizon as an accurate physical diagnosis.
+5. `tests/ModernFastPreview.test.js` covers real geometric fills/outlines,
+   zero RK4 calls in Fast, unsupported profile refusal, quality switch/cache
+   isolation, and UI routing for Scene/Compare. Browser pixel parity and
+   complete end-to-end FPS have **not** been established.
+
+### Next evaluation and Auto-navigation work
+
+- Compare actual rasterized contours/fills with Accurate under Scene and
+  Compare A/B, at varied camera poses, camera FOVs and atmospheres.
+- Time end-to-end Canvas renders (including tessellation), then decide whether
+  lower contour LOD and an Auto-preview scheduler are justified.
+- Keep exact caches, exact horizon/ground events and final offline animation
+  rendering completely independent of Preview.

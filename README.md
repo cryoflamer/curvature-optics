@@ -7,6 +7,13 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 
 The former standalone WebGPU optics harness and Modern's optional CPU research panel were **removed from the active tree** in #140.12.74. Neither is required to run these applications. The **Check GPU** button only reports capabilities; it does **not** perform WebGPU optical calculations. See [research archive](docs/research-archive.md) for history and recovery.
 
+**Experimental Fast Preview:** In Modern → Scene/Compare → Display, choose
+**Optical ray field → Fast Preview** to draw with cheaper approximate ray
+angles. Accurate RK4 remains the default and is restored manually; the
+near-horizon image may be incorrect. Some profiles are not qualified and
+show an explicit error instead of silently using RK4. Auto-switching during
+navigation is not implemented. See [limits and tests](docs/fast-optical-preview.md).
+
 **Modern camera navigation:** Shift + left drag moves the observer sideways and
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or
 backward horizontally. Shift + wheel continues to zoom. The shared position is
@@ -33,7 +40,7 @@ Open the main interface in a browser; the older URL is a compatibility entry:
 
 Bare `CurvatureApp.html` and older `?ui=modern` bookmarks redirect to `CurvatureModern.html`. Modern now keeps its own URL and generates direct Modern experiment links; no history rewrite back to Legacy. Old `?tab=`, `?demo=`, `?pos=`, `?play=`, `?state=` and `?embed=` URLs still boot the original Legacy runtime for compatibility. Direct file opening is not the recommended verification environment. A local server is also useful when testing saved links and loading scripts.
 
-For first-time use, start with the [user guide](docs/user-guide.md). **Modern may take appreciably longer to recalculate** because it numerically traces refracted rays; it is not intended to animate every Legacy storyboard frame.
+For first-time use, start with the [user guide](docs/user-guide.md). **Modern Accurate may take appreciably longer to recalculate** because it numerically traces refracted rays; it is not intended to animate every Legacy storyboard frame.
 
 ## Current project map
 
@@ -51,7 +58,7 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 
 - [Architecture](docs/architecture.md) — entry points, module ownership, data flow, retained/archived boundaries.
 - [Physics and numerical methods](docs/physics.md) — surface geometry, atmospheric models, RK4, shooting, and limits of validation.
-- [Fast optical preview research](docs/fast-optical-preview.md) — standalone analytic/conformal candidate, explicit uncertainty, RK4 comparison and integration limits; not enabled in Modern.
+- [Fast optical preview](docs/fast-optical-preview.md) — experimental manual Display → Optical ray field selector, approximate visibility, exact RK4 isolation, unsupported profiles and validation limits.
 - [User guide](docs/user-guide.md) — Legacy storyboards, Modern Scene/Compare, rendering, URLs and saved scenes.
 - [Development and tests](docs/development.md) — no-build workflow, test commands, preserved baselines and contribution rules.
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.
