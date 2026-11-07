@@ -327,13 +327,14 @@
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
       "src/jsgx3d.js",
+      "src/optics/OpticalFastRayField.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
       "src/x.js",
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 136,
+  "sourceJsCount": 137,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1050,6 +1051,16 @@
       "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
+    "src/optics/OpticalFastRayField.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/OpticalFastRayField.test.js"
+      ],
+      "commonJsToolCallers": [
+        "tools/compare-fast-ray-field.js"
+      ]
+    },
     "src/optics/OpticalProjectionCalibration.js": {
       "directHtmlLoads": [
         "legacy"
@@ -1076,6 +1087,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/optics/OpticalFastRayField.js",
         "src/optics/OpticalRayHorizon.js",
         "src/optics/OpticalTargetProjection.js",
         "src/optics/OpticalTowerDiagnostics.js"
@@ -1167,6 +1179,7 @@
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalEngineeredExperiment1404.test.js",
         "tests/OpticalEngineeredQualification1405.test.js",
+        "tests/OpticalFastRayField.test.js",
         "tests/OpticalFusedProductionGate141249.test.js",
         "tests/OpticalFusedProductionPromotion141250.test.js",
         "tests/OpticalShootingBracket1407.test.js",
@@ -1179,6 +1192,7 @@
         "tests/PhysicalHeightChange120.test.js"
       ],
       "commonJsToolCallers": [
+        "tools/compare-fast-ray-field.js",
         "tools/diagnose-short-range-shooting-1406.js",
         "tools/qualify-engineered-shooting-1405.js",
         "tools/validate-physical-scene-115.js"

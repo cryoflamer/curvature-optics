@@ -1771,3 +1771,16 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
 - The shared physical Scene/Compare camera supports focused-viewport keyboard navigation (W/A/S/D, Q/E, arrow-key Pan/Nick), adjustable movement and turn rates, and optional fixed Alt-wheel steps. Keyboard movement updates the pose while held and calculates the full optical scene on release; it is not live continuous physical rendering.
 - East/North can be edited numerically. Named camera positions (including coordinates, orientation, focal length, aim and aspect) are stored as optional `cameraPositions` in Modern experiments, without extending Legacy state or changing physical A/B configurations. Up to 20 poses support save, restore, update, rename and delete; camera reset returns to the loaded workspace starting pose. Navigation speed is separately stored in local browser preferences.
 - Future offline camera animation and video export remain deferred. See `docs/modern-camera-navigation.md` for the control contract and limitations.
+
+### Experimental fast optical preview (standalone mathematical field)
+
+- `src/optics/OpticalFastRayField.js` provides a low-cost, independently selectable
+  2D field candidate using constant *conformal* log-gradient, with analytic
+  forward-branch solutions for vacuum and flat engineered exponential endpoints.
+  Built-in Standard is approximate, with explicit near-contact uncertainty and
+  no automatic RK4 fallback; unsupported profiles never turn into visible rays.
+- This module is **not connected** to Modern Scene/Compare rendering, navigation,
+  or Legacy. The Accurate path remains unchanged. See
+  `docs/fast-optical-preview.md`, `tests/OpticalFastRayField.test.js` and
+  `tools/compare-fast-ray-field.js`. Production integration and camera Auto
+  preview must follow separate pixel-accuracy and scheduling reviews.

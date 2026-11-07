@@ -51,6 +51,7 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 
 - [Architecture](docs/architecture.md) — entry points, module ownership, data flow, retained/archived boundaries.
 - [Physics and numerical methods](docs/physics.md) — surface geometry, atmospheric models, RK4, shooting, and limits of validation.
+- [Fast optical preview research](docs/fast-optical-preview.md) — standalone analytic/conformal candidate, explicit uncertainty, RK4 comparison and integration limits; not enabled in Modern.
 - [User guide](docs/user-guide.md) — Legacy storyboards, Modern Scene/Compare, rendering, URLs and saved scenes.
 - [Development and tests](docs/development.md) — no-build workflow, test commands, preserved baselines and contribution rules.
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.
