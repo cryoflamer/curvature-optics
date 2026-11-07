@@ -1764,3 +1764,10 @@ Three explicit **standard-atmosphere-only** experiments (`traceOptimization: 'fu
 ### #140.12.94 — Temperature gradient in Modern Physical
 
 Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface temperature, pressure and local gradient parameters in Scene and Compare A/B. The existing Legacy coefficient model and fixed Modern Standard exponential are unchanged. The Physical RK4 tower, ground guide and horizon solvers use the same temperature profile; cache keys include profile inputs. Optional 0–2 km temperature column is a **DOM overlay**, not ray or pixel modification. Temperature settings and column visibility round-trip in Modern experiment links and JSON, old links migrate by safe defaults. Model is an *idealized exponentially relaxing boundary-layer lapse*, not constant `dT/dh` at all heights, not measured meteorology or humidity. See `docs/temperature-gradient-modern.md` and `tests/ModernTemperatureGradient.test.js`.
+
+
+## Modern camera navigation and reusable poses
+
+- The shared physical Scene/Compare camera supports focused-viewport keyboard navigation (W/A/S/D, Q/E, arrow-key Pan/Nick), adjustable movement and turn rates, and optional fixed Alt-wheel steps. Keyboard movement updates the pose while held and calculates the full optical scene on release; it is not live continuous physical rendering.
+- East/North can be edited numerically. Named camera positions (including coordinates, orientation, focal length, aim and aspect) are stored as optional `cameraPositions` in Modern experiments, without extending Legacy state or changing physical A/B configurations. Up to 20 poses support save, restore, update, rename and delete; camera reset returns to the loaded workspace starting pose. Navigation speed is separately stored in local browser preferences.
+- Future offline camera animation and video export remain deferred. See `docs/modern-camera-navigation.md` for the control contract and limitations.

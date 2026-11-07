@@ -19,7 +19,7 @@ const modernScripts = scriptTags.filter(tag => tag.file.startsWith('src/ui/moder
 const required = [
   'ModernApp.js', 'ModernAtmosphericPresentation.js',
   'ModernAtmosphericShimmer.js', 'ModernCameraDragPreview.js',
-  'ModernCameraInteraction.js', 'ModernCameraPerspectiveWarp.js',
+  'ModernCameraInteraction.js', 'ModernCameraNavigation.js', 'ModernCameraPerspectiveWarp.js',
   'ModernCompareGraph.js', 'ModernCompareModel.js',
   'ModernCompareState.js', 'ModernDemos.js', 'ModernExperimentLibrary.js',
   'ModernExperimentState.js', 'ModernGpuCapabilities.js',
@@ -31,7 +31,7 @@ function tagsFor(name) {
   return modernScripts.filter(tag => tag.file === 'src/ui/modern/' + name);
 }
 
-test('140.12.72: all 17 Modern helper modules remain active and locally available', () => {
+test('140.12.72: all 18 Modern helper modules remain active and locally available', () => {
   const actual = fs.readdirSync(modernDir).filter(name => name.endsWith('.js')).sort();
   assert.deepEqual(actual, [...required].sort(), 'review newly added/removed modules explicitly');
   for (const name of required) {

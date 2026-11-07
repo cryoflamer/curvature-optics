@@ -53,3 +53,58 @@ zero. Selecting a named scene preset resets the offset to the origin.
 remain on the near observer-facing hemisphere of the selected globe; the
 camera refuses movements that would cross this restriction. OS/browser
 shortcuts may intercept Alt + wheel before it reaches the page.
+
+## Keyboard navigation and precision controls
+
+Click or focus a Scene/Compare image before navigating. The viewport is keyboard
+focusable. Ordinary input, select, button and text editing keep their own keys;
+Demos and Legacy never receive Modern navigation events.
+
+| Keyboard | Motion |
+|---|---|
+| W / S | Forward / back along the local surface, following Pan, not Nick |
+| A / D | Left / right along the local surface |
+| Q / E | Lower / raise observer height |
+| Left / right arrows | Decrease / increase Pan |
+| Up / down arrows | Increase / decrease Nick |
+| Shift (with navigation key) | Five times normal movement and angular rate |
+| Ctrl (with navigation key) | One fifth of normal movement and angular rate |
+
+These keys can be held together. Translation in multiple directions is
+normalized so diagonals do not move faster. Keyboard movement is integrated
+from elapsed time with bounded steps, with numeric values updated immediately,
+but the **expensive optical redraw happens on key release**. This deliberately
+avoids attempting 60 optical recomputations per second. There is no live
+physical animation of intermediate keyboard positions yet. The browser/OS may
+intercept certain Ctrl shortcuts before the application receives them.
+
+The Camera sidebar has `East` and `North` numeric fields, in metres, alongside
+Height, Pan, Nick, Roll and focal length. They use the same physical camera
+and validation as pointer navigation. Changes do not modify object coordinates,
+refractive profiles or surface geometry. The shared camera is applied to both
+models in Compare. The Camera panel also exposes a movement speed (m/s),
+angular rate (degrees/s), and an optional fixed Alt + wheel step (metres per
+notch); `Automatic` preserves the original scene-scaled wheel behavior. These
+navigation preferences are stored only in local browser preferences, *not* in
+saved experiment camera poses.
+
+## Saved camera positions
+
+In **Camera → Saved camera positions**, name a pose and select **Save current**.
+Choose one from the list to **Go**, **Update** its stored pose, **Rename**, or
+**Delete** it. `Reset camera` returns to the starting camera pose of the
+currently loaded experiment (or the most recently selected named Scene preset),
+without changing objects, atmosphere, surface or Compare A/B settings.
+
+Each pose stores `CameraEast`, `CameraNorth`, `Height`, `Pan`, `Nick`, `Roll`,
+`FocalLengthField`, `viewcenterHorizon`, and `deviceRatio`. This is a full
+camera pose, **not a complete experiment snapshot**. Up to 20 named poses are
+included as optional `cameraPositions` data in the existing Modern experiment
+JSON, copied links and experiment library. An older experiment without poses
+continues to load unchanged. The optional field does not modify the Legacy
+`?state=` contract. Selecting a fresh Scene preset starts a new pose list;
+loading a saved experiment restores its own list.
+
+The list is ordered by creation and does not yet define animation timing, path
+interpolation or video export. Future camera keyframes can refer to these
+validated poses without binding animation to mouse or keyboard event playback.

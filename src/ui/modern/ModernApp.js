@@ -305,6 +305,15 @@
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
     root.performance.now():Date.now();}
   var persistence={ready:false,explicitUrl:false,timer:null};
+  // Saved camera poses belong to the experiment; navigation speed belongs to
+  // the user's local preferences and is never mixed into a cinematic keyframe.
+  var cameraPositions=[];
+  var initialCamera=null;
+  var navigation=root.CurvatureModernCameraNavigation;
+  var navigationPrefs=navigation?navigation.settings():{speed:10,turnRate:1,wheelStep:'auto'};
+  var navigationKeys=Object.create(null),navigationFrame=null,navigationStamp=null;
+  var navigationMoved=false,navigationModifiers={fast:false,precise:false};
+  var NAVIGATION_STORAGE_KEY='curvature-modern-camera-navigation-v1';
   var model=new root.CurveAppClass();
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
@@ -345,7 +354,8 @@
       horizon:state.compareHorizon,selected:state.compareSelected,
       gpuProbe:false,probeTargets:256,
       showTemperatureProfile:state.showTemperatureProfile,
-      temperaturePlacement:state.temperaturePlacement}); // Keep legacy schema; never re-enable retired WebGPU.
+      temperaturePlacement:state.temperaturePlacement,
+      cameraPositions:cameraPositions}); // Keep legacy schema; never re-enable retired WebGPU.
   }
   function storeExperiment(){
     if(!persistence.ready||!experiments||!root.location)return;
@@ -394,10 +404,14 @@
     state.compareSelected=data.compare.selected;
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
     state.mode=data.display.mode;
+    cameraPositions=data.cameraPositions||[];
+    initialCamera=null;
     // Older saved experiments may contain display.gpuProbe=true. The mode is
     // retired: load their A/B physical settings without invoking WebGPU.
     model.Update();
     var select=el('ModernPreset');if(select)select.value=scene.preset;
+    initialCamera=captureCameraPose();
+    renderCameraPositions('');
   }
   function restoreExperiment(){
     if(!experiments||!root.location)return false;
@@ -1287,6 +1301,201 @@
   function cameraMovePreview(sample){
     return sample&&sample.mode==='translate'?{mode:'translate',dx:-sample.dx,dy:-sample.dy}:sample;
   }
+  var CAMERA_POSE_FIELDS=['Height','FocalLengthField','Pan','Nick','Roll',
+    'CameraEast','CameraNorth','viewcenterHorizon','deviceRatio'];
+  function captureCameraPose(){
+    var pose={};CAMERA_POSE_FIELDS.forEach(function(field){pose[field]=model[field];});
+    return pose;
+  }
+  function applyCameraPose(pose){
+    if(!pose)return;
+    checkedCameraPosition(pose);
+    stopCameraKeyboard(true);cancelCameraDrag();cancelEdits();cancelPending();
+    CAMERA_POSE_FIELDS.forEach(function(key){model[key]=pose[key];});
+    model.Update();markCustom();syncNumericInputs();redraw();
+  }
+  function cameraPositionStatus(message,problem){
+    var element=newUiEl('ModernCameraPositionsStatus');
+    if(element){element.textContent=message||'';element.classList.toggle('is-error',!!problem);}
+  }
+  function renderCameraPositions(preferred){
+    var list=newUiEl('ModernCameraPositions');
+    if(!list||typeof list.appendChild!=='function')return;
+    var selected=preferred===undefined?list.value:preferred;
+    list.innerHTML='';
+    var placeholder=document.createElement('option');
+    placeholder.value='';placeholder.textContent=cameraPositions.length?'Select a saved position':'No saved positions';
+    list.appendChild(placeholder);
+    cameraPositions.forEach(function(entry){
+      var option=document.createElement('option');option.value=entry.id;
+      option.textContent=entry.name;list.appendChild(option);
+    });
+    list.value=cameraPositions.some(function(entry){return entry.id===selected;})?selected:'';
+    var disabled=!list.value;
+    ['ModernCameraGo','ModernCameraUpdate','ModernCameraRename','ModernCameraDelete'].forEach(function(id){
+      var button=newUiEl(id);if(button)button.disabled=disabled;
+    });
+    if(list.value){
+      var chosen=cameraPositions.find(function(entry){return entry.id===list.value;});
+      var name=newUiEl('ModernCameraPositionName');if(name&&chosen)name.value=chosen.name;
+    }
+  }
+  function selectedCameraPosition(){
+    var list=newUiEl('ModernCameraPositions');
+    return list&&cameraPositions.find(function(entry){return entry.id===list.value;});
+  }
+  function nextCameraId(){
+    var max=cameraPositions.reduce(function(prev,entry){
+      var match=/^camera-(\d+)$/.exec(entry.id);
+      return match?Math.max(prev,Number(match[1])):prev;
+    },0);
+    // IDs remain unique even if an old list contained externally authored IDs.
+    var id;do{id='camera-'+(++max);}while(cameraPositions.some(function(entry){return entry.id===id;}));
+    return id;
+  }
+  function commitCameraPositions(list,selected,message){
+    cameraPositions=list;renderCameraPositions(selected);
+    scheduleExperimentSave();cameraPositionStatus(message);
+  }
+  function bindCameraPositions(){
+    var list=newUiEl('ModernCameraPositions'),name=newUiEl('ModernCameraPositionName');
+    if(!list||!name||!experiments)return;
+    function execute(fn){
+      try{fn();}catch(error){cameraPositionStatus(error.message,true);}
+    }
+    function validated(list){
+      var snapshot=experimentSnapshot();
+      snapshot.cameraPositions=list;
+      return experiments.validate(snapshot).cameraPositions||[];
+    }
+    function label(){var text=String(name.value||'').trim();
+      if(!text)throw RangeError('Enter a camera position name');return text;}
+    list.addEventListener('change',function(){renderCameraPositions(list.value);});
+    el('ModernCameraSave').addEventListener('click',function(){execute(function(){
+      if(cameraPositions.length>=20)throw RangeError('Maximum 20 camera positions');
+      var entry={id:nextCameraId(),name:label(),camera:captureCameraPose()};
+      commitCameraPositions(validated(cameraPositions.concat([entry])),entry.id,'Saved: '+entry.name);
+    });});
+    el('ModernCameraGo').addEventListener('click',function(){execute(function(){
+      var entry=selectedCameraPosition();if(!entry)throw RangeError('Select a saved camera position');
+      applyCameraPose(entry.camera);cameraPositionStatus('Restored: '+entry.name);
+    });});
+    el('ModernCameraUpdate').addEventListener('click',function(){execute(function(){
+      var entry=selectedCameraPosition();if(!entry)throw RangeError('Select a saved camera position');
+      var updated=cameraPositions.map(function(p){return p.id===entry.id?{
+        id:p.id,name:p.name,camera:captureCameraPose()}:p;});
+      commitCameraPositions(validated(updated),entry.id,'Updated: '+entry.name);
+    });});
+    el('ModernCameraRename').addEventListener('click',function(){execute(function(){
+      var entry=selectedCameraPosition();if(!entry)throw RangeError('Select a saved camera position');
+      var newName=label();
+      var updated=cameraPositions.map(function(p){return p.id===entry.id?{
+        id:p.id,name:newName,camera:p.camera}:p;});
+      commitCameraPositions(validated(updated),entry.id,'Renamed: '+newName);
+    });});
+    el('ModernCameraDelete').addEventListener('click',function(){execute(function(){
+      var entry=selectedCameraPosition();if(!entry)throw RangeError('Select a saved camera position');
+      commitCameraPositions(validated(cameraPositions.filter(function(p){return p.id!==entry.id;})),
+        '', 'Deleted: '+entry.name);
+    });});
+    el('ModernCameraReset').addEventListener('click',function(){execute(function(){
+      if(initialCamera)applyCameraPose(initialCamera);
+      cameraPositionStatus('Camera restored to the loaded experiment starting pose');
+    });});
+    renderCameraPositions('');
+  }
+  function saveNavigationPrefs(){
+    try{if(root.localStorage)root.localStorage.setItem(NAVIGATION_STORAGE_KEY,JSON.stringify(navigationPrefs));}
+    catch(error){cameraPositionStatus('Navigation preferences not saved: '+error.message,true);}
+  }
+  function refreshNavigationCameraInputs(){
+    var fields={ModernHeight:'Height',ModernPan:'Pan',ModernNick:'Nick',
+      ModernCameraEast:'CameraEast',ModernCameraNorth:'CameraNorth'};
+    Object.keys(fields).forEach(function(id){var input=newUiEl(id);if(input)input.value=String(model[fields[id]]);});
+    var note=newUiEl('ModernCameraPositionInfo');if(note)note.textContent=cameraPositionText();
+  }
+  function navigationKeyActive(){return Object.keys(navigationKeys).length>0;}
+  function stopCameraKeyboard(deferRender){
+    if(navigationFrame!==null){cancelAnimationFrame(navigationFrame);navigationFrame=null;}
+    Object.keys(navigationKeys).forEach(function(key){delete navigationKeys[key];});
+    navigationStamp=null;navigationModifiers={fast:false,precise:false};
+    if(navigationMoved){navigationMoved=false;markCustom();if(!deferRender)redraw();}
+  }
+  function navigationTick(now){
+    navigationFrame=null;
+    if(!navigationKeyActive()||!navigation)return;
+    if(!Number.isFinite(now))now=profileNow();
+    var elapsed=Math.min(.1,Math.max(0,(now-navigationStamp)/1000));
+    navigationStamp=now;
+    if(elapsed>0){
+      var next=navigation.move(model,navigationKeys,elapsed,navigationPrefs,navigationModifiers);
+      var changed=Object.keys(next).some(function(k){return next[k]!==model[k];});
+      if(changed){
+        try{checkedCameraPosition(next);}
+        catch(error){updateStatus('Navigation limit: '+error.message,true);stopCameraKeyboard();return;}
+        Object.keys(next).forEach(function(k){model[k]=next[k];});
+        navigationMoved=true;refreshNavigationCameraInputs();
+        updateStatus('Moving camera · release keys to calculate physical optics');
+      }
+    }
+    navigationFrame=requestAnimationFrame(navigationTick);
+  }
+  function keyboardAllowed(event){
+    if(!event||event.altKey||event.metaKey||state.demosActive||activeCameraPointer)return false;
+    var target=event.target||document.activeElement;
+    if(target){
+      var tag=String(target.tagName||'').toLowerCase();
+      if(['input','select','textarea','button','a'].includes(tag)||target.isContentEditable)return false;
+      if(tag==='canvas')return true;
+    }
+    return !document.activeElement||document.activeElement===document.body||
+      document.activeElement===document.documentElement;
+  }
+  function bindCameraKeyboard(){
+    if(!navigation||!root.addEventListener)return;
+    var inputs=[['ModernCameraMoveSpeed','speed'],['ModernCameraTurnRate','turnRate'],
+      ['ModernCameraWheelStep','wheelStep']];
+    try{
+      if(root.localStorage){var saved=root.localStorage.getItem(NAVIGATION_STORAGE_KEY);
+        if(saved)navigationPrefs=navigation.settings(JSON.parse(saved));}
+    }catch(error){cameraPositionStatus('Cannot read navigation preferences: '+error.message,true);}
+    inputs.forEach(function(pair){
+      var node=newUiEl(pair[0]);if(!node)return;
+      node.value=String(navigationPrefs[pair[1]]);
+      node.addEventListener('change',function(){
+        var value=pair[1]==='wheelStep'&&node.value==='auto'?'auto':Number(node.value);
+        var edited=Object.assign({},navigationPrefs);edited[pair[1]]=value;
+        navigationPrefs=navigation.settings(edited);node.value=String(navigationPrefs[pair[1]]);
+        saveNavigationPrefs();
+      });
+    });
+    root.addEventListener('keydown',function(event){
+      var action=navigation.action(event.code);
+      if(!action||!keyboardAllowed(event))return;
+      if(event.preventDefault)event.preventDefault();
+      if(navigationKeys[action])return;
+      cancelEdits();cancelPending();
+      navigationKeys[action]=true;
+      navigationModifiers={fast:!!event.shiftKey,precise:!!event.ctrlKey};
+      if(navigationFrame===null){navigationStamp=profileNow();navigationFrame=requestAnimationFrame(navigationTick);}
+    });
+    root.addEventListener('keyup',function(event){
+      var action=navigation.action(event.code);
+      if(!action||!navigationKeys[action])return;
+      if(event.preventDefault)event.preventDefault();
+      // Integrate the last fraction of a movement before stopping the gesture.
+      if(navigationFrame!==null){cancelAnimationFrame(navigationFrame);navigationFrame=null;}
+      navigationTick(profileNow());
+      delete navigationKeys[action];
+      if(navigationKeyActive()){
+        navigationModifiers={fast:!!event.shiftKey,precise:!!event.ctrlKey};
+      }else stopCameraKeyboard();
+    });
+    root.addEventListener('blur',function(){stopCameraKeyboard();});
+    if(document.addEventListener)document.addEventListener('visibilitychange',function(){
+      if(document.hidden)stopCameraKeyboard();
+    });
+  }
   // 137.2: the existing raster Canvas is compositor-translated during drag.
   // The shared physical model remains untouched until the final pointerup.
   var activeCameraPointer=null;
@@ -1332,6 +1541,9 @@
     if(!cameraInteraction||!canvas||typeof canvas.addEventListener!=='function')return;
     var hud=cameraDragHud(canvas);
     canvas.classList&&canvas.classList.add('modern-camera-draggable');
+    canvas.tabIndex=0;
+    if(typeof canvas.setAttribute==='function')canvas.setAttribute('aria-label',
+      'Camera viewport. Use W A S D, Q E and arrow keys for keyboard navigation.');
     // The CSS link may be stale in a long-running local session. Make the
     // effective pointer affordance explicit on each real Canvas as well.
     if(root.CurvatureModernCameraDragPreview&&root.CurvatureModernCameraDragPreview.setCursor)
@@ -1356,6 +1568,7 @@
       var rect=canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
       if(!rect||!(rect.width>0&&rect.height>0))return;
       try{
+        if(typeof canvas.focus==='function')canvas.focus({preventScroll:true});
         cameraInteraction.begin({viewport:view,x:event.clientX,y:event.clientY,
           width:rect.width,height:rect.height,
           mode:event.shiftKey?'translate':'rotate',
@@ -1467,7 +1680,7 @@
       try{
         if(event.altKey){
           next=checkedCameraPosition(Object.assign({Height:model.Height},
-            interaction.dolly(model,delta,event.deltaMode,cameraReferenceDistance())));
+            interaction.dolly(model,delta,event.deltaMode,cameraReferenceDistance(),navigationPrefs.wheelStep)));
         }else next=interaction.focalWheel(model.FocalLengthField,delta,event.deltaMode);
       }catch(error){updateStatus('Camera movement: '+error.message,true);return;}
       if(event.preventDefault)event.preventDefault();
@@ -1606,7 +1819,7 @@
   }
   function setMode(mode){
     if(mode!=='scene'&&mode!=='compare'&&mode!=='demos')throw RangeError('Invalid Modern UI mode');
-    cancelCameraDrag();cancelEdits();stopShimmerFrame();
+    stopCameraKeyboard(true);cancelCameraDrag();cancelEdits();stopShimmerFrame();
     if(atmosphericShimmer)atmosphericShimmer.resetClock();
     var demos=root.CurvatureModernDemos;
     var demosActive=mode==='demos';
@@ -1722,6 +1935,10 @@
     var pairs={ModernHeight:'Height',ModernFocal:'FocalLengthField',ModernPan:'Pan',
       ModernNick:'Nick',ModernRoll:'Roll'};
     Object.keys(pairs).forEach(function(id){var node=el(id);if(node)node.value=String(model[pairs[id]]);});
+    if(typeof document.querySelector==='function')
+      [['#ModernCameraEast','CameraEast'],['#ModernCameraNorth','CameraNorth']].forEach(function(pair){
+        var node=document.querySelector(pair[0]);if(node)node.value=String(model[pair[1]]);
+      });
     var aim=el('ModernCameraAim');if(aim)aim.value=String(model.viewcenterHorizon);
     var atmosphere=el('ModernAtmosphere');if(atmosphere){showLegacyOption('ModernAtmosphere',state.atmosphere);atmosphere.value=state.atmosphere;}
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
@@ -1792,7 +2009,8 @@
       state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
       state.transitionProfile={source:'standard',weight:0};
       state.inverseProfile={source:'temperature-lapse',weight:0};
-      model.Update();syncNumericInputs();
+      cameraPositions=[];initialCamera=captureCameraPose();
+      renderCameraPositions();model.Update();syncNumericInputs();
       var preset=el('ModernPreset');if(preset)preset.value=id;
       redraw();
     }catch(error){updateStatus(error.message,true);}
@@ -1841,6 +2059,8 @@
   }
   var fieldHelp={
     ModernHeight:'Observer height above the local surface, in metres. Does not move the towers.',
+    ModernCameraEast:'Observer east-west surface-arc offset in metres from the scene origin. Objects stay fixed.',
+    ModernCameraNorth:'Observer north-south surface-arc offset in metres from the scene origin. Objects stay fixed.',
     ModernFocal:'Camera focal length in millimetres. This and field of view describe the same camera zoom. Hold Shift and scroll over a Scene/Compare image to zoom both Compare models together.',
     ModernViewAngle:'Angular field of view in degrees, synchronized with focal length. Only the displayed number is rounded.',
     ModernPan:'Horizontal aiming angle in degrees. Changes the camera, not the object azimuths.',
@@ -1890,6 +2110,8 @@
   }
   function bind(){
     bindCameraDrag();
+    bindCameraKeyboard();
+    bindCameraPositions();
     bindObjectFields();
     bindSettingsTabs();
     bindHelp();
@@ -1902,6 +2124,16 @@
     bindGeometryBackend();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
+    if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))
+    bindNumber('ModernCameraEast',function(v){
+      var next=Object.assign({},captureCameraPose(),{CameraEast:adapter?adapter.finiteNumber(v,-1e7,1e7):Number(v)});
+      checkedCameraPosition(next);model.CameraEast=next.CameraEast;
+    },'camera east');
+    if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraNorth'))
+    bindNumber('ModernCameraNorth',function(v){
+      var next=Object.assign({},captureCameraPose(),{CameraNorth:adapter?adapter.finiteNumber(v,-1e7,1e7):Number(v)});
+      checkedCameraPosition(next);model.CameraNorth=next.CameraNorth;
+    },'camera north');
     bindNumber('ModernFocal',function(v){adapter?adapter.setCamera(model,'FocalLengthField',v):model.FocalLengthField=v;},'focal length');
     bindNumber('ModernPan',function(v){adapter?adapter.setCamera(model,'Pan',v):model.Pan=v;},'pan');
     bindNumber('ModernNick',function(v){adapter?adapter.setCamera(model,'Nick',v):model.Nick=v;},'nick');
@@ -1948,6 +2180,7 @@
     bindLibrary();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
     var restored=restoreExperiment();
+    if(!initialCamera)initialCamera=captureCameraPose();
     syncNumericInputs();
     if(restored){
       // Apply the restored workspace without touching the physics itself.
@@ -1969,6 +2202,8 @@
     resetRenderProfile:function(){if(renderProfiler)renderProfiler.clear();},
     getPerformanceSnapshot:performanceSnapshot,
     getCameraInteraction:function(){return cameraInteraction;},
+    getCameraPositions:function(){return cameraPositions.map(function(p){return {id:p.id,name:p.name,camera:Object.assign({},p.camera)};});},
+    getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
     // DevTools API remains available alongside the 138.3 Atmosphere controls.

@@ -108,3 +108,12 @@ for now. Opera measurements for 200 towers were 647 ms B optics at 100% and
 2462 ms at 50%; remaining intermediate-blend and non-optics overhead work is
 tracked as a **deferred, low-priority TODO** in
 [`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).
+
+### Modern camera navigation and saved poses
+
+Modern Scene and Compare support W/A/S/D horizontal movement, Q/E height, and
+arrow-key Pan/Nick after focusing the viewport. Shift/Ctrl adjust navigation
+speed; optical recomputation occurs on release. The Camera panel exposes exact
+East/North coordinates, movement/turn rates, Alt-wheel step and up to 20 named
+camera poses. Poses round-trip with Modern experiments and leave physical A/B
+settings unchanged. See [`docs/modern-camera-navigation.md`](docs/modern-camera-navigation.md).

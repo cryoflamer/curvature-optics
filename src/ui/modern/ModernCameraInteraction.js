@@ -79,14 +79,18 @@
       throw RangeError('Invalid wheel delta mode');
     return Math.max(-4,Math.min(4,deltaY/(deltaMode===1?3:deltaMode===2?1:100)));
   }
-  function dolly(camera,deltaY,deltaMode,referenceDistance){
+  function dolly(camera,deltaY,deltaMode,referenceDistance,stepMetres){
     if(!camera)throw TypeError('Camera required for dolly');
     var pan=finite(camera.Pan,'pan')*Math.PI/180;
     var east=finite(camera.CameraEast,'east'),north=finite(camera.CameraNorth,'north');
     var depth=finite(referenceDistance,'dolly reference distance');
     if(!(depth>0))throw RangeError('Dolly reference distance must be positive');
     // At the default Pontchartrain distances this is ~100 metres per notch.
-    var metres=-wheelSteps(deltaY,deltaMode)*Math.max(.1,Math.min(1000,depth/100));
+    var step=stepMetres===undefined||stepMetres==='auto'?
+      Math.max(.1,Math.min(1000,depth/100)):stepMetres;
+    if(typeof step!=='number'||!Number.isFinite(step)||step<=0)
+      throw RangeError('Invalid dolly step');
+    var metres=-wheelSteps(deltaY,deltaMode)*step;
     return Object.freeze({CameraEast:Math.max(-1e7,Math.min(1e7,east+metres*Math.sin(pan))),
       CameraNorth:Math.max(-1e7,Math.min(1e7,north+metres*Math.cos(pan)))});
   }

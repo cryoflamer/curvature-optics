@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 55,
-      "uniqueScripts": 54,
+      "scriptTags": 56,
+      "uniqueScripts": 55,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -162,6 +162,7 @@
         "src/app/CurvatureMainCanvasRenderer.js",
         "src/ui/modern/ModernSceneState.js",
         "src/ui/modern/ModernCameraInteraction.js",
+        "src/ui/modern/ModernCameraNavigation.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
         "src/ui/modern/ModernCameraDragPreview.js",
         "src/ui/modern/ModernRenderProfiler.js",
@@ -303,6 +304,7 @@
       "src/ui/modern/ModernAtmosphericShimmer.js",
       "src/ui/modern/ModernCameraDragPreview.js",
       "src/ui/modern/ModernCameraInteraction.js",
+      "src/ui/modern/ModernCameraNavigation.js",
       "src/ui/modern/ModernCameraPerspectiveWarp.js",
       "src/ui/modern/ModernCompareGraph.js",
       "src/ui/modern/ModernCompareModel.js",
@@ -331,7 +333,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 135,
+  "sourceJsCount": 136,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -476,6 +478,7 @@
       "commonJsTestCallers": [
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernSceneControls.test.js",
@@ -757,7 +760,8 @@
       ],
       "commonJsTestCallers": [
         "tests/CurvatureCameraTranslation.test.js",
-        "tests/ModernCameraDrag1371.test.js"
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1838,8 +1842,19 @@
         "tests/CurvatureCameraTranslation.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraInteraction137.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
         "tests/ModernIndependentCompare.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCameraNavigation.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraNavigation.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1871,6 +1886,7 @@
         "tests/ModernAngularGuide.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernIndependentCompare.test.js",
@@ -1892,6 +1908,7 @@
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
@@ -1936,6 +1953,7 @@
         "tests/LegacyModernBoundary.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernInverseTemperature97.test.js",
@@ -2009,6 +2027,7 @@
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernAtmosphericPresentation13822.test.js",
         "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js"
