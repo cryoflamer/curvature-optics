@@ -327,6 +327,7 @@
       "src/ModelAnimation.js",
       "src/NumFormatter.js",
       "src/Slider.js",
+      "src/camera/ModernCameraInterpolator.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
@@ -337,7 +338,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 138,
+  "sourceJsCount": 139,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -522,6 +523,14 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/camera/ModernCameraInterpolator.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraInterpolator.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/diagnostics/CurvatureCameraVerification.js": {
