@@ -11,10 +11,11 @@
     root.CurvaturePhysicalGroundGuides||(typeof require==='function'?require('./CurvaturePhysicalGroundGuides'):null),
     root.CurvaturePhysicalPolygonFills||(typeof require==='function'?require('./CurvaturePhysicalPolygonFills'):null),
     root.CurvatureSurfaceGeometry||(typeof require==='function'?require('../geometry/CurvatureSurfaceGeometry'):null),
-    root.CurvatureOpticalFastRayField||(typeof require==='function'?require('./OpticalFastRayField'):null));
+    root.CurvatureOpticalFastRayField||(typeof require==='function'?require('./OpticalFastRayField'):null),
+    root.CurvatureOpticalPreviewLod||(typeof require==='function'?require('./OpticalPreviewLod'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvaturePhysicalSceneOptics=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills,surfaceApi,fastFields){
+}(typeof globalThis!=='undefined'?globalThis:this,function(contract,fields,silhouette,groundGuides,polygonFills,surfaceApi,fastFields,previewLod){
   'use strict';
   if(!contract||!fields||!silhouette||!groundGuides||!polygonFills)throw Error('Physical scene optics dependencies required');
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
@@ -202,6 +203,11 @@
       if(opticalQuality!=='accurate'&&opticalQuality!=='fast')
         throw RangeError('Unknown optical quality (accurate or fast expected)');
       var preview=opticalQuality==='fast';
+      var previewStride=preview&&options.previewLod?options.previewLod.stride:1;
+      if(preview){
+        if(!previewLod)throw Error('Fast Preview LOD module is unavailable');
+        previewLod.validateStride(previewStride);
+      }
       if(!ATMOSPHERES.includes(kind)||!Number.isFinite(R)||R<=0)
         throw RangeError('Invalid physical atmospheric configuration');
       var geometry=model.showModel===1?'globe':model.showModel===2?'flat':null;
@@ -210,7 +216,8 @@
         throw RangeError('Globe/Flat physical model required');
       var key=modelKey(model,{atmosphere:kind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,transitionProfile:options.transitionProfile,inverseProfile:options.inverseProfile,settings:options.settings,
         metricWorld:composed.scene.metadata.physicalMetricWorld===true})+
-        '\n'+sceneKey(composed)+'\noptical-quality='+opticalQuality;
+        '\n'+sceneKey(composed)+'\noptical-quality='+opticalQuality+
+        (preview?'\npreview-stride='+previewStride:'');
       // The common frame/painter copies and validates its input scene. A
       // camera-only redraw may therefore reuse the optical composition itself
       // instead of rebuilding thousands of validated line primitives.
@@ -370,6 +377,10 @@
       // fills and only then its strokes made far tower strokes cross foreground
       // foundations regardless of the bank sorting order.
       var prioritized=placedObjects(source,groups);
+      var selection=preview?previewLod.thin(prioritized,model,previewStride):null;
+      if(selection)prioritized=selection.objects;
+      stats.previewLod=selection?{stride:selection.stride,original:selection.original,
+        selected:selection.selected,skipped:selection.skipped}:null;
       var outlinesMs=0,fillsMs=0;
       prioritized.forEach(function(r){
         var prim=r.primitives;

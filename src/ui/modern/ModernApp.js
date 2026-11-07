@@ -13,7 +13,7 @@
     preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
-    geometryBackend:'canvas',opticalQuality:'accurate',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},compareFastCache:{A:null,B:null}};
+    geometryBackend:'canvas',opticalQuality:'accurate',previewDetail:'auto',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},compareFastCache:{A:null,B:null}};
   var adapter=root.CurvatureModernSceneState;
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
@@ -71,13 +71,60 @@
       (result&&result.geometryFallback?' · fallback: '+result.geometryFallback:'');
     if(active)active.textContent=backend;
   }
+  // Preview LOD is an ephemeral display preference, NOT experiment physics.
+  // The same stride is used by both Compare viewports, so A/B always show
+  // identical tower subsets even when their optical atmospheres differ.
+  var previewLodApi=root.CurvatureOpticalPreviewLod;
+  var previewLodControllers=previewLodApi?{
+    Scene:previewLodApi.createController(45),
+    compare:previewLodApi.createController(70)}:null;
+  function previewStride(view){
+    if(state.opticalQuality!=='fast')return 1;
+    if(state.previewDetail!=='auto')return Number(state.previewDetail);
+    return previewLodControllers?previewLodControllers[view==='Scene'?'Scene':'compare'].stride():1;
+  }
+  function updatePreviewDetailStatus(){
+    var selector=geometryUi('ModernPreviewDetail'),note=geometryUi('ModernPreviewDetailStatus');
+    if(selector)selector.disabled=state.opticalQuality!=='fast';
+    if(!note)return;
+    if(state.opticalQuality!=='fast'){
+      note.textContent='Accurate: all authored towers retained.';return;
+    }
+    var scope=state.mode==='compare'?'compare':'Scene';
+    var stride=previewStride(scope),result=scope==='Scene'?state.last:state.compareLast.B;
+    var drawn=result&&result.previewLod||null;
+    note.textContent='Fast Preview LOD: '+(state.previewDetail==='auto'?'Auto':'Manual')+
+      ' · '+(drawn?'drawn '+drawn.selected+'/'+drawn.original+' objects · ':'')+
+      (stride===1?'next: full detail':'next: every '+stride+'th tower')+
+      ' · no effect on Accurate';
+  }
+  function bindPreviewDetail(){
+    var selector=geometryUi('ModernPreviewDetail');
+    if(!selector)return;
+    selector.value=state.previewDetail;
+    selector.addEventListener('change',function(){
+      state.previewDetail=['auto','1','2','4','8','16','32'].includes(selector.value)?selector.value:'auto';
+      if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
+      updatePreviewDetailStatus();redraw();
+    });
+    updatePreviewDetailStatus();
+  }
+  function observePreviewFrame(scope,ms,fullBatch){
+    var valid=scope==='Scene'?state.last&&state.last.opticalQuality==='fast'&&state.last.previewLod:
+      fullBatch&&state.compareLast.A&&state.compareLast.B&&
+      state.compareLast.A.opticalQuality==='fast'&&state.compareLast.B.opticalQuality==='fast'&&
+      state.compareLast.A.previewLod&&state.compareLast.B.previewLod;
+    if(state.opticalQuality==='fast'&&state.previewDetail==='auto'&&
+        previewLodControllers&&valid)previewLodControllers[scope].observe(ms);
+    updatePreviewDetailStatus();
+  }
   function bindOpticalQuality(){
     var select=geometryUi('ModernOpticalQuality');
     if(!select)return;
     select.value=state.opticalQuality;
     select.addEventListener('change',function(){
       state.opticalQuality=select.value==='fast'?'fast':'accurate';
-      updateOpticalQualityStatus();redraw();
+      updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
     });
     updateOpticalQualityStatus();
   }
@@ -588,6 +635,7 @@
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
         deferDecorations:separateDecorations,geometryBackend:state.geometryBackend,
         opticalQuality:state.opticalQuality,
+        previewLod:{stride:previewStride('Scene')},
         forceColdOptics:state.opticalSample==='cold'
       });
       var renderedAt=profileNow();
@@ -624,6 +672,7 @@
       updateStatus(fullStatus,result.unresolved>0);
       updateOpticalQualityStatus();
     }catch(error){
+      state.last=null;
       if(state.opticalQuality==='fast')clearUnavailablePreview(g);
       updateOpticalQualityStatus(state.opticalQuality==='fast'?'Fast Preview: '+error.message:undefined);
       updateStatus('Physical renderer: '+error.message,true);
@@ -645,6 +694,7 @@
         transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
         inverseProfile:spec?spec.inverseProfile:state.inverseProfile,interactive:false,
         geometryBackend:state.geometryBackend,opticalQuality:state.opticalQuality,
+        previewLod:{stride:previewStride('compare')},
         forceColdOptics:state.opticalSample==='cold'};
       // Separate optical sessions prevent A and B from evicting each other's
       // keyed ray fields as two viewports are rendered in succession.
@@ -686,10 +736,12 @@
         node.textContent=(state.opticalQuality==='fast'?'Fast Preview · approximate':'Computed optics')+
           (result.cacheReused?' (cached)':'')+
           ' · '+result.drawn+' contours · '+result.fillTriangles+' fills · '+
-          result.unresolved+' unresolved';
+          result.unresolved+' unresolved'+
+          (result.previewLod?' · '+result.previewLod.selected+'/'+result.previewLod.original+' objects':'');
         node.classList.toggle('is-error',!!result.unresolved);
       }
     }catch(error){
+      state.compareLast[side]=null;
       if(state.opticalQuality==='fast')clearUnavailablePreview(g);
       updateOpticalQualityStatus(state.opticalQuality==='fast'?'Fast Preview: '+error.message:undefined);
       var status=el('ModernCompareStatus'+side);
@@ -1826,6 +1878,7 @@
           if(Number.isFinite(stage.opticsMs))line+=' · '+active+' optics '+Math.round(stage.opticsMs)+' ms';
           if(Number.isFinite(stage.canvasMs))line+=' · Canvas '+Math.round(stage.canvasMs)+' ms';
           showComputeTiming(line);
+          observePreviewFrame('compare',doneAt-startedAt,!selected);
           if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
             setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:doneAt-startedAt,
             A:a||undefined,B:b||undefined});
@@ -1847,6 +1900,7 @@
         try{
           var metrics=measuredGraphRedraw(graph);
           showComputeTiming('Scene rendered · '+Math.round(metrics.totalMs)+' ms');
+          observePreviewFrame('Scene',metrics.totalMs,true);
           if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
             setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
         }finally{
@@ -2172,6 +2226,7 @@
     bindPerformanceDiagnostics();
     bindGeometryBackend();
     bindOpticalQuality();
+    bindPreviewDetail();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))
@@ -2260,5 +2315,7 @@
     getAtmosphericShimmer:function(){return atmosphericShimmer;},
     getGpuCapabilities:function(){return gpuSnapshot;},
     getGeometryBackend:function(){return state.geometryBackend;},
-    getOpticalQuality:function(){return state.opticalQuality;}};
+    getOpticalQuality:function(){return state.opticalQuality;},
+    getPreviewDetail:function(){return state.previewDetail;},
+    getPreviewStride:function(scope){return previewStride(scope||'Scene');}};
 }(window));

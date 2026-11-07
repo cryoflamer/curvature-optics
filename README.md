@@ -10,7 +10,9 @@ The former standalone WebGPU optics harness and Modern's optional CPU research p
 **Experimental Fast Preview:** In Modern → Scene/Compare → Display, choose
 **Optical ray field → Fast Preview** to draw with cheaper approximate ray
 angles. Accurate RK4 remains the default and is restored manually; the
-near-horizon image may be incorrect. Some profiles are not qualified and
+near-horizon image may be incorrect. Fast Preview object detail can be
+selected manually or adapted to measured redraw cost (`Auto`); full object
+geometry remains intact in Accurate. Some profiles are not qualified and
 show an explicit error instead of silently using RK4. Auto-switching during
 navigation is not implemented. See [limits and tests](docs/fast-optical-preview.md).
 
@@ -58,7 +60,7 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 
 - [Architecture](docs/architecture.md) — entry points, module ownership, data flow, retained/archived boundaries.
 - [Physics and numerical methods](docs/physics.md) — surface geometry, atmospheric models, RK4, shooting, and limits of validation.
-- [Fast optical preview](docs/fast-optical-preview.md) — experimental manual Display → Optical ray field selector, approximate visibility, exact RK4 isolation, unsupported profiles and validation limits.
+- [Fast optical preview](docs/fast-optical-preview.md) — experimental manual Display → Optical ray field, adaptive Preview-only tower LOD, exact RK4 isolation, unsupported profiles and validation limits.
 - [User guide](docs/user-guide.md) — Legacy storyboards, Modern Scene/Compare, rendering, URLs and saved scenes.
 - [Development and tests](docs/development.md) — no-build workflow, test commands, preserved baselines and contribution rules.
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.

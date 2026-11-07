@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 57,
-      "uniqueScripts": 56,
+      "scriptTags": 58,
+      "uniqueScripts": 57,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -152,6 +152,7 @@
         "src/optics/OpticalConformalPredictor.js",
         "src/optics/OpticalSharedRayField.js",
         "src/optics/OpticalFastRayField.js",
+        "src/optics/OpticalPreviewLod.js",
         "src/optics/OpticalTowerSilhouette.js",
         "src/optics/CurvaturePhysicalGroundGuides.js",
         "src/optics/CurvaturePhysicalPolygonFills.js",
@@ -298,6 +299,7 @@
       "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
       "src/optics/OpticalFastRayField.js",
+      "src/optics/OpticalPreviewLod.js",
       "src/optics/OpticalRayHorizon.js",
       "src/renderers/CurvatureAtmosphericVisibility.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
@@ -335,7 +337,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 137,
+  "sourceJsCount": 138,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1021,6 +1023,7 @@
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalFusedProductionGate141249.test.js",
         "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalPreviewLod.test.js",
         "tests/OpticalShootingReduction121.test.js",
         "tests/OpticalTraceOptimization141248.test.js",
         "tests/OpticalWarmStarts123.test.js",
@@ -1040,6 +1043,7 @@
         "tools/benchmark-engineered-shooting-1404.js",
         "tools/benchmark-height-change-120.js",
         "tools/benchmark-inverse-optics.js",
+        "tools/benchmark-preview-lod.js",
         "tools/validate-physical-scene-115.js"
       ]
     },
@@ -1066,6 +1070,19 @@
       "commonJsToolCallers": [
         "tools/compare-fast-ray-field.js"
       ]
+    },
+    "src/optics/OpticalPreviewLod.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/optics/CurvaturePhysicalSceneOptics.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernFastPreview.test.js",
+        "tests/OpticalPreviewLod.test.js"
+      ],
+      "commonJsToolCallers": []
     },
     "src/optics/OpticalProjectionCalibration.js": {
       "directHtmlLoads": [
@@ -1189,6 +1206,7 @@
         "tests/OpticalFastRayField.test.js",
         "tests/OpticalFusedProductionGate141249.test.js",
         "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalPreviewLod.test.js",
         "tests/OpticalShootingBracket1407.test.js",
         "tests/OpticalShootingReduction121.test.js",
         "tests/OpticalShortRangeBranch1406.test.js",
@@ -1597,6 +1615,7 @@
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalFusedProductionGate141249.test.js",
         "tests/OpticalFusedProductionPromotion141250.test.js",
+        "tests/OpticalPreviewLod.test.js",
         "tests/OpticalShootingReduction121.test.js",
         "tests/OpticalTraceOptimization141248.test.js",
         "tests/OpticalWarmStarts123.test.js",
@@ -1615,6 +1634,7 @@
         "tools/benchmark-engineered-shooting-1404.js",
         "tools/benchmark-height-change-120.js",
         "tools/benchmark-inverse-optics.js",
+        "tools/benchmark-preview-lod.js",
         "tools/validate-physical-scene-115.js"
       ]
     },

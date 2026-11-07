@@ -192,6 +192,7 @@
       cacheReused:opticalFrame.reused,budgetExceeded:stats.budgetExceeded,
       physicalMetricWorld:stats.physicalMetricWorld,
       primitiveCount:drawComposition.scene.primitives.length,
+      previewLod:stats.previewLod,
       layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,fieldPrism:stats.fieldPrism,
       opticalStages:stats.opticalStages,opticalWork:stats.opticalWork,
       unresolvedReasons:stats.unresolvedReasons,sampleStatuses:stats.sampleStatuses,

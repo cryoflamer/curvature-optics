@@ -1802,3 +1802,17 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
 - `tests/ModernFastPreview.test.js` covers the shared Modern geometry path,
   scene/Compare UI selection, zero RK4 calls, failure isolation and cache
   restoration. See `docs/fast-optical-preview.md`.
+
+### Adaptive Fast Preview object LOD
+
+- A separate `OpticalPreviewLod` utility selects full tower batches from the
+  existing far-to-near painter order. It keeps the four nearest and farthest
+  tower of each bank, thinning other towers only in Fast Preview; no authored
+  scene or experiment field is changed. Non-towers remain fully intact.
+- Modern Display offers Auto / full / manual stride 2, 4, 8, 16, 32; the
+  session-only Auto feedback uses measured redraw time with separate Scene
+  and joint Compare budgets and hysteresis. Compare A/B always share a stride.
+- LOD is included in the Fast optical composition cache key and is entirely
+  ignored by Accurate, including when a Preview LOD option is supplied.
+- `tools/benchmark-preview-lod.js` measures cold optical composition only.
+  Browser painter performance and pixel discrepancies are not yet certified.

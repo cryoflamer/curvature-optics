@@ -40,6 +40,7 @@
 <script src="src/optics/OpticalConformalPredictor.js?v=140.12.46"></script>
 <script src="src/optics/OpticalSharedRayField.js?v=140.12.46"></script>
 <script src="src/optics/OpticalFastRayField.js"></script>
+<script src="src/optics/OpticalPreviewLod.js"></script>
 <script src="src/optics/OpticalTowerSilhouette.js?v=140.12.37.2"></script>
 <script src="src/optics/CurvaturePhysicalGroundGuides.js?v=140.12.97"></script>
 <script src="src/optics/CurvaturePhysicalPolygonFills.js?v=140.12.37.2"></script>
@@ -327,6 +328,13 @@
             <select id="ModernOpticalQuality"><option value="accurate" selected>Accurate · RK4 (reference)</option>
               <option value="fast">Fast Preview · approximate</option></select></div>
           <p class="modern-note">Fast Preview reuses the Modern painter with analytic/local-gradient rays; ground visibility near the horizon is approximate. Only Vacuum, Standard and the qualified Flat exponential endpoints are supported. Unsupported profiles show an explicit error, never a hidden RK4 fallback. The exact traced horizon annotation is disabled in Fast Preview. This setting is not saved in experiments.</p>
+          <div class="modern-field"><label for="ModernPreviewDetail">Fast Preview object detail</label>
+            <select id="ModernPreviewDetail"><option value="auto" selected>Auto · frame budget</option>
+              <option value="1">All towers</option><option value="2">Every 2nd</option>
+              <option value="4">Every 4th</option><option value="8">Every 8th</option>
+              <option value="16">Every 16th</option><option value="32">Every 32nd</option></select></div>
+          <p id="ModernPreviewDetailStatus" class="modern-note" role="status" aria-live="polite">Auto LOD: full detail initially.</p>
+          <p class="modern-note">Preview-only: retains the nearest four towers and far endpoint of each tower bank; other object types stay intact. Auto adjusts on measured frame time (Scene: 45 ms; both Compare viewports: 70 ms). Accurate always draws every tower. Details are not saved in experiments.</p>
           <p id="ModernOpticalQualityStatus" class="modern-note" role="status" aria-live="polite">Active: Accurate (RK4)</p>
         </div>
         <div class="modern-gpu-diagnostics" aria-label="Experimental geometry renderer">

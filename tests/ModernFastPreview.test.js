@@ -87,6 +87,9 @@ test('Modern Display optical selector routes Scene and Compare to an explicit qu
   assert.ok(scripts.indexOf('src/optics/OpticalFastRayField.js')<
     scripts.indexOf('src/optics/CurvaturePhysicalSceneOptics.js'));
   assert.ok(html.includes('id="ModernOpticalQuality"'));
+  assert.ok(html.includes('id="ModernPreviewDetail"'));
+  assert.ok(scripts.indexOf('src/optics/OpticalPreviewLod.js')<
+    scripts.indexOf('src/optics/CurvaturePhysicalSceneOptics.js'));
   const names=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill',
     'ModernOcclusionWrap','ModernSceneTab','ModernCompareTab','ModernCompareMessage',
     'ModernGraphHost','ModernCompareViews','ModernBackToScene','ModernHeight','ModernFocal',
@@ -95,7 +98,7 @@ test('Modern Display optical selector routes Scene and Compare to an explicit qu
     'ModernRadiusKm','ModernFlat','ModernPreset','ModernResetPreset',
     'ModernObjectFields0','ModernObjectFields1','ModernSceneTitle','ModernSceneDescription',
     'ModernCompareLabelA','ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB',
-    'ModernOpticalQuality','ModernOpticalQualityStatus',
+    'ModernOpticalQuality','ModernOpticalQualityStatus','ModernPreviewDetail','ModernPreviewDetailStatus',
     'ModernHorizonStatusA','ModernHorizonStatusB','ModernHorizonStatusScene'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},
@@ -106,6 +109,7 @@ test('Modern Display optical selector routes Scene and Compare to an explicit qu
   const win={CurveAppClass:FakeModel,
     CurvatureModernSceneState:null,
     CurvatureModernCompareModel:require('../src/ui/modern/ModernCompareModel'),
+    CurvatureOpticalPreviewLod:require('../src/optics/OpticalPreviewLod'),
     CurvaturePhysicalSceneOptics:{create(){return {clearCache(){}};}},
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,options){call.push({g,m,options});
       return {drawn:12,fillTriangles:6,unresolved:0,cacheReused:false,timings:{totalMs:1}};}},
@@ -116,8 +120,8 @@ test('Modern Display optical selector routes Scene and Compare to an explicit qu
   win.window=win;
   const context={window:win,document:{
     getElementById(id){return nodes.get(id)||null;},
-    querySelector(selector){return selector==='#ModernOpticalQuality'?
-      nodes.get('ModernOpticalQuality'):null;},
+    querySelector(selector){return ['#ModernOpticalQuality','#ModernPreviewDetail'].includes(selector)?
+      nodes.get(selector.slice(1)):null;},
     createElement(){return {setAttribute(){},addEventListener(){}};}
   },requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
   setTimeout(fn){fn();return 1;},clearTimeout(){},console};
@@ -132,14 +136,20 @@ test('Modern Display optical selector routes Scene and Compare to an explicit qu
   selector.value='fast';selector.listeners.change();
   assert.equal(app.getOpticalQuality(),'fast');
   assert.equal(call.at(-1).options.opticalQuality,'fast');
+  const detail=nodes.get('ModernPreviewDetail');
+  detail.value='8';detail.listeners.change();
+  assert.equal(app.getPreviewDetail(),'8');
+  assert.equal(call.at(-1).options.previewLod.stride,8);
   assert.match(nodes.get('ModernStatus').textContent,/Fast Preview/);
   const horizonBefore=horizonCalls;
   nodes.get('ModernCompareTab').listeners.click();
   assert.equal(horizonCalls,horizonBefore,'Fast mode must not call accurate traced horizon');
   assert.deepEqual(call.slice(-2).map(x=>x.options.opticalQuality),['fast','fast']);
+  assert.deepEqual(call.slice(-2).map(x=>x.options.previewLod.stride),[8,8]);
   assert.notEqual(call.at(-2).options.cacheSession,call.at(-1).options.cacheSession);
   selector.value='accurate';selector.listeners.change();
   assert.equal(app.getOpticalQuality(),'accurate');
+  assert.equal(detail.disabled,true);
   assert.deepEqual(call.slice(-2).map(x=>x.options.opticalQuality),['accurate','accurate']);
   assert.notEqual(call.at(-2).options.cacheSession,call.at(-1).options.cacheSession);
 });

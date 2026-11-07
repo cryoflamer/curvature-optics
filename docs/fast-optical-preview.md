@@ -89,7 +89,7 @@ camera, and sampled computation time. It does not compare finished Canvas
 images or validate global first-ground events. A reported `indeterminate`
 should not be counted as an incorrect occlusion or silent success.
 
-## Manual Modern integration and known limits
+## Manual Modern integration, adaptive object LOD and known limits
 
 1. Open **Modern → Scene or Compare → Display → Optical ray field**. Select
    `Fast Preview · approximate` to draw a new scene through the cheap ray
@@ -113,7 +113,28 @@ should not be counted as an incorrect occlusion or silent success.
    key, prevent Approximate results from being mistaken for Accurate. Traced
    horizon overlays are suppressed in Fast mode to avoid accidental RK4
    work. Do not interpret the guide horizon as an accurate physical diagnosis.
-5. `tests/ModernFastPreview.test.js` covers real geometric fills/outlines,
+5. **Fast Preview object detail** (under the quality selector) has `Auto`,
+   `All towers`, and manual strides 2/4/8/16/32. Only authored tower banks
+   are thinned, and **whole placed objects** (struts plus foundations) are
+   selected in existing far-to-near painter order. The four nearest towers
+   and the far endpoint of each bank always remain. Non-tower shapes and
+   unidentified authored objects are never thinned. The original composition,
+   physics, saved experiments and Accurate mode remain unchanged. Both Compare
+   viewports use the **same stride** for consistent object selection.
+   `Auto` begins at full detail and adjusts *future* preview redraws using
+   complete measured render time, with hysteresis to avoid flicker: 45 ms
+   target in Scene, 70 ms for a whole A+B Compare update. A targeted single
+   Compare-side edit does not retune the shared stride. The LOD controller is
+   not an asynchronous renderer; it does not redraw by itself and cannot
+   guarantee target FPS. Quality/LOD preferences are session-only and do not
+   enter experiment JSON. Switching to Accurate restores **all** objects.
+6. Repeatable CPU optics-only measurement on real tower geometry:
+   `node tools/benchmark-preview-lod.js` (`--towers=85`, `--runs=5`). It
+   reports median cold optical composition cost for stride 1/2/4/8/16/32
+   on Globe and Flat, separate from authored scene generation and Canvas.
+   Its object counts can differ from the nominal tower count because the scene
+   includes another object bank. End-to-end browser timing remains necessary.
+7. `tests/ModernFastPreview.test.js` covers real geometric fills/outlines,
    zero RK4 calls in Fast, unsupported profile refusal, quality switch/cache
    isolation, and UI routing for Scene/Compare. Browser pixel parity and
    complete end-to-end FPS have **not** been established.
@@ -122,7 +143,9 @@ should not be counted as an incorrect occlusion or silent success.
 
 - Compare actual rasterized contours/fills with Accurate under Scene and
   Compare A/B, at varied camera poses, camera FOVs and atmospheres.
-- Time end-to-end Canvas renders (including tessellation), then decide whether
-  lower contour LOD and an Auto-preview scheduler are justified.
+- Time end-to-end Canvas renders (including tessellation), assess image artifacts
+  from tower thinning, and develop an Auto-preview scheduler for navigation.
+  Adaptive object LOD is available in manual Fast Preview, but **not**
+  automatic switching between Fast and Accurate during camera motion.
 - Keep exact caches, exact horizon/ground events and final offline animation
   rendering completely independent of Preview.
