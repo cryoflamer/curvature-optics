@@ -1831,3 +1831,22 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
   Fast renders and finish with Accurate; manual Fast still fails explicitly.
 - Both the quality mode and Preview LOD remain transient UI preferences; no
   experiment/Legacy state is altered. Tests cover transitions and coalescing.
+
+### Camera Transition Player (Modern)
+
+- Modern Camera panel can preview a deterministic, two-saved-position camera
+  transition with selectable 0.2–120 second duration and Linear/Smoothstep easing.
+  Pure `src/camera/ModernCameraInterpolator.js` is loaded by the Modern entrypoint.
+  No new persistence fields and no Legacy runtime/renderer dependencies.
+- The transition samples the absolute monotonic playback clock in a dedicated
+  animation loop; the optical render request is throttled independently using
+  existing Fast Preview and LOD. No missed optical frame can slow down the
+  camera path. Compare A/B receive one common camera and LOD.
+- Stop holds the intermediate pose; Cancel restores the pose before Play;
+  manual camera gestures, parameter edits, workspace/experiment change and
+  focus loss interrupt playback. Stale queued Fast frames are cancelled before
+  the final display reverts to the user's selected optical quality (Accurate
+  for the default / Auto at rest). Unsupported Fast profiles reject Play.
+- Discrete aim and aspect differences between saved poses are rejected without
+  changing the scene. Animation sequences, geodesic paths and video export
+  are future tasks. Browser visual playback remains to be verified manually.

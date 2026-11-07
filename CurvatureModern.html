@@ -7,10 +7,10 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;camera-navigation=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;camera-navigation=1&amp;camera-transition=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
-     No ControlPanelX, animations, diagnostic UI or legacy runtime is loaded. -->
+     No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
 <script src="src/legacy/GraphX3DX.js"></script>
 <script src="src/scene/CurvatureSceneContract.js"></script>
 <script src="src/scene/CurvatureRenderFrame.js"></script>
@@ -53,6 +53,7 @@
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
 <script src="src/ui/modern/ModernCameraNavigation.js"></script>
+<script src="src/camera/ModernCameraInterpolator.js"></script>
 <script src="src/ui/modern/ModernCameraPerspectiveWarp.js"></script>
 <script src="src/ui/modern/ModernCameraDragPreview.js?v=137.4&amp;camera-position=1"></script>
 <script src="src/ui/modern/ModernRenderProfiler.js?v=140.3"></script>
@@ -175,6 +176,22 @@
           <button type="button" id="ModernCameraDelete">Delete</button>
           <button type="button" id="ModernCameraReset">Reset camera</button>
         </div>
+        <h3 class="modern-camera-subheading">Camera transition</h3>
+        <div class="modern-two-fields">
+          <div class="modern-field"><label for="ModernTransitionFrom">From position</label><select id="ModernTransitionFrom"><option value="">Save two positions first</option></select></div>
+          <div class="modern-field"><label for="ModernTransitionTo">To position</label><select id="ModernTransitionTo"><option value="">Save two positions first</option></select></div>
+        </div>
+        <div class="modern-two-fields">
+          <div class="modern-field"><label for="ModernTransitionDuration">Duration (seconds)</label><input id="ModernTransitionDuration" type="number" min="0.2" max="120" step="0.1" value="5"></div>
+          <div class="modern-field"><label for="ModernTransitionEasing">Timing</label><select id="ModernTransitionEasing"><option value="smoothstep" selected>Ease in / out</option><option value="linear">Linear</option></select></div>
+        </div>
+        <div class="modern-camera-actions modern-transition-actions">
+          <button type="button" id="ModernTransitionPlay">Play transition</button>
+          <button type="button" id="ModernTransitionStop" disabled>Stop here</button>
+          <button type="button" id="ModernTransitionCancel" disabled>Cancel / restore</button>
+        </div>
+        <p class="modern-note" id="ModernTransitionStatus" role="status" aria-live="polite">Save two camera positions to preview a transition.</p>
+        <p class="modern-note">Fast Preview is used during playback; the selected optical quality is restored when it ends. Stop keeps the current pose; Cancel restores the pose from before Play. Manual navigation interrupts playback.</p>
         <p class="modern-note" id="ModernCameraPositionsStatus" role="status" aria-live="polite"></p>        <p class="modern-note">Camera: drag to aim; Shift + drag to move sideways/change height; Alt + wheel to move forward/backward; Shift + wheel to zoom. Compare shares the camera between A/B.</p>
         <p class="modern-note" id="ModernCameraPositionInfo">East 0 m · North 0 m</p>
         <p id="ModernCompareCameraAimNote" class="modern-note" hidden>Compare uses a fixed eye-level aim (0°) for both models; other Scene aiming modes are not applied.</p>
@@ -401,7 +418,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>

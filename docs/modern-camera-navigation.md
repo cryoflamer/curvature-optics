@@ -110,6 +110,28 @@ continues to load unchanged. The optional field does not modify the Legacy
 `?state=` contract. Selecting a fresh Scene preset starts a new pose list;
 loading a saved experiment restores its own list.
 
-The list is ordered by creation and does not yet define animation timing, path
-interpolation or video export. Future camera keyframes can refer to these
-validated poses without binding animation to mouse or keyboard event playback.
+The list is ordered by creation. The **Camera transition** controls below it
+provide a single non-persistent transition between **two distinct saved poses**:
+select From/To, a duration from 0.2 to 120 seconds, and Linear or Ease in / out.
+Press **Play transition** for an actual moving camera preview. Fast optical
+samples are throttled and use the existing adaptive/selected tower LOD; when
+finished, the active optical-quality preference (normally Accurate or Auto at
+rest) renders the full endpoint. Compare A/B always receive the same camera
+and LOD. Some atmospheres are not qualified for Fast and cannot be animated by
+this player yet; no implicit RK4 renders are scheduled during a transition.
+
+**Stop here** keeps the latest intermediate camera pose. **Cancel / restore**
+returns to the camera pose that was active *before Play* (not to the chosen
+From position). Starting manual keyboard/pointer/wheel navigation or editing
+physical controls interrupts playback. Changing workspaces, experiments or
+browser focus also stops the active transition, without changing the authored
+scene. Discrete camera aim and aspect must match between the saved poses;
+otherwise Play reports a validation error before modifying the camera.
+
+Position is sampled from **absolute elapsed time**, not integrated per Fast
+frame: a slow optical frame may cause visual skipping but must not make camera
+motion run slow. Only local linear East/North, local height, shortest wrapped
+Pan/Roll, linear Nick and logarithmic focal length are used. Long-distance
+geodesic paths, multi-keyframe timelines, video export, and persistence of
+transition settings are intentionally out of scope. The existing experiment
+schema and saved poses remain unchanged.

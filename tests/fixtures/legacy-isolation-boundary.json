@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 58,
-      "uniqueScripts": 57,
+      "scriptTags": 59,
+      "uniqueScripts": 58,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -165,6 +165,7 @@
         "src/ui/modern/ModernSceneState.js",
         "src/ui/modern/ModernCameraInteraction.js",
         "src/ui/modern/ModernCameraNavigation.js",
+        "src/camera/ModernCameraInterpolator.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
         "src/ui/modern/ModernCameraDragPreview.js",
         "src/ui/modern/ModernRenderProfiler.js",
@@ -296,6 +297,7 @@
       "src/ui/panels/ViewSliders.js"
     ],
     "loadedByModernNotLegacy": [
+      "src/camera/ModernCameraInterpolator.js",
       "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
       "src/optics/OpticalFastRayField.js",
@@ -327,7 +329,6 @@
       "src/ModelAnimation.js",
       "src/NumFormatter.js",
       "src/Slider.js",
-      "src/camera/ModernCameraInterpolator.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
@@ -526,10 +527,13 @@
       "commonJsToolCallers": []
     },
     "src/camera/ModernCameraInterpolator.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernCameraInterpolator.test.js"
+        "tests/ModernCameraInterpolator.test.js",
+        "tests/ModernCameraNavigation.test.js"
       ],
       "commonJsToolCallers": []
     },

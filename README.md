@@ -22,7 +22,8 @@ return to Accurate when motion stops. See [limits and tests](docs/fast-optical-p
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or
 backward horizontally. Shift + wheel continues to zoom. The shared position is
 saved with Scene/Compare experiments. See [Modern camera navigation](docs/modern-camera-navigation.md)
-for coordinate semantics, spherical recentering and limitations.
+for coordinate semantics, spherical recentering, a two-pose transition player
+(**Camera → Camera transition → Play / Stop / Cancel**) and limitations.
 
 ## Run locally
 

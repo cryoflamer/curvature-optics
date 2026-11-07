@@ -78,6 +78,7 @@
   // the renderer. Fast is used only for qualified camera-motion samples;
   // idle renders and unsupported profiles always retain Accurate.
   var autoCameraActive=false,autoCameraLastFrame=-Infinity,autoCameraSettleTimer=null;
+  var cameraTransition=null;
   var AUTO_FRAME_INTERVAL_MS=120,AUTO_WHEEL_IDLE_MS=220;
   function qualifiedFastProfile(atmosphere,surface,inverse){
     return atmosphere==='vacuum'||atmosphere==='standard'||
@@ -95,6 +96,7 @@
     return qualifiedFastProfile(state.atmosphere,model.showModel===2?'flat':'globe',state.inverseProfile);
   }
   function effectiveOpticalQuality(){
+    if(cameraTransition)return 'fast';
     return state.opticalQuality==='auto'?(autoCameraActive&&autoPreviewSupported()?'fast':'accurate'):
       state.opticalQuality;
   }
@@ -105,7 +107,7 @@
     clearAutoCameraSettle();autoCameraActive=false;autoCameraLastFrame=-Infinity;
   }
   function requestAutoCameraPreview(){
-    if(state.opticalQuality!=='auto'||!autoPreviewSupported())return false;
+    if((state.opticalQuality!=='auto'&&!cameraTransition)||!autoPreviewSupported())return false;
     if(!autoCameraActive){
       autoCameraActive=true;autoCameraLastFrame=-Infinity;
       // The first dense-scene frame should be inexpensive. Auto LOD will
@@ -513,6 +515,7 @@
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
   }
   function applyExperiment(experiment){
+    stopCameraTransition(false,'Transition interrupted by experiment load',false);
     var data=experiments.validate(experiment),scene=data.scene;
     // All values are prevalidated as one transaction before touching CurveApp.
     Object.keys(scene.camera).forEach(function(key){model[key]=scene.camera[key];});
@@ -1464,10 +1467,151 @@
   }
   function applyCameraPose(pose){
     if(!pose)return;
+    stopCameraTransition(false,'Transition interrupted by camera restore',false);
     checkedCameraPosition(pose);
     stopCameraKeyboard(true);abortCameraDrag();cancelEdits();cancelPending();
     CAMERA_POSE_FIELDS.forEach(function(key){model[key]=pose[key];});
     model.Update();markCustom();syncNumericInputs();redraw();
+  }
+  // Playback is sampled from absolute elapsed time, not from the number of
+  // optical frames. Fast frames may be skipped on a slow Scene/Compare render.
+  var cameraInterpolator=root.CurvatureModernCameraInterpolator;
+  function transitionStatus(text,problem){
+    var node=newUiEl('ModernTransitionStatus');
+    if(node){node.textContent=text||'';node.classList.toggle('is-error',!!problem);}
+  }
+  function transitionControls(){
+    var playing=!!cameraTransition;
+    var from=newUiEl('ModernTransitionFrom'),to=newUiEl('ModernTransitionTo');
+    var available=cameraPositions.length>=2&&!!cameraInterpolator&&!state.demosActive;
+    [['ModernTransitionPlay',!playing&&available],['ModernTransitionStop',playing],
+      ['ModernTransitionCancel',playing]].forEach(function(pair){
+      var button=newUiEl(pair[0]);if(button)button.disabled=!pair[1];
+    });
+    [from,to,newUiEl('ModernTransitionDuration'),newUiEl('ModernTransitionEasing')].forEach(function(node){
+      if(node)node.disabled=playing;
+    });
+  }
+  function renderCameraTransitionChoices(){
+    var from=newUiEl('ModernTransitionFrom'),to=newUiEl('ModernTransitionTo');
+    if(!from||!to||typeof from.appendChild!=='function')return;
+    var oldFrom=from.value,oldTo=to.value;
+    [from,to].forEach(function(select){
+      select.innerHTML='';
+      cameraPositions.forEach(function(entry){
+        var option=document.createElement('option');option.value=entry.id;
+        option.textContent=entry.name;select.appendChild(option);
+      });
+    });
+    from.value=cameraPositions.some(function(p){return p.id===oldFrom;})?oldFrom:
+      (cameraPositions[0]&&cameraPositions[0].id||'');
+    to.value=cameraPositions.some(function(p){return p.id===oldTo&&p.id!==from.value;})?oldTo:
+      (cameraPositions.find(function(p){return p.id!==from.value;})||{}).id||'';
+    var status=newUiEl('ModernTransitionStatus');
+    if(status&&/^(Save two|Choose two)/.test(status.textContent))status.textContent=
+      cameraPositions.length>=2?'Choose two saved positions and press Play.':
+      'Save two camera positions to preview a transition.';
+    transitionControls();
+  }
+  function transitionPose(pose){
+    CAMERA_POSE_FIELDS.forEach(function(key){model[key]=pose[key];});
+  }
+  function transitionInputPreview(){
+    refreshNavigationCameraInputs();
+    var ids={ModernFocal:'FocalLengthField',ModernRoll:'Roll'};
+    Object.keys(ids).forEach(function(id){var node=newUiEl(id);if(node)node.value=String(model[ids[id]]);});
+    var aim=newUiEl('ModernCameraAim');if(aim)aim.value=String(model.viewcenterHorizon);
+    var fov=newUiEl('ModernViewAngle');
+    if(fov&&root.CurvatureModernCameraInteraction&&root.CurvatureModernCameraInteraction.focalViewAngle)
+      fov.value=String(Number(root.CurvatureModernCameraInteraction.focalViewAngle(model.FocalLengthField).toFixed(4)));
+  }
+  // Stop keeps the latest sampled pose. Cancel restores the pre-Play camera,
+  // not necessarily the selected From position. A manual gesture can interrupt
+  // silently and let its own final redraw happen later.
+  function stopCameraTransition(restore,message,renderNow){
+    var running=cameraTransition;
+    if(!running)return false;
+    cameraTransition=null;
+    if(running.frame!==null)cancelAnimationFrame(running.frame);
+    stopAutoCameraPreview();cancelPending();
+    if(restore)transitionPose(running.original);
+    markCustom();syncNumericInputs();transitionControls();
+    transitionStatus(message||(restore?'Transition cancelled; starting view restored':
+      'Transition stopped at current camera position'));
+    if(renderNow)redraw();
+    return true;
+  }
+  function cameraTransitionTick(now){
+    var current=cameraTransition;
+    if(!current)return;
+    current.frame=null;
+    var elapsed=Math.max(0,Number.isFinite(now)?now-current.startedAt:profileNow()-current.startedAt);
+    try{
+      var position=cameraInterpolator.cameraAt(current.from,current.to,
+        elapsed,current.durationMs,current.easing);
+      transitionPose(position);
+      if(elapsed>=current.durationMs){
+        // Drop any stale Fast redraw before the authoritative final sample.
+        stopCameraTransition(false,'Completed: '+current.fromName+' → '+current.toName,true);
+        return;
+      }
+      transitionInputPreview();
+      transitionStatus('Playing '+current.fromName+' → '+current.toName+' · '+
+        Math.round(100*elapsed/current.durationMs)+'% · '+(elapsed/1000).toFixed(1)+
+        ' / '+(current.durationMs/1000).toFixed(1)+' s');
+      requestAutoCameraPreview();
+      current.frame=requestAnimationFrame(cameraTransitionTick);
+    }catch(error){stopCameraTransition(false,'Transition failed: '+error.message,true);
+      transitionStatus('Transition failed: '+error.message,true);}
+  }
+  function startCameraTransition(){
+    if(!cameraInterpolator)throw Error('Camera interpolation module is unavailable');
+    if(cameraTransition)throw RangeError('A camera transition is already playing');
+    if(state.demosActive||state.mode==='demos')throw RangeError('Switch to Scene or Compare first');
+    if(!autoPreviewSupported())throw RangeError('Fast Preview is unavailable for this atmosphere / surface combination');
+    var fromId=newUiEl('ModernTransitionFrom').value,toId=newUiEl('ModernTransitionTo').value;
+    var from=cameraPositions.find(function(p){return p.id===fromId;});
+    var to=cameraPositions.find(function(p){return p.id===toId;});
+    if(!from||!to||from.id===to.id)throw RangeError('Choose two different saved camera positions');
+    var secondsRaw=String(newUiEl('ModernTransitionDuration').value).trim();
+    var seconds=Number(secondsRaw),mode=newUiEl('ModernTransitionEasing').value;
+    if(!secondsRaw||!Number.isFinite(seconds)||seconds<.2||seconds>120)
+      throw RangeError('Transition duration must be between 0.2 and 120 seconds');
+    if(mode!=='linear'&&mode!=='smoothstep')throw RangeError('Invalid transition timing');
+    // Prevalidate geometry, the fixed discrete camera modes and the midpoint
+    // BEFORE changing the shared Scene/Compare camera or cancelling a render.
+    cameraInterpolator.cameraAt(from.camera,to.camera,seconds*500,seconds*1000,mode);
+    checkedCameraPosition(from.camera);checkedCameraPosition(to.camera);
+    checkedCameraPosition(cameraInterpolator.cameraAt(from.camera,to.camera,seconds*500,seconds*1000,mode));
+    stopCameraKeyboard(true);abortCameraDrag();cancelEdits();cancelPending();stopAutoCameraPreview();
+    cameraTransition={original:captureCameraPose(),from:Object.assign({},from.camera),
+      to:Object.assign({},to.camera),fromName:from.name,toName:to.name,
+      startedAt:profileNow(),durationMs:seconds*1000,easing:mode,frame:null};
+    transitionPose(from.camera);transitionInputPreview();markCustom();transitionControls();
+    transitionStatus('Playing '+from.name+' → '+to.name+' · 0%');
+    requestAutoCameraPreview();
+    cameraTransition.frame=requestAnimationFrame(cameraTransitionTick);
+  }
+  function bindCameraTransition(){
+    var play=newUiEl('ModernTransitionPlay');
+    if(!play)return;
+    play.addEventListener('click',function(){
+      try{startCameraTransition();}
+      catch(error){transitionStatus(error.message,true);}
+    });
+    var stop=newUiEl('ModernTransitionStop');if(stop)stop.addEventListener('click',function(){
+      stopCameraTransition(false,null,true);
+    });
+    var cancel=newUiEl('ModernTransitionCancel');if(cancel)cancel.addEventListener('click',function(){
+      stopCameraTransition(true,null,true);
+    });
+    if(root.addEventListener)root.addEventListener('blur',function(){
+      stopCameraTransition(false,'Transition stopped when the window lost focus',true);
+    });
+    if(document.addEventListener)document.addEventListener('visibilitychange',function(){
+      if(document.hidden)stopCameraTransition(false,'Transition stopped while the page is hidden',true);
+    });
+    renderCameraTransitionChoices();
   }
   function cameraPositionStatus(message,problem){
     var element=newUiEl('ModernCameraPositionsStatus');
@@ -1494,6 +1638,7 @@
       var chosen=cameraPositions.find(function(entry){return entry.id===list.value;});
       var name=newUiEl('ModernCameraPositionName');if(name&&chosen)name.value=chosen.name;
     }
+    renderCameraTransitionChoices();
   }
   function selectedCameraPosition(){
     var list=newUiEl('ModernCameraPositions');
@@ -1509,6 +1654,7 @@
     return id;
   }
   function commitCameraPositions(list,selected,message){
+    stopCameraTransition(false,'Transition interrupted by position edit',false);
     cameraPositions=list;renderCameraPositions(selected);
     scheduleExperimentSave();cameraPositionStatus(message);
   }
@@ -1633,6 +1779,7 @@
       if(!action||!keyboardAllowed(event))return;
       if(event.preventDefault)event.preventDefault();
       if(navigationKeys[action])return;
+      stopCameraTransition(false,'Transition interrupted by keyboard navigation',false);
       cancelEdits();cancelPending();
       navigationKeys[action]=true;
       navigationModifiers={fast:!!event.shiftKey,precise:!!event.ctrlKey};
@@ -1726,6 +1873,7 @@
         (view!=='Scene'&&state.mode!=='compare'))return;
       var rect=canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
       if(!rect||!(rect.width>0&&rect.height>0))return;
+      stopCameraTransition(false,'Transition interrupted by mouse navigation',false);
       try{
         if(typeof canvas.focus==='function')canvas.focus({preventScroll:true});
         cameraInteraction.begin({viewport:view,x:event.clientX,y:event.clientY,
@@ -1860,6 +2008,7 @@
          delta===0||activeCameraPointer||
          (view==='Scene'&&state.mode!=='scene')||
          (view!=='Scene'&&state.mode!=='compare')||state.demosActive)return;
+      stopCameraTransition(false,'Transition interrupted by wheel navigation',false);
       var next;
       try{
         if(event.altKey){
@@ -1937,6 +2086,7 @@
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
     var liveMotion=opticalSampleMode==='camera-motion';
+    if(cameraTransition&&!liveMotion)stopCameraTransition(false,'Transition interrupted by redraw',false);
     var sample=opticalSampleMode==='cold'||opticalSampleMode==='warm';
     state.opticalSample=sample?opticalSampleMode:null;
     // A targeted physical-input edit cannot invalidate the other viewport.
@@ -2022,6 +2172,7 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode){
+    stopCameraTransition(false,'Transition interrupted by workspace switch',false);
     stopAutoCameraPreview();
     if(mode!=='scene'&&mode!=='compare'&&mode!=='demos')throw RangeError('Invalid Modern UI mode');
     stopCameraKeyboard(true);abortCameraDrag();cancelEdits();stopShimmerFrame();
@@ -2120,6 +2271,7 @@
       if(applyField(action,raw,description||id))syncNumericInputs();
     }
     input.addEventListener('input',function(){
+      if(cameraTransition)stopCameraTransition(false,'Transition interrupted by camera editing',false);
       if(commitOnly){radiusDraft(id,true);return;}
       if(state.editTimeouts[id]!==undefined)clearTimeout(state.editTimeouts[id]);
       // Other controls retain the existing short debounce.
@@ -2207,6 +2359,7 @@
   }
   function selectPreset(id){
     if(!adapter)return;
+    stopCameraTransition(false,'Transition interrupted by preset change',false);
     try{
       cancelEdits();
       adapter.applyPreset(model,id);
@@ -2317,6 +2470,7 @@
     bindCameraDrag();
     bindCameraKeyboard();
     bindCameraPositions();
+    bindCameraTransition();
     bindObjectFields();
     bindSettingsTabs();
     bindHelp();
@@ -2410,6 +2564,8 @@
     getPerformanceSnapshot:performanceSnapshot,
     getCameraInteraction:function(){return cameraInteraction;},
     getCameraPositions:function(){return cameraPositions.map(function(p){return {id:p.id,name:p.name,camera:Object.assign({},p.camera)};});},
+    getCameraTransition:function(){return cameraTransition?{playing:true,from:cameraTransition.fromName,
+      to:cameraTransition.toName,durationMs:cameraTransition.durationMs}: {playing:false};},
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},

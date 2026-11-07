@@ -283,3 +283,7 @@ button{cursor:pointer}
 .modern-camera-actions button{background:#f4f8ff;color:#24619d;border:1px solid #ccddf1;border-radius:7px;padding:7px 5px;font-size:12px}
 .modern-camera-actions button:disabled{opacity:.45;cursor:default}
 .modern-camera-draggable:focus-visible{outline:3px solid #65acf2;outline-offset:2px}
+
+.modern-transition-actions{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:8px}
+.modern-transition-actions button{min-width:0;overflow-wrap:anywhere}
+#ModernTransitionStatus.is-error{color:#ac3145}

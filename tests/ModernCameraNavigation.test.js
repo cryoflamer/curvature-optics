@@ -6,6 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const nav=require('../src/ui/modern/ModernCameraNavigation');
 const interaction=require('../src/ui/modern/ModernCameraInteraction');
+const interpolator=require('../src/camera/ModernCameraInterpolator');
 const codec=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 const compareModel=require('../src/ui/modern/ModernCompareModel');
@@ -127,6 +128,7 @@ function boot(){
   const win={CurveAppClass:Model,CurvatureModernSceneState:scene,
     CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
     CurvatureModernCameraInteraction:interaction,CurvatureModernCameraNavigation:nav,
+    CurvatureModernCameraInterpolator:interpolator,
     CurvatureModernExperimentState:codec,
     CurvatureModernCompareState:compare,CurvatureModernCompareModel:compareModel,
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
@@ -342,4 +344,157 @@ test('Cancelling an Auto camera drag restores initial pose and Accurate optics',
   assert.equal(model.Pan,originalPan);
   assert.equal(r.at(-1).quality,'accurate');
   assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
+});
+
+function savedTransition(h){
+  const n=h.nodes,m=h.app.getModel();
+  n.get('ModernCameraPositionName').value='Bridge A';n.get('ModernCameraSave').dispatch('click');
+  m.Height=100;m.CameraNorth=400;m.CameraEast=100;m.Pan=30;m.Nick=-5;
+  m.FocalLengthField=800;m.Roll=10;
+  n.get('ModernCameraPositionName').value='Bridge B';n.get('ModernCameraSave').dispatch('click');
+  n.get('ModernTransitionFrom').value='camera-1';
+  n.get('ModernTransitionTo').value='camera-2';
+  n.get('ModernTransitionDuration').value='5';
+  n.get('ModernTransitionEasing').value='linear';
+}
+
+test('transition plays deterministic Fast samples and finishes at the exact saved pose with Accurate',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();
+  savedTransition(h);
+  const before=JSON.stringify(h.app.getCameraPositions());
+  n.get('ModernTransitionPlay').dispatch('click');
+  assert.equal(h.app.getCameraTransition().playing,true);
+  assert.equal(m.CameraNorth,0);
+  assert.equal(n.get('ModernTransitionStop').disabled,false);
+  h.flushFrames(2500);
+  approx(m.CameraNorth,200);approx(m.CameraEast,50);approx(m.Height,57.5);
+  approx(m.FocalLengthField,Math.sqrt(2000*800));
+  h.flushFrames();
+  assert.ok(h.renders.some(r=>r.quality==='fast'),'Fast optical frame during movement');
+  h.flushFrames(2600);h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.equal(m.CameraNorth,400);assert.equal(m.Height,100);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+  assert.equal(h.renders.at(-1).stride,1);
+  assert.equal(n.get('ModernTransitionPlay').disabled,false);
+  assert.equal(n.get('ModernTransitionStop').disabled,true);
+  assert.equal(JSON.stringify(h.app.getCameraPositions()),before,'saved keyframes remain untouched');
+});
+
+test('transition Stop holds interpolated pose and Cancel restores the pre-play pose',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1250);h.flushFrames();
+  const held=m.CameraNorth;assert.ok(held>0&&held<400);
+  n.get('ModernTransitionStop').dispatch('click');h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  approx(m.CameraNorth,held);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+  h.flushFrames(6000);approx(m.CameraNorth,held);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(2000);
+  assert.ok(m.CameraNorth>0&&m.CameraNorth<400);
+  n.get('ModernTransitionCancel').dispatch('click');h.flushFrames();
+  approx(m.CameraNorth,held);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('keyboard interrupts playback and takes over camera without an expensive redraw on keydown',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1100);h.flushFrames();
+  const cameraBefore=m.CameraNorth,renders=h.renders.length;
+  h.dispatchGlobal('keydown',{code:'KeyW'});
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.equal(h.renders.length,renders);
+  h.flushFrames(100);
+  assert.ok(m.CameraNorth>cameraBefore);
+  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames();
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('transition rejects unsupported optics, discrete pose mismatches and invalid durations without changing the camera',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  const original=m.CameraNorth;
+  n.get('ModernTransitionDuration').value='0';n.get('ModernTransitionPlay').dispatch('click');
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.match(n.get('ModernTransitionStatus').textContent,/duration/i);
+  n.get('ModernTransitionDuration').value='5';
+  n.get('ModernAtmosphere').value='temperature-lapse';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
+  n.get('ModernTransitionPlay').dispatch('click');
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.match(n.get('ModernTransitionStatus').textContent,/Fast Preview/i);
+  n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
+  const entries=h.app.getCameraPositions();entries[1].camera.viewcenterHorizon=2;
+  // Editing saved positions through the public UI respects the same validation.
+  m.viewcenterHorizon=2;n.get('ModernCameraPositions').value='camera-2';
+  n.get('ModernCameraUpdate').dispatch('click');
+  n.get('ModernTransitionPlay').dispatch('click');
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.match(n.get('ModernTransitionStatus').textContent,/aim mode/i);
+  assert.equal(m.CameraNorth,original);
+});
+
+test('Compare transition shares the same camera and Preview LOD in A/B, then restores Accurate',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1500);h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,true);
+  const pair=h.app.getCompareModels();
+  assert.equal(pair.A.CameraNorth,pair.B.CameraNorth);
+  assert.equal(pair.A.Pan,pair.B.Pan);
+  const a=h.renders.filter(r=>r.quality==='fast');
+  assert.ok(a.length>=2);assert.equal(a.at(-1).stride,a.at(-2).stride);
+  h.flushFrames(4000);h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.equal(h.app.getCompareModels().A.CameraNorth,400);
+  assert.equal(h.app.getCompareModels().B.CameraNorth,400);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('switching workspaces or pressing Cancel clears stale transition frames',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1000);
+  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  const stopped=m.CameraNorth;h.flushFrames(8000);
+  assert.equal(m.CameraNorth,stopped,'cancelled RAF must not move the camera later');
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(2000);
+  n.get('ModernTransitionCancel').dispatch('click');h.flushFrames();
+  assert.equal(m.CameraNorth,stopped);
+  h.flushFrames(8000);assert.equal(m.CameraNorth,stopped);
+});
+
+
+test('pointer navigation interrupts transition and retains immediate manual control',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1000);h.flushFrames();
+  const before=m.Pan;
+  const pointer={button:0,pointerId:3,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  assert.equal(h.app.getCameraTransition().playing,false);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:90,clientY:60});
+  h.canvas.dispatch('pointerup',{...pointer,clientX:90,clientY:60});
+  h.flushFrames();
+  assert.notEqual(m.Pan,before);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('wheel input interrupts transition and the resulting viewport shows manual zoom',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(1200);h.flushFrames();
+  const focal=m.FocalLengthField;
+  h.canvas.dispatch('wheel',{deltaY:-100,deltaX:0,deltaMode:0,shiftKey:true});
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.notEqual(m.FocalLengthField,focal);
+  h.flushTimers();h.flushFrames();
+  assert.equal(h.renders.at(-1).quality,'accurate');
+});
+
+test('losing browser focus stops transition and returns to idle optics',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedTransition(h);
+  n.get('ModernTransitionPlay').dispatch('click');h.flushFrames(500);h.flushFrames();
+  const north=m.CameraNorth;
+  h.dispatchGlobal('blur',{});h.flushFrames();
+  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.equal(m.CameraNorth,north);
+  assert.equal(h.renders.at(-1).quality,'accurate');
+  h.flushFrames(10000);assert.equal(m.CameraNorth,north);
 });
