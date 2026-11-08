@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 63,
-      "uniqueScripts": 62,
+      "scriptTags": 65,
+      "uniqueScripts": 64,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -180,7 +180,9 @@
         "src/ui/modern/ModernExperimentState.js",
         "src/ui/modern/ModernExperimentLibrary.js",
         "src/ui/modern/ModernExperimentFingerprint.js",
+        "src/ui/modern/ModernExperimentThumbnail.js",
         "src/ui/modern/ModernExperimentHistory.js",
+        "src/ui/modern/ModernExperimentHistoryUI.js",
         "src/ui/modern/ModernDemos.js",
         "src/ui/modern/ModernApp.js",
         "src/ui/modern/ModernCompareGraph.js",
@@ -324,8 +326,10 @@
       "src/ui/modern/ModernDemos.js",
       "src/ui/modern/ModernExperimentFingerprint.js",
       "src/ui/modern/ModernExperimentHistory.js",
+      "src/ui/modern/ModernExperimentHistoryUI.js",
       "src/ui/modern/ModernExperimentLibrary.js",
       "src/ui/modern/ModernExperimentState.js",
+      "src/ui/modern/ModernExperimentThumbnail.js",
       "src/ui/modern/ModernGpuCapabilities.js",
       "src/ui/modern/ModernPerformanceReport.js",
       "src/ui/modern/ModernRenderProfiler.js",
@@ -347,7 +351,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 143,
+  "sourceJsCount": 145,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2048,6 +2052,16 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernExperimentHistoryUI.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernExperimentVisualHistory.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernExperimentLibrary.js": {
       "directHtmlLoads": [
         "modern"
@@ -2085,6 +2099,19 @@
       "commonJsToolCallers": [
         "tools/audit-legacy-modern-boundary.js"
       ]
+    },
+    "src/ui/modern/ModernExperimentThumbnail.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernExperimentHistory.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentVisualHistory.test.js"
+      ],
+      "commonJsToolCallers": []
     },
     "src/ui/modern/ModernGpuCapabilities.js": {
       "directHtmlLoads": [

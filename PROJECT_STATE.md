@@ -1937,6 +1937,10 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
 - Restore validates the target and commits the current experiment as a
   protected recovery record before applying the requested saved state. A failed
   checkpoint blocks restore. Only unpinned automatic records are subject to
-  200-entry retention and automatic clearing. Thumbnail capture, rich gallery,
-  advanced filters and Storyboard are deferred. See
+  200-entry retention and automatic clearing. Visual History now captures
+  bounded real-Canvas Scene or labelled A/B thumbnails only after valid accurate
+  rendering, with per-side stale-frame guards, optional atmospheric layers,
+  read-only preview, newest/oldest ordering, pin/unpin, in-memory multi-selection,
+  batch deletion and confirmed clear-all. Existing null-thumbnail records are
+  supported. Semantic A/B filters and Storyboard remain deferred. See
   `docs/modern-experiment-history.md` for usage and future design constraints.

@@ -1,6 +1,6 @@
 /* Browser-local Modern experiment history. IndexedDB writes are transactional,
  * serialized, allowlist-validated and independent of URL/localStorage saves.
- * Image thumbnails will be added to the same records by the Visual History UI.
+ * Bounded thumbnail data is stored alongside snapshots (never in experiment JSON).
  */
 (function(root,factory){
   var state=root.CurvatureModernExperimentState;
@@ -9,10 +9,12 @@
     if(!state)state=require('./ModernExperimentState');
     if(!fp)fp=require('./ModernExperimentFingerprint');
   }
-  var api=factory(state,fp);
+  var thumbnail=root.CurvatureModernExperimentThumbnail;
+  if(!thumbnail&&typeof module==='object'&&module.exports)thumbnail=require('./ModernExperimentThumbnail');
+  var api=factory(state,fp,thumbnail);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentHistory=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,fp){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,fp,thumbnailApi){
   'use strict';
   var DATABASE='curvature-modern-experiment-history',VERSION=1,STORE='snapshots';
   var MAX_AUTO=200;
@@ -72,13 +74,14 @@
       var request=store.get(Number(id));
       request.onsuccess=function(){set(request.result||null);};
     });});}
-    function record(experiment,source){
+    function record(experiment,source,thumbnail){
       if(!['manual','auto','recovery'].includes(source))throw RangeError('Invalid history source');
       // Validate synchronously before any database mutation. Persist copies,
       // never references to the mutable live Compare/Scene model.
       var snapshot=state.validate(experiment);
       var signature=fp.exactSignature(snapshot),physical=fp.physicalSignature(snapshot);
       var metadata=fp.features(snapshot);
+      var image=thumbnailApi.validate(thumbnail||null,metadata.mode);
       return serialize(function(){return transact('readwrite',function(store,set){
         var getAll=store.getAll();
         getAll.onsuccess=function(){
@@ -86,14 +89,17 @@
           if(latest&&latest.signature===signature){
             // A deliberate Save Now or a pre-restore checkpoint must protect
             // an otherwise disposable automatic entry, even on deduplication.
+            var changed=false;
             if(source!=='auto'&&!latest.pinned){
-              latest.pinned=true;latest.source=source;store.put(latest);
+              latest.pinned=true;latest.source=source;changed=true;
             }
+            if(image&&!latest.thumbnail){latest.thumbnail=image;changed=true;}
+            if(changed)store.put(latest);
             set({created:false,entry:latest});return;
           }
           var entry={version:VERSION,createdAt:now(),source:source,pinned:source!=='auto',
             experiment:snapshot,signature:signature,physicalSignature:physical,
-            features:metadata,thumbnail:null};
+            features:metadata,thumbnail:image};
           var add=store.add(entry);
           add.onsuccess=function(){
             entry.id=add.result;set({created:true,entry:entry});
@@ -113,6 +119,21 @@
         store.delete(Number(id));set(true);
       };
     });});}
+    function pin(id,pinned){return serialize(function(){return transact('readwrite',function(store,set){
+      var request=store.get(Number(id));
+      request.onsuccess=function(){
+        var entry=request.result;if(!entry){set(false);return;}
+        entry.pinned=!!pinned;store.put(entry);set(true);
+      };
+    });});}
+    function clearAll(){return serialize(function(){return transact('readwrite',function(store,set){
+      var request=store.getAll();
+      request.onsuccess=function(){
+        var entries=request.result||[];
+        entries.forEach(function(entry){store.delete(entry.id);});
+        set(entries.length);
+      };
+    });});}
     function clearAuto(){return serialize(function(){return transact('readwrite',function(store,set){
       var request=store.getAll();
       request.onsuccess=function(){
@@ -121,7 +142,7 @@
         set(removed);
       };
     });});}
-    return Object.freeze({open:open,list:list,get:get,record:record,remove:remove,clearAuto:clearAuto});
+    return Object.freeze({open:open,list:list,get:get,record:record,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
   }
   return Object.freeze({DATABASE:DATABASE,VERSION:VERSION,STORE:STORE,
     MAX_AUTO:MAX_AUTO,create:create});

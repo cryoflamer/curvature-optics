@@ -20,6 +20,8 @@
   var experiments=root.CurvatureModernExperimentState;
   var historyFactory=root.CurvatureModernExperimentHistory;
   var historyFingerprint=root.CurvatureModernExperimentFingerprint;
+  var thumbnailApi=root.CurvatureModernExperimentThumbnail;
+  var historyUI=root.CurvatureModernExperimentHistoryUI;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
@@ -720,7 +722,48 @@
   // changed; camera gestures, keyframe playback, editor tabs and demo playback
   // cannot fill the journal with near-duplicates.
   var experimentHistory=null,historyBaseline=null,historyTimer=null,historyEpoch=0;
+  var historyMultiSelection=Object.create(null);
+  var historyRenderedKeys={Scene:null,A:null,B:null};
   var HISTORY_IDLE_MS=1600;
+  // Timestamped physical renders are the only eligible screenshot sources.
+  // In Compare a partial A/B redraw is safe ONLY if the untouched side still
+  // matches its own current physical state and the shared camera/objects.
+  function historyViewKey(snapshot,view){
+    return thumbnailApi.viewKey(snapshot,view);
+  }
+  function markHistoryRendered(view){
+    historyRenderedKeys[view]=null;
+    if(!experiments||!thumbnailApi||effectiveOpticalQuality()!=='accurate')return;
+    try{historyRenderedKeys[view]=historyViewKey(experimentSnapshot(),view);}
+    catch(ignore){}
+  }
+  function historyCanvasLayers(view){
+    var g=view==='Scene'?graph:state.compareGraphs[view];
+    var base=g&&g.Canvas;
+    if(!base||!base.width||!base.height)return null;
+    if(atmosphericPresentation&&atmosphericPresentation.ready(view)&&
+      typeof atmosphericPresentation.getGuideCanvas==='function'){
+      var image=atmosphericPresentation.getCanvas(view);
+      var guides=atmosphericPresentation.getGuideCanvas(view);
+      if(image&&guides)return [image,guides];
+    }
+    return [base];
+  }
+  function historyThumbnail(snapshot){
+    if(!thumbnailApi||effectiveOpticalQuality()!=='accurate'||state.frame!==null)return null;
+    var mode=snapshot.display.mode;
+    if(mode!=='scene'&&mode!=='compare')return null;
+    var views=mode==='scene'?['Scene']:['A','B'];
+    var sources=[];
+    for(var i=0;i<views.length;i++){
+      var view=views[i];
+      if(historyRenderedKeys[view]!==historyViewKey(snapshot,view))return null;
+      var layers=historyCanvasLayers(view);
+      if(!layers)return null;
+      sources.push({layers:layers});
+    }
+    return thumbnailApi.capture(document,mode,sources);
+  }
   function historyStatus(message,error){
     var node=newUiEl('ModernHistoryStatus');
     if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
@@ -752,16 +795,29 @@
       try{snapshot=experimentSnapshot();signature=historyFingerprint.physicalSignature(snapshot);}
       catch(error){historyStatus('Auto-history capture failed: '+error.message,true);return;}
       if(signature===historyBaseline)return;
-      experimentHistory.record(snapshot,'auto').then(function(result){
+      experimentHistory.record(snapshot,'auto',historyThumbnail(snapshot)).then(function(result){
         if(generation===historyEpoch)historyBaseline=signature;
         if(result.created&&generation===historyEpoch)refreshHistoryList();
       },function(error){historyStatus('Auto-history unavailable: '+error.message,true);});
     },HISTORY_IDLE_MS);
   }
+  function historySelectedIds(){
+    return Object.keys(historyMultiSelection).filter(function(id){return historyMultiSelection[id];})
+      .map(Number).filter(Number.isSafeInteger);
+  }
+  function historyMultiCount(){
+    var node=newUiEl('ModernHistoryMultiCount');
+    if(node)node.textContent=historySelectedIds().length+' snapshots selected';
+  }
   function refreshHistoryList(selectedId){
     if(!experimentHistory)return Promise.resolve([]);
     var select=newUiEl('ModernHistorySelect');
     return experimentHistory.list().then(function(entries){
+      var ids=new Set(entries.map(function(entry){return entry.id;}));
+      historySelectedIds().forEach(function(id){if(!ids.has(id))delete historyMultiSelection[id];});
+      historyMultiCount();
+      var order=newUiEl('ModernHistorySort');
+      if(order&&order.value==='oldest')entries.reverse();
       if(!select)return entries;
       var previous=selectedId===undefined?select.value:String(selectedId);
       select.textContent='';
@@ -773,10 +829,34 @@
         var scene=entry.features&&entry.features.mode||entry.experiment.display.mode;
         var label=scene==='compare'?'Compare A/B':'Scene';
         option.textContent=new Date(entry.createdAt).toLocaleString()+' · '+label+' · '+entry.source+
-          (entry.pinned?' · saved':'');
+          (entry.pinned?' · pinned':'');
         select.appendChild(option);
       });
       if(previous&&entries.some(function(entry){return String(entry.id)===previous;}))select.value=previous;
+      var gallery=newUiEl('ModernHistoryGallery'),panel=newUiEl('ModernHistoryPanel');
+      if(gallery&&historyUI&&panel&&!panel.hidden)historyUI.render(document,gallery,entries,select.value,{
+        select:function(id){select.value=String(id);historyUI.select(gallery,id);},
+        preview:function(id){
+          var entry=entries.find(function(item){return item.id===id;});
+          if(entry)historyUI.preview(document,newUiEl('ModernHistoryPreview'),entry);
+        },
+        pin:function(id,pinned){
+          experimentHistory.pin(id,pinned).then(function(){return refreshHistoryList(id);})
+            .catch(function(error){historyStatus(error.message,true);});
+        },
+        remove:function(id){
+          if(!root.confirm||!root.confirm('Delete snapshot '+id+'?'))return;
+          experimentHistory.remove(id).then(function(){
+            delete historyMultiSelection[id];
+            historyStatus('Snapshot deleted.');return refreshHistoryList();
+          }).catch(function(error){historyStatus(error.message,true);});
+        },
+        multi:function(id,checked){
+          if(checked)historyMultiSelection[id]=true;
+          else delete historyMultiSelection[id];
+          historyMultiCount();
+        }
+      },historyMultiSelection);
       return entries;
     });
   }
@@ -790,16 +870,62 @@
     toggle.addEventListener('click',function(){
       panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));
       if(!panel.hidden)handle(function(){return refreshHistoryList();});
+      else if(historyUI)historyUI.close(newUiEl('ModernHistoryPreview'));
     });
     el('ModernHistoryClose').addEventListener('click',function(){
       panel.hidden=true;toggle.setAttribute('aria-expanded','false');
+      if(historyUI)historyUI.close(newUiEl('ModernHistoryPreview'));
     });
+    el('ModernHistorySelect').addEventListener('change',function(){
+      handle(function(){return refreshHistoryList();});
+    });
+    var historySort=newUiEl('ModernHistorySort');
+    if(historySort)historySort.addEventListener('change',function(){
+      handle(function(){return refreshHistoryList();});
+    });
+    var pinChecked=newUiEl('ModernHistoryPinChecked');
+    if(pinChecked)pinChecked.addEventListener('click',function(){handle(function(){
+      var ids=historySelectedIds();
+      if(!ids.length)throw RangeError('Select snapshots using the card checkboxes');
+      return Promise.all(ids.map(function(id){return experimentHistory.pin(id,true);})).then(function(){
+        historyStatus('Pinned '+ids.length+' selected snapshots.');return refreshHistoryList();
+      });
+    });});
+    var deleteChecked=newUiEl('ModernHistoryDeleteChecked');
+    if(deleteChecked)deleteChecked.addEventListener('click',function(){handle(function(){
+      var ids=historySelectedIds();
+      if(!ids.length)throw RangeError('Select snapshots using the card checkboxes');
+      if(!root.confirm||!root.confirm('Delete '+ids.length+' selected snapshots?'))return;
+      return Promise.all(ids.map(function(id){return experimentHistory.remove(id);})).then(function(){
+        ids.forEach(function(id){delete historyMultiSelection[id];});
+        historyStatus('Deleted '+ids.length+' selected snapshots.');return refreshHistoryList();
+      });
+    });});
+    var selectedPin=newUiEl('ModernHistoryPin');
+    if(selectedPin)selectedPin.addEventListener('click',function(){handle(function(){
+      var id=el('ModernHistorySelect').value;
+      if(!id)throw RangeError('Select a history snapshot to pin or unpin');
+      return experimentHistory.get(id).then(function(entry){
+        if(!entry)throw RangeError('History snapshot not found');
+        return experimentHistory.pin(id,!entry.pinned);
+      }).then(function(){return refreshHistoryList(id);});
+    });});
+    var clearAll=newUiEl('ModernHistoryClearAll');
+    if(clearAll)clearAll.addEventListener('click',function(){handle(function(){
+      if(!root.confirm||!root.confirm('Permanently delete ALL history snapshots, including pinned and recovery?'))return;
+      return experimentHistory.clearAll().then(function(count){
+        historyMultiSelection=Object.create(null);
+        resetHistoryBaseline();historyStatus('Deleted '+count+' history snapshots.');
+        return refreshHistoryList('');
+      });
+    });});
     el('ModernHistorySave').addEventListener('click',function(){handle(function(){
       cancelEdits();
-      var snapshot=experimentSnapshot();
-      return experimentHistory.record(snapshot,'manual').then(function(result){
+      var snapshot=experimentSnapshot(),image=historyThumbnail(snapshot);
+      return experimentHistory.record(snapshot,'manual',image).then(function(result){
         resetHistoryBaseline();
-        historyStatus(result.created?'Snapshot saved.':'Current snapshot already saved.');
+        historyStatus((result.created?'Snapshot saved.':'Current snapshot already saved.')+
+          (!image&&!result.entry.thumbnail?' Accurate preview unavailable; full experiment is safe.':''));
         return refreshHistoryList(result.entry.id);
       });
     });});
@@ -814,7 +940,7 @@
         cancelEdits();stopCameraTransition(false,'History restore interrupted animation',false);
         stopCameraKeyboard(true);abortCameraDrag();cancelPending();cancelHistoryAuto();
         var current=experimentSnapshot();
-        return experimentHistory.record(current,'recovery').then(function(backup){
+        return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
           if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
           applyExperiment(target);syncNumericInputs();syncCompareEditor();
           setMode(state.mode,false);resetHistoryBaseline();
@@ -1086,6 +1212,7 @@
         var fastHorizon=el('ModernHorizonStatusScene');
         if(fastHorizon)fastHorizon.textContent='Exact horizon: disabled in Fast Preview';
       }else if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
+      markHistoryRendered('Scene');
       scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
@@ -1104,7 +1231,7 @@
       updateStatus(fullStatus,result.unresolved>0);
       updateOpticalQualityStatus();
     }catch(error){
-      state.last=null;
+      historyRenderedKeys.Scene=null;state.last=null;
       if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
       updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined);
       updateStatus('Physical renderer: '+error.message,true);
@@ -1155,6 +1282,7 @@
         if(approximateHorizon)approximateHorizon.textContent='Exact horizon: disabled in Fast Preview';
       }else if(state.compareHorizon)drawCompareHorizon(side,guideGraph,m,options);
       else {var hr=el('ModernHorizonStatus'+side);if(hr)hr.textContent='Horizon guide hidden';}
+      markHistoryRendered(side);
       scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:side,
@@ -1173,7 +1301,7 @@
         node.classList.toggle('is-error',!!result.unresolved);
       }
     }catch(error){
-      state.compareLast[side]=null;
+      historyRenderedKeys[side]=null;state.compareLast[side]=null;
       if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
       updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined);
       var status=el('ModernCompareStatus'+side);

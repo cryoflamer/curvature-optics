@@ -255,8 +255,12 @@ Modern now has a separate **History** panel in the header (not a sixth settings
 or physics tab). It saves full, validated Scene/Compare snapshots in browser
 IndexedDB, with manual Save, automatic saves after stable physical-input edits,
 restore with a protected pre-restore checkpoint, delete and clear automatic.
-Camera movement alone never creates automatic entries. The current list is
-text-only; Scene and composite A/B thumbnails, filters and Storyboard are
-separate upcoming stages. See [Modern Experiment History](docs/modern-experiment-history.md)
+Camera movement alone never creates automatic entries. The **Visual History** gallery now shows saved, real-Canvas Scene thumbnails or
+composite A/B thumbnails, read-only enlargement, newest/oldest ordering,
+pinning, multi-selection, batch deletion and explicit clear-all. Screenshots
+are only attached when an accurate completed render matches the saved state;
+when the Canvas is stale/unavailable, the full experiment saves with a
+placeholder instead. Older Core entries are readable without migration.
+Smart semantic A/B filters and Storyboard remain future stages. See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment
 URLs/JSON and the named Experiment Library are unchanged.

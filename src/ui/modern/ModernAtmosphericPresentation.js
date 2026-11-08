@@ -157,6 +157,7 @@
       // The next patch may replace the identity presenter with WebGL;
       // Scene/Compare callers need no further physics-renderer changes.
       getCanvas:function(name){return slot(name).image;},
+      getGuideCanvas:function(name){return slot(name).guides;},
       ready:function(name){var s=slot(name);return !!(s.enabled&&s.image&&!s.suspended&&!s.gpuLost);},
       destroy:function(){names.forEach(function(name){slots[name].enabled=false;remove(slots[name]);});}});
   }

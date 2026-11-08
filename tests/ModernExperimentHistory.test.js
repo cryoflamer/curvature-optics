@@ -167,7 +167,7 @@ test('Modern panel integrates separately from library and never rewrites existin
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.ok(html.indexOf('ModernExperimentFingerprint.js')<html.indexOf('ModernExperimentHistory.js'));
   assert.ok(html.indexOf('ModernExperimentHistory.js')<html.indexOf('ModernApp.js'));
-  assert.match(app,/experimentHistory\.record\(current,'recovery'\)\.then\(function\(backup\)/);
+  assert.match(app,/experimentHistory\.record\(current,'recovery',historyThumbnail\(current\)\)\.then\(function\(backup\)/);
   assert.match(app,/queueHistoryAuto\(\)/);
   assert.equal(state.VERSION,1);
 });
@@ -207,35 +207,49 @@ test('Live Modern integration saves and restores a full experiment and protects 
     ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
     ObjSize:[23,64],ObjSizeVar:[0,0],Update(){}});}
   let onload;
+  const renderedCanvas={width:800,height:500,getContext(){return {save(){},restore(){},setTransform(){},
+    beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}};}};
   const rootWindow={CurveAppClass:Model,
     CurvatureModernSceneState:null,
     CurvatureModernCompareModel:require('../src/ui/modern/ModernCompareModel'),
     CurvatureModernCompareState:compare,CurvatureModernExperimentState:state,
     CurvatureModernExperimentHistory:history,
     CurvatureModernExperimentFingerprint:fingerprint,
+    CurvatureModernExperimentThumbnail:require('../src/ui/modern/ModernExperimentThumbnail'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
     CurvatureMainCanvasRenderer:{renderPhysical(){return {drawn:10,fillTriangles:5,unresolved:0};}},
     CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
-    NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'scene'});}};},
+    NewGraphX3D(params){return {Canvas:renderedCanvas,
+      Redraw(){params.DrawFunc({Canvas:renderedCanvas});}};},
     xOnLoad(fn){onload=fn;},
     console:{error(){}},location,history:historyApi,indexedDB:db,confirm(){return true;},
     localStorage:{getItem(){return null;},setItem(){},removeItem(){}}};
   rootWindow.window=rootWindow;
   const document={getElementById(id){return nodes.get(id)||null;},
     querySelector(selector){return nodes.get(selector.slice(1))||null;},
-    createElement(){return {value:'',textContent:''};}};
-  const ctx={window:rootWindow,document,URL,URLSearchParams,requestAnimationFrame(fn){fn();return 1;},
-    cancelAnimationFrame(){},setTimeout,clearTimeout,console};
+    createElement(name){if(name==='canvas')return {width:0,height:0,
+      getContext(){return {fillRect(){},fillText(){},drawImage(){}};},
+      toDataURL(){return 'data:image/webp;base64,YQ==';}};
+      return {value:'',textContent:''};}};
+  const ctx={window:rootWindow,document,URL,URLSearchParams,
+    requestAnimationFrame(fn){return setTimeout(()=>fn(Date.now()),0);},
+    cancelAnimationFrame(id){clearTimeout(id);},setTimeout,clearTimeout,console};
   vm.runInNewContext(fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8'),ctx);
   const app=rootWindow.CurvatureModernApp;
-  for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},
-    Redraw(){app.drawCompare(side,{id:side,Canvas:{width:800,height:500,
-      getContext(){return {save(){},restore(){},setTransform(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}};}}});}});
+  for(const side of ['A','B']){
+    const sideCanvas={width:800,height:500,getContext(){return {save(){},restore(){},
+      setTransform(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}};}};
+    app.registerCompareGraph(side,{Canvas:sideCanvas,UpdateCanvasSize(){},
+      Redraw(){app.drawCompare(side,{id:side,Canvas:sideCanvas});}});
+  }
   onload();
+  await new Promise(resolve=>setTimeout(resolve,25)); // allow accurate scheduled redraw to complete
   const store=app.getHistoryStore();assert.ok(store);
   nodes.get('ModernHistorySave').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,60));
   const list=await store.list();assert.equal(list.length,1);assert.equal(list[0].source,'manual');
+  assert.equal(list[0].thumbnail.mode,'scene','actual completed render is captured by Save');
+  assert.equal(list[0].thumbnail.width,480);
   const id=list[0].id;
   app.getModel().Height=66;
   nodes.get('ModernHistorySelect').value=String(id);
@@ -266,4 +280,37 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernRender').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,1700));
   assert.equal((await store.list()).length,3);
+  // A genuine two-view Compare render is saved as one labelled composite.
+  nodes.get('ModernCompareTab').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(app.getMode(),'compare');
+  nodes.get('ModernHistorySave').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,70));
+  const pair=(await store.list())[0];
+  assert.equal(pair.features.mode,'compare');
+  assert.equal(pair.thumbnail.mode,'compare');
+  assert.equal(pair.thumbnail.width,960);
+});
+
+test('Visual History attaches bounded screenshots, upgrades deduplicated entries, pins and clears explicitly',async()=>{
+  const db=indexedDB(),h=history.create({indexedDB:db});
+  const a=experiment('scene'),image={mode:'scene',width:320,height:200,
+    dataUrl:'data:image/webp;base64,YQ=='};
+  const initial=await h.record(a,'auto');
+  assert.equal(initial.entry.thumbnail,null);
+  const upgrade=await h.record(a,'manual',image);
+  assert.equal(upgrade.created,false);
+  assert.deepEqual((await h.get(initial.entry.id)).thumbnail,image);
+  assert.equal((await h.get(initial.entry.id)).pinned,true);
+  assert.throws(()=>h.record(experiment('compare'),'manual',image),/Invalid experiment thumbnail/);
+  const b=await h.record(experiment('compare'),'auto');
+  assert.equal((await h.list()).length,2);
+  assert.equal(await h.pin(b.entry.id,true),true);
+  assert.equal((await h.get(b.entry.id)).pinned,true);
+  assert.equal(await h.clearAuto(),0,'pinned automatic snapshots must be preserved');
+  assert.equal(await h.pin(b.entry.id,false),true);
+  assert.equal(await h.clearAuto(),1);
+  assert.equal((await h.list()).length,1);
+  assert.equal(await h.clearAll(),1);
+  assert.equal((await h.list()).length,0);
 });
