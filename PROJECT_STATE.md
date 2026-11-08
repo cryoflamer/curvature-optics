@@ -1,3 +1,13 @@
+> **Current UI cleanup (#140.12.112, 2026-11-08):** Modern Scene/Compare
+> Display retains immediate access to optical quality, Fast Preview LOD,
+> geometry backend and reference lines. Explanatory paragraphs moved to the
+> existing accessible `?` hints. Advanced settings and nested Diagnostics
+> (GPU probe / Render profiler) use native collapsible panels whose state
+> persists as browser-local Application Preferences, independent of experiment
+> JSON. Recording remains indicated in collapsed Diagnostics; actionable
+> optical/backend errors stay outside collapsed sections. All existing
+> control IDs, rendering and profiling actions are preserved. See README.
+
 > **Current update — inverse atmosphere performance checkpoint (#140.12.100,
 > 2026-11-07):** The #140.12.99 prepared-gradient optimization is accepted as
 > the working baseline. User-observed Opera B optics times for 200 towers:

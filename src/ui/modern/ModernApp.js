@@ -254,6 +254,9 @@
       record.disabled=profilingRecording;
       record.setAttribute('aria-pressed',String(profilingRecording));
       if(stop)stop.disabled=!profilingRecording;
+      ['ModernProfilerRecordingState','ModernDiagnosticsRecordingState'].forEach(function(id){
+        var node=geometryUi(id);if(node)node.hidden=!profilingRecording;
+      });
     }
     function setRecording(active){
       if(active===profilingRecording)return;
@@ -449,6 +452,7 @@
   var navigationMoved=false,navigationModifiers={fast:false,precise:false};
   var NAVIGATION_STORAGE_KEY='curvature-modern-camera-navigation-v1';
   var applicationPreferences=root.CurvatureModernApplicationPreferences;
+  var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   function preferencesStorage(){
     try{return root.localStorage||null;}catch(error){return null;}
   }
@@ -457,21 +461,40 @@
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
     state.geometryBackend=remembered.geometryBackend;
+    displayPanels=Object.assign({},remembered.displayPanels);
     navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
   }
   function preferencesStatus(message,error){
     var node=geometryUi('ModernPreferencesStatus');
-    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
+    if(node){
+      node.textContent=message;node.classList.toggle('is-error',!!error);
+      // Success messages need not permanently occupy the Display pane.
+      node.hidden=!error&&!/reset/i.test(message);
+    }
   }
   function saveApplicationPreferences(){
     if(!applicationPreferences)return;
     try{
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
-        geometryBackend:state.geometryBackend,navigation:navigationPrefs
+        geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
+  }
+  function bindDisplayPanels(){
+    var entries=[['advanced','ModernDisplayAdvanced'],
+      ['diagnostics','ModernDisplayDiagnostics'],['gpu','ModernDisplayGpu'],
+      ['profiler','ModernDisplayProfiler']];
+    entries.forEach(function(entry){
+      var node=geometryUi(entry[1]);if(!node)return;
+      node.open=displayPanels[entry[0]]===true;
+      node.addEventListener('toggle',function(){
+        if(displayPanels[entry[0]]===node.open)return;
+        displayPanels[entry[0]]=node.open;
+        saveApplicationPreferences();
+      });
+    });
   }
   function bindApplicationPreferences(){
     var button=geometryUi('ModernResetPreferences');
@@ -485,6 +508,11 @@
       state.previewDetail=defaults.previewDetail;
       state.geometryBackend=defaults.geometryBackend;
       navigationPrefs=navigation?navigation.settings(defaults.navigation):defaults.navigation;
+      displayPanels=Object.assign({},defaults.displayPanels);
+      [['advanced','ModernDisplayAdvanced'],['diagnostics','ModernDisplayDiagnostics'],
+        ['gpu','ModernDisplayGpu'],['profiler','ModernDisplayProfiler']].forEach(function(entry){
+        var node=geometryUi(entry[1]);if(node)node.open=false;
+      });
       [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
         ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
         ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
@@ -2625,8 +2653,7 @@
     ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
     ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',
     ModernAtmosphere:'Controls how light propagates. Standard is a fixed exponential. Temperature gradient uses a dry hydrostatic boundary layer. Profile transition is a mathematical interpolation, not a temperature-driven physical transformation.',
-    ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.',
-    ModernGrid:'Metric guide lines are measured along the actual surface and do not determine the optical horizon.'
+    ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.'
   };
   var objectHelp={
     NObjects:'Number of objects in this group.',ObjType:'Selects the actual 3D object shape, not just its appearance: tower, ship, measuring rod or Bedford marker.',
@@ -2670,6 +2697,7 @@
     bindObjectFields();
     bindSettingsTabs();
     bindHelp();
+    bindDisplayPanels();
     bindCompareEditor();
     bindShimmerControls();
     bindVisibilityControls();

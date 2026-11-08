@@ -302,3 +302,30 @@ button{cursor:pointer}
 .modern-camera-optional summary{cursor:pointer;color:#24619d;font-size:12px;font-weight:600;margin-bottom:9px}
 #ModernSequenceEmpty{margin:5px 0 0}
 #ModernSequenceKeyframes{min-height:120px}
+
+/* Compact Modern Display: information stays at the point of use, diagnostics on demand. */
+.modern-display-check{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}
+.modern-display-check .modern-check{flex:1;min-width:0;margin:0}
+.modern-display-label{display:flex;align-items:center;justify-content:flex-start;gap:7px;margin-bottom:5px}
+.modern-display-label label{font-size:inherit;color:inherit}
+.modern-display-label .modern-help,.modern-display-check .modern-help{flex:0 0 16px}
+.modern-display-status{margin-top:5px!important;overflow-wrap:anywhere}
+.modern-display-fold{border-top:1px solid #d7e4ef;margin-top:16px;padding-top:0}
+.modern-display-fold>summary,.modern-display-subfold>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:7px;padding:13px 0 9px;color:#244b78;font-size:12px;font-weight:700}
+.modern-display-fold>summary::-webkit-details-marker,.modern-display-subfold>summary::-webkit-details-marker{display:none}
+.modern-display-fold>summary::after,.modern-display-subfold>summary::after{content:'▸';color:#537696;font-size:14px;margin-left:auto;transform-origin:center}
+.modern-display-fold[open]>summary::after,.modern-display-subfold[open]>summary::after{transform:rotate(90deg)}
+.modern-display-fold>summary:focus-visible,.modern-display-subfold>summary:focus-visible{outline:2px solid #2c83d3;outline-offset:2px;border-radius:4px}
+.modern-display-fold-content{padding:4px 0 10px}
+.modern-display-fold-content>.modern-ghost-button{margin:0}
+.modern-display-hint{font-size:11px;line-height:1.5;color:#6f8195}
+.modern-display-fold-content>.modern-display-hint{display:block;margin-top:6px}
+.modern-display-subfold{border-top:1px solid #e6edf4}
+.modern-display-subfold:first-child{border-top:0}
+.modern-display-subfold>summary{font-weight:650;padding:10px 0}
+.modern-display-subfold>.modern-display-fold-content{padding:2px 0 12px}
+.modern-display-inline-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.modern-display-inline-actions .modern-ghost-button{margin:0}
+.modern-recording-indicator:not([hidden]){margin-left:5px;margin-right:auto;color:#a52c32;font-size:10px;font-weight:750}
+.modern-display-check .modern-help:hover:after,.modern-display-label .modern-help:hover:after,
+.modern-display-inline-actions .modern-help:hover:after{max-height:65vh;overflow-wrap:break-word}

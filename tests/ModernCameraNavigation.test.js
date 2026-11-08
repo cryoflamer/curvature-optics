@@ -89,7 +89,7 @@ function boot(savedExperiment, initialPreferences){
   const nodes=new Map(),renders=[],globalListeners={},frames=new Map(),timers=new Map();
   let clock=100,seq=0,ons=[];
   function element(id,tag='DIV'){
-    return {id,tagName:tag,hidden:false,disabled:false,checked:false,textContent:'',value:'',
+    return {id,tagName:tag,hidden:false,open:false,disabled:false,checked:false,textContent:'',value:'',
       min:'',max:'',options:[],listeners:{},children:[],style:{},classList:{toggle(){},add(){},remove(){}},
       addEventListener(name,fn){(this.listeners[name]??=[]).push(fn);},
       dispatch(name,options={}){const ev={key:'',code:'',target:this,preventDefault(){this.defaultPrevented=true;},...options};
@@ -690,6 +690,7 @@ test('display and navigation preferences are immediately saved and restored inde
   const saved=h.storage.get(preferences.STORAGE_KEY);
   assert.deepEqual(JSON.parse(saved),{
     version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:1,wheelStep:'auto'}
   });
   const reopened=boot(null,{[preferences.STORAGE_KEY]:saved});
@@ -734,4 +735,27 @@ test('app preferences override old camera preference key and experiment restorat
   assert.equal(h.nodes.get('ModernPreviewDetail').value,'16');
   assert.equal(h.app.getMode(),'compare');
   assert.equal(h.app.getModel().Height,15);
+});
+
+test('Display fold toggles persist across reloads and Reset closes them without erasing experiments',()=>{
+  const h=boot(experiment([])),nodes=h.nodes;
+  for(const id of ['ModernDisplayDiagnostics','ModernDisplayProfiler','ModernDisplayAdvanced']){
+    assert.equal(nodes.get(id).open,false,id+' starts closed');
+  }
+  for(const id of ['ModernDisplayDiagnostics','ModernDisplayProfiler']){
+    nodes.get(id).open=true;nodes.get(id).dispatch('toggle');
+  }
+  const saved=JSON.parse(h.storage.get(preferences.STORAGE_KEY));
+  assert.equal(saved.displayPanels.diagnostics,true);
+  assert.equal(saved.displayPanels.profiler,true);
+  assert.equal(saved.displayPanels.gpu,false);
+  const reopened=boot(experiment([]),{[preferences.STORAGE_KEY]:JSON.stringify(saved)});
+  assert.equal(reopened.nodes.get('ModernDisplayDiagnostics').open,true);
+  assert.equal(reopened.nodes.get('ModernDisplayProfiler').open,true);
+  assert.equal(reopened.nodes.get('ModernDisplayAdvanced').open,false);
+  reopened.nodes.get('ModernResetPreferences').dispatch('click');
+  for(const id of ['ModernDisplayDiagnostics','ModernDisplayProfiler','ModernDisplayGpu',
+    'ModernDisplayAdvanced'])assert.equal(reopened.nodes.get(id).open,false,id+' Reset');
+  assert.equal(reopened.storage.has(preferences.STORAGE_KEY),false);
+  assert.equal(reopened.storage.has(codec.STORAGE_KEY),true);
 });

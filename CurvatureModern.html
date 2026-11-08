@@ -346,8 +346,14 @@
         <details class="modern-objects"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
-        <label class="modern-check"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
-        <label class="modern-check"><input id="ModernShowTemperatureProfile" type="checkbox"> Show temperature column (0–2 km)</label>
+        <div class="modern-display-check">
+          <label class="modern-check" for="ModernGrid"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
+          <button type="button" class="modern-help" aria-label="Help: metric ground grid" data-tip="Metric guide lines follow the physical surface and do not determine the optical horizon.">?</button>
+        </div>
+        <div class="modern-display-check">
+          <label class="modern-check" for="ModernShowTemperatureProfile"><input id="ModernShowTemperatureProfile" type="checkbox"> Show temperature column (0–2 km)</label>
+          <button type="button" class="modern-help" aria-label="Help: temperature column" data-tip="Shown for hydrostatic, hydrostatic-start transition, and inverse-temperature atmospheres. Outside positions reserve a separate strip; inside positions overlay the scene. In inverse mode the shared scale is −273.15…+60 °C; otherwise −40…+60 °C. Gray indicates invalid temperature. This legend does not change atmospheric physics.">?</button>
+        </div>
         <div class="modern-field modern-temperature-placement" id="ModernTemperaturePlacementWrap">
           <label for="ModernTemperaturePlacement">Temperature column position</label>
           <select id="ModernTemperaturePlacement">
@@ -357,68 +363,95 @@
             <option value="inside-left">On image · left</option>
           </select>
         </div>
-        <p class="modern-note">Shown for hydrostatic, hydrostatic-start transition, and inverse-temperature atmospheres. Outside positions reserve a separate strip, without obscuring towers; on-image positions overlay the scene. When inverse mode is active, colors use a shared −273.15…+60 °C scale; otherwise −40…+60 °C. Gray indicates no valid temperature. Changing the display does not change atmospheric physics.</p>
         <div id="ModernCompareDisplayOptions">
-        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label><p class="modern-note">Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.</p></div>
-        <div class="modern-field modern-eye-level-option"><label><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label><p class="modern-note">Orange dashed line: finite first-ground-contact tangent found by forward ray integration in the active viewport(s). Unresolved cases are not assumed to have a horizon.</p></div>
+          <div class="modern-display-check">
+            <label class="modern-check" for="ModernCompareEyeLevel"><input type="checkbox" id="ModernCompareEyeLevel"> Show eye-level line (0°)</label>
+            <button type="button" class="modern-help" aria-label="Help: eye-level line" data-tip="Green angular reference in Scene or both Compare viewports; independent of atmospheric refraction.">?</button>
+          </div>
+          <div class="modern-display-check">
+            <label class="modern-check" for="ModernCompareHorizon"><input type="checkbox" id="ModernCompareHorizon" checked> Show traced horizon</label>
+            <button type="button" class="modern-help" aria-label="Help: traced horizon" data-tip="Orange dashed line: finite first-ground-contact tangent found by forward ray integration. Unresolved cases are not assumed to have a horizon. Exact traced horizon annotation is unavailable in Fast Preview.">?</button>
+          </div>
         </div>
         <div class="modern-gpu-diagnostics" aria-label="Optical quality selection">
           <div class="modern-gpu-heading"><strong>Optical quality · experimental</strong></div>
-          <div class="modern-field"><label for="ModernOpticalQuality">Optical ray field</label>
+          <div class="modern-field">
+            <div class="modern-display-label"><label for="ModernOpticalQuality">Optical ray field</label>
+              <button type="button" class="modern-help" aria-label="Help: optical ray field" data-tip="Accurate uses RK4. Fast uses approximate analytic/local-gradient rays with approximate near-horizon visibility; only Vacuum, Standard and qualified Flat exponential endpoints are supported. Unsupported Fast profiles show an error, not a hidden RK4 fallback. Auto uses Fast during supported movement and Accurate when idle.">?</button></div>
             <select id="ModernOpticalQuality"><option value="accurate" selected>Accurate · RK4 (reference)</option>
               <option value="fast">Fast Preview · approximate</option>
               <option value="auto">Auto · Fast while moving, Accurate at rest</option></select></div>
-          <p class="modern-note">Fast Preview reuses the Modern painter with analytic/local-gradient rays; ground visibility near the horizon is approximate. Only Vacuum, Standard and the qualified Flat exponential endpoints are supported. Unsupported profiles show an explicit error, never a hidden RK4 fallback. The exact traced horizon annotation is disabled in Fast Preview. Auto uses Fast during supported camera movement, then Accurate on release/idle. Unsupported atmospheres remain Accurate at rest and do not trigger heavy re-tracing during motion. This setting is not saved in experiments.</p>
-          <div class="modern-field"><label for="ModernPreviewDetail">Fast Preview object detail</label>
+          <div class="modern-field">
+            <div class="modern-display-label"><label for="ModernPreviewDetail">Fast Preview object detail</label>
+              <button type="button" class="modern-help" aria-label="Help: Fast Preview object detail" data-tip="Preview-only: keeps the nearest four towers and far endpoint of each bank, leaving other object types intact. Auto adapts to measured frame time (Scene 45 ms, Compare 70 ms). Accurate always draws all towers. Stored as a browser preference, not in experiments.">?</button></div>
             <select id="ModernPreviewDetail"><option value="auto" selected>Auto · frame budget</option>
               <option value="1">All towers</option><option value="2">Every 2nd</option>
               <option value="4">Every 4th</option><option value="8">Every 8th</option>
               <option value="16">Every 16th</option><option value="32">Every 32nd</option></select></div>
-          <p id="ModernPreviewDetailStatus" class="modern-note" role="status" aria-live="polite">Auto LOD: full detail initially.</p>
-          <p class="modern-note">Preview-only: retains the nearest four towers and far endpoint of each tower bank; other object types stay intact. Auto adjusts on measured frame time (Scene: 45 ms; both Compare viewports: 70 ms). Accurate always draws every tower. Details are not saved in experiments.</p>
-          <p id="ModernOpticalQualityStatus" class="modern-note" role="status" aria-live="polite">Active: Accurate (RK4)</p>
+          <p id="ModernPreviewDetailStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Auto LOD: full detail initially.</p>
+          <p id="ModernOpticalQualityStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Active: Accurate (RK4)</p>
         </div>
         <div class="modern-gpu-diagnostics" aria-label="Experimental geometry renderer">
           <div class="modern-gpu-heading"><strong>Geometry renderer · experimental</strong></div>
-          <div class="modern-field"><label for="ModernGeometryBackend">Rendering backend</label>
+          <div class="modern-field">
+            <div class="modern-display-label"><label for="ModernGeometryBackend">Rendering backend</label>
+              <button type="button" class="modern-help" aria-label="Help: rendering backend" data-tip="Optical rays and geometry are unchanged. WebGL2 draws projected triangles and approximate 1px line quads, then copies into Canvas for annotations and shimmer. Line joints/antialiasing may differ; no automatic speedup is assumed.">?</button></div>
             <select id="ModernGeometryBackend"><option value="canvas">Canvas 2D · reference</option>
               <option value="webgl2">WebGL2 · experimental</option></select></div>
-          <p class="modern-note">Optical rays and geometry are unchanged. WebGL2 rasterizes projected triangles and approximate 1px-style line quads, then copies the result into the current Canvas for annotations and shimmer. Some line joints and antialiasing may differ. No automatic performance win is assumed.</p>
-          <p id="ModernGeometryBackendStatus" class="modern-note" role="status" aria-live="polite">Active: Canvas 2D</p>
-          <div class="modern-field"><button type="button" class="modern-ghost-button" id="ModernResetPreferences">Reset application preferences</button></div>
-          <p id="ModernPreferencesStatus" class="modern-note" role="status" aria-live="polite">Display and navigation choices are saved automatically in this browser, separately from experiments.</p>
+          <p id="ModernGeometryBackendStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Active: Canvas 2D</p>
         </div>
-        <div class="modern-gpu-diagnostics" aria-label="GPU capability diagnostics">
-          <div class="modern-gpu-heading"><strong>GPU capabilities</strong><button type="button" class="modern-ghost-button" id="ModernGpuCheck">Check GPU</button></div>
-          <p class="modern-note">Optional capability probe; no rendering backend is changed. Software/hardware classification may be unavailable.</p>
-          <dl class="modern-gpu-results" id="ModernGpuResults" aria-live="polite">
-            <dt>WebGL</dt><dd id="ModernGpuWebGL">Not checked</dd>
-            <dt>WebGL2</dt><dd id="ModernGpuWebGL2">Not checked</dd>
-            <dt>WebGPU</dt><dd id="ModernGpuWebGPU">Not checked</dd>
-            <dt>Renderer</dt><dd id="ModernGpuRenderer">Not checked</dd>
-            <dt>Float textures</dt><dd id="ModernGpuFloat">Not checked</dd>
-            <dt>Hardware acceleration</dt><dd id="ModernGpuHardware">Unverified</dd>
-            <dt>Selected scene backend</dt><dd id="ModernGpuActiveBackend">Canvas 2D</dd>
-          </dl>
-          <p id="ModernGpuNote" class="modern-note" role="status"></p>
-        </div>
-        <div class="modern-gpu-diagnostics modern-performance-diagnostics" aria-label="Rendering performance profiler">
-          <div class="modern-gpu-heading"><strong>Render profiler</strong></div>
-          <p class="modern-note">Measures CPU scene composition, ray optics, projection and Canvas 2D painting. Optional WebGL measurements require Atmospheric Turbulence to be ON. No renderer is changed.</p>
-          <div class="modern-performance-actions">
-            <button type="button" class="modern-ghost-button" id="ModernPerfRecord" aria-pressed="false">Start recording</button>
-            <button type="button" class="modern-ghost-button" id="ModernPerfStop" disabled>Stop recording</button>
-            <button type="button" class="modern-ghost-button" id="ModernPerfCold">Cold optical sample</button>
-            <button type="button" class="modern-ghost-button" id="ModernPerfWarm">Warm optical sample</button>
-            <button type="button" class="modern-ghost-button" id="ModernPerfSnapshot">Refresh report</button>
-            <button type="button" class="modern-ghost-button" id="ModernPerfReset">Clear</button>
-            <button type="button" class="modern-ghost-button" id="ModernPerfExport">Export JSON</button>
+        <details class="modern-display-fold" id="ModernDisplayAdvanced">
+          <summary>Advanced settings</summary>
+          <div class="modern-display-fold-content">
+            <button type="button" class="modern-ghost-button" id="ModernResetPreferences">Reset application preferences</button>
+            <span class="modern-display-hint">Resets browser display and navigation preferences, not experiments.</span>
           </div>
-          <p class="modern-note">Cold clears only the chosen viewport's optical projection cache before one redraw; Warm redraws without clearing it. In Compare, both A and B are sampled independently. Warm cache misses are reported, not silently counted as hits. Start recording first; neither action changes the atmosphere or model.</p>
-          <p class="modern-note" id="ModernPerfStatus" role="status" aria-live="polite">Status: idle. Previous CPU redraws may be in memory. Start recording for a clean run.</p>
-          <pre class="modern-performance-results" id="ModernPerfResults" aria-label="Render timing summary">Press Refresh report to inspect the latest samples.</pre>
-          <p class="modern-note">For a fair comparison, record several runs with unchanged dimensions and settings. GPU draw time is reported only if the timer-query extension is available; WebGL call time is <em>not</em> GPU execution time.</p>
-        </div>
+        </details>
+        <p id="ModernPreferencesStatus" class="modern-note modern-display-status" role="status" aria-live="polite" hidden></p>
+        <details class="modern-display-fold" id="ModernDisplayDiagnostics">
+          <summary>Diagnostics &amp; profiling <span class="modern-recording-indicator" id="ModernDiagnosticsRecordingState" hidden>Recording</span></summary>
+          <div class="modern-display-fold-content">
+            <details class="modern-display-subfold" id="ModernDisplayGpu">
+              <summary>GPU capabilities</summary>
+              <div class="modern-display-fold-content">
+                <div class="modern-display-inline-actions">
+                  <button type="button" class="modern-ghost-button" id="ModernGpuCheck">Check GPU</button>
+                  <button type="button" class="modern-help" aria-label="Help: GPU capabilities" data-tip="Optional browser GPU capability probe. It does not change the rendering backend. Hardware/software classification may be unavailable.">?</button>
+                </div>
+                <dl class="modern-gpu-results" id="ModernGpuResults" aria-live="polite">
+                  <dt>WebGL</dt><dd id="ModernGpuWebGL">Not checked</dd>
+                  <dt>WebGL2</dt><dd id="ModernGpuWebGL2">Not checked</dd>
+                  <dt>WebGPU</dt><dd id="ModernGpuWebGPU">Not checked</dd>
+                  <dt>Renderer</dt><dd id="ModernGpuRenderer">Not checked</dd>
+                  <dt>Float textures</dt><dd id="ModernGpuFloat">Not checked</dd>
+                  <dt>Hardware acceleration</dt><dd id="ModernGpuHardware">Unverified</dd>
+                  <dt>Selected scene backend</dt><dd id="ModernGpuActiveBackend">Canvas 2D</dd>
+                </dl>
+                <p id="ModernGpuNote" class="modern-note" role="status"></p>
+              </div>
+            </details>
+            <details class="modern-display-subfold modern-performance-diagnostics" id="ModernDisplayProfiler">
+              <summary>Render profiler <span class="modern-recording-indicator" id="ModernProfilerRecordingState" hidden>Recording</span></summary>
+              <div class="modern-display-fold-content">
+                <div class="modern-display-inline-actions">
+                  <span class="modern-display-hint">Optical and Canvas timings</span>
+                  <button type="button" class="modern-help" aria-label="Help: render profiler" data-tip="Measures CPU scene composition, ray optics, projection and Canvas painting. Optional WebGL GPU timing requires Atmospheric Turbulence and timer-query support. Cold clears the optical cache for one redraw; Warm keeps it. Start recording first. A WebGL call time is not GPU execution time; compare samples only at unchanged settings.">?</button>
+                </div>
+                <div class="modern-performance-actions">
+                  <button type="button" class="modern-ghost-button" id="ModernPerfRecord" aria-pressed="false">Start recording</button>
+                  <button type="button" class="modern-ghost-button" id="ModernPerfStop" disabled>Stop recording</button>
+                  <button type="button" class="modern-ghost-button" id="ModernPerfCold">Cold optical sample</button>
+                  <button type="button" class="modern-ghost-button" id="ModernPerfWarm">Warm optical sample</button>
+                  <button type="button" class="modern-ghost-button" id="ModernPerfSnapshot">Refresh report</button>
+                  <button type="button" class="modern-ghost-button" id="ModernPerfReset">Clear</button>
+                  <button type="button" class="modern-ghost-button" id="ModernPerfExport">Export JSON</button>
+                </div>
+                <p class="modern-note" id="ModernPerfStatus" role="status" aria-live="polite">Status: idle. Previous CPU redraws may be in memory. Start recording for a clean run.</p>
+                <pre class="modern-performance-results" id="ModernPerfResults" aria-label="Render timing summary">Press Refresh report to inspect the latest samples.</pre>
+              </div>
+            </details>
+          </div>
+        </details>
       </section>
       <button type="button" class="modern-primary-button" id="ModernRender">Recalculate scene</button>
       <button type="button" class="modern-primary-button" id="ModernRecalculateCompare" hidden>Recalculate A/B</button>

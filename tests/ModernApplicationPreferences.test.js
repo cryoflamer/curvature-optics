@@ -10,10 +10,13 @@ function storage(values={}){
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
   assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:10,turnRate:1,wheelStep:'auto'}});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
   {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:.05,wheelStep:10}});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
@@ -44,4 +47,27 @@ test('corrupt, partial and blocked localStorage fail safely and do not affect so
   assert.throws(()=>preferences.reset({removeItem(){throw Error('blocked');}}),/blocked/);
   const source={navigation:{speed:100}};preferences.normalize(source);
   assert.deepEqual(source,{navigation:{speed:100}});
+});
+
+test('Display panels persist across reload without changing experiment preferences',()=>{
+  const db=storage();
+  const first=preferences.normalize({opticalQuality:'auto',previewDetail:'8',
+    displayPanels:{advanced:true,diagnostics:true,gpu:true,profiler:false}});
+  assert.equal(preferences.write(db,first),true);
+  const second=preferences.read(db);
+  assert.deepEqual(second.displayPanels,{advanced:true,diagnostics:true,gpu:true,profiler:false});
+  assert.equal(Object.isFrozen(second.displayPanels),true);
+  assert.equal(second.opticalQuality,'auto');assert.equal(second.previewDetail,'8');
+  assert.equal(preferences.read(db).displayPanels.gpu,true);
+  assert.equal(preferences.reset(db),true);
+  assert.deepEqual(preferences.read(db).displayPanels,
+    {advanced:false,diagnostics:false,gpu:false,profiler:false});
+});
+test('partial, stale or malformed Display panel preferences cannot open hidden diagnostics',()=>{
+  const db=storage({[preferences.STORAGE_KEY]:JSON.stringify({version:1,
+    displayPanels:{advanced:true,diagnostics:'true',gpu:1,profiler:null,unknown:true}})});
+  assert.deepEqual(preferences.read(db).displayPanels,
+    {advanced:true,diagnostics:false,gpu:false,profiler:false});
+  assert.deepEqual(preferences.normalize({displayPanels:[]}).displayPanels,
+    {advanced:false,diagnostics:false,gpu:false,profiler:false});
 });

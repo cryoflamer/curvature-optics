@@ -18,6 +18,18 @@ show an explicit error instead of silently using RK4 in manual Fast mode.
 In Auto, unsupported profiles do not render intermediate optical frames and
 return to Accurate when motion stops. See [limits and tests](docs/fast-optical-preview.md).
 
+**Compact Modern Display:** Under **Scene/Compare → Display**, the optical ray
+field, Fast Preview detail, geometry backend and reference overlays remain
+immediately available. Use the adjacent keyboard-focusable **?** hints for
+technical details. **Advanced settings** contains the browser preference reset;
+**Diagnostics & profiling** contains the separately collapsible GPU probe and
+Render profiler. Panels start collapsed, and their open/closed choices persist
+locally in Application Preferences (not in exported experiments). While
+profiling is active, **Recording** is visible in the diagnostics heading even
+if the profiler is folded. Optical/backend errors and live statuses are not
+hidden in help text. These changes affect presentation only, not optics or
+rendering behavior.
+
 **Modern camera navigation:** Shift + left drag moves the observer sideways and
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or
 backward horizontally. Shift + wheel continues to zoom. The shared position is

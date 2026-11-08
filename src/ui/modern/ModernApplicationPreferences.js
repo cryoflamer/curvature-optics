@@ -16,6 +16,13 @@
   var SPEEDS=[.01,.1,1,10,100,1000,10000];
   var TURNS=[.05,.2,1,5,20];
   var WHEELS=['auto',.1,1,10,100,1000];
+  var PANEL_KEYS=['advanced','diagnostics','gpu','profiler'];
+  function panels(input){
+    var source=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
+    var result={};
+    PANEL_KEYS.forEach(function(key){result[key]=source[key]===true;});
+    return Object.freeze(result);
+  }
   function from(choices,value,fallback){return choices.includes(value)?value:fallback;}
   function normalize(input){
     var data=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
@@ -24,6 +31,7 @@
       opticalQuality:from(QUALITIES,data.opticalQuality,'accurate'),
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
+      displayPanels:panels(data.displayPanels),
       navigation:Object.freeze({speed:from(SPEEDS,nav.speed,10),
         turnRate:from(TURNS,nav.turnRate,1),wheelStep:from(WHEELS,nav.wheelStep,'auto')})
     });
@@ -47,7 +55,8 @@
     var data=normalize(value);
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
-      previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,navigation:data.navigation}));
+      previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
+      displayPanels:data.displayPanels,navigation:data.navigation}));
     // Old navigation data cannot override the new selection on reload.
     return true;
   }
