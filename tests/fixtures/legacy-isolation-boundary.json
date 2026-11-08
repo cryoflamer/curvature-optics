@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 65,
-      "uniqueScripts": 64,
+      "scriptTags": 66,
+      "uniqueScripts": 65,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -183,6 +183,7 @@
         "src/ui/modern/ModernExperimentThumbnail.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentHistoryUI.js",
+        "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
         "src/ui/modern/ModernApp.js",
         "src/ui/modern/ModernCompareGraph.js",
@@ -333,7 +334,8 @@
       "src/ui/modern/ModernGpuCapabilities.js",
       "src/ui/modern/ModernPerformanceReport.js",
       "src/ui/modern/ModernRenderProfiler.js",
-      "src/ui/modern/ModernSceneState.js"
+      "src/ui/modern/ModernSceneState.js",
+      "src/ui/modern/ModernSessionAutosave.js"
     ],
     "notDirectlyLoadedByTheseEntrypoints": [
       "src/ControlPanel.js",
@@ -351,7 +353,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 145,
+  "sourceJsCount": 146,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2099,6 +2101,7 @@
         "tests/ModernExperimentVisualHistory.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
+        "tests/ModernSessionAutosave.test.js",
         "tests/ModernTemperatureGradient.test.js"
       ],
       "commonJsToolCallers": [
@@ -2185,6 +2188,17 @@
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernSessionAutosave.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraNavigation.test.js",
+        "tests/ModernSessionAutosave.test.js"
       ],
       "commonJsToolCallers": []
     },

@@ -26,14 +26,14 @@ const required = [
   'ModernExperimentThumbnail.js', 'ModernExperimentLibrary.js',
   'ModernExperimentState.js', 'ModernGpuCapabilities.js',
   'ModernPerformanceReport.js', 'ModernRenderProfiler.js',
-  'ModernRoute.js', 'ModernSceneState.js'
+  'ModernRoute.js', 'ModernSceneState.js', 'ModernSessionAutosave.js'
 ];
 
 function tagsFor(name) {
   return modernScripts.filter(tag => tag.file === 'src/ui/modern/' + name);
 }
 
-test('140.12.72: all 23 Modern helper modules remain active and locally available', () => {
+test('Modern helper inventory remains reviewed and locally available', () => {
   const actual = fs.readdirSync(modernDir).filter(name => name.endsWith('.js')).sort();
   assert.deepEqual(actual, [...required].sort(), 'review newly added/removed modules explicitly');
   for (const name of required) {

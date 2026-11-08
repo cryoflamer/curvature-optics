@@ -267,6 +267,9 @@ test('Live Modern integration saves and restores a full experiment and protects 
       Redraw(){app.drawCompare(side,{id:side,Canvas:sideCanvas});}});
   }
   onload();
+  // The real HTML starts with History hidden; open it explicitly before
+  // asserting gallery layout and interaction (rather than relying on a stub).
+  nodes.get('ModernHistoryToggle').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,25)); // allow accurate scheduled redraw to complete
   const store=app.getHistoryStore();assert.ok(store);
   nodes.get('ModernHistorySave').listeners.click();
@@ -285,7 +288,9 @@ test('Live Modern integration saves and restores a full experiment and protects 
   db.failAdd=false;
   const gallery=nodes.get('ModernHistoryGallery');
   assert.equal(gallery['data-size'],'small','compact is the default gallery density');
-  const card=gallery.children[1].children[1].children.find(x=>x['data-snapshot-id']===String(id));
+  const sections=gallery.children.filter(x=>x.className==='modern-history-section');
+  const card=sections[0].children[1].children.find(x=>x['data-snapshot-id']===String(id));
+  // Manual checkpoints are pinned by the existing History policy.
   assert.ok(card,'manual snapshot appears in the real rendered gallery');
   card.children[0].listeners.dblclick({stopPropagation(){}});
   await new Promise(resolve=>setTimeout(resolve,60));

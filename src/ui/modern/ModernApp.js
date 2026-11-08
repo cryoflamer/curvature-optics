@@ -22,6 +22,7 @@
   var historyFingerprint=root.CurvatureModernExperimentFingerprint;
   var thumbnailApi=root.CurvatureModernExperimentThumbnail;
   var historyUI=root.CurvatureModernExperimentHistoryUI;
+  var sessionAutosave=root.CurvatureModernSessionAutosave;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
@@ -450,7 +451,9 @@
   // Its history marker survives reload, so browser workspace preferences remain
   // authoritative without giving an imported/shared URL the wrong mode.
   var AUTO_EXPERIMENT_HISTORY_KEY='__curvatureModernAutoExperimentUrlV1';
-  var persistence={ready:false,explicitUrl:false,timer:null};
+  var EDITED_SHARED_URL_KEY='__curvatureModernEditedSharedUrlV1';
+  var persistence={ready:false,explicitUrl:false,timer:null,dirty:false,latestTimestamp:0,
+    pendingCheckpoint:Promise.resolve()};
   // Saved camera poses belong to the experiment; navigation speed belongs to
   // the user's local preferences and is never mixed into a cinematic keyframe.
   var cameraPositions=[];
@@ -464,6 +467,7 @@
   var applicationPreferences=root.CurvatureModernApplicationPreferences;
   var historyGallerySize='small';
   var historyPinnedCollapsed=false;
+  var historyPanelOpen=false;
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   var legacyDisplayPanels=Object.assign({},displayPanels);
   var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
@@ -487,6 +491,7 @@
     state.geometryBackend=remembered.geometryBackend;
     historyGallerySize=remembered.historyGallerySize;
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
+    historyPanelOpen=remembered.historyPanelOpen;
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
@@ -509,6 +514,7 @@
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
+        historyPanelOpen:historyPanelOpen,
         workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
@@ -628,6 +634,11 @@
       state.geometryBackend=defaults.geometryBackend;
       historyGallerySize=defaults.historyGallerySize;
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
+      historyPanelOpen=defaults.historyPanelOpen;
+      var historyPanel=newUiEl('ModernHistoryPanel'),historyToggle=newUiEl('ModernHistoryToggle');
+      if(historyPanel)historyPanel.hidden=true;
+      if(historyToggle)historyToggle.setAttribute('aria-expanded','false');
+      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
       var historySizeControl=newUiEl('ModernHistorySize');
       if(historySizeControl)historySizeControl.value=historyGallerySize;
       if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
@@ -697,17 +708,64 @@
       temperaturePlacement:state.temperaturePlacement,
       cameraPositions:cameraPositions,cameraSequence:cameraSequence}); // Keep legacy schema; never re-enable retired WebGPU.
   }
+  function localSession(){
+    if(!experiments)return null;
+    try{
+      var storage=preferencesStorage(),raw=storage&&storage.getItem(experiments.STORAGE_KEY);
+      if(!raw)return null;
+      var timestamp=sessionAutosave&&storage.getItem(sessionAutosave.META_KEY);
+      var savedAt=timestamp&&Number(timestamp);
+      return {experiment:experiments.validate(JSON.parse(raw)),
+        savedAt:Number.isSafeInteger(savedAt)&&savedAt>0?savedAt:null};
+    }catch(error){return null;}
+  }
   function storeExperiment(){
-    if(!persistence.ready||!experiments||!root.location)return;
+    if(!persistence.ready||!persistence.dirty||!experiments||!root.location)return;
     var current;
     try{current=experimentSnapshot();}
-    catch(error){persistenceStatus('Cannot save experiment: '+error.message,true);return;}
-    var errors=[],saved=false;
+    catch(error){persistenceStatus('Cannot save working session: '+error.message,true);return;}
+    var errors=[],saved=false,localSaved=false,idbPending=false;
+    var timestamp=Math.max(Date.now(),persistence.latestTimestamp+1);
+    persistence.latestTimestamp=timestamp;
     try{
-      if(root.localStorage){root.localStorage.setItem(experiments.STORAGE_KEY,JSON.stringify(current));saved=true;}
+      var storage=preferencesStorage();
+      if(storage){
+        // This legacy-compatible synchronous slot is critical on pagehide:
+        // the browser is free to cancel unfinished IndexedDB transactions.
+        storage.setItem(experiments.STORAGE_KEY,JSON.stringify(current));
+        if(sessionAutosave)storage.setItem(sessionAutosave.META_KEY,String(timestamp));
+        saved=true;localSaved=true;
+      }
     }catch(error){errors.push('browser storage: '+error.message);}
-    // Do not rewrite an explicitly shared URL: it remains the reproducible
-    // incoming experiment until the user explicitly copies a new link.
+    // Serialize async checkpoints so an older transaction cannot overwrite
+    // the final state if the user changes physics during an ongoing write.
+    if(sessionAutosave&&root.indexedDB){
+      idbPending=true;
+      persistence.pendingCheckpoint=persistence.pendingCheckpoint.catch(function(){}).then(function(){
+        return sessionAutosave.write(root.indexedDB,current,timestamp);
+      }).then(function(){
+        if(timestamp===persistence.latestTimestamp)persistenceStatus('Working session saved');
+      },function(error){
+        if(timestamp===persistence.latestTimestamp)persistenceStatus(
+          (localSaved?'Session saved locally, but IndexedDB failed: ':'Session checkpoint unavailable: ')+error.message,true);
+      });
+      saved=true;
+    }
+    if(!saved){persistenceStatus('Working-session storage unavailable',true);return;}
+    persistence.dirty=false;
+    // The automatically generated URL must never rewrite an incoming shared
+    // experiment URL. Explicit shared links always keep their original query.
+    if(persistence.explicitUrl&&root.history&&root.location.href){
+      // The first arrival through a shared URL must win. After the user edits
+      // that same history entry, a refresh should resume their live work while
+      // keeping the publicly shareable URL bytes completely unchanged.
+      try{
+        var previousShared=root.history.state;
+        var sharedState=Object.assign({},previousShared&&typeof previousShared==='object'?previousShared:{});
+        sharedState[EDITED_SHARED_URL_KEY]=root.location.href;
+        root.history.replaceState(sharedState,'',root.location.href);
+      }catch(error){errors.push('shared-link workspace: '+error.message);}
+    }
     if(!persistence.explicitUrl&&root.history&&root.location.href){
       try{
         var url=new URL(root.location.href);
@@ -720,12 +778,29 @@
       }catch(error){errors.push('URL: '+error.message);}
     }
     if(errors.length)persistenceStatus('Partial save: '+errors.join('; '),true);
-    else if(saved)persistenceStatus('Experiment saved locally');
+    else if(idbPending)persistenceStatus(localSaved?'Working session saved locally; syncing…':'Saving working session…');
+    else persistenceStatus('Working session saved locally');
   }
   function scheduleExperimentSave(){
     if(!persistence.ready||!experiments||!root.location)return;
+    persistence.dirty=true;
     if(persistence.timer!==null)clearTimeout(persistence.timer);
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
+  }
+  function flushWorkingSession(){
+    if(!persistence.ready||!persistence.dirty)return;
+    if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
+    storeExperiment();
+  }
+  function bindWorkingSessionLifecycle(){
+    if(root.addEventListener){
+      root.addEventListener('pagehide',flushWorkingSession);
+      // On mobile pagehide can be skipped when the browser is suspended.
+      root.addEventListener('beforeunload',flushWorkingSession);
+    }
+    if(document.addEventListener)document.addEventListener('visibilitychange',function(){
+      if(document.hidden)flushWorkingSession();
+    });
   }
   // History lives in IndexedDB, not in the URL/legacy history or localStorage.
   // A render produces an auto snapshot only after active physical inputs have
@@ -923,15 +998,19 @@
     function handle(operation){
       Promise.resolve().then(operation).catch(function(error){historyStatus(error.message,true);});
     }
-    toggle.addEventListener('click',function(){
-      panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));
-      if(!panel.hidden)handle(function(){return refreshHistoryList();});
+    function setHistoryOpen(open){
+      historyPanelOpen=!!open;panel.hidden=!historyPanelOpen;
+      toggle.setAttribute('aria-expanded',String(historyPanelOpen));
+      saveApplicationPreferences();
+      if(historyPanelOpen)handle(function(){return refreshHistoryList();});
       else if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
-    });
-    el('ModernHistoryClose').addEventListener('click',function(){
-      panel.hidden=true;toggle.setAttribute('aria-expanded','false');
-      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
-    });
+    }
+    toggle.addEventListener('click',function(){setHistoryOpen(panel.hidden);});
+    el('ModernHistoryClose').addEventListener('click',function(){setHistoryOpen(false);});
+    // The preference is applied before IndexedDB has finished opening. Once
+    // open() resolves, refreshHistoryList() populates the visible panel.
+    panel.hidden=!historyPanelOpen;
+    toggle.setAttribute('aria-expanded',String(historyPanelOpen));
     el('ModernHistorySelect').addEventListener('change',function(){
       handle(function(){return refreshHistoryList();});
     });
@@ -1048,29 +1127,54 @@
     initialCamera=captureCameraPose();
     renderCameraPositions('');renderCameraSequenceKeyframes(-1);
   }
-  function restoreExperiment(){
+  function isExplicitSharedExperiment(){
     if(!experiments||!root.location)return false;
     var params=new URLSearchParams(root.location.search||'');
-    var hasUrlExperiment=params.has(experiments.PARAM);
-    // Old shared links have no history marker. Only our own auto-generated
-    // history entry is allowed to yield to local UI workspace preferences.
-    var generated=!!(root.history&&root.history.state&&
-      root.history.state[AUTO_EXPERIMENT_HISTORY_KEY]===true);
-    persistence.explicitUrl=hasUrlExperiment&&!generated;
+    var historyState=root.history&&root.history.state;
+    var generated=!!(historyState&&historyState[AUTO_EXPERIMENT_HISTORY_KEY]===true);
+    var editedHere=!!(historyState&&historyState[EDITED_SHARED_URL_KEY]===root.location.href);
+    return params.has(experiments.PARAM)&&!generated&&!editedHere;
+  }
+  function restoreExperiment(remoteRecord,remoteError){
+    if(!experiments||!root.location)return false;
+    var params=new URLSearchParams(root.location.search||'');
+    var explicit=isExplicitSharedExperiment();
+    persistence.explicitUrl=explicit;
     var data=null,source='';
     try{
-      if(hasUrlExperiment){data=experiments.readUrl(root.location.search);source='URL';}
-      else if(root.localStorage){
-        var saved=root.localStorage.getItem(experiments.STORAGE_KEY);
-        if(saved){data=experiments.validate(JSON.parse(saved));source='local storage';}
+      if(explicit){
+        // Explicit shared links win even when they are invalid: never replace
+        // a broken incoming link with another user's private local session.
+        data=experiments.readUrl(root.location.search);source='shared URL';
+      }else{
+        var local=localSession(),remote=null;
+        if(remoteRecord&&sessionAutosave){
+          try{remote=sessionAutosave.normalize(remoteRecord,experiments.validate);}
+          catch(error){remoteError=error;}
+        }
+        var chosen=sessionAutosave?sessionAutosave.newer(local,remote):(local||remote);
+        if(chosen){data=chosen.experiment;source=chosen===remote?'working-session database':'working-session storage';
+          if(chosen.savedAt!==null)persistence.latestTimestamp=chosen.savedAt;
+          if(chosen===remote){
+            // Repair the synchronous unload fallback after a successful IDB
+            // recovery. This does not mark a new edit or create History.
+            try{var storage=preferencesStorage();if(storage){
+              storage.setItem(experiments.STORAGE_KEY,JSON.stringify(data));
+              storage.setItem(sessionAutosave.META_KEY,String(remote.savedAt));
+            }}catch(ignore){}
+          }
+        }else if(params.has(experiments.PARAM)){
+          data=experiments.readUrl(root.location.search);source='previous session URL';
+        }
       }
-      if(!data)return false;
+      if(!data){
+        if(remoteError)persistenceStatus('Session storage unavailable: '+remoteError.message,true);
+        return false;
+      }
       applyExperiment(data);
-      persistenceStatus('Restored experiment from '+source);
+      persistenceStatus('Restored '+source);
       return true;
     }catch(error){
-      // In particular, a broken explicit URL must never load an unrelated
-      // local experiment: the visible scene stays at the documented default.
       persistenceStatus('Experiment not restored: '+error.message,true);
       return false;
     }
@@ -1090,16 +1194,30 @@
   }
   function resetExperiment(){
     cancelEdits();cancelPending();
+    persistence.dirty=false;
     if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
-    try{if(root.localStorage)root.localStorage.removeItem(experiments.STORAGE_KEY);}
-    catch(error){persistenceStatus('Could not clear saved experiment: '+error.message,true);return;}
-    if(root.location&&root.location.href){
-      var url=new URL(root.location.href);
-      url.searchParams.delete(experiments.PARAM);url.searchParams.delete('state');
-      url.searchParams.set('ui','modern');
-      if(typeof root.location.assign==='function')root.location.assign(url.href);
-      else persistenceStatus('Reload this page to restore the default experiment');
+    try{
+      if(root.localStorage){
+        root.localStorage.removeItem(experiments.STORAGE_KEY);
+        if(sessionAutosave)root.localStorage.removeItem(sessionAutosave.META_KEY);
+      }
+    }catch(error){persistenceStatus('Could not clear saved experiment: '+error.message,true);return;}
+    function navigateDefault(){
+      if(root.location&&root.location.href){
+        var url=new URL(root.location.href);
+        url.searchParams.delete(experiments.PARAM);url.searchParams.delete('state');
+        url.searchParams.set('ui','modern');
+        if(typeof root.location.assign==='function')root.location.assign(url.href);
+        else persistenceStatus('Reload this page to restore the default experiment');
+      }
     }
+    if(sessionAutosave&&root.indexedDB){
+      persistence.pendingCheckpoint.catch(function(){}).then(function(){
+        return sessionAutosave.clear(root.indexedDB);
+      }).then(navigateDefault,function(error){
+        persistenceStatus('Could not clear working-session database: '+error.message,true);
+      });
+    }else navigateDefault();
   }
   function bindPersistence(){
     if(!experiments)return;
@@ -2883,6 +3001,9 @@
   }
   function scheduleRedraw(){
     cancelPending();
+    // A slider may be edited immediately before Refresh/pagehide, before the
+    // deferred optics redraw occurs. Persist its live value in that case.
+    scheduleExperimentSave();
     updateStatus('Updating physical optics after parameter change…');
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
@@ -2894,6 +3015,9 @@
     if(mode!=='scene'&&mode!=='compare'&&mode!=='demos')throw RangeError('Invalid Modern UI mode');
     stopCameraKeyboard(true);abortCameraDrag();cancelEdits();stopShimmerFrame();
     if(atmosphericShimmer)atmosphericShimmer.resetClock();
+    // Demos has no serializable experiment mode. Commit pending Scene/Compare
+    // edits before switching there, rather than leaving an invalid checkpoint.
+    if(mode==='demos'&&persistence.dirty)flushWorkingSession();
     var demos=root.CurvatureModernDemos;
     var demosActive=mode==='demos';
     var workspace=newUiEl('ModernWorkspace');
@@ -3305,28 +3429,39 @@
     bindLibrary();
     bindHistory();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
-    var restored=restoreExperiment();
-    if(!initialCamera)initialCamera=captureCameraPose();
-    syncNumericInputs();
-    // An explicitly shared experiment URL retains its authored Scene/Compare
-    // viewport. Local experiments instead use the browser workspace preference.
-    var params=typeof URLSearchParams==='function'?
-      new URLSearchParams(root.location&&root.location.search||''):{get:function(){return null;}};
-    if(!persistence.explicitUrl){
-      if(workspaceState.mode)state.mode=workspaceState.mode;
-      if(workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
+    function finishStartup(remoteRecord,remoteError){
+      var restored=restoreExperiment(remoteRecord,remoteError);
+      if(!initialCamera)initialCamera=captureCameraPose();
+      syncNumericInputs();
+      // Explicit shared URLs retain their Scene/Compare mode. Local working
+      // sessions use the stored UI workspace choice independently of physics.
+      var params=typeof URLSearchParams==='function'?
+        new URLSearchParams(root.location&&root.location.search||''):{get:function(){return null;}};
+      if(!persistence.explicitUrl){
+        if(workspaceState.mode)state.mode=workspaceState.mode;
+        if(workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
+      }
+      var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
+      if(['scene','compare','demos'].includes(explicitMode))state.mode=explicitMode;
+      if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
+      if(settingGroups.includes(explicitTab))workspaceState[state.mode==='compare'?'compareTab':'sceneTab']=explicitTab;
+      if(state.mode==='compare'||state.mode==='demos'||explicitMode==='scene')setMode(state.mode,false);
+      else {applyWorkspaceSections();
+        if(typeof document.querySelector==='function')activateSettings(workspaceState.sceneTab,false,false);
+        redraw();}
+      if(restored||state.compareConfig)syncCompareEditor();
+      // Only user edits after complete restore are eligible for autosave.
+      // Initial model construction must not overwrite either storage copy.
+      persistence.ready=true;
+      resetHistoryBaseline();
     }
-    var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
-    if(['scene','compare','demos'].includes(explicitMode))state.mode=explicitMode;
-    if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
-    if(settingGroups.includes(explicitTab))workspaceState[state.mode==='compare'?'compareTab':'sceneTab']=explicitTab;
-    if(state.mode==='compare'||state.mode==='demos'||explicitMode==='scene')setMode(state.mode,false);
-    else {applyWorkspaceSections();
-      if(typeof document.querySelector==='function')activateSettings(workspaceState.sceneTab,false,false);
-      redraw();}
-    if(restored||state.compareConfig)syncCompareEditor();
-    persistence.ready=true;
-    resetHistoryBaseline();
+    bindWorkingSessionLifecycle();
+    if(sessionAutosave&&root.indexedDB&&!isExplicitSharedExperiment()){
+      persistenceStatus('Restoring working session…');
+      sessionAutosave.read(root.indexedDB).then(function(record){
+        finishStartup(record,null);
+      },function(error){finishStartup(null,error);});
+    }else finishStartup(null,null);
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);

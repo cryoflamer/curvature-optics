@@ -249,6 +249,33 @@ existing preferences, collapsible-section choices, saved experiments,
 renderers, and physical computation are unchanged. Visual behavior in the
 user's Opera browser should be checked after application.
 
+### Modern working-session autosave
+
+Modern restores the most recent complete working experiment when the page is
+reopened or refreshed. Scene/Compare physics, camera, objects, model-specific
+atmospheres and camera keyframes are saved after 550 ms of idle editing; an
+immediate synchronous checkpoint also runs on `pagehide`, `beforeunload` and
+when the tab becomes hidden, so a quick reload does not drop the final edit.
+The durable checkpoint is in browser IndexedDB (`curvature-modern-working-session`),
+with the existing version-1 experiment `localStorage` entry as a synchronous
+reload fallback. Startup waits for IndexedDB recovery before rendering the
+initial model. Corrupt checkpoints are rejected; an explicitly shared experiment
+URL wins on first arrival, and its URL is never overwritten by autosave. After
+editing, a reload of that same tab resumes the working session without changing
+the shareable URL; navigating to a different shared link still gives that link
+priority.
+Reset experiment clears both storage copies. This is a single continuously
+replaced working session, **not** a new History snapshot on each edit.
+
+The **History** panel's open/closed state is remembered independently in
+Application Preferences and restored on refresh; resetting those preferences
+closes History without deleting the current experiment or its History records.
+The Pinned fold and S/M/L size continue to use those preferences. Browser storage
+is origin-local, may be cleared or evicted, and is not a cross-device backup.
+Simultaneous edits from multiple tabs are not automatically merged; the latest
+saved checkpoint wins. See the session notes in
+[Modern Experiment History](docs/modern-experiment-history.md).
+
 ### Modern Experiment History
 
 Modern now has a separate **History** panel in the header (not a sixth settings

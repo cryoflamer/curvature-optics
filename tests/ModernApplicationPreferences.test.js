@@ -11,13 +11,13 @@ function storage(values={}){
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
   assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
   {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
@@ -106,6 +106,7 @@ test('History card size preference survives reload and invalid/legacy values fal
   const db=storage();
   assert.equal(preferences.read(db).historyGallerySize,'small');
   assert.equal(preferences.read(db).historyPinnedCollapsed,false);
+  assert.equal(preferences.read(db).historyPanelOpen,false);
   assert.equal(preferences.write(db,{historyGallerySize:'medium',historyPinnedCollapsed:true,opticalQuality:'fast'}),true);
   assert.equal(preferences.read(db).historyPinnedCollapsed,true);
   assert.equal(preferences.read(db).historyGallerySize,'medium');

@@ -1,8 +1,46 @@
 # Modern Experiment History
 
 Modern's Experiment History is separate from **Experiment Library** and from the
-existing URL/localStorage save. It never changes the experiment JSON v1 schema,
+working-session autosave and experiment URL mechanism. It never changes the experiment JSON v1 schema,
 Scene/Compare renderer, or Legacy state.
+
+## Working session autosave and reload recovery
+
+The live experiment has **one mutable working-session checkpoint**, separate
+from the protected/manual/automatic History list. `ModernSessionAutosave.js`
+uses IndexedDB `curvature-modern-working-session`, version 1, store `session`,
+key `current`; the checkpoint contains a timestamp and validated experiment
+JSON v1 (no thumbnail). The legacy `curvature-modern-experiment-v1` localStorage
+record remains a synchronous fallback and migration path, with a separate
+last-saved timestamp for choosing the newer valid copy. The latest complete
+snapshot is written after 550 ms of idle changes. If a redraw or slider edit
+is pending, `pagehide`, `beforeunload` and hidden-page handling synchronously
+flush the current state to localStorage; an IDB write is queued as well, but
+browser shutdown does not guarantee that asynchronous transaction finishes.
+
+On startup, the application waits for IDB selection **before enabling session
+writes or drawing the initial scene**. The most recent valid local/IDB checkpoint
+is applied through `applyExperiment`; when IDB is newer, the local fallback is
+repaired. Invalid IDB checkpoints are rejected without mutating the model or
+History, and blocked/unavailable IDB falls back to localStorage. An externally
+shared experiment URL has strict precedence and cannot silently load unrelated
+local content. After editing that shared link, reloading the **same tab** resumes
+the edited working session via an in-tab history marker, without changing the
+shared URL; a newly opened incoming URL still wins. The existing auto-generated
+URL marker retains its meaning.
+Reset experiment clears both copies (the page is not navigated until IDB clear
+succeeds). On initial boot neither History nor the working-session checkpoint is
+silently created merely because defaults were rendered.
+
+The **History panel visibility** itself is stored as `historyPanelOpen` in
+`curvature-modern-application-preferences-v1` and applied before History data
+is loaded; opening and closing via either control updates the preference.
+Reset Application Preferences closes it; Reset Workspace Layout does not.
+Preview overlays are deliberately not restored. The separate Pinned collapse
+state and card-size preference continue working unchanged. Browser-local
+persistence is not a backup, and simultaneous tabs are last-writer-wins rather
+than merged automatically; keep manual/pinned History checkpoints for important
+results.
 
 ## History Core and Visual History
 
@@ -146,3 +184,18 @@ specified. A screenshot crossfade is not a physical optics calculation.
 6. Check that History inspection does not trigger expensive physical redraws,
    that Scene/Compare selection continues to work, and that the live viewport
    remains unaffected by merely opening the Preview.
+
+## Working-session reload checks
+
+1. Change a Scene camera value and immediately reload, before 550 ms have
+   elapsed; the exact value should return. Repeat with Compare A/B physics,
+   object parameters and a camera keyframe.
+2. Open History, reload, and verify History remains visible with the same
+   pinned fold and card density. Close History and reload; it should stay closed.
+3. Open an explicit shared experiment URL while a different working session
+   exists: the URL's physics wins and the incoming URL is not rewritten.
+4. Use Reset experiment, reload and verify defaults rather than the previous
+   working state. Reset Application Preferences separately and verify only the
+   UI choices (including History visibility) reset.
+5. Check that restoring a working session does **not** create a new auto History
+   record. If IndexedDB is unavailable, localStorage is the intended fallback.

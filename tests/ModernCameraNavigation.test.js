@@ -10,6 +10,7 @@ const interaction=require('../src/ui/modern/ModernCameraInteraction');
 const interpolator=require('../src/camera/ModernCameraInterpolator');
 const sequence=require('../src/camera/ModernCameraSequence');
 const codec=require('../src/ui/modern/ModernExperimentState');
+const sessionModule=require('../src/ui/modern/ModernSessionAutosave');
 const compare=require('../src/ui/modern/ModernCompareState');
 const compareModel=require('../src/ui/modern/ModernCompareModel');
 const scene=require('../src/ui/modern/ModernSceneState');
@@ -84,7 +85,7 @@ test('camera positions survive JSON/URL round-trip without changing legacy exper
   ])assert.throws(()=>codec.validate({...old,cameraPositions:invalid}),RangeError);
 });
 
-function boot(savedExperiment, initialPreferences, pageUrl, historyState){
+function boot(savedExperiment, initialPreferences, pageUrl, historyState, historySupport, sessionSupport){
   const ids=[...read('CurvatureModern.html').matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]);
   const nodes=new Map(),renders=[],globalListeners={},frames=new Map(),timers=new Map();
   let clock=100,seq=0,ons=[];
@@ -146,6 +147,14 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState){
     addEventListener(name,fn){(globalListeners[name]??=[]).push(fn);},
     NewGraphX3D(args){return {Canvas:sceneCanvas,UpdateCanvasSize(){},Redraw(){args.DrawFunc({Canvas:sceneCanvas});}};},
     xOnLoad(fn){ons.push(fn);},console};
+  if(sessionSupport){
+    win.indexedDB={open(){throw Error('unexpected direct IndexedDB access');}};
+    win.CurvatureModernSessionAutosave=sessionSupport;
+  }
+  if(historySupport){
+    win.CurvatureModernExperimentHistory=historySupport;
+    win.CurvatureModernExperimentFingerprint={physicalSignature:()=>'{"physics":"fixed"}'};
+  }
   if(savedExperiment||pageUrl)win.location={href:pageUrl||'https://example.org/CurvatureModern.html',
     search:pageUrl?new URL(pageUrl).search:''};
   if(historyState!==undefined)win.history={state:historyState,
@@ -693,7 +702,7 @@ test('display and navigation preferences are immediately saved and restored inde
   const saved=h.storage.get(preferences.STORAGE_KEY);
   assert.deepEqual(JSON.parse(saved),{
     version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',
-    historyGallerySize:'small',historyPinnedCollapsed:false,displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
+    historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:1,wheelStep:'auto'},
     workspace:{mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}}
   });
@@ -919,4 +928,117 @@ test('Surface and Atmosphere folds keep physics warnings visible and remember Sc
   reopened.nodes.get('ModernSceneTab').dispatch('click');
   assert.equal(reopened.nodes.get('ModernSceneAtmosphereExplanationSection').open,true,
     'Scene fold is restored when switching back from Compare');
+});
+
+
+test('working session flushes pending edits on pagehide, before 550ms debounce',()=>{
+  const h=boot(experiment([])),n=h.nodes;
+  n.get('ModernHeight').value='31.25';n.get('ModernHeight').dispatch('change');
+  assert.equal(h.app.getModel().Height,31.25);
+  assert.equal(JSON.parse(h.storage.get(codec.STORAGE_KEY)).scene.camera.Height,15,
+    'debounced edit has not replaced the prior checkpoint yet');
+  h.dispatchGlobal('pagehide');
+  const checkpoint=codec.validate(JSON.parse(h.storage.get(codec.STORAGE_KEY)));
+  assert.equal(checkpoint.scene.camera.Height,31.25);
+  assert.equal(h.storage.has(codec.STORAGE_KEY),true);
+  h.flushTimers();
+  assert.equal(JSON.parse(h.storage.get(codec.STORAGE_KEY)).scene.camera.Height,31.25,
+    'pagehide and the pending timer must not conflict');
+  const reopened=boot(checkpoint,{[preferences.STORAGE_KEY]:h.storage.get(preferences.STORAGE_KEY)});
+  assert.equal(reopened.app.getModel().Height,31.25);
+});
+
+test('History open/close survives reload and resets with application preferences',()=>{
+  const historyFactory={create:()=>({open:()=>Promise.resolve(),list:()=>Promise.resolve([])})};
+  const original=experiment([]);
+  const first=boot(original,{},undefined,undefined,historyFactory),n=first.nodes;
+  assert.equal(n.get('ModernHistoryPanel').hidden,true);
+  n.get('ModernHistoryToggle').dispatch('click');
+  assert.equal(n.get('ModernHistoryPanel').hidden,false);
+  assert.equal(preferences.read(first.win.localStorage).historyPanelOpen,true);
+  const reopened=boot(original,{[preferences.STORAGE_KEY]:first.storage.get(preferences.STORAGE_KEY)},
+    undefined,undefined,historyFactory);
+  assert.equal(reopened.nodes.get('ModernHistoryPanel').hidden,false);
+  reopened.nodes.get('ModernHistoryClose').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernHistoryPanel').hidden,true);
+  assert.equal(preferences.read(reopened.win.localStorage).historyPanelOpen,false);
+  reopened.nodes.get('ModernHistoryToggle').dispatch('click');
+  reopened.nodes.get('ModernResetPreferences').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernHistoryPanel').hidden,true);
+  assert.equal(reopened.storage.has(codec.STORAGE_KEY),true,
+    'reset application preferences must not erase the working experiment');
+});
+
+
+test('async IndexedDB working-session restore precedes initial render and repairs local fallback',async()=>{
+  const remote=experiment([]);remote.scene.camera.Height=72.5;
+  const records=[];
+  const checkpoint={version:1,savedAt:300,experiment:remote};
+  const api={...sessionModule,
+    read(){records.push('read');return Promise.resolve(checkpoint);},
+    write(_db,experiment,savedAt){records.push(['write',experiment.scene.camera.Height,savedAt]);return Promise.resolve();},
+    clear(){records.push('clear');return Promise.resolve();}};
+  const h=boot(undefined,{},'https://example.org/CurvatureModern.html',undefined,undefined,api);
+  assert.equal(h.app.getModel().Height,15,'boot must not apply default and persist it before IDB load');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.app.getModel().Height,72.5,'IDB checkpoint takes effect before first saved edit');
+  assert.equal(JSON.parse(h.storage.get(codec.STORAGE_KEY)).scene.camera.Height,72.5,
+    'successful IDB restore repairs synchronous localStorage fallback');
+  assert.equal(h.storage.get(sessionModule.META_KEY),'300');
+  assert.deepEqual(records,['read'],'boot restore does not produce a new session write');
+  h.nodes.get('ModernHeight').value='88';h.nodes.get('ModernHeight').dispatch('change');
+  h.dispatchGlobal('pagehide');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(JSON.parse(h.storage.get(codec.STORAGE_KEY)).scene.camera.Height,88);
+  assert.equal(records[1][0],'write');
+  assert.equal(records[1][1],88);
+  assert.ok(records[1][2]>300);
+});
+
+test('newer IndexedDB checkpoint beats stale local slot; explicit shared URL always wins',async()=>{
+  const stale=experiment([]);stale.scene.camera.Height=20;
+  const newer=experiment([]);newer.scene.camera.Height=90;
+  let reads=0;
+  const api={...sessionModule,
+    read(){reads++;return Promise.resolve({version:1,savedAt:500,experiment:newer});},
+    write(){return Promise.resolve();},clear(){return Promise.resolve();}};
+  const h=boot(stale,{[sessionModule.META_KEY]:'450'},
+    'https://example.org/CurvatureModern.html',undefined,undefined,api);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.app.getModel().Height,90);
+  assert.equal(JSON.parse(h.storage.get(codec.STORAGE_KEY)).scene.camera.Height,90);
+  const explicit=codec.urlWithExperiment('https://example.org/CurvatureModern.html',stale);
+  const other=boot(stale,{},explicit,undefined,undefined,api);
+  assert.equal(other.app.getModel().Height,20);
+  assert.equal(reads,1,'incoming shared link must bypass private IDB restoration');
+});
+
+test('corrupt asynchronous IDB checkpoint falls back to valid local session',async()=>{
+  const local=experiment([]);local.scene.camera.Height=41;
+  const api={...sessionModule,read(){return Promise.resolve({version:2,savedAt:500,experiment:{}});},
+    write(){return Promise.resolve();},clear(){return Promise.resolve();}};
+  const h=boot(local,{},'https://example.org/CurvatureModern.html',undefined,undefined,api);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.app.getModel().Height,41);
+});
+
+test('edited shared URL reload resumes the same tab without rewriting the incoming URL',()=>{
+  const linked=experiment([]),local=experiment([]);
+  linked.scene.camera.Height=17;
+  local.scene.camera.Height=60;
+  const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html',linked);
+  const h=boot(local,{},url,{});
+  assert.equal(h.app.getModel().Height,17,'first shared-link arrival takes precedence');
+  h.nodes.get('ModernHeight').value='45';h.nodes.get('ModernHeight').dispatch('change');
+  h.dispatchGlobal('pagehide');
+  assert.equal(h.win.location.href,url,'the explicit URL remains untouched after editing');
+  assert.equal(h.win.history.state.__curvatureModernEditedSharedUrlV1,url);
+  const resumed=JSON.parse(h.storage.get(codec.STORAGE_KEY));
+  const again=boot(resumed,{},url,h.win.history.state);
+  assert.equal(again.app.getModel().Height,45,'refresh of edited shared link resumes the live session');
+  const another=experiment([]);another.scene.camera.Height=91;
+  const anotherUrl=codec.urlWithExperiment('https://example.org/CurvatureModern.html',another);
+  const newLink=boot(resumed,{},anotherUrl,h.win.history.state);
+  assert.equal(newLink.app.getModel().Height,91,
+    'another shared link wins even if old tab history state was carried over');
 });
