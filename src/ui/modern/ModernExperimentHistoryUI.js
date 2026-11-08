@@ -16,6 +16,7 @@
     }
     return 'Scene · '+(f.scene&&f.scene.geometry&&f.scene.geometry.kind==='flat'?'Flat':'Globe');
   }
+  function displayName(entry){return entry.name&&entry.name.trim()?entry.name:label(entry);}
   // The inspector reads the already loaded validated experiment. No IndexedDB
   // query, experiment mutation or optical work is performed while hovering.
   function number(value,digits){
@@ -70,7 +71,8 @@
       var count=objects.NObjects[i];
       if(count)groups.push(number(count,0)+' × '+(names[objects.ObjType[i]]||'object'));
     }
-    return {mode:mode,title:label(entry),A:a,B:b,relations:relations,
+    return {mode:mode,title:displayName(entry),classification:label(entry),
+      description:entry.description||'',A:a,B:b,relations:relations,
       shared:[['Camera height',number(camera.Height)+' m'],
         ['Camera orientation',number(camera.Pan)+'° pan · '+number(camera.Nick)+'° nick'],
         ['Objects',groups.join(' · ')||'No objects']]};
@@ -84,6 +86,10 @@
     }else card.appendChild(el(doc,'p','modern-history-empty',
       'No screenshot saved; physical settings and Restore are still available.'));
     card.appendChild(el(doc,'strong','modern-history-inspector-title',data.title));
+    if(data.title!==data.classification)
+      card.appendChild(el(doc,'span','modern-history-inspector-kind',data.classification));
+    if(data.description)
+      card.appendChild(el(doc,'p','modern-history-inspector-description',data.description));
     card.appendChild(el(doc,'span','modern-history-inspector-time',
       new Date(entry.createdAt).toLocaleString()+' · '+entry.source));
     var columns=el(doc,'div','modern-history-inspector-columns');
@@ -238,12 +244,12 @@
       card.setAttribute('data-snapshot-id',String(entry.id));
       card.addEventListener('click',function(event){
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete'))return;
+          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename'))return;
         actions.select(entry.id);
       });
       card.addEventListener('dblclick',function(event){
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete'))return;
+          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename'))return;
         if(inspector)inspector.hide();
         if(actions.restore)actions.restore(entry.id);
       });
@@ -281,7 +287,7 @@
       }
       if(entry.thumbnail&&entry.thumbnail.dataUrl){
         var image=el(doc,'img','modern-history-image');
-        image.src=entry.thumbnail.dataUrl;image.alt=label(entry)+' thumbnail';image.loading='lazy';
+        image.src=entry.thumbnail.dataUrl;image.alt=displayName(entry)+' thumbnail';image.loading='lazy';
         select.className+=' has-preview';select.appendChild(image);
       }else select.appendChild(el(doc,'span','modern-history-no-image','No preview available'));
       card.appendChild(select);
@@ -301,7 +307,9 @@
       remove.disabled=!!entry.pinned;
       card.appendChild(remove);
       var body=el(doc,'div','modern-history-card-body');
-      body.appendChild(el(doc,'strong','modern-history-card-title',label(entry)));
+      var title=el(doc,'strong','modern-history-card-title',displayName(entry));
+      title.title=entry.name?label(entry):'';
+      body.appendChild(title);
       body.appendChild(el(doc,'span','modern-history-card-meta',
         new Date(entry.createdAt).toLocaleString()+' · '+entry.source));
       var footer=el(doc,'div','modern-history-card-footer');
@@ -314,7 +322,13 @@
       check.addEventListener('dblclick',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
       multiLabel.appendChild(check);
       multiLabel.appendChild(el(doc,'span','','Select'));
-      footer.appendChild(multiLabel);body.appendChild(footer);
+      footer.appendChild(multiLabel);
+      var rename=button(doc,'✎','Edit snapshot name and description',function(){
+        if(inspector)inspector.hide();
+        if(actions.edit)actions.edit(entry.id);
+      });
+      rename.className='modern-history-rename';
+      footer.appendChild(rename);body.appendChild(footer);
       card.appendChild(body);
       return card;
     }
@@ -356,6 +370,6 @@
       if(control)control.setAttribute('aria-pressed',String(active));
     });
   }
-  return Object.freeze({render:render,select:select,label:label,inspect:inspect,
+  return Object.freeze({render:render,select:select,label:label,displayName:displayName,inspect:inspect,
     hideInspector:hideInspector,setSize:setSize});
 }));

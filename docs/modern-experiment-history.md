@@ -210,3 +210,32 @@ specified. A screenshot crossfade is not a physical optics calculation.
    UI choices (including History visibility) reset.
 5. Check that restoring a working session does **not** create a new auto History
    record. If IndexedDB is unavailable, localStorage is the intended fallback.
+
+## Named snapshots and descriptions
+
+Use the small **✎** action beneath a History thumbnail to open the snapshot
+editor. A snapshot can have an optional **name** (up to 120 characters) and
+**description** (up to 1000 characters). Save details to update that particular
+IndexedDB history record. Empty name falls back to the automatic Scene/Compare
+physics label; the classification is retained in the unified Preview even for
+named snapshots. Notes appear in Preview, without increasing compact card size.
+The selected-snapshot dropdown also displays user names.
+
+Names and descriptions belong to the **history record**, not the version-1
+experiment JSON, its full-state fingerprint, physical signature or screenshot.
+Editing annotations never creates a snapshot, invokes the optics renderer,
+changes pinned order, or restores the experiment. Older records with no
+metadata continue to render with the generated physics label; no IndexedDB
+schema migration is necessary. Deduplicating a manually saved experiment
+preserves its existing annotations and stable history ID.
+
+Adding a name or description to an **automatic** entry promotes it to a
+long-lived manual record so auto-pruning/"Clear automatic" will not silently
+remove the annotated work. This does **not** set Pin: Pinned remains a gallery
+selection for future Storyboards. Clearing annotations later does not demote
+that record back to automatic history.
+
+The existing Experiment Library JSON export and URLs serialize **experiment
+physics only**, not History annotations. Portable export/import of annotated
+History records belongs to the upcoming Library/History consolidation; do not
+assume that exporting a bare experiment JSON includes name or description.

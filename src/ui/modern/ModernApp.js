@@ -827,7 +827,8 @@
       var existing=savedHistorySignatures.get(signature);
       if(existing){
         status.textContent=existing.pinned?'Already in History · protected':
-          'Already in History · automatic (pin it in History to keep it)';
+          existing.source==='auto'?'Already in History · automatic (pin it in History to keep it)':
+          'Already in History · saved';
       }else{
         status.textContent=snapshotSaveBusy?'Saving snapshot…':
           snapshotSaveError?'Save failed: '+snapshotSaveError:'Not yet saved in History';
@@ -922,6 +923,33 @@
     var node=newUiEl('ModernHistoryMultiCount');
     if(node)node.textContent=historySelectedIds().length+' snapshots selected';
   }
+  var historyMetadataEditingId=null;
+  function closeHistoryMetadataEditor(){
+    var dialog=newUiEl('ModernHistoryMetadataDialog');
+    if(dialog){
+      if(typeof dialog.close==='function'&&dialog.open)dialog.close();
+      else if(typeof dialog.removeAttribute==='function')dialog.removeAttribute('open');
+    }
+    historyMetadataEditingId=null;
+  }
+  function openHistoryMetadataEditor(id){
+    var dialog=newUiEl('ModernHistoryMetadataDialog');
+    var name=newUiEl('ModernHistoryMetadataName');
+    var description=newUiEl('ModernHistoryMetadataDescription');
+    if(!dialog||!name||!description)return Promise.reject(Error('Snapshot editor unavailable'));
+    return experimentHistory.get(id).then(function(entry){
+      if(!entry)throw RangeError('History snapshot not found');
+      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
+      historyMetadataEditingId=entry.id;
+      name.value=entry.name||'';description.value=entry.description||'';
+      var errorNode=newUiEl('ModernHistoryMetadataError');
+      if(errorNode)errorNode.textContent='';
+      if(typeof dialog.showModal==='function'){
+        if(!dialog.open)dialog.showModal();
+      }else if(typeof dialog.setAttribute==='function')dialog.setAttribute('open','');
+      if(typeof name.focus==='function')name.focus();
+    });
+  }
   function refreshHistoryList(selectedId){
     if(!experimentHistory)return Promise.resolve([]);
     var select=newUiEl('ModernHistorySelect');
@@ -949,7 +977,8 @@
         var option=document.createElement('option');option.value=String(entry.id);
         var scene=entry.features&&entry.features.mode||entry.experiment.display.mode;
         var label=scene==='compare'?'Compare A/B':'Scene';
-        option.textContent=new Date(entry.createdAt).toLocaleString()+' · '+label+' · '+entry.source+
+        option.textContent=(entry.name?entry.name+' · ':'')+
+          new Date(entry.createdAt).toLocaleString()+' · '+label+' · '+entry.source+
           (entry.pinned?' · pinned':'');
         select.appendChild(option);
       });
@@ -964,6 +993,9 @@
           experimentHistory.pin(id,pinned).then(function(){return refreshHistoryList(id);})
             .catch(function(error){historyStatus(error.message,true);});
         },
+        edit:function(id){openHistoryMetadataEditor(id).catch(function(error){
+          historyStatus(error.message,true);
+        });},
         remove:function(id){
           if(entries.some(function(entry){return entry.id===id&&entry.pinned;})){
             historyStatus('Unpin this snapshot before deleting it.',true);return;
@@ -1021,6 +1053,32 @@
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
     experimentHistory=historyFactory.create({indexedDB:root.indexedDB});
+    var metadataForm=newUiEl('ModernHistoryMetadataForm');
+    var metadataCancel=newUiEl('ModernHistoryMetadataCancel');
+    var metadataDialog=newUiEl('ModernHistoryMetadataDialog');
+    var metadataSave=newUiEl('ModernHistoryMetadataSave');
+    if(metadataCancel)metadataCancel.addEventListener('click',closeHistoryMetadataEditor);
+    if(metadataDialog)metadataDialog.addEventListener('close',function(){historyMetadataEditingId=null;});
+    if(metadataForm)metadataForm.addEventListener('submit',function(event){
+      if(event&&event.preventDefault)event.preventDefault();
+      if(historyMetadataEditingId===null||!metadataSave||metadataSave.disabled)return;
+      var id=historyMetadataEditingId;
+      metadataSave.disabled=true;
+      Promise.resolve().then(function(){return experimentHistory.updateMetadata(id,
+        newUiEl('ModernHistoryMetadataName').value,
+        newUiEl('ModernHistoryMetadataDescription').value);
+      }).then(function(updated){
+        if(!updated)throw RangeError('History snapshot not found');
+        closeHistoryMetadataEditor();
+        historyStatus('Snapshot details saved.');
+        return refreshHistoryList(id);
+      }).catch(function(error){
+        var errorNode=newUiEl('ModernHistoryMetadataError');
+        if(errorNode)errorNode.textContent=error.message;
+        historyStatus('Snapshot details: '+error.message,true);
+      })
+        .finally(function(){metadataSave.disabled=false;});
+    });
     var sizeControl=newUiEl('ModernHistorySize');
     if(sizeControl){
       sizeControl.value=historyGallerySize;

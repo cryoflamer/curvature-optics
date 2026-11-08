@@ -333,3 +333,44 @@ test('Unified preview contains image and physical settings, hover dwell and stic
   ui.render(doc,host,[cardEntry],1,actions,{});
   assert.equal(doc.body.children.length,1,'rerender destroys previous overlay');
 });
+
+test('Named history cards keep physical classification and edit without Restore',()=>{
+  const {doc}=dom(),host=doc.createElement('div'),calls=[];
+  const saved=entry(31,'compare',false);
+  saved.name='  Geometry check  ';saved.description='Why this snapshot matters';
+  assert.equal(ui.displayName(saved),'  Geometry check  ');
+  assert.match(ui.label(saved),/Compare A\/B/);
+  ui.render(doc,host,[saved],31,{
+    select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
+    edit:id=>calls.push(['edit',id]),pin(){},remove(){},multi(){}
+  },{});
+  const card=host.children[1].children[1].children[0];
+  const body=card.children[3],rename=body.children[2].children[1];
+  assert.equal(body.children[0].textContent,'  Geometry check  ');
+  assert.match(body.children[0].title,/Compare A\/B/);
+  assert.equal(rename.className,'modern-history-rename');
+  assert.equal(rename['aria-label'],'Edit snapshot name and description');
+  rename.listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls,[['edit',31]]);
+  rename.listeners.dblclick({stopPropagation(){}});
+  card.listeners.dblclick({target:{closest(selector){return selector.includes('modern-history-rename')?rename:null;}}});
+  card.listeners.click({target:{closest(selector){return selector.includes('modern-history-rename')?rename:null;}}});
+  assert.deepEqual(calls,[['edit',31]],'editing does not select or restore a snapshot');
+  const old=entry(32,'scene',false);
+  assert.equal(ui.displayName(old),ui.label(old),'old records retain automatic labels');
+});
+
+test('Named snapshots expose description and automatic physical label in Preview',()=>{
+  const doc=inspectorDom(),host=doc.createElement('div');
+  const saved=entry(40,'scene',false);saved.name='My horizon';saved.description='Check height 15 m';
+  saved.experiment.scene={camera:{Height:15,Pan:0,Nick:0},objects:{NObjects:[1,0],ObjType:[3,0]},
+    surface:{showModel:1,rEarth:6371000},atmosphere:'standard'};
+  ui.render(doc,host,[saved],40,{select(){},restore(){},edit(){},pin(){},remove(){},multi(){}},{});
+  const image=host.children[1].children[1].children[0].children[0];
+  image.listeners.keydown({key:' ',preventDefault(){}});
+  const overlay=doc.body.children[0],inner=overlay.children[0];
+  assert.equal(inner.children[1].textContent,'My horizon');
+  assert.match(inner.children[2].textContent,/Scene/);
+  assert.equal(inner.children[3].textContent,'Check height 15 m');
+  ui.hideInspector(host);
+});

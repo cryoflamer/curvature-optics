@@ -213,12 +213,17 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
     'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
-    'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount'];
+    'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount',
+    'ModernHistoryMetadataDialog','ModernHistoryMetadataForm','ModernHistoryMetadataName',
+    'ModernHistoryMetadataDescription','ModernHistoryMetadataCancel','ModernHistoryMetadataSave',
+    'ModernHistoryMetadataError'];
   const nodes=new Map(ids.map(id=>[id,{id,value:'',min:'',max:'',checked:true,
     hidden:false,textContent:'',children:[],listeners:{},classList:{toggle(){},remove(){}},
     addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(key,value){this[key]=value;},
     appendChild(child){this.children.push(child);},closest(){return {set hidden(value){}};}}]));
   nodes.get('ModernPreset').value='pontchartrain';
+  Object.assign(nodes.get('ModernHistoryMetadataDialog'),{
+    showModal(){this.open=true;},close(){this.open=false;if(this.listeners.close)this.listeners.close();}});
   const href='https://example.org/CurvatureModern.html';
   const location={href,search:'',assign(){}};
   const historyApi={state:null,replaceState(state,_title,url){this.state=state;location.href=url;location.search=new URL(url).search;}};
@@ -284,6 +289,34 @@ test('Live Modern integration saves and restores a full experiment and protects 
   const id=list[0].id;
   assert.equal(nodes.get('ModernSnapshotSave').hidden,true,'existing saved experiment hides Save');
   assert.match(nodes.get('ModernSnapshotSaveStatus').textContent,/Already in History/);
+  // Rename through the real card action and form, not just through the store.
+  const renameSections=nodes.get('ModernHistoryGallery').children.filter(
+    node=>node.className==='modern-history-section');
+  const renameCard=renameSections.at(-2).children[1].children[0];
+  const editButton=renameCard.children[3].children[2].children[1];
+  editButton.listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(nodes.get('ModernHistoryMetadataDialog').open,true);
+  nodes.get('ModernHistoryMetadataName').value='Inversion study';
+  nodes.get('ModernHistoryMetadataDescription').value='Observed at 15 m';
+  nodes.get('ModernHistoryMetadataForm').listeners.submit({preventDefault(){}});
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(nodes.get('ModernHistoryMetadataDialog').open,false);
+  assert.equal((await store.get(id)).name,'Inversion study');
+  assert.equal((await store.get(id)).description,'Observed at 15 m');
+  assert.ok(nodes.get('ModernHistorySelect').children.some(node=>/Inversion study/.test(node.textContent)),
+    'named snapshot appears in the selection menu');
+  assert.equal(nodes.get('ModernSnapshotSave').hidden,true,
+    'renaming never changes the active experiment signature');
+  // Cancelling a subsequent edit must not persist the partial form data.
+  const currentSections=nodes.get('ModernHistoryGallery').children.filter(
+    node=>node.className==='modern-history-section');
+  currentSections.at(-2).children[1].children[0].children[3].children[2].children[1]
+    .listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,12));
+  nodes.get('ModernHistoryMetadataName').value='Unsaved draft';
+  nodes.get('ModernHistoryMetadataCancel').listeners.click();
+  assert.equal((await store.get(id)).name,'Inversion study');
   app.getModel().Height=66;
   nodes.get('ModernRender').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,25));
@@ -382,4 +415,52 @@ test('Manual Save reuses matching older snapshot, upgrades automatic entry and d
   const auto=await h.record(scene,'auto');
   assert.equal(auto.created,true);
   assert.equal((await h.list()).length,3);
+});
+
+test('Named snapshots persist independently of experiment state and survive deduplication',async()=>{
+  const db=indexedDB(),store=history.create({indexedDB:db,now:()=>1710000000000});
+  const original=await store.record(experiment('compare'),'manual');
+  const before=await store.get(original.entry.id);
+  assert.equal(before.name,'');assert.equal(before.description,'');
+  const updated=await store.updateMetadata(before.id,'  Refracted horizon  ',
+    '  Compare the same camera with different atmosphere.\r\nKeep for animation.  ');
+  assert.equal(updated.name,'Refracted horizon');
+  assert.equal(updated.description,'Compare the same camera with different atmosphere.\nKeep for animation.');
+  assert.equal(updated.id,before.id);
+  for(const key of ['experiment','signature','physicalSignature','features','thumbnail',
+    'pinned','createdAt','version'])assert.deepEqual(updated[key],before[key]);
+  const reopened=history.create({indexedDB:db});
+  const persisted=await reopened.get(before.id);
+  assert.equal(persisted.name,'Refracted horizon');
+  assert.match(persisted.description,/Keep for animation/);
+  const reused=await reopened.record(experiment('compare'),'manual');
+  assert.equal(reused.created,false);
+  assert.equal(reused.entry.name,'Refracted horizon');
+  assert.equal((await reopened.list()).length,1);
+  assert.equal(await reopened.pin(before.id,false),true);
+  assert.equal((await reopened.get(before.id)).name,'Refracted horizon');
+  const cleared=await reopened.updateMetadata(before.id,'','');
+  assert.equal(cleared.name,'');assert.equal(cleared.description,'');
+});
+
+test('Metadata edits validate user input before IndexedDB writes and do not alter old records',async()=>{
+  const db=indexedDB(),store=history.create({indexedDB:db});
+  const created=await store.record(experiment(),'auto'),id=created.entry.id;
+  // Existing schema-v1 records had no metadata fields.
+  const legacy=structuredClone(db.records.get(id));delete legacy.name;delete legacy.description;
+  db.records.set(id,legacy);
+  assert.equal((await store.get(id)).name,undefined);
+  assert.ok(await store.updateMetadata(id,'  Lake study  ','    '));
+  const saved=await store.get(id);
+  assert.equal(saved.name,'Lake study');assert.equal(saved.description,'');
+  assert.equal(saved.pinned,false);assert.equal(saved.source,'manual',
+    'annotating an automatic entry protects it from auto-pruning without pinning');
+  assert.equal(await store.clearAuto(),0);
+  assert.throws(()=>store.updateMetadata(id,'x'.repeat(history.MAX_NAME+1),''),/name exceeds/);
+  assert.throws(()=>store.updateMetadata(id,'ok','x'.repeat(history.MAX_DESCRIPTION+1)),/description exceeds/);
+  assert.throws(()=>store.updateMetadata(id,null,''),/must be text/);
+  assert.deepEqual(await store.get(id),saved,'rejected changes leave stored metadata untouched');
+  assert.equal(await store.updateMetadata(99999,'Missing',''),null);
+  await assert.rejects(store.updateMetadata(-1,'Bad',''),/Invalid snapshot id/);
+  assert.equal((await store.get(id)).name,'Lake study');
 });

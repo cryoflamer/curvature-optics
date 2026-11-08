@@ -17,7 +17,16 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(state,fp,thumbnailApi){
   'use strict';
   var DATABASE='curvature-modern-experiment-history',VERSION=1,STORE='snapshots';
-  var MAX_AUTO=200;
+  var MAX_AUTO=200,MAX_NAME=120,MAX_DESCRIPTION=1000;
+  function validatedMetadata(name,description){
+    if(typeof name!=='string'||typeof description!=='string')
+      throw TypeError('Snapshot name and description must be text');
+    var cleanName=name.trim(),cleanDescription=description.replace(/\r\n?/g,'\n').trim();
+    if(cleanName.length>MAX_NAME)throw RangeError('Snapshot name exceeds '+MAX_NAME+' characters');
+    if(cleanDescription.length>MAX_DESCRIPTION)
+      throw RangeError('Snapshot description exceeds '+MAX_DESCRIPTION+' characters');
+    return {name:cleanName,description:cleanDescription};
+  }
   function create(options){
     options=options||{};
     var factory=options.indexedDB,now=options.now||Date.now;
@@ -104,7 +113,7 @@
             set({created:false,entry:match});return;
           }
           var entry={version:VERSION,createdAt:now(),source:source,pinned:source!=='auto',
-            experiment:snapshot,signature:signature,physicalSignature:physical,
+            name:'',description:'',experiment:snapshot,signature:signature,physicalSignature:physical,
             features:metadata,thumbnail:image};
           var add=store.add(entry);
           add.onsuccess=function(){
@@ -115,6 +124,26 @@
           var auto=existing.filter(function(item){return item.source==='auto'&&!item.pinned;});
           var overflow=auto.length+(source==='auto'?1:0)-maxAuto;
           for(var i=auto.length-1;i>=0&&overflow>0;i--,overflow--)store.delete(auto[i].id);
+        };
+      });});
+    }
+    // Edit user annotations only. Keep the validated experiment and its stable
+    // signature, thumbnail, pin, timestamps and history identity untouched.
+    // Named automatic entries are promoted to manual retention (not pinned).
+    function updateMetadata(id,name,description){
+      var metadata=validatedMetadata(name,description);
+      if(!Number.isSafeInteger(Number(id))||Number(id)<1)
+        return Promise.reject(RangeError('Invalid snapshot id'));
+      return serialize(function(){return transact('readwrite',function(store,set){
+        var request=store.get(Number(id));
+        request.onsuccess=function(){
+          var entry=request.result;
+          if(!entry){set(null);return;}
+          entry.name=metadata.name;entry.description=metadata.description;
+          // An annotated automatic entry becomes a deliberate long-lived
+          // record. Pin remains an independent gallery/Storyboard choice.
+          if((entry.name||entry.description)&&entry.source==='auto')entry.source='manual';
+          store.put(entry);set(entry);
         };
       });});
     }
@@ -148,8 +177,8 @@
         set(removed);
       };
     });});}
-    return Object.freeze({open:open,list:list,get:get,record:record,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
+    return Object.freeze({open:open,list:list,get:get,record:record,updateMetadata:updateMetadata,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
   }
   return Object.freeze({DATABASE:DATABASE,VERSION:VERSION,STORE:STORE,
-    MAX_AUTO:MAX_AUTO,create:create});
+    MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,create:create});
 }));

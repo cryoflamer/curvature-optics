@@ -320,3 +320,5 @@ No new History schema is introduced.
 Smart semantic A/B filters and Storyboard remain future stages. See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment
 URLs/JSON and the named Experiment Library are unchanged.
+
+History snapshots now support optional saved names/descriptions via the ✎ action, independent of experiment JSON and Pin. See `docs/modern-experiment-history.md` for details and current JSON portability limits.
