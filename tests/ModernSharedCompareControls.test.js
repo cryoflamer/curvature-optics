@@ -408,3 +408,38 @@ test('135.5: Display toggles remain visible and shared while Scene and Compare s
   assert.equal(n.get('ModernCompareHorizon').checked,false);
   assert.equal(app.getMode(),'scene');
 });
+
+test('Compare selector gives a current, read-only physics summary without retracing on A/B switch',()=>{
+  const h=boot(),n=h.nodes;
+  n.get('ModernCompareTab').dispatch('click');
+  const summary=n.get('ModernCompareSelectedSummary');
+  assert.match(summary.textContent,/Model A · Globe · R = 6,371 km · Standard/);
+  const before=h.getRenderCount();
+  n.get('ModernModelTabB').dispatch('click');
+  assert.match(summary.textContent,/Model B · Flat · Standard/);
+  assert.equal(h.getRenderCount(),before,'selecting a model never retraces optics');
+  n.get('ModernPairPreset').value='globe-flat-vacuum';
+  n.get('ModernPairPreset').dispatch('change');
+  assert.match(summary.textContent,/Model B · Flat · Vacuum/);
+  n.get('ModernModelTabA').dispatch('click');
+  assert.match(summary.textContent,/Model A · Globe · R = 6,371 km · Vacuum/);
+  assert.equal(h.app.getCompareConfig().B.surface,'flat');
+});
+
+test('Scene/Compare ergonomic notes are compact accessible help, with all action IDs intact',()=>{
+  for(const id of ['ModernCompareSelectedSummary','ModernCompareCameraAimNote',
+    'ModernSceneEditNote','ModernCompareEditNote','ModernCameraNavigationSummary',
+    'ModernRender','ModernRecalculateCompare','ModernPairPreset'])
+    assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);
+  assert.match(html,/aria-label="Help: Compare model editing"/);
+  assert.match(html,/aria-label="Help: Compare camera aim"/);
+  assert.match(html,/aria-label="Help: Compare recalculation"/);
+  assert.match(html,/aria-label="Help: saved camera views"/);
+  assert.doesNotMatch(html,/<p class="modern-note">Models A\/B have independent surfaces/);
+  assert.doesNotMatch(html,/Switching tabs never recalculates optics\.<\/p>/);
+  const css=read('src/ui/modern/ModernApp.css');
+  assert.match(css,/@media\(max-width:550px\)[\s\S]*\.modern-sidebar \.modern-help:hover:after/);
+  assert.match(css,/position:fixed;top:auto;bottom:12px;left:12px;right:12px/);
+  assert.match(css,/@media\(max-width:380px\)/);
+  assert.match(read('src/ui/modern/ModernApp.js'),/function updateNavigationPanelSummary\(\)/);
+});

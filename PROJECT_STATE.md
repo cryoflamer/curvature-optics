@@ -1,3 +1,12 @@
+> **Current Modern UI consistency (2026-11-08):** Scene/Compare now use
+> compact contextual help instead of repeated paragraphs around the Compare
+> model editor and redraw controls. The selected Compare model's actual
+> surface/radius and atmosphere are shown in a live read-only summary; the
+> Camera Navigation header reports current speeds. Tooltips stay within the
+> mobile viewport, and tiny screens stack cramped editing fields. Existing
+> input IDs, experiment schema, application/workspace preferences, physics,
+> ray tracing and rendering paths are not modified. See README.
+
 > **Current Objects UI cleanup (2026-11-08):** The Modern Scene/Compare
 > Objects editor retains both shared physical groups and all original object
 > fields/handlers. Frequently edited geometry stays visible, with offset/size

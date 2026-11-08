@@ -632,6 +632,7 @@
         ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
         ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
       ].forEach(function(entry){var node=geometryUi(entry[0]);if(node)node.value=String(entry[1]);});
+      updateNavigationPanelSummary();
       stopAutoCameraPreview();
       if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
       updateGeometryBackendStatus(null);updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
@@ -873,6 +874,18 @@
     var summary=newUiEl('ModernSurface'+scope+'Summary');
     if(summary)summary.textContent=surface==='flat'?'Flat · κ = 0':'Globe · R = '+radiusLabel;
     var kind=compare?spec.atmosphere:state.atmosphere;
+    if(compare){
+      var physicsSummary=newUiEl('ModernCompareSelectedSummary');
+      if(physicsSummary){
+        var atmosphereNames={'standard':'Standard','vacuum':'Vacuum',
+          'temperature-lapse':'Temperature gradient','profile-transition':'Profile transition',
+          'inverse-temperature':'Inverse temperature','exponential-occlusion':'Engineered exponential',
+          'inverse-spherical':'Legacy inverse'};
+        physicsSummary.textContent='Model '+state.compareSelected+' · '+
+          (surface==='flat'?'Flat':'Globe · R = '+radiusLabel)+' · '+
+          (atmosphereNames[kind]||kind);
+      }
+    }
     var caution=newUiEl('ModernAtmosphere'+scope+'Caution');
     var cautionText={
       'profile-transition':'Mathematical n(h) blend — not an atmospheric temperature law.',
@@ -2082,7 +2095,12 @@
     });});
     renderCameraPositions('');
   }
+  function updateNavigationPanelSummary(){
+    var summary=newUiEl('ModernCameraNavigationSummary');
+    if(summary)summary.textContent=navigationPrefs.speed+' m/s · '+navigationPrefs.turnRate+'°/s';
+  }
   function saveNavigationPrefs(){
+    updateNavigationPanelSummary();
     if(applicationPreferences){saveApplicationPreferences();return;}
     // Compatibility for embedded/older Modern hosts that omit preferences module.
     try{if(root.localStorage)root.localStorage.setItem(NAVIGATION_STORAGE_KEY,JSON.stringify(navigationPrefs));}
@@ -2147,6 +2165,7 @@
           if(saved)navigationPrefs=navigation.settings(JSON.parse(saved));}
       }catch(error){cameraPositionStatus('Cannot read navigation preferences: '+error.message,true);}
     }
+    updateNavigationPanelSummary();
     inputs.forEach(function(pair){
       var node=newUiEl(pair[0]);if(!node)return;
       node.value=String(navigationPrefs[pair[1]]);

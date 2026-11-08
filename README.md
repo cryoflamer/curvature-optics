@@ -224,3 +224,27 @@ the sidebar. Compare's A/B model-specific surface and atmosphere still use the
 existing independent physics editor; visibility remains shared where it was
 shared before. No optical, atmospheric, painter or experiment-schema changes
 are introduced by this layout pass.
+
+### Modern Scene / Compare consistency
+
+**Compare → Physics pair** now uses one short sharing hint with an accessible
+`?` explanation instead of an always-visible paragraph. Beneath the A/B
+selector, a live read-only summary shows the **selected** model, Globe/Flat
+surface (and Globe radius), and optical atmosphere. The summary updates when
+switching A/B, changing physics presets, or editing a model; selecting A/B
+alone still does not retrace optical rays. Physics and experiment data are
+unchanged.
+
+The Camera **Navigation** fold summarizes the current movement and rotation
+speeds, including after a stored preference is restored or reset. Optional
+saved-view guidance, Compare eye-level guidance, and Scene/Compare recalculation
+notes use short labels with keyboard-focusable `?` help. Status messages,
+physical-model cautions, and actual control labels remain visible. The
+main Scene/Compare controls keep their original IDs and handlers.
+
+On narrow screens, focused or hovered sidebar help is fixed within the
+viewport to avoid off-screen tooltip overflow. Below 380 px, two-column
+camera/object fields stack into one column. This is a presentation-only pass;
+existing preferences, collapsible-section choices, saved experiments,
+renderers, and physical computation are unchanged. Visual behavior in the
+user's Opera browser should be checked after application.

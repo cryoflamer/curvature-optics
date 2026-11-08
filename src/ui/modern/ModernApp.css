@@ -361,3 +361,34 @@ button{cursor:pointer}
 .modern-object-variations.modern-workspace-fold>summary{padding:9px 0;color:#355b82;font-size:11px}
 .modern-object-variations .modern-object-grid{padding:5px 0 0}
 .modern-objects .modern-fold-summary{font-size:10px;max-width:60%;line-height:1.35}
+
+/* 116: one compact Scene/Compare presentation. Technical explanations remain
+   keyboard-focusable help, while transient errors stay in visible status nodes. */
+.modern-pair-intro{margin:4px 0 8px}
+.modern-pair-intro .modern-display-hint{font-size:11px}
+.modern-model-physics-summary{margin:0 0 8px;padding:7px 9px;border-radius:6px;
+  background:#f4f8fd;color:#385c7d;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.modern-context-note{margin-top:8px;margin-bottom:3px}
+.modern-context-note[hidden]{display:none!important}
+.modern-context-note .modern-display-hint{min-width:0}
+.modern-display-inline-actions .modern-help:focus:after,
+.modern-display-label .modern-help:focus:after,
+.modern-display-check .modern-help:focus:after{max-height:65vh;overflow-wrap:break-word}
+@media(max-width:550px){
+  /* Fixed mobile help avoids clipped tips and horizontal scrolling when a ?
+     lives near either edge of the sidebar. Click/focus works without hover. */
+  .modern-sidebar .modern-help:hover:after,
+  .modern-sidebar .modern-help:focus:after{
+    position:fixed;top:auto;bottom:12px;left:12px;right:12px;
+    width:auto;max-width:none;max-height:55vh;overflow-y:auto;
+    z-index:200;box-shadow:0 8px 26px #0d244568
+  }
+  .modern-sidebar .modern-two-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .modern-sidebar .modern-settings-tab{min-width:0;white-space:normal}
+  .modern-sidebar-heading{gap:12px}
+  .modern-sidebar-heading small{max-width:55%;text-align:right}
+}
+@media(max-width:380px){
+  .modern-sidebar .modern-two-fields{grid-template-columns:minmax(0,1fr)}
+  .modern-sidebar .modern-object-grid{grid-template-columns:minmax(0,1fr)}
+}
