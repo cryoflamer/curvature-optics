@@ -879,3 +879,44 @@ test('auto-generated experiment URL restores user workspace, unlike an externall
   assert.equal(h.win.history.state.__curvatureModernAutoExperimentUrlV1,true,
     'subsequent edits keep the auto-generated history marker');
 });
+
+test('Surface and Atmosphere folds keep physics warnings visible and remember Scene/Compare layout',()=>{
+  const h=boot(),n=h.nodes;
+  assert.match(n.get('ModernSurfaceSceneSummary').textContent,/Globe.*6,371 km/);
+  assert.equal(n.get('ModernSceneAtmosphereProfileSection').hidden,true,
+    'Standard has no additional profile controls to show');
+  assert.equal(n.get('ModernAtmosphereSceneCaution').hidden,true);
+  n.get('ModernAtmosphere').value='inverse-temperature';
+  n.get('ModernAtmosphere').dispatch('change');
+  assert.equal(n.get('ModernSceneAtmosphereProfileSection').hidden,false);
+  assert.equal(n.get('ModernAtmosphereSceneCaution').hidden,false);
+  assert.match(n.get('ModernAtmosphereSceneCaution').textContent,/zero Kelvin/);
+  const sceneExplanation=n.get('ModernSceneAtmosphereExplanationSection');
+  assert.equal(sceneExplanation.open,false);
+  sceneExplanation.open=true;sceneExplanation.dispatch('toggle');
+  assert.equal(JSON.parse(h.storage.get(preferences.STORAGE_KEY)).workspace.sections['scene.atmosphere.explanation'],true);
+  n.get('ModernCompareTab').dispatch('click');
+  assert.equal(n.get('ModernCompareAtmosphereExplanationSection').open,false,
+    'Compare remains folded when Scene equations are open');
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernModelAtmosphere').value='exponential-occlusion';
+  n.get('ModernModelAtmosphere').dispatch('change');
+  assert.equal(n.get('ModernCompareAtmosphereProfileSection').hidden,false);
+  assert.match(n.get('ModernAtmosphereCompareCaution').textContent,/hypothetical/);
+  n.get('ModernModelFlat').dispatch('click');
+  assert.match(n.get('ModernSurfaceCompareSummary').textContent,/Flat/);
+  const compareVisibility=n.get('ModernCompareAtmosphereVisibilitySection');
+  compareVisibility.open=true;compareVisibility.dispatch('toggle');
+  const saved=h.storage.get(preferences.STORAGE_KEY);
+  const layout=JSON.parse(saved).workspace.sections;
+  assert.equal(layout['compare.atmosphere.visibility'],true);
+  assert.equal(layout['scene.atmosphere.explanation'],true);
+  const reopened=boot(undefined,{[preferences.STORAGE_KEY]:saved});
+  reopened.nodes.get('ModernSceneTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernSceneAtmosphereExplanationSection').open,true);
+  reopened.nodes.get('ModernCompareTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernCompareAtmosphereVisibilitySection').open,true);
+  reopened.nodes.get('ModernSceneTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernSceneAtmosphereExplanationSection').open,true,
+    'Scene fold is restored when switching back from Compare');
+});

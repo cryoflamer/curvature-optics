@@ -186,3 +186,23 @@ and open sections, without clearing optical quality, navigation speeds or
 experiments. The existing **Reset application preferences** clears all browser
 preferences, including workspace layout. Scene and Compare share camera/objects,
 but not the UI state of their collapsible controls.
+
+### Modern Surface and Atmosphere layout
+
+**Scene / Compare → Surface** now groups curvature and radius controls under a
+persistent *Curvature & radius* fold. Its header reports the selected model's
+actual globe radius or exact flat geometry even when folded. **Atmosphere**
+keeps the optical-model selector visible; profile inputs are shown only for
+models that need them. Equations and extended descriptions, atmospheric
+visibility and turbulence have separate collapsible groups. Their open/closed
+states are remembered independently in Scene and Compare, using the existing
+browser-local workspace preferences, not experiment JSON.
+
+The current physical-model caveat stays visible above the folds for engineered
+profiles, mathematical blends and inverse temperatures (including their
+zero-Kelvin limit). Haze and turbulence show their active state in each folded
+header. Technical explanations are available from `?` hints without occupying
+the sidebar. Compare's A/B model-specific surface and atmosphere still use the
+existing independent physics editor; visibility remains shared where it was
+shared before. No optical, atmospheric, painter or experiment-schema changes
+are introduced by this layout pass.

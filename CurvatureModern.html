@@ -237,6 +237,9 @@
         <p id="ModernCompareCameraAimNote" class="modern-note" hidden>Compare uses a fixed eye-level aim (0°) for both models; other Scene aiming modes are not applied.</p>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface</h2>
+        <details class="modern-workspace-fold" id="ModernSceneSurfaceGeometrySection" data-workspace-section="surface.geometry" open>
+          <summary>Curvature &amp; radius <span class="modern-fold-summary" id="ModernSurfaceSceneSummary"></span></summary>
+          <div class="modern-workspace-fold-content">
         <div id="ModernSceneCurvatureWrap"><label for="ModernCurvature">Surface curvature</label>
         <input id="ModernCurvature" type="range" min="0" max="1000" step="1" value="164">
         <output id="ModernCurvatureLabel" for="ModernCurvature">R = 6371 km</output></div>
@@ -245,9 +248,15 @@
           <div class="modern-field"><label class="modern-check" for="ModernFlat"><input id="ModernFlat" type="checkbox"> Exact flat (κ = 0)</label></div>
         </div>
         <div id="ModernSceneEarthWrap"><button type="button" class="modern-ghost-button" id="ModernEarth">Reset to Earth radius</button></div>
+
+          </div>
+        </details>
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface · selected model</h2>
+        <details class="modern-workspace-fold" id="ModernCompareSurfaceGeometrySection" data-workspace-section="surface.geometry" open>
+          <summary>Curvature &amp; radius <span class="modern-fold-summary" id="ModernSurfaceCompareSummary"></span></summary>
+          <div class="modern-workspace-fold-content">
         <div class="modern-field"><label for="ModernModelCurvature">Surface curvature</label>
           <input id="ModernModelCurvature" type="range" min="0" max="1000" step="1" value="164">
           <output id="ModernModelCurvatureLabel" for="ModernModelCurvature">R = 6371 km</output>
@@ -262,43 +271,63 @@
             <button type="button" class="modern-ghost-button" id="ModernModelEarth">Earth R</button>
           </div>
         </div>
+
+          </div>
+        </details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere</h2>
         <div class="modern-field"><label for="ModernAtmosphere">Optical model</label><select id="ModernAtmosphere">
           <option value="standard" selected>Standard atmosphere</option><option value="temperature-lapse">Temperature gradient · hydrostatic</option><option value="profile-transition">Profile transition · experimental</option><option value="inverse-temperature">Inverse atmosphere · required temperature</option><option value="vacuum">Vacuum · straight rays</option>
           <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option><option value="exponential-occlusion">Exponential refractive profile · engineered</option>
         </select></div>
+        <p class="modern-physics-caution" id="ModernAtmosphereSceneCaution" role="status" aria-live="polite" hidden></p>
+        <details class="modern-workspace-fold" id="ModernSceneAtmosphereProfileSection" data-workspace-section="atmosphere.profile" open>
+          <summary>Refraction &amp; profile parameters</summary>
+          <div class="modern-workspace-fold-content">
         <div class="modern-field" id="ModernOcclusionWrap" hidden><label for="ModernOcclusion">Refraction scale radius (km)</label><input id="ModernOcclusion" type="number" min="0.001" max="10000000000000" step="any" value="6371"><p class="modern-note modern-radius-draft" id="ModernOcclusionDraft" hidden>Editing radius… press Enter or leave the field to recalculate.</p></div>
         <div class="modern-temperature-fields" id="ModernTransitionSceneFields" hidden>
           <div class="modern-field"><label for="ModernTransitionSceneSource">Start profile</label><select id="ModernTransitionSceneSource"><option value="standard">Standard · exact existing baseline</option><option value="temperature-lapse">Temperature gradient · dry hydrostatic</option></select></div>
           <div class="modern-field"><label for="ModernTransitionSceneWeight">Engineered-profile blend: <output id="ModernTransitionSceneWeightValue">0%</output></label><input type="range" id="ModernTransitionSceneWeight" min="0" max="100" step="1" value="0"></div>
-          <p class="modern-note">Mathematical interpolation of n(h), NOT an atmospheric temperature law. 0% = selected start profile, 100% = exact engineered exponential n₀ exp(h/R). Temperature affects rays only when the hydrostatic start is selected and blend is below 100%.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">Model assumptions</span> <button type="button" class="modern-help" aria-label="Help: Model assumptions" data-tip="Mathematical interpolation of n(h), NOT an atmospheric temperature law. 0% = selected start profile, 100% = exact engineered exponential n₀ exp(h/R). Temperature affects rays only when the hydrostatic start is selected and blend is below 100%.">?</button></div>
         </div>
         <div class="modern-temperature-fields" id="ModernInverseSceneFields" hidden>
           <div class="modern-field"><label for="ModernInverseSceneSource">Starting atmosphere</label><select id="ModernInverseSceneSource"><option value="temperature-lapse">Hydrostatic temperature gradient</option><option value="standard">Standard exponential (H = 7350 m)</option></select></div>
           <div class="modern-field"><label for="ModernInverseSceneWeight">Inverse target strength: <output id="ModernInverseSceneWeightValue">0%</output></label><input type="range" id="ModernInverseSceneWeight" min="0" max="100" step="0.01" value="0"></div>
           <div class="modern-field"><label for="ModernInverseSceneGradient">Required surface gradient (K/km)</label><input type="number" id="ModernInverseSceneGradient" step="any" value="-6.5"></div>
           <div class="modern-inverse-status" id="ModernInverseSceneStatus" aria-live="polite"></div>
-          <p class="modern-note">Dragging previews the required temperature and color column without tracing rays. Release the slider to update optics. A single model edit leaves the other Compare image unchanged.</p>
-          <p class="modern-note">Dry hydrostatic inverse: the displayed temperature and gradient are calculated from the target n(h). At 100% the optical rays match engineered exp(h/R), after scaling n(0) to match air density. Beyond the zero-K altitude the refractive field continues only as a mathematical target, NOT a physical atmosphere.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="Dragging previews the required temperature and color column without tracing rays. Release the slider to update optics. A single model edit leaves the other Compare image unchanged.">?</button></div>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">Model assumptions</span> <button type="button" class="modern-help" aria-label="Help: Model assumptions" data-tip="Dry hydrostatic inverse: the displayed temperature and gradient are calculated from the target n(h). At 100% the optical rays match engineered exp(h/R), after scaling n(0) to match air density. Beyond the zero-K altitude the refractive field continues only as a mathematical target, NOT a physical atmosphere.">?</button></div>
         </div>
-        <div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div>
+
         <div class="modern-temperature-fields" id="ModernTemperatureSceneFields" hidden>
           <div class="modern-field"><label for="ModernTemperatureSceneC">Surface temperature (°C)</label><input type="number" id="ModernTemperatureSceneC" min="-30" max="40" step="0.5" value="15"></div>
           <div class="modern-field"><label for="ModernTemperatureSceneGradient">Surface temperature gradient (K/km)</label><input type="number" id="ModernTemperatureSceneGradient" min="-20" max="20" step="0.5" value="-6.5"></div>
           <div class="modern-field"><label for="ModernTemperatureScenePressure">Surface pressure (hPa)</label><input type="number" id="ModernTemperatureScenePressure" min="800" max="1100" step="1" value="1013.25"></div>
-          <p class="modern-note">Dry hydrostatic model. The specified gradient is local at the surface and decays above a 1 km boundary layer; no humidity or multi-layer inversions.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">Model assumptions</span> <button type="button" class="modern-help" aria-label="Help: Model assumptions" data-tip="Dry hydrostatic model. The specified gradient is local at the surface and decays above a 1 km boundary layer; no humidity or multi-layer inversions.">?</button></div>
         </div>
-        <div class="modern-visibility" aria-label="Atmospheric visibility">
+
+          </div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernSceneAtmosphereExplanationSection" data-workspace-section="atmosphere.explanation">
+          <summary>Model equations &amp; limitations</summary>
+          <div class="modern-workspace-fold-content"><div class="modern-atmosphere-info" id="ModernAtmosphereInfo" aria-live="polite"></div></div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernSceneAtmosphereVisibilitySection" data-workspace-section="atmosphere.visibility">
+          <summary>Visibility &amp; haze <span class="modern-fold-summary" id="ModernAtmosphereSceneVisibilitySummary">Off</span></summary>
+          <div class="modern-workspace-fold-content"><div class="modern-visibility" aria-label="Atmospheric visibility">
           <label class="modern-check" for="ModernVisibilityEnabled"><input id="ModernVisibilityEnabled" type="checkbox"> Atmospheric extinction / haze</label>
           <div class="modern-field" id="ModernVisibilityOptions" hidden><label for="ModernVisibilityRange">Visibility range (km · 5% contrast)</label>
             <input id="ModernVisibilityRange" type="number" min="1" max="500" step="1" value="60"></div>
-          <p class="modern-note">Optional distance-based airlight approximation. Independent of refraction; no change to ray paths or occlusion. White background, uniform extinction.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="Optional distance-based airlight approximation. Independent of refraction; no change to ray paths or occlusion. White background, uniform extinction.">?</button></div>
         </div>
-        <div class="modern-shimmer" id="ModernShimmerScenePanel" aria-label="Scene atmospheric turbulence">
+        </div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernSceneAtmosphereShimmerSection" data-workspace-section="atmosphere.shimmer">
+          <summary>Atmospheric turbulence <span class="modern-fold-summary" id="ModernAtmosphereSceneShimmerSummary">Off</span></summary>
+          <div class="modern-workspace-fold-content"><div class="modern-shimmer" id="ModernShimmerScenePanel" aria-label="Scene atmospheric turbulence">
           <div class="modern-shimmer-header"><strong>Atmospheric Turbulence</strong>
             <label class="modern-shimmer-switch" for="ModernShimmerSceneEnabled"><input type="checkbox" id="ModernShimmerSceneEnabled"> On</label></div>
-          <p class="modern-note">Animated heat shimmer · visual approximation, not Cₙ²-calibrated.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="Animated heat shimmer · visual approximation, not Cₙ²-calibrated.">?</button></div>
           <div class="modern-shimmer-options" id="ModernShimmerSceneOptions" hidden>
             <div class="modern-shimmer-field"><label for="ModernShimmerSceneIntensity">Intensity <output id="ModernShimmerSceneIntensityValue" for="ModernShimmerSceneIntensity">3 px</output></label><input type="range" id="ModernShimmerSceneIntensity" min="0" max="20" step="0.5" value="3"></div>
             <div class="modern-shimmer-field"><label for="ModernShimmerSceneScale">Eddy scale <output id="ModernShimmerSceneScaleValue" for="ModernShimmerSceneScale">54 px</output></label><input type="range" id="ModernShimmerSceneScale" min="8" max="200" step="1" value="54"></div>
@@ -306,6 +335,8 @@
             <button type="button" class="modern-ghost-button modern-shimmer-pause" id="ModernShimmerScenePause" aria-pressed="false">Pause animation</button>
           </div>
         </div>
+      </div>
+        </details>
       </section>
       <section class="modern-section modern-settings-panel modern-compare-panel" id="ModernComparePanelAtmosphere" role="tabpanel" aria-labelledby="ModernSettingsAtmosphere" hidden>
         <h2>Atmosphere · selected model</h2>
@@ -315,6 +346,10 @@
             <option value="temperature-lapse">Temperature gradient · hydrostatic</option><option value="profile-transition">Profile transition · experimental</option><option value="inverse-temperature">Inverse atmosphere · required temperature</option>
             <option value="inverse-spherical" hidden disabled>Inverse spherical · legacy</option>
             <option value="exponential-occlusion">Exponential refractive profile · engineered</option></select></div>
+        <p class="modern-physics-caution" id="ModernAtmosphereCompareCaution" role="status" aria-live="polite" hidden></p>
+        <details class="modern-workspace-fold" id="ModernCompareAtmosphereProfileSection" data-workspace-section="atmosphere.profile" open>
+          <summary>Refraction &amp; profile parameters</summary>
+          <div class="modern-workspace-fold-content">
         <div class="modern-field" id="ModernModelOcclusionWrap" hidden>
           <label for="ModernModelOcclusion">Refraction scale radius (km)</label>
           <input id="ModernModelOcclusion" type="number" min="0.001" max="10000000000000" step="any">
@@ -322,33 +357,46 @@
         <div class="modern-temperature-fields" id="ModernTransitionCompareFields" hidden>
           <div class="modern-field"><label for="ModernTransitionCompareSource">Start profile (selected A/B)</label><select id="ModernTransitionCompareSource"><option value="standard">Standard · exact existing baseline</option><option value="temperature-lapse">Temperature gradient · dry hydrostatic</option></select></div>
           <div class="modern-field"><label for="ModernTransitionCompareWeight">Engineered-profile blend: <output id="ModernTransitionCompareWeightValue">0%</output></label><input type="range" id="ModernTransitionCompareWeight" min="0" max="100" step="1" value="0"></div>
-          <p class="modern-note">Mathematical n(h) blend, not a physical temperature transition. Settings are independent for A/B; 100% restores the existing engineered exponential exactly.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">Model assumptions</span> <button type="button" class="modern-help" aria-label="Help: Model assumptions" data-tip="Mathematical n(h) blend, not a physical temperature transition. Settings are independent for A/B; 100% restores the existing engineered exponential exactly.">?</button></div>
         </div>
         <div class="modern-temperature-fields" id="ModernInverseCompareFields" hidden>
           <div class="modern-field"><label for="ModernInverseCompareSource">Starting atmosphere</label><select id="ModernInverseCompareSource"><option value="temperature-lapse">Hydrostatic temperature gradient</option><option value="standard">Standard exponential (H = 7350 m)</option></select></div>
           <div class="modern-field"><label for="ModernInverseCompareWeight">Inverse target strength: <output id="ModernInverseCompareWeightValue">0%</output></label><input type="range" id="ModernInverseCompareWeight" min="0" max="100" step="0.01" value="0"></div>
           <div class="modern-field"><label for="ModernInverseCompareGradient">Required surface gradient (K/km)</label><input type="number" id="ModernInverseCompareGradient" step="any" value="-6.5"></div>
           <div class="modern-inverse-status" id="ModernInverseCompareStatus" aria-live="polite"></div>
-          <p class="modern-note">Dragging previews the required temperature and color column without tracing rays. Release the slider to update optics. A single model edit leaves the other Compare image unchanged.</p>
-          <p class="modern-note">Dry hydrostatic inverse: the displayed temperature and gradient are calculated from the target n(h). At 100% the optical rays match engineered exp(h/R), after scaling n(0) to match air density. Beyond the zero-K altitude the refractive field continues only as a mathematical target, NOT a physical atmosphere.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="Dragging previews the required temperature and color column without tracing rays. Release the slider to update optics. A single model edit leaves the other Compare image unchanged.">?</button></div>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">Model assumptions</span> <button type="button" class="modern-help" aria-label="Help: Model assumptions" data-tip="Dry hydrostatic inverse: the displayed temperature and gradient are calculated from the target n(h). At 100% the optical rays match engineered exp(h/R), after scaling n(0) to match air density. Beyond the zero-K altitude the refractive field continues only as a mathematical target, NOT a physical atmosphere.">?</button></div>
         </div>
-        <div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div>
+
         <div class="modern-temperature-fields" id="ModernTemperatureCompareFields" hidden>
           <div class="modern-field"><label for="ModernTemperatureCompareC">Surface temperature (°C)</label><input type="number" id="ModernTemperatureCompareC" min="-30" max="40" step="0.5" value="15"></div>
           <div class="modern-field"><label for="ModernTemperatureCompareGradient">Surface temperature gradient (K/km)</label><input type="number" id="ModernTemperatureCompareGradient" min="-20" max="20" step="0.5" value="-6.5"></div>
           <div class="modern-field"><label for="ModernTemperatureComparePressure">Surface pressure (hPa)</label><input type="number" id="ModernTemperatureComparePressure" min="800" max="1100" step="1" value="1013.25"></div>
-          <p class="modern-note">These inputs affect only the selected model A/B. The column shows T(h), not refraction strength.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="These inputs affect only the selected model A/B. The column shows T(h), not refraction strength.">?</button></div>
         </div>
-        <div class="modern-visibility" aria-label="Shared Compare atmospheric visibility for both models">
+
+          </div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernCompareAtmosphereExplanationSection" data-workspace-section="atmosphere.explanation">
+          <summary>Model equations &amp; limitations</summary>
+          <div class="modern-workspace-fold-content"><div class="modern-atmosphere-info" id="ModernModelAtmosphereInfo" aria-live="polite"></div></div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernCompareAtmosphereVisibilitySection" data-workspace-section="atmosphere.visibility">
+          <summary>Visibility &amp; haze <span class="modern-fold-summary" id="ModernAtmosphereCompareVisibilitySummary">Off</span></summary>
+          <div class="modern-workspace-fold-content"><div class="modern-visibility" aria-label="Shared Compare atmospheric visibility for both models">
           <label class="modern-check" for="ModernModelVisibilityEnabled"><input id="ModernModelVisibilityEnabled" type="checkbox"> Atmospheric extinction / haze (both models)</label>
           <div class="modern-field" id="ModernModelVisibilityOptions" hidden><label for="ModernModelVisibilityRange">Visibility range (km · 5% contrast)</label>
             <input id="ModernModelVisibilityRange" type="number" min="1" max="500" step="1" value="60"></div>
-          <p class="modern-note">Optional distance-based airlight approximation. Independent of refraction; no change to ray paths or occlusion. White background, uniform extinction.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="Optional distance-based airlight approximation. Independent of refraction; no change to ray paths or occlusion. White background, uniform extinction.">?</button></div>
         </div>
-        <div class="modern-shimmer" id="ModernShimmerComparePanel" aria-label="Selected Compare model atmospheric turbulence">
+        </div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernCompareAtmosphereShimmerSection" data-workspace-section="atmosphere.shimmer">
+          <summary>Atmospheric turbulence <span class="modern-fold-summary" id="ModernAtmosphereCompareShimmerSummary">Off</span></summary>
+          <div class="modern-workspace-fold-content"><div class="modern-shimmer" id="ModernShimmerComparePanel" aria-label="Selected Compare model atmospheric turbulence">
           <div class="modern-shimmer-header"><strong>Atmospheric Turbulence · <span id="ModernShimmerCompareTarget">model A</span></strong>
             <label class="modern-shimmer-switch" for="ModernShimmerCompareEnabled"><input type="checkbox" id="ModernShimmerCompareEnabled"> On</label></div>
-          <p class="modern-note">Animated heat shimmer · visual approximation, not Cₙ²-calibrated.</p>
+          <div class="modern-display-inline-actions"><span class="modern-display-hint">How this setting works</span> <button type="button" class="modern-help" aria-label="Help: How this setting works" data-tip="Animated heat shimmer · visual approximation, not Cₙ²-calibrated.">?</button></div>
           <div class="modern-shimmer-options" id="ModernShimmerCompareOptions" hidden>
             <div class="modern-shimmer-field"><label for="ModernShimmerCompareIntensity">Intensity <output id="ModernShimmerCompareIntensityValue" for="ModernShimmerCompareIntensity">3 px</output></label><input type="range" id="ModernShimmerCompareIntensity" min="0" max="20" step="0.5" value="3"></div>
             <div class="modern-shimmer-field"><label for="ModernShimmerCompareScale">Eddy scale <output id="ModernShimmerCompareScaleValue" for="ModernShimmerCompareScale">54 px</output></label><input type="range" id="ModernShimmerCompareScale" min="8" max="200" step="1" value="54"></div>
@@ -356,6 +404,8 @@
             <button type="button" class="modern-ghost-button modern-shimmer-pause" id="ModernShimmerComparePause" aria-pressed="false">Pause animation</button>
           </div>
         </div>
+      </div>
+        </details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>
         <p class="modern-note">Two physical object groups shared by Scene and both Compare models: towers, ships, rods and Bedford objects.</p>

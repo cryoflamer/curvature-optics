@@ -25,7 +25,8 @@
   }
   var TABS=['Camera','Surface','Atmosphere','Objects','Display'];
   var SECTION_SUFFIXES=['camera.pose','camera.navigation','camera.animation','camera.savedViews',
-    'camera.frameName','objects.group1','objects.group2','display.advanced',
+    'camera.frameName','surface.geometry','atmosphere.profile','atmosphere.explanation',
+    'atmosphere.visibility','atmosphere.shimmer','objects.group1','objects.group2','display.advanced',
     'display.diagnostics','display.gpu','display.profiler'];
   var SECTION_KEYS=['scene','compare'].flatMap(function(mode){
     return SECTION_SUFFIXES.map(function(section){return mode+'.'+section;});

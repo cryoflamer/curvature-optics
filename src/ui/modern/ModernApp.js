@@ -387,6 +387,8 @@
       var name=shimmerTarget(group),active=atmosphericPresentation.enabled(name);
       var settings=atmosphericShimmer.getSettings(name);
       enabled.checked=active;options.hidden=!active;
+      var summary=newUiEl('ModernAtmosphere'+group+'ShimmerSummary');
+      if(summary)summary.textContent=active?(shimmerPaused[name]?'Paused':'On'):'Off';
       var targetLabel=shimmerUi('CompareTarget');
       if(group==='Compare'&&targetLabel)targetLabel.textContent='model '+name;
       [['Intensity','intensity',' px'],['Scale','scale',' px'],['Drift','drift',' px/s']].forEach(function(row){
@@ -463,6 +465,8 @@
   var workspaceInitialSections={
     'camera.pose':true,'camera.navigation':false,'camera.animation':true,
     'camera.savedViews':false,'camera.frameName':false,
+    'surface.geometry':true,'atmosphere.profile':true,'atmosphere.explanation':false,
+    'atmosphere.visibility':false,'atmosphere.shimmer':false,
     'objects.group1':true,'objects.group2':false,
     'display.advanced':false,'display.diagnostics':false,'display.gpu':false,'display.profiler':false
   };
@@ -545,6 +549,16 @@
         ['ModernCameraAnimationSection','camera.animation'],
         ['ModernSavedCameraLibrary','camera.savedViews'],
         ['ModernCameraFrameNameSection','camera.frameName'],
+        ['ModernSceneSurfaceGeometrySection','surface.geometry'],
+        ['ModernCompareSurfaceGeometrySection','surface.geometry'],
+        ['ModernSceneAtmosphereProfileSection','atmosphere.profile'],
+        ['ModernCompareAtmosphereProfileSection','atmosphere.profile'],
+        ['ModernSceneAtmosphereExplanationSection','atmosphere.explanation'],
+        ['ModernCompareAtmosphereExplanationSection','atmosphere.explanation'],
+        ['ModernSceneAtmosphereVisibilitySection','atmosphere.visibility'],
+        ['ModernCompareAtmosphereVisibilitySection','atmosphere.visibility'],
+        ['ModernSceneAtmosphereShimmerSection','atmosphere.shimmer'],
+        ['ModernCompareAtmosphereShimmerSection','atmosphere.shimmer'],
         ['ModernDisplayAdvanced','display.advanced'],
         ['ModernDisplayDiagnostics','display.diagnostics'],
         ['ModernDisplayGpu','display.gpu'],
@@ -841,6 +855,31 @@
       });},function(error){status('Cannot read JSON: '+error.message,true);});
     });
   }
+  // Compact physics summaries reflect live model state, not workspace preferences.
+  // Mathematical model caveats remain visible outside collapsed help/equations.
+  function updatePhysicsPanelPresentation(compare){
+    var scope=compare?'Compare':'Scene';
+    var spec=compare&&state.compareConfig?state.compareConfig[state.compareSelected]:null;
+    if(compare&&!spec)return;
+    var surface=compare?spec.surface:(model.showModel===2?'flat':'globe');
+    var radiusKm=compare?spec.radiusKm:model.rEarth/1000;
+    var radiusLabel=Number.isFinite(Number(radiusKm))?
+      Number(Number(radiusKm).toPrecision(7)).toLocaleString('en-US')+' km':'unknown R';
+    var summary=newUiEl('ModernSurface'+scope+'Summary');
+    if(summary)summary.textContent=surface==='flat'?'Flat · κ = 0':'Globe · R = '+radiusLabel;
+    var kind=compare?spec.atmosphere:state.atmosphere;
+    var caution=newUiEl('ModernAtmosphere'+scope+'Caution');
+    var cautionText={
+      'profile-transition':'Mathematical n(h) blend — not an atmospheric temperature law.',
+      'inverse-temperature':'Inverse T(h) can become nonphysical above zero Kelvin; rays still follow a mathematical refractive profile.',
+      'exponential-occlusion':'Engineered refractive profile — hypothetical, not an observed atmosphere.',
+      'inverse-spherical':'Legacy inverse model — a mathematical construction, not an observed atmosphere.'
+    }[kind]||'';
+    if(caution){caution.textContent=cautionText;caution.hidden=!cautionText;}
+    var profile=newUiEl('Modern'+scope+'AtmosphereProfileSection');
+    if(profile)profile.hidden=!['temperature-lapse','profile-transition',
+      'inverse-temperature','exponential-occlusion','inverse-spherical'].includes(kind);
+  }
   function refreshLabels(){
     var curvature=root.CurvaturePhysicalCurvature;
     var output=el('ModernCurvatureLabel');
@@ -862,6 +901,7 @@
     if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition','inverse-temperature'].includes(state.atmosphere);
     showLegacyOption('ModernAtmosphere',state.atmosphere);
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
+    updatePhysicsPanelPresentation(false);
     syncTemperatureControls();
     var fov=el('ModernViewAngle');if(fov&&Number.isFinite(model.ViewAngle))
       fov.value=String(Number(model.ViewAngle.toFixed(4)));
@@ -1427,6 +1467,7 @@
     var pairPreset=el('ModernPairPreset');if(pairPreset){showLegacyOption('ModernPairPreset',state.compareConfig.preset);pairPreset.value=state.compareConfig.preset;}
     showLegacyOption('ModernModelAtmosphere',spec.atmosphere);
     renderAtmosphereDescription('ModernModelAtmosphereInfo',spec.atmosphere);
+    updatePhysicsPanelPresentation(true);
     var fields={ModernModelRadius:'radiusKm',ModernModelAtmosphere:'atmosphere'};
     Object.keys(fields).forEach(function(id){var node=el(id);if(node)node.value=String(spec[fields[id]]);});
     var scale=el('ModernModelOcclusion');if(scale)scale.value=String(spec.occlusionRadius/1000);
@@ -1467,6 +1508,8 @@
       if(checkbox)checkbox.checked=config.enabled;
       if(range)range.value=String(config.rangeKm);
       if(options)options.hidden=!config.enabled;
+      var summary=newUiEl('ModernAtmosphere'+(prefix==='ModernVisibility'?'Scene':'Compare')+'VisibilitySummary');
+      if(summary)summary.textContent=config.enabled?'On · '+config.rangeKm+' km':'Off';
     });
   }
   function bindVisibilityControls(){
@@ -2638,6 +2681,7 @@
     var aim=el('ModernCameraAim');if(aim)aim.value=String(model.viewcenterHorizon);
     var atmosphere=el('ModernAtmosphere');if(atmosphere){showLegacyOption('ModernAtmosphere',state.atmosphere);atmosphere.value=state.atmosphere;}
     renderAtmosphereDescription('ModernAtmosphereInfo',state.atmosphere);
+    updatePhysicsPanelPresentation(false);
     var occlusion=el('ModernOcclusion');if(occlusion)occlusion.value=String(state.occlusionRadius/1000);
     syncVisibilityControls();
     syncTemperatureControls();
@@ -2772,7 +2816,19 @@
     ModernRadiusKm:'Physical surface radius in kilometres. Independent of any special atmospheric comparison radius.',
     ModernFlat:'Sets exact zero surface curvature. Camera and tower distances do not change.',
     ModernAtmosphere:'Controls how light propagates. Standard is a fixed exponential. Temperature gradient uses a dry hydrostatic boundary layer. Profile transition is a mathematical interpolation, not a temperature-driven physical transformation.',
-    ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.'
+    ModernOcclusion:'Refraction scale radius R in kilometres for the engineered n(h) profile. Independent of the geometric surface radius; stored internally in metres.',
+    ModernModelCurvature:'Curvature of the selected Compare model only. A and B retain independent physical surfaces.',
+    ModernModelRadius:'Radius of the selected Compare surface in kilometres; not the atmospheric refraction scale.',
+    ModernModelAtmosphere:'Optical atmosphere for the selected Compare model only; the other model is unchanged.',
+    ModernModelOcclusion:'Engineered refractive-index scale radius of the selected Compare model, independent of surface radius.',
+    ModernTemperatureSceneC:'Surface air temperature in Celsius, used by the dry hydrostatic refractivity model.',
+    ModernTemperatureSceneGradient:'Local surface temperature gradient in K/km; the gradient decays above the boundary layer.',
+    ModernTemperatureScenePressure:'Surface air pressure in hectopascals. The optical calculation assumes dry air.',
+    ModernTemperatureCompareC:'Surface temperature for the selected Compare model A or B.',
+    ModernTemperatureCompareGradient:'Local surface gradient for the selected Compare model; not shared across A/B.',
+    ModernTemperatureComparePressure:'Surface pressure of the selected Compare model; not shared across A/B.',
+    ModernVisibilityRange:'Visibility range for the 5% contrast threshold; haze does not change ray paths.',
+    ModernModelVisibilityRange:'Shared Compare haze visibility range, applied equally to A and B.'
   };
   var objectHelp={
     NObjects:'Number of objects in this group.',ObjType:'Selects the actual 3D object shape, not just its appearance: tower, ship, measuring rod or Bedford marker.',

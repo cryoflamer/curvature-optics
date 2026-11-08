@@ -1,3 +1,12 @@
+> **Current Surface / Atmosphere UI cleanup (2026-11-08):** Scene and
+> Compare group surface curvature/radius, atmospheric profile inputs,
+> model equations, visibility/haze and turbulence into browser-persistent
+> native details sections. Physics model selection and active validity
+> caveats stay outside the collapsible groups. Selected A/B model summaries,
+> active effects and existing parameter IDs are preserved. Layout preferences
+> remain independent of all physical experiment JSON and optical paths.
+> Full code/tests and patch validation apply to the current branch.
+
 > **Current UI cleanup (#140.12.112, 2026-11-08):** Modern Scene/Compare
 > Display retains immediate access to optical quality, Fast Preview LOD,
 > geometry backend and reference lines. Explanatory paragraphs moved to the

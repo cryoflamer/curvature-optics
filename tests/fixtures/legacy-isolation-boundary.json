@@ -1877,7 +1877,8 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernApplicationPreferences.test.js",
-        "tests/ModernCameraNavigation.test.js"
+        "tests/ModernCameraNavigation.test.js",
+        "tests/ModernSurfaceAtmosphereLayout.test.js"
       ],
       "commonJsToolCallers": []
     },
