@@ -2013,6 +2013,7 @@
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
+        "tests/ModernExperimentVisualHistory.test.js",
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernInverseTemperature97.test.js",
@@ -2039,7 +2040,8 @@
         "src/ui/modern/ModernExperimentHistory.js"
       ],
       "commonJsTestCallers": [
-        "tests/ModernExperimentHistory.test.js"
+        "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentVisualHistory.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2094,6 +2096,7 @@
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
+        "tests/ModernExperimentVisualHistory.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
         "tests/ModernTemperatureGradient.test.js"

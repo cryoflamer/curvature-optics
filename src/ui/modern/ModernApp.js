@@ -920,11 +920,13 @@
     toggle.addEventListener('click',function(){
       panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));
       if(!panel.hidden)handle(function(){return refreshHistoryList();});
-      else if(historyUI)historyUI.close(newUiEl('ModernHistoryPreview'));
+      else if(historyUI){historyUI.close(newUiEl('ModernHistoryPreview'));
+        historyUI.hideInspector(newUiEl('ModernHistoryGallery'));}
     });
     el('ModernHistoryClose').addEventListener('click',function(){
       panel.hidden=true;toggle.setAttribute('aria-expanded','false');
-      if(historyUI)historyUI.close(newUiEl('ModernHistoryPreview'));
+      if(historyUI){historyUI.close(newUiEl('ModernHistoryPreview'));
+        historyUI.hideInspector(newUiEl('ModernHistoryGallery'));}
     });
     el('ModernHistorySelect').addEventListener('change',function(){
       handle(function(){return refreshHistoryList();});

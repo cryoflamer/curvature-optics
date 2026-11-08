@@ -433,6 +433,28 @@ button{cursor:pointer}
 .modern-history-gallery[data-size="small"] .modern-history-card-menu .modern-history-action{padding:4px 6px;font-size:10px}
 .modern-history-card-menu-toggle:focus-visible{outline:2px solid #287ac5;outline-offset:1px}
 .modern-history-empty{margin:9px 0;color:#6b7d91;font-size:12px;line-height:1.6}
+/* Snapshot inspector is fixed to the viewport, outside the scroll-clipped gallery. */
+.modern-history-card-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.modern-history-info{border:0;background:transparent;padding:1px 3px;border-radius:4px;color:#236aa3;font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap}
+.modern-history-info:hover,.modern-history-info:focus-visible{background:#e1effb;outline-offset:2px}
+.modern-history-gallery[data-size="small"] .modern-history-info{font-size:10px;padding:0 2px}
+.modern-history-inspector{position:fixed;z-index:1300;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;box-sizing:border-box;border:1px solid #b6cfe6;border-radius:11px;background:#fff;color:#1a3955;box-shadow:0 14px 42px #09284950;padding:13px 14px;font-size:12px;line-height:1.45}
+.modern-history-inspector[hidden]{display:none}
+.modern-history-inspector-inner{display:flex;flex-direction:column;gap:7px}
+.modern-history-inspector-title{font-size:13px;padding-right:34px}
+.modern-history-inspector-time{font-size:11px;color:#687f96}
+.modern-history-inspector-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:8px}
+.modern-history-inspector-column{background:#f3f8fd;border:1px solid #e1ebf5;border-radius:7px;padding:9px;min-width:0}
+.modern-history-inspector-heading{display:block;font-size:12px;margin-bottom:7px;color:#205b90}
+.modern-history-inspector-row{display:flex;justify-content:space-between;align-items:baseline;gap:9px;margin-top:4px}
+.modern-history-inspector-row span{color:#657f97;flex:0 1 44%}
+.modern-history-inspector-row strong{font-weight:600;min-width:0;text-align:right;overflow-wrap:anywhere}
+.modern-history-inspector-differences{border-top:1px solid #e1ebf5;padding-top:6px;display:flex;flex-direction:column;gap:3px}
+.modern-history-inspector-differences span{color:#286b9c}
+.modern-history-inspector-shared{border-top:1px solid #e1ebf5;padding-top:7px;display:flex;gap:5px 12px;flex-wrap:wrap;color:#567087;font-size:11px}
+.modern-history-inspector-close{position:absolute;top:7px;right:9px;border:0;background:transparent;border-radius:5px;padding:1px 7px;font-size:21px;color:#526f8b;cursor:pointer}
+.modern-history-inspector-close:hover,.modern-history-inspector-close:focus-visible{background:#e1effb}
+@media(max-width:480px){.modern-history-inspector-columns{grid-template-columns:1fr}.modern-history-inspector{padding:10px}}
 .modern-history-preview{width:min(1040px,92vw);max-height:88vh;padding:18px;border:1px solid #c9d8e8;border-radius:12px;background:#fff;box-shadow:0 20px 60px #061a3550;color:#19334e}
 .modern-history-preview::backdrop{background:#0a1d35b8}
 .modern-history-preview-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}

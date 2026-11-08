@@ -59,6 +59,25 @@ Scene/Compare renderer, or Legacy state.
   JSON. Resetting application preferences returns to S; workspace layout reset
   does not affect card density. The grid remains responsive on narrow screens.
 
+## Snapshot Inspector (read-only)
+
+- Hover a Scene or Compare history card for approximately **350 ms**. The
+  floating detail card shows the captured **surface** (Globe with radius or
+  Flat), **atmospheric model** and only its relevant temperature/gradient,
+  transition, inversion or occlusion parameters. Compare displays independent
+  A/B columns and their semantic geometry/atmosphere/refraction relationship;
+  Scene has one column. Camera height/orientation and shared object counts/types
+  appear underneath.
+- The tooltip stays open while the pointer moves onto it and shifts within the
+  viewport near right/bottom edges. Keyboard focus on the snapshot thumbnail
+  opens it immediately; **Esc** closes it. **ⓘ Info** on every card pins the
+  inspector for touch users, with a Close button. Ordinary click still selects,
+  and double-click still restores; clicking Info never triggers Restore.
+- The inspector uses the saved, validated experiment and existing fingerprint
+  metadata from the already loaded history list. **It does not query IndexedDB,
+  recalculate optics or change the experiment** while opening. It supports older
+  records without thumbnails and adds no persistent fields or migration.
+
 ## Comparison semantics and future steps
 
 `ModernExperimentFingerprint` derives canonical active physical descriptors
@@ -106,6 +125,9 @@ specified. A screenshot crossfade is not a physical optics calculation.
    contains the **current** A and B rather than a stale side. If Fast Preview
    is active or an accurate render has not completed, expect "No preview".
 4. Try the **S / M / L** gallery size selector, reload and confirm it persists.
+   Hover over Scene and Compare cards, confirm the matching physics summary;
+   use Info and Esc, and test that hovering and clicking Info do not restore.
+   Near the right/bottom viewport edge confirm the tooltip remains visible.
    Single-click a card to select it, double-click its thumbnail to restore;
    confirm no unintended duplicate recovery points. Double-click on checkbox,
    View, Pin, Delete or the compact **⋯ Actions** menu: none should restore.

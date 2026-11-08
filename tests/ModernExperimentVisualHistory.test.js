@@ -157,3 +157,99 @@ test('Visual History loaded before Modern app; restore guards remain and thumbna
   assert.match(app,/experimentHistory\.record\(current,'recovery',historyThumbnail\(current\)\)/);
   assert.match(app,/if\(!entry\)throw RangeError\('History snapshot not found'\)/);
 });
+
+test('Snapshot inspector reports active Scene/Compare physics and meaningful A/B differences',()=>{
+  const model={Height:15,FocalLengthField:2000,Pan:12,Nick:-2,Roll:0,
+    CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+    showModel:1,rEarth:6371000,showGrid:1,DemoText:'Test',Description:'',
+    ObjType:[3,2],NObjects:[85,1],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+    ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+    ObjSize:[23,64],ObjSizeVar:[0,0]};
+  const state=require('../src/ui/modern/ModernExperimentState');
+  const compare=require('../src/ui/modern/ModernCompareState');
+  const fp=require('../src/ui/modern/ModernExperimentFingerprint');
+  const experiment=state.capture(model,{atmosphere:'vacuum',occlusionRadius:6371000,
+    preset:'pontchartrain',resetPreset:'pontchartrain'},compare.preset('globe-flat-vacuum'),
+  {mode:'compare',eyeLevel:false,horizon:true,selected:'A'});
+  experiment.compare.A.atmosphere='standard';
+  experiment.compare.B.atmosphere='temperature-lapse';
+  experiment.compare.B.temperatureProfile.gradientKPerKm=7;
+  const snapshot={id:1,source:'manual',createdAt:1700000000000,
+    experiment,features:fp.features(experiment)};
+  const result=ui.inspect(snapshot);
+  assert.equal(result.mode,'compare');
+  assert.match(result.A.find(row=>row[0]==='Surface')[1],/Globe.*6,371 km/);
+  assert.match(result.B.find(row=>row[0]==='Surface')[1],/Flat/);
+  assert.deepEqual(result.B.find(row=>row[0]==='Gradient'),['Gradient','7 K/km']);
+  assert.ok(!result.A.some(row=>row[0]==='Gradient'),'Standard has no lapse-gradient control');
+  assert.deepEqual(result.relations,['Different geometry','Different atmosphere models']);
+  assert.match(result.shared.find(row=>row[0]==='Objects')[1],/85.*transmission tower/);
+  assert.match(result.shared.find(row=>row[0]==='Camera height')[1],/15 m/);
+  experiment.compare.B.surface='globe';
+  experiment.compare.B.radiusKm=experiment.compare.A.radiusKm;
+  experiment.compare.B.atmosphere='standard';
+  snapshot.features=fp.features(experiment);
+  assert.deepEqual(ui.inspect(snapshot).relations,['Identical physical settings']);
+  experiment.display.mode='scene';
+  snapshot.features=fp.features(experiment);
+  const scene=ui.inspect(snapshot);
+  assert.equal(scene.mode,'scene');assert.equal(scene.B,undefined);
+  assert.deepEqual(scene.A.find(row=>row[0]==='Atmosphere'),['Atmosphere','Vacuum']);
+  assert.ok(!scene.A.some(row=>row[0]==='Gradient'),'Inactive Vacuum gradient is hidden');
+});
+
+function inspectorDom(){
+  const doc={listeners:{},defaultView:{innerWidth:800,innerHeight:560,
+    listeners:{},addEventListener(name,callback){this.listeners[name]=callback;},
+    removeEventListener(name){delete this.listeners[name];}},
+    addEventListener(name,callback){this.listeners[name]=callback;},
+    removeEventListener(name){delete this.listeners[name];}};
+  function element(name){
+    return {tagName:name,children:[],listeners:{},style:{},textContent:'',hidden:false,
+      setAttribute(key,value){this[key]=value;},getAttribute(key){return this[key];},
+      addEventListener(key,callback){this.listeners[key]=callback;},
+      removeEventListener(key){delete this.listeners[key];},
+      appendChild(child){child.parentNode=this;this.children.push(child);return child;},
+      removeChild(child){this.children.splice(this.children.indexOf(child),1);child.parentNode=null;},
+      contains(child){return this===child||this.children.some(item=>item.contains(child));},
+      getBoundingClientRect(){return this.className==='modern-history-inspector'?
+        {left:0,right:480,top:0,bottom:310,width:480,height:310}:
+        {left:620,right:770,top:460,bottom:535,width:150,height:80};}};
+  }
+  doc.createElement=element;doc.body=element('body');return doc;
+}
+test('Hover inspector delays, stays viewport-bound, supports Info and Escape without Restore',async()=>{
+  const doc=inspectorDom(),host=doc.createElement('div'),calls=[];
+  const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
+    preview:()=>{},pin:()=>{},remove:()=>{},multi:()=>{}};
+  const cardEntry=entry(1,'compare',true);
+  cardEntry.experiment.scene={camera:{Height:15,Pan:0,Nick:0},objects:{NObjects:[1,0],ObjType:[3,0]},
+    surface:{showModel:1,rEarth:6371000},atmosphere:'standard'};
+  cardEntry.experiment.compare={A:{surface:'globe',radiusKm:6371,atmosphere:'standard'},
+    B:{surface:'flat',radiusKm:6371,atmosphere:'vacuum'}};
+  cardEntry.features.relations={geometrySame:false,atmosphereSame:false,refractionSame:false,physicsSame:false};
+  ui.render(doc,host,[cardEntry],1,actions,{});
+  const overlay=doc.body.children[0],card=host.children[0];
+  assert.equal(overlay.hidden,true);
+  card.listeners.mouseenter();
+  assert.equal(overlay.hidden,true,'hover does not appear immediately');
+  await new Promise(resolve=>setTimeout(resolve,390));
+  assert.equal(overlay.hidden,false,'tooltip is shown after dwell');
+  assert.equal(overlay.role,'tooltip');
+  assert.ok(parseInt(overlay.style.left,10)<620,'tooltip flips at right viewport edge');
+  assert.ok(parseInt(overlay.style.top,10)<460,'tooltip clamps above bottom edge');
+  card.listeners.mouseleave();overlay.listeners.mouseenter();
+  await new Promise(resolve=>setTimeout(resolve,180));
+  assert.equal(overlay.hidden,false,'pointer over tooltip keeps it open');
+  const info=card.children[1].children[1].children[0];
+  assert.equal(info.className,'modern-history-info');
+  info.listeners.click({stopPropagation(){}});
+  assert.equal(overlay.role,'dialog','Info pins inspector for touch users');
+  card.listeners.dblclick({target:{closest(selector){return selector.includes('.modern-history-info')?info:null;}}});
+  assert.equal(calls.length,0,'Info never restores a snapshot');
+  doc.listeners.keydown({key:'Escape'});assert.equal(overlay.hidden,true);
+  ui.render(doc,host,[cardEntry],1,actions,{});
+  assert.equal(doc.body.children.length,1,'rerender destroys previous overlay');
+  assert.equal(host.__historyInspector!==null,true);
+  ui.hideInspector(host);assert.equal(doc.body.children[0].hidden,true);
+});

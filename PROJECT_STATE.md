@@ -1950,5 +1950,13 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   click selects. Compact View/Pin/Delete actions are collapsed into a per-card
   details menu, while multi-select and accessibility remain available. UI layout
   changes neither stored history records nor physical or experiment schemas.
+  Snapshot Inspector appears after a 350 ms hover or by keyboard focus on
+  the thumbnail. The per-card **Info** action pins a viewport-clamped floating
+  detail card for touch/keyboard use; **Esc** or Close dismisses it. The
+  read-only view shows the active surface, atmosphere/refraction values,
+  Compare A/B relationships and shared camera/objects. It uses only the
+  already-loaded full experiment and metadata; no IndexedDB reads, optics
+  recompute, experiment JSON/schema changes or restore gestures. The overlay
+  is removed/recreated on list refresh and hidden on History close.
   Semantic A/B filters and Storyboard remain deferred. See
   `docs/modern-experiment-history.md` for usage and future design constraints.
