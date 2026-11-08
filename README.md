@@ -269,15 +269,16 @@ IndexedDB migration; opaque dark-filled older captures must be recreated.
 Older Core entries are readable without migration.
 Gallery UX: double-click a snapshot image or card text to restore it through the
 same protected recovery logic as **Restore selected**; one click selects.
-Card density has browser-local **S (compact, default) / M / L** choices; in S,
-View/Pin/Delete are behind each card's **⋯ Actions** menu. Checkboxes remain
+Card density has browser-local **S (compact, default) / M / L** choices.
+All sizes show a thumbnail-corner Pin/Unpin toggle (always visible when pinned)
+and a **⋯** menu for View, Info and Delete. Checkboxes remain
 available for bulk operations and do not restore on double-click. The selected
 card size is stored in Application Preferences, never in the experiment.
 Snapshot Inspector: hovering over any history card for a moment opens a
 read-only physical-settings tooltip. In Compare it shows **A/B side by side**
 (surface, Globe radius, atmospheric model and active refraction parameters),
 then the A/B relationship and shared camera/objects; Scene shows one column.
-**ⓘ Info** pins the inspector for keyboard/touch access, **Esc** dismisses it,
+**Info** in the **⋯** menu pins the inspector for keyboard/touch access, **Esc** dismisses it,
 and it closes with the History panel. Hovering never queries IndexedDB or
 recalculates optics. The inspector derives values from the saved full snapshot,
 including existing history records, without changing the stored format.

@@ -224,14 +224,14 @@
       }
       card.addEventListener('click',function(event){
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-card-actions, .modern-history-card-menu, .modern-history-multi, .modern-history-info'))return;
+          event.target.closest('.modern-history-card-menu, .modern-history-multi, .modern-history-pin'))return;
         actions.select(entry.id);
       });
       card.addEventListener('dblclick',function(event){
         // An explicit control, bulk-selection checkbox or actions menu is not
         // an experiment gesture. Only the card image/text restores.
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-card-actions, .modern-history-card-menu, .modern-history-multi, .modern-history-info'))return;
+          event.target.closest('.modern-history-card-menu, .modern-history-multi, .modern-history-pin'))return;
         if(actions.restore)actions.restore(entry.id);
       });
       var select=button(doc,'','Select snapshot '+entry.id,function(){actions.select(entry.id);});
@@ -267,36 +267,50 @@
       var meta=el(doc,'span','modern-history-card-meta',
         new Date(entry.createdAt).toLocaleString()+' · '+entry.source+
         (entry.pinned?' · pinned':''));
-      var info=button(doc,'ⓘ Info','Show physical settings for snapshot '+entry.id,function(){
-        if(inspector)inspector.show(entry,card,true,info);
-      });
-      info.className='modern-history-info';info.title='';
       body.appendChild(meta);
-      var controls=el(doc,'div','modern-history-card-actions');
-      controls.appendChild(button(doc,'View','Quick view snapshot '+entry.id,function(){actions.preview(entry.id);}));
-      controls.appendChild(button(doc,entry.pinned?'Unpin':'Pin',
-        (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){actions.pin(entry.id,!entry.pinned);}));
-      controls.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){actions.remove(entry.id);}));
-      body.appendChild(controls);
       var footer=el(doc,'div','modern-history-card-footer');
-      footer.appendChild(info);
       var menu=el(doc,'details','modern-history-card-menu');
-      var summary=el(doc,'summary','modern-history-card-menu-toggle','⋯ Actions');
+      var summary=el(doc,'summary','modern-history-card-menu-toggle','⋯');
       summary.setAttribute('aria-label','Snapshot actions');
+      summary.title='Snapshot actions';
+      summary.addEventListener('dblclick',function(event){
+        if(event&&event.stopPropagation)event.stopPropagation();
+      });
       menu.appendChild(summary);
       var menuActions=el(doc,'div','modern-history-card-menu-actions');
-      menuActions.appendChild(button(doc,'View','Quick view snapshot '+entry.id,function(){actions.preview(entry.id);menu.open=false;}));
-      menuActions.appendChild(button(doc,entry.pinned?'Unpin':'Pin',
-        (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){actions.pin(entry.id,!entry.pinned);menu.open=false;}));
-      menuActions.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){actions.remove(entry.id);menu.open=false;}));
+      menuActions.appendChild(button(doc,'View','Quick view snapshot '+entry.id,function(){
+        actions.preview(entry.id);menu.open=false;
+      }));
+      var info=button(doc,'Info','Show physical settings for snapshot '+entry.id,function(){
+        menu.open=false;
+        if(inspector)inspector.show(entry,card,true,summary);
+      });
+      menuActions.appendChild(info);
+      menuActions.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){
+        actions.remove(entry.id);menu.open=false;
+      }));
       menu.appendChild(menuActions);footer.appendChild(menu);
       var multiLabel=el(doc,'label','modern-history-multi');
       multiLabel.title='Select for storyboard / bulk actions';
       var check=el(doc,'input');check.type='checkbox';check.checked=!!(multi&&multi[entry.id]);
+      check.setAttribute('aria-label','Select snapshot '+entry.id+' for bulk actions');
       check.addEventListener('change',function(){actions.multi(entry.id,check.checked);});
+      check.addEventListener('click',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
+      check.addEventListener('dblclick',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
       multiLabel.appendChild(check);
       multiLabel.appendChild(el(doc,'span','', 'Select'));
-      footer.appendChild(multiLabel);body.appendChild(footer);
+      footer.appendChild(multiLabel);
+      var pin=button(doc,'📌',
+        (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){
+          actions.pin(entry.id,!entry.pinned);
+      });
+      // The pin is visually over the thumbnail, but is not nested in the
+      // thumbnail's button (nested buttons would be invalid HTML).
+      pin.className='modern-history-pin'+(entry.pinned?' is-pinned':'');
+      pin.setAttribute('aria-pressed',String(!!entry.pinned));
+      pin.textContent='';
+      footer.appendChild(pin);
+      body.appendChild(footer);
       card.appendChild(body);host.appendChild(card);
     });
   }

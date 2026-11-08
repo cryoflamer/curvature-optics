@@ -49,10 +49,10 @@ Scene/Compare renderer, or Legacy state.
   uses the same guarded path, with a protected recovery checkpoint before any
   change to live physics. Restore actions are serialized to avoid overlapping
   operations on repeated double-clicks.
-- Card sizing is **S / M / L** (compact by default). S uses small thumbnails
-  and **⋯ Actions** for View, Pin/Unpin and Delete; M and L expose these actions
-  below each card. Native checkbox bulk selection remains available at every
-  size. A double-click on action buttons, menus or selection checkboxes never
+- Card sizing is **S / M / L** (compact by default). All sizes use a
+  thumbnail-corner **Pin/Unpin** toggle (pinned entries are always marked) and
+  a compact **⋯** menu for View, Info and Delete. The checkbox remains for
+  storyboard/bulk selection. Double-clicking pin, menu or checkbox never
   restores an experiment.
 - Card density is a validated browser-local Application Preference. Switching
   size does not reread IndexedDB, recalculate optics or modify the experiment
@@ -70,9 +70,9 @@ Scene/Compare renderer, or Legacy state.
   appear underneath.
 - The tooltip stays open while the pointer moves onto it and shifts within the
   viewport near right/bottom edges. Keyboard focus on the snapshot thumbnail
-  opens it immediately; **Esc** closes it. **ⓘ Info** on every card pins the
+  opens it immediately; **Esc** closes it. **Info** in the **⋯** menu pins the
   inspector for touch users, with a Close button. Ordinary click still selects,
-  and double-click still restores; clicking Info never triggers Restore.
+  and double-click still restores; clicking Info or Pin never triggers Restore.
 - The inspector uses the saved, validated experiment and existing fingerprint
   metadata from the already loaded history list. **It does not query IndexedDB,
   recalculate optics or change the experiment** while opening. It supports older

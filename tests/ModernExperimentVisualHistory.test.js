@@ -108,40 +108,42 @@ function entry(id,mode,image){return {id,source:'manual',pinned:false,createdAt:
   thumbnail:image?{mode,dataUrl:'data:image/webp;base64,YQ=='}:null,
   features:{mode,scene:{geometry:{kind:'flat'}},relations:{physicsSame:false,geometrySame:true}},
   experiment:{display:{mode}}};}
-test('Visual gallery selects, previews, pins and deletes via explicit actions only',()=>{
+test('Visual gallery selection, overlay pin, compact menu and bulk actions',()=>{
   const {doc}=dom(),host=doc.createElement('div'),calls=[];
-  const actions={select:id=>calls.push(['select',id]),preview:id=>calls.push(['preview',id]),
-    multi:(id,value)=>calls.push(['multi',id,value]),
+  const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
+    preview:id=>calls.push(['preview',id]),multi:(id,value)=>calls.push(['multi',id,value]),
     pin:(id,value)=>calls.push(['pin',id,value]),remove:id=>calls.push(['remove',id])};
   ui.render(doc,host,[entry(1,'scene',true),entry(2,'compare',false)],2,actions,{2:true});
-  assert.equal(host.children.length,2);
   const one=host.children[0],two=host.children[1];
+  const footer=one.children[1].children[2],menu=footer.children[0],checkbox=footer.children[1],pin=footer.children[2];
   assert.equal(two.className.includes('is-selected'),true);
-  assert.equal(two.children[1].children[3].children[2].children[0].checked,true);
+  assert.equal(two.children[1].children[2].children[1].children[0].checked,true);
   ui.select(host,1);
   assert.equal(one.className.includes('is-selected'),true);
   assert.equal(two.className.includes('is-selected'),false);
   assert.equal(one.children[0].children[0].tagName,'img');
-  assert.match(one.children[0].className,/has-preview/,
-    'old transparency-preserving thumbnails render over white even without IDB migration');
-  assert.doesNotMatch(two.children[0].className,/has-preview/,
-    'thumbnail-less snapshots retain a readable empty-state background');
+  assert.match(one.children[0].className,/has-preview/);
+  assert.doesNotMatch(two.children[0].className,/has-preview/);
   assert.match(two.children[0].children[0].textContent,/No preview/);
   one.children[0].listeners.click();
-  const buttons=one.children[1].children[2].children;
-  for(const b of buttons)b.listeners.click({stopPropagation(){}});
-  one.children[1].children[3].children[2].children[0].checked=true;
-  one.children[1].children[3].children[2].children[0].listeners.change();
+  menu.children[1].children[0].listeners.click({stopPropagation(){}});
+  pin.listeners.click({stopPropagation(){}});
+  menu.children[1].children[2].listeners.click({stopPropagation(){}});
+  checkbox.children[0].checked=true;
+  checkbox.children[0].listeners.change();
   assert.deepEqual(calls,[['select',1],['preview',1],['pin',1,true],['remove',1],['multi',1,true]]);
+  assert.equal(pin['aria-pressed'],'false');
+  assert.equal(pin.title,'Pin snapshot 1');
+  assert.equal(menu.children[1].children[1].textContent,'Info');
   const dialog=doc.createElement('dialog');dialog.hidden=true;
   ui.preview(doc,dialog,entry(1,'scene',true));
   assert.equal(dialog.hidden,false);
   assert.equal(dialog.children[1].tagName,'img');
   ui.close(dialog);assert.equal(dialog.hidden,true);
   ui.preview(doc,dialog,entry(1,'scene',true));
-  assert.equal(dialog.hidden,false,'a reopened preview must not stay hidden');
+  assert.equal(dialog.hidden,false);
 });
-test('History gallery S/M/L, double-click restore and action isolation',()=>{
+test('History S/M/L, double-click restore and all action isolation',()=>{
   const {doc}=dom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
     preview:id=>calls.push(['preview',id]),pin:(id,value)=>calls.push(['pin',id,value]),
@@ -149,42 +151,48 @@ test('History gallery S/M/L, double-click restore and action isolation',()=>{
   ui.setSize(host,'medium');assert.equal(host['data-size'],'medium');
   ui.setSize(host,'large');assert.equal(host['data-size'],'large');
   ui.setSize(host,'bogus');assert.equal(host['data-size'],'small');
-  ui.render(doc,host,[entry(10,'scene',true)],10,actions,{});
-  const card=host.children[0],thumbnail=card.children[0],body=card.children[1];
-  const menu=body.children[3].children[1],checkbox=body.children[3].children[2];
+  const pinned=entry(10,'scene',true);pinned.pinned=true;
+  ui.render(doc,host,[pinned],10,actions,{});
+  const card=host.children[0],thumbnail=card.children[0],footer=card.children[1].children[2];
+  const menu=footer.children[0],checkbox=footer.children[1],pin=footer.children[2];
+  assert.match(pin.className,/is-pinned/);
+  assert.equal(pin['aria-pressed'],'true');
   thumbnail.listeners.click({stopPropagation(){}});
   thumbnail.listeners.dblclick({stopPropagation(){calls.push('thumbnail-stop');}});
-  card.listeners.dblclick({target:{closest(){return null;}}});
   thumbnail.listeners.keydown({key:'Enter',preventDefault(){calls.push(['preventDefault']);}});
-  assert.deepEqual(calls,[['select',10],'thumbnail-stop',['restore',10],['restore',10],
-    ['preventDefault'],['restore',10]]);
-  card.listeners.dblclick({target:{closest(){return menu;}}});
-  card.listeners.dblclick({target:{closest(){return checkbox;}}});
-  card.listeners.click({target:{closest(){return checkbox;}}});
-  assert.equal(calls.length,6,'checkbox or menu never initiates restore/selection');
+  assert.deepEqual(calls,[['select',10],'thumbnail-stop',['restore',10],['preventDefault'],['restore',10]]);
+  for(const target of [menu,checkbox,pin]){
+    card.listeners.dblclick({target:{closest(){return target;}}});
+    card.listeners.click({target:{closest(){return target;}}});
+  }
+  assert.equal(calls.length,5,'non-thumbnail actions never trigger selection or restore');
+  menu.children[0].listeners.dblclick({stopPropagation(){calls.push('summary-stopped');}});
+  pin.listeners.dblclick({stopPropagation(){calls.push('pin-stopped');}});
+  checkbox.children[0].listeners.dblclick({stopPropagation(){calls.push('checkbox-stopped');}});
+  assert.deepEqual(calls.slice(-3),['summary-stopped','pin-stopped','checkbox-stopped']);
   menu.children[1].children[0].listeners.click({stopPropagation(){}});
-  assert.deepEqual(calls.pop(),['preview',10],'compact actions remain operational');
-  menu.children[1].children[1].listeners.dblclick({stopPropagation(){calls.push('stopped');}});
-  assert.equal(calls.pop(),'stopped','action double-click cannot bubble');
+  pin.listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls.slice(-2),[['preview',10],['pin',10,false]]);
 });
 
-test('Compact gallery uses bounded columns and a single-row action footer',()=>{
+test('Compact gallery uses bounded columns and minimal consistent controls',()=>{
   const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
-  assert.match(css,/grid-template-columns:repeat\(auto-fill,minmax\(0,min\(150px,100%\)\)\)/,
-    'compact cards have a fixed upper bound instead of stretching to 1fr');
+  assert.match(css,/grid-template-columns:repeat\(auto-fill,minmax\(0,min\(150px,100%\)\)\)/);
   assert.match(css,/data-size="medium"\]\{grid-template-columns:repeat\(auto-fill,minmax\(0,min\(215px,100%\)\)\)/);
   assert.match(css,/data-size="large"\]\{grid-template-columns:repeat\(auto-fill,minmax\(0,min\(320px,100%\)\)\)/);
-  assert.match(css,/data-size="small"\] \.modern-history-card-footer\{justify-content:space-between;flex-wrap:nowrap/);
+  assert.match(css,/\.modern-history-pin\{position:absolute;right:5px;top:5px/);
+  assert.match(css,/@media\(hover:none\)\{\.modern-history-pin\{opacity:1\}\}/);
   const {doc}=dom(),host=doc.createElement('div');
   ui.render(doc,host,[entry(3,'compare',true)],3,{
     select(){},restore(){},preview(){},pin(){},remove(){},multi(){}
   },{});
-  const body=host.children[0].children[1],footer=body.children[3];
-  assert.equal(body.children.length,4,'title, timestamp, regular actions and footer');
-  assert.equal(footer.children.length,3,'Info, action menu and checkbox share a footer');
-  assert.equal(footer.children[0].className,'modern-history-info');
-  assert.equal(footer.children[1].className,'modern-history-card-menu');
-  assert.equal(footer.children[2].className,'modern-history-multi');
+  const body=host.children[0].children[1],footer=body.children[2];
+  assert.equal(body.children.length,3,'title, timestamp and action footer');
+  assert.equal(footer.children.length,3,'menu, checkbox and overlay pin');
+  assert.equal(footer.children[0].className,'modern-history-card-menu');
+  assert.equal(footer.children[1].className,'modern-history-multi');
+  assert.equal(footer.children[2].className,'modern-history-pin');
+  assert.deepEqual(footer.children[0].children[1].children.map(x=>x.textContent),['View','Info','Delete']);
 });
 
 test('Visual History loaded before Modern app; restore guards remain and thumbnails stay outside experiment JSON',()=>{
@@ -262,7 +270,7 @@ function inspectorDom(){
   }
   doc.createElement=element;doc.body=element('body');return doc;
 }
-test('Hover inspector delays, stays viewport-bound, supports Info and Escape without Restore',async()=>{
+test('Hover inspector delays, stays viewport-bound, supports menu Info and Escape without Restore',async()=>{
   const doc=inspectorDom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
     preview:()=>{},pin:()=>{},remove:()=>{},multi:()=>{}};
@@ -285,11 +293,11 @@ test('Hover inspector delays, stays viewport-bound, supports Info and Escape wit
   card.listeners.mouseleave();overlay.listeners.mouseenter();
   await new Promise(resolve=>setTimeout(resolve,180));
   assert.equal(overlay.hidden,false,'pointer over tooltip keeps it open');
-  const info=card.children[1].children[3].children[0];
-  assert.equal(info.className,'modern-history-info');
+  const info=card.children[1].children[2].children[0].children[1].children[1];
+  assert.equal(info.textContent,'Info');
   info.listeners.click({stopPropagation(){}});
-  assert.equal(overlay.role,'dialog','Info pins inspector for touch users');
-  card.listeners.dblclick({target:{closest(selector){return selector.includes('.modern-history-info')?info:null;}}});
+  assert.equal(overlay.role,'dialog','menu Info pins inspector for touch users');
+  card.listeners.dblclick({target:{closest(selector){return selector.includes('.modern-history-card-menu')?info:null;}}});
   assert.equal(calls.length,0,'Info never restores a snapshot');
   doc.listeners.keydown({key:'Escape'});assert.equal(overlay.hidden,true);
   ui.render(doc,host,[cardEntry],1,actions,{});
