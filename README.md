@@ -261,7 +261,12 @@ composite A/B thumbnails, read-only enlargement, newest/oldest ordering,
 pinning, multi-selection, batch deletion and explicit clear-all. Screenshots
 are only attached when an accurate completed render matches the saved state;
 when the Canvas is stale/unavailable, the full experiment saves with a
-placeholder instead. Older Core entries are readable without migration.
+placeholder instead. The physical painter's background is transparent: history
+composites pixels on the same **white** backdrop seen in the live Modern
+viewport, instead of showing the gallery's navy background through the image.
+Previously stored transparent thumbnails also display over white without
+IndexedDB migration; opaque dark-filled older captures must be recreated.
+Older Core entries are readable without migration.
 Gallery UX: double-click a snapshot image or card text to restore it through the
 same protected recovery logic as **Restore selected**; one click selects.
 Card density has browser-local **S (compact, default) / M / L** choices; in S,

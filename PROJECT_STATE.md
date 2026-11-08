@@ -1,3 +1,12 @@
+> **History thumbnail correction (2026-11-08):** The physical painter
+> calls `clearRect`, leaving pixels transparent. The main Modern viewport
+> appears white via CSS, but History previously copied only the transparent
+> pixels, exposing its navy card background. The composer now adds the same
+> white backdrop before physical and guide layers in Scene and both Compare
+> viewports. Gallery cards and enlarged previews also use white behind old
+> alpha thumbnails; already encoded opaque-blue thumbnails require recapture.
+> This changes only image presentation, not optics, experiment JSON or IndexedDB.
+
 > **Current Modern UI consistency (2026-11-08):** Scene/Compare now use
 > compact contextual help instead of repeated paragraphs around the Compare
 > model editor and redraw controls. The selected Compare model's actual

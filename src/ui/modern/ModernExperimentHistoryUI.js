@@ -255,7 +255,9 @@
       if(entry.thumbnail&&entry.thumbnail.dataUrl){
         var image=el(doc,'img','modern-history-image');
         image.src=entry.thumbnail.dataUrl;image.alt=label(entry)+' thumbnail';image.loading='lazy';
-        select.appendChild(image);
+        // Old transparent snapshots can also be displayed over the same white
+        // background as their original physical view, without rewriting IDB.
+        select.className+=' has-preview';select.appendChild(image);
       }else{
         select.appendChild(el(doc,'span','modern-history-no-image','No preview available'));
       }

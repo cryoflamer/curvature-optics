@@ -10,7 +10,7 @@ function canvas(width=800,height=500){return {width,height};}
 function outputDoc(options={}){
   const operations=[];
   const ctx={drawImage(...args){operations.push(['draw',...args]);if(options.tainted)throw Error('Tainted canvas');},
-    fillRect(...args){operations.push(['fill',...args]);},fillText(...args){operations.push(['text',...args]);}};
+    fillRect(...args){operations.push(['fill',this.fillStyle,...args]);},fillText(...args){operations.push(['text',...args]);}};
   return {operations,createElement(name){
     if(name!=='canvas')throw Error('Canvas-only document');
     return {width:0,height:0,getContext(){return ctx;},toDataURL(type){
@@ -24,15 +24,18 @@ test('Scene captures one completed real Canvas image with bounded data, dimensio
   assert.deepEqual(captured,{dataUrl:'data:image/webp;base64,YQ==',width:480,height:300,mode:'scene'});
   assert.deepEqual(thumbnail.validate(captured,'scene'),captured);
   assert.equal(doc.operations.filter(x=>x[0]==='draw').length,1);
+  assert.deepEqual(doc.operations[0],['fill','#fff',0,0,480,300],
+    'opaque white viewport background must precede transparent physical pixels');
   assert.equal(doc.operations.filter(x=>x[0]==='text').length,0);
   assert.deepEqual(doc.operations.filter(x=>x[0]==='export').map(x=>x[1]),['image/webp']);
 });
-test('Thumbnail uses source aspect ratio without drawing artificial dark padding',()=>{
+test('Thumbnail uses source aspect ratio with the displayed white Canvas background, without bars',()=>{
   const doc=outputDoc(),wide=canvas(1200,400);
   const snap=thumbnail.capture(doc,'scene',[{layers:[wide]}]);
   assert.equal(snap.width,480);
   assert.equal(snap.height,160);
-  assert.equal(doc.operations.filter(op=>op[0]==='fill').length,0);
+  assert.deepEqual(doc.operations.filter(op=>op[0]==='fill'),
+    [['fill','#fff',0,0,480,160]],'white is the viewport backdrop, not a padded border');
   assert.deepEqual(doc.operations.filter(op=>op[0]==='draw')[0].slice(2),[0,0,480,160]);
   const tall=thumbnail.capture(outputDoc(),'scene',[{layers:[canvas(400,800)]}]);
   assert.equal(tall.width,150);
@@ -43,9 +46,27 @@ test('Compare composites both distinct A/B Canvas sources and retains guide over
   const captured=thumbnail.capture(doc,'compare',[{layers:[a,guides]},{layers:[b]}]);
   assert.equal(captured.width,960);assert.equal(captured.mode,'compare');
   assert.deepEqual(doc.operations.filter(x=>x[0]==='draw').map(x=>x[1]),[a,guides,b]);
+  assert.deepEqual(doc.operations.filter(x=>x[0]==='fill'&&x[1]==='#fff'),
+    [['fill','#fff',0,0,960,300]],'Compare keeps white underneath BOTH transparent views');
+  assert.deepEqual(doc.operations.slice(0,3).map(x=>x[0]),['fill','draw','draw'],
+    'white backdrop precedes the physical image and transparent guide overlay');
+  assert.ok(doc.operations.findIndex(x=>x[0]==='draw'&&x[1]===b)>2,
+    'B physical image is composited after A, its guides and label');
   assert.deepEqual(doc.operations.filter(x=>x[0]==='text').map(x=>x[1]),['A','B']);
   assert.notDeepEqual(doc.operations.filter(x=>x[0]==='draw')[0].slice(2),
     doc.operations.filter(x=>x[0]==='draw')[2].slice(2));
+});
+test('Thumbnail transparency matches the live white Modern viewport and legacy alpha images are displayed consistently',()=>{
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  const painter=fs.readFileSync(path.join(root,'src/renderers/CurvatureLegacyOrderPreview.js'),'utf8');
+  assert.match(painter,/ctx\.clearRect\(0,0,canvas\.width,canvas\.height\)/,
+    'the physical painter clears to transparent instead of painting a background');
+  assert.match(css,/\.modern-graph-host canvas\{[^}]*background:white/,
+    'the live physical viewport supplies the missing white backdrop through CSS');
+  assert.match(css,/\.modern-history-card-select\.has-preview\{background:#fff\}/,
+    'previously stored alpha thumbnails display over white without IDB migration');
+  assert.match(css,/\.modern-history-preview-image\{[^}]*background:#fff/,
+    'enlarged previews also display older alpha images over white');
 });
 test('Per-side render keys reject stale A/B images but retain unchanged opposite side',()=>{
   const e={scene:{camera:{Height:10},objects:{NObjects:[20,2]},showGrid:true,
@@ -101,6 +122,10 @@ test('Visual gallery selects, previews, pins and deletes via explicit actions on
   assert.equal(one.className.includes('is-selected'),true);
   assert.equal(two.className.includes('is-selected'),false);
   assert.equal(one.children[0].children[0].tagName,'img');
+  assert.match(one.children[0].className,/has-preview/,
+    'old transparency-preserving thumbnails render over white even without IDB migration');
+  assert.doesNotMatch(two.children[0].className,/has-preview/,
+    'thumbnail-less snapshots retain a readable empty-state background');
   assert.match(two.children[0].children[0].textContent,/No preview/);
   one.children[0].listeners.click();
   const buttons=one.children[1].children[2].children;

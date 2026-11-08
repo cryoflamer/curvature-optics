@@ -9,6 +9,10 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var MAX_DATA_LENGTH=750000,VIEW_WIDTH=480,VIEW_HEIGHT=300;
+  // The physical painter intentionally clears its Canvas to transparent. In
+  // the live Modern viewport CSS paints WHITE behind it; copying raw pixels
+  // without that backdrop exposes the gallery's navy card background instead.
+  var VIEWPORT_BACKGROUND='#fff';
   function capture(doc,mode,views){
     if(!doc||typeof doc.createElement!=='function'||
       !['scene','compare'].includes(mode)||!Array.isArray(views)||
@@ -27,6 +31,14 @@
       var sideWidth=Math.max(1,Math.round(first.width*fit));
       var sideHeight=Math.max(1,Math.round(first.height*fit));
       canvas.width=sideWidth*views.length;canvas.height=sideHeight;
+      // Recreate the actual displayed composition, not just the transparent
+      // backing-store pixels: physical scene over white, then presentation
+      // image and transparent guides, separately for both Compare viewports.
+      // Draw the backing AFTER setting canvas dimensions (resizing resets 2D
+      // state) and BEFORE any source/guide layers.
+      if(typeof ctx.fillRect!=='function')return null;
+      ctx.fillStyle=VIEWPORT_BACKGROUND;
+      ctx.fillRect(0,0,canvas.width,canvas.height);
       for(var i=0;i<views.length;i++){
         var view=views[i];
         if(!view||!Array.isArray(view.layers)||!view.layers.length)return null;
