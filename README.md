@@ -278,6 +278,13 @@ saved checkpoint wins. See the session notes in
 
 ### Modern Experiment History
 
+**Save snapshot** now appears below the Scene/Compare result only when the full
+current experiment is not already in History. Existing saved states display an
+**Already in History** indicator instead. Automatic History entries count as
+existing states; use Pin in History to protect them. Manual Save checks every
+saved full-state signature and never duplicates an older matching record.
+The History panel remains dedicated to browsing, restoring and organizing.
+
 Modern now has a separate **History** panel in the header (not a sixth settings
 or physics tab). It saves full, validated Scene/Compare snapshots in browser
 IndexedDB, with manual Save, automatic saves after stable physical-input edits,

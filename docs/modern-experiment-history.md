@@ -44,9 +44,20 @@ results.
 
 ## History Core and Visual History
 
-- **History** in the Modern header opens a minimal list. **Save snapshot now**
-  stores the full validated experiment (camera, two object groups, independent
-  Compare A/B physics, selected editor, saved camera poses/sequence, display).
+- **Save snapshot** is now immediately below the current Scene / Compare
+  result, not inside History. Once History finishes loading, the button appears
+  only if the current full experiment is absent from the saved records. A
+  matching entry shows **Already in History** instead. Equality uses the
+  canonical full experiment signature (including camera, objects, A/B physics,
+  display and camera animation; the currently selected A/B editor is ignored).
+  Automatic History can also satisfy this check; pin such a record in History
+  if it must be protected from automatic pruning. Changing only camera position
+  can make Save available again without generating an automatic snapshot.
+  Saving explicitly stores the full validated experiment and any available
+  accurate thumbnail. Manual Save is idempotent against *any* identical prior
+  entry, not just the latest; it protects an existing automatic entry rather
+  than producing a duplicate. A status message is shown if History is unavailable.
+- **History** in the Modern header opens the existing browser-local journal.
 - **Automatic snapshots** are scheduled 1.6 seconds after a completed redraw
   whose active physical configuration differs from the last observed baseline.
   Camera-only motion, Camera Animation playback, selecting A/B, section folds,
@@ -58,7 +69,7 @@ results.
   persists the current live experiment as a protected recovery point *before*
   changing the model, and then applies the target via existing `applyExperiment`.
   On failed/blocked/quota storage, the live experiment is not replaced. An
-  identical latest automatic entry is upgraded to protected if saved manually
+  identical existing automatic entry is upgraded to protected if saved manually
   or used as a recovery point.
 - **Delete selected** removes an unpinned record after confirmation; individual cards
   use corner icons for **Pin / Unpin** and **Delete**. A pinned record must be
@@ -160,7 +171,7 @@ specified. A screenshot crossfade is not a physical optics calculation.
 
 ## Smoke test in Opera
 
-1. Open Modern → History. Save a Scene state, change surface/atmosphere,
+1. Open Modern and use **Save snapshot** below Scene (or Compare) output. Open History, change surface/atmosphere,
    and wait for an automatic snapshot. Moving only the camera must not create
    more automatic snapshots.
 2. Save Compare A/B with different physics for A and B. Hover its thumbnail:

@@ -86,9 +86,10 @@
         var getAll=store.getAll();
         getAll.onsuccess=function(){
           var existing=ordered(getAll.result||[]),latest=existing[0];
-          // A recovery checkpoint must reuse ANY identical state in history,
-          // not only the newest record. Earlier snapshots remain restorable.
-          var match=source==='recovery'?existing.find(function(item){
+          // A deliberate manual save and a recovery checkpoint reuse ANY
+          // identical full experiment, even if newer entries exist. Automatic
+          // history still deduplicates only adjacent identical renders.
+          var match=source!=='auto'?existing.find(function(item){
             return item.signature===signature;
           }):latest&&latest.signature===signature?latest:null;
           if(match){

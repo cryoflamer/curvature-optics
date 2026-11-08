@@ -783,6 +783,7 @@
   }
   function scheduleExperimentSave(){
     if(!persistence.ready||!experiments||!root.location)return;
+    updateSnapshotSaveAction();
     persistence.dirty=true;
     if(persistence.timer!==null)clearTimeout(persistence.timer);
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
@@ -807,6 +808,33 @@
   // changed; camera gestures, keyframe playback, editor tabs and demo playback
   // cannot fill the journal with near-duplicates.
   var experimentHistory=null,historyBaseline=null,historyTimer=null,historyEpoch=0;
+  var savedHistorySignatures=null,snapshotSaveBusy=false;
+  var historyLoadError=null,snapshotSaveError=null;
+  // This is an in-memory index of persisted full-state signatures. Never query
+  // IndexedDB or calculate optics while toggling the Save Snapshot affordance.
+  function updateSnapshotSaveAction(){
+    var bar=newUiEl('ModernSnapshotSaveBar'),button=newUiEl('ModernSnapshotSave');
+    var status=newUiEl('ModernSnapshotSaveStatus');
+    if(!button||!status)return;
+    if(bar)bar.hidden=!!state.demosActive;
+    button.hidden=true;button.disabled=snapshotSaveBusy;
+    if(state.demosActive){status.textContent='';return;}
+    if(!persistence.ready){status.textContent='Preparing current experiment…';return;}
+    if(historyLoadError){status.textContent='History unavailable: '+historyLoadError;return;}
+    if(!savedHistorySignatures){status.textContent='Checking History…';return;}
+    try{
+      var signature=historyFingerprint.exactSignature(experimentSnapshot());
+      var existing=savedHistorySignatures.get(signature);
+      if(existing){
+        status.textContent=existing.pinned?'Already in History · protected':
+          'Already in History · automatic (pin it in History to keep it)';
+      }else{
+        status.textContent=snapshotSaveBusy?'Saving snapshot…':
+          snapshotSaveError?'Save failed: '+snapshotSaveError:'Not yet saved in History';
+        button.hidden=false;
+      }
+    }catch(error){status.textContent='Snapshot unavailable: '+error.message;}
+  }
   var historyMultiSelection=Object.create(null);
   var historyRenderedKeys={Scene:null,A:null,B:null};
   var HISTORY_IDLE_MS=1600;
@@ -898,6 +926,14 @@
     if(!experimentHistory)return Promise.resolve([]);
     var select=newUiEl('ModernHistorySelect');
     return experimentHistory.list().then(function(entries){
+      historyLoadError=null;snapshotSaveError=null;
+      savedHistorySignatures=new Map();
+      entries.forEach(function(entry){
+        // list() is newest-first; preserve the newest matching record.
+        if(!savedHistorySignatures.has(entry.signature))
+          savedHistorySignatures.set(entry.signature,entry);
+      });
+      updateSnapshotSaveAction();
       var ids=new Set(entries.map(function(entry){return entry.id;}));
       historySelectedIds().forEach(function(id){if(!ids.has(id))delete historyMultiSelection[id];});
       historyMultiCount();
@@ -1059,16 +1095,28 @@
         return refreshHistoryList('');
       });
     });});
-    el('ModernHistorySave').addEventListener('click',function(){handle(function(){
-      cancelEdits();
-      var snapshot=experimentSnapshot(),image=historyThumbnail(snapshot);
-      return experimentHistory.record(snapshot,'manual',image).then(function(result){
-        resetHistoryBaseline();
-        historyStatus((result.created?'Snapshot saved.':'Current snapshot already saved.')+
-          (!image&&!result.entry.thumbnail?' Accurate preview unavailable; full experiment is safe.':''));
-        return refreshHistoryList(result.entry.id);
-      });
-    });});
+    var saveSnapshot=newUiEl('ModernSnapshotSave');
+    if(saveSnapshot)saveSnapshot.addEventListener('click',function(){
+      if(snapshotSaveBusy)return;
+      snapshotSaveBusy=true;updateSnapshotSaveAction();
+      Promise.resolve().then(function(){
+        cancelEdits();
+        var snapshot=experimentSnapshot(),signature=historyFingerprint.exactSignature(snapshot);
+        // Another History operation may have committed since the last refresh.
+        // The store handles this race transactionally as well.
+        if(savedHistorySignatures&&savedHistorySignatures.has(signature))return null;
+        var image=historyThumbnail(snapshot);
+        return experimentHistory.record(snapshot,'manual',image).then(function(result){
+          resetHistoryBaseline();
+          historyStatus((result.created?'Snapshot saved.':'Current snapshot already saved.')+
+            (!image&&!result.entry.thumbnail?' Accurate preview unavailable; full experiment is safe.':''));
+          return result.entry.id;
+        });
+      }).then(function(id){return refreshHistoryList(id===null?undefined:id);})
+        .catch(function(error){historyStatus(error.message,true);
+          snapshotSaveError=error.message;
+        }).finally(function(){snapshotSaveBusy=false;updateSnapshotSaveAction();});
+    });
     el('ModernHistoryRestore').addEventListener('click',function(){handle(function(){
       return restoreHistorySnapshot(el('ModernHistorySelect').value);
     });});
@@ -1093,7 +1141,9 @@
       });
     });});
     experimentHistory.open().then(function(){return refreshHistoryList();}).catch(function(error){
+      historyLoadError=error.message;
       historyStatus('Experiment history unavailable: '+error.message,true);
+      updateSnapshotSaveAction();
     });
   }
   function applyExperiment(experiment){
@@ -3000,6 +3050,7 @@
     }
   }
   function scheduleRedraw(){
+    updateSnapshotSaveAction();
     cancelPending();
     // A slider may be edited immediately before Refresh/pagehide, before the
     // deferred optics redraw occurs. Persist its live value in that case.
@@ -3027,6 +3078,7 @@
     if(demosTab){demosTab.classList.toggle('is-active',demosActive);
       demosTab.setAttribute('aria-pressed',String(demosActive));}
     if(demosActive){
+      if(newUiEl('ModernSnapshotSaveBar'))newUiEl('ModernSnapshotSaveBar').hidden=true;
       cancelPending();
       state.demosActive=true;
       el('ModernSceneTab').classList.remove('is-active');
@@ -3039,6 +3091,7 @@
     if(state.demosActive&&demos)demos.deactivate();
     state.demosActive=false;
     state.mode=mode;
+    updateSnapshotSaveAction();
     resetHistoryBaseline();
     el('ModernSceneTab').classList.toggle('is-active',mode==='scene');
     el('ModernCompareTab').classList.toggle('is-active',mode==='compare');
@@ -3453,6 +3506,7 @@
       // Only user edits after complete restore are eligible for autosave.
       // Initial model construction must not overwrite either storage copy.
       persistence.ready=true;
+      updateSnapshotSaveAction();
       resetHistoryBaseline();
     }
     bindWorkingSessionLifecycle();

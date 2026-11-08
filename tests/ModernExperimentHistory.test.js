@@ -178,9 +178,12 @@ test('Modern panel integrates separately from library and never rewrites existin
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   assert.equal(ids.length,new Set(ids).size);
-  for(const id of ['ModernHistoryPanel','ModernHistoryToggle','ModernHistorySave','ModernHistorySelect',
+  for(const id of ['ModernHistoryPanel','ModernHistoryToggle','ModernSnapshotSave','ModernSnapshotSaveBar','ModernSnapshotSaveStatus','ModernHistorySelect',
     'ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto','ModernHistoryStatus'])
     assert.match(html,new RegExp('id="'+id+'"'));
+  assert.ok(html.indexOf('ModernSnapshotSaveBar')>html.indexOf('ModernCompareViews'));
+  assert.ok(html.indexOf('ModernSnapshotSaveBar')>html.indexOf('ModernHistoryPanel'));
+  assert.doesNotMatch(html,/id="ModernHistorySave"/);
   assert.ok(html.indexOf('ModernExperimentFingerprint.js')<html.indexOf('ModernExperimentHistory.js'));
   assert.ok(html.indexOf('ModernExperimentHistory.js')<html.indexOf('ModernApp.js'));
   assert.match(app,/experimentHistory\.record\(current,'recovery',historyThumbnail\(current\)\)\.then\(function\(backup\)/);
@@ -205,7 +208,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernModelOcclusion','ModernRecalculateCompare','ModernCompareEyeLevel','ModernCompareHorizon',
     'ModernCopyExperiment','ModernResetExperiment','ModernPersistenceStatus',
     'ModernHorizonStatusA','ModernHorizonStatusB',
-    'ModernHistoryPanel','ModernHistoryToggle','ModernHistoryClose','ModernHistorySave',
+    'ModernHistoryPanel','ModernHistoryToggle','ModernHistoryClose','ModernSnapshotSave',
+    'ModernSnapshotSaveBar','ModernSnapshotSaveStatus',
     'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
     'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
@@ -272,13 +276,19 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernHistoryToggle').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,25)); // allow accurate scheduled redraw to complete
   const store=app.getHistoryStore();assert.ok(store);
-  nodes.get('ModernHistorySave').listeners.click();
+  nodes.get('ModernSnapshotSave').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,60));
   const list=await store.list();assert.equal(list.length,1);assert.equal(list[0].source,'manual');
   assert.equal(list[0].thumbnail.mode,'scene','actual completed render is captured by Save');
   assert.equal(list[0].thumbnail.width,480);
   const id=list[0].id;
+  assert.equal(nodes.get('ModernSnapshotSave').hidden,true,'existing saved experiment hides Save');
+  assert.match(nodes.get('ModernSnapshotSaveStatus').textContent,/Already in History/);
   app.getModel().Height=66;
+  nodes.get('ModernRender').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,25));
+  assert.equal(nodes.get('ModernSnapshotSave').hidden,false,
+    'changing camera creates a new full experiment without auto-history');
   nodes.get('ModernHistorySelect').value=String(id);
   db.failAdd=true;
   nodes.get('ModernHistoryRestore').listeners.click();
@@ -315,6 +325,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.equal(auto.length,3);
   assert.equal(auto[0].source,'auto');
   assert.equal(auto[0].experiment.scene.atmosphere,'vacuum');
+  assert.equal(nodes.get('ModernSnapshotSave').hidden,true,
+    'new automatic History entry is recognized as saved');
   // Camera-only movement and a manual redraw must not flood the history.
   app.getModel().Height=22;
   nodes.get('ModernRender').listeners.click();
@@ -324,7 +336,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernCompareTab').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(app.getMode(),'compare');
-  nodes.get('ModernHistorySave').listeners.click();
+  nodes.get('ModernSnapshotSave').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,70));
   const pair=(await store.list())[0];
   assert.equal(pair.features.mode,'compare');
@@ -353,4 +365,21 @@ test('Visual History attaches bounded screenshots, upgrades deduplicated entries
   assert.equal((await h.list()).length,1);
   assert.equal(await h.clearAll(),1);
   assert.equal((await h.list()).length,0);
+});
+
+test('Manual Save reuses matching older snapshot, upgrades automatic entry and does not duplicate',async()=>{
+  const db=indexedDB(),h=history.create({indexedDB:db});
+  const scene=experiment('scene'),comparison=experiment('compare');
+  const first=await h.record(scene,'auto');
+  await h.record(comparison,'manual');
+  const again=await h.record(scene,'manual');
+  assert.equal(again.created,false);
+  assert.equal(again.entry.id,first.entry.id);
+  assert.equal(again.entry.source,'manual');
+  assert.equal(again.entry.pinned,true);
+  assert.equal((await h.list()).length,2);
+  // A later automatic snapshot still records real chronological changes.
+  const auto=await h.record(scene,'auto');
+  assert.equal(auto.created,true);
+  assert.equal((await h.list()).length,3);
 });
