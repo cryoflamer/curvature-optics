@@ -67,6 +67,8 @@
 <script src="src/ui/modern/ModernCompareState.js?v=140.12.97"></script>
 <script src="src/ui/modern/ModernExperimentState.js?v=camera-position"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
+<script src="src/ui/modern/ModernExperimentFingerprint.js"></script>
+<script src="src/ui/modern/ModernExperimentHistory.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
 <body>
@@ -79,7 +81,7 @@
       <button class="modern-tab" id="ModernCompareTab" type="button" aria-pressed="false">Compare</button>
       <button class="modern-tab" id="ModernDemosTab" type="button" aria-pressed="false">Demos</button>
     </nav>
-    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernLibraryToggle" aria-expanded="false" aria-controls="ModernExperimentLibraryPanel">Experiment library</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
+    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><button type="button" class="modern-ghost-button" id="ModernLibraryToggle" aria-expanded="false" aria-controls="ModernExperimentLibraryPanel">Experiment library</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
   <section id="ModernExperimentLibraryPanel" class="modern-library" aria-label="Experiment library" hidden>
     <div class="modern-library-top"><strong>Saved experiments</strong><button type="button" class="modern-ghost-button" id="ModernLibraryClose">Close</button></div>
@@ -87,6 +89,13 @@
     <div class="modern-library-row"><label for="ModernLibraryName">Name</label><input id="ModernLibraryName" type="text" maxlength="100" placeholder="e.g. Lake Pontchartrain — inverse optics"></div>
     <div class="modern-library-buttons"><button type="button" id="ModernLibrarySave">Save current</button><button type="button" id="ModernLibraryLoad">Load selected</button><button type="button" id="ModernLibraryDelete">Delete selected</button><button type="button" id="ModernLibraryExport">Export current JSON</button><button type="button" id="ModernLibraryImport">Import JSON</button><input type="file" id="ModernLibraryFile" accept=".json,application/json" hidden></div>
     <p id="ModernLibraryStatus" class="modern-library-status" role="status" aria-live="polite"></p>
+  </section>
+  <section id="ModernHistoryPanel" class="modern-library modern-history" aria-label="Experiment history" hidden>
+    <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
+    <p class="modern-history-hint">Automatic snapshots follow changes to physical settings. Camera moves, playback and editor tabs do not create entries. Manual snapshots retain the complete camera and experiment state.</p>
+    <div class="modern-library-row"><label for="ModernHistorySelect">Saved snapshot</label><select id="ModernHistorySelect"><option value="">No snapshots yet</option></select></div>
+    <div class="modern-library-buttons"><button type="button" id="ModernHistorySave">Save snapshot now</button><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button></div>
+    <p id="ModernHistoryStatus" class="modern-library-status" role="status" aria-live="polite"></p>
   </section>
   <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
   <div class="modern-workspace" id="ModernWorkspace">

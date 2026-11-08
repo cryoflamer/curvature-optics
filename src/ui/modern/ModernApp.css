@@ -392,3 +392,8 @@ button{cursor:pointer}
   .modern-sidebar .modern-two-fields{grid-template-columns:minmax(0,1fr)}
   .modern-sidebar .modern-object-grid{grid-template-columns:minmax(0,1fr)}
 }
+
+/* History Core: lightweight list until the thumbnail gallery is introduced. */
+.modern-history-hint{font-size:12px;line-height:1.5;color:#586e85;margin:0 0 12px}
+.modern-history select{max-width:680px}
+.modern-history button:disabled{opacity:.52;cursor:not-allowed}

@@ -248,3 +248,15 @@ camera/object fields stack into one column. This is a presentation-only pass;
 existing preferences, collapsible-section choices, saved experiments,
 renderers, and physical computation are unchanged. Visual behavior in the
 user's Opera browser should be checked after application.
+
+### Modern Experiment History
+
+Modern now has a separate **History** panel in the header (not a sixth settings
+or physics tab). It saves full, validated Scene/Compare snapshots in browser
+IndexedDB, with manual Save, automatic saves after stable physical-input edits,
+restore with a protected pre-restore checkpoint, delete and clear automatic.
+Camera movement alone never creates automatic entries. The current list is
+text-only; Scene and composite A/B thumbnails, filters and Storyboard are
+separate upcoming stages. See [Modern Experiment History](docs/modern-experiment-history.md)
+for retention, comparison semantics and browser checks. Existing experiment
+URLs/JSON and the named Experiment Library are unchanged.

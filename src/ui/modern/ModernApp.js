@@ -18,6 +18,8 @@
   var compareAdapter=root.CurvatureModernCompareModel;
   var compareState=root.CurvatureModernCompareState;
   var experiments=root.CurvatureModernExperimentState;
+  var historyFactory=root.CurvatureModernExperimentHistory;
+  var historyFingerprint=root.CurvatureModernExperimentFingerprint;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
@@ -712,6 +714,135 @@
     if(!persistence.ready||!experiments||!root.location)return;
     if(persistence.timer!==null)clearTimeout(persistence.timer);
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
+  }
+  // History lives in IndexedDB, not in the URL/legacy history or localStorage.
+  // A render produces an auto snapshot only after active physical inputs have
+  // changed; camera gestures, keyframe playback, editor tabs and demo playback
+  // cannot fill the journal with near-duplicates.
+  var experimentHistory=null,historyBaseline=null,historyTimer=null,historyEpoch=0;
+  var HISTORY_IDLE_MS=1600;
+  function historyStatus(message,error){
+    var node=newUiEl('ModernHistoryStatus');
+    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
+  }
+  function cancelHistoryAuto(){
+    historyEpoch++;
+    if(historyTimer!==null){clearTimeout(historyTimer);historyTimer=null;}
+  }
+  function historyPhysicalSignature(){
+    return historyFingerprint.physicalSignature(experimentSnapshot());
+  }
+  function resetHistoryBaseline(){
+    cancelHistoryAuto();
+    try{historyBaseline=historyPhysicalSignature();}
+    catch(error){historyBaseline=null;}
+  }
+  function queueHistoryAuto(){
+    if(!experimentHistory||!persistence.ready||state.demosActive||cameraTransition||autoCameraActive)return;
+    var key;
+    try{key=historyPhysicalSignature();}
+    catch(error){return;}
+    if(key===historyBaseline){cancelHistoryAuto();return;}
+    cancelHistoryAuto();
+    var generation=historyEpoch;
+    historyTimer=setTimeout(function(){
+      historyTimer=null;
+      if(!persistence.ready||state.demosActive||cameraTransition||autoCameraActive)return;
+      var snapshot,signature;
+      try{snapshot=experimentSnapshot();signature=historyFingerprint.physicalSignature(snapshot);}
+      catch(error){historyStatus('Auto-history capture failed: '+error.message,true);return;}
+      if(signature===historyBaseline)return;
+      experimentHistory.record(snapshot,'auto').then(function(result){
+        if(generation===historyEpoch)historyBaseline=signature;
+        if(result.created&&generation===historyEpoch)refreshHistoryList();
+      },function(error){historyStatus('Auto-history unavailable: '+error.message,true);});
+    },HISTORY_IDLE_MS);
+  }
+  function refreshHistoryList(selectedId){
+    if(!experimentHistory)return Promise.resolve([]);
+    var select=newUiEl('ModernHistorySelect');
+    return experimentHistory.list().then(function(entries){
+      if(!select)return entries;
+      var previous=selectedId===undefined?select.value:String(selectedId);
+      select.textContent='';
+      var placeholder=document.createElement('option');
+      placeholder.value='';placeholder.textContent=entries.length?'Choose snapshot':'No snapshots yet';
+      select.appendChild(placeholder);
+      entries.forEach(function(entry){
+        var option=document.createElement('option');option.value=String(entry.id);
+        var scene=entry.features&&entry.features.mode||entry.experiment.display.mode;
+        var label=scene==='compare'?'Compare A/B':'Scene';
+        option.textContent=new Date(entry.createdAt).toLocaleString()+' · '+label+' · '+entry.source+
+          (entry.pinned?' · saved':'');
+        select.appendChild(option);
+      });
+      if(previous&&entries.some(function(entry){return String(entry.id)===previous;}))select.value=previous;
+      return entries;
+    });
+  }
+  function bindHistory(){
+    var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
+    if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
+    experimentHistory=historyFactory.create({indexedDB:root.indexedDB});
+    function handle(operation){
+      Promise.resolve().then(operation).catch(function(error){historyStatus(error.message,true);});
+    }
+    toggle.addEventListener('click',function(){
+      panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));
+      if(!panel.hidden)handle(function(){return refreshHistoryList();});
+    });
+    el('ModernHistoryClose').addEventListener('click',function(){
+      panel.hidden=true;toggle.setAttribute('aria-expanded','false');
+    });
+    el('ModernHistorySave').addEventListener('click',function(){handle(function(){
+      cancelEdits();
+      var snapshot=experimentSnapshot();
+      return experimentHistory.record(snapshot,'manual').then(function(result){
+        resetHistoryBaseline();
+        historyStatus(result.created?'Snapshot saved.':'Current snapshot already saved.');
+        return refreshHistoryList(result.entry.id);
+      });
+    });});
+    el('ModernHistoryRestore').addEventListener('click',function(){handle(function(){
+      var id=el('ModernHistorySelect').value;
+      if(!id)throw RangeError('Select a history snapshot to restore');
+      return experimentHistory.get(id).then(function(entry){
+        if(!entry)throw RangeError('History snapshot not found');
+        var target=experiments.validate(entry.experiment);
+        // The pre-restore checkpoint must commit successfully BEFORE any
+        // mutation. On blocked/quota storage, leave the live model untouched.
+        cancelEdits();stopCameraTransition(false,'History restore interrupted animation',false);
+        stopCameraKeyboard(true);abortCameraDrag();cancelPending();cancelHistoryAuto();
+        var current=experimentSnapshot();
+        return experimentHistory.record(current,'recovery').then(function(backup){
+          if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
+          applyExperiment(target);syncNumericInputs();syncCompareEditor();
+          setMode(state.mode,false);resetHistoryBaseline();
+          historyStatus('Snapshot restored. Previous state '+
+            (backup.created?'saved as protected recovery point.':'already in history.'));
+          return refreshHistoryList(id);
+        });
+      });
+    });});
+    el('ModernHistoryDelete').addEventListener('click',function(){handle(function(){
+      var id=el('ModernHistorySelect').value;
+      if(!id)throw RangeError('Select a history snapshot to delete');
+      if(!root.confirm||!root.confirm('Delete selected history snapshot?'))return;
+      return experimentHistory.remove(id).then(function(deleted){
+        historyStatus(deleted?'Snapshot deleted.':'Snapshot not found.');return refreshHistoryList();
+      });
+    });});
+    el('ModernHistoryClearAuto').addEventListener('click',function(){handle(function(){
+      if(!root.confirm||!root.confirm('Delete all unpinned automatic snapshots?'))return;
+      return experimentHistory.clearAuto().then(function(count){
+        resetHistoryBaseline();
+        historyStatus('Removed '+count+' automatic snapshots. Manual and recovery snapshots kept.');
+        return refreshHistoryList();
+      });
+    });});
+    experimentHistory.open().then(function(){return refreshHistoryList();}).catch(function(error){
+      historyStatus('Experiment history unavailable: '+error.message,true);
+    });
   }
   function applyExperiment(experiment){
     stopCameraTransition(false,'Transition interrupted by experiment load',false);
@@ -2520,6 +2651,7 @@
         state.frame=null;pendingCompareScope=null;
         var startedAt=profileNow();
         try{
+          var previousA=state.compareLast.A,previousB=state.compareLast.B;
           var a=selected==='B'?null:measuredGraphRedraw(state.compareGraphs.A);
           var b=selected==='A'?null:measuredGraphRedraw(state.compareGraphs.B);
           var doneAt=profileNow();
@@ -2532,6 +2664,10 @@
           if(Number.isFinite(stage.canvasMs))line+=' · Canvas '+Math.round(stage.canvasMs)+' ms';
           showComputeTiming(line);
           observePreviewFrame('compare',doneAt-startedAt,!selected);
+          if(!liveMotion&&state.compareLast.A&&state.compareLast.B&&
+              (selected==='A'?state.compareLast.A!==previousA:
+                selected==='B'?state.compareLast.B!==previousB:
+                state.compareLast.A!==previousA&&state.compareLast.B!==previousB))queueHistoryAuto();
           if(renderProfiler)renderProfiler.recordBatch({mode:'compare',
             setupMs:scheduledAt-setupStartedAt,queueMs:startedAt-scheduledAt,totalMs:doneAt-startedAt,
             A:a||undefined,B:b||undefined});
@@ -2551,9 +2687,11 @@
         state.frame=null;
         var startedAt=profileNow();
         try{
+          var previousScene=state.last;
           var metrics=measuredGraphRedraw(graph);
           showComputeTiming('Scene rendered · '+Math.round(metrics.totalMs)+' ms');
           observePreviewFrame('Scene',metrics.totalMs,true);
+          if(!liveMotion&&state.last&&state.last!==previousScene)queueHistoryAuto();
           if(renderProfiler)renderProfiler.recordBatch({mode:'scene',
             setupMs:sceneScheduledAt-setupStartedAt,queueMs:startedAt-sceneScheduledAt,totalMs:profileNow()-startedAt,Scene:metrics});
         }finally{
@@ -2574,6 +2712,7 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode,remember){
+    if(state.mode!==mode)resetHistoryBaseline();
     if(remember!==false&&mode!==workspaceState.mode){workspaceState.mode=mode;saveApplicationPreferences();}
     stopCameraTransition(false,'Transition interrupted by workspace switch',false);
     stopAutoCameraPreview();
@@ -2601,6 +2740,7 @@
     if(state.demosActive&&demos)demos.deactivate();
     state.demosActive=false;
     state.mode=mode;
+    resetHistoryBaseline();
     el('ModernSceneTab').classList.toggle('is-active',mode==='scene');
     el('ModernCompareTab').classList.toggle('is-active',mode==='compare');
     el('ModernSceneTab').setAttribute('aria-pressed',String(mode==='scene'));
@@ -2988,6 +3128,7 @@
     if(demosTab)demosTab.addEventListener('click',function(){setMode('demos');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
     bindLibrary();
+    bindHistory();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
     var restored=restoreExperiment();
     if(!initialCamera)initialCamera=captureCameraPose();
@@ -3010,6 +3151,7 @@
       redraw();}
     if(restored||state.compareConfig)syncCompareEditor();
     persistence.ready=true;
+    resetHistoryBaseline();
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
@@ -3028,6 +3170,7 @@
     getCameraAnimation:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getCameraTransition:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
+    getHistoryStore:function(){return experimentHistory;},
     getWorkspaceState:function(){return {mode:state.demosActive?'demos':state.mode,
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:state.compareSelected,sections:Object.assign({},workspaceState.sections)};},

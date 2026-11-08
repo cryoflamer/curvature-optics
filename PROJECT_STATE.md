@@ -1922,3 +1922,21 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
 - Reset workspace layout changes only tabs and fold state. Reset application
   preferences also clears workspace choices. Neither changes optical algorithms,
   Camera Animation keyframes, Legacy controls or the experiment JSON schema.
+
+### Modern Experiment History Core
+
+- Header **History** opens a separate, minimal text list backed by IndexedDB.
+  Full snapshots are validated by `ModernExperimentState`; immutable stored
+  A/B metadata are derived by `ModernExperimentFingerprint`. No changes were
+  made to the v1 experiment serializer or optical calculations.
+- Physical-input changes after a completed redraw schedule a debounced auto
+  snapshot; camera-only motions, animation playback and workspace changes are
+  excluded. Manual snapshots preserve all camera and Compare information.
+  Consecutive duplicates are suppressed; manual Save upgrades duplicate auto
+  snapshots to protected entries.
+- Restore validates the target and commits the current experiment as a
+  protected recovery record before applying the requested saved state. A failed
+  checkpoint blocks restore. Only unpinned automatic records are subject to
+  200-entry retention and automatic clearing. Thumbnail capture, rich gallery,
+  advanced filters and Storyboard are deferred. See
+  `docs/modern-experiment-history.md` for usage and future design constraints.
