@@ -12,13 +12,13 @@ function storage(values={}){
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
   assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
   {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
@@ -144,4 +144,20 @@ test('History filters round-trip in browser preferences, independent of experime
   assert.deepEqual(badRelation.historyFilters,historyFilterDefaults);
   preferences.reset(db);
   assert.deepEqual(preferences.read(db).historyFilters,historyFilterDefaults);
+});
+
+test('Storyboard shortlist preferences are ordered, bounded, unique and never contain untrusted identifiers',()=>{
+  const db=storage();
+  const valid=[7,2,7,4,0,-3,3.2,'5',Number.MAX_SAFE_INTEGER+1];
+  assert.deepEqual(preferences.normalize({historyStoryboardQueue:valid}).historyStoryboardQueue,[7,2,4]);
+  assert.equal(Object.isFrozen(preferences.normalize({historyStoryboardQueue:[1]}).historyStoryboardQueue),true);
+  assert.deepEqual(preferences.normalize({historyStoryboardQueue:{0:1}}).historyStoryboardQueue,[]);
+  assert.equal(preferences.normalize({historyStoryboardQueue:Array.from({length:250},(_,i)=>i+1)}).historyStoryboardQueue.length,200);
+  preferences.write(db,{historyStoryboardQueue:[17,6,17,9],historyFilters:{mode:'scene'}});
+  const saved=JSON.parse(db.data.get(preferences.STORAGE_KEY));
+  assert.deepEqual(saved.historyStoryboardQueue,[17,6,9]);
+  assert.deepEqual(preferences.read(db).historyStoryboardQueue,[17,6,9]);
+  assert.equal(preferences.read(db).historyFilters.mode,'scene');
+  preferences.reset(db);
+  assert.deepEqual(preferences.read(db).historyStoryboardQueue,[]);
 });

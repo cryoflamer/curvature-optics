@@ -496,6 +496,21 @@ button{cursor:pointer}
 .modern-history-multi{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:10px;color:#526981;cursor:pointer}
 
 .modern-history-multi input{accent-color:#287ac5;width:15px;height:15px}
+.modern-history-bulk button:disabled,.modern-history-storyboard button:disabled{opacity:.45;cursor:not-allowed}
+.modern-history-storyboard{border:1px solid #d4e3f1;border-radius:9px;background:#f7fbff;
+  padding:10px 12px;margin:0 0 14px;color:#315777;font-size:12px}
+.modern-history-storyboard-heading{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.modern-history-storyboard-heading strong{font-size:13px;color:#254e72}
+.modern-history-storyboard-heading span{color:#5b758b;margin-right:auto}
+.modern-history-storyboard button{border:1px solid #c5d8ec;border-radius:6px;background:#fff;
+  color:#205b90;cursor:pointer;padding:4px 8px}
+.modern-history-storyboard p{font-size:11px;color:#698198;margin:5px 0 8px}
+.modern-history-storyboard ol{margin:0;padding:0 0 0 26px;max-height:240px;overflow:auto}
+.modern-history-storyboard li{padding:5px 0;border-top:1px solid #dfeaf5}
+.modern-history-storyboard-frame{display:flex;align-items:center;gap:7px}
+.modern-history-storyboard-name{flex:1;min-width:0;overflow-wrap:anywhere}
+.modern-history-storyboard-frame button{flex-shrink:0;min-width:28px}
+@media(max-width:480px){.modern-history-storyboard-frame{flex-wrap:wrap}}
 
 /* History annotations: compact per-card edit action and one shared modal. */
 .modern-history-rename{border:0;background:transparent;color:#37678f;font-size:17px;line-height:1;

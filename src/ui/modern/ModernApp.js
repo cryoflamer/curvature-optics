@@ -469,6 +469,7 @@
   var historyGallerySize='small';
   var historyPinnedCollapsed=false;
   var historyPanelOpen=false;
+  var historyStoryboardQueue=[];
   var historyFilters={query:'',mode:'all',geometry:'any',atmosphere:'any',
     geometryRelation:'any',refractionRelation:'any'};
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
@@ -496,6 +497,7 @@
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     historyPanelOpen=remembered.historyPanelOpen;
     historyFilters=remembered.historyFilters;
+    historyStoryboardQueue=remembered.historyStoryboardQueue.slice();
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
@@ -519,6 +521,7 @@
         geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
+        historyStoryboardQueue:historyStoryboardQueue,
         workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
@@ -649,6 +652,7 @@
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
       historyPanelOpen=defaults.historyPanelOpen;
       historyFilters=defaults.historyFilters;
+      historyStoryboardQueue=[];
       syncHistoryFilterControls();
       var historyPanel=newUiEl('ModernHistoryPanel'),historyToggle=newUiEl('ModernHistoryToggle');
       if(historyPanel)historyPanel.hidden=true;
@@ -852,6 +856,7 @@
     }catch(error){status.textContent='Snapshot unavailable: '+error.message;}
   }
   var historyMultiSelection=Object.create(null);
+  var historyShownIds=[];
   var historyRenderedKeys={Scene:null,A:null,B:null};
   var HISTORY_IDLE_MS=1600;
   // Timestamped physical renders are the only eligible screenshot sources.
@@ -934,9 +939,40 @@
     return Object.keys(historyMultiSelection).filter(function(id){return historyMultiSelection[id];})
       .map(Number).filter(Number.isSafeInteger);
   }
+  function historyVisibleSelectedIds(){
+    var shown=new Set(historyShownIds);
+    return historySelectedIds().filter(function(id){return shown.has(id);});
+  }
   function historyMultiCount(){
+    var count=historyVisibleSelectedIds().length;
     var node=newUiEl('ModernHistoryMultiCount');
-    if(node)node.textContent=historySelectedIds().length+' snapshots selected';
+    if(node)node.textContent=count+' shown '+(count===1?'snapshot':'snapshots')+' selected';
+    ['ModernHistoryClearChecked','ModernHistoryPinChecked','ModernHistoryDeleteChecked',
+      'ModernHistoryQueueChecked'].forEach(function(id){
+      var button=newUiEl(id);if(button)button.disabled=count===0;
+    });
+    var select=newUiEl('ModernHistorySelectVisible');
+    if(select)select.disabled=!historyShownIds.length||count===historyShownIds.length;
+  }
+  function renderHistoryStoryboard(entries){
+    var queue=newUiEl('ModernHistoryStoryboardQueue'),count=newUiEl('ModernHistoryQueueCount');
+    if(count)count.textContent=historyStoryboardQueue.length+' '+(historyStoryboardQueue.length===1?'frame':'frames');
+    var clear=newUiEl('ModernHistoryQueueClear');
+    if(clear)clear.disabled=historyStoryboardQueue.length===0;
+    if(historyUI&&historyUI.renderStoryboardQueue)
+      historyUI.renderStoryboardQueue(document,queue,historyStoryboardQueue,entries,{
+        move:function(id,step){
+          var pos=historyStoryboardQueue.indexOf(id),next=pos+step;
+          if(pos<0||next<0||next>=historyStoryboardQueue.length)return;
+          var item=historyStoryboardQueue.splice(pos,1)[0];
+          historyStoryboardQueue.splice(next,0,item);
+          saveApplicationPreferences();renderHistoryStoryboard(entries);
+        },
+        remove:function(id){
+          historyStoryboardQueue=historyStoryboardQueue.filter(function(value){return value!==id;});
+          saveApplicationPreferences();renderHistoryStoryboard(entries);
+        }
+      });
   }
   var historyMetadataEditingId=null;
   function closeHistoryMetadataEditor(){
@@ -979,12 +1015,25 @@
       updateSnapshotSaveAction();
       var ids=new Set(entries.map(function(entry){return entry.id;}));
       historySelectedIds().forEach(function(id){if(!ids.has(id))delete historyMultiSelection[id];});
-      historyMultiCount();
+      var surviving=historyStoryboardQueue.filter(function(id){return ids.has(id);});
+      if(surviving.length!==historyStoryboardQueue.length){
+        historyStoryboardQueue=surviving;saveApplicationPreferences();
+      }
+      renderHistoryStoryboard(entries);
       var visible=historyFiltersApi?historyFiltersApi.filter(entries,historyFilters):entries;
       var count=newUiEl('ModernHistoryFilterCount');
       if(count)count.textContent='Showing '+visible.length+' of '+entries.length+' snapshots';
       var order=newUiEl('ModernHistorySort');
       if(order&&order.value==='oldest')visible=visible.slice().reverse();
+      // A collapsed Pinned section contains no selectable cards. Never let a
+      // bulk action silently modify snapshots that are no longer shown.
+      historyShownIds=visible.filter(function(entry){return !!entry.pinned&&!historyPinnedCollapsed;})
+        .concat(visible.filter(function(entry){return !entry.pinned;}))
+        .map(function(entry){return entry.id;});
+      historySelectedIds().forEach(function(id){
+        if(!historyShownIds.includes(id))delete historyMultiSelection[id];
+      });
+      historyMultiCount();
       if(!select)return entries;
       var previous=selectedId===undefined?select.value:String(selectedId);
       select.textContent='';
@@ -1027,6 +1076,7 @@
         },
         setPinnedCollapsed:function(collapsed){
           historyPinnedCollapsed=collapsed;
+          historyMultiSelection=Object.create(null);
           saveApplicationPreferences();refreshHistoryList();
         },
         multi:function(id,checked){
@@ -1181,18 +1231,51 @@
     if(historySort)historySort.addEventListener('change',function(){
       handle(function(){return refreshHistoryList();});
     });
+    var selectVisible=newUiEl('ModernHistorySelectVisible');
+    if(selectVisible)selectVisible.addEventListener('click',function(){
+      historyShownIds.forEach(function(id){historyMultiSelection[id]=true;});
+      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+    });
+    var clearChecked=newUiEl('ModernHistoryClearChecked');
+    if(clearChecked)clearChecked.addEventListener('click',function(){
+      historyMultiSelection=Object.create(null);
+      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+    });
+    var queueChecked=newUiEl('ModernHistoryQueueChecked');
+    if(queueChecked)queueChecked.addEventListener('click',function(){handle(function(){
+      var selected=new Set(historyVisibleSelectedIds());
+      if(!selected.size)throw RangeError('Select shown snapshots first');
+      // The gallery ordering, not record ID or checkbox click order, defines
+      // insertion order. Existing picks are neither duplicated nor reordered.
+      var added=0;
+      historyShownIds.forEach(function(id){
+        if(selected.has(id)&&!historyStoryboardQueue.includes(id)&&historyStoryboardQueue.length<200){
+          historyStoryboardQueue.push(id);added++;
+        }
+      });
+      historyMultiSelection=Object.create(null);
+      saveApplicationPreferences();
+      historyStatus('Added '+added+' snapshots to Storyboard shortlist (max 200).');
+      return refreshHistoryList();
+    });});
+    var clearQueue=newUiEl('ModernHistoryQueueClear');
+    if(clearQueue)clearQueue.addEventListener('click',function(){
+      historyStoryboardQueue=[];
+      saveApplicationPreferences();
+      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+    });
     var pinChecked=newUiEl('ModernHistoryPinChecked');
     if(pinChecked)pinChecked.addEventListener('click',function(){handle(function(){
-      var ids=historySelectedIds();
-      if(!ids.length)throw RangeError('Select snapshots using the card checkboxes');
+      var ids=historyVisibleSelectedIds();
+      if(!ids.length)throw RangeError('Select shown snapshots using the card checkboxes');
       return Promise.all(ids.map(function(id){return experimentHistory.pin(id,true);})).then(function(){
         historyStatus('Pinned '+ids.length+' selected snapshots.');return refreshHistoryList();
       });
     });});
     var deleteChecked=newUiEl('ModernHistoryDeleteChecked');
     if(deleteChecked)deleteChecked.addEventListener('click',function(){handle(function(){
-      var ids=historySelectedIds();
-      if(!ids.length)throw RangeError('Select snapshots using the card checkboxes');
+      var ids=historyVisibleSelectedIds();
+      if(!ids.length)throw RangeError('Select shown snapshots using the card checkboxes');
       return experimentHistory.list().then(function(entries){
         if(entries.some(function(entry){return entry.pinned&&ids.includes(entry.id);}))
           throw RangeError('Unpin selected pinned snapshots before deletion');

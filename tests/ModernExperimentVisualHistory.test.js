@@ -385,3 +385,26 @@ test('Named snapshots expose description and automatic physical label in Preview
   assert.equal(inner.children[3].textContent,'Check height 15 m');
   ui.hideInspector(host);
 });
+
+test('Storyboard shortlist render preserves order and names without physics, with independent moves/removals',()=>{
+  const {doc}=dom(),host=doc.createElement('ol'),calls=[];
+  Object.defineProperty(host,'textContent',{get(){return '';},set(value){if(value==='')this.children=[];}});
+  const first=entry(12,'scene',false),second=entry(22,'compare',true);
+  first.name='Globe sunrise';second.name='Refracted skyline';
+  ui.renderStoryboardQueue(doc,host,[22,12],[first,second],{
+    move:(id,step)=>calls.push(['move',id,step]),
+    remove:id=>calls.push(['remove',id])});
+  assert.equal(host.children.length,2);
+  assert.equal(host.children[0].children[0].children[0].textContent,'Refracted skyline');
+  assert.equal(host.children[1].children[0].children[0].textContent,'Globe sunrise');
+  const earlier=host.children[0].children[0].children[1];
+  const later=host.children[0].children[0].children[2];
+  assert.equal(earlier.disabled,true);
+  assert.equal(later.disabled,false);
+  later.listeners.click({stopPropagation(){}});
+  host.children[1].children[0].children[3].listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls,[['move',22,1],['remove',12]]);
+  ui.renderStoryboardQueue(doc,host,[12],[first,second],{move(){},remove(){}});
+  assert.equal(host.children.length,1,'refresh replaces the shortlist; no duplicated DOM nodes');
+  assert.equal(host.children[0].children[0].children[0].textContent,'Globe sunrise');
+});

@@ -64,6 +64,14 @@
       refractionRelation:source.mode==='scene'?'any':from(HISTORY_RELATIONS,source.refractionRelation,'any')
     });
   }
+  function storyboardQueue(input){
+    var seen=new Set(),result=[];
+    if(Array.isArray(input))input.forEach(function(id){
+      if(!Number.isSafeInteger(id)||id<=0||seen.has(id)||result.length>=200)return;
+      seen.add(id);result.push(id);
+    });
+    return Object.freeze(result);
+  }
   function normalize(input){
     var data=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
     var nav=data.navigation&&typeof data.navigation==='object'&&!Array.isArray(data.navigation)?data.navigation:{};
@@ -75,6 +83,7 @@
       historyPinnedCollapsed:data.historyPinnedCollapsed===true,
       historyPanelOpen:data.historyPanelOpen===true,
       historyFilters:historyFilters(data.historyFilters),
+      historyStoryboardQueue:storyboardQueue(data.historyStoryboardQueue),
       displayPanels:panels(data.displayPanels),
       workspace:workspace(data.workspace),
       navigation:Object.freeze({speed:from(SPEEDS,nav.speed,10),
@@ -103,6 +112,7 @@
       previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
       historyGallerySize:data.historyGallerySize,historyPinnedCollapsed:data.historyPinnedCollapsed,
       historyPanelOpen:data.historyPanelOpen,historyFilters:data.historyFilters,
+      historyStoryboardQueue:data.historyStoryboardQueue,
       displayPanels:data.displayPanels,navigation:data.navigation,workspace:data.workspace}));
     // Old navigation data cannot override the new selection on reload.
     return true;

@@ -120,7 +120,12 @@
       <span id="ModernHistoryFilterCount" role="status" aria-live="polite">Showing 0 of 0 snapshots</span>
     </div>
     <div id="ModernHistoryGallery" class="modern-history-gallery" aria-label="Saved experiment thumbnails"></div>
-    <div class="modern-history-bulk"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistoryPinChecked" type="button">Pin selected</button><button id="ModernHistoryDeleteChecked" type="button">Delete selected</button></div>
+    <div class="modern-history-bulk" role="group" aria-label="Bulk selection of visible snapshots"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistorySelectVisible" type="button">Select shown</button><button id="ModernHistoryClearChecked" type="button">Clear selection</button><button id="ModernHistoryPinChecked" type="button">Pin checked</button><button id="ModernHistoryDeleteChecked" type="button">Delete checked</button><button id="ModernHistoryQueueChecked" type="button">Add to storyboard list</button></div>
+    <section class="modern-history-storyboard" aria-label="Storyboard shortlist">
+      <div class="modern-history-storyboard-heading"><strong>Storyboard shortlist</strong><span id="ModernHistoryQueueCount" role="status">0 frames</span><button id="ModernHistoryQueueClear" type="button">Clear list</button></div>
+      <p>Ordered saved snapshots for a future Storyboard. The list does not create an animation or protect unpinned automatic snapshots from cleanup.</p>
+      <ol id="ModernHistoryStoryboardQueue" aria-label="Storyboard frame order"></ol>
+    </section>
     <div class="modern-library-buttons"><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryPin">Pin / unpin selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>
     <div class="modern-history-portable" aria-label="History import and export">
       <button type="button" id="ModernHistoryExportSelected">Export selected snapshot</button>

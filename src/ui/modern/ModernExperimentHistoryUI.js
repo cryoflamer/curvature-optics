@@ -361,6 +361,30 @@
     section('Pinned',pinned,true,!!(options&&options.pinnedCollapsed));
     section('Recent',recent,false,false);
   }
+  // A Storyboard shortlist is an ordered list of stable History IDs, not an
+  // animation and not a second snapshot store. Refresh always resolves labels
+  // from the current records, so renaming cannot stale the display.
+  function renderStoryboardQueue(doc,host,ids,entries,actions){
+    if(!host||!doc)return;
+    host.textContent='';
+    var records=new Map(entries.map(function(entry){return [entry.id,entry];}));
+    ids.forEach(function(id,index){
+      var entry=records.get(id);
+      if(!entry)return;
+      var item=el(doc,'li');
+      var line=el(doc,'div','modern-history-storyboard-frame');
+      line.appendChild(el(doc,'span','modern-history-storyboard-name',displayName(entry)));
+      function action(symbol,title,disabled,fn){
+        var control=button(doc,symbol,title,fn);control.disabled=disabled;
+        control.className='modern-history-storyboard-control';
+        line.appendChild(control);
+      }
+      action('↑','Move frame '+(index+1)+' earlier',index===0,function(){actions.move(id,-1);});
+      action('↓','Move frame '+(index+1)+' later',index===ids.length-1,function(){actions.move(id,1);});
+      action('×','Remove frame '+(index+1)+' from shortlist',false,function(){actions.remove(id);});
+      item.appendChild(line);host.appendChild(item);
+    });
+  }
   function hideInspector(host){if(host&&host.__historyInspector)host.__historyInspector.hide();}
   function select(host,id){
     if(!host)return;
@@ -374,5 +398,5 @@
     });
   }
   return Object.freeze({render:render,select:select,label:label,displayName:displayName,inspect:inspect,
-    hideInspector:hideInspector,setSize:setSize});
+    hideInspector:hideInspector,setSize:setSize,renderStoryboardQueue:renderStoryboardQueue});
 }));

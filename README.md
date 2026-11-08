@@ -320,8 +320,15 @@ No new History schema is introduced.
 History supports browser-local **Search, Type, Geometry and Atmosphere** filters
 across both Pinned and Recent, with a match counter and persistent preferences.
 Compare A/B physical choices match either model, but combined Geometry and
-Atmosphere must apply to the same side. Detailed A/B Same/Different rules and
-Storyboard remain future stages. See [Modern Experiment History](docs/modern-experiment-history.md)
+Atmosphere must apply to the same side. **Geometry A/B** and **Refraction A/B**
+Same/Different use the active physical parameters, not merely model labels.
+**Select shown** checks only currently rendered cards; temporary bulk selection
+is cleared when filters change or Pinned collapses. Checked snapshots can be
+appended, without duplicates, to an ordered **Storyboard shortlist**, whose
+stable History IDs persist in browser-local preferences. Frames may be moved
+up/down or removed, and missing/deleted entries are pruned. The shortlist is
+not yet an animation; Storyboard editing and playback remain future stages.
+See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment URLs and plain JSON remain compatible; named Experiment Library records migrate into History.
 
 History snapshots support optional saved names/descriptions via ✎, independent of experiment JSON and Pin. **History replaces the former Experiment Library panel:** it provides **Export selected snapshot**, **Export all snapshots** and **Import JSON** for portable backups containing names, notes, pins and existing thumbnails. **Export current experiment JSON** retains the plain version-1 format for sharing with older Curvature builds. Old named localStorage Library entries are copied to History at first launch; the original data is not deleted. See `docs/modern-experiment-history.md` for migration and JSON compatibility details.

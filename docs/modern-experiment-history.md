@@ -175,6 +175,31 @@ Scene excludes A/B constraints, and that the same IDs appear in the dropdown and
 reload with History open, then clear filters and verify all original records
 remain unchanged. Check that the no-matches message differs from empty History.
 
+## Bulk selection and Storyboard shortlist
+
+The **Select shown** action checks only the currently rendered cards (respecting
+filters, sort order, and a collapsed Pinned section). **Clear selection** resets
+the temporary checkbox selection. Pin selected and Delete selected operate on
+shown checked records only; pinned deletion remains blocked and explicitly
+confirmed. Changing a filter or collapsing Pinned clears checkboxes rather
+than allowing hidden records to be deleted accidentally.
+
+**Add to storyboard list** copies checked visible snapshot **IDs** into a
+separate ordered shortlist. Its order is determined by the displayed gallery,
+including its current oldest/newest sort, and further picks append without
+duplicating previous ones. Each item shows its current name, can be moved
+up/down or removed, and the entire list can be cleared. Picks persist in local
+Application Preferences (up to 200 unique IDs); deleted/cleared History records
+are pruned automatically. It is a **selection plan**, not an animation: it does
+not store experiment copies, change physics, export a Storyboard, or rerender.
+The list is independent of Pin: unpinned auto snapshots may be removed by
+automatic cleanup and then disappear from the shortlist. Pin important ones.
+
+Manual check: save several snapshots, filter and select shown, add to the
+shortlist, then switch filters and add more. Verify ordering, duplicate
+suppression, persistence after reload, name updates, and pruning after deletion.
+Try collapsing Pinned: only rendered cards can be selected for bulk operations.
+
 ## Comparison semantics and future steps
 
 `ModernExperimentFingerprint` derives canonical active physical descriptors
