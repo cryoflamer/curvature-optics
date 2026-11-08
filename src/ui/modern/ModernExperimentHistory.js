@@ -18,6 +18,55 @@
   'use strict';
   var DATABASE='curvature-modern-experiment-history',VERSION=1,STORE='snapshots';
   var MAX_AUTO=200,MAX_NAME=120,MAX_DESCRIPTION=1000;
+  var PORTABLE_FORMAT='curvature-modern-history',PORTABLE_VERSION=1;
+  var MAX_PORTABLE_ITEMS=1000,MAX_PORTABLE_LENGTH=200000000;
+  function portableItem(value){
+    if(!value||typeof value!=='object'||Array.isArray(value))
+      throw RangeError('Invalid portable snapshot');
+    var allowed=['experiment','name','description','pinned','thumbnail','createdAt'];
+    if(Object.keys(value).some(function(key){return !allowed.includes(key);}))
+      throw RangeError('Unknown portable snapshot field');
+    var experiment=state.validate(value.experiment);
+    var metadata=validatedMetadata(value.name===undefined?'':value.name,
+      value.description===undefined?'':value.description);
+    if(value.pinned!==undefined&&typeof value.pinned!=='boolean')
+      throw RangeError('Invalid portable pin');
+    var createdAt=value.createdAt;
+    if(createdAt!==undefined&&(!Number.isSafeInteger(createdAt)||createdAt<0))
+      throw RangeError('Invalid portable timestamp');
+    return {experiment:experiment,name:metadata.name,description:metadata.description,
+      pinned:value.pinned===true,thumbnail:thumbnailApi.validate(value.thumbnail||null,
+        experiment.display.mode),createdAt:createdAt};
+  }
+  // Portable History preserves user annotations, pins and saved screenshots.
+  // Plain v1 experiment JSON from the former Library is also accepted.
+  function parsePortable(text){
+    if(typeof text!=='string'||text.length>MAX_PORTABLE_LENGTH)
+      throw RangeError('History JSON file too large');
+    var value=JSON.parse(text);
+    if(value&&value.version===state.VERSION&&value.scene&&value.compare&&value.display)
+      return [portableItem({experiment:value})];
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).sort().join(',')!=='format,snapshots,version'||
+      value.format!==PORTABLE_FORMAT||value.version!==PORTABLE_VERSION||
+      !Array.isArray(value.snapshots)||!value.snapshots.length||
+      value.snapshots.length>MAX_PORTABLE_ITEMS)
+      throw RangeError('Unsupported History JSON format');
+    return value.snapshots.map(portableItem);
+  }
+  function exportPortable(entries){
+    if(!Array.isArray(entries)||!entries.length||entries.length>MAX_PORTABLE_ITEMS)
+      throw RangeError('Select 1–'+MAX_PORTABLE_ITEMS+' snapshots to export');
+    var snapshots=entries.map(function(entry){
+      return portableItem({experiment:entry.experiment,name:entry.name||'',
+        description:entry.description||'',pinned:entry.pinned===undefined?false:entry.pinned,
+        thumbnail:entry.thumbnail||null,createdAt:entry.createdAt});
+    });
+    var text=JSON.stringify({format:PORTABLE_FORMAT,version:PORTABLE_VERSION,
+      snapshots:snapshots},null,2)+'\n';
+    if(text.length>MAX_PORTABLE_LENGTH)throw RangeError('History export is too large');
+    return text;
+  }
   function validatedMetadata(name,description){
     if(typeof name!=='string'||typeof description!=='string')
       throw TypeError('Snapshot name and description must be text');
@@ -127,6 +176,49 @@
         };
       });});
     }
+    // Import a whole archive atomically in one IndexedDB transaction. Unlike
+    // manual Save, differently named records with identical physics remain
+    // separate so old Library bookmarks do not silently lose their names.
+    // Re-importing the same (full state + name + notes) is idempotent.
+    function importEntries(items){
+      if(!Array.isArray(items)||!items.length||items.length>MAX_PORTABLE_ITEMS)
+        throw RangeError('Invalid History import list');
+      var prepared=items.map(function(raw){
+        var item=portableItem(raw);
+        item.signature=fp.exactSignature(item.experiment);
+        item.physicalSignature=fp.physicalSignature(item.experiment);
+        item.features=fp.features(item.experiment);
+        return item;
+      });
+      return serialize(function(){return transact('readwrite',function(store,set){
+        var allRecords=store.getAll();
+        allRecords.onsuccess=function(){
+          var records=allRecords.result||[],created=0,reused=0;
+          prepared.forEach(function(item){
+            var match=records.find(function(entry){return entry.signature===item.signature&&
+              (entry.name||'')===item.name&&(entry.description||'')===item.description;});
+            if(match){
+              reused++;
+              var changed=false;
+              if(match.source==='auto'){match.source='manual';changed=true;}
+              if(item.pinned&&!match.pinned){match.pinned=true;changed=true;}
+              if(item.thumbnail&&!match.thumbnail){match.thumbnail=item.thumbnail;changed=true;}
+              if(changed)store.put(match);
+              return;
+            }
+            var record={version:VERSION,createdAt:item.createdAt===undefined?now():item.createdAt,
+              source:'manual',pinned:item.pinned,name:item.name,description:item.description,
+              experiment:item.experiment,signature:item.signature,
+              physicalSignature:item.physicalSignature,features:item.features,
+              thumbnail:item.thumbnail};
+            // Add the prepared record to the transaction and to the local
+            // deduplication index before processing the next imported item.
+            store.add(record);records.push(record);created++;
+          });
+          set({created:created,reused:reused});
+        };
+      });});
+    }
     // Edit user annotations only. Keep the validated experiment and its stable
     // signature, thumbnail, pin, timestamps and history identity untouched.
     // Named automatic entries are promoted to manual retention (not pinned).
@@ -177,8 +269,11 @@
         set(removed);
       };
     });});}
-    return Object.freeze({open:open,list:list,get:get,record:record,updateMetadata:updateMetadata,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
+    return Object.freeze({open:open,list:list,get:get,record:record,importEntries:importEntries,updateMetadata:updateMetadata,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
   }
   return Object.freeze({DATABASE:DATABASE,VERSION:VERSION,STORE:STORE,
-    MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,create:create});
+    MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,
+    PORTABLE_FORMAT:PORTABLE_FORMAT,MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,
+    MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,parsePortable:parsePortable,
+    exportPortable:exportPortable,create:create});
 }));

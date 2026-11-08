@@ -52,7 +52,7 @@ Not every module is solely owned by the listed layer. Verify **actual callers an
 
 ## State persistence and compatibility
 
-- Modern configuration is an allowlisted, versioned payload managed by `ModernExperimentState.js`. **Copy experiment URL** writes a Modern `?ui=modern&experiment=...` link. The **Experiment library** stores named configurations in browser local storage (`curvature-modern-library-v1`) and supports JSON export/import. This library remains active and is **not** an archive of research benchmarks.
+- Modern configuration is an allowlisted, versioned payload managed by `ModernExperimentState.js`. **Copy experiment URL** writes a Modern `?ui=modern&experiment=...` link. **History** is the sole active archive in IndexedDB; portable History JSON retains names, descriptions, pins, screenshots and versioned experiment states. `ModernExperimentLibrary.js` remains loaded only as a backward-compatible plain-JSON codec and to migrate old named localStorage entries (`curvature-modern-library-v1`) without deleting that data. History imports are validated before a single IndexedDB transaction, and its JSON format is separate from the URL experiment schema.
 - Legacy uses its existing `?demo=...`, one-based `?pos=...`, `?play=...` and `?state=` semantics. For actual precedence and delayed application, see [Legacy preservation](legacy-preservation-contract.md).
 - There is **no promised one-to-one conversion** of Legacy demos or saved states to Modern. See [compatibility findings](legacy-modern-compatibility.md) for the mapping barriers.
 

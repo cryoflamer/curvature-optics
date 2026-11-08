@@ -1,4 +1,8 @@
-/* Named local experiments; always reuse the versioned experiment validator. */
+/* Compatibility reader for named local experiments created before History.
+ * New browser saves live in IndexedDB History; the old library is never
+ * overwritten or deleted during migration. Plain v1 experiment JSON remains
+ * compatible with existing saved files and shared URLs.
+ */
 (function(root,factory){
   var validator=root.CurvatureModernExperimentState;
   if(!validator&&typeof module==='object'&&module.exports)validator=require('./ModernExperimentState');
@@ -7,7 +11,7 @@
   root.CurvatureModernExperimentLibrary=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(state){
   'use strict';
-  var KEY='curvature-modern-library-v1',MAX_ENTRIES=50,MAX_JSON=200000;
+  var KEY='curvature-modern-library-v1',MIGRATION_KEY='curvature-modern-library-migrated-v1',MAX_ENTRIES=50,MAX_JSON=200000;
   function requireState(){if(!state||!state.validate)throw Error('Experiment validator unavailable');}
   function nameOf(name){
     if(typeof name!=='string')throw RangeError('Experiment name must be text');
@@ -53,6 +57,24 @@
     if(filtered.length===entries.length)throw RangeError('Experiment not found');
     return write(storage,filtered);
   }
+  function migrate(storage,history){
+    if(!history||typeof history.importEntries!=='function')
+      return Promise.reject(Error('History storage unavailable'));
+    try{
+      if(!storage)throw Error('Browser storage unavailable');
+      if(storage.getItem(MIGRATION_KEY)==='done')return Promise.resolve({skipped:true});
+      var entries=read(storage);
+      if(!entries.length){storage.setItem(MIGRATION_KEY,'done');return Promise.resolve({created:0,reused:0});}
+      return history.importEntries(entries.map(function(entry){
+        return {experiment:entry.experiment,name:entry.name,description:'',pinned:false};
+      })).then(function(result){
+        // Mark only after the whole IndexedDB transaction committed. The old
+        // localStorage record remains intact for rollback or backup.
+        storage.setItem(MIGRATION_KEY,'done');
+        return result;
+      });
+    }catch(error){return Promise.reject(error);}
+  }
   function importJson(text){
     if(typeof text!=='string'||text.length>MAX_JSON)throw RangeError('JSON file too large');
     var parsed=JSON.parse(text);
@@ -60,6 +82,7 @@
     return state.validate(parsed);
   }
   function exportJson(experiment){return JSON.stringify(state.validate(experiment),null,2)+'\n';}
-  return Object.freeze({KEY:KEY,MAX_ENTRIES:MAX_ENTRIES,read:read,write:write,save:save,
+  return Object.freeze({KEY:KEY,MIGRATION_KEY:MIGRATION_KEY,MAX_ENTRIES:MAX_ENTRIES,
+    migrate:migrate,read:read,write:write,save:save,
     remove:remove,importJson:importJson,exportJson:exportJson,nameOf:nameOf});
 }));

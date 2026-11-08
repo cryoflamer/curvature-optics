@@ -318,7 +318,6 @@ The popup is viewport-bounded, stays open while hovered and can be locked with
 IndexedDB query or optics recalculation happens when inspecting a snapshot.
 No new History schema is introduced.
 Smart semantic A/B filters and Storyboard remain future stages. See [Modern Experiment History](docs/modern-experiment-history.md)
-for retention, comparison semantics and browser checks. Existing experiment
-URLs/JSON and the named Experiment Library are unchanged.
+for retention, comparison semantics and browser checks. Existing experiment URLs and plain JSON remain compatible; named Experiment Library records migrate into History.
 
-History snapshots now support optional saved names/descriptions via the ✎ action, independent of experiment JSON and Pin. See `docs/modern-experiment-history.md` for details and current JSON portability limits.
+History snapshots support optional saved names/descriptions via ✎, independent of experiment JSON and Pin. **History replaces the former Experiment Library panel:** it provides **Export selected snapshot**, **Export all snapshots** and **Import JSON** for portable backups containing names, notes, pins and existing thumbnails. **Export current experiment JSON** retains the plain version-1 format for sharing with older Curvature builds. Old named localStorage Library entries are copied to History at first launch; the original data is not deleted. See `docs/modern-experiment-history.md` for migration and JSON compatibility details.

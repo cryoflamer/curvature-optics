@@ -47,7 +47,7 @@ test('140.12.74: production CPU RK4, A/B Compare, WebGL2 and capability reportin
   assert.match(app,/CurvatureMainCanvasRenderer\.renderPhysical\(g,m,options\)/);
   assert.match(compare,/return Object\.freeze\(\{pair:pair,clone:clone,invariant:invariant\}\)/);
   for(const id of ['ModernSceneTab','ModernCompareTab','ModernGpuCheck','ModernGeometryBackend',
-    'ModernLibraryToggle','ModernLibrarySave','ModernCompareViews'])
+    'ModernHistoryToggle','ModernHistoryImport','ModernCompareViews'])
     assert.ok(modern.includes('id="'+id+'"'),id);
   assert.match(legacy,/CurvatureDemos\.js/);
   assert.ok(fs.existsSync(path.join(root,'tests/fixtures/legacy-browser-references.zip')));

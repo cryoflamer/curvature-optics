@@ -54,8 +54,8 @@ test('140.12.75: running instructions match both supported entry points', () => 
 test('140.12.75: modern documented controls still exist', () => {
   const html = read('CurvatureModern.html');
   for (const id of ['ModernSceneTab','ModernCompareTab', 'ModernRender',
-    'ModernRecalculateCompare', 'ModernExperimentLibraryPanel','ModernLibrarySave',
-    'ModernLibraryExport','ModernLibraryImport','ModernGpuCheck','ModernGeometryBackend'])
+    'ModernRecalculateCompare', 'ModernHistoryPanel','ModernHistoryExportSelected',
+    'ModernHistoryExportAll','ModernHistoryImport','ModernGpuCheck','ModernGeometryBackend'])
     assert.ok(html.includes(`id="${id}"`), id);
   assert.match(html, /option value="canvas"/);
   assert.match(html, /option value="webgl2"/);

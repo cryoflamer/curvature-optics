@@ -59,7 +59,9 @@ Do **not** treat a matching silhouette or a pixel difference alone as proof of p
 ### Save and share Modern scenes
 
 - **Copy experiment URL** creates a direct `CurvatureModern.html?ui=modern&experiment=...` link. Its data format is different from Legacy `?state=`.
-- **Experiment library** saves and loads named browser-local configurations and can **Export current JSON** / **Import JSON**. A saved browser-library entry is not a portable backup until exported; local storage is browser/profile-specific.
+- **History** is now the single browser-local archive for named and automatic experiments. Use **Save snapshot** below the Scene/Compare result, ✎ in History to add a name and notes, and **Restore selected** or double-click to load a saved configuration.
+- **History → Export selected snapshot** or **Export all snapshots** creates portable JSON including annotations, pins and available previews; **Import JSON** adds validated snapshots to History (it does not silently replace the live experiment). **Export current experiment JSON** preserves the original plain v1 schema for shared URLs and older releases.
+- Named entries from the retired Experiment Library (`curvature-modern-library-v1` in localStorage) are copied automatically into History on startup; the original library is retained for rollback. If IndexedDB is unavailable, migration is retried on a later load. Browser storage is still device/profile/origin-specific until exported.
 - Historical `gpuProbe` fields may still be accepted by the experiment validator for backward compatibility. They **do not** restore the removed research execution paths.
 
 ## If something goes wrong

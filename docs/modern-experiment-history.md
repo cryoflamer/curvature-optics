@@ -1,6 +1,6 @@
 # Modern Experiment History
 
-Modern's Experiment History is separate from **Experiment Library** and from the
+Modern's Experiment History now replaces the former **Experiment Library** UI and remains separate from the
 working-session autosave and experiment URL mechanism. It never changes the experiment JSON v1 schema,
 Scene/Compare renderer, or Legacy state.
 
@@ -235,7 +235,47 @@ remove the annotated work. This does **not** set Pin: Pinned remains a gallery
 selection for future Storyboards. Clearing annotations later does not demote
 that record back to automatic history.
 
-The existing Experiment Library JSON export and URLs serialize **experiment
-physics only**, not History annotations. Portable export/import of annotated
-History records belongs to the upcoming Library/History consolidation; do not
-assume that exporting a bare experiment JSON includes name or description.
+## Unified archive and portable JSON
+
+The separate **Experiment Library** panel was retired. History is now the
+single interface for selecting, restoring, naming and managing saved Modern
+Scene/Compare states. **Save snapshot** stays below the active experiment;
+manual snapshots are kept as long-lived records. The former Library reader
+remains in the source only for migration and compatible plain experiment JSON.
+
+History has four portable actions:
+
+- **Export selected snapshot** exports the chosen History record (use the
+  selected-snapshot dropdown first). **Export all snapshots** backs up the
+  journal, including protected manual/recovery and automatic records. Both use
+  `format: "curvature-modern-history"`, `version: 1` and a `snapshots` array.
+  Each entry contains validated version-1 `experiment`, optional `name` and
+  `description`, `pinned`, `createdAt` and an existing `thumbnail` or `null`.
+  History IDs and private storage keys are intentionally *not* portable.
+- **Import JSON** accepts either the History archive or an older bare Modern
+  experiment JSON. Input is strictly validated (up to 1000 records and a
+  bounded JSON payload) before making any writes. A whole import is committed
+  in one IndexedDB transaction; invalid data changes nothing. Identical
+  full-state+name+description records are reused, while distinct named copies
+  remain separate even when their physical state is identical. Imported items
+  are durable manual entries. Import does not replace the current live model;
+  select the imported record and use Restore when ready.
+- **Export current experiment JSON** retains the original plain v1 JSON format
+  and deliberately excludes History annotations, for compatibility with older
+  Curvature and direct `?experiment=` URLs.
+
+**One-time legacy migration:** on History startup, previously saved names and
+experiments from `localStorage['curvature-modern-library-v1']` are copied into
+IndexedDB as *manual, unpinned* records; distinct names are preserved, even
+for identical physics. The migration marker is written only after successful
+commit. Import is idempotent, so a crash before the marker is safe to retry.
+The original localStorage library is never deleted or rewritten. If legacy
+storage is malformed, unavailable, or IndexedDB is blocked, History continues
+operating when possible and reports the migration problem; old data is retained
+for troubleshooting. Pin still means gallery selection, not long-term
+retention, and future Storyboards should reference stable in-browser IDs.
+
+**Backup caution:** History and thumbnails are browser-local until exported.
+An exported archive can be large when it contains many real-Canvas thumbnails;
+large files may exceed the importer size limit. URLs and bare experiment JSON
+are not complete History backups.

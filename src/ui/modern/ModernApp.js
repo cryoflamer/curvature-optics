@@ -1049,6 +1049,13 @@
   function handleHistoryRestore(id){
     return restoreHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
   }
+  function downloadHistoryJson(contents,filename){
+    var address=URL.createObjectURL(new Blob([contents],{type:'application/json'}));
+    try{
+      var anchor=document.createElement('a');anchor.href=address;anchor.download=filename;
+      document.body.appendChild(anchor);anchor.click();anchor.remove();
+    }finally{setTimeout(function(){URL.revokeObjectURL(address);},1000);}
+  }
   function bindHistory(){
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
@@ -1198,7 +1205,60 @@
         return refreshHistoryList();
       });
     });});
-    experimentHistory.open().then(function(){return refreshHistoryList();}).catch(function(error){
+    var exportSelected=newUiEl('ModernHistoryExportSelected');
+    if(exportSelected)exportSelected.addEventListener('click',function(){handle(function(){
+      var id=newUiEl('ModernHistorySelect').value;
+      if(!id)throw RangeError('Select a snapshot to export');
+      return experimentHistory.get(id).then(function(entry){
+        if(!entry)throw RangeError('Snapshot not found');
+        downloadHistoryJson(historyFactory.exportPortable([entry]),'curvature-snapshot.json');
+        historyStatus('Snapshot exported with name, notes and preview.');
+      });
+    });});
+    var exportAll=newUiEl('ModernHistoryExportAll');
+    if(exportAll)exportAll.addEventListener('click',function(){handle(function(){
+      return experimentHistory.list().then(function(entries){
+        if(!entries.length)throw RangeError('No snapshots to export');
+        downloadHistoryJson(historyFactory.exportPortable(entries),'curvature-history.json');
+        historyStatus('Exported '+entries.length+' snapshots with annotations.');
+      });
+    });});
+    var exportCurrent=newUiEl('ModernHistoryExportCurrent');
+    if(exportCurrent)exportCurrent.addEventListener('click',function(){handle(function(){
+      cancelEdits();
+      downloadHistoryJson(root.CurvatureModernExperimentLibrary.exportJson(experimentSnapshot()),
+        'curvature-experiment.json');
+      historyStatus('Current experiment exported as compatible plain JSON.');
+    });});
+    var importButton=newUiEl('ModernHistoryImport'),importFile=newUiEl('ModernHistoryImportFile');
+    if(importButton&&importFile){
+      importButton.addEventListener('click',function(){importFile.value='';importFile.click();});
+      importFile.addEventListener('change',function(){
+        var file=importFile.files&&importFile.files[0];if(!file)return;
+        if(file.size>historyFactory.MAX_PORTABLE_LENGTH){
+          historyStatus('History JSON file too large.',true);return;
+        }
+        file.text().then(function(contents){
+          var entries=historyFactory.parsePortable(contents);
+          return experimentHistory.importEntries(entries).then(function(result){
+            return refreshHistoryList().then(function(){
+              historyStatus('Imported '+result.created+' snapshots; '+result.reused+
+                ' already present. Use Restore to load an imported experiment.');
+            });
+          });
+        }).catch(function(error){historyStatus('Import failed: '+error.message,true);});
+      });
+    }
+    experimentHistory.open().then(function(){
+      var oldLibrary=root.CurvatureModernExperimentLibrary;
+      if(!oldLibrary)return;
+      return oldLibrary.migrate(root.localStorage,experimentHistory).then(function(result){
+        if(result&&!result.skipped&&result.created)
+          historyStatus('Imported '+result.created+' named Library experiments. Original local data retained.');
+      }).catch(function(error){
+        historyStatus('Old Library migration pending: '+error.message,true);
+      });
+    }).then(function(){return refreshHistoryList();}).catch(function(error){
       historyLoadError=error.message;
       historyStatus('Experiment history unavailable: '+error.message,true);
       updateSnapshotSaveAction();
@@ -1331,65 +1391,6 @@
     if(!experiments)return;
     var copy=el('ModernCopyExperiment');if(copy)copy.addEventListener('click',copyExperimentUrl);
     var reset=el('ModernResetExperiment');if(reset)reset.addEventListener('click',resetExperiment);
-  }
-  function bindLibrary(){
-    var library=root.CurvatureModernExperimentLibrary;
-    if(!library)return;
-    var panel=el('ModernExperimentLibraryPanel'),select=el('ModernLibrarySelect');
-    var name=el('ModernLibraryName'),file=el('ModernLibraryFile');
-    function status(message,error){var node=el('ModernLibraryStatus');if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}}
-    function execute(action){try{action();}catch(error){status(error.message,true);}}
-    function refresh(selected){
-      var entries=library.read(root.localStorage);
-      select.textContent='';
-      var placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose saved experiment';select.appendChild(placeholder);
-      entries.forEach(function(entry){var option=document.createElement('option');option.value=entry.name;option.textContent=entry.name;select.appendChild(option);});
-      if(selected&&entries.some(function(e){return e.name===selected;}))select.value=selected;
-      return entries;
-    }
-    el('ModernLibraryToggle').addEventListener('click',function(){
-      panel.hidden=!panel.hidden;this.setAttribute('aria-expanded',String(!panel.hidden));
-      if(!panel.hidden)execute(function(){refresh();});
-    });
-    el('ModernLibraryClose').addEventListener('click',function(){panel.hidden=true;el('ModernLibraryToggle').setAttribute('aria-expanded','false');});
-    select.addEventListener('change',function(){if(select.value)name.value=select.value;});
-    el('ModernLibrarySave').addEventListener('click',function(){execute(function(){
-      cancelEdits();var current=experimentSnapshot(),label=library.nameOf(name.value);
-      var existing=library.read(root.localStorage).some(function(e){return e.name.toLocaleLowerCase()===label.toLocaleLowerCase();});
-      if(existing&&(!root.confirm||!root.confirm('Replace saved experiment "'+label+'"?')))return;
-      library.save(root.localStorage,label,current);refresh(label);status('Saved: '+label);
-    });});
-    el('ModernLibraryLoad').addEventListener('click',function(){execute(function(){
-      var entry=library.read(root.localStorage).find(function(e){return e.name===select.value;});
-      if(!entry)throw RangeError('Select an experiment to load');
-      cancelEdits();cancelPending();applyExperiment(entry.experiment);
-      syncNumericInputs();syncCompareEditor();setMode(state.mode);
-      scheduleExperimentSave();status('Loaded: '+entry.name);
-    });});
-    el('ModernLibraryDelete').addEventListener('click',function(){execute(function(){
-      if(!select.value)throw RangeError('Select an experiment to delete');
-      var label=select.value;
-      if(!root.confirm||!root.confirm('Delete saved experiment "'+label+'"?'))return;
-      library.remove(root.localStorage,label);refresh();status('Deleted: '+label);
-    });});
-    el('ModernLibraryExport').addEventListener('click',function(){execute(function(){
-      cancelEdits();var data=library.exportJson(experimentSnapshot());
-      var url=URL.createObjectURL(new Blob([data],{type:'application/json'}));
-      var anchor=document.createElement('a');anchor.href=url;anchor.download='curvature-experiment.json';
-      document.body.appendChild(anchor);anchor.click();anchor.remove();
-      setTimeout(function(){URL.revokeObjectURL(url);},1000);status('Current experiment exported as JSON');
-    });});
-    el('ModernLibraryImport').addEventListener('click',function(){file.value='';file.click();});
-    file.addEventListener('change',function(){
-      var picked=file.files&&file.files[0];if(!picked)return;
-      if(picked.size>200000){status('JSON file too large',true);return;}
-      picked.text().then(function(text){execute(function(){
-        var experiment=library.importJson(text);
-        // Import applies after full validation, but does not silently overwrite named entries.
-        cancelEdits();cancelPending();applyExperiment(experiment);syncNumericInputs();syncCompareEditor();setMode(state.mode);
-        scheduleExperimentSave();status('Imported JSON into current experiment; save it with a name to keep it');
-      });},function(error){status('Cannot read JSON: '+error.message,true);});
-    });
   }
   // Compact physics summaries reflect live model state, not workspace preferences.
   // Mathematical model caveats remain visible outside collapsed help/equations.
@@ -3537,7 +3538,6 @@
     var demosTab=newUiEl('ModernDemosTab');
     if(demosTab)demosTab.addEventListener('click',function(){setMode('demos');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
-    bindLibrary();
     bindHistory();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
     function finishStartup(remoteRecord,remoteError){

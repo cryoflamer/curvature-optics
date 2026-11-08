@@ -84,15 +84,8 @@
       <button class="modern-tab" id="ModernCompareTab" type="button" aria-pressed="false">Compare</button>
       <button class="modern-tab" id="ModernDemosTab" type="button" aria-pressed="false">Demos</button>
     </nav>
-    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><button type="button" class="modern-ghost-button" id="ModernLibraryToggle" aria-expanded="false" aria-controls="ModernExperimentLibraryPanel">Experiment library</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
+    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
-  <section id="ModernExperimentLibraryPanel" class="modern-library" aria-label="Experiment library" hidden>
-    <div class="modern-library-top"><strong>Saved experiments</strong><button type="button" class="modern-ghost-button" id="ModernLibraryClose">Close</button></div>
-    <div class="modern-library-row"><label for="ModernLibrarySelect">Choose an experiment</label><select id="ModernLibrarySelect"><option value="">No saved experiments</option></select></div>
-    <div class="modern-library-row"><label for="ModernLibraryName">Name</label><input id="ModernLibraryName" type="text" maxlength="100" placeholder="e.g. Lake Pontchartrain — inverse optics"></div>
-    <div class="modern-library-buttons"><button type="button" id="ModernLibrarySave">Save current</button><button type="button" id="ModernLibraryLoad">Load selected</button><button type="button" id="ModernLibraryDelete">Delete selected</button><button type="button" id="ModernLibraryExport">Export current JSON</button><button type="button" id="ModernLibraryImport">Import JSON</button><input type="file" id="ModernLibraryFile" accept=".json,application/json" hidden></div>
-    <p id="ModernLibraryStatus" class="modern-library-status" role="status" aria-live="polite"></p>
-  </section>
   <section id="ModernHistoryPanel" class="modern-library modern-history" aria-label="Experiment history" hidden>
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
     <p class="modern-history-hint">Double-click a snapshot to restore it; one click selects it. Use ✎ to name it or add notes. Hover for a larger preview and physical settings; use Space on the focused image or tap on touch devices to keep it open. <span title="Automatic snapshots follow physical changes, not camera moves, animation playback or editor tabs. Manual snapshots retain the full experiment and camera.">Automatic history tracks physics only.</span></p>
@@ -100,6 +93,14 @@
     <div id="ModernHistoryGallery" class="modern-history-gallery" aria-label="Saved experiment thumbnails"></div>
     <div class="modern-history-bulk"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistoryPinChecked" type="button">Pin selected</button><button id="ModernHistoryDeleteChecked" type="button">Delete selected</button></div>
     <div class="modern-library-buttons"><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryPin">Pin / unpin selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>
+    <div class="modern-history-portable" aria-label="History import and export">
+      <button type="button" id="ModernHistoryExportSelected">Export selected snapshot</button>
+      <button type="button" id="ModernHistoryExportAll">Export all snapshots</button>
+      <button type="button" id="ModernHistoryExportCurrent">Export current experiment JSON</button>
+      <button type="button" id="ModernHistoryImport">Import JSON</button>
+      <input type="file" id="ModernHistoryImportFile" accept=".json,application/json" hidden>
+    </div>
+    <p class="modern-history-portable-note">History exports retain names, notes, pins and available previews. Plain experiment JSON remains supported for sharing.</p>
     <p id="ModernHistoryStatus" class="modern-library-status" role="status" aria-live="polite"></p>
   </section>
   <dialog id="ModernHistoryMetadataDialog" class="modern-history-editor" aria-labelledby="ModernHistoryMetadataTitle">
