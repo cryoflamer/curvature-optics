@@ -120,3 +120,30 @@ view. Manual navigation, mode changes and focus loss stop playback. Compare
 receives a single common camera pose on both sides. Discrete camera aim and
 aspect ratio must agree across frames. Geodesic paths, fly-through splines
 and video export are deferred.
+
+## Application preferences (browser-local)
+
+**Display → Optical ray field**, **Fast Preview object detail**, and
+**Rendering backend** are now saved immediately when changed, together with
+**Camera → movement speed, rotation speed and Alt + wheel step**. They are
+restored automatically on the next visit from the **same browser profile and
+origin**. The UI's **Reset application preferences** button (in Display)
+restores the reference defaults: Accurate RK4, automatic Preview LOD, Canvas 2D,
+10 m/s, 1°/s and automatic wheel step. Reset does **not** delete saved
+experiments, Camera Positions or animation frames.
+
+These are **user interface/performance choices**, not scene physics: they do
+not enter exported experiment JSON, share URLs or keyframes. In particular,
+`Auto` always begins at rest using Accurate, then uses Fast only for eligible
+motion. `Auto LOD` stores the *Auto choice*, not the measured tower stride.
+WebGL2 is still experimental; when unavailable the renderer uses its existing
+per-frame Canvas fallback without changing the saved selection.
+
+The versioned browser key is `curvature-modern-application-preferences-v1`.
+Previously saved camera-navigation values from
+`curvature-modern-camera-navigation-v1` are read when no new-format record
+exists; new-format values take precedence thereafter. Reset clears both keys
+so that obsolete speeds cannot reappear. Malformed or unavailable storage
+falls back to defaults and should not block the Modern app. Browser storage
+may be partitioned by origin, so `localhost` and `file://` do not necessarily
+share preferences.

@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const nav=require('../src/ui/modern/ModernCameraNavigation');
+const preferences=require('../src/ui/modern/ModernApplicationPreferences');
 const interaction=require('../src/ui/modern/ModernCameraInteraction');
 const interpolator=require('../src/camera/ModernCameraInterpolator');
 const sequence=require('../src/camera/ModernCameraSequence');
@@ -83,7 +84,7 @@ test('camera positions survive JSON/URL round-trip without changing legacy exper
   ])assert.throws(()=>codec.validate({...old,cameraPositions:invalid}),RangeError);
 });
 
-function boot(savedExperiment){
+function boot(savedExperiment, initialPreferences){
   const ids=[...read('CurvatureModern.html').matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]);
   const nodes=new Map(),renders=[],globalListeners={},frames=new Map(),timers=new Map();
   let clock=100,seq=0,ons=[];
@@ -126,9 +127,11 @@ function boot(savedExperiment){
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0],
     Update(){this.FocalLength=this.FocalLengthField;this.ViewAngleField=1.2;this.camViewAngle=.02;}});}
   const storage=new Map(savedExperiment?[[codec.STORAGE_KEY,JSON.stringify(savedExperiment)]]:[]);
+  for(const [key,value] of Object.entries(initialPreferences||{}))storage.set(key,value);
   const win={CurveAppClass:Model,CurvatureModernSceneState:scene,
     CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
     CurvatureModernCameraInteraction:interaction,CurvatureModernCameraNavigation:nav,
+    CurvatureModernApplicationPreferences:preferences,
     CurvatureModernCameraInterpolator:interpolator,CurvatureModernCameraSequence:sequence,
     CurvatureModernExperimentState:codec,
     CurvatureModernCompareState:compare,CurvatureModernCompareModel:compareModel,
@@ -138,7 +141,7 @@ function boot(savedExperiment){
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){renders.push({...pose,East:m.CameraEast,North:m.CameraNorth,Height:m.Height,Pan:m.Pan,
       quality:opt.opticalQuality,stride:opt.previewLod.stride});
       return {drawn:12,fillTriangles:3,unresolved:0,timings:{opticsMs:1,canvasMs:1}};}},
-    localStorage:{getItem(k){return storage.get(k)||null;},setItem(k,v){storage.set(k,v);}},
+    localStorage:{getItem(k){return storage.get(k)||null;},setItem(k,v){storage.set(k,v);},removeItem(k){storage.delete(k);}},
     performance:{now:()=>clock},
     addEventListener(name,fn){(globalListeners[name]??=[]).push(fn);},
     NewGraphX3D(args){return {Canvas:sceneCanvas,UpdateCanvasSize(){},Redraw(){args.DrawFunc({Canvas:sceneCanvas});}};},
@@ -244,7 +247,8 @@ test('keyboard speed preferences are separate from captured camera poses',()=>{
   assert.equal(h.app.getNavigationPrefs().speed,100);
   assert.equal(h.app.getNavigationPrefs().turnRate,.05);
   assert.equal(h.app.getNavigationPrefs().wheelStep,10);
-  assert.ok(h.storage.has('curvature-modern-camera-navigation-v1'));
+  assert.ok(h.storage.has(preferences.STORAGE_KEY));
+  assert.equal(JSON.parse(h.storage.get(preferences.STORAGE_KEY)).navigation.speed,100);
   n.get('ModernCameraPositionName').value='Without speed';n.get('ModernCameraSave').dispatch('click');
   const entry=h.app.getCameraPositions()[0];
   assert.ok(!Object.hasOwn(entry.camera,'speed'));
@@ -674,4 +678,60 @@ test('Camera Animation is the primary UI and the old two-position controls are r
   for(const id of ['ModernTransitionPlay','ModernTransitionFrom','ModernTransitionTo','ModernSequenceUpdate'])
     assert.doesNotMatch(html,new RegExp('id="'+id+'"'),id);
   assert.match(html,/<details class="modern-camera-optional" id="ModernSavedCameraLibrary">/);
+});
+
+
+test('display and navigation preferences are immediately saved and restored independently of experiments',()=>{
+  const h=boot(),nodes=h.nodes;
+  nodes.get('ModernOpticalQuality').value='auto';nodes.get('ModernOpticalQuality').dispatch('change');
+  nodes.get('ModernPreviewDetail').value='8';nodes.get('ModernPreviewDetail').dispatch('change');
+  nodes.get('ModernGeometryBackend').value='webgl2';nodes.get('ModernGeometryBackend').dispatch('change');
+  nodes.get('ModernCameraMoveSpeed').value='100';nodes.get('ModernCameraMoveSpeed').dispatch('change');
+  const saved=h.storage.get(preferences.STORAGE_KEY);
+  assert.deepEqual(JSON.parse(saved),{
+    version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',
+    navigation:{speed:100,turnRate:1,wheelStep:'auto'}
+  });
+  const reopened=boot(null,{[preferences.STORAGE_KEY]:saved});
+  assert.equal(reopened.app.getOpticalQuality(),'auto');
+  assert.equal(reopened.app.getGeometryBackend(),'webgl2');
+  assert.equal(reopened.nodes.get('ModernPreviewDetail').value,'8');
+  assert.equal(reopened.nodes.get('ModernOpticalQuality').value,'auto');
+  assert.equal(reopened.nodes.get('ModernGeometryBackend').value,'webgl2');
+  assert.equal(reopened.nodes.get('ModernCameraMoveSpeed').value,'100');
+  assert.equal(reopened.app.getEffectiveOpticalQuality(),'accurate','Auto is Accurate at rest on reload');
+  assert.ok(!JSON.stringify(experiment([])).includes('opticalQuality'));
+  assert.equal(reopened.storage.has(codec.STORAGE_KEY),false);
+});
+
+test('reset application preferences also clears migrated navigation settings without erasing experiments',()=>{
+  const h=boot(experiment([]),{[preferences.LEGACY_NAVIGATION_KEY]:JSON.stringify({speed:1000,turnRate:5,wheelStep:10})});
+  assert.equal(h.app.getNavigationPrefs().speed,1000,'old camera settings migrate when new preferences do not exist');
+  h.nodes.get('ModernOpticalQuality').value='fast';h.nodes.get('ModernOpticalQuality').dispatch('change');
+  assert.ok(h.storage.has(preferences.STORAGE_KEY));
+  h.nodes.get('ModernResetPreferences').dispatch('click');
+  assert.equal(h.storage.has(preferences.STORAGE_KEY),false);
+  assert.equal(h.storage.has(preferences.LEGACY_NAVIGATION_KEY),false);
+  assert.equal(h.storage.has(codec.STORAGE_KEY),true,'reset must not clear experiment storage');
+  assert.equal(h.app.getOpticalQuality(),'accurate');
+  assert.equal(h.app.getGeometryBackend(),'canvas');
+  assert.equal(h.app.getNavigationPrefs().speed,10);
+  assert.equal(h.nodes.get('ModernCameraMoveSpeed').value,'10');
+  assert.equal(h.nodes.get('ModernPreviewDetail').value,'auto');
+  const reopened=boot(null,Object.fromEntries(h.storage));
+  assert.equal(reopened.app.getNavigationPrefs().speed,10);
+  assert.equal(reopened.app.getOpticalQuality(),'accurate');
+});
+
+test('app preferences override old camera preference key and experiment restoration stays independent',()=>{
+  const sample=experiment([]);
+  const prefs=preferences.normalize({opticalQuality:'fast',previewDetail:'16',geometryBackend:'canvas',
+    navigation:{speed:1,turnRate:.2,wheelStep:100}});
+  const h=boot(sample,{[preferences.STORAGE_KEY]:JSON.stringify(prefs),
+    [preferences.LEGACY_NAVIGATION_KEY]:JSON.stringify({speed:10000})});
+  assert.equal(h.app.getOpticalQuality(),'fast');
+  assert.equal(h.app.getNavigationPrefs().speed,1);
+  assert.equal(h.nodes.get('ModernPreviewDetail').value,'16');
+  assert.equal(h.app.getMode(),'compare');
+  assert.equal(h.app.getModel().Height,15);
 });

@@ -156,6 +156,7 @@
     selector.value=state.previewDetail;
     selector.addEventListener('change',function(){
       state.previewDetail=['auto','1','2','4','8','16','32'].includes(selector.value)?selector.value:'auto';
+      saveApplicationPreferences();
       if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
       updatePreviewDetailStatus();
       if(state.opticalQuality!=='auto'||autoCameraActive)redraw();
@@ -178,6 +179,7 @@
     select.addEventListener('change',function(){
       stopAutoCameraPreview();
       state.opticalQuality=['fast','auto'].includes(select.value)?select.value:'accurate';
+      saveApplicationPreferences();
       updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
     });
     updateOpticalQualityStatus();
@@ -207,6 +209,7 @@
     select.value=state.geometryBackend;
     select.addEventListener('change',function(){
       state.geometryBackend=select.value==='webgl2'?'webgl2':'canvas';
+      saveApplicationPreferences();
       updateGeometryBackendStatus(null);
       redraw();
     });
@@ -445,6 +448,54 @@
   var navigationKeys=Object.create(null),navigationFrame=null,navigationStamp=null;
   var navigationMoved=false,navigationModifiers={fast:false,precise:false};
   var NAVIGATION_STORAGE_KEY='curvature-modern-camera-navigation-v1';
+  var applicationPreferences=root.CurvatureModernApplicationPreferences;
+  function preferencesStorage(){
+    try{return root.localStorage||null;}catch(error){return null;}
+  }
+  if(applicationPreferences){
+    var remembered=applicationPreferences.read(preferencesStorage());
+    state.opticalQuality=remembered.opticalQuality;
+    state.previewDetail=remembered.previewDetail;
+    state.geometryBackend=remembered.geometryBackend;
+    navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
+  }
+  function preferencesStatus(message,error){
+    var node=geometryUi('ModernPreferencesStatus');
+    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
+  }
+  function saveApplicationPreferences(){
+    if(!applicationPreferences)return;
+    try{
+      if(!applicationPreferences.write(preferencesStorage(),{
+        opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
+        geometryBackend:state.geometryBackend,navigation:navigationPrefs
+      }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
+      else preferencesStatus('Application preferences saved in this browser.',false);
+    }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
+  }
+  function bindApplicationPreferences(){
+    var button=geometryUi('ModernResetPreferences');
+    if(!button||!applicationPreferences)return;
+    button.addEventListener('click',function(){
+      var storage=preferencesStorage(),cleared=false;
+      try{cleared=applicationPreferences.reset(storage);}
+      catch(error){preferencesStatus('Cannot reset stored preferences: '+error.message,true);return;}
+      var defaults=applicationPreferences.defaults();
+      state.opticalQuality=defaults.opticalQuality;
+      state.previewDetail=defaults.previewDetail;
+      state.geometryBackend=defaults.geometryBackend;
+      navigationPrefs=navigation?navigation.settings(defaults.navigation):defaults.navigation;
+      [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
+        ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
+        ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
+      ].forEach(function(entry){var node=geometryUi(entry[0]);if(node)node.value=String(entry[1]);});
+      stopAutoCameraPreview();
+      if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
+      updateGeometryBackendStatus(null);updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
+      preferencesStatus(cleared?'Application preferences reset to defaults.':
+        'Defaults restored for this session; browser storage is unavailable.',!cleared);
+    });
+  }
   var model=new root.CurveAppClass();
   Object.assign(model,{
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
@@ -1847,6 +1898,8 @@
     renderCameraPositions('');
   }
   function saveNavigationPrefs(){
+    if(applicationPreferences){saveApplicationPreferences();return;}
+    // Compatibility for embedded/older Modern hosts that omit preferences module.
     try{if(root.localStorage)root.localStorage.setItem(NAVIGATION_STORAGE_KEY,JSON.stringify(navigationPrefs));}
     catch(error){cameraPositionStatus('Navigation preferences not saved: '+error.message,true);}
   }
@@ -1901,10 +1954,12 @@
     if(!navigation||!root.addEventListener)return;
     var inputs=[['ModernCameraMoveSpeed','speed'],['ModernCameraTurnRate','turnRate'],
       ['ModernCameraWheelStep','wheelStep']];
-    try{
-      if(root.localStorage){var saved=root.localStorage.getItem(NAVIGATION_STORAGE_KEY);
-        if(saved)navigationPrefs=navigation.settings(JSON.parse(saved));}
-    }catch(error){cameraPositionStatus('Cannot read navigation preferences: '+error.message,true);}
+    if(!applicationPreferences){
+      try{
+        if(root.localStorage){var saved=root.localStorage.getItem(NAVIGATION_STORAGE_KEY);
+          if(saved)navigationPrefs=navigation.settings(JSON.parse(saved));}
+      }catch(error){cameraPositionStatus('Cannot read navigation preferences: '+error.message,true);}
+    }
     inputs.forEach(function(pair){
       var node=newUiEl(pair[0]);if(!node)return;
       node.value=String(navigationPrefs[pair[1]]);
@@ -2624,6 +2679,7 @@
     bindGeometryBackend();
     bindOpticalQuality();
     bindPreviewDetail();
+    bindApplicationPreferences();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))

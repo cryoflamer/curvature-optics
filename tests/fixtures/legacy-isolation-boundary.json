@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 60,
-      "uniqueScripts": 59,
+      "scriptTags": 61,
+      "uniqueScripts": 60,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -165,6 +165,7 @@
         "src/ui/modern/ModernSceneState.js",
         "src/ui/modern/ModernCameraInteraction.js",
         "src/ui/modern/ModernCameraNavigation.js",
+        "src/ui/modern/ModernApplicationPreferences.js",
         "src/camera/ModernCameraInterpolator.js",
         "src/camera/ModernCameraSequence.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
@@ -308,6 +309,7 @@
       "src/renderers/CurvatureAtmosphericVisibility.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
       "src/ui/modern/ModernApp.js",
+      "src/ui/modern/ModernApplicationPreferences.js",
       "src/ui/modern/ModernAtmosphericPresentation.js",
       "src/ui/modern/ModernAtmosphericShimmer.js",
       "src/ui/modern/ModernCameraDragPreview.js",
@@ -341,7 +343,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 140,
+  "sourceJsCount": 141,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1866,6 +1868,17 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernApplicationPreferences.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernApplicationPreferences.test.js",
+        "tests/ModernCameraNavigation.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/ui/modern/ModernAtmosphericPresentation.js": {

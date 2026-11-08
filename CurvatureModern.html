@@ -53,6 +53,7 @@
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
 <script src="src/ui/modern/ModernCameraNavigation.js"></script>
+<script src="src/ui/modern/ModernApplicationPreferences.js"></script>
 <script src="src/camera/ModernCameraInterpolator.js"></script>
 <script src="src/camera/ModernCameraSequence.js"></script>
 <script src="src/ui/modern/ModernCameraPerspectiveWarp.js"></script>
@@ -384,6 +385,8 @@
               <option value="webgl2">WebGL2 · experimental</option></select></div>
           <p class="modern-note">Optical rays and geometry are unchanged. WebGL2 rasterizes projected triangles and approximate 1px-style line quads, then copies the result into the current Canvas for annotations and shimmer. Some line joints and antialiasing may differ. No automatic performance win is assumed.</p>
           <p id="ModernGeometryBackendStatus" class="modern-note" role="status" aria-live="polite">Active: Canvas 2D</p>
+          <div class="modern-field"><button type="button" class="modern-ghost-button" id="ModernResetPreferences">Reset application preferences</button></div>
+          <p id="ModernPreferencesStatus" class="modern-note" role="status" aria-live="polite">Display and navigation choices are saved automatically in this browser, separately from experiments.</p>
         </div>
         <div class="modern-gpu-diagnostics" aria-label="GPU capability diagnostics">
           <div class="modern-gpu-heading"><strong>GPU capabilities</strong><button type="button" class="modern-ghost-button" id="ModernGpuCheck">Check GPU</button></div>

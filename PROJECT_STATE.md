@@ -1852,3 +1852,13 @@ Added independent dry-hydrostatic `temperature-lapse` atmosphere, with surface t
   absolute time; browser playback uses the shared Fast Preview/LOD and idle
   Accurate restoration. Stop/Cancel/manual interruption and Compare A/B remain
   unchanged. Browser visual validation remains a separate step.
+
+### Application preferences (after Camera Animation UI)
+
+Modern keeps optical-quality policy, Fast Preview LOD policy, geometry backend
+selection and navigation rates in a versioned browser-local preferences record.
+Changes persist immediately; historical navigation-only preferences are migrated
+when no consolidated record is present. Display provides a reset that clears
+both preference generations, never experiment data. Preferences remain separate
+from camera poses, keyframes, physical parameters and experiment URLs/JSON.
+Malformed or inaccessible localStorage reverts to the reference defaults.

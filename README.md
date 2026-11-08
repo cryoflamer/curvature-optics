@@ -144,3 +144,13 @@ independent snapshots preserved in JSON/URL experiments. Playback uses Fast
 Preview/LOD, with Accurate restored at rest. See
 [`docs/modern-camera-interpolation.md`](docs/modern-camera-interpolation.md)
 for timeline semantics, limits and tests.
+
+### Persistent Modern application preferences
+
+Modern remembers Display → **Optical ray field**, **Fast Preview object detail**
+and **Rendering backend**, plus camera navigation speeds and Alt-wheel step,
+without requiring Save. They are local to the browser, not exported with scene
+physics or Camera Animation. **Display → Reset application preferences**
+restores defaults without clearing experiments. Earlier navigation settings
+are migrated automatically. See
+[`docs/modern-camera-navigation.md`](docs/modern-camera-navigation.md#application-preferences-browser-local).
