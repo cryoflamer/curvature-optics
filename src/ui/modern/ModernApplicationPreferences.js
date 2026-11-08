@@ -56,6 +56,7 @@
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
       historyGallerySize:from(HISTORY_SIZES,data.historyGallerySize,'small'),
+      historyPinnedCollapsed:data.historyPinnedCollapsed===true,
       displayPanels:panels(data.displayPanels),
       workspace:workspace(data.workspace),
       navigation:Object.freeze({speed:from(SPEEDS,nav.speed,10),
@@ -82,7 +83,7 @@
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
       previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
-      historyGallerySize:data.historyGallerySize,
+      historyGallerySize:data.historyGallerySize,historyPinnedCollapsed:data.historyPinnedCollapsed,
       displayPanels:data.displayPanels,navigation:data.navigation,workspace:data.workspace}));
     // Old navigation data cannot override the new selection on reload.
     return true;

@@ -208,7 +208,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHistoryPanel','ModernHistoryToggle','ModernHistoryClose','ModernHistorySave',
     'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
-    'ModernHistoryPreview','ModernHistoryPinChecked','ModernHistoryDeleteChecked',
+    'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
     'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount'];
   const nodes=new Map(ids.map(id=>[id,{id,value:'',min:'',max:'',checked:true,
     hidden:false,textContent:'',children:[],listeners:{},classList:{toggle(){},remove(){}},
@@ -285,7 +285,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
   db.failAdd=false;
   const gallery=nodes.get('ModernHistoryGallery');
   assert.equal(gallery['data-size'],'small','compact is the default gallery density');
-  const card=gallery.children.find(x=>x['data-snapshot-id']===String(id));
+  const card=gallery.children[1].children[1].children.find(x=>x['data-snapshot-id']===String(id));
   assert.ok(card,'manual snapshot appears in the real rendered gallery');
   card.children[0].listeners.dblclick({stopPropagation(){}});
   await new Promise(resolve=>setTimeout(resolve,60));

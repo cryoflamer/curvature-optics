@@ -22,8 +22,9 @@ Scene/Compare renderer, or Legacy state.
   On failed/blocked/quota storage, the live experiment is not replaced. An
   identical latest automatic entry is upgraded to protected if saved manually
   or used as a recovery point.
-- **Delete selected** removes one record after confirmation; individual cards
-  also provide **View**, **Pin / Unpin** and **Delete**. Checkboxes enable
+- **Delete selected** removes an unpinned record after confirmation; individual cards
+  use corner icons for **Pin / Unpin** and **Delete**. A pinned record must be
+  unpinned before individual or bulk deletion. Checkboxes enable
   multiple selection for **Pin selected** and **Delete selected**; selection
   is in-memory only and will later serve Storyboard. Newest/oldest sorting
   is available. **Clear automatic** only removes unpinned automatic records;
@@ -41,42 +42,41 @@ Scene/Compare renderer, or Legacy state.
   already existed. Browsers may evict site storage;
   these local records are not a backup across browsers/devices or origins.
 
-## History gallery controls
+## History gallery controls and unified Preview
 
-- **One click** on a snapshot image or card text selects it; **double-click**
-  restores the full experiment. Pressing **Enter** while the thumbnail button
-  has focus also restores the snapshot. The existing **Restore selected** button
-  uses the same guarded path, with a protected recovery checkpoint before any
-  change to live physics. Restore actions are serialized to avoid overlapping
-  operations on repeated double-clicks.
-- Card sizing is **S / M / L** (compact by default). All sizes use a
-  thumbnail-corner **Pin/Unpin** toggle (pinned entries are always marked) and
-  a compact **⋯** menu for View, Info and Delete. The checkbox remains for
-  storyboard/bulk selection. Double-clicking pin, menu or checkbox never
-  restores an experiment.
-- Card density is a validated browser-local Application Preference. Switching
-  size does not reread IndexedDB, recalculate optics or modify the experiment
-  JSON. Resetting application preferences returns to S; workspace layout reset
-  does not affect card density. The grid remains responsive on narrow screens.
-
-## Snapshot Inspector (read-only)
-
-- Hover a Scene or Compare history card for approximately **350 ms**. The
-  floating detail card shows the captured **surface** (Globe with radius or
-  Flat), **atmospheric model** and only its relevant temperature/gradient,
-  transition, inversion or occlusion parameters. Compare displays independent
-  A/B columns and their semantic geometry/atmosphere/refraction relationship;
-  Scene has one column. Camera height/orientation and shared object counts/types
-  appear underneath.
-- The tooltip stays open while the pointer moves onto it and shifts within the
-  viewport near right/bottom edges. Keyboard focus on the snapshot thumbnail
-  opens it immediately; **Esc** closes it. **Info** in the **⋯** menu pins the
-  inspector for touch users, with a Close button. Ordinary click still selects,
-  and double-click still restores; clicking Info or Pin never triggers Restore.
-- The inspector uses the saved, validated experiment and existing fingerprint
-  metadata from the already loaded history list. **It does not query IndexedDB,
-  recalculate optics or change the experiment** while opening. It supports older
-  records without thumbnails and adds no persistent fields or migration.
+- **One click** on a snapshot selects it; **double-click** on the image or card
+  text restores the full experiment. **Enter** on the thumbnail also restores.
+  Restore is guarded and records a protected recovery checkpoint before
+  changing live physics. Card sizes **S / M / L** are stored in Application
+  Preferences, without modifying experiment JSON or IndexedDB entries.
+- **Pinned** snapshots appear at the top, in their own collapsible section.
+  **Recent** contains only unpinned records, so no entry appears twice. The
+  current newest/oldest sort order applies inside each section. Pinned collapse
+  state persists in browser Application Preferences and survives reload; it is
+  reset by Reset Application Preferences, not Reset Workspace Layout. Pinning
+  does not imply Storyboard membership or order.
+- Both thumbnail corners contain compact Pin/Unpin and Delete controls. A
+  pinned record's Delete control is disabled until it is unpinned. Bulk and
+  selected-record deletion reject pinned entries as well. **Clear all history**
+  remains a separate explicitly confirmed destructive operation. Checkboxes
+  for multi-selection remain available, and interacting with corner controls
+  or checkboxes never triggers Restore.
+- Hover the **thumbnail** for approximately **400 ms** to open the unified
+  Preview. It combines the saved, enlarged real-Canvas image (or an accurate
+  missing-image message) with the existing physics inspector: Scene has one
+  model column; Compare presents independent A/B surface, atmosphere and
+  active refraction parameters, meaningful A/B difference flags, and shared
+  camera and objects. Old transparent images are still shown on white.
+- The floating Preview is positioned within the viewport, is not clipped by
+  the gallery and remains open while the pointer moves over it. **Keep open**
+  locks it for inspection. A touch/pen tap on the thumbnail or keyboard
+  **Space** opens a persistent Preview. Keyboard focus shows it immediately;
+  **Esc** or Close dismisses it, and clicking outside dismisses a locked
+  preview. Double-click and Enter continue to restore the snapshot instead.
+- Hovering, locking and closing Preview only use already loaded validated
+  snapshot data. They do not query IndexedDB, invoke the optics renderer,
+  create history records, or change stored experiments. The former View dialog
+  and Info/Actions menu have been replaced rather than duplicated.
 
 ## Comparison semantics and future steps
 
@@ -98,7 +98,7 @@ composites the rendered pixels and optional guide overlays over that same
 opaque white backdrop; otherwise transparent pixels reveal the gallery's navy
 placeholder color, making the entire image appear dark blue. No dark
 letterboxing or automatic cropping is introduced. Saved transparent thumbnails
-also display over white in the gallery and full-size preview without changing
+also display over white in the gallery and unified Preview without changing
 IndexedDB. Earlier screenshots encoded with opaque blue fill cannot be
 repaired by this display-only fallback; recapture those states after Restore.
 A screenshot is accepted
@@ -109,7 +109,7 @@ as a valid pair. If a canvas is stale, unavailable, tainted, or the browser
 cannot export it, the complete experiment still saves with `thumbnail:null`.
 Atmospheric presentation image and sharp guide layers are combined when
 available. UI chrome and the optional DOM-only temperature column are not
-part of the raster thumbnail. The gallery previews an enlarged saved image
+part of the raster thumbnail. The gallery previews an enlarged saved image alongside saved physics settings
 **without** changing the live model or retracing optics.
 
 Pinning, sorting, manual/bulk deletion and screenshot inspection use the
@@ -122,39 +122,27 @@ specified. A screenshot crossfade is not a physical optics calculation.
 
 ## Smoke test in Opera
 
-1. Open Modern → History. Save a Scene state, change the surface/atmosphere,
-   and wait briefly for one auto-history entry. Move the camera several times:
-   no new auto-history entry should appear.
-2. Switch to Compare, change A or B physical parameters, and inspect the new
-   Compare A/B record. Switching only the selected model editor should not
-   create an entry.
-3. Save manually after an accurate Scene render and confirm a real thumbnail
-   with the **same white background** as the live viewport; the objects and
-   dark text should remain readable. Compare should show two correctly
-   composited white-background views. Check both the compact card and View.
-   Older alpha thumbnails should also turn white immediately upon reload,
-   while opaque-blue legacy thumbnails need a new capture.
-   In Compare, change only A, then B; check that a new composite thumbnail
-   contains the **current** A and B rather than a stale side. If Fast Preview
-   is active or an accurate render has not completed, expect "No preview".
-4. Try the **S / M / L** gallery size selector, reload and confirm it persists.
-   Hover over Scene and Compare cards, confirm the matching physics summary;
-   use Info and Esc, and test that hovering and clicking Info do not restore.
-   Near the right/bottom viewport edge confirm the tooltip remains visible.
-   Single-click a card to select it, double-click its thumbnail to restore;
-   confirm no unintended duplicate recovery points. Double-click on checkbox,
-   View, Pin, Delete or the compact **⋯ Actions** menu: none should restore.
-   Click **View** for read-only enlargement; confirm that the live experiment
-   does not change. Pin a record, sort newest/oldest, select multiple cards and
-   delete them; verify confirmations. Test Clear automatic and separately
-   Clear all (including protected recovery records).
-5. Restore the currently active snapshot twice: confirm no recovery entries
-   are created. Then restore a different state and confirm an already-saved
-   matching state is reused rather than duplicated as recovery.
-6. Change the camera and physical inputs; restore a previous snapshot. Check
-   Scene/Compare mode, camera and A/B models. Restore the recovery entry to
-   return to the state before restoration. Reload and check persistence.
-   If IndexedDB is blocked, History reports an error without breaking rendering.
-
-The numerical and simulated-IDB integration suites do not replace actual
-Opera UI/IndexedDB testing; no browser visual validation is claimed here.
+1. Open Modern → History. Save a Scene state, change surface/atmosphere,
+   and wait for an automatic snapshot. Moving only the camera must not create
+   more automatic snapshots.
+2. Save Compare A/B with different physics for A and B. Hover its thumbnail:
+   the unified Preview must show the larger, correctly white-background image,
+   both model configurations and A/B differences; the live scene must not change.
+   Test a saved snapshot without a thumbnail, as well as an older transparent
+   screenshot if one is available.
+3. Move the pointer from the thumbnail onto the Preview, activate **Keep open**,
+   move away, then use Esc or Close. Test near the right/bottom window edges.
+   With keyboard focus on a thumbnail, use **Space** for persistent preview
+   and **Enter** for Restore; on a touch device, tap once for preview. A desktop
+   single click selects and double-click restores via protected recovery.
+4. Pin two snapshots and check that both move into **Pinned** above **Recent**,
+   with no duplicates. Collapse Pinned and reload: the fold state should persist.
+   Unpin one snapshot and check that it returns to Recent. Change S/M/L and
+   verify the card size preference also persists.
+5. Try the Delete icon on a pinned snapshot (disabled), unpin and delete it
+   (confirmation required). Test that batch deletion rejects checked pinned
+   records, and that clicking/holding corner icons or checkboxes never
+   restores. Test Clear automatic separately from the explicit Clear all action.
+6. Check that History inspection does not trigger expensive physical redraws,
+   that Scene/Compare selection continues to work, and that the live viewport
+   remains unaffected by merely opening the Preview.

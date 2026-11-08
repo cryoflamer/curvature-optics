@@ -463,6 +463,7 @@
   var NAVIGATION_STORAGE_KEY='curvature-modern-camera-navigation-v1';
   var applicationPreferences=root.CurvatureModernApplicationPreferences;
   var historyGallerySize='small';
+  var historyPinnedCollapsed=false;
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   var legacyDisplayPanels=Object.assign({},displayPanels);
   var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
@@ -485,6 +486,7 @@
     state.previewDetail=remembered.previewDetail;
     state.geometryBackend=remembered.geometryBackend;
     historyGallerySize=remembered.historyGallerySize;
+    historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
@@ -506,7 +508,7 @@
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
-        historyGallerySize:historyGallerySize,
+        historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
@@ -625,6 +627,7 @@
       state.previewDetail=defaults.previewDetail;
       state.geometryBackend=defaults.geometryBackend;
       historyGallerySize=defaults.historyGallerySize;
+      historyPinnedCollapsed=defaults.historyPinnedCollapsed;
       var historySizeControl=newUiEl('ModernHistorySize');
       if(historySizeControl)historySizeControl.value=historyGallerySize;
       if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
@@ -846,27 +849,30 @@
         historyUI.render(document,gallery,entries,select.value,{
         select:function(id){select.value=String(id);historyUI.select(gallery,id);},
         restore:function(id){handleHistoryRestore(id);},
-        preview:function(id){
-          var entry=entries.find(function(item){return item.id===id;});
-          if(entry)historyUI.preview(document,newUiEl('ModernHistoryPreview'),entry);
-        },
         pin:function(id,pinned){
           experimentHistory.pin(id,pinned).then(function(){return refreshHistoryList(id);})
             .catch(function(error){historyStatus(error.message,true);});
         },
         remove:function(id){
+          if(entries.some(function(entry){return entry.id===id&&entry.pinned;})){
+            historyStatus('Unpin this snapshot before deleting it.',true);return;
+          }
           if(!root.confirm||!root.confirm('Delete snapshot '+id+'?'))return;
           experimentHistory.remove(id).then(function(){
             delete historyMultiSelection[id];
             historyStatus('Snapshot deleted.');return refreshHistoryList();
           }).catch(function(error){historyStatus(error.message,true);});
         },
+        setPinnedCollapsed:function(collapsed){
+          historyPinnedCollapsed=collapsed;
+          saveApplicationPreferences();refreshHistoryList();
+        },
         multi:function(id,checked){
           if(checked)historyMultiSelection[id]=true;
           else delete historyMultiSelection[id];
           historyMultiCount();
         }
-      },historyMultiSelection);
+      },historyMultiSelection,{pinnedCollapsed:historyPinnedCollapsed});
       }
       return entries;
     });
@@ -920,13 +926,11 @@
     toggle.addEventListener('click',function(){
       panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));
       if(!panel.hidden)handle(function(){return refreshHistoryList();});
-      else if(historyUI){historyUI.close(newUiEl('ModernHistoryPreview'));
-        historyUI.hideInspector(newUiEl('ModernHistoryGallery'));}
+      else if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
     });
     el('ModernHistoryClose').addEventListener('click',function(){
       panel.hidden=true;toggle.setAttribute('aria-expanded','false');
-      if(historyUI){historyUI.close(newUiEl('ModernHistoryPreview'));
-        historyUI.hideInspector(newUiEl('ModernHistoryGallery'));}
+      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
     });
     el('ModernHistorySelect').addEventListener('change',function(){
       handle(function(){return refreshHistoryList();});
@@ -947,8 +951,13 @@
     if(deleteChecked)deleteChecked.addEventListener('click',function(){handle(function(){
       var ids=historySelectedIds();
       if(!ids.length)throw RangeError('Select snapshots using the card checkboxes');
-      if(!root.confirm||!root.confirm('Delete '+ids.length+' selected snapshots?'))return;
-      return Promise.all(ids.map(function(id){return experimentHistory.remove(id);})).then(function(){
+      return experimentHistory.list().then(function(entries){
+        if(entries.some(function(entry){return entry.pinned&&ids.includes(entry.id);}))
+          throw RangeError('Unpin selected pinned snapshots before deletion');
+        if(!root.confirm||!root.confirm('Delete '+ids.length+' selected snapshots?'))return false;
+        return Promise.all(ids.map(function(id){return experimentHistory.remove(id);}));
+      }).then(function(result){
+        if(result===false)return;
         ids.forEach(function(id){delete historyMultiSelection[id];});
         historyStatus('Deleted '+ids.length+' selected snapshots.');return refreshHistoryList();
       });
@@ -987,8 +996,12 @@
     el('ModernHistoryDelete').addEventListener('click',function(){handle(function(){
       var id=el('ModernHistorySelect').value;
       if(!id)throw RangeError('Select a history snapshot to delete');
-      if(!root.confirm||!root.confirm('Delete selected history snapshot?'))return;
-      return experimentHistory.remove(id).then(function(deleted){
+      return experimentHistory.get(id).then(function(entry){
+        if(entry&&entry.pinned)throw RangeError('Unpin this snapshot before deletion');
+        if(!root.confirm||!root.confirm('Delete selected history snapshot?'))return false;
+        return experimentHistory.remove(id);
+      }).then(function(deleted){
+        if(deleted===false)return;
         historyStatus(deleted?'Snapshot deleted.':'Snapshot not found.');return refreshHistoryList();
       });
     });});

@@ -100,7 +100,16 @@ function dom(){
       appendChild(child){this.children.push(child);return child;},
       setAttribute(key,value){this[key]=value;},
       getAttribute(key){return this[key];},
-      addEventListener(name,callback){this.listeners[name]=callback;}};
+      addEventListener(name,callback){this.listeners[name]=callback;},
+      querySelectorAll(selector){
+        const found=[];
+        function walk(node){for(const child of node.children){
+          if(selector.startsWith('.')&&child.className&&
+            child.className.split(' ').includes(selector.slice(1)))found.push(child);
+          walk(child);
+        }}walk(this);return found;
+      },
+      querySelector(selector){return this.querySelectorAll(selector)[0]||null;}};
   }};
   return {doc,events};
 }
@@ -108,91 +117,101 @@ function entry(id,mode,image){return {id,source:'manual',pinned:false,createdAt:
   thumbnail:image?{mode,dataUrl:'data:image/webp;base64,YQ=='}:null,
   features:{mode,scene:{geometry:{kind:'flat'}},relations:{physicsSame:false,geometrySame:true}},
   experiment:{display:{mode}}};}
-test('Visual gallery selection, overlay pin, compact menu and bulk actions',()=>{
+test('Pinned/Recent grouping, action icons, protected deletion and bulk selection',()=>{
   const {doc}=dom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
-    preview:id=>calls.push(['preview',id]),multi:(id,value)=>calls.push(['multi',id,value]),
-    pin:(id,value)=>calls.push(['pin',id,value]),remove:id=>calls.push(['remove',id])};
-  ui.render(doc,host,[entry(1,'scene',true),entry(2,'compare',false)],2,actions,{2:true});
-  const one=host.children[0],two=host.children[1];
-  const footer=one.children[1].children[2],menu=footer.children[0],checkbox=footer.children[1],pin=footer.children[2];
-  assert.equal(two.className.includes('is-selected'),true);
-  assert.equal(two.children[1].children[2].children[1].children[0].checked,true);
+    multi:(id,value)=>calls.push(['multi',id,value]),
+    pin:(id,value)=>calls.push(['pin',id,value]),remove:id=>calls.push(['remove',id]),
+    setPinnedCollapsed:value=>calls.push(['collapse',value])};
+  const a=entry(1,'scene',true),b=entry(2,'compare',false),c=entry(3,'scene',true);
+  a.pinned=true;
+  ui.render(doc,host,[a,b,c],2,actions,{2:true});
+  const pinnedSection=host.children[0],recentSection=host.children[1];
+  assert.equal(pinnedSection['aria-label'],'Pinned experiments');
+  assert.equal(recentSection['aria-label'],'Recent experiments');
+  assert.equal(pinnedSection.children[1].children.length,1);
+  assert.equal(recentSection.children[1].children.length,2);
+  const pinned=pinnedSection.children[1].children[0];
+  const recent=recentSection.children[1].children[0];
+  assert.equal(pinned['data-snapshot-id'],'1');
+  assert.equal(recent['data-snapshot-id'],'2');
+  assert.equal(pinned.children[2].disabled,true,'pinned is protected from direct deletion');
+  pinned.children[2].listeners.click({stopPropagation(){}});
+  assert.equal(calls.length,0);
+  pinned.children[1].listeners.click({stopPropagation(){}});
+  recent.children[2].listeners.click({stopPropagation(){}});
+  recent.children[3].children[2].children[0].children[0].checked=true;
+  recent.children[3].children[2].children[0].children[0].listeners.change();
+  assert.deepEqual(calls,[['pin',1,false],['remove',2],['multi',2,true]]);
+  assert.equal(recent.children[3].children[2].className,'modern-history-card-footer');
+  pinnedSection.children[0].children[0].listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls.at(-1),['collapse',true]);
   ui.select(host,1);
-  assert.equal(one.className.includes('is-selected'),true);
-  assert.equal(two.className.includes('is-selected'),false);
-  assert.equal(one.children[0].children[0].tagName,'img');
-  assert.match(one.children[0].className,/has-preview/);
-  assert.doesNotMatch(two.children[0].className,/has-preview/);
-  assert.match(two.children[0].children[0].textContent,/No preview/);
-  one.children[0].listeners.click();
-  menu.children[1].children[0].listeners.click({stopPropagation(){}});
-  pin.listeners.click({stopPropagation(){}});
-  menu.children[1].children[2].listeners.click({stopPropagation(){}});
-  checkbox.children[0].checked=true;
-  checkbox.children[0].listeners.change();
-  assert.deepEqual(calls,[['select',1],['preview',1],['pin',1,true],['remove',1],['multi',1,true]]);
-  assert.equal(pin['aria-pressed'],'false');
-  assert.equal(pin.title,'Pin snapshot 1');
-  assert.equal(menu.children[1].children[1].textContent,'Info');
-  const dialog=doc.createElement('dialog');dialog.hidden=true;
-  ui.preview(doc,dialog,entry(1,'scene',true));
-  assert.equal(dialog.hidden,false);
-  assert.equal(dialog.children[1].tagName,'img');
-  ui.close(dialog);assert.equal(dialog.hidden,true);
-  ui.preview(doc,dialog,entry(1,'scene',true));
-  assert.equal(dialog.hidden,false);
+  assert.match(pinned.className,/is-selected/);
+  assert.doesNotMatch(recent.className,/is-selected/);
+  assert.equal(pinned.children[0]['aria-pressed'],'true');
+  assert.equal(recent.children[0]['aria-pressed'],'false');
+  assert.equal(pinned.children[0].children[0].tagName,'img');
+  assert.match(recent.children[0].children[0].textContent,/No preview/);
 });
-test('History S/M/L, double-click restore and all action isolation',()=>{
+
+test('History S/M/L and double-click/keyboard restore isolate icon and bulk controls',()=>{
   const {doc}=dom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
-    preview:id=>calls.push(['preview',id]),pin:(id,value)=>calls.push(['pin',id,value]),
-    remove:id=>calls.push(['remove',id]),multi:(id,value)=>calls.push(['multi',id,value])};
+    pin:(id,value)=>calls.push(['pin',id,value]),remove:id=>calls.push(['remove',id]),multi:()=>{}};
   ui.setSize(host,'medium');assert.equal(host['data-size'],'medium');
   ui.setSize(host,'large');assert.equal(host['data-size'],'large');
   ui.setSize(host,'bogus');assert.equal(host['data-size'],'small');
   const pinned=entry(10,'scene',true);pinned.pinned=true;
   ui.render(doc,host,[pinned],10,actions,{});
-  const card=host.children[0],thumbnail=card.children[0],footer=card.children[1].children[2];
-  const menu=footer.children[0],checkbox=footer.children[1],pin=footer.children[2];
+  const card=host.children[0].children[1].children[0],thumbnail=card.children[0];
+  const pin=card.children[1],del=card.children[2],checkbox=card.children[3].children[2].children[0];
   assert.match(pin.className,/is-pinned/);
   assert.equal(pin['aria-pressed'],'true');
+  assert.equal(del.disabled,true);
   thumbnail.listeners.click({stopPropagation(){}});
   thumbnail.listeners.dblclick({stopPropagation(){calls.push('thumbnail-stop');}});
-  thumbnail.listeners.keydown({key:'Enter',preventDefault(){calls.push(['preventDefault']);}});
-  assert.deepEqual(calls,[['select',10],'thumbnail-stop',['restore',10],['preventDefault'],['restore',10]]);
-  for(const target of [menu,checkbox,pin]){
-    card.listeners.dblclick({target:{closest(){return target;}}});
-    card.listeners.click({target:{closest(){return target;}}});
+  thumbnail.listeners.keydown({key:'Enter',preventDefault(){calls.push('preventDefault');}});
+  assert.deepEqual(calls,[['select',10],'thumbnail-stop',['restore',10],'preventDefault',['restore',10]]);
+  for(const control of [pin,del,checkbox]){
+    card.listeners.dblclick({target:{closest(selector){return selector.includes('modern-history-')?control:null;}}});
+    card.listeners.click({target:{closest(selector){return selector.includes('modern-history-')?control:null;}}});
   }
-  assert.equal(calls.length,5,'non-thumbnail actions never trigger selection or restore');
-  menu.children[0].listeners.dblclick({stopPropagation(){calls.push('summary-stopped');}});
+  assert.equal(calls.length,5,'action controls never trigger selection or restore');
   pin.listeners.dblclick({stopPropagation(){calls.push('pin-stopped');}});
+  del.listeners.dblclick({stopPropagation(){calls.push('delete-stopped');}});
   checkbox.children[0].listeners.dblclick({stopPropagation(){calls.push('checkbox-stopped');}});
-  assert.deepEqual(calls.slice(-3),['summary-stopped','pin-stopped','checkbox-stopped']);
-  menu.children[1].children[0].listeners.click({stopPropagation(){}});
   pin.listeners.click({stopPropagation(){}});
-  assert.deepEqual(calls.slice(-2),[['preview',10],['pin',10,false]]);
+  assert.deepEqual(calls.slice(-4),['pin-stopped','delete-stopped','checkbox-stopped',['pin',10,false]]);
 });
 
-test('Compact gallery uses bounded columns and minimal consistent controls',()=>{
+test('Compact section grids use bounded columns and menu-free minimal controls',()=>{
   const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
   assert.match(css,/grid-template-columns:repeat\(auto-fill,minmax\(0,min\(150px,100%\)\)\)/);
-  assert.match(css,/data-size="medium"\]\{grid-template-columns:repeat\(auto-fill,minmax\(0,min\(215px,100%\)\)\)/);
-  assert.match(css,/data-size="large"\]\{grid-template-columns:repeat\(auto-fill,minmax\(0,min\(320px,100%\)\)\)/);
-  assert.match(css,/\.modern-history-pin\{position:absolute;right:5px;top:5px/);
-  assert.match(css,/@media\(hover:none\)\{\.modern-history-pin\{opacity:1\}\}/);
+  assert.match(css,/data-size="medium"\] \.modern-history-section-grid/);
+  assert.match(css,/data-size="large"\] \.modern-history-section-grid/);
+  assert.match(css,/\.modern-history-pin\{right:35px\}/);
+  assert.match(css,/@media\(hover:none\)\{\.modern-history-pin,\.modern-history-delete:not\(:disabled\)\{opacity:1\}/);
   const {doc}=dom(),host=doc.createElement('div');
   ui.render(doc,host,[entry(3,'compare',true)],3,{
-    select(){},restore(){},preview(){},pin(){},remove(){},multi(){}
+    select(){},restore(){},pin(){},remove(){},multi(){}
   },{});
-  const body=host.children[0].children[1],footer=body.children[2];
-  assert.equal(body.children.length,3,'title, timestamp and action footer');
-  assert.equal(footer.children.length,3,'menu, checkbox and overlay pin');
-  assert.equal(footer.children[0].className,'modern-history-card-menu');
-  assert.equal(footer.children[1].className,'modern-history-multi');
-  assert.equal(footer.children[2].className,'modern-history-pin');
-  assert.deepEqual(footer.children[0].children[1].children.map(x=>x.textContent),['View','Info','Delete']);
+  const card=host.children[1].children[1].children[0];
+  assert.deepEqual(card.children.map(c=>c.className),[
+    'modern-history-card-select has-preview','modern-history-pin','modern-history-delete','modern-history-card-body']);
+  assert.deepEqual(card.children[3].children.map(c=>c.className),[
+    'modern-history-card-title','modern-history-card-meta','modern-history-card-footer']);
+  assert.equal(card.children[3].children[2].children[0].className,'modern-history-multi');
+});
+
+test('Pinned section can collapse without duplicating snapshots or changing stored pins',()=>{
+  const {doc}=dom(),host=doc.createElement('div'),entries=[entry(1,'scene',true),entry(2,'scene',true)];
+  entries[0].pinned=true;
+  ui.render(doc,host,entries,1,{select(){},pin(){},remove(){},multi(){}},{},{pinnedCollapsed:true});
+  assert.equal(host.children[0].children.length,1,'collapsed section does not build cards');
+  assert.equal(host.children[0].children[0].children[0]['aria-expanded'],'false');
+  assert.equal(host.children[1].children[1].children.length,1,'recent does not duplicate pinned');
+  assert.equal(entries[0].pinned,true);
 });
 
 test('Visual History loaded before Modern app; restore guards remain and thumbnails stay outside experiment JSON',()=>{
@@ -200,7 +219,7 @@ test('Visual History loaded before Modern app; restore guards remain and thumbna
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   assert.ok(html.indexOf('ModernExperimentThumbnail.js')<html.indexOf('ModernExperimentHistory.js'));
   assert.ok(html.indexOf('ModernExperimentHistoryUI.js')<html.indexOf('ModernApp.js'));
-  for(const id of ['ModernHistoryGallery','ModernHistoryPreview','ModernHistoryPin','ModernHistoryClearAll','ModernHistorySort','ModernHistoryMultiCount','ModernHistoryDeleteChecked','ModernHistorySize'])
+  for(const id of ['ModernHistoryGallery','ModernHistoryPin','ModernHistoryClearAll','ModernHistorySort','ModernHistoryMultiCount','ModernHistoryDeleteChecked','ModernHistorySize'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.match(app,/historyRenderedKeys\[view\]!==historyViewKey\(snapshot,view\)/);
   assert.match(app,/restore:function\(id\)\{handleHistoryRestore\(id\);\}/);
@@ -270,10 +289,10 @@ function inspectorDom(){
   }
   doc.createElement=element;doc.body=element('body');return doc;
 }
-test('Hover inspector delays, stays viewport-bound, supports menu Info and Escape without Restore',async()=>{
+test('Unified preview contains image and physical settings, hover dwell and sticky modes without Restore',async()=>{
   const doc=inspectorDom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
-    preview:()=>{},pin:()=>{},remove:()=>{},multi:()=>{}};
+    pin:()=>{},remove:()=>{},multi:()=>{}};
   const cardEntry=entry(1,'compare',true);
   cardEntry.experiment.scene={camera:{Height:15,Pan:0,Nick:0},objects:{NObjects:[1,0],ObjType:[3,0]},
     surface:{showModel:1,rEarth:6371000},atmosphere:'standard'};
@@ -281,27 +300,36 @@ test('Hover inspector delays, stays viewport-bound, supports menu Info and Escap
     B:{surface:'flat',radiusKm:6371,atmosphere:'vacuum'}};
   cardEntry.features.relations={geometrySame:false,atmosphereSame:false,refractionSame:false,physicsSame:false};
   ui.render(doc,host,[cardEntry],1,actions,{});
-  const overlay=doc.body.children[0],card=host.children[0];
+  const overlay=doc.body.children[0],card=host.children[1].children[1].children[0],image=card.children[0];
   assert.equal(overlay.hidden,true);
-  card.listeners.mouseenter();
-  assert.equal(overlay.hidden,true,'hover does not appear immediately');
-  await new Promise(resolve=>setTimeout(resolve,390));
-  assert.equal(overlay.hidden,false,'tooltip is shown after dwell');
+  image.listeners.mouseenter();
+  assert.equal(overlay.hidden,true,'hover is deferred');
+  await new Promise(resolve=>setTimeout(resolve,450));
+  assert.equal(overlay.hidden,false);
   assert.equal(overlay.role,'tooltip');
-  assert.ok(parseInt(overlay.style.left,10)<620,'tooltip flips at right viewport edge');
-  assert.ok(parseInt(overlay.style.top,10)<460,'tooltip clamps above bottom edge');
-  card.listeners.mouseleave();overlay.listeners.mouseenter();
+  assert.equal(overlay.children[0].children[0].tagName,'img','enlarged screenshot precedes the physics');
+  assert.equal(overlay.children[0].children[0].src,cardEntry.thumbnail.dataUrl);
+  assert.ok(parseInt(overlay.style.left,10)<620,'preview flips at right viewport edge');
+  assert.ok(parseInt(overlay.style.top,10)<460,'preview clamps above bottom edge');
+  image.listeners.mouseleave();overlay.listeners.mouseenter();
   await new Promise(resolve=>setTimeout(resolve,180));
-  assert.equal(overlay.hidden,false,'pointer over tooltip keeps it open');
-  const info=card.children[1].children[2].children[0].children[1].children[1];
-  assert.equal(info.textContent,'Info');
-  info.listeners.click({stopPropagation(){}});
-  assert.equal(overlay.role,'dialog','menu Info pins inspector for touch users');
-  card.listeners.dblclick({target:{closest(selector){return selector.includes('.modern-history-card-menu')?info:null;}}});
-  assert.equal(calls.length,0,'Info never restores a snapshot');
+  assert.equal(overlay.hidden,false,'pointer over popup keeps it open');
+  overlay.children[1].listeners.click({stopPropagation(){}});
+  assert.equal(overlay.role,'dialog','Keep open makes the popup persistent');
+  overlay.listeners.mouseleave();
+  await new Promise(resolve=>setTimeout(resolve,180));
+  assert.equal(overlay.hidden,false,'locked preview survives pointer leaving');
   doc.listeners.keydown({key:'Escape'});assert.equal(overlay.hidden,true);
+  image.listeners.click({pointerType:'touch'});
+  assert.equal(overlay.role,'dialog','touch opens persistent preview');
+  assert.equal(overlay.hidden,false);
+  image.listeners.keydown({key:' ',preventDefault(){}});
+  assert.equal(overlay.role,'dialog','Space also pins the keyboard preview');
+  for(const ctrl of [card.children[1],card.children[2]]){
+    card.listeners.dblclick({target:{closest(){return ctrl;}}});
+  }
+  assert.equal(calls.length,0,'pin and delete do not restore experiments');
+  ui.hideInspector(host);assert.equal(overlay.hidden,true);
   ui.render(doc,host,[cardEntry],1,actions,{});
   assert.equal(doc.body.children.length,1,'rerender destroys previous overlay');
-  assert.equal(host.__historyInspector!==null,true);
-  ui.hideInspector(host);assert.equal(doc.body.children[0].hidden,true);
 });

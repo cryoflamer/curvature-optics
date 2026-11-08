@@ -267,21 +267,22 @@ viewport, instead of showing the gallery's navy background through the image.
 Previously stored transparent thumbnails also display over white without
 IndexedDB migration; opaque dark-filled older captures must be recreated.
 Older Core entries are readable without migration.
-Gallery UX: double-click a snapshot image or card text to restore it through the
-same protected recovery logic as **Restore selected**; one click selects.
-Card density has browser-local **S (compact, default) / M / L** choices.
-All sizes show a thumbnail-corner Pin/Unpin toggle (always visible when pinned)
-and a **⋯** menu for View, Info and Delete. Checkboxes remain
-available for bulk operations and do not restore on double-click. The selected
-card size is stored in Application Preferences, never in the experiment.
-Snapshot Inspector: hovering over any history card for a moment opens a
-read-only physical-settings tooltip. In Compare it shows **A/B side by side**
-(surface, Globe radius, atmospheric model and active refraction parameters),
-then the A/B relationship and shared camera/objects; Scene shows one column.
-**Info** in the **⋯** menu pins the inspector for keyboard/touch access, **Esc** dismisses it,
-and it closes with the History panel. Hovering never queries IndexedDB or
-recalculates optics. The inspector derives values from the saved full snapshot,
-including existing history records, without changing the stored format.
+Gallery UX: one click selects a snapshot; double-clicking its image/text
+restores the experiment with the protected recovery checkpoint. Browser-local
+**S / M / L** card sizes are available. **Pinned** records appear in a
+collapsible section above **Recent**, never duplicated; the collapsed state and
+card size are Application Preferences, independent of experiment/IndexedDB data.
+Pin/Unpin and Delete are thumbnail-corner icons. Pinned records must be
+unpinned before individual or batch deletion. A checkbox remains available
+for bulk selection and future Storyboard composition.
+Unified Preview: hovering over the thumbnail for 400 ms shows its enlarged
+saved screenshot and physical-settings inspector together. Compare exposes
+both A/B physics and their differences; Scene exposes one configuration.
+The popup is viewport-bounded, stays open while hovered and can be locked with
+**Keep open**. Keyboard **Space** or a touch tap opens a persistent preview;
+**Enter** and double-click still restore. **Esc** closes the popup. No
+IndexedDB query or optics recalculation happens when inspecting a snapshot.
+No new History schema is introduced.
 Smart semantic A/B filters and Storyboard remain future stages. See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment
 URLs/JSON and the named Experiment Library are unchanged.
