@@ -1932,14 +1932,16 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
 - Physical-input changes after a completed redraw schedule a debounced auto
   snapshot; camera-only motions, animation playback and workspace changes are
   excluded. Manual snapshots preserve all camera and Compare information.
-  Consecutive duplicates are suppressed; manual Save upgrades duplicate auto
+  Consecutive duplicates are suppressed; recovery checkpoints additionally
+  reuse matching snapshots anywhere in history, and no-op Restore avoids a
+  checkpoint. Manual Save upgrades duplicate auto
   snapshots to protected entries.
 - Restore validates the target and commits the current experiment as a
   protected recovery record before applying the requested saved state. A failed
   checkpoint blocks restore. Only unpinned automatic records are subject to
   200-entry retention and automatic clearing. Visual History now captures
-  bounded real-Canvas Scene or labelled A/B thumbnails only after valid accurate
-  rendering, with per-side stale-frame guards, optional atmospheric layers,
+  bounded, aspect-preserving real-Canvas Scene or labelled A/B thumbnails
+  without artificial dark letterboxing, only after valid accurate rendering, with per-side stale-frame guards, optional atmospheric layers,
   read-only preview, newest/oldest ordering, pin/unpin, in-memory multi-selection,
   batch deletion and confirmed clear-all. Existing null-thumbnail records are
   supported. Semantic A/B filters and Storyboard remain deferred. See

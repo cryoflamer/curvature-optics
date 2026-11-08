@@ -130,6 +130,22 @@ test('IndexedDB history persists deep-copy validated snapshots, deduplicates lat
   assert.equal((await second.get(savedB.entry.id)).pinned,true);
   assert.equal((await second.get(savedB.entry.id)).source,'manual');
 });
+test('Recovery reuses an older identical snapshot even when another state is newer',async()=>{
+  const h=history.create({indexedDB:indexedDB(),now:()=>123});
+  const original=experiment('compare');
+  const first=await h.record(original,'auto');
+  const changed=structuredClone(original);changed.scene.camera.Height=99;
+  await h.record(changed,'manual');
+  const checkpoint=await h.record(original,'recovery');
+  assert.equal(checkpoint.created,false);
+  assert.equal(checkpoint.entry.id,first.entry.id);
+  assert.equal(checkpoint.entry.pinned,true);
+  assert.equal(checkpoint.entry.source,'recovery');
+  assert.equal((await h.list()).length,2);
+  const again=await h.record(original,'recovery');
+  assert.equal(again.created,false);
+  assert.equal((await h.list()).length,2);
+});
 test('Automatic history limit prunes only old unpinned auto entries, not manual/recovery',async()=>{
   const db=indexedDB(),h=history.create({indexedDB:db,maxAutoEntries:2});
   const manual=await h.record(experiment(),'manual');

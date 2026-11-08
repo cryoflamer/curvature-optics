@@ -18,25 +18,32 @@
       if(!canvas||!canvas.getContext||!canvas.toDataURL)return null;
       var ctx=canvas.getContext('2d');
       if(!ctx||typeof ctx.drawImage!=='function')return null;
-      canvas.width=VIEW_WIDTH*views.length;canvas.height=VIEW_HEIGHT;
+      // Fit the output to the source aspect ratio instead of adding artificial
+      // dark bars inside a fixed 480 x 300 frame. All viewports share the
+      // same source canvas geometry in the current Scene/Compare renderer.
+      var first=views[0]&&views[0].layers&&views[0].layers[0];
+      if(!first||!(first.width>0)||!(first.height>0))return null;
+      var fit=Math.min(VIEW_WIDTH/first.width,VIEW_HEIGHT/first.height);
+      var sideWidth=Math.max(1,Math.round(first.width*fit));
+      var sideHeight=Math.max(1,Math.round(first.height*fit));
+      canvas.width=sideWidth*views.length;canvas.height=sideHeight;
       for(var i=0;i<views.length;i++){
         var view=views[i];
         if(!view||!Array.isArray(view.layers)||!view.layers.length)return null;
         var primary=view.layers[0];
         if(!primary||!(primary.width>0)||!(primary.height>0))return null;
-        var x=i*VIEW_WIDTH,scale=Math.min(VIEW_WIDTH/primary.width,VIEW_HEIGHT/primary.height);
-        var width=Math.max(1,Math.round(primary.width*scale));
-        var height=Math.max(1,Math.round(primary.height*scale));
-        var left=x+Math.floor((VIEW_WIDTH-width)/2),top=Math.floor((VIEW_HEIGHT-height)/2);
-        ctx.fillStyle='#192d47';ctx.fillRect(x,0,VIEW_WIDTH,VIEW_HEIGHT);
+        // Require consistent viewport proportions; otherwise fall back to a
+        // thumbnail-less snapshot instead of misrepresenting either view.
+        if(primary.width!==first.width||primary.height!==first.height)return null;
+        var left=i*sideWidth,top=0,width=sideWidth,height=sideHeight;
         view.layers.forEach(function(layer){
           if(!layer||layer.width!==primary.width||layer.height!==primary.height)
             throw RangeError('Screenshot layers must have matching dimensions');
           ctx.drawImage(layer,left,top,width,height);
         });
         if(mode==='compare'){
-          ctx.fillStyle='rgba(12,31,54,.86)';ctx.fillRect(x+6,6,24,22);
-          ctx.fillStyle='#fff';ctx.font='bold 14px Arial';ctx.fillText(i===0?'A':'B',x+13,22);
+          ctx.fillStyle='rgba(12,31,54,.86)';ctx.fillRect(left+6,6,24,22);
+          ctx.fillStyle='#fff';ctx.font='bold 14px Arial';ctx.fillText(i===0?'A':'B',left+13,22);
         }
       }
       var dataUrl=canvas.toDataURL('image/webp',.72);

@@ -86,16 +86,21 @@
         var getAll=store.getAll();
         getAll.onsuccess=function(){
           var existing=ordered(getAll.result||[]),latest=existing[0];
-          if(latest&&latest.signature===signature){
+          // A recovery checkpoint must reuse ANY identical state in history,
+          // not only the newest record. Earlier snapshots remain restorable.
+          var match=source==='recovery'?existing.find(function(item){
+            return item.signature===signature;
+          }):latest&&latest.signature===signature?latest:null;
+          if(match){
             // A deliberate Save Now or a pre-restore checkpoint must protect
             // an otherwise disposable automatic entry, even on deduplication.
             var changed=false;
-            if(source!=='auto'&&!latest.pinned){
-              latest.pinned=true;latest.source=source;changed=true;
+            if(source!=='auto'&&!match.pinned){
+              match.pinned=true;match.source=source;changed=true;
             }
-            if(image&&!latest.thumbnail){latest.thumbnail=image;changed=true;}
-            if(changed)store.put(latest);
-            set({created:false,entry:latest});return;
+            if(image&&!match.thumbnail){match.thumbnail=image;changed=true;}
+            if(changed)store.put(match);
+            set({created:false,entry:match});return;
           }
           var entry={version:VERSION,createdAt:now(),source:source,pinned:source!=='auto',
             experiment:snapshot,signature:signature,physicalSignature:physical,

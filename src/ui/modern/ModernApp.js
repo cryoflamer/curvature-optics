@@ -940,6 +940,10 @@
         cancelEdits();stopCameraTransition(false,'History restore interrupted animation',false);
         stopCameraKeyboard(true);abortCameraDrag();cancelPending();cancelHistoryAuto();
         var current=experimentSnapshot();
+        if(historyFingerprint.exactSignature(current)===historyFingerprint.exactSignature(target)){
+          historyStatus('This snapshot already matches the current experiment.');
+          return refreshHistoryList(id);
+        }
         return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
           if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
           applyExperiment(target);syncNumericInputs();syncCompareEditor();

@@ -27,6 +27,17 @@ test('Scene captures one completed real Canvas image with bounded data, dimensio
   assert.equal(doc.operations.filter(x=>x[0]==='text').length,0);
   assert.deepEqual(doc.operations.filter(x=>x[0]==='export').map(x=>x[1]),['image/webp']);
 });
+test('Thumbnail uses source aspect ratio without drawing artificial dark padding',()=>{
+  const doc=outputDoc(),wide=canvas(1200,400);
+  const snap=thumbnail.capture(doc,'scene',[{layers:[wide]}]);
+  assert.equal(snap.width,480);
+  assert.equal(snap.height,160);
+  assert.equal(doc.operations.filter(op=>op[0]==='fill').length,0);
+  assert.deepEqual(doc.operations.filter(op=>op[0]==='draw')[0].slice(2),[0,0,480,160]);
+  const tall=thumbnail.capture(outputDoc(),'scene',[{layers:[canvas(400,800)]}]);
+  assert.equal(tall.width,150);
+  assert.equal(tall.height,300);
+});
 test('Compare composites both distinct A/B Canvas sources and retains guide overlays',()=>{
   const doc=outputDoc(),a=canvas(),b=canvas(),guides=canvas();
   const captured=thumbnail.capture(doc,'compare',[{layers:[a,guides]},{layers:[b]}]);

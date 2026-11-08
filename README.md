@@ -254,7 +254,8 @@ user's Opera browser should be checked after application.
 Modern now has a separate **History** panel in the header (not a sixth settings
 or physics tab). It saves full, validated Scene/Compare snapshots in browser
 IndexedDB, with manual Save, automatic saves after stable physical-input edits,
-restore with a protected pre-restore checkpoint, delete and clear automatic.
+restore with a protected pre-restore checkpoint (deduplicated across history),
+delete and clear automatic.
 Camera movement alone never creates automatic entries. The **Visual History** gallery now shows saved, real-Canvas Scene thumbnails or
 composite A/B thumbnails, read-only enlargement, newest/oldest ordering,
 pinning, multi-selection, batch deletion and explicit clear-all. Screenshots
