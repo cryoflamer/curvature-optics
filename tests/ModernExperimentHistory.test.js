@@ -207,10 +207,12 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHorizonStatusA','ModernHorizonStatusB',
     'ModernHistoryPanel','ModernHistoryToggle','ModernHistoryClose','ModernHistorySave',
     'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
-    'ModernHistoryStatus'];
+    'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
+    'ModernHistoryPreview','ModernHistoryPinChecked','ModernHistoryDeleteChecked',
+    'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount'];
   const nodes=new Map(ids.map(id=>[id,{id,value:'',min:'',max:'',checked:true,
     hidden:false,textContent:'',children:[],listeners:{},classList:{toggle(){},remove(){}},
-    addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(){},
+    addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(key,value){this[key]=value;},
     appendChild(child){this.children.push(child);},closest(){return {set hidden(value){}};}}]));
   nodes.get('ModernPreset').value='pontchartrain';
   const href='https://example.org/CurvatureModern.html';
@@ -230,6 +232,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
     CurvatureModernCompareModel:require('../src/ui/modern/ModernCompareModel'),
     CurvatureModernCompareState:compare,CurvatureModernExperimentState:state,
     CurvatureModernExperimentHistory:history,
+    CurvatureModernExperimentHistoryUI:require('../src/ui/modern/ModernExperimentHistoryUI'),
+    CurvatureModernApplicationPreferences:require('../src/ui/modern/ModernApplicationPreferences'),
     CurvatureModernExperimentFingerprint:fingerprint,
     CurvatureModernExperimentThumbnail:require('../src/ui/modern/ModernExperimentThumbnail'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
@@ -239,14 +243,18 @@ test('Live Modern integration saves and restores a full experiment and protects 
       Redraw(){params.DrawFunc({Canvas:renderedCanvas});}};},
     xOnLoad(fn){onload=fn;},
     console:{error(){}},location,history:historyApi,indexedDB:db,confirm(){return true;},
-    localStorage:{getItem(){return null;},setItem(){},removeItem(){}}};
+    localStorage:{data:new Map(),getItem(key){return this.data.get(key)||null;},
+      setItem(key,value){this.data.set(key,value);},removeItem(key){this.data.delete(key);}}};
   rootWindow.window=rootWindow;
   const document={getElementById(id){return nodes.get(id)||null;},
-    querySelector(selector){return nodes.get(selector.slice(1))||null;},
+    querySelector(selector){return selector[0]==='#'?nodes.get(selector.slice(1))||null:null;},
     createElement(name){if(name==='canvas')return {width:0,height:0,
       getContext(){return {fillRect(){},fillText(){},drawImage(){}};},
       toDataURL(){return 'data:image/webp;base64,YQ==';}};
-      return {value:'',textContent:''};}};
+      return {value:'',textContent:'',children:[],style:{},listeners:{},
+        appendChild(child){this.children.push(child);return child;},
+        setAttribute(key,value){this[key]=value;},getAttribute(key){return this[key];},
+        addEventListener(type,fn){this.listeners[type]=fn;}};}};
   const ctx={window:rootWindow,document,URL,URLSearchParams,
     requestAnimationFrame(fn){return setTimeout(()=>fn(Date.now()),0);},
     cancelAnimationFrame(id){clearTimeout(id);},setTimeout,clearTimeout,console};
@@ -275,9 +283,20 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.equal(app.getModel().Height,66,'failed recovery must block restoration');
   assert.match(nodes.get('ModernHistoryStatus').textContent,/Quota exceeded/);
   db.failAdd=false;
+  const gallery=nodes.get('ModernHistoryGallery');
+  assert.equal(gallery['data-size'],'small','compact is the default gallery density');
+  const card=gallery.children.find(x=>x['data-snapshot-id']===String(id));
+  assert.ok(card,'manual snapshot appears in the real rendered gallery');
+  card.children[0].listeners.dblclick({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal(app.getModel().Height,15,'double-click restores through guarded path');
   nodes.get('ModernHistoryRestore').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,60));
-  assert.equal(app.getModel().Height,15);
+  assert.equal((await store.list()).length,2,'toolbar Restore of active state is a no-op');
+  const sizeControl=nodes.get('ModernHistorySize');
+  sizeControl.value='large';sizeControl.listeners.change();
+  assert.equal(gallery['data-size'],'large');
+  assert.equal(JSON.parse(rootWindow.localStorage.data.get('curvature-modern-application-preferences-v1')).historyGallerySize,'large');
   const entries=await store.list();
   assert.equal(entries.length,2);
   assert.equal(entries[0].source,'recovery');

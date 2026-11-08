@@ -462,6 +462,7 @@
   var navigationMoved=false,navigationModifiers={fast:false,precise:false};
   var NAVIGATION_STORAGE_KEY='curvature-modern-camera-navigation-v1';
   var applicationPreferences=root.CurvatureModernApplicationPreferences;
+  var historyGallerySize='small';
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   var legacyDisplayPanels=Object.assign({},displayPanels);
   var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
@@ -483,6 +484,7 @@
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
     state.geometryBackend=remembered.geometryBackend;
+    historyGallerySize=remembered.historyGallerySize;
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
@@ -504,6 +506,7 @@
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
+        historyGallerySize:historyGallerySize,
         workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
@@ -621,6 +624,10 @@
       state.opticalQuality=defaults.opticalQuality;
       state.previewDetail=defaults.previewDetail;
       state.geometryBackend=defaults.geometryBackend;
+      historyGallerySize=defaults.historyGallerySize;
+      var historySizeControl=newUiEl('ModernHistorySize');
+      if(historySizeControl)historySizeControl.value=historyGallerySize;
+      if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
       navigationPrefs=navigation?navigation.settings(defaults.navigation):defaults.navigation;
       displayPanels=Object.assign({},defaults.displayPanels);
       legacyDisplayPanels=Object.assign({},displayPanels);
@@ -834,8 +841,11 @@
       });
       if(previous&&entries.some(function(entry){return String(entry.id)===previous;}))select.value=previous;
       var gallery=newUiEl('ModernHistoryGallery'),panel=newUiEl('ModernHistoryPanel');
-      if(gallery&&historyUI&&panel&&!panel.hidden)historyUI.render(document,gallery,entries,select.value,{
+      if(gallery&&historyUI&&panel&&!panel.hidden){
+        historyUI.setSize(gallery,historyGallerySize);
+        historyUI.render(document,gallery,entries,select.value,{
         select:function(id){select.value=String(id);historyUI.select(gallery,id);},
+        restore:function(id){handleHistoryRestore(id);},
         preview:function(id){
           var entry=entries.find(function(item){return item.id===id;});
           if(entry)historyUI.preview(document,newUiEl('ModernHistoryPreview'),entry);
@@ -857,13 +867,53 @@
           historyMultiCount();
         }
       },historyMultiSelection);
+      }
       return entries;
     });
+  }
+  var historyRestoreBusy=false;
+  function restoreHistorySnapshot(id){
+    if(historyRestoreBusy)return Promise.resolve();
+    if(!id)return Promise.reject(RangeError('Select a history snapshot to restore'));
+    historyRestoreBusy=true;
+    return experimentHistory.get(id).then(function(entry){
+      if(!entry)throw RangeError('History snapshot not found');
+      var target=experiments.validate(entry.experiment);
+      // A protected checkpoint must commit BEFORE changing current physics.
+      cancelEdits();stopCameraTransition(false,'History restore interrupted animation',false);
+      stopCameraKeyboard(true);abortCameraDrag();cancelPending();cancelHistoryAuto();
+      var current=experimentSnapshot();
+      if(historyFingerprint.exactSignature(current)===historyFingerprint.exactSignature(target)){
+        historyStatus('This snapshot already matches the current experiment.');
+        return refreshHistoryList(id);
+      }
+      return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
+        if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
+        applyExperiment(target);syncNumericInputs();syncCompareEditor();
+        setMode(state.mode,false);resetHistoryBaseline();
+        historyStatus('Snapshot restored. Previous state '+
+          (backup.created?'saved as protected recovery point.':'already in history.'));
+        return refreshHistoryList(id);
+      });
+    }).finally(function(){historyRestoreBusy=false;});
+  }
+  function handleHistoryRestore(id){
+    return restoreHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
   }
   function bindHistory(){
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
     experimentHistory=historyFactory.create({indexedDB:root.indexedDB});
+    var sizeControl=newUiEl('ModernHistorySize');
+    if(sizeControl){
+      sizeControl.value=historyGallerySize;
+      sizeControl.addEventListener('change',function(){
+        if(!['small','medium','large'].includes(sizeControl.value))return;
+        historyGallerySize=sizeControl.value;
+        if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
+        saveApplicationPreferences();
+      });
+    }
     function handle(operation){
       Promise.resolve().then(operation).catch(function(error){historyStatus(error.message,true);});
     }
@@ -930,29 +980,7 @@
       });
     });});
     el('ModernHistoryRestore').addEventListener('click',function(){handle(function(){
-      var id=el('ModernHistorySelect').value;
-      if(!id)throw RangeError('Select a history snapshot to restore');
-      return experimentHistory.get(id).then(function(entry){
-        if(!entry)throw RangeError('History snapshot not found');
-        var target=experiments.validate(entry.experiment);
-        // The pre-restore checkpoint must commit successfully BEFORE any
-        // mutation. On blocked/quota storage, leave the live model untouched.
-        cancelEdits();stopCameraTransition(false,'History restore interrupted animation',false);
-        stopCameraKeyboard(true);abortCameraDrag();cancelPending();cancelHistoryAuto();
-        var current=experimentSnapshot();
-        if(historyFingerprint.exactSignature(current)===historyFingerprint.exactSignature(target)){
-          historyStatus('This snapshot already matches the current experiment.');
-          return refreshHistoryList(id);
-        }
-        return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
-          if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
-          applyExperiment(target);syncNumericInputs();syncCompareEditor();
-          setMode(state.mode,false);resetHistoryBaseline();
-          historyStatus('Snapshot restored. Previous state '+
-            (backup.created?'saved as protected recovery point.':'already in history.'));
-          return refreshHistoryList(id);
-        });
-      });
+      return restoreHistorySnapshot(el('ModernHistorySelect').value);
     });});
     el('ModernHistoryDelete').addEventListener('click',function(){handle(function(){
       var id=el('ModernHistorySelect').value;

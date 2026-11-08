@@ -28,7 +28,15 @@
     node.addEventListener('click',function(event){
       if(event&&event.stopPropagation)event.stopPropagation();handler();
     });
+    // Double-clicking a card action must never bubble into snapshot restore.
+    node.addEventListener('dblclick',function(event){
+      if(event&&event.stopPropagation)event.stopPropagation();
+    });
     return node;
+  }
+  function setSize(host,size){
+    if(!host)return;
+    host.setAttribute('data-size',['small','medium','large'].includes(size)?size:'small');
   }
   function render(doc,host,entries,selectedId,actions,multi){
     if(!host||!doc)return;
@@ -41,8 +49,33 @@
     entries.forEach(function(entry){
       var card=el(doc,'article','modern-history-card'+(String(entry.id)===String(selectedId)?' is-selected':''));
       card.setAttribute('data-snapshot-id',String(entry.id));
+      card.addEventListener('click',function(event){
+        if(event&&event.target&&typeof event.target.closest==='function'&&
+          event.target.closest('.modern-history-card-actions, .modern-history-card-menu, .modern-history-multi'))return;
+        actions.select(entry.id);
+      });
+      card.addEventListener('dblclick',function(event){
+        // An explicit control, bulk-selection checkbox or actions menu is not
+        // an experiment gesture. Only the card image/text restores.
+        if(event&&event.target&&typeof event.target.closest==='function'&&
+          event.target.closest('.modern-history-card-actions, .modern-history-card-menu, .modern-history-multi'))return;
+        if(actions.restore)actions.restore(entry.id);
+      });
       var select=button(doc,'','Select snapshot '+entry.id,function(){actions.select(entry.id);});
       select.className='modern-history-card-select';
+      select.title='Select snapshot; double-click to restore';
+      // The thumbnail is itself a button; stopPropagation on ordinary action
+      // buttons must not swallow this dedicated double-click restore.
+      select.addEventListener('dblclick',function(event){
+        if(event&&event.stopPropagation)event.stopPropagation();
+        if(actions.restore)actions.restore(entry.id);
+      });
+      select.addEventListener('keydown',function(event){
+        if(event&&event.key==='Enter'&&actions.restore){
+          if(event.preventDefault)event.preventDefault();
+          actions.restore(entry.id);
+        }
+      });
       select.setAttribute('aria-pressed',String(String(entry.id)===String(selectedId)));
       if(entry.thumbnail&&entry.thumbnail.dataUrl){
         var image=el(doc,'img','modern-history-image');
@@ -55,18 +88,30 @@
       var body=el(doc,'div','modern-history-card-body');
       body.appendChild(el(doc,'strong','modern-history-card-title',label(entry)));
       body.appendChild(el(doc,'span','modern-history-card-meta',
-        new Date(entry.createdAt).toLocaleString()+' · '+entry.source));
+        new Date(entry.createdAt).toLocaleString()+' · '+entry.source+
+        (entry.pinned?' · pinned':'')));
       var controls=el(doc,'div','modern-history-card-actions');
       controls.appendChild(button(doc,'View','Quick view snapshot '+entry.id,function(){actions.preview(entry.id);}));
       controls.appendChild(button(doc,entry.pinned?'Unpin':'Pin',
         (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){actions.pin(entry.id,!entry.pinned);}));
       controls.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){actions.remove(entry.id);}));
       body.appendChild(controls);
+      var menu=el(doc,'details','modern-history-card-menu');
+      var summary=el(doc,'summary','modern-history-card-menu-toggle','⋯ Actions');
+      summary.setAttribute('aria-label','Snapshot actions');
+      menu.appendChild(summary);
+      var menuActions=el(doc,'div','modern-history-card-menu-actions');
+      menuActions.appendChild(button(doc,'View','Quick view snapshot '+entry.id,function(){actions.preview(entry.id);menu.open=false;}));
+      menuActions.appendChild(button(doc,entry.pinned?'Unpin':'Pin',
+        (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){actions.pin(entry.id,!entry.pinned);menu.open=false;}));
+      menuActions.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){actions.remove(entry.id);menu.open=false;}));
+      menu.appendChild(menuActions);body.appendChild(menu);
       var multiLabel=el(doc,'label','modern-history-multi');
+      multiLabel.title='Select for storyboard / bulk actions';
       var check=el(doc,'input');check.type='checkbox';check.checked=!!(multi&&multi[entry.id]);
       check.addEventListener('change',function(){actions.multi(entry.id,check.checked);});
       multiLabel.appendChild(check);
-      multiLabel.appendChild(el(doc,'span','', 'Select for storyboard / bulk actions'));
+      multiLabel.appendChild(el(doc,'span','', 'Select'));
       body.appendChild(multiLabel);
       card.appendChild(body);host.appendChild(card);
     });
@@ -106,5 +151,6 @@
     if(typeof dialog.close==='function'&&dialog.open)dialog.close();
     dialog.hidden=true;
   }
-  return Object.freeze({render:render,select:select,preview:preview,close:close,label:label});
+  return Object.freeze({render:render,select:select,preview:preview,close:close,label:label,
+    setSize:setSize});
 }));

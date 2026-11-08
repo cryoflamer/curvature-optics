@@ -262,6 +262,12 @@ pinning, multi-selection, batch deletion and explicit clear-all. Screenshots
 are only attached when an accurate completed render matches the saved state;
 when the Canvas is stale/unavailable, the full experiment saves with a
 placeholder instead. Older Core entries are readable without migration.
+Gallery UX: double-click a snapshot image or card text to restore it through the
+same protected recovery logic as **Restore selected**; one click selects.
+Card density has browser-local **S (compact, default) / M / L** choices; in S,
+View/Pin/Delete are behind each card's **⋯ Actions** menu. Checkboxes remain
+available for bulk operations and do not restore on double-click. The selected
+card size is stored in Application Preferences, never in the experiment.
 Smart semantic A/B filters and Storyboard remain future stages. See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment
 URLs/JSON and the named Experiment Library are unchanged.

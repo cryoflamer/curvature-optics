@@ -96,7 +96,7 @@ test('Visual gallery selects, previews, pins and deletes via explicit actions on
   assert.equal(host.children.length,2);
   const one=host.children[0],two=host.children[1];
   assert.equal(two.className.includes('is-selected'),true);
-  assert.equal(two.children[1].children[3].children[0].checked,true);
+  assert.equal(two.children[1].children[4].children[0].checked,true);
   ui.select(host,1);
   assert.equal(one.className.includes('is-selected'),true);
   assert.equal(two.className.includes('is-selected'),false);
@@ -105,8 +105,8 @@ test('Visual gallery selects, previews, pins and deletes via explicit actions on
   one.children[0].listeners.click();
   const buttons=one.children[1].children[2].children;
   for(const b of buttons)b.listeners.click({stopPropagation(){}});
-  one.children[1].children[3].children[0].checked=true;
-  one.children[1].children[3].children[0].listeners.change();
+  one.children[1].children[4].children[0].checked=true;
+  one.children[1].children[4].children[0].listeners.change();
   assert.deepEqual(calls,[['select',1],['preview',1],['pin',1,true],['remove',1],['multi',1,true]]);
   const dialog=doc.createElement('dialog');dialog.hidden=true;
   ui.preview(doc,dialog,entry(1,'scene',true));
@@ -116,14 +116,43 @@ test('Visual gallery selects, previews, pins and deletes via explicit actions on
   ui.preview(doc,dialog,entry(1,'scene',true));
   assert.equal(dialog.hidden,false,'a reopened preview must not stay hidden');
 });
+test('History gallery S/M/L, double-click restore and action isolation',()=>{
+  const {doc}=dom(),host=doc.createElement('div'),calls=[];
+  const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
+    preview:id=>calls.push(['preview',id]),pin:(id,value)=>calls.push(['pin',id,value]),
+    remove:id=>calls.push(['remove',id]),multi:(id,value)=>calls.push(['multi',id,value])};
+  ui.setSize(host,'medium');assert.equal(host['data-size'],'medium');
+  ui.setSize(host,'large');assert.equal(host['data-size'],'large');
+  ui.setSize(host,'bogus');assert.equal(host['data-size'],'small');
+  ui.render(doc,host,[entry(10,'scene',true)],10,actions,{});
+  const card=host.children[0],thumbnail=card.children[0],body=card.children[1];
+  const menu=body.children[3],checkbox=body.children[4];
+  thumbnail.listeners.click({stopPropagation(){}});
+  thumbnail.listeners.dblclick({stopPropagation(){calls.push('thumbnail-stop');}});
+  card.listeners.dblclick({target:{closest(){return null;}}});
+  thumbnail.listeners.keydown({key:'Enter',preventDefault(){calls.push(['preventDefault']);}});
+  assert.deepEqual(calls,[['select',10],'thumbnail-stop',['restore',10],['restore',10],
+    ['preventDefault'],['restore',10]]);
+  card.listeners.dblclick({target:{closest(){return menu;}}});
+  card.listeners.dblclick({target:{closest(){return checkbox;}}});
+  card.listeners.click({target:{closest(){return checkbox;}}});
+  assert.equal(calls.length,6,'checkbox or menu never initiates restore/selection');
+  menu.children[1].children[0].listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls.pop(),['preview',10],'compact actions remain operational');
+  menu.children[1].children[1].listeners.dblclick({stopPropagation(){calls.push('stopped');}});
+  assert.equal(calls.pop(),'stopped','action double-click cannot bubble');
+});
+
 test('Visual History loaded before Modern app; restore guards remain and thumbnails stay outside experiment JSON',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   assert.ok(html.indexOf('ModernExperimentThumbnail.js')<html.indexOf('ModernExperimentHistory.js'));
   assert.ok(html.indexOf('ModernExperimentHistoryUI.js')<html.indexOf('ModernApp.js'));
-  for(const id of ['ModernHistoryGallery','ModernHistoryPreview','ModernHistoryPin','ModernHistoryClearAll','ModernHistorySort','ModernHistoryMultiCount','ModernHistoryDeleteChecked'])
+  for(const id of ['ModernHistoryGallery','ModernHistoryPreview','ModernHistoryPin','ModernHistoryClearAll','ModernHistorySort','ModernHistoryMultiCount','ModernHistoryDeleteChecked','ModernHistorySize'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.match(app,/historyRenderedKeys\[view\]!==historyViewKey\(snapshot,view\)/);
+  assert.match(app,/restore:function\(id\)\{handleHistoryRestore\(id\);\}/);
+  assert.match(app,/historyGallerySize=remembered.historyGallerySize/);
   assert.match(app,/effectiveOpticalQuality\(\)!=='accurate'/);
   assert.match(app,/experimentHistory\.record\(current,'recovery',historyThumbnail\(current\)\)/);
   assert.match(app,/if\(!entry\)throw RangeError\('History snapshot not found'\)/);

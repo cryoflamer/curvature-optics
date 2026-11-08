@@ -1944,5 +1944,11 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   without artificial dark letterboxing, only after valid accurate rendering, with per-side stale-frame guards, optional atmospheric layers,
   read-only preview, newest/oldest ordering, pin/unpin, in-memory multi-selection,
   batch deletion and confirmed clear-all. Existing null-thumbnail records are
-  supported. Semantic A/B filters and Storyboard remain deferred. See
+  supported. The gallery now defaults to a compact S layout, with optional M/L
+  sizing persisted in Application Preferences. Double-clicking a card restores
+  via the same serialized protected recovery path as the toolbar button; single
+  click selects. Compact View/Pin/Delete actions are collapsed into a per-card
+  details menu, while multi-select and accessibility remain available. UI layout
+  changes neither stored history records nor physical or experiment schemas.
+  Semantic A/B filters and Storyboard remain deferred. See
   `docs/modern-experiment-history.md` for usage and future design constraints.

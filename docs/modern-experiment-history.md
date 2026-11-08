@@ -41,6 +41,24 @@ Scene/Compare renderer, or Legacy state.
   already existed. Browsers may evict site storage;
   these local records are not a backup across browsers/devices or origins.
 
+## History gallery controls
+
+- **One click** on a snapshot image or card text selects it; **double-click**
+  restores the full experiment. Pressing **Enter** while the thumbnail button
+  has focus also restores the snapshot. The existing **Restore selected** button
+  uses the same guarded path, with a protected recovery checkpoint before any
+  change to live physics. Restore actions are serialized to avoid overlapping
+  operations on repeated double-clicks.
+- Card sizing is **S / M / L** (compact by default). S uses small thumbnails
+  and **⋯ Actions** for View, Pin/Unpin and Delete; M and L expose these actions
+  below each card. Native checkbox bulk selection remains available at every
+  size. A double-click on action buttons, menus or selection checkboxes never
+  restores an experiment.
+- Card density is a validated browser-local Application Preference. Switching
+  size does not reread IndexedDB, recalculate optics or modify the experiment
+  JSON. Resetting application preferences returns to S; workspace layout reset
+  does not affect card density. The grid remains responsive on narrow screens.
+
 ## Comparison semantics and future steps
 
 `ModernExperimentFingerprint` derives canonical active physical descriptors
@@ -87,7 +105,11 @@ specified. A screenshot crossfade is not a physical optics calculation.
    In Compare, change only A, then B; check that a new composite thumbnail
    contains the **current** A and B rather than a stale side. If Fast Preview
    is active or an accurate render has not completed, expect "No preview".
-4. Click **View** for read-only enlargement; confirm that the live experiment
+4. Try the **S / M / L** gallery size selector, reload and confirm it persists.
+   Single-click a card to select it, double-click its thumbnail to restore;
+   confirm no unintended duplicate recovery points. Double-click on checkbox,
+   View, Pin, Delete or the compact **⋯ Actions** menu: none should restore.
+   Click **View** for read-only enlargement; confirm that the live experiment
    does not change. Pin a record, sort newest/oldest, select multiple cards and
    delete them; verify confirmations. Test Clear automatic and separately
    Clear all (including protected recovery records).
