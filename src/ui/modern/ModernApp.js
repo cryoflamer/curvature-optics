@@ -469,7 +469,8 @@
   var historyGallerySize='small';
   var historyPinnedCollapsed=false;
   var historyPanelOpen=false;
-  var historyFilters={query:'',mode:'all',geometry:'any',atmosphere:'any'};
+  var historyFilters={query:'',mode:'all',geometry:'any',atmosphere:'any',
+    geometryRelation:'any',refractionRelation:'any'};
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   var legacyDisplayPanels=Object.assign({},displayPanels);
   var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
@@ -613,7 +614,9 @@
   function syncHistoryFilterControls(){
     [['ModernHistoryFilterQuery','query'],['ModernHistoryFilterMode','mode'],
       ['ModernHistoryFilterGeometry','geometry'],
-      ['ModernHistoryFilterAtmosphere','atmosphere']].forEach(function(pair){
+      ['ModernHistoryFilterAtmosphere','atmosphere'],
+      ['ModernHistoryFilterGeometryRelation','geometryRelation'],
+      ['ModernHistoryFilterRefractionRelation','refractionRelation']].forEach(function(pair){
       var node=newUiEl(pair[0]);if(node)node.value=historyFilters[pair[1]];
     });
   }
@@ -1109,8 +1112,9 @@
     var filterRefreshTimer=null;
     function changeHistoryFilter(key,value,debounced){
       if(!historyFiltersApi)return;
-      var next=Object.assign({},historyFilters);next[key]=value;
-      historyFilters=historyFiltersApi.normalize(next);
+      historyFilters=historyFiltersApi.update(historyFilters,key,value);
+      if(key==='mode'||key==='geometryRelation'||key==='refractionRelation')
+        syncHistoryFilterControls();
       // A bulk operation must not silently affect records now hidden by filters.
       historyMultiSelection=Object.create(null);historyMultiCount();
       saveApplicationPreferences();
@@ -1123,7 +1127,9 @@
     [['ModernHistoryFilterQuery','query','input',true],
       ['ModernHistoryFilterMode','mode','change',false],
       ['ModernHistoryFilterGeometry','geometry','change',false],
-      ['ModernHistoryFilterAtmosphere','atmosphere','change',false]
+      ['ModernHistoryFilterAtmosphere','atmosphere','change',false],
+      ['ModernHistoryFilterGeometryRelation','geometryRelation','change',false],
+      ['ModernHistoryFilterRefractionRelation','refractionRelation','change',false]
     ].forEach(function(config){
       var node=newUiEl(config[0]);
       if(node)node.addEventListener(config[2],function(){
@@ -1133,7 +1139,8 @@
     var clearFilters=newUiEl('ModernHistoryFiltersClear');
     if(clearFilters)clearFilters.addEventListener('click',function(){
       historyFilters=historyFiltersApi?historyFiltersApi.normalize():
-        {query:'',mode:'all',geometry:'any',atmosphere:'any'};
+        {query:'',mode:'all',geometry:'any',atmosphere:'any',
+          geometryRelation:'any',refractionRelation:'any'};
       syncHistoryFilterControls();
       historyMultiSelection=Object.create(null);historyMultiCount();
       saveApplicationPreferences();

@@ -16,6 +16,7 @@
   var HISTORY_SIZES=['small','medium','large'];
   var HISTORY_MODES=['all','scene','compare'];
   var HISTORY_GEOMETRIES=['any','globe','flat'];
+  var HISTORY_RELATIONS=['any','same','different'];
   var HISTORY_ATMOSPHERES=['any','vacuum','standard','temperature-lapse','profile-transition',
     'inverse-temperature','inverse-spherical','exponential-occlusion'];
   var SPEEDS=[.01,.1,1,10,100,1000,10000];
@@ -58,7 +59,9 @@
       query:typeof source.query==='string'?source.query.slice(0,160).trim():'',
       mode:from(HISTORY_MODES,source.mode,'all'),
       geometry:from(HISTORY_GEOMETRIES,source.geometry,'any'),
-      atmosphere:from(HISTORY_ATMOSPHERES,source.atmosphere,'any')
+      atmosphere:from(HISTORY_ATMOSPHERES,source.atmosphere,'any'),
+      geometryRelation:source.mode==='scene'?'any':from(HISTORY_RELATIONS,source.geometryRelation,'any'),
+      refractionRelation:source.mode==='scene'?'any':from(HISTORY_RELATIONS,source.refractionRelation,'any')
     });
   }
   function normalize(input){

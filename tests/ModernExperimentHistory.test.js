@@ -213,7 +213,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
     'ModernHistoryFilterQuery','ModernHistoryFilterMode','ModernHistoryFilterGeometry',
-    'ModernHistoryFilterAtmosphere','ModernHistoryFiltersClear','ModernHistoryFilterCount',
+    'ModernHistoryFilterAtmosphere','ModernHistoryFilterGeometryRelation',
+    'ModernHistoryFilterRefractionRelation','ModernHistoryFiltersClear','ModernHistoryFilterCount',
     'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
     'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount',
     'ModernHistoryMetadataDialog','ModernHistoryMetadataForm','ModernHistoryMetadataName',
@@ -411,6 +412,36 @@ test('Live Modern integration saves and restores a full experiment and protects 
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(count.textContent,'Showing 0 of 4 snapshots');
   assert.equal((await store.list()).length,4,'filtering does not rewrite History');
+  // Compare-only relation filters operate on the existing canonical A/B flags.
+  nodes.get('ModernHistoryFiltersClear').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  const geometryRelation=nodes.get('ModernHistoryFilterGeometryRelation');
+  const refractionRelation=nodes.get('ModernHistoryFilterRefractionRelation');
+  geometryRelation.value=pair.features.relations.geometrySame?'same':'different';
+  geometryRelation.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 1 of 4 snapshots');
+  assert.equal(nodes.get('ModernHistorySelect').children.at(-1).value,String(pair.id));
+  refractionRelation.value=pair.features.relations.refractionSame?'same':'different';
+  refractionRelation.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 1 of 4 snapshots');
+  assert.equal(JSON.parse(rootWindow.localStorage.data.get(
+    'curvature-modern-application-preferences-v1')).historyFilters.geometryRelation,
+    geometryRelation.value);
+  refractionRelation.value=pair.features.relations.refractionSame?'different':'same';
+  refractionRelation.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 0 of 4 snapshots');
+  kind.value='scene';kind.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(geometryRelation.value,'any','Scene clears Compare-only conditions');
+  assert.equal(refractionRelation.value,'any');
+  assert.equal(count.textContent,'Showing 3 of 4 snapshots');
+  geometryRelation.value='different';geometryRelation.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(kind.value,'compare','selecting A/B relation in Scene switches to Compare');
+  assert.equal(count.textContent,'Showing 1 of 4 snapshots');
   nodes.get('ModernHistoryFiltersClear').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(count.textContent,'Showing 4 of 4 snapshots');

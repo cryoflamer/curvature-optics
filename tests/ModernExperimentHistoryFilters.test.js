@@ -74,11 +74,78 @@ test('old snapshots can be filtered by recalculating missing cached features rea
   assert.deepEqual(older,previous,'search never rewrites old IndexedDB entries');
 });
 test('invalid local filter preferences fall back safely, query size is bounded',()=>{
-  assert.deepEqual(filters.normalize(),{query:'',mode:'all',geometry:'any',atmosphere:'any'});
+  assert.deepEqual(filters.normalize(),{query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'});
   assert.deepEqual(filters.normalize({mode:'bogus',geometry:'cube',atmosphere:42,query:{}}),
     filters.normalize());
   assert.equal(filters.normalize({query:'x'.repeat(1000)}).query.length,160);
   assert.equal(filters.normalize({query:'  hi  '}).query,'hi');
   assert.equal(filters.normalize({query:'hi',mode:'compare'}).mode,'compare');
   assert.equal(Object.isFrozen(filters.normalize()),true);
+});
+
+test('Smart Compare relations distinguish geometry, active refraction, and model-name equality',()=>{
+  const value=experiment('compare');
+  value.compare.A.surface='globe';value.compare.B.surface='globe';
+  value.compare.A.radiusKm=6371;value.compare.B.radiusKm=6371;
+  value.compare.A.atmosphere='temperature-lapse';
+  value.compare.B.atmosphere='temperature-lapse';
+  value.compare.B.temperatureProfile.gradientKPerKm=
+    value.compare.A.temperatureProfile.gradientKPerKm+1;
+  const item=entry(10,value,'Different gradients');
+  const original=structuredClone(item);
+  assert.equal(fingerprint.features(value).relations.atmosphereSame,true);
+  assert.equal(fingerprint.features(value).relations.refractionSame,false);
+  assert.ok(filters.matches(item,{geometryRelation:'same',refractionRelation:'different'}));
+  assert.equal(filters.matches(item,{refractionRelation:'same'}),false);
+  assert.equal(filters.matches(item,{geometryRelation:'different'}),false);
+  assert.ok(filters.matches(item,{mode:'compare',geometry:'globe',atmosphere:'temperature-lapse',
+    geometryRelation:'same',refractionRelation:'different'}));
+  assert.deepEqual(item,original,'filtering never mutates physical snapshots');
+  value.compare.B.radiusKm+=1;
+  const radius=entry(11,value);
+  assert.ok(filters.matches(radius,{geometryRelation:'different',refractionRelation:'different'}));
+  value.compare.B.temperatureProfile.gradientKPerKm=
+    value.compare.A.temperatureProfile.gradientKPerKm;
+  const identical=entry(12,value);
+  assert.ok(filters.matches(identical,{geometryRelation:'different',refractionRelation:'same'}));
+});
+test('Smart Compare relations exclude Scene and ignore inactive Flat/Vacuum controls',()=>{
+  const scene=entry(1,experiment('scene'));
+  const value=experiment('compare');
+  for(const side of ['A','B']){
+    value.compare[side].surface='flat';
+    value.compare[side].atmosphere='vacuum';
+  }
+  value.compare.A.radiusKm=3000;value.compare.B.radiusKm=100000;
+  value.compare.A.temperatureProfile.gradientKPerKm=-19;
+  value.compare.B.temperatureProfile.gradientKPerKm=18;
+  const pair=entry(2,value);
+  assert.equal(fingerprint.features(value).relations.geometrySame,true);
+  assert.equal(fingerprint.features(value).relations.refractionSame,true);
+  assert.deepEqual(filters.filter([scene,pair],{geometryRelation:'same',refractionRelation:'same'}),[pair]);
+  assert.deepEqual(filters.filter([scene,pair],{refractionRelation:'different'}),[]);
+  assert.ok(filters.matches(scene,{geometryRelation:'any',refractionRelation:'any'}));
+  value.compare.B.atmosphere='standard';
+  assert.ok(filters.matches(entry(3,value),{geometryRelation:'same',refractionRelation:'different'}));
+  const older={id:4,experiment:value,features:{mode:'compare',scene:{},compare:{A:{},B:{}}}};
+  assert.ok(filters.matches(older,{refractionRelation:'different'}),
+    'missing cached relation flags are rebuilt read-only for older snapshots');
+});
+test('Compare relation normalization and field updates never strand Scene in contradictory filters',()=>{
+  const defaults=filters.normalize();
+  assert.equal(defaults.geometryRelation,'any');
+  assert.equal(defaults.refractionRelation,'any');
+  assert.equal(filters.active({refractionRelation:'different'}),true);
+  assert.deepEqual(filters.normalize({mode:'scene',geometryRelation:'same',refractionRelation:'different'}),
+    filters.normalize({mode:'scene'}));
+  assert.deepEqual(filters.normalize({geometryRelation:'invalid',refractionRelation:1}),defaults);
+  const fromScene=filters.update({mode:'scene'},'refractionRelation','different');
+  assert.equal(fromScene.mode,'compare');
+  assert.equal(fromScene.refractionRelation,'different');
+  const switched=filters.update(fromScene,'mode','scene');
+  assert.equal(switched.mode,'scene');
+  assert.equal(switched.refractionRelation,'any');
+  assert.deepEqual(filters.update(fromScene,'mode','scene'),switched);
+  assert.deepEqual(filters.update(fromScene,'geometryRelation','unknown').geometryRelation,'any');
+  assert.equal(filters.active(filters.normalize()),false);
 });

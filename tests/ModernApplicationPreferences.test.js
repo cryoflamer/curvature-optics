@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const preferences=require('../src/ui/modern/ModernApplicationPreferences');
-const historyFilterDefaults={query:'',mode:'all',geometry:'any',atmosphere:'any'};
+const historyFilterDefaults={query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
 const workspaceDefaults={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
 function storage(values={}){
   const data=new Map(Object.entries(values));
@@ -123,7 +123,8 @@ test('History card size preference survives reload and invalid/legacy values fal
 
 test('History filters round-trip in browser preferences, independent of experiment state',()=>{
   const db=storage();
-  const expected={query:'Lake  12',mode:'compare',geometry:'flat',atmosphere:'temperature-lapse'};
+  const expected={query:'Lake  12',mode:'compare',geometry:'flat',atmosphere:'temperature-lapse',
+    geometryRelation:'same',refractionRelation:'different'};
   preferences.write(db,{historyFilters:expected,historyPanelOpen:true,opticalQuality:'fast'});
   assert.deepEqual(preferences.read(db).historyFilters,expected);
   assert.equal(preferences.read(db).historyPanelOpen,true);
@@ -136,6 +137,11 @@ test('History filters round-trip in browser preferences, independent of experime
   assert.deepEqual(preferences.read(storage({[preferences.STORAGE_KEY]:JSON.stringify({version:1})})).historyFilters,historyFilterDefaults,
     'old v1 preferences load with unfiltered History');
   assert.deepEqual(preferences.read(storage({[preferences.STORAGE_KEY]:'{invalid'})).historyFilters,historyFilterDefaults);
+  assert.deepEqual(preferences.normalize({historyFilters:{mode:'scene',geometryRelation:'same',
+    refractionRelation:'different'}}).historyFilters,
+    {...historyFilterDefaults,mode:'scene'});
+  const badRelation=preferences.normalize({historyFilters:{geometryRelation:'equal',refractionRelation:4}});
+  assert.deepEqual(badRelation.historyFilters,historyFilterDefaults);
   preferences.reset(db);
   assert.deepEqual(preferences.read(db).historyFilters,historyFilterDefaults);
 });

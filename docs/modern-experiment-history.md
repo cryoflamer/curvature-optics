@@ -127,7 +127,7 @@ results.
   create history records, or change stored experiments. The former View dialog
   and Info/Actions menu have been replaced rather than duplicated.
 
-## Smart History Filters (basic search)
+## Smart History Filters (search and A/B differences)
 
 History now includes an inline **Search** field and **Type**, **Geometry** and
 **Atmosphere** dropdowns. Search is case-insensitive and requires every word to
@@ -143,8 +143,19 @@ search engine uses cached `ModernExperimentFingerprint.features` or recalculates
 it read-only for older records. Inactive controls such as Flat radius or
 Vacuum gradients cannot create false physical matches. The filtering step
 never rerenders optics, changes experiment state, writes to IndexedDB or creates
-History snapshots. Detailed A/B **Same/Different** relationships are reserved
-for the next stage.
+History snapshots. **A/B differences** provides independent **Geometry A/B**
+and **Refraction A/B** controls, each with Any / Same / Different. Geometry
+compares active shapes and Globe radii (but ignores unused Flat radius).
+Refraction compares the entire active refractive profile, not only the name
+of the atmosphere model: two Temperature lapse configurations with different
+gradients match Refraction Different even when Atmosphere is the same model;
+inactive Vacuum gradients do not count. These conditions can be combined
+with ordinary Geometry/Atmosphere filters and the text query.
+
+An active A/B relation excludes Scene records, even when Type is Scene +
+Compare. Choosing Type Scene clears both relations; choosing a relation while
+Scene is selected switches Type to Compare automatically. No new data is
+stored in History; missing cached relation flags are recalculated read-only.
 
 Filters apply to **Pinned and Recent** together, retaining their sections,
 order and absence of duplicate records. The panel reports **Showing N of M
@@ -157,8 +168,10 @@ Preferences (`historyFilters`); neither exported experiments nor portable
 History archives include these UI preferences. Reset Application Preferences
 clears the filters; Reset Workspace Layout does not.
 
-Manual check: save a named Scene and a Compare snapshot, apply and combine
-filters, verify the same selected IDs appear in the dropdown and gallery,
+Manual check: save a named Scene and Compare snapshots that differ only by
+Globe radius, only by temperature gradient, and only by inactive Vacuum
+settings. Verify Same/Different and ordinary physical filters agree, that
+Scene excludes A/B constraints, and that the same IDs appear in the dropdown and gallery,
 reload with History open, then clear filters and verify all original records
 remain unchanged. Check that the no-matches message differs from empty History.
 
@@ -198,7 +211,8 @@ part of the raster thumbnail. The gallery previews an enlarged saved image along
 
 Pinning, sorting, manual/bulk deletion and screenshot inspection use the
 existing stored records; the experiment JSON v1 serializer is unchanged.
-Semantic Scene/Compare and A/B **filters** are reserved for the next stage.
+Scene/Compare and active A/B filters are available in History. Grouped
+storyboard selection is reserved for the next stage.
 A storyboard can refer to
 stable history IDs; it must explicitly resolve deleted references, and should
 only interpolate parameters for which a physically meaningful transition is

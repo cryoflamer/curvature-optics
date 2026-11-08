@@ -107,6 +107,15 @@
         <option value="inverse-temperature">Inverse temperature</option><option value="inverse-spherical">Inverse spherical</option>
         <option value="exponential-occlusion">Exponential occlusion</option>
       </select></label>
+      <fieldset class="modern-history-relations" aria-label="Compare A/B difference filters">
+        <legend>A/B differences <span>active physics only · Compare snapshots</span></legend>
+        <label for="ModernHistoryFilterGeometryRelation">Geometry A/B <select id="ModernHistoryFilterGeometryRelation" title="Compare active geometry including Globe radius; Flat radius is ignored">
+          <option value="any">Any</option><option value="same">Same</option><option value="different">Different</option>
+        </select></label>
+        <label for="ModernHistoryFilterRefractionRelation">Refraction A/B <select id="ModernHistoryFilterRefractionRelation" title="Compare active refraction including profiles and gradients, not merely the atmosphere model name">
+          <option value="any">Any</option><option value="same">Same</option><option value="different">Different</option>
+        </select></label>
+      </fieldset>
       <button type="button" id="ModernHistoryFiltersClear">Clear filters</button>
       <span id="ModernHistoryFilterCount" role="status" aria-live="polite">Showing 0 of 0 snapshots</span>
     </div>

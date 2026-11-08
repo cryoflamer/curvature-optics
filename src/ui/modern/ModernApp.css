@@ -536,6 +536,12 @@ button{cursor:pointer}
 .modern-history-filters input,.modern-history-filters select{box-sizing:border-box;width:100%;max-width:260px;
   min-height:33px;padding:6px 9px;font-size:12px;border-radius:7px;
   border:1px solid #bfd4e7;background:white;color:#20415e}
+.modern-history-relations{display:flex;align-items:end;flex-wrap:wrap;gap:8px 12px;
+  width:100%;min-width:0;box-sizing:border-box;border:1px solid #cbddeb;border-radius:7px;
+  margin:2px 0 0;padding:8px 10px 10px;background:#fff}
+.modern-history-relations legend{padding:0 5px;font-size:12px;font-weight:700;color:#315b7e}
+.modern-history-relations legend span{font-size:11px;font-weight:400;color:#637e93}
+.modern-history-filters .modern-history-relations label{min-width:175px;flex:0 1 205px}
 .modern-history-filters input{max-width:none}
 .modern-history-filters button{min-height:33px;padding:6px 10px;border-radius:7px;
   border:1px solid #bfd4e7;background:#fff;color:#245e8d;cursor:pointer;font-size:12px}
