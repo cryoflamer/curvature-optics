@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 66,
-      "uniqueScripts": 65,
+      "scriptTags": 67,
+      "uniqueScripts": 66,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -183,6 +183,7 @@
         "src/ui/modern/ModernExperimentThumbnail.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentHistoryUI.js",
+        "src/ui/modern/ModernExperimentHistoryFilters.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
         "src/ui/modern/ModernApp.js",
@@ -327,6 +328,7 @@
       "src/ui/modern/ModernDemos.js",
       "src/ui/modern/ModernExperimentFingerprint.js",
       "src/ui/modern/ModernExperimentHistory.js",
+      "src/ui/modern/ModernExperimentHistoryFilters.js",
       "src/ui/modern/ModernExperimentHistoryUI.js",
       "src/ui/modern/ModernExperimentLibrary.js",
       "src/ui/modern/ModernExperimentState.js",
@@ -353,7 +355,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 146,
+  "sourceJsCount": 147,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2013,6 +2015,7 @@
         "tests/ModernCameraSequence.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentHistoryFilters.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
@@ -2040,10 +2043,12 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/ui/modern/ModernExperimentHistory.js"
+        "src/ui/modern/ModernExperimentHistory.js",
+        "src/ui/modern/ModernExperimentHistoryFilters.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentHistoryFilters.test.js",
         "tests/ModernExperimentVisualHistory.test.js"
       ],
       "commonJsToolCallers": []
@@ -2056,6 +2061,17 @@
       "commonJsTestCallers": [
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernHistoryPortability.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernExperimentHistoryFilters.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentHistoryFilters.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2099,6 +2115,7 @@
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js",
         "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentHistoryFilters.test.js",
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernExperimentVisualHistory.test.js",

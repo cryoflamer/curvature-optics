@@ -22,6 +22,7 @@
   var historyFingerprint=root.CurvatureModernExperimentFingerprint;
   var thumbnailApi=root.CurvatureModernExperimentThumbnail;
   var historyUI=root.CurvatureModernExperimentHistoryUI;
+  var historyFiltersApi=root.CurvatureModernExperimentHistoryFilters;
   var sessionAutosave=root.CurvatureModernSessionAutosave;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
@@ -468,6 +469,7 @@
   var historyGallerySize='small';
   var historyPinnedCollapsed=false;
   var historyPanelOpen=false;
+  var historyFilters={query:'',mode:'all',geometry:'any',atmosphere:'any'};
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   var legacyDisplayPanels=Object.assign({},displayPanels);
   var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
@@ -492,6 +494,7 @@
     historyGallerySize=remembered.historyGallerySize;
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     historyPanelOpen=remembered.historyPanelOpen;
+    historyFilters=remembered.historyFilters;
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
@@ -514,7 +517,7 @@
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
-        historyPanelOpen:historyPanelOpen,
+        historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
         workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
@@ -607,6 +610,13 @@
     // controller with Camera, Objects and all future native <details> folds.
     bindWorkspaceSections();
   }
+  function syncHistoryFilterControls(){
+    [['ModernHistoryFilterQuery','query'],['ModernHistoryFilterMode','mode'],
+      ['ModernHistoryFilterGeometry','geometry'],
+      ['ModernHistoryFilterAtmosphere','atmosphere']].forEach(function(pair){
+      var node=newUiEl(pair[0]);if(node)node.value=historyFilters[pair[1]];
+    });
+  }
   function resetWorkspaceLayout(){
     workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
     displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
@@ -635,6 +645,8 @@
       historyGallerySize=defaults.historyGallerySize;
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
       historyPanelOpen=defaults.historyPanelOpen;
+      historyFilters=defaults.historyFilters;
+      syncHistoryFilterControls();
       var historyPanel=newUiEl('ModernHistoryPanel'),historyToggle=newUiEl('ModernHistoryToggle');
       if(historyPanel)historyPanel.hidden=true;
       if(historyToggle)historyToggle.setAttribute('aria-expanded','false');
@@ -965,15 +977,19 @@
       var ids=new Set(entries.map(function(entry){return entry.id;}));
       historySelectedIds().forEach(function(id){if(!ids.has(id))delete historyMultiSelection[id];});
       historyMultiCount();
+      var visible=historyFiltersApi?historyFiltersApi.filter(entries,historyFilters):entries;
+      var count=newUiEl('ModernHistoryFilterCount');
+      if(count)count.textContent='Showing '+visible.length+' of '+entries.length+' snapshots';
       var order=newUiEl('ModernHistorySort');
-      if(order&&order.value==='oldest')entries.reverse();
+      if(order&&order.value==='oldest')visible=visible.slice().reverse();
       if(!select)return entries;
       var previous=selectedId===undefined?select.value:String(selectedId);
       select.textContent='';
       var placeholder=document.createElement('option');
-      placeholder.value='';placeholder.textContent=entries.length?'Choose snapshot':'No snapshots yet';
+      placeholder.value='';placeholder.textContent=!entries.length?'No snapshots yet':
+        !visible.length?'No matches':'Choose snapshot';
       select.appendChild(placeholder);
-      entries.forEach(function(entry){
+      visible.forEach(function(entry){
         var option=document.createElement('option');option.value=String(entry.id);
         var scene=entry.features&&entry.features.mode||entry.experiment.display.mode;
         var label=scene==='compare'?'Compare A/B':'Scene';
@@ -982,11 +998,11 @@
           (entry.pinned?' · pinned':'');
         select.appendChild(option);
       });
-      if(previous&&entries.some(function(entry){return String(entry.id)===previous;}))select.value=previous;
+      select.value=previous&&visible.some(function(entry){return String(entry.id)===previous;})?previous:'';
       var gallery=newUiEl('ModernHistoryGallery'),panel=newUiEl('ModernHistoryPanel');
       if(gallery&&historyUI&&panel&&!panel.hidden){
         historyUI.setSize(gallery,historyGallerySize);
-        historyUI.render(document,gallery,entries,select.value,{
+        historyUI.render(document,gallery,visible,select.value,{
         select:function(id){select.value=String(id);historyUI.select(gallery,id);},
         restore:function(id){handleHistoryRestore(id);},
         pin:function(id,pinned){
@@ -1015,7 +1031,10 @@
           else delete historyMultiSelection[id];
           historyMultiCount();
         }
-      },historyMultiSelection,{pinnedCollapsed:historyPinnedCollapsed});
+      },historyMultiSelection,{pinnedCollapsed:historyPinnedCollapsed,
+        emptyFiltered:entries.length>0,
+        filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
+        hasPinned:entries.some(function(entry){return !!entry.pinned;})});
       }
       return entries;
     });
@@ -1085,6 +1104,42 @@
         historyStatus('Snapshot details: '+error.message,true);
       })
         .finally(function(){metadataSave.disabled=false;});
+    });
+    syncHistoryFilterControls();
+    var filterRefreshTimer=null;
+    function changeHistoryFilter(key,value,debounced){
+      if(!historyFiltersApi)return;
+      var next=Object.assign({},historyFilters);next[key]=value;
+      historyFilters=historyFiltersApi.normalize(next);
+      // A bulk operation must not silently affect records now hidden by filters.
+      historyMultiSelection=Object.create(null);historyMultiCount();
+      saveApplicationPreferences();
+      if(filterRefreshTimer!==null)clearTimeout(filterRefreshTimer);
+      filterRefreshTimer=setTimeout(function(){
+        filterRefreshTimer=null;
+        refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+      },debounced?150:0);
+    }
+    [['ModernHistoryFilterQuery','query','input',true],
+      ['ModernHistoryFilterMode','mode','change',false],
+      ['ModernHistoryFilterGeometry','geometry','change',false],
+      ['ModernHistoryFilterAtmosphere','atmosphere','change',false]
+    ].forEach(function(config){
+      var node=newUiEl(config[0]);
+      if(node)node.addEventListener(config[2],function(){
+        changeHistoryFilter(config[1],node.value,config[3]);
+      });
+    });
+    var clearFilters=newUiEl('ModernHistoryFiltersClear');
+    if(clearFilters)clearFilters.addEventListener('click',function(){
+      historyFilters=historyFiltersApi?historyFiltersApi.normalize():
+        {query:'',mode:'all',geometry:'any',atmosphere:'any'};
+      syncHistoryFilterControls();
+      historyMultiSelection=Object.create(null);historyMultiCount();
+      saveApplicationPreferences();
+      if(filterRefreshTimer!==null)clearTimeout(filterRefreshTimer);
+      filterRefreshTimer=null;
+      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
     });
     var sizeControl=newUiEl('ModernHistorySize');
     if(sizeControl){

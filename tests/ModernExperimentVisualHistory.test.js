@@ -214,6 +214,17 @@ test('Pinned section can collapse without duplicating snapshots or changing stor
   assert.equal(entries[0].pinned,true);
 });
 
+test('filtered Pinned has an accurate empty state without changing pinned records',()=>{
+  const {doc}=dom(),host=doc.createElement('div'),saved=entry(1,'scene',true);
+  saved.pinned=true;
+  ui.render(doc,host,[entry(2,'scene',true)],2,
+    {select(){},pin(){},remove(){},multi(){}},{},{filtersActive:true,hasPinned:true});
+  assert.match(host.children[0].children[1].children[0].textContent,/No pinned snapshots match/);
+  assert.equal(saved.pinned,true);
+  ui.render(doc,host,[],null,{},null,{emptyFiltered:true});
+  assert.match(host.children.at(-1).textContent,/No snapshots match/);
+});
+
 test('Visual History loaded before Modern app; restore guards remain and thumbnails stay outside experiment JSON',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');

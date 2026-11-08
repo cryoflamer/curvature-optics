@@ -22,7 +22,7 @@ const required = [
   'ModernCameraInteraction.js', 'ModernCameraNavigation.js', 'ModernCameraPerspectiveWarp.js',
   'ModernCompareGraph.js', 'ModernCompareModel.js',
   'ModernCompareState.js', 'ModernDemos.js', 'ModernExperimentFingerprint.js',
-  'ModernExperimentHistory.js', 'ModernExperimentHistoryUI.js',
+  'ModernExperimentHistory.js', 'ModernExperimentHistoryUI.js', 'ModernExperimentHistoryFilters.js',
   'ModernExperimentThumbnail.js', 'ModernExperimentLibrary.js',
   'ModernExperimentState.js', 'ModernGpuCapabilities.js',
   'ModernPerformanceReport.js', 'ModernRenderProfiler.js',

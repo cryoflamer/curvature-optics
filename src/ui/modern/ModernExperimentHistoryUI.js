@@ -234,7 +234,8 @@
     var inspector=entries.length?createInspector(doc,host):null;host.__historyInspector=inspector;
     if(!entries.length){
       host.appendChild(el(doc,'p','modern-history-empty',
-        'No snapshots yet. Save a snapshot to start your visual history.'));
+        options&&options.emptyFiltered?'No snapshots match these filters. Clear filters to see your saved experiments.':
+          'No snapshots yet. Save a snapshot to start your visual history.'));
       return;
     }
     var pinned=entries.filter(function(entry){return !!entry.pinned;});
@@ -350,7 +351,9 @@
         var grid=el(doc,'div','modern-history-section-grid');
         items.forEach(function(entry){grid.appendChild(makeCard(entry));});
         if(!items.length)grid.appendChild(el(doc,'p','modern-history-empty',
-          'Pin an experiment to keep it here for future Storyboards.'));
+          options&&options.filtersActive&&options.hasPinned?
+            'No pinned snapshots match these filters.':
+            'Pin an experiment to keep it here for future Storyboards.'));
         section.appendChild(grid);
       }
       host.appendChild(section);

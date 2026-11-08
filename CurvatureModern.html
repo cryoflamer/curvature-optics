@@ -71,6 +71,7 @@
 <script src="src/ui/modern/ModernExperimentThumbnail.js"></script>
 <script src="src/ui/modern/ModernExperimentHistory.js"></script>
 <script src="src/ui/modern/ModernExperimentHistoryUI.js"></script>
+<script src="src/ui/modern/ModernExperimentHistoryFilters.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
@@ -90,6 +91,25 @@
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
     <p class="modern-history-hint">Double-click a snapshot to restore it; one click selects it. Use ✎ to name it or add notes. Hover for a larger preview and physical settings; use Space on the focused image or tap on touch devices to keep it open. <span title="Automatic snapshots follow physical changes, not camera moves, animation playback or editor tabs. Manual snapshots retain the full experiment and camera.">Automatic history tracks physics only.</span></p>
     <div class="modern-history-toolbar"><div class="modern-library-row"><label for="ModernHistorySelect">Selected snapshot</label><select id="ModernHistorySelect"><option value="">No snapshots yet</option></select></div><label class="modern-history-sort">Order <select id="ModernHistorySort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label><label class="modern-history-size" for="ModernHistorySize">Cards <select id="ModernHistorySize" aria-label="History card size"><option value="small">S · Compact</option><option value="medium">M · Medium</option><option value="large">L · Large</option></select></label></div>
+    <div class="modern-history-filters" role="search" aria-label="Filter saved experiments">
+      <label class="modern-history-filter-search" for="ModernHistoryFilterQuery">Search
+        <input id="ModernHistoryFilterQuery" type="search" maxlength="160" placeholder="Name, notes, physical settings…" autocomplete="off">
+      </label>
+      <label for="ModernHistoryFilterMode">Type <select id="ModernHistoryFilterMode">
+        <option value="all">Scene + Compare</option><option value="scene">Scene only</option><option value="compare">Compare A/B only</option>
+      </select></label>
+      <label for="ModernHistoryFilterGeometry">Geometry <select id="ModernHistoryFilterGeometry" title="In Compare, matches either A or B">
+        <option value="any">Any geometry</option><option value="globe">Globe (either A/B)</option><option value="flat">Flat (either A/B)</option>
+      </select></label>
+      <label for="ModernHistoryFilterAtmosphere">Atmosphere <select id="ModernHistoryFilterAtmosphere" title="In Compare, matches either A or B">
+        <option value="any">Any atmosphere</option><option value="vacuum">Vacuum</option><option value="standard">Standard</option>
+        <option value="temperature-lapse">Temperature lapse</option><option value="profile-transition">Profile transition</option>
+        <option value="inverse-temperature">Inverse temperature</option><option value="inverse-spherical">Inverse spherical</option>
+        <option value="exponential-occlusion">Exponential occlusion</option>
+      </select></label>
+      <button type="button" id="ModernHistoryFiltersClear">Clear filters</button>
+      <span id="ModernHistoryFilterCount" role="status" aria-live="polite">Showing 0 of 0 snapshots</span>
+    </div>
     <div id="ModernHistoryGallery" class="modern-history-gallery" aria-label="Saved experiment thumbnails"></div>
     <div class="modern-history-bulk"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistoryPinChecked" type="button">Pin selected</button><button id="ModernHistoryDeleteChecked" type="button">Delete selected</button></div>
     <div class="modern-library-buttons"><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryPin">Pin / unpin selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>

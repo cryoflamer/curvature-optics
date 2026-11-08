@@ -212,6 +212,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernSnapshotSaveBar','ModernSnapshotSaveStatus',
     'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
+    'ModernHistoryFilterQuery','ModernHistoryFilterMode','ModernHistoryFilterGeometry',
+    'ModernHistoryFilterAtmosphere','ModernHistoryFiltersClear','ModernHistoryFilterCount',
     'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
     'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount',
     'ModernHistoryMetadataDialog','ModernHistoryMetadataForm','ModernHistoryMetadataName',
@@ -242,6 +244,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     CurvatureModernCompareState:compare,CurvatureModernExperimentState:state,
     CurvatureModernExperimentHistory:history,
     CurvatureModernExperimentHistoryUI:require('../src/ui/modern/ModernExperimentHistoryUI'),
+    CurvatureModernExperimentHistoryFilters:require('../src/ui/modern/ModernExperimentHistoryFilters'),
     CurvatureModernApplicationPreferences:require('../src/ui/modern/ModernApplicationPreferences'),
     CurvatureModernExperimentFingerprint:fingerprint,
     CurvatureModernExperimentThumbnail:require('../src/ui/modern/ModernExperimentThumbnail'),
@@ -375,6 +378,42 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.equal(pair.features.mode,'compare');
   assert.equal(pair.thumbnail.mode,'compare');
   assert.equal(pair.thumbnail.width,960);
+  // Search and filters affect both gallery and select, never IndexedDB/physics.
+  const count=nodes.get('ModernHistoryFilterCount');
+  assert.equal(count.textContent,'Showing 4 of 4 snapshots');
+  const query=nodes.get('ModernHistoryFilterQuery');
+  query.value='Inversion study';query.listeners.input();
+  await new Promise(resolve=>setTimeout(resolve,230));
+  assert.equal(count.textContent,'Showing 1 of 4 snapshots');
+  assert.equal(nodes.get('ModernHistorySelect').children.at(-1).value,String(id),
+    'latest selection option is the one matching named snapshot');
+  assert.match(nodes.get('ModernHistoryGallery').children.at(-1).className,/modern-history-section/);
+  assert.equal(rootWindow.localStorage.data.size>0,true);
+  assert.equal(JSON.parse(rootWindow.localStorage.data.get('curvature-modern-application-preferences-v1')).historyFilters.query,'Inversion study');
+  query.value='not found anywhere';query.listeners.input();
+  await new Promise(resolve=>setTimeout(resolve,230));
+  assert.equal(count.textContent,'Showing 0 of 4 snapshots');
+  assert.match(nodes.get('ModernHistoryGallery').children.at(-1).textContent,/No snapshots match/);
+  nodes.get('ModernHistoryFiltersClear').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 4 of 4 snapshots');
+  assert.equal(query.value,'');
+  const kind=nodes.get('ModernHistoryFilterMode');
+  kind.value='compare';kind.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 1 of 4 snapshots');
+  const geometry=nodes.get('ModernHistoryFilterGeometry');
+  geometry.value='flat';geometry.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 1 of 4 snapshots');
+  const atmosphere=nodes.get('ModernHistoryFilterAtmosphere');
+  atmosphere.value='inverse-spherical';atmosphere.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 0 of 4 snapshots');
+  assert.equal((await store.list()).length,4,'filtering does not rewrite History');
+  nodes.get('ModernHistoryFiltersClear').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(count.textContent,'Showing 4 of 4 snapshots');
 });
 
 test('Visual History attaches bounded screenshots, upgrades deduplicated entries, pins and clears explicitly',async()=>{

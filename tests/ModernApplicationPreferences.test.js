@@ -2,6 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const preferences=require('../src/ui/modern/ModernApplicationPreferences');
+const historyFilterDefaults={query:'',mode:'all',geometry:'any',atmosphere:'any'};
 const workspaceDefaults={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
 function storage(values={}){
   const data=new Map(Object.entries(values));
@@ -11,13 +12,13 @@ function storage(values={}){
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
   assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
   {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
@@ -118,4 +119,23 @@ test('History card size preference survives reload and invalid/legacy values fal
   assert.equal(preferences.normalize({historyGallerySize:{size:'large'}}).historyGallerySize,'small');
   assert.equal(preferences.reset(db),true);
   assert.equal(preferences.read(db).historyGallerySize,'small');
+});
+
+test('History filters round-trip in browser preferences, independent of experiment state',()=>{
+  const db=storage();
+  const expected={query:'Lake  12',mode:'compare',geometry:'flat',atmosphere:'temperature-lapse'};
+  preferences.write(db,{historyFilters:expected,historyPanelOpen:true,opticalQuality:'fast'});
+  assert.deepEqual(preferences.read(db).historyFilters,expected);
+  assert.equal(preferences.read(db).historyPanelOpen,true);
+  assert.equal(preferences.read(db).opticalQuality,'fast');
+  assert.equal(preferences.read(db).historyFilters===expected,false);
+  assert.equal(Object.isFrozen(preferences.read(db).historyFilters),true);
+  const invalid=preferences.normalize({historyFilters:{query:123,mode:'x',geometry:'cube',atmosphere:false}});
+  assert.deepEqual(invalid.historyFilters,historyFilterDefaults);
+  assert.equal(preferences.normalize({historyFilters:{query:'a'.repeat(500)}}).historyFilters.query.length,160);
+  assert.deepEqual(preferences.read(storage({[preferences.STORAGE_KEY]:JSON.stringify({version:1})})).historyFilters,historyFilterDefaults,
+    'old v1 preferences load with unfiltered History');
+  assert.deepEqual(preferences.read(storage({[preferences.STORAGE_KEY]:'{invalid'})).historyFilters,historyFilterDefaults);
+  preferences.reset(db);
+  assert.deepEqual(preferences.read(db).historyFilters,historyFilterDefaults);
 });

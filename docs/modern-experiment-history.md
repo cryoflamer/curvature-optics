@@ -127,6 +127,41 @@ results.
   create history records, or change stored experiments. The former View dialog
   and Info/Actions menu have been replaced rather than duplicated.
 
+## Smart History Filters (basic search)
+
+History now includes an inline **Search** field and **Type**, **Geometry** and
+**Atmosphere** dropdowns. Search is case-insensitive and requires every word to
+appear somewhere in the name, notes, Scene/Compare classification or active
+physical features; multiple words can match different fields. The geometry
+filter matches **Globe** or **Flat** and atmosphere covers all supported models,
+including Vacuum, Standard, Temperature lapse, Profile transition, Inverse
+Temperature, Inverse spherical and Exponential occlusion.
+
+In **Compare A/B**, the physical filters consider either side, but when both
+Geometry and Atmosphere are specified **one side must satisfy both**. The
+search engine uses cached `ModernExperimentFingerprint.features` or recalculates
+it read-only for older records. Inactive controls such as Flat radius or
+Vacuum gradients cannot create false physical matches. The filtering step
+never rerenders optics, changes experiment state, writes to IndexedDB or creates
+History snapshots. Detailed A/B **Same/Different** relationships are reserved
+for the next stage.
+
+Filters apply to **Pinned and Recent** together, retaining their sections,
+order and absence of duplicate records. The panel reports **Showing N of M
+snapshots**; a no-match result gives a clear empty state. Only matching records
+appear in the selected-snapshot dropdown. **Clear filters** restores the full
+view. Changing any filter clears bulk checkbox selection so hidden records are
+not accidentally targeted by a later batch operation. Search refresh is
+briefly debounced (150 ms). Choices persist with browser-local Application
+Preferences (`historyFilters`); neither exported experiments nor portable
+History archives include these UI preferences. Reset Application Preferences
+clears the filters; Reset Workspace Layout does not.
+
+Manual check: save a named Scene and a Compare snapshot, apply and combine
+filters, verify the same selected IDs appear in the dropdown and gallery,
+reload with History open, then clear filters and verify all original records
+remain unchanged. Check that the no-matches message differs from empty History.
+
 ## Comparison semantics and future steps
 
 `ModernExperimentFingerprint` derives canonical active physical descriptors

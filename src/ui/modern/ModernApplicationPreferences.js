@@ -14,6 +14,10 @@
   var DETAILS=['auto','1','2','4','8','16','32'];
   var BACKENDS=['canvas','webgl2'];
   var HISTORY_SIZES=['small','medium','large'];
+  var HISTORY_MODES=['all','scene','compare'];
+  var HISTORY_GEOMETRIES=['any','globe','flat'];
+  var HISTORY_ATMOSPHERES=['any','vacuum','standard','temperature-lapse','profile-transition',
+    'inverse-temperature','inverse-spherical','exponential-occlusion'];
   var SPEEDS=[.01,.1,1,10,100,1000,10000];
   var TURNS=[.05,.2,1,5,20];
   var WHEELS=['auto',.1,1,10,100,1000];
@@ -48,6 +52,15 @@
     });
   }
   function from(choices,value,fallback){return choices.includes(value)?value:fallback;}
+  function historyFilters(input){
+    var source=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
+    return Object.freeze({
+      query:typeof source.query==='string'?source.query.slice(0,160).trim():'',
+      mode:from(HISTORY_MODES,source.mode,'all'),
+      geometry:from(HISTORY_GEOMETRIES,source.geometry,'any'),
+      atmosphere:from(HISTORY_ATMOSPHERES,source.atmosphere,'any')
+    });
+  }
   function normalize(input){
     var data=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
     var nav=data.navigation&&typeof data.navigation==='object'&&!Array.isArray(data.navigation)?data.navigation:{};
@@ -58,6 +71,7 @@
       historyGallerySize:from(HISTORY_SIZES,data.historyGallerySize,'small'),
       historyPinnedCollapsed:data.historyPinnedCollapsed===true,
       historyPanelOpen:data.historyPanelOpen===true,
+      historyFilters:historyFilters(data.historyFilters),
       displayPanels:panels(data.displayPanels),
       workspace:workspace(data.workspace),
       navigation:Object.freeze({speed:from(SPEEDS,nav.speed,10),
@@ -85,7 +99,7 @@
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
       previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
       historyGallerySize:data.historyGallerySize,historyPinnedCollapsed:data.historyPinnedCollapsed,
-      historyPanelOpen:data.historyPanelOpen,
+      historyPanelOpen:data.historyPanelOpen,historyFilters:data.historyFilters,
       displayPanels:data.displayPanels,navigation:data.navigation,workspace:data.workspace}));
     // Old navigation data cannot override the new selection on reload.
     return true;
