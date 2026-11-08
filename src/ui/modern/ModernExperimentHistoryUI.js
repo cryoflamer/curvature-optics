@@ -271,13 +271,15 @@
         if(inspector)inspector.show(entry,card,true,info);
       });
       info.className='modern-history-info';info.title='';
-      meta.appendChild(info);body.appendChild(meta);
+      body.appendChild(meta);
       var controls=el(doc,'div','modern-history-card-actions');
       controls.appendChild(button(doc,'View','Quick view snapshot '+entry.id,function(){actions.preview(entry.id);}));
       controls.appendChild(button(doc,entry.pinned?'Unpin':'Pin',
         (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){actions.pin(entry.id,!entry.pinned);}));
       controls.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){actions.remove(entry.id);}));
       body.appendChild(controls);
+      var footer=el(doc,'div','modern-history-card-footer');
+      footer.appendChild(info);
       var menu=el(doc,'details','modern-history-card-menu');
       var summary=el(doc,'summary','modern-history-card-menu-toggle','⋯ Actions');
       summary.setAttribute('aria-label','Snapshot actions');
@@ -287,14 +289,14 @@
       menuActions.appendChild(button(doc,entry.pinned?'Unpin':'Pin',
         (entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){actions.pin(entry.id,!entry.pinned);menu.open=false;}));
       menuActions.appendChild(button(doc,'Delete','Delete snapshot '+entry.id,function(){actions.remove(entry.id);menu.open=false;}));
-      menu.appendChild(menuActions);body.appendChild(menu);
+      menu.appendChild(menuActions);footer.appendChild(menu);
       var multiLabel=el(doc,'label','modern-history-multi');
       multiLabel.title='Select for storyboard / bulk actions';
       var check=el(doc,'input');check.type='checkbox';check.checked=!!(multi&&multi[entry.id]);
       check.addEventListener('change',function(){actions.multi(entry.id,check.checked);});
       multiLabel.appendChild(check);
       multiLabel.appendChild(el(doc,'span','', 'Select'));
-      body.appendChild(multiLabel);
+      footer.appendChild(multiLabel);body.appendChild(footer);
       card.appendChild(body);host.appendChild(card);
     });
   }

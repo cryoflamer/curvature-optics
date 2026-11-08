@@ -404,20 +404,20 @@ button{cursor:pointer}
 .modern-history-toolbar .modern-library-row{min-width:min(300px,100%);flex:1;margin:0}
 .modern-history-toolbar select{width:100%;max-width:480px}
 .modern-history-toolbar>button{height:36px}
-.modern-history-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(160px,100%),1fr));gap:10px;max-height:60vh;overflow-y:auto;scrollbar-width:thin;padding:2px 2px 10px}
-.modern-history-gallery[data-size="medium"]{grid-template-columns:repeat(auto-fill,minmax(min(245px,100%),1fr));gap:12px}
-.modern-history-gallery[data-size="large"]{grid-template-columns:repeat(auto-fill,minmax(min(390px,100%),1fr));gap:14px}
+.modern-history-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(0,min(150px,100%)));gap:8px;justify-content:start;align-content:start;max-height:60vh;overflow-y:auto;scrollbar-width:thin;padding:2px 2px 10px}
+.modern-history-gallery[data-size="medium"]{grid-template-columns:repeat(auto-fill,minmax(0,min(215px,100%)));gap:10px}
+.modern-history-gallery[data-size="large"]{grid-template-columns:repeat(auto-fill,minmax(0,min(320px,100%)));gap:12px}
 .modern-history-card{min-width:0;border:1px solid #d4e1ef;border-radius:10px;background:#fbfdff;overflow:hidden;display:flex;flex-direction:column}
 .modern-history-card.is-selected{border:2px solid #287ac5;box-shadow:0 0 0 2px #287ac51c}
-.modern-history-card-select{display:flex;align-items:center;justify-content:center;width:100%;height:136px;padding:0;background:#182e48;border:0;border-radius:0;overflow:hidden;cursor:pointer}
-.modern-history-gallery[data-size="small"] .modern-history-card-select{height:96px}
-.modern-history-gallery[data-size="large"] .modern-history-card-select{height:205px}
+.modern-history-card-select{display:flex;align-items:center;justify-content:center;width:100%;height:118px;padding:0;background:#182e48;border:0;border-radius:0;overflow:hidden;cursor:pointer}
+.modern-history-gallery[data-size="small"] .modern-history-card-select{height:72px}
+.modern-history-gallery[data-size="large"] .modern-history-card-select{height:175px}
 .modern-history-card-select.has-preview{background:#fff}
 .modern-history-card-select:focus-visible,.modern-history-action:focus-visible{outline:3px solid #287ac5;outline-offset:-3px}
 .modern-history-image{width:100%;height:100%;object-fit:contain;display:block}
 .modern-history-no-image{color:#bbcee1;font-size:12px;text-align:center;padding:12px}
 .modern-history-card-body{padding:10px 11px;display:flex;flex:1;flex-direction:column;gap:4px}
-.modern-history-gallery[data-size="small"] .modern-history-card-body{padding:6px 8px;gap:3px}
+.modern-history-gallery[data-size="small"] .modern-history-card-body{padding:5px 6px;gap:3px}
 .modern-history-gallery[data-size="small"] .modern-history-card-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modern-history-gallery[data-size="small"] .modern-history-card-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modern-history-card-title{font-size:12px;color:#19334e;overflow-wrap:anywhere}
@@ -427,7 +427,7 @@ button{cursor:pointer}
 .modern-history-action:hover{background:#e0efff}
 .modern-history-card-menu{display:none}
 .modern-history-gallery[data-size="small"] .modern-history-card-actions{display:none}
-.modern-history-gallery[data-size="small"] .modern-history-card-menu{display:block;margin-top:3px}
+.modern-history-gallery[data-size="small"] .modern-history-card-menu{display:block;margin:0;min-width:0}
 .modern-history-card-menu-toggle{list-style:none;cursor:pointer;font-size:11px;color:#205b90;padding:3px 0;user-select:none}
 .modern-history-card-menu-toggle::-webkit-details-marker{display:none}
 .modern-history-card-menu-actions{display:flex;gap:4px;flex-wrap:wrap;padding:5px 0}
@@ -435,7 +435,18 @@ button{cursor:pointer}
 .modern-history-card-menu-toggle:focus-visible{outline:2px solid #287ac5;outline-offset:1px}
 .modern-history-empty{margin:9px 0;color:#6b7d91;font-size:12px;line-height:1.6}
 /* Snapshot inspector is fixed to the viewport, outside the scroll-clipped gallery. */
-.modern-history-card-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.modern-history-card-meta{display:block;min-width:0}
+.modern-history-card-footer{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:3px}
+.modern-history-gallery[data-size="small"] .modern-history-card-footer{justify-content:space-between;flex-wrap:nowrap;gap:3px;margin-top:1px}
+.modern-history-gallery[data-size="small"] .modern-history-card-menu-toggle{font-size:0;padding:2px 3px}
+.modern-history-gallery[data-size="small"] .modern-history-card-menu-toggle::after{content:"⋯";font-size:16px;line-height:1}
+.modern-history-gallery[data-size="small"] .modern-history-multi{margin:0;gap:0}
+.modern-history-gallery[data-size="small"] .modern-history-multi span{display:none}
+.modern-history-gallery[data-size="small"] .modern-history-multi input{margin:0}
+.modern-history-gallery[data-size="small"] .modern-history-info{font-size:0;padding:2px 3px}
+.modern-history-gallery[data-size="small"] .modern-history-info::after{content:"ⓘ";font-size:14px}
+.modern-history-gallery[data-size="small"] .modern-history-card-title{font-size:11px}
+.modern-history-gallery[data-size="small"] .modern-history-card-meta{font-size:10px}
 .modern-history-info{border:0;background:transparent;padding:1px 3px;border-radius:4px;color:#236aa3;font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap}
 .modern-history-info:hover,.modern-history-info:focus-visible{background:#e1effb;outline-offset:2px}
 .modern-history-gallery[data-size="small"] .modern-history-info{font-size:10px;padding:0 2px}
@@ -470,5 +481,5 @@ button{cursor:pointer}
 .modern-history-bulk{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:7px 0 12px;font-size:12px;color:#55728c}
 .modern-history-bulk button{border:1px solid #c5d8ec;border-radius:6px;background:#f1f7ff;padding:6px 10px;color:#205b90;cursor:pointer}
 .modern-history-multi{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:10px;color:#526981;cursor:pointer}
-.modern-history-gallery[data-size="small"] .modern-history-multi{margin-top:2px}
+
 .modern-history-multi input{accent-color:#287ac5;width:15px;height:15px}

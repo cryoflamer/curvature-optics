@@ -117,7 +117,7 @@ test('Visual gallery selects, previews, pins and deletes via explicit actions on
   assert.equal(host.children.length,2);
   const one=host.children[0],two=host.children[1];
   assert.equal(two.className.includes('is-selected'),true);
-  assert.equal(two.children[1].children[4].children[0].checked,true);
+  assert.equal(two.children[1].children[3].children[2].children[0].checked,true);
   ui.select(host,1);
   assert.equal(one.className.includes('is-selected'),true);
   assert.equal(two.className.includes('is-selected'),false);
@@ -130,8 +130,8 @@ test('Visual gallery selects, previews, pins and deletes via explicit actions on
   one.children[0].listeners.click();
   const buttons=one.children[1].children[2].children;
   for(const b of buttons)b.listeners.click({stopPropagation(){}});
-  one.children[1].children[4].children[0].checked=true;
-  one.children[1].children[4].children[0].listeners.change();
+  one.children[1].children[3].children[2].children[0].checked=true;
+  one.children[1].children[3].children[2].children[0].listeners.change();
   assert.deepEqual(calls,[['select',1],['preview',1],['pin',1,true],['remove',1],['multi',1,true]]);
   const dialog=doc.createElement('dialog');dialog.hidden=true;
   ui.preview(doc,dialog,entry(1,'scene',true));
@@ -151,7 +151,7 @@ test('History gallery S/M/L, double-click restore and action isolation',()=>{
   ui.setSize(host,'bogus');assert.equal(host['data-size'],'small');
   ui.render(doc,host,[entry(10,'scene',true)],10,actions,{});
   const card=host.children[0],thumbnail=card.children[0],body=card.children[1];
-  const menu=body.children[3],checkbox=body.children[4];
+  const menu=body.children[3].children[1],checkbox=body.children[3].children[2];
   thumbnail.listeners.click({stopPropagation(){}});
   thumbnail.listeners.dblclick({stopPropagation(){calls.push('thumbnail-stop');}});
   card.listeners.dblclick({target:{closest(){return null;}}});
@@ -166,6 +166,25 @@ test('History gallery S/M/L, double-click restore and action isolation',()=>{
   assert.deepEqual(calls.pop(),['preview',10],'compact actions remain operational');
   menu.children[1].children[1].listeners.dblclick({stopPropagation(){calls.push('stopped');}});
   assert.equal(calls.pop(),'stopped','action double-click cannot bubble');
+});
+
+test('Compact gallery uses bounded columns and a single-row action footer',()=>{
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  assert.match(css,/grid-template-columns:repeat\(auto-fill,minmax\(0,min\(150px,100%\)\)\)/,
+    'compact cards have a fixed upper bound instead of stretching to 1fr');
+  assert.match(css,/data-size="medium"\]\{grid-template-columns:repeat\(auto-fill,minmax\(0,min\(215px,100%\)\)\)/);
+  assert.match(css,/data-size="large"\]\{grid-template-columns:repeat\(auto-fill,minmax\(0,min\(320px,100%\)\)\)/);
+  assert.match(css,/data-size="small"\] \.modern-history-card-footer\{justify-content:space-between;flex-wrap:nowrap/);
+  const {doc}=dom(),host=doc.createElement('div');
+  ui.render(doc,host,[entry(3,'compare',true)],3,{
+    select(){},restore(){},preview(){},pin(){},remove(){},multi(){}
+  },{});
+  const body=host.children[0].children[1],footer=body.children[3];
+  assert.equal(body.children.length,4,'title, timestamp, regular actions and footer');
+  assert.equal(footer.children.length,3,'Info, action menu and checkbox share a footer');
+  assert.equal(footer.children[0].className,'modern-history-info');
+  assert.equal(footer.children[1].className,'modern-history-card-menu');
+  assert.equal(footer.children[2].className,'modern-history-multi');
 });
 
 test('Visual History loaded before Modern app; restore guards remain and thumbnails stay outside experiment JSON',()=>{
@@ -266,7 +285,7 @@ test('Hover inspector delays, stays viewport-bound, supports Info and Escape wit
   card.listeners.mouseleave();overlay.listeners.mouseenter();
   await new Promise(resolve=>setTimeout(resolve,180));
   assert.equal(overlay.hidden,false,'pointer over tooltip keeps it open');
-  const info=card.children[1].children[1].children[0];
+  const info=card.children[1].children[3].children[0];
   assert.equal(info.className,'modern-history-info');
   info.listeners.click({stopPropagation(){}});
   assert.equal(overlay.role,'dialog','Info pins inspector for touch users');
