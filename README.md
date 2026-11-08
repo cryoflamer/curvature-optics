@@ -166,3 +166,23 @@ physics or Camera Animation. **Display → Reset application preferences**
 restores defaults without clearing experiments. Earlier navigation settings
 are migrated automatically. See
 [`docs/modern-camera-navigation.md`](docs/modern-camera-navigation.md#application-preferences-browser-local).
+
+### Modern workspace preferences and Camera layout
+
+Scene and Compare now remember **separate active settings tabs** and fold states;
+Compare additionally remembers the selected A/B editor. The top-level Scene /
+Compare / Demos selection is also browser-local. Camera now has collapsible
+Position & orientation, Navigation, Camera Animation and optional Saved views;
+long usage notes live in accessible `?` help. Camera Animation keeps a compact
+frame-count/duration summary when folded. These choices persist automatically
+in `curvature-modern-application-preferences-v1` and do **not** become part of
+the physical experiment schema. Old preference records and experiment URLs
+remain valid. An explicitly shared experiment URL takes precedence over the
+saved mode/model; direct `?mode=`, `?tab=` and `?model=` parameters take priority
+when valid. Invalid keys or removed sections are ignored safely.
+
+**Display → Advanced settings → Reset workspace layout** restores default tabs
+and open sections, without clearing optical quality, navigation speeds or
+experiments. The existing **Reset application preferences** clears all browser
+preferences, including workspace layout. Scene and Compare share camera/objects,
+but not the UI state of their collapsible controls.

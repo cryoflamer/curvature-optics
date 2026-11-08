@@ -440,6 +440,10 @@
   }
   function profileNow(){return root.performance&&typeof root.performance.now==='function'?
     root.performance.now():Date.now();}
+  // A replaceState-authored experiment URL is not an externally shared link.
+  // Its history marker survives reload, so browser workspace preferences remain
+  // authoritative without giving an imported/shared URL the wrong mode.
+  var AUTO_EXPERIMENT_HISTORY_KEY='__curvatureModernAutoExperimentUrlV1';
   var persistence={ready:false,explicitUrl:false,timer:null};
   // Saved camera poses belong to the experiment; navigation speed belongs to
   // the user's local preferences and is never mixed into a cinematic keyframe.
@@ -453,6 +457,15 @@
   var NAVIGATION_STORAGE_KEY='curvature-modern-camera-navigation-v1';
   var applicationPreferences=root.CurvatureModernApplicationPreferences;
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
+  var legacyDisplayPanels=Object.assign({},displayPanels);
+  var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
+  var workspaceSections=[];
+  var workspaceInitialSections={
+    'camera.pose':true,'camera.navigation':false,'camera.animation':true,
+    'camera.savedViews':false,'camera.frameName':false,
+    'objects.group1':true,'objects.group2':false,
+    'display.advanced':false,'display.diagnostics':false,'display.gpu':false,'display.profiler':false
+  };
   function preferencesStorage(){
     try{return root.localStorage||null;}catch(error){return null;}
   }
@@ -462,6 +475,10 @@
     state.previewDetail=remembered.previewDetail;
     state.geometryBackend=remembered.geometryBackend;
     displayPanels=Object.assign({},remembered.displayPanels);
+    legacyDisplayPanels=Object.assign({},displayPanels);
+    workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
+      compareTab:remembered.workspace.compareTab,compareModel:remembered.workspace.compareModel,
+      sections:Object.assign({},remembered.workspace.sections)};
     navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
   }
   function preferencesStatus(message,error){
@@ -477,26 +494,100 @@
     try{
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
-        geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels
+        geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
+        workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
   }
-  function bindDisplayPanels(){
-    var entries=[['advanced','ModernDisplayAdvanced'],
-      ['diagnostics','ModernDisplayDiagnostics'],['gpu','ModernDisplayGpu'],
-      ['profiler','ModernDisplayProfiler']];
-    entries.forEach(function(entry){
-      var node=geometryUi(entry[1]);if(!node)return;
-      node.open=displayPanels[entry[0]]===true;
-      node.addEventListener('toggle',function(){
-        if(displayPanels[entry[0]]===node.open)return;
-        displayPanels[entry[0]]=node.open;
+  function workspaceScope(){return state.demosActive?'scene':state.mode==='compare'?'compare':'scene';}
+  function workspaceSectionValue(scope,suffix){
+    var key=scope+'.'+suffix;
+    if(Object.prototype.hasOwnProperty.call(workspaceState.sections,key))return workspaceState.sections[key];
+    // Migrate the original four Display folds without changing their old storage key.
+    if(suffix.indexOf('display.')===0){
+      // Read the old global Display choice only while no mode-specific Display
+      // override exists. Otherwise a Scene toggle would leak into Compare
+      // after the next reload through the old displayPanels mirror.
+      var hasScopedDisplay=Object.keys(workspaceState.sections).some(function(section){
+        return section.indexOf('.display.')!==-1;
+      });
+      if(!hasScopedDisplay){
+        var old=suffix.slice('display.'.length);
+        return Object.prototype.hasOwnProperty.call(legacyDisplayPanels,old)?legacyDisplayPanels[old]:false;
+      }
+      return false;
+    }
+    return workspaceInitialSections[suffix]===true;
+  }
+  function applyWorkspaceSections(){
+    var scope=workspaceScope();
+    workspaceSections.forEach(function(entry){
+      var desired=workspaceSectionValue(scope,entry.suffix);
+      if(entry.node.open!==desired)entry.node.open=desired;
+      if(entry.suffix.indexOf('display.')===0)
+        displayPanels[entry.suffix.slice('display.'.length)]=desired;
+    });
+  }
+  function bindWorkspaceSections(){
+    var elements=typeof document.querySelectorAll==='function'?
+      document.querySelectorAll('details[data-workspace-section]'):null;
+    if(elements&&elements.length){
+      workspaceSections=Array.prototype.map.call(elements,function(node){
+        return {node:node,suffix:node.getAttribute('data-workspace-section')};
+      });
+    }else{
+      // Older embedded hosts and integration DOM fixtures do not implement
+      // querySelectorAll. Keep optional native details (especially Display) live.
+      workspaceSections=[
+        ['ModernCameraPoseSection','camera.pose'],
+        ['ModernCameraNavigationSection','camera.navigation'],
+        ['ModernCameraAnimationSection','camera.animation'],
+        ['ModernSavedCameraLibrary','camera.savedViews'],
+        ['ModernCameraFrameNameSection','camera.frameName'],
+        ['ModernDisplayAdvanced','display.advanced'],
+        ['ModernDisplayDiagnostics','display.diagnostics'],
+        ['ModernDisplayGpu','display.gpu'],
+        ['ModernDisplayProfiler','display.profiler']
+      ].map(function(entry){return {node:geometryUi(entry[0]),suffix:entry[1]};})
+        .filter(function(entry){return !!entry.node;});
+    }
+    workspaceSections.forEach(function(entry){
+      entry.node.addEventListener('toggle',function(){
+        var key=workspaceScope()+'.'+entry.suffix;
+        // Programmatic restoration of a mode-specific fold must not be saved
+        // back as an explicit user preference (toggle events are asynchronous).
+        if(entry.node.open===workspaceSectionValue(workspaceScope(),entry.suffix))return;
+        workspaceState.sections[key]=entry.node.open;
+        if(entry.suffix.indexOf('display.')===0){
+          var shortKey=entry.suffix.slice('display.'.length);
+          displayPanels[shortKey]=entry.node.open;
+        }
         saveApplicationPreferences();
       });
     });
+    applyWorkspaceSections();
+  }
+  function bindDisplayPanels(){
+    // Preserve the existing Display entry point, but share the same per-mode
+    // controller with Camera, Objects and all future native <details> folds.
+    bindWorkspaceSections();
+  }
+  function resetWorkspaceLayout(){
+    workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
+    displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
+    legacyDisplayPanels=Object.assign({},displayPanels);
+    state.compareSelected='A';
+    if(state.compareConfig)syncCompareEditor();
+    // Do not render or alter the experiment when resetting the workspace.
+    applyWorkspaceSections();
+    if(typeof document.querySelector==='function')activateSettings('Camera',false,false);
+    saveApplicationPreferences();
+    preferencesStatus('Workspace layout reset to defaults.',false);
   }
   function bindApplicationPreferences(){
+    var layoutButton=geometryUi('ModernResetWorkspace');
+    if(layoutButton&&applicationPreferences)layoutButton.addEventListener('click',resetWorkspaceLayout);
     var button=geometryUi('ModernResetPreferences');
     if(!button||!applicationPreferences)return;
     button.addEventListener('click',function(){
@@ -509,10 +600,15 @@
       state.geometryBackend=defaults.geometryBackend;
       navigationPrefs=navigation?navigation.settings(defaults.navigation):defaults.navigation;
       displayPanels=Object.assign({},defaults.displayPanels);
-      [['advanced','ModernDisplayAdvanced'],['diagnostics','ModernDisplayDiagnostics'],
-        ['gpu','ModernDisplayGpu'],['profiler','ModernDisplayProfiler']].forEach(function(entry){
-        var node=geometryUi(entry[1]);if(node)node.open=false;
-      });
+      legacyDisplayPanels=Object.assign({},displayPanels);
+      workspaceState={mode:defaults.workspace.mode,sceneTab:defaults.workspace.sceneTab,
+        compareTab:defaults.workspace.compareTab,compareModel:defaults.workspace.compareModel,
+        sections:Object.assign({},defaults.workspace.sections)};
+      applyWorkspaceSections();
+      // A full preference reset also restores visible tab/model selection.
+      state.compareSelected='A';
+      if(state.compareConfig)syncCompareEditor();
+      if(typeof document.querySelector==='function')activateSettings('Camera',false,false);
       [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
         ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
         ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
@@ -582,7 +678,10 @@
       try{
         var url=new URL(root.location.href);
         if(!url.searchParams.has('state')){
-          root.history.replaceState(root.history.state,'',experiments.urlWithExperiment(url.href,current));
+          var previous=root.history.state;
+          var historyState=Object.assign({},previous&&typeof previous==='object'?previous:{});
+          historyState[AUTO_EXPERIMENT_HISTORY_KEY]=true;
+          root.history.replaceState(historyState,'',experiments.urlWithExperiment(url.href,current));
         }
       }catch(error){errors.push('URL: '+error.message);}
     }
@@ -628,10 +727,15 @@
   function restoreExperiment(){
     if(!experiments||!root.location)return false;
     var params=new URLSearchParams(root.location.search||'');
-    persistence.explicitUrl=params.has(experiments.PARAM);
+    var hasUrlExperiment=params.has(experiments.PARAM);
+    // Old shared links have no history marker. Only our own auto-generated
+    // history entry is allowed to yield to local UI workspace preferences.
+    var generated=!!(root.history&&root.history.state&&
+      root.history.state[AUTO_EXPERIMENT_HISTORY_KEY]===true);
+    persistence.explicitUrl=hasUrlExperiment&&!generated;
     var data=null,source='';
     try{
-      if(persistence.explicitUrl){data=experiments.readUrl(root.location.search);source='URL';}
+      if(hasUrlExperiment){data=experiments.readUrl(root.location.search);source='URL';}
       else if(root.localStorage){
         var saved=root.localStorage.getItem(experiments.STORAGE_KEY);
         if(saved){data=experiments.validate(JSON.parse(saved));source='local storage';}
@@ -1389,7 +1493,8 @@
       var tab=el('ModernModelTab'+side);if(tab)tab.addEventListener('click',function(){
         // Do not leave a changed slider paired with the previous model's image.
         if(state.curvaturePending)redraw();
-        cancelEdits();state.compareSelected=side;syncCompareEditor();scheduleExperimentSave();
+        cancelEdits();state.compareSelected=side;workspaceState.compareModel=side;
+        syncCompareEditor();saveApplicationPreferences();scheduleExperimentSave();
       });
     });
     var preset=el('ModernPairPreset');if(preset)preset.addEventListener('change',function(){
@@ -1677,6 +1782,9 @@
     list.value=index<0?'':String(index);
     if(index>=0)sequenceEditFields(index);
     var empty=newUiEl('ModernSequenceEmpty');if(empty)empty.hidden=cameraSequence.length>0;
+    var summary=newUiEl('ModernCameraAnimationSummary');
+    if(summary)summary.textContent=cameraSequence.length+' frames'+
+      (cameraSequenceApi?' · '+(cameraSequenceApi.totalMs(cameraSequence)/1000).toFixed(1)+' s':'');
     if(!cameraTransition){
       var total=cameraSequenceApi.totalMs(cameraSequence);
       sequenceStatus(cameraSequence.length+' frame(s) · '+(total/1000).toFixed(1)+' s total'+
@@ -1936,6 +2044,8 @@
       ModernCameraEast:'CameraEast',ModernCameraNorth:'CameraNorth'};
     Object.keys(fields).forEach(function(id){var input=newUiEl(id);if(input)input.value=String(model[fields[id]]);});
     var note=newUiEl('ModernCameraPositionInfo');if(note)note.textContent=cameraPositionText();
+    var poseSummary=newUiEl('ModernCameraPoseSummary');
+    if(poseSummary)poseSummary.textContent='Height '+Number(model.Height).toFixed(1)+' m';
   }
   function navigationKeyActive(){return Object.keys(navigationKeys).length>0;}
   function stopCameraKeyboard(deferRender){
@@ -2395,7 +2505,8 @@
     updateStatus('Updating physical optics after parameter change…');
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
-  function setMode(mode){
+  function setMode(mode,remember){
+    if(remember!==false&&mode!==workspaceState.mode){workspaceState.mode=mode;saveApplicationPreferences();}
     stopCameraTransition(false,'Transition interrupted by workspace switch',false);
     stopAutoCameraPreview();
     if(mode!=='scene'&&mode!=='compare'&&mode!=='demos')throw RangeError('Invalid Modern UI mode');
@@ -2452,7 +2563,9 @@
     // always use a common eye-level aim. Do not show a misleading Scene aim.
     var cameraAim=el('ModernCameraAim');
     if(cameraAim)cameraAim.value=mode==='compare'?'3':String(model.viewcenterHorizon);
-    if(typeof document.querySelector==='function')activateSettings(activeSettings,false);
+    applyWorkspaceSections();
+    if(typeof document.querySelector==='function')
+      activateSettings(workspaceState[mode+'Tab']||'Camera',false,false);
     el('ModernGraphHost').closest('.modern-viewport-panel').hidden=mode==='compare';
     var views=el('ModernCompareViews');
     if(views){views.classList.toggle('is-active',mode==='compare');
@@ -2513,6 +2626,8 @@
   function syncNumericInputs(){
     var position=newUiEl('ModernCameraPositionInfo');
     if(position)position.textContent=cameraPositionText();
+    var poseSummary=newUiEl('ModernCameraPoseSummary');
+    if(poseSummary)poseSummary.textContent='Height '+Number(model.Height).toFixed(1)+' m';
     var pairs={ModernHeight:'Height',ModernFocal:'FocalLengthField',ModernPan:'Pan',
       ModernNick:'Nick',ModernRoll:'Roll'};
     Object.keys(pairs).forEach(function(id){var node=el(id);if(node)node.value=String(model[pairs[id]]);});
@@ -2606,9 +2721,13 @@
       return 'ModernComparePanel'+group;
     return 'ModernPanel'+group;
   }
-  function activateSettings(name,focus){
+  function activateSettings(name,focus,remember){
     if(!settingGroups.includes(name))return;
     activeSettings=name;
+    if(remember!==false){
+      var tabKey=state.mode==='compare'?'compareTab':'sceneTab';
+      if(workspaceState[tabKey]!==name){workspaceState[tabKey]=name;saveApplicationPreferences();}
+    }
     settingGroups.forEach(function(group){
       var tab=el('ModernSettings'+group),scenePanel=el('ModernPanel'+group);
       if(!tab||!scenePanel)return;
@@ -2637,7 +2756,7 @@
         else if(offset){event.preventDefault();activateSettings(settingGroups[(index+offset+settingGroups.length)%settingGroups.length],true);}
       });
     });
-    activateSettings('Camera',false);
+    activateSettings('Camera',false,false);
   }
   var fieldHelp={
     ModernHeight:'Observer height above the local surface, in metres. Does not move the towers.',
@@ -2768,12 +2887,23 @@
     var restored=restoreExperiment();
     if(!initialCamera)initialCamera=captureCameraPose();
     syncNumericInputs();
-    if(restored){
-      // Apply the restored workspace without touching the physics itself.
-      if(state.mode==='compare')setMode('compare');
-      else redraw();
-      syncCompareEditor();
-    }else redraw();
+    // An explicitly shared experiment URL retains its authored Scene/Compare
+    // viewport. Local experiments instead use the browser workspace preference.
+    var params=typeof URLSearchParams==='function'?
+      new URLSearchParams(root.location&&root.location.search||''):{get:function(){return null;}};
+    if(!persistence.explicitUrl){
+      if(workspaceState.mode)state.mode=workspaceState.mode;
+      if(workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
+    }
+    var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
+    if(['scene','compare','demos'].includes(explicitMode))state.mode=explicitMode;
+    if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
+    if(settingGroups.includes(explicitTab))workspaceState[state.mode==='compare'?'compareTab':'sceneTab']=explicitTab;
+    if(state.mode==='compare'||state.mode==='demos'||explicitMode==='scene')setMode(state.mode,false);
+    else {applyWorkspaceSections();
+      if(typeof document.querySelector==='function')activateSettings(workspaceState.sceneTab,false,false);
+      redraw();}
+    if(restored||state.compareConfig)syncCompareEditor();
     persistence.ready=true;
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
@@ -2793,6 +2923,9 @@
     getCameraAnimation:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getCameraTransition:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
+    getWorkspaceState:function(){return {mode:state.demosActive?'demos':state.mode,
+      sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
+      compareModel:state.compareSelected,sections:Object.assign({},workspaceState.sections)};},
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
     // DevTools API remains available alongside the 138.3 Atmosphere controls.

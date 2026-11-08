@@ -2,6 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const preferences=require('../src/ui/modern/ModernApplicationPreferences');
+const workspaceDefaults={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
 function storage(values={}){
   const data=new Map(Object.entries(values));
   return {data,getItem(key){return data.has(key)?data.get(key):null;},
@@ -11,13 +12,13 @@ test('application preference defaults, allowed values and individual invalid fie
   const defaults=preferences.defaults();
   assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
-    navigation:{speed:10,turnRate:1,wheelStep:'auto'}});
+    navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
   {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
-    navigation:{speed:100,turnRate:.05,wheelStep:10}});
+    navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
   assert.deepEqual(invalid,defaults);
@@ -70,4 +71,33 @@ test('partial, stale or malformed Display panel preferences cannot open hidden d
     {advanced:true,diagnostics:false,gpu:false,profiler:false});
   assert.deepEqual(preferences.normalize({displayPanels:[]}).displayPanels,
     {advanced:false,diagnostics:false,gpu:false,profiler:false});
+});
+
+test('workspace preferences retain validated tabs, model, mode and independent section scopes',()=>{
+  const db=storage();
+  const saved=preferences.normalize({workspace:{mode:'compare',sceneTab:'Surface',
+    compareTab:'Atmosphere',compareModel:'B',sections:{
+      'scene.camera.animation':false,'compare.camera.animation':true,
+      'compare.display.profiler':true,'scene.objects.group2':true}}});
+  assert.equal(preferences.write(db,saved),true);
+  const result=preferences.read(db).workspace;
+  assert.equal(result.mode,'compare');assert.equal(result.sceneTab,'Surface');
+  assert.equal(result.compareTab,'Atmosphere');assert.equal(result.compareModel,'B');
+  assert.equal(result.sections['scene.camera.animation'],false);
+  assert.equal(result.sections['compare.camera.animation'],true);
+  assert.equal(result.sections['compare.display.profiler'],true);
+  assert.equal(result.sections['scene.objects.group2'],true);
+  assert.ok(Object.isFrozen(result));assert.ok(Object.isFrozen(result.sections));
+  assert.deepEqual(preferences.normalize({workspace:{mode:'invalid',sceneTab:'Missing',
+    compareModel:'C',sections:{'scene.camera.animation':'true',
+      'compare.camera.animation':1,'__proto__':true}}}).workspace,workspaceDefaults);
+});
+test('pre-workspace v1 preferences migrate without overriding embedded experiment mode',()=>{
+  const db=storage({[preferences.STORAGE_KEY]:JSON.stringify({version:1,
+    opticalQuality:'auto',displayPanels:{diagnostics:true},navigation:{speed:100}})});
+  const restored=preferences.read(db);
+  assert.equal(restored.opticalQuality,'auto');assert.equal(restored.navigation.speed,100);
+  assert.equal(restored.displayPanels.diagnostics,true);
+  assert.equal(restored.workspace.mode,null);
+  assert.deepEqual(restored.workspace.sections,{});
 });

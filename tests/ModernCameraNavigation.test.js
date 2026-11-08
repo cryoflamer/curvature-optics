@@ -84,7 +84,7 @@ test('camera positions survive JSON/URL round-trip without changing legacy exper
   ])assert.throws(()=>codec.validate({...old,cameraPositions:invalid}),RangeError);
 });
 
-function boot(savedExperiment, initialPreferences){
+function boot(savedExperiment, initialPreferences, pageUrl, historyState){
   const ids=[...read('CurvatureModern.html').matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]);
   const nodes=new Map(),renders=[],globalListeners={},frames=new Map(),timers=new Map();
   let clock=100,seq=0,ons=[];
@@ -146,7 +146,10 @@ function boot(savedExperiment, initialPreferences){
     addEventListener(name,fn){(globalListeners[name]??=[]).push(fn);},
     NewGraphX3D(args){return {Canvas:sceneCanvas,UpdateCanvasSize(){},Redraw(){args.DrawFunc({Canvas:sceneCanvas});}};},
     xOnLoad(fn){ons.push(fn);},console};
-  if(savedExperiment)win.location={href:'https://example.org/CurvatureModern.html',search:''};
+  if(savedExperiment||pageUrl)win.location={href:pageUrl||'https://example.org/CurvatureModern.html',
+    search:pageUrl?new URL(pageUrl).search:''};
+  if(historyState!==undefined)win.history={state:historyState,
+    replaceState(state,title,url){this.state=state;win.location={href:url,search:new URL(url).search};}};
   win.window=win;
   const context={window:win,document,console,URL,URLSearchParams,
     requestAnimationFrame(fn){const id=++seq;frames.set(id,fn);return id;},
@@ -677,7 +680,7 @@ test('Camera Animation is the primary UI and the old two-position controls are r
   }
   for(const id of ['ModernTransitionPlay','ModernTransitionFrom','ModernTransitionTo','ModernSequenceUpdate'])
     assert.doesNotMatch(html,new RegExp('id="'+id+'"'),id);
-  assert.match(html,/<details class="modern-camera-optional" id="ModernSavedCameraLibrary">/);
+  assert.match(html,/<details class="modern-camera-optional modern-workspace-fold" id="ModernSavedCameraLibrary" data-workspace-section="camera.savedViews">/);
 });
 
 
@@ -691,7 +694,8 @@ test('display and navigation preferences are immediately saved and restored inde
   assert.deepEqual(JSON.parse(saved),{
     version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
-    navigation:{speed:100,turnRate:1,wheelStep:'auto'}
+    navigation:{speed:100,turnRate:1,wheelStep:'auto'},
+    workspace:{mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}}
   });
   const reopened=boot(null,{[preferences.STORAGE_KEY]:saved});
   assert.equal(reopened.app.getOpticalQuality(),'auto');
@@ -758,4 +762,120 @@ test('Display fold toggles persist across reloads and Reset closes them without 
     'ModernDisplayAdvanced'])assert.equal(reopened.nodes.get(id).open,false,id+' Reset');
   assert.equal(reopened.storage.has(preferences.STORAGE_KEY),false);
   assert.equal(reopened.storage.has(codec.STORAGE_KEY),true);
+});
+
+test('workspace tabs and Compare model survive reload independently of experiment physics',()=>{
+  const h=boot(experiment([])),n=h.nodes;
+  n.get('ModernSceneTab').dispatch('click');
+  n.get('ModernSettingsSurface').dispatch('click');
+  assert.equal(h.app.getWorkspaceState().sceneTab,'Surface');
+  n.get('ModernCompareTab').dispatch('click');
+  n.get('ModernSettingsAtmosphere').dispatch('click');
+  n.get('ModernModelTabB').dispatch('click');
+  const before=h.app.getModel().Height;
+  const saved=h.storage.get(preferences.STORAGE_KEY);
+  const savedJson=JSON.parse(saved);
+  assert.equal(savedJson.workspace.mode,'compare');
+  assert.equal(savedJson.workspace.sceneTab,'Surface');
+  assert.equal(savedJson.workspace.compareTab,'Atmosphere');
+  assert.equal(savedJson.workspace.compareModel,'B');
+  const reopened=boot(experiment([]),{[preferences.STORAGE_KEY]:saved});
+  assert.equal(reopened.app.getMode(),'compare');
+  assert.equal(reopened.app.getWorkspaceState().sceneTab,'Surface');
+  assert.equal(reopened.app.getWorkspaceState().compareTab,'Atmosphere');
+  assert.equal(reopened.app.getWorkspaceState().compareModel,'B');
+  assert.equal(reopened.nodes.get('ModernComparePanelAtmosphere').hidden,false);
+  assert.equal(reopened.app.getModel().Height,before);
+  reopened.nodes.get('ModernSceneTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernPanelSurface').hidden,false,
+    'Scene restores its own tab without changing the Compare tab');
+});
+test('scene and compare section folds persist separately; workspace reset preserves quality and experiment',()=>{
+  const h=boot(experiment([])),n=h.nodes;
+  const section=n.get('ModernCameraNavigationSection');
+  assert.equal(section.open,false);
+  section.open=true;section.dispatch('toggle');
+  assert.equal(JSON.parse(h.storage.get(preferences.STORAGE_KEY)).workspace.sections['compare.camera.navigation'],true,
+    'saved experiment initially opens Compare');
+  n.get('ModernSceneTab').dispatch('click');
+  assert.equal(section.open,false,'Scene navigation starts folded independently of Compare');
+  n.get('ModernCameraAnimationSection').open=false;
+  n.get('ModernCameraAnimationSection').dispatch('toggle');
+  n.get('ModernOpticalQuality').value='auto';n.get('ModernOpticalQuality').dispatch('change');
+  const saved=h.storage.get(preferences.STORAGE_KEY);
+  const reopened=boot(experiment([]),{[preferences.STORAGE_KEY]:saved});
+  assert.equal(reopened.app.getMode(),'scene');
+  assert.equal(reopened.nodes.get('ModernCameraAnimationSection').open,false);
+  assert.equal(reopened.nodes.get('ModernCameraNavigationSection').open,false);
+  reopened.nodes.get('ModernCompareTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernCameraNavigationSection').open,true);
+  reopened.nodes.get('ModernResetWorkspace').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernCameraAnimationSection').open,true);
+  assert.equal(reopened.nodes.get('ModernCameraNavigationSection').open,false);
+  assert.equal(reopened.app.getOpticalQuality(),'auto');
+  assert.equal(reopened.storage.has(codec.STORAGE_KEY),true);
+  assert.equal(JSON.parse(reopened.storage.get(preferences.STORAGE_KEY)).workspace.mode,null);
+});
+
+test('explicit experiment URL and explicit mode/tab/model override local workspace only for this visit',()=>{
+  const savedExperiment=experiment([]);
+  const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html?mode=scene&tab=Objects&model=B',savedExperiment);
+  const pref=preferences.normalize({workspace:{mode:'demos',sceneTab:'Surface',
+    compareTab:'Atmosphere',compareModel:'A'}});
+  const h=boot(savedExperiment,{[preferences.STORAGE_KEY]:JSON.stringify({version:1,...pref})},url);
+  assert.equal(h.app.getMode(),'scene','explicit URL mode beats local Demos preference and embedded Compare');
+  assert.equal(h.nodes.get('ModernPanelObjects').hidden,false);
+  assert.equal(h.app.getWorkspaceState().compareModel,'B','URL model beats remembered A');
+  assert.equal(h.app.getModel().Height,15);
+  assert.equal(h.app.getWorkspaceState().compareTab,'Atmosphere');
+  assert.equal(preferences.read(h.win.localStorage).workspace.mode,'demos',
+    'viewing an explicit URL must not silently rewrite persistent workspace choices');
+});
+
+test('Camera details are stable, compact and use native accessible folds',()=>{
+  const html=read('CurvatureModern.html');
+  for(const suffix of ['camera.pose','camera.navigation','camera.animation','camera.savedViews',
+    'camera.frameName','objects.group1','objects.group2'])
+    assert.ok(html.includes('data-workspace-section="'+suffix+'"'),suffix);
+  assert.ok(html.includes('id="ModernCameraAnimationSummary"'));
+  assert.ok(html.includes('id="ModernResetWorkspace"'));
+  assert.ok(html.includes('aria-label="Help: camera animation"'));
+  assert.ok(html.includes('aria-label="Help: camera navigation"'));
+});
+
+test('Display fold state does not leak from Scene to Compare on the next reload',()=>{
+  const h=boot(experiment([])),n=h.nodes;
+  n.get('ModernSceneTab').dispatch('click');
+  n.get('ModernDisplayDiagnostics').open=true;
+  n.get('ModernDisplayDiagnostics').dispatch('toggle');
+  const saved=h.storage.get(preferences.STORAGE_KEY);
+  const first=JSON.parse(saved);
+  assert.equal(first.displayPanels.diagnostics,true,'backwards-compatible global mirror');
+  assert.equal(first.workspace.sections['scene.display.diagnostics'],true);
+  const reopened=boot(experiment([]),{[preferences.STORAGE_KEY]:saved});
+  assert.equal(reopened.nodes.get('ModernDisplayDiagnostics').open,true);
+  reopened.nodes.get('ModernCompareTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernDisplayDiagnostics').open,false,
+    'Compare must not inherit the Scene selection from the legacy mirror');
+  reopened.nodes.get('ModernDisplayDiagnostics').open=true;
+  reopened.nodes.get('ModernDisplayDiagnostics').dispatch('toggle');
+  reopened.nodes.get('ModernSceneTab').dispatch('click');
+  assert.equal(reopened.nodes.get('ModernDisplayDiagnostics').open,true);
+});
+
+test('auto-generated experiment URL restores user workspace, unlike an externally shared URL',()=>{
+  const savedExperiment=experiment([]);
+  const url=codec.urlWithExperiment('https://example.org/CurvatureModern.html',savedExperiment);
+  const pref=preferences.normalize({workspace:{mode:'scene',sceneTab:'Objects',
+    compareTab:'Surface',compareModel:'B'}});
+  const history={__curvatureModernAutoExperimentUrlV1:true};
+  const h=boot(savedExperiment,{[preferences.STORAGE_KEY]:JSON.stringify({version:1,...pref})},url,history);
+  assert.equal(h.app.getMode(),'scene');
+  assert.equal(h.nodes.get('ModernPanelObjects').hidden,false);
+  assert.equal(h.app.getWorkspaceState().compareModel,'B');
+  assert.equal(h.app.getModel().Height,15);
+  h.nodes.get('ModernPan').value='1.5';h.nodes.get('ModernPan').dispatch('change');
+  h.flushTimers();
+  assert.equal(h.win.history.state.__curvatureModernAutoExperimentUrlV1,true,
+    'subsequent edits keep the auto-generated history marker');
 });

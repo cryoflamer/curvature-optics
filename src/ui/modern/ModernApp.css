@@ -329,3 +329,16 @@ button{cursor:pointer}
 .modern-recording-indicator:not([hidden]){margin-left:5px;margin-right:auto;color:#a52c32;font-size:10px;font-weight:750}
 .modern-display-check .modern-help:hover:after,.modern-display-label .modern-help:hover:after,
 .modern-display-inline-actions .modern-help:hover:after{max-height:65vh;overflow-wrap:break-word}
+
+/* Consistent workspace folds; native details preserve accessible keyboard toggling. */
+.modern-workspace-fold{border-top:1px solid #dbe7f4;margin-top:11px}
+.modern-workspace-fold>summary{cursor:pointer;display:flex;align-items:center;gap:6px;list-style:none;color:#244b78;font-size:12px;font-weight:700;padding:11px 0}
+.modern-workspace-fold>summary::-webkit-details-marker{display:none}
+.modern-workspace-fold>summary:before{content:'▸';font-size:14px;color:#537696;display:inline-block}
+.modern-workspace-fold[open]>summary:before{transform:rotate(90deg)}
+.modern-workspace-fold>summary:focus-visible{outline:2px solid #2c83d3;outline-offset:2px;border-radius:4px}
+.modern-workspace-fold-content{padding:4px 0 11px}
+.modern-fold-summary{margin-left:auto;color:#6d8093;font-size:10px;font-weight:500;text-align:right;max-width:56%;overflow-wrap:anywhere}
+.modern-camera-optional.modern-workspace-fold{padding-top:0}
+.modern-camera-optional.modern-workspace-fold>summary{margin-bottom:0}
+.modern-camera-location-status{font-size:10px}

@@ -1872,3 +1872,26 @@ when no consolidated record is present. Display provides a reset that clears
 both preference generations, never experiment data. Preferences remain separate
 from camera poses, keyframes, physical parameters and experiment URLs/JSON.
 Malformed or inaccessible localStorage reverts to the reference defaults.
+
+
+### Modern workspace persistence and Camera UI consistency
+
+- Application Preferences now include a validated `workspace` value with
+  remembered Scene / Compare / Demos mode, independent Scene and Compare
+  Camera/Surface/Atmosphere/Objects/Display tabs, Compare editor A/B choice,
+  and native `details` fold states keyed by stable `scene.*` / `compare.*` IDs.
+  The original Display fold preferences are read for backward compatibility.
+- Camera splits its controls into Position & orientation, Navigation and
+  Camera Animation folds (plus optional Saved views and frame name); long
+  explanations use the existing keyboard-accessible `?` help. Animation
+  retains a frame count and total duration in its fold summary.
+- Explicit experiment URLs retain their authored display mode/model; validated
+  direct `mode`, `tab` and `model` query parameters override local layout for
+  the opened page. The app marks its own history.replaceState-generated URL
+  so a normal reload honors browser preferences without mistaking the URL
+  for a newly opened shared link. Local experiments also take their workspace
+  from browser prefs when these choices were explicitly saved. An old v1 preferences record
+  lacking `workspace` keeps its previous experiment-selected mode/model.
+- Reset workspace layout changes only tabs and fold state. Reset application
+  preferences also clears workspace choices. Neither changes optical algorithms,
+  Camera Animation keyframes, Legacy controls or the experiment JSON schema.

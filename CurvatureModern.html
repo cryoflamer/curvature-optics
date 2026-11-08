@@ -131,6 +131,9 @@
       </div>
       <section class="modern-section modern-settings-panel" id="ModernPanelCamera" role="tabpanel" aria-labelledby="ModernSettingsCamera">
         <h2>Camera</h2>
+        <details class="modern-workspace-fold" id="ModernCameraPoseSection" data-workspace-section="camera.pose" open>
+          <summary>Position &amp; orientation <span class="modern-fold-summary" id="ModernCameraPoseSummary"></span></summary>
+          <div class="modern-workspace-fold-content">
         <div class="modern-field"><label for="ModernHeight">Observer height (m)</label><input id="ModernHeight" type="number" min="0.001" max="1000000000" step="any" value="15"></div>
         <div class="modern-two-fields">
           <div class="modern-field"><label for="ModernFocal">Focal length (mm)</label><input id="ModernFocal" type="number" min="1" max="100000" step="any" value="2000"></div>
@@ -151,7 +154,11 @@
           <div class="modern-field"><label for="ModernCameraEast">East (m)</label><input id="ModernCameraEast" type="number" min="-10000000" max="10000000" step="any" value="0"></div>
           <div class="modern-field"><label for="ModernCameraNorth">North (m)</label><input id="ModernCameraNorth" type="number" min="-10000000" max="10000000" step="any" value="0"></div>
         </div>
-        <h3 class="modern-camera-subheading">Navigation</h3>
+          </div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernCameraNavigationSection" data-workspace-section="camera.navigation">
+          <summary>Navigation <span class="modern-fold-summary">Movement &amp; turn speed</span></summary>
+          <div class="modern-workspace-fold-content">
         <div class="modern-two-fields">
           <div class="modern-field"><label for="ModernCameraMoveSpeed">Movement speed (m/s)</label><select id="ModernCameraMoveSpeed">
             <option value="0.01">0.01</option><option value="0.1">0.1</option><option value="1">1</option>
@@ -166,10 +173,16 @@
           <option value="auto" selected>Automatic (scene distance)</option><option value="0.1">0.1 m</option>
           <option value="1">1 m</option><option value="10">10 m</option><option value="100">100 m</option><option value="1000">1,000 m</option>
         </select></div>
-        <p class="modern-note">Drag to aim · Shift + drag to move sideways/change height · Alt + wheel moves forward/back · Shift + wheel zooms. Click the scene, then use W/A/S/D to move, Q/E for height and arrow keys for Pan/Nick. Shift ×5; Ctrl ×0.2. Keyboard movement calculates optics on release.</p>
+        <div class="modern-display-inline-actions"><span class="modern-display-hint">Keyboard / mouse controls</span>
+          <button type="button" class="modern-help" aria-label="Help: camera navigation" data-tip="Drag to aim; Shift + drag to move sideways/change height; Alt + wheel moves forward/back; Shift + wheel zooms. Click the scene; W/A/S/D move, Q/E adjust height and arrow keys change Pan/Nick. Shift ×5, Ctrl ×0.2. Accurate optics returns after keyboard movement.">?</button></div>
         <div class="modern-field"><button type="button" class="modern-ghost-button" id="ModernCameraReset">Reset camera</button></div>
-        <h3 class="modern-camera-subheading">Camera Animation</h3>
-        <p class="modern-note">1. Aim or move the camera. 2. Click <strong>Add current view</strong>. 3. Repeat for every view, then press Play. Two views make a simple transition; more views make a sequence. No names or saved positions are needed.</p>
+          </div>
+        </details>
+        <details class="modern-workspace-fold" id="ModernCameraAnimationSection" data-workspace-section="camera.animation" open>
+          <summary>Camera Animation <span class="modern-fold-summary" id="ModernCameraAnimationSummary">0 frames</span></summary>
+          <div class="modern-workspace-fold-content">
+        <div class="modern-display-inline-actions"><span class="modern-display-hint">Add views, then play</span>
+          <button type="button" class="modern-help" aria-label="Help: camera animation" data-tip="Aim or move the camera, then click Add current view. Repeat for each frame and press Play. Two views form a simple transition; additional views make a sequence. Names and saved camera positions are optional.">?</button></div>
         <div class="modern-field"><button type="button" class="modern-animation-add" id="ModernSequenceAdd">+ Add current view</button></div>
         <div class="modern-field"><label for="ModernSequenceKeyframes">Animation frames · in playback order</label>
           <select id="ModernSequenceKeyframes" size="5" aria-label="Camera animation frames"></select>
@@ -188,8 +201,9 @@
           <div class="modern-field"><label for="ModernSequenceHold">Pause at selected frame (s)</label><input id="ModernSequenceHold" type="number" min="0" max="120" step="0.1" value="0"></div>
         </div>
         <div class="modern-field"><label for="ModernSequenceEasing">Motion into selected frame</label><select id="ModernSequenceEasing"><option value="smoothstep" selected>Ease in / out</option><option value="linear">Linear</option></select></div>
-        <p class="modern-note">Each new frame uses a 5-second transition by default. The first frame has no incoming travel. Changes to time and pauses are saved automatically.</p>
-        <details class="modern-camera-optional"><summary>Optional frame name</summary>
+        <div class="modern-display-inline-actions"><span class="modern-display-hint">Changes save automatically</span>
+          <button type="button" class="modern-help" aria-label="Help: animation timing" data-tip="Each new frame uses a 5-second incoming transition by default. The first frame has no incoming travel. Travel time, pauses and easing save automatically.">?</button></div>
+        <details class="modern-camera-optional" id="ModernCameraFrameNameSection" data-workspace-section="camera.frameName"><summary>Optional frame name</summary>
           <div class="modern-field"><label for="ModernSequenceName">Name</label><input id="ModernSequenceName" type="text" maxlength="80" placeholder="e.g. Bridge close-up (optional)"></div>
         </details>
         <div class="modern-camera-actions modern-transition-actions">
@@ -198,8 +212,11 @@
           <button type="button" id="ModernSequenceCancel" disabled>Cancel / restore</button>
         </div>
         <p class="modern-note" id="ModernSequenceStatus" role="status" aria-live="polite">Add at least two views to play an animation.</p>
-        <p class="modern-note">Fast Preview runs during playback and the selected optical quality returns afterward. Stop keeps the camera where it is; Cancel restores the view from before Play. Manual navigation interrupts playback.</p>
-        <details class="modern-camera-optional" id="ModernSavedCameraLibrary">
+        <div class="modern-display-inline-actions"><span class="modern-display-hint">Fast during playback</span>
+          <button type="button" class="modern-help" aria-label="Help: animation playback" data-tip="Fast Preview runs during playback; the selected optical quality returns afterward. Stop keeps the current camera; Cancel restores the view from before Play. Manual navigation interrupts playback.">?</button></div>
+          </div>
+        </details>
+        <details class="modern-camera-optional modern-workspace-fold" id="ModernSavedCameraLibrary" data-workspace-section="camera.savedViews">
           <summary>Saved views · optional library</summary>
           <p class="modern-note">Reuse a view in multiple animations. The animation still owns a separate snapshot of each frame.</p>
           <div class="modern-field"><label for="ModernCameraPositionName">View name (optional)</label><input id="ModernCameraPositionName" type="text" maxlength="80" placeholder="Automatically named if empty"></div>
@@ -215,8 +232,8 @@
           <button type="button" id="ModernSequenceAddSaved">Add selected saved view</button>
           <p class="modern-note" id="ModernCameraPositionsStatus" role="status" aria-live="polite"></p>
         </details>
-        <p class="modern-note">Camera: drag to aim; Shift + drag to move sideways/change height; Alt + wheel to move forward/backward; Shift + wheel to zoom. Compare shares the camera between A/B.</p>
-        <p class="modern-note" id="ModernCameraPositionInfo">East 0 m · North 0 m</p>
+
+        <p class="modern-note modern-camera-location-status" id="ModernCameraPositionInfo">East 0 m · North 0 m</p>
         <p id="ModernCompareCameraAimNote" class="modern-note" hidden>Compare uses a fixed eye-level aim (0°) for both models; other Scene aiming modes are not applied.</p>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelSurface" role="tabpanel" aria-labelledby="ModernSettingsSurface" hidden>
         <h2>Surface</h2>
@@ -342,8 +359,8 @@
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>
         <p class="modern-note">Two physical object groups shared by Scene and both Compare models: towers, ships, rods and Bedford objects.</p>
-        <details class="modern-objects" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
-        <details class="modern-objects"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
+        <details class="modern-objects" data-workspace-section="objects.group1" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
+        <details class="modern-objects" data-workspace-section="objects.group2"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
         <div class="modern-display-check">
@@ -400,18 +417,20 @@
               <option value="webgl2">WebGL2 · experimental</option></select></div>
           <p id="ModernGeometryBackendStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Active: Canvas 2D</p>
         </div>
-        <details class="modern-display-fold" id="ModernDisplayAdvanced">
+        <details class="modern-display-fold" id="ModernDisplayAdvanced" data-workspace-section="display.advanced">
           <summary>Advanced settings</summary>
           <div class="modern-display-fold-content">
             <button type="button" class="modern-ghost-button" id="ModernResetPreferences">Reset application preferences</button>
-            <span class="modern-display-hint">Resets browser display and navigation preferences, not experiments.</span>
+            <span class="modern-display-hint">Resets display, navigation and workspace preferences, not experiments.</span>
+            <button type="button" class="modern-ghost-button" id="ModernResetWorkspace">Reset workspace layout</button>
+            <span class="modern-display-hint">Resets only tabs and open sections; retains optical and navigation preferences.</span>
           </div>
         </details>
         <p id="ModernPreferencesStatus" class="modern-note modern-display-status" role="status" aria-live="polite" hidden></p>
-        <details class="modern-display-fold" id="ModernDisplayDiagnostics">
+        <details class="modern-display-fold" id="ModernDisplayDiagnostics" data-workspace-section="display.diagnostics">
           <summary>Diagnostics &amp; profiling <span class="modern-recording-indicator" id="ModernDiagnosticsRecordingState" hidden>Recording</span></summary>
           <div class="modern-display-fold-content">
-            <details class="modern-display-subfold" id="ModernDisplayGpu">
+            <details class="modern-display-subfold" id="ModernDisplayGpu" data-workspace-section="display.gpu">
               <summary>GPU capabilities</summary>
               <div class="modern-display-fold-content">
                 <div class="modern-display-inline-actions">
@@ -430,7 +449,7 @@
                 <p id="ModernGpuNote" class="modern-note" role="status"></p>
               </div>
             </details>
-            <details class="modern-display-subfold modern-performance-diagnostics" id="ModernDisplayProfiler">
+            <details class="modern-display-subfold modern-performance-diagnostics" id="ModernDisplayProfiler" data-workspace-section="display.profiler">
               <summary>Render profiler <span class="modern-recording-indicator" id="ModernProfilerRecordingState" hidden>Recording</span></summary>
               <div class="modern-display-fold-content">
                 <div class="modern-display-inline-actions">

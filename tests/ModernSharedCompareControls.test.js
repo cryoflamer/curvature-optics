@@ -98,6 +98,8 @@ test('134.2: one set of Camera, Objects and Display controls; tab panels match m
   const before=h.getRenderCount();
   n.get('ModernCompareTab').dispatch('click');
   assert.equal(n.get('ModernPanelSurface').hidden,true);
+  assert.equal(n.get('ModernPanelCamera').hidden,false,'Compare restores its own Camera tab');
+  n.get('ModernSettingsSurface').dispatch('click');
   assert.equal(n.get('ModernComparePanelSurface').hidden,false);
   assert.equal(n.get('ModernSettingsSurface').attributes['aria-controls'],'ModernComparePanelSurface');
   assert.equal(n.get('ModernCompareSettings').hidden,false);
@@ -114,7 +116,8 @@ test('134.2: one set of Camera, Objects and Display controls; tab panels match m
   n.get('ModernSceneTab').dispatch('click');
   assert.equal(n.get('ModernCompareSettings').hidden,true);
   assert.equal(n.get('ModernCompareDisplayOptions').hidden,false);
-  assert.equal(n.get('ModernSettingsDisplay').attributes['aria-controls'],'ModernPanelDisplay');
+  assert.equal(n.get('ModernSettingsSurface').attributes['aria-controls'],'ModernPanelSurface');
+  assert.equal(n.get('ModernPanelSurface').hidden,false,'Scene remembers its independent Surface tab');
 });
 
 test('134.2: shared camera, objects and grid edit both Compare models without changing A/B atmosphere',()=>{

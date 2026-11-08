@@ -23,6 +23,27 @@
     PANEL_KEYS.forEach(function(key){result[key]=source[key]===true;});
     return Object.freeze(result);
   }
+  var TABS=['Camera','Surface','Atmosphere','Objects','Display'];
+  var SECTION_SUFFIXES=['camera.pose','camera.navigation','camera.animation','camera.savedViews',
+    'camera.frameName','objects.group1','objects.group2','display.advanced',
+    'display.diagnostics','display.gpu','display.profiler'];
+  var SECTION_KEYS=['scene','compare'].flatMap(function(mode){
+    return SECTION_SUFFIXES.map(function(section){return mode+'.'+section;});
+  });
+  function workspace(input){
+    var data=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
+    var source=data.sections&&typeof data.sections==='object'&&!Array.isArray(data.sections)?data.sections:{};
+    var sections={};
+    SECTION_KEYS.forEach(function(key){if(typeof source[key]==='boolean')sections[key]=source[key];});
+    return Object.freeze({
+      // null preserves the mode/model embedded in pre-workspace experiments.
+      mode:['scene','compare','demos'].includes(data.mode)?data.mode:null,
+      sceneTab:TABS.includes(data.sceneTab)?data.sceneTab:'Camera',
+      compareTab:TABS.includes(data.compareTab)?data.compareTab:'Camera',
+      compareModel:['A','B'].includes(data.compareModel)?data.compareModel:null,
+      sections:Object.freeze(sections)
+    });
+  }
   function from(choices,value,fallback){return choices.includes(value)?value:fallback;}
   function normalize(input){
     var data=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
@@ -32,6 +53,7 @@
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
       displayPanels:panels(data.displayPanels),
+      workspace:workspace(data.workspace),
       navigation:Object.freeze({speed:from(SPEEDS,nav.speed,10),
         turnRate:from(TURNS,nav.turnRate,1),wheelStep:from(WHEELS,nav.wheelStep,'auto')})
     });
@@ -56,7 +78,7 @@
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
       previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
-      displayPanels:data.displayPanels,navigation:data.navigation}));
+      displayPanels:data.displayPanels,navigation:data.navigation,workspace:data.workspace}));
     // Old navigation data cannot override the new selection on reload.
     return true;
   }

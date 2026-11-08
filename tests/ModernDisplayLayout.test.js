@@ -50,9 +50,10 @@ test('Advanced and diagnostics are native nested details with unchanged working 
 });
 
 test('Display fold toggles and Reset use the existing preferences, never experiment state',()=>{
+  assert.match(app,/function bindWorkspaceSections\(\)/);
   assert.match(app,/function bindDisplayPanels\(\)/);
-  assert.match(app,/node\.addEventListener\('toggle',function\(\)/);
-  assert.match(app,/displayPanels\[entry\[0\]\]=node\.open/);
+  assert.match(app,/entry\.node\.addEventListener\('toggle',function\(\)/);
+  assert.match(app,/displayPanels\[shortKey\]=entry\.node\.open/);
   assert.match(app,/displayPanels:displayPanels/);
   assert.match(app,/bindDisplayPanels\(\);/);
   assert.match(app,/displayPanels=Object\.assign\(\{\},defaults\.displayPanels\)/);
