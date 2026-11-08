@@ -408,9 +408,18 @@
         </details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelObjects" role="tabpanel" aria-labelledby="ModernSettingsObjects" hidden>
         <h2>Objects</h2>
-        <p class="modern-note">Two physical object groups shared by Scene and both Compare models: towers, ships, rods and Bedford objects.</p>
-        <details class="modern-objects" data-workspace-section="objects.group1" open><summary>Group 1</summary><div id="ModernObjectFields0"></div></details>
-        <details class="modern-objects" data-workspace-section="objects.group2"><summary>Group 2</summary><div id="ModernObjectFields1"></div></details>
+        <div class="modern-display-inline-actions modern-object-panel-intro">
+          <span class="modern-display-hint">Two shared object groups</span>
+          <button type="button" class="modern-help" aria-label="Help: object groups" data-tip="Both groups are shared by Scene and both Compare models. Edit tower, ship, rod or Bedford-marker geometry here. The object count can be zero; variations are optional.">?</button>
+        </div>
+        <details class="modern-objects modern-workspace-fold" id="ModernObjectGroup0" data-workspace-section="objects.group1" open>
+          <summary>Group 1 <span class="modern-fold-summary" id="ModernObjectGroupSummary0"></span></summary>
+          <div class="modern-workspace-fold-content" id="ModernObjectFields0"></div>
+        </details>
+        <details class="modern-objects modern-workspace-fold" id="ModernObjectGroup1" data-workspace-section="objects.group2">
+          <summary>Group 2 <span class="modern-fold-summary" id="ModernObjectGroupSummary1"></span></summary>
+          <div class="modern-workspace-fold-content" id="ModernObjectFields1"></div>
+        </details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
         <div class="modern-display-check">

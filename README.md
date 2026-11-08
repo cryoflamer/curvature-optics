@@ -187,6 +187,24 @@ experiments. The existing **Reset application preferences** clears all browser
 preferences, including workspace layout. Scene and Compare share camera/objects,
 but not the UI state of their collapsible controls.
 
+### Modern Objects layout
+
+**Scene / Compare → Objects** retains two physical groups and the same ten
+editable fields per group. The six frequently used inputs (count, type, first
+distance, spacing, lateral offset and object size) remain visible when a group
+is open. The four optional offset/size variation controls live under a
+nested **Variations** fold, closed initially. Each group heading reports its
+current object count and shape (including an empty group); the Variations
+heading identifies active nonzero amplitudes. Help for the shared A/B object
+editor is in the keyboard-accessible `?` tooltip.
+
+Group and variation fold states are remembered separately for Scene and
+Compare across reloads via browser-local workspace preferences. Folding
+controls does not change the model, hide objects from rendering, or affect
+experiment JSON/URL serialization. All existing physical object control IDs,
+validation handlers, shared Compare objects, preset reset and optics remain
+unchanged. **Reset workspace layout** returns the fold states to defaults.
+
 ### Modern Surface and Atmosphere layout
 
 **Scene / Compare → Surface** now groups curvature and radius controls under a

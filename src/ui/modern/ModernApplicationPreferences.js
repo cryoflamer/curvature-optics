@@ -26,7 +26,8 @@
   var TABS=['Camera','Surface','Atmosphere','Objects','Display'];
   var SECTION_SUFFIXES=['camera.pose','camera.navigation','camera.animation','camera.savedViews',
     'camera.frameName','surface.geometry','atmosphere.profile','atmosphere.explanation',
-    'atmosphere.visibility','atmosphere.shimmer','objects.group1','objects.group2','display.advanced',
+    'atmosphere.visibility','atmosphere.shimmer','objects.group1','objects.group2',
+    'objects.group1.variations','objects.group2.variations','display.advanced',
     'display.diagnostics','display.gpu','display.profiler'];
   var SECTION_KEYS=['scene','compare'].flatMap(function(mode){
     return SECTION_SUFFIXES.map(function(section){return mode+'.'+section;});

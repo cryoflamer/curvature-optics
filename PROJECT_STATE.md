@@ -1,3 +1,12 @@
+> **Current Objects UI cleanup (2026-11-08):** The Modern Scene/Compare
+> Objects editor retains both shared physical groups and all original object
+> fields/handlers. Frequently edited geometry stays visible, with offset/size
+> variation controls inside nested foldouts and a count/type summary for each
+> group. All foldouts persist independently for Scene and Compare via existing
+> browser-local workspace preferences; no physical model, optics or experiment
+> format changes were made. Tooltip help replaces the persistent group note.
+> Automated tests cover object edits, presets and preference normalization.
+
 > **Current Surface / Atmosphere UI cleanup (2026-11-08):** Scene and
 > Compare group surface curvature/radius, atmospheric profile inputs,
 > model equations, visibility/haze and turbulence into browser-persistent

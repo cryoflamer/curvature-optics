@@ -104,6 +104,33 @@ test('140.12.88 Scene and Compare caption updates on object edits and preset res
   assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
 });
 
+test('Objects group summaries reflect validated edits and preset restoration without affecting Compare physics',()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  const summary=i=>r.nodes.get('ModernObjectGroupSummary'+i).textContent;
+  assert.equal(summary(0),'85 transmission towers');
+  assert.equal(summary(1),'2 transmission towers');
+  assert.match(r.nodes.get('ModernObjectFields0').innerHTML,/ModernObjectVariations0/);
+  assert.match(r.nodes.get('ModernObjectFields1').innerHTML,/ModernObjectVariations1/);
+  assert.match(r.nodes.get('ModernObjectFields0').innerHTML,/ModernObject0ObjSizeVar/,
+    'hidden variation fields remain bound');
+  r.fire('ModernObject0NObjects','change','200');
+  assert.equal(summary(0),'200 transmission towers');
+  r.fire('ModernObject0ObjType','change','2');
+  assert.equal(summary(0),'200 ships');
+  r.fire('ModernObject1NObjects','change','0');
+  assert.equal(summary(1),'No objects');
+  r.fire('ModernObject0NObjects','change','201');
+  assert.equal(m.NObjects[0],200,'invalid count cannot mutate the model');
+  assert.equal(summary(0),'200 ships','invalid count cannot update the summary');
+  r.fire('ModernPreset','change','single');
+  assert.equal(summary(0),'1 transmission tower');
+  assert.equal(summary(1),'No objects');
+  r.fire('ModernCompareTab','click');
+  r.fire('ModernObject0ObjType','change','1');
+  assert.equal(summary(0),'1 measuring rod');
+  assert.equal(m.ObjType[0],1,'Compare edits the shared object model');
+});
+
 test('131 HTML controls and isolated module order are explicit and no Legacy handlers are loaded',()=>{
   const html=read('CurvatureModern.html');
   const ids=[...html.matchAll(/\sid="([^"]+)"/g)].map(x=>x[1]);

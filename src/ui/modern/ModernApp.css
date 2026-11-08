@@ -349,3 +349,15 @@ button{cursor:pointer}
 .modern-physics-caution[hidden],.modern-workspace-fold[hidden]{display:none!important}
 .modern-workspace-fold .modern-display-inline-actions{margin-top:6px;margin-bottom:4px}
 .modern-workspace-fold .modern-atmosphere-info{margin:4px 0 10px}
+
+/* Modern Objects: the six commonly edited fields remain visible; optional
+   variation controls are nested native details with workspace persistence. */
+.modern-object-panel-intro{margin:2px 0 10px}
+.modern-object-panel-intro .modern-display-hint{color:#6f8195;font-size:11px}
+.modern-objects.modern-workspace-fold{margin:8px 0;border:1px solid #dce5ef;border-radius:8px;background:#fafcff}
+.modern-objects.modern-workspace-fold>summary{padding:11px 12px}
+.modern-objects>.modern-workspace-fold-content{padding:0 0 5px}
+.modern-object-variations.modern-workspace-fold{margin:2px 11px 6px;border-top:1px solid #dce5ef}
+.modern-object-variations.modern-workspace-fold>summary{padding:9px 0;color:#355b82;font-size:11px}
+.modern-object-variations .modern-object-grid{padding:5px 0 0}
+.modern-objects .modern-fold-summary{font-size:10px;max-width:60%;line-height:1.35}

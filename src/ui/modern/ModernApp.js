@@ -468,6 +468,7 @@
     'surface.geometry':true,'atmosphere.profile':true,'atmosphere.explanation':false,
     'atmosphere.visibility':false,'atmosphere.shimmer':false,
     'objects.group1':true,'objects.group2':false,
+    'objects.group1.variations':false,'objects.group2.variations':false,
     'display.advanced':false,'display.diagnostics':false,'display.gpu':false,'display.profiler':false
   };
   function preferencesStorage(){
@@ -559,6 +560,10 @@
         ['ModernCompareAtmosphereVisibilitySection','atmosphere.visibility'],
         ['ModernSceneAtmosphereShimmerSection','atmosphere.shimmer'],
         ['ModernCompareAtmosphereShimmerSection','atmosphere.shimmer'],
+        ['ModernObjectGroup0','objects.group1'],
+        ['ModernObjectGroup1','objects.group2'],
+        ['ModernObjectVariations0','objects.group1.variations'],
+        ['ModernObjectVariations1','objects.group2.variations'],
         ['ModernDisplayAdvanced','display.advanced'],
         ['ModernDisplayDiagnostics','display.diagnostics'],
         ['ModernDisplayGpu','display.gpu'],
@@ -897,6 +902,7 @@
     if(mode)mode.textContent=(model.viewcenterHorizon===3?'Eye level':'Camera aim '+model.viewcenterHorizon)+
       ' · '+(model.showModel===2?'Flat surface':'Globe');
     var pill=el('ModernModePill');if(pill)pill.textContent=state.mode.toUpperCase();
+    updateObjectGroupSummaries();
     var wrap=el('ModernOcclusionWrap');
     if(wrap)wrap.hidden=!['inverse-spherical','exponential-occlusion','profile-transition','inverse-temperature'].includes(state.atmosphere);
     showLegacyOption('ModernAtmosphere',state.atmosphere);
@@ -2620,7 +2626,7 @@
     var preset=el('ModernPreset');if(preset)preset.value='custom';
   }
   function applyField(action,raw,label){
-    try{action(raw);markCustom();redraw();return true;}
+    try{action(raw);markCustom();updateObjectGroupSummaries();redraw();return true;}
     catch(error){updateStatus('Invalid '+label+': '+error.message,true);return false;}
   }
   function cancelEdits(){
@@ -2699,27 +2705,51 @@
     }
     refreshLabels();
   }
+  // Labels are derived from the model, never from controls that may be hidden
+  // by a native <details>. Collapsing sections does not change physical state.
+  function updateObjectGroupSummaries(){
+    var names={0:['Bedford marker','Bedford markers'],1:['measuring rod','measuring rods'],
+      2:['ship','ships'],3:['transmission tower','transmission towers']};
+    for(var i=0;i<2;i++){
+      var count=Number(model.NObjects[i]);
+      var types=names[model.ObjType[i]]||['object','objects'];
+      var summary=newUiEl('ModernObjectGroupSummary'+i);
+      if(summary)summary.textContent=count===0?'No objects':
+        count+' '+types[count===1?0:1];
+      var variations=newUiEl('ModernObjectVariationSummary'+i);
+      if(variations){
+        var side=Number(model.ObjSideVar[i])!==0,size=Number(model.ObjSizeVar[i])!==0;
+        variations.textContent=side&&size?'Offset + size':side?'Offset varied':
+          size?'Size varied':'No variation';
+      }
+    }
+  }
   function objectFieldMarkup(i){
     var fields=[
       ['NObjects','Count','number',0,200,1],['ObjType','Object type','select'],
       ['ObjDist','Start distance (m)','number',0,10000000,'any'],
       ['ObjDeltaDist','Spacing (m)','number',0.001,10000000,'any'],
       ['ObjSidePos','Lateral offset (m)','number',-10000000,10000000,'any'],
-      ['ObjSize','Object height / size (m)','number',0.001,1000000,'any'],
+      ['ObjSize','Height / size (m)','number',0.001,1000000,'any'],
       ['ObjSideType','Offset variation','select'],
-      ['ObjSideVar','Offset variation amplitude (m)','number',-10000000,10000000,'any'],
+      ['ObjSideVar','Offset amplitude (m)','number',-10000000,10000000,'any'],
       ['ObjSizeType','Size variation','select'],
-      ['ObjSizeVar','Size variation amplitude (fraction)','number',-10000,10000,'any']
+      ['ObjSizeVar','Size amplitude (fraction)','number',-10000,10000,'any']
     ];
     var typeOptions=[['3','Transmission tower'],['2','Ship'],['1','Measuring rod'],['0','Bedford marker']];
     var variationOptions=[['0','Linear'],['1','Alternating'],['2','Random'],['3','Cosine'],['4','Sine']];
-    return '<div class="modern-object-grid">'+fields.map(function(row){
+    function field(row){
       var key=row[0],id='ModernObject'+i+key;
       var inner=row[2]==='select'?'<select id="'+id+'" data-group="'+i+'" data-field="'+key+'">'+
         (key==='ObjType'?typeOptions:variationOptions).map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('')+'</select>':
         '<input id="'+id+'" data-group="'+i+'" data-field="'+key+'" type="number" min="'+row[3]+'" max="'+row[4]+'" step="'+row[5]+'">';
       return '<div class="modern-field"><label for="'+id+'">'+row[1]+'</label>'+inner+'</div>';
-    }).join('')+'</div>';
+    }
+    return '<div class="modern-object-grid">'+fields.slice(0,6).map(field).join('')+'</div>'+
+      '<details class="modern-object-variations modern-workspace-fold" id="ModernObjectVariations'+i+'" data-workspace-section="objects.group'+(i+1)+'.variations">'+
+        '<summary>Variations <span class="modern-fold-summary" id="ModernObjectVariationSummary'+i+'">No variation</span></summary>'+
+        '<div class="modern-workspace-fold-content modern-object-grid">'+fields.slice(6).map(field).join('')+'</div>'+
+      '</details>';
   }
   function bindObjectFields(){
     if(!adapter)return;
