@@ -232,8 +232,8 @@ use Fast Preview, visibly labeled as such. Temperature-lapse and other
 unsupported fast profiles use Accurate optics even if slow, rather than a
 scientifically misleading approximation. Leaving Animation or hiding the tab
 pauses playback; changing the draft discards its prepared player. The old
-Camera Animation player is unaffected. Browser pixel/FPS validation and
-permanent Animation Project storage remain outstanding.
+Camera Animation player is unaffected. Browser pixel/FPS validation remains outstanding; named project storage
+was subsequently added in #140.12.120.5.1.
 
 
 ## Implementation update — Physical Parameter Playback (#140.12.120.4)
@@ -321,7 +321,8 @@ At the end of the absolute-time sequence, the terminal sampled state is
 rendered (including exactly Flat where applicable). Recovery does not
 rewind the clock or change timing. Rendering may still be too slow for
 smooth playback; browser verification of visual fidelity and completion is
-required. Named Animation Library project storage remains a separate planned feature.
+required. Named Animation Library project storage was subsequently implemented in
+#140.12.120.5.1.
 
 ## Editable Animation Studio checkpoint (#140.12.120.4.3)
 
@@ -347,8 +348,8 @@ visibility changes and pagehide persist immediately locally. Corrupted or
 unsupported versions are ignored. Browser storage failures are reported
 without deleting existing History or replacing the working Scene/Compare.
 
-There is still only *one* recoverable working draft; the multi-project
-Animation Library and portable import/export are planned separately.
+There is still only *one* recoverable working draft; the separate multi-project
+Animation Library was added in #140.12.120.5.1. Portable import/export remains planned.
 
 ## Initial physical preview after Prepare / F5
 
@@ -428,3 +429,32 @@ interpolation, saved project format, and independent Scene/Compare remain
 unchanged. Regression tests cover Fast → nonqualified curvature → Fast,
 state-specific runtime failure memory, and retry on manual quality change.
 A real-browser visual check in Opera is still necessary.
+
+
+## Named Animation Library foundation (#140.12.120.5.1)
+
+`ModernAnimationLibrary` provides a versioned IndexedDB `projects` store,
+separate from the single `ModernAnimationDraftAutosave` checkpoint and from
+History. The project schema remains the existing immutable
+`ModernAnimationProject.VERSION === 1`: a saved project includes its owned
+experiment, mode and single physical target (if applicable), keyframe values,
+transition timings and easing. A library wrapper adds creation/update time,
+quality preference and a persistent project ID; it does not depend on local
+History records or snapshot thumbnails.
+
+- `create(db, project, optics)`: atomic create-only save (existing IDs rejected).
+- `get(db, id)` and `list(db)`: validated retrieval, newest updates first.
+- `update(db, project, optics, expectedRevision)`: explicit, revision-checked
+  overwrite to protect against cross-tab edits.
+- `remove(db, id)`: delete only the named record; never delete current draft or History.
+- `ModernAnimationStudio.fromProject(project)`: reconstruct independently
+  editable keyframe experiments from the baseline and per-frame arrival times.
+
+The Animation workspace offers Save animation / Save As / Save changes / Open /
+Delete. Opening validates the entire record before replacing the draft and
+starts prepared Playback *paused* at the first frame. Saving is explicit;
+autosave remains scoped to the current editable draft and can restore the
+associated library ID/revision after reload (old v1 checkpoints remain valid).
+A stale revision or IndexedDB failure must produce a visible error, not a
+false success message. Detailed library cards and portable JSON interchange
+are deferred to the next two phases. No separate rendering engine is added.

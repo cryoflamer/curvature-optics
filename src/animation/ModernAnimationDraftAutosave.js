@@ -49,10 +49,19 @@
     var quality=input.quality;
     if(!['auto','accurate','fast'].includes(quality))throw RangeError('Invalid playback quality');
     if(typeof input.prepared!=='boolean')throw RangeError('Invalid prepared flag');
+    // Optional association with a named project; older v1 checkpoints stay valid.
+    var libraryId=input.libraryId===undefined?null:input.libraryId;
+    var libraryRevision=input.libraryRevision===undefined?null:input.libraryRevision;
+    if(libraryId!==null&&(typeof libraryId!=='string'||
+      !/^[A-Za-z0-9_-]{1,80}$/.test(libraryId)))throw RangeError('Invalid saved animation ID');
+    if(libraryId===null){libraryRevision=null;}
+    else if(!Number.isSafeInteger(libraryRevision)||libraryRevision<=0)
+      throw RangeError('Invalid saved animation revision');
     return {version:VERSION,savedAt:input.savedAt,
       draft:{name:string(draft.name,120),description:string(draft.description,1000),
         mode:draft.mode,target:draft.target,source:draft.source,frames:frames},
       selectedKey:selected,quality:quality,prepared:input.prepared,
+      libraryId:libraryId,libraryRevision:libraryRevision,
       positionMs:number(input.positionMs,0,48000000)};
   }
   function checkpoint(value,savedAt){

@@ -396,8 +396,8 @@ frames: slow optics may cause skipped intermediate display frames. Fast Preview
 is labeled **approximate**, while unsupported fast profiles (including
 Temperature lapse) use **Accurate** and may update slowly. Hiding the browser
 tab or leaving Animation pauses playback; editing keyframes invalidates the
-prepared project, which must be prepared again. The preview does not export a
-video or create named Library projects. **Physical parameter playback is now available**.
+prepared project, which must be prepared again. The preview itself does not export a
+video; named projects are saved separately through Animation Library. **Physical parameter playback is now available**.
 See [animation research](docs/modern-animation-research.md) for the clock,
 model-isolation and optical-rendering contract.
 
@@ -420,10 +420,10 @@ future-version checkpoints are ignored, and late IndexedDB restoration cannot ov
 an edit made in the new tab. Extremely large drafts may exceed localStorage quota;
 IndexedDB is the durable fallback, with a visible status if browser storage fails.
 
-This is **working-draft recovery**, not Animation Library: it stores only the current
-draft and does not create named persistent projects or export JSON/video. Creating
-a new draft overwrites the previous autosave; saving several distinct animations
-is planned for #140.12.120.5. The Scene/Compare experiment is not modified.
+This is **working-draft recovery**, separate from the named Animation Library:
+it stores only the current draft. Creating a new draft overwrites the prior
+autosave, but named saved projects remain independent. Portable JSON/video
+export is not yet implemented. The Scene/Compare experiment is not modified.
 
 ### Animation preview initial frame and reload redraw
 
@@ -481,3 +481,31 @@ During a slow render the playback clock may move ahead of the last rendered
 frame, which is reported separately. The atmospheric temperature column is
 not yet supported in the isolated Animation viewport. Details: [animation
 research](docs/modern-animation-research.md).
+
+### Named Animation Library — durable project foundation (#140.12.120.5.1)
+
+Animation Studio now has a compact **Animation Library** toolbar, separate from
+History and from the single automatic draft checkpoint. For a compatible set
+of frames, **Save animation** creates a new named project in its own IndexedDB
+store; **Save As** creates another independent copy. Select a project and use
+**Open** to load its editable keyframes and optics settings, with playback
+prepared and paused at frame zero. **Save changes** explicitly updates the
+opened project; simply editing a draft never overwrites a saved animation.
+**Delete** confirms removal of the selected library project while retaining
+the current draft. The toolbar reports storage and validation errors.
+
+Each library record embeds a fully validated `ModernAnimationProject` with its
+base physical experiment and keyframe values. History snapshot IDs are only
+provenance: removing, pruning, or renaming the source snapshots does not change
+saved animation playback. Opening a project reconstructs an owned editable
+Studio draft, not a live Scene/Compare state. The automatic draft continues to
+save independently, including the associated library ID and revision after F5.
+If a different tab changes a named project before **Save changes**, a revision
+check rejects the stale write; use **Open** or **Save As** instead. An unavailable
+IndexedDB database is reported rather than claiming that a project was saved.
+
+This patch implements durable model operations and an initial small toolbar;
+rich project cards, thumbnail management and in-place rename are planned for
+#140.12.120.5.2, while JSON import/export belongs to #140.12.120.5.3.
+There is no video export, background rendering, change to optical physics,
+new HTML entrypoint, or Legacy change.

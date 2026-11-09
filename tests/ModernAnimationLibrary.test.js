@@ -1,0 +1,187 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const library=require('../src/animation/ModernAnimationLibrary');
+const studio=require('../src/animation/ModernAnimationStudio');
+const animation=require('../src/animation/ModernAnimationProject');
+const codec=require('../src/ui/modern/ModernExperimentState');
+const compare=require('../src/ui/modern/ModernCompareState');
+
+function experiment(){
+  const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+    CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+    showModel:1,rEarth:6371000,showGrid:1,DemoText:'Animation Library test',Description:'',
+    ObjType:[3,3],NObjects:[2,0],ObjDist:[50,20000],ObjDeltaDist:[300,300],
+    ObjSideType:[0,0],ObjSidePos:[0,0],ObjSideVar:[0,0],ObjSizeType:[0,0],
+    ObjSize:[10,10],ObjSizeVar:[0,0]};
+  return codec.capture(model,{atmosphere:'standard',occlusionRadius:6371000,
+    preset:'custom',resetPreset:'single'},compare.preset('globe-flat-vacuum'),
+    {mode:'scene',eyeLevel:true,horizon:true,selected:'A'});
+}
+function source(){
+  const a=experiment(),b=structuredClone(a);b.scene.surface.showModel=2;
+  const draft=studio.history([11,12],[{id:11,name:'Globe',experiment:a},
+    {id:12,name:'Flat',experiment:b}]);
+  return studio.edit(draft,'name','Globe to Flat');
+}
+function memoryIndexedDB(){
+  const records=new Map();let exists=false;
+  return {open(name,version){
+    assert.equal(name,library.DATABASE);assert.equal(version,1);
+    const request={result:null,error:null};
+    queueMicrotask(()=>{
+      const db={objectStoreNames:{contains:()=>exists},
+        createObjectStore(name,opts){assert.equal(name,library.STORE);assert.equal(opts.keyPath,'id');exists=true;},
+        close(){},transaction(name,mode){
+          assert.equal(name,library.STORE);
+          let pending=0,finished=false;
+          const tx={oncomplete:null,onabort:null,onerror:null,error:null,
+            abort(){finished=true;queueMicrotask(()=>tx.onabort&&tx.onabort());},
+            objectStore(){
+              function operation(method,key,value){
+                const r={result:undefined,error:null,onsuccess:null};pending++;
+                queueMicrotask(()=>{
+                  if(finished)return;
+                  if(method==='get')r.result=records.get(key)?structuredClone(records.get(key)):undefined;
+                  if(method==='all')r.result=[...records.values()].map(v=>structuredClone(v));
+                  if(method==='put'||method==='add'){
+                    assert.equal(mode,'readwrite');
+                    const id=value.id;
+                    if(method==='add'&&records.has(id)){
+                      finished=true;tx.error=Error('Constraint');tx.onerror&&tx.onerror();return;
+                    }
+                    records.set(id,structuredClone(value));
+                  }
+                  if(method==='delete')records.delete(key);
+                  r.onsuccess&&r.onsuccess();pending--;
+                  if(pending===0&&!finished){finished=true;queueMicrotask(()=>tx.oncomplete&&tx.oncomplete());}
+                });return r;
+              }
+              return {get:k=>operation('get',k),getAll:()=>operation('all'),
+                put:v=>operation('put',null,v),add:v=>operation('add',null,v),
+                delete:k=>operation('delete',k)};
+            }};
+          return tx;
+        }};
+      request.result=db;
+      if(!exists)request.onupgradeneeded();
+      request.onsuccess();
+    });return request;
+  }};
+}
+
+test('named projects round-trip without History and retain exact physical endpoints',async()=>{
+  const db=memoryIndexedDB();const initial=source();
+  const first=studio.build(initial,'animation_one');
+  const stored=await library.create(db,first,'accurate',1000);
+  assert.equal(stored.createdAt,1000);assert.equal(stored.updatedAt,1000);
+  assert.deepEqual(await library.get(db,'animation_one'),stored);
+  assert.equal((await library.list(db)).length,1);
+  const loaded=studio.fromProject(stored.project);
+  assert.equal(loaded.name,'Globe to Flat');
+  assert.equal(loaded.frames[0].sourceSnapshotId,11);
+  assert.equal(loaded.frames[1].sourceSnapshotId,12);
+  assert.equal(animation.sampleAt(studio.build(loaded,'animation_one'),5000).scene.surface.showModel,2);
+  assert.deepEqual(studio.build(loaded,'animation_one'),stored.project);
+  // Destroy the in-memory source and test that History data is irrelevant.
+  initial.frames[0].experiment.scene.surface.rEarth=9000000;
+  assert.equal(animation.sampleAt((await library.get(db,'animation_one')).project,0)
+    .scene.surface.rEarth,6371000);
+  assert.equal((await library.get(db,'animation_one')).project.keyframes.length,2);
+});
+
+test('Save As owns another ID and Save Changes uses optimistic revisions',async()=>{
+  const db=memoryIndexedDB();const sourceDraft=source();
+  const first=await library.create(db,studio.build(sourceDraft,'animation_a'),'fast',100);
+  const second=await library.create(db,studio.build(sourceDraft,'animation_b'),'accurate',120);
+  assert.equal((await library.list(db))[0].id,'animation_b');
+  await assert.rejects(library.create(db,first.project,'fast',130),/already exists/);
+  const changed=studio.edit(sourceDraft,'description','A later explanation');
+  const updated=await library.update(db,studio.build(changed,'animation_a'),'accurate',100,200);
+  assert.equal(updated.createdAt,100);assert.equal(updated.updatedAt,200);
+  assert.equal(updated.project.description,'A later explanation');
+  assert.equal((await library.get(db,'animation_b')).project.description,'');
+  await assert.rejects(library.update(db,first.project,'fast',100,220),/another tab/);
+  await assert.rejects(library.update(db,studio.build(sourceDraft,'missing'),'fast',100),/deleted/);
+  assert.equal(await library.remove(db,'animation_a'),true);
+  assert.equal(await library.remove(db,'animation_a'),false);
+  assert.equal((await library.list(db)).length,1);
+  assert.equal(second.project.name,'Globe to Flat');
+});
+
+test('invalid projects never enter storage and malformed records are rejected',async()=>{
+  const db=memoryIndexedDB();
+  const good=studio.build(source(),'valid_one');
+  assert.throws(()=>library.record({...good,name:''},'fast','valid_one',1,1),/text/);
+  assert.throws(()=>library.record(good,'wat','valid_one',1,1),/optics/);
+  assert.throws(()=>library.record(good,'fast','wrong_id',1,1),/ID/);
+  assert.throws(()=>library.normalize({version:2}),/Unsupported/);
+  assert.throws(()=>library.normalize({version:1,id:'valid_one',project:good,
+    quality:'auto',createdAt:10,updatedAt:9}),/revision/);
+  assert.match(library.makeId({randomUUID:()=> '0000-1111'},300),/^animation_/);
+  await assert.rejects(library.list(null),/IndexedDB/);
+  await assert.rejects(library.get({open(){throw Error('blocked');}},'valid_one'),/blocked/);
+});
+
+test('HTML load order and application expose named project save/open actions separately from draft',()=>{
+  const root=path.join(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
+  const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
+  assert.ok(html.indexOf('ModernAnimationProject.js')<html.indexOf('ModernAnimationLibrary.js'));
+  assert.ok(html.indexOf('ModernAnimationLibrary.js')<html.indexOf('ModernApp.js'));
+  assert.match(html,/id="ModernAnimationLibrary"/);
+  assert.match(app,/studioLibrary\.create\(/);
+  assert.match(app,/studioLibrary\.update\(/);
+  assert.match(app,/studioLibrary\.get\(/);
+  assert.match(app,/studioLibrary\.remove\(/);
+  assert.match(app,/studioLibraryActive\.updatedAt/);
+  assert.match(ui,/Save changes/);
+  assert.match(ui,/Save As/);
+  assert.match(app,/Opening a saved animation replaces the current draft/);
+});
+
+test('saved project association survives F5 without changing older draft checkpoints',()=>{
+  const autosave=require('../src/animation/ModernAnimationDraftAutosave');
+  const draft=source();
+  const basic={draft,selectedKey:'history-11',quality:'auto',prepared:true,positionMs:900};
+  const old=autosave.checkpoint(basic,1000);
+  assert.equal(old.libraryId,null);
+  assert.equal(old.libraryRevision,null);
+  const named=autosave.checkpoint({...basic,libraryId:'animation_abc',libraryRevision:44},1001);
+  assert.equal(named.libraryId,'animation_abc');
+  assert.equal(named.libraryRevision,44);
+  assert.throws(()=>autosave.checkpoint({...basic,libraryId:'!bad',libraryRevision:44},1001),/ID/);
+  assert.throws(()=>autosave.checkpoint({...basic,libraryId:'animation_abc',libraryRevision:null},1001),/revision/);
+});
+
+test('Animation Library controls open real actions and show unsaved edits without duplicating editor',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},
+    textContent:'',className:'',value:'',disabled:false,
+    appendChild(node){this.children.push(node);return node;},
+    addEventListener(name,fn){this.listeners[name]=fn;},
+    setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section'),project=studio.build(source(),'animation_a'),calls=[];
+  const actions={select:id=>calls.push(['select',id]),save:()=>calls.push('save'),
+    saveAs:()=>calls.push('saveAs'),saveChanges:()=>calls.push('saveChanges'),
+    open:()=>calls.push('open'),remove:()=>calls.push('delete')};
+  ui.renderLibrary(doc,host,[library.record(project,'auto','animation_a',10,11)],
+    {selectedId:'animation_a',activeId:'animation_a',canSave:true,dirty:true},actions);
+  const nodes=(function collect(n){return [n,...n.children.flatMap(collect)];})(host);
+  assert.equal(nodes.find(n=>n.tagName==='select').value,'animation_a');
+  assert.ok(nodes.find(n=>n.textContent==='Editing saved project · Unsaved changes'));
+  assert.equal(nodes.find(n=>n.textContent==='Save animation').disabled,true,
+    'opened project uses explicit Save changes or Save As');
+  for(const [label,action] of [['Save changes','saveChanges'],
+      ['Save As','saveAs'],['Open','open'],['Delete','delete']]){
+    const button=nodes.find(n=>n.tagName==='button'&&n.textContent===label);
+    assert.equal(button.disabled,false);button.listeners.click();
+    assert.equal(calls.at(-1),action);
+  }
+  host.children=[];ui.renderLibrary(doc,host,[],{selectedId:'',canSave:false},actions);
+  const empty=(function collect(n){return [n,...n.children.flatMap(collect)];})(host);
+  assert.equal(empty.find(n=>n.textContent==='Save animation').disabled,true);
+});

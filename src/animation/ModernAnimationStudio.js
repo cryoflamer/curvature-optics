@@ -62,6 +62,23 @@
     });
     return draft;
   }
+  // Reconstruct an editable, owned draft from a named Animation Project.
+  // History IDs are provenance only; all image-producing physics comes from
+  // the embedded project, so deleted History snapshots cannot break playback.
+  function fromProject(input){
+    var project=projects.validate(input),arrivals=projects.timeline(project);
+    var draft=blank();
+    draft.name=project.name;draft.description=project.description;draft.mode=project.mode;
+    draft.target=project.target?project.target.scope+'|'+project.target.parameter:'auto';
+    draft.source='mixed';
+    draft.frames=project.keyframes.map(function(frame,i){
+      return {key:'library-'+i,sourceSnapshotId:frame.sourceSnapshotId,
+        name:frame.name,experiment:projects.sampleAt(project,arrivals[i].arrivalMs),
+        travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing};
+    });
+    if(!inspect(draft).compatible)throw RangeError('Saved animation project cannot be edited');
+    return draft;
+  }
   function target(value){
     if(value==='auto')return null;
     var parts=String(value).split('|');
@@ -190,6 +207,6 @@
     }),{id:id,name:draft.name,description:draft.description,
       mode:result.mode,target:result.target});
   }
-  return Object.freeze({blank:blank,history:history,importCamera:importCamera,
+  return Object.freeze({blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
     edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build});
 }));
