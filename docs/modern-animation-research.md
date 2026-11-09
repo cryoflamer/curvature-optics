@@ -298,3 +298,27 @@ confirm that project interpolation itself is correct. An apparent different
 radius paired with that clock label in a screenshot is **not by itself proof**
 of a faulty curvature formula. A real-browser pixel-parity/performance check
 at identical saved Scene and Animation states is still required.
+
+### Runtime Fast → Accurate recovery (#140.12.120.4.2)
+
+Fast capability checks made from the profile name are only advisory: the
+actual optical field builder may reject a geometry/profile combination after
+the preview began. For example, `standard` on `globe` can be rejected by the
+Fast ray-field implementation even when a coarse eligibility check accepted
+it. This is a renderer capability mismatch, not an invalid animation state.
+
+The isolated Animation viewport retries **only** the known `RangeError`
+(`Fast Preview is unavailable for … on …; select Accurate (RK4).`) using
+`opticalQuality: accurate` and full object detail. A per-preview-session
+cache avoids repeatedly probing the same unsupported profile and geometry.
+Both the selected quality and the fallback count are diagnostic, and the
+original project / working Scene / Compare are untouched. In Compare, if
+model B falls back, model A is also redrawn Accurate to avoid silently
+mixing approximations in that frame. Errors from the Accurate retry and all
+unrelated rendering exceptions propagate rather than being swallowed.
+
+At the end of the absolute-time sequence, the terminal sampled state is
+rendered (including exactly Flat where applicable). Recovery does not
+rewind the clock or change timing. Rendering may still be too slow for
+smooth playback; browser verification of visual fidelity and completion is
+required. Persistent project storage remains a separate planned feature.

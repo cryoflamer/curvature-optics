@@ -83,6 +83,21 @@
       B:optics&&optics.create?optics.create():null};
     var models={A:new dependencies.Model(),B:new dependencies.Model()};
     var horizons={A:null,B:null};
+    // The coarse fastEligible check is advisory: the Fast field builder may
+    // reject a specific atmosphere/geometry combination at runtime. Remember
+    // those rejections to avoid retrying an unsupported path on every frame.
+    var fastUnsupported=new Set(),fallbackCount=0;
+    function fastKey(config){
+      var spec=config.spec,model=config.model;
+      return JSON.stringify([model.showModel===2?'flat':'globe',spec.atmosphere,
+        spec.transitionProfile&&spec.transitionProfile.source,
+        spec.transitionProfile&&spec.transitionProfile.weight,
+        spec.inverseProfile&&spec.inverseProfile.weight]);
+    }
+    function isFastUnsupported(error){
+      return error instanceof RangeError &&
+        /^Fast Preview is unavailable for .+ on (?:flat|globe); select Accurate \(RK4\)\.$/.test(error.message);
+    }
     function build(data,side,options){
       options=options||{};
       var validated=experiment.validate(data),scene=validated.scene;
@@ -144,9 +159,26 @@
       if(!graph||!graph.Canvas)throw TypeError('Independent preview Canvas required');
       var config=build(data,side,options);
       if(typeof graph.UpdateCanvasSize==='function')graph.UpdateCanvasSize();
-      var result=renderer.renderPhysical(graph,config.model,config.options);
+      var key=fastKey(config),reason=null,result;
+      if(config.quality==='fast'&&fastUnsupported.has(key)){
+        config.quality='accurate';config.options.opticalQuality='accurate';
+        config.options.previewLod={stride:1};
+        reason='Fast Preview unsupported for this atmosphere / geometry';
+      }
+      try{result=renderer.renderPhysical(graph,config.model,config.options);}
+      catch(error){
+        // Retry only the explicitly declared Fast-capability rejection. A
+        // failed Accurate render (or any other error) must remain visible.
+        if(config.quality!=='fast'||!isFastUnsupported(error))throw error;
+        fastUnsupported.add(key);fallbackCount++;
+        config.quality='accurate';config.options.opticalQuality='accurate';
+        config.options.previewLod={stride:1};
+        reason=error.message;
+        result=renderer.renderPhysical(graph,config.model,config.options);
+      }
       var overlays=guides(config,side,graph);
       return {quality:config.quality,requestedQuality:config.requestedQuality,
+        fallback:reason,fallbackCount:fallbackCount,
         overlays:overlays,result:result};
     }
     return Object.freeze({build:build,render:render});

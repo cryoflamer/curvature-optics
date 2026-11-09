@@ -303,3 +303,79 @@ test('Playback quality and rendered frame time are displayed distinctly from the
   assert.match(app,/image at /);
   assert.match(app,/studioPrepared.mode/);
 });
+
+test('Unsupported fast frame falls back to Accurate, then skips repeated failed fast attempts',()=>{
+  const source=snapshot(),before=structuredClone(source),calls=[];
+  class FakeModel {Update(){}}
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(graph,model,options)=>{
+    calls.push({quality:options.opticalQuality,geometry:model.showModel});
+    if(options.opticalQuality==='fast')throw RangeError(
+      'Fast Preview is unavailable for standard on globe; select Accurate (RK4).');
+    return {drawn:42};
+  }}});
+  const graph={Canvas:{}};
+  const first=view.render(source,'A',graph,{quality:'fast',animationMode:'physical'});
+  assert.equal(first.quality,'accurate');assert.equal(first.result.drawn,42);
+  assert.match(first.fallback,/Fast Preview is unavailable/);
+  assert.equal(first.fallbackCount,1);
+  assert.deepEqual(calls.map(x=>x.quality),['fast','accurate']);
+  const second=view.render(source,'A',graph,{quality:'fast',animationMode:'physical'});
+  assert.equal(second.quality,'accurate');assert.ok(second.fallback);
+  assert.equal(second.fallbackCount,1,'fallback should be counted once per failed probe');
+  assert.deepEqual(calls.map(x=>x.quality),['fast','accurate','accurate']);
+  assert.deepEqual(source,before,'recovery must not mutate source snapshot');
+});
+
+test('Fast recovery does not mask arbitrary errors or a failing Accurate retry',()=>{
+  const source=snapshot(),graph={Canvas:{}};
+  class FakeModel {Update(){}}
+  const unexpected=preview.create({Model:FakeModel,renderer:{renderPhysical:()=>{
+    throw RangeError('Unexpected optical failure');
+  }}});
+  assert.throws(()=>unexpected.render(source,'A',graph,{quality:'fast'}),
+    /Unexpected optical failure/);
+  let attempts=0;
+  const brokenAccurate=preview.create({Model:FakeModel,renderer:{renderPhysical:(g,m,o)=>{
+    attempts++;
+    if(o.opticalQuality==='fast')throw RangeError(
+      'Fast Preview is unavailable for standard on globe; select Accurate (RK4).');
+    throw Error('RK4 solver failed');
+  }}});
+  assert.throws(()=>brokenAccurate.render(source,'A',graph,{quality:'fast'}),/RK4 solver failed/);
+  assert.equal(attempts,2,'exactly one Accurate retry');
+});
+
+test('Playback status reports the actual rendered quality and fallback count',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(app,/Fast fallback\(s\):/);
+  assert.match(app,/b&&b\.fallback&&a\.quality==='fast'/);
+  assert.match(app,/quality:'accurate',animationMode:studioPrepared\.mode/);
+});
+
+test('Globe to Flat reaches the terminal frame after a fast rejection without clock mutation',()=>{
+  const globe=snapshot(),flat=structuredClone(globe);
+  flat.scene.surface.showModel=2;
+  const p=project.create([{experiment:globe},{experiment:flat,travelMs:5000}],
+    {id:'fallback_terminal',name:'Curvature recovery'});
+  const controller=playback.create(p),seen=[];
+  class FakeModel {Update(){}}
+  const renderer=preview.create({Model:FakeModel,renderer:{renderPhysical:(g,m,o)=>{
+    seen.push({quality:o.opticalQuality,flat:m.showModel===2});
+    if(o.opticalQuality==='fast')throw RangeError(
+      'Fast Preview is unavailable for standard on globe; select Accurate (RK4).');
+    return {drawn:12};
+  }}});
+  controller.start(100);
+  controller.tick(3600);
+  const intermediate=renderer.render(controller.sample(),'A',{Canvas:{}},
+    {quality:'fast',animationMode:'physical'});
+  assert.equal(intermediate.quality,'accurate');
+  controller.tick(5100);
+  assert.equal(controller.status().playing,false);
+  assert.equal(controller.status().positionMs,5000);
+  const terminal=renderer.render(controller.sample(),'A',{Canvas:{}},
+    {quality:'fast',animationMode:'physical'});
+  assert.equal(terminal.quality,'accurate');
+  assert.equal(seen.at(-1).flat,true);
+  assert.equal(controller.sample().scene.surface.showModel,2);
+});

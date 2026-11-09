@@ -418,7 +418,14 @@ absolute-time playback may skip displayed frames. See
 In **Animation**, the **Optics** selector controls the isolated renderer.
 **Auto** means Accurate RK4 for curvature/temperature animations (Fast only
 for qualified camera motion); explicit Accurate is also available, while
-**Fast if supported** is an opt-in approximation. The current frame displays
+**Fast if supported** is an opt-in approximation. When the physical
+renderer rejects a Fast atmosphere/geometry combination at runtime, the
+Animation preview automatically retries that frame using Accurate RK4
+instead of stopping Playback. Rejected combinations are remembered for the
+current preview session, so repeated frames use Accurate directly. The
+render diagnostics expose the actual quality and the number of Fast fallbacks;
+other optical failures remain visible rather than being hidden by retries.
+The final Flat frame is still sampled at its exact animation time. The current frame displays
 its sampled time, calculation time, quality per viewport and whether the
 Eye level and Traced horizon overlays were drawn or were unavailable.
 Eye level and the exact forward-RK4 Traced horizon respect the original

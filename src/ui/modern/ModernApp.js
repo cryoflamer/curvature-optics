@@ -1060,6 +1060,10 @@
     var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
     var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
     var spent=profileNow()-begun;
+    // When Model B discovers an unsupported fast configuration, repaint A
+    // in Accurate too: a Compare frame must not silently mix approximations.
+    if(b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
+      {quality:'accurate',animationMode:studioPrepared.mode});
     var fast=a.quality==='fast'&&(!b||b.quality==='fast');
     var qualityNode=newUiEl('ModernAnimationPlaybackQuality');
     if(qualityNode)qualityNode.textContent=fast?'Fast Preview · approximate':
@@ -1073,11 +1077,14 @@
           ' · horizon '+(overlays.horizon||'unknown');
       }
       var drawn=a.result||{};
+      var fallbacks=Math.max(a.fallbackCount||0,b&&b.fallbackCount||0);
+      var fallbackNote=(a.fallback||b&&b.fallback)?' · Fast → Accurate fallback':'';
       diagnostic.textContent='Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
         (studioPlayback.status().durationMs/1000).toFixed(2)+'s · frame '+
         Math.round(spent)+' ms · '+describe(a,isCompare?'A':'Scene')+
         (isCompare?' · '+describe(b,'B'):'')+
         (Number.isFinite(drawn.drawn)?' · '+drawn.drawn+' visible segments':'')+
+        fallbackNote+' · Fast fallback(s): '+fallbacks+
         (spent>500?' · slow calculation: playback may skip intermediate frames':'');
     }
     // This timestamp always corresponds to the pixels just drawn. The
