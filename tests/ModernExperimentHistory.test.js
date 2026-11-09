@@ -493,7 +493,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'curvature-modern-application-preferences-v1')).historyStoryboardQueue,queue,
     're-adding a checked card never duplicates or reorders earlier picks');
   const storyboardList=nodes.get('ModernHistoryStoryboardQueue');
-  storyboardList.children[1].children[0].children[1].listeners.click({stopPropagation(){}});
+  storyboardList.children[1].children[3].children[0].listeners.click({stopPropagation(){}});
   assert.equal(JSON.parse(rootWindow.localStorage.data.get(
     'curvature-modern-application-preferences-v1')).historyStoryboardQueue[0],shownScene[0].id,
     'moving a picked frame changes saved order without rewriting a snapshot');

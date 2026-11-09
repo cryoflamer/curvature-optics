@@ -400,3 +400,29 @@ There is no Play, Seek, accurate frame rendering, permanent Animation Project
 store or portable animation export yet; those are upcoming stages. Reloading
 the page resets the editor draft. History snapshot IDs in a prepared project
 are optional provenance, not runtime dependencies.
+
+## Compact Storyboard and Animation Studio editor (#140.12.120.2.1)
+
+The **Storyboard shortlist** now presents an ordered, horizontally scrolling
+strip of compact screenshot cards, using the existing saved History thumbnails.
+Each card includes its ordinal, user-given name and a brief physical summary:
+Scene or Compare A/B geometry, atmosphere and shared camera height. Long names
+have a tooltip. The arrow and remove buttons still edit only the shortlist;
+renaming, restoring or mutating the original experiment is not performed by
+these controls. A missing thumbnail has an explicit **No screenshot** label:
+listing an experiment never re-renders it merely to invent a thumbnail.
+
+The **Animation Studio** is constrained to a readable maximum width. Its
+horizontal timeline displays the same saved thumbnails and marks the selected
+keyframe with a visible border and `aria-pressed` state. Only **one selected
+frame** has expanded timing and naming fields; move/remove controls act on
+that frame. Selection is maintained across name, timing and ordering changes,
+and moves to a surviving adjacent frame if the selected frame is removed.
+The strip can scroll independently of the page. Imported Camera Animation
+frames do not have History screenshots and are labeled accordingly rather
+than showing an unrelated saved image. On narrow screens the cards remain
+small and horizontally scrollable instead of stretching to the screen width.
+
+This change is **presentation-only**: it does not alter the compatibility
+validator, `ModernAnimationProject`, existing History ID semantics or live
+physics. The Studio draft still lives in memory, with no playback or export.

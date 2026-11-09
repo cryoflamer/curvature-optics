@@ -474,6 +474,8 @@
   var historyPanelOpen=false;
   var historyStoryboardQueue=[];
   var studioDraft=studioApi?studioApi.blank():null;
+  var studioSelectedKey=null;
+  var studioFilmstripScroll=0;
   var studioPrepared=null;
   var historyFilters={query:'',mode:'all',geometry:'any',atmosphere:'any',
     geometryRelation:'any',refractionRelation:'any'};
@@ -964,6 +966,7 @@
     if(count)count.textContent=historyStoryboardQueue.length+' '+(historyStoryboardQueue.length===1?'frame':'frames');
     var clear=newUiEl('ModernHistoryQueueClear');
     if(clear)clear.disabled=historyStoryboardQueue.length===0;
+    var previousScroll=queue?queue.scrollLeft:0;
     if(historyUI&&historyUI.renderStoryboardQueue)
       historyUI.renderStoryboardQueue(document,queue,historyStoryboardQueue,entries,{
         move:function(id,step){
@@ -978,6 +981,7 @@
           saveApplicationPreferences();renderHistoryStoryboard(entries);
         }
       });
+    if(queue)queue.scrollLeft=previousScroll;
   }
   // Animation Studio is a temporary, self-contained draft, not a new History
   // store or a live renderer. The shortlist and old camera sequence are read
@@ -987,8 +991,15 @@
     if(!studioApi||!studioUI||!host)return;
     if(!studioDraft)studioDraft=studioApi.blank();
     var assessment=studioApi.inspect(studioDraft);
+    var resetFilmstrip=studioSelectedKey===null;
+    if(!studioDraft.frames.some(function(f){return f.key===studioSelectedKey;}))
+      studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
+    var oldStrip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
+    if(oldStrip&&!resetFilmstrip)studioFilmstripScroll=oldStrip.scrollLeft;
     function update(next){
       studioDraft=next;studioPrepared=null;
+      if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
+        studioSelectedKey=next.frames.length?next.frames[0].key:null;
       var status=newUiEl('ModernAnimationStudioMessage');
       if(status){status.textContent='';status.classList.remove('is-error');}
       renderAnimationStudio(entries);
@@ -1000,17 +1011,30 @@
     function safe(action){try{action();}catch(error){report(error);}}
     studioUI.render(document,host,studioDraft,assessment,{
       load:function(){safe(function(){
+        studioSelectedKey=null;studioFilmstripScroll=0;
         update(studioApi.history(historyStoryboardQueue,entries,studioDraft));
       });},
       importCamera:function(){safe(function(){
+        studioSelectedKey=null;studioFilmstripScroll=0;
         update(studioApi.importCamera(experimentSnapshot(),cameraSequence,studioDraft));
       });},
       edit:function(field,value){safe(function(){update(studioApi.edit(studioDraft,field,value));});},
       frame:function(key,field,value){safe(function(){
         update(studioApi.editFrame(studioDraft,key,field,value));
       });},
+      select:function(key){
+        studioSelectedKey=key;renderAnimationStudio(entries);
+        var active=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-active');
+        if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
+      },
       move:function(key,step){safe(function(){update(studioApi.move(studioDraft,key,step));});},
-      remove:function(key){safe(function(){update(studioApi.remove(studioDraft,key));});},
+      remove:function(key){safe(function(){
+        var index=studioDraft.frames.findIndex(function(f){return f.key===key;});
+        var next=studioApi.remove(studioDraft,key);
+        if(studioSelectedKey===key)
+          studioSelectedKey=next.frames.length?next.frames[Math.min(index,next.frames.length-1)].key:null;
+        update(next);
+      });},
       prepare:function(){safe(function(){
         studioPrepared=studioApi.build(studioDraft,'studio_draft');
         renderAnimationStudio(entries);
@@ -1018,7 +1042,9 @@
         if(status){status.classList.remove('is-error');
           status.textContent='Animation project prepared in memory. Playback and permanent saving are not implemented yet.';}
       });}
-    },!!studioPrepared);
+    },!!studioPrepared,{selectedKey:studioSelectedKey,entries:entries});
+    var strip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
+    if(strip)strip.scrollLeft=studioFilmstripScroll;
   }
   var historyMetadataEditingId=null;
   function closeHistoryMetadataEditor(){

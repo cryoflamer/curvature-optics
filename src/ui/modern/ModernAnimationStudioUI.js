@@ -1,11 +1,14 @@
-/* DOM-only editor for an in-memory Animation Studio draft. History remains
- * authoritative for choosing snapshots; building does not trigger playback.
+/* Compact DOM-only editor for an in-memory animation draft. The filmstrip
+ * resolves saved thumbnails from History but never captures or renders optics.
  */
 (function(root,factory){
-  var api=factory();
+  var historyUI=root.CurvatureModernExperimentHistoryUI;
+  if(typeof module==='object'&&module.exports)
+    historyUI=require('./ModernExperimentHistoryUI');
+  var api=factory(historyUI);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(){
+}(typeof globalThis!=='undefined'?globalThis:this,function(historyUI){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
@@ -33,16 +36,26 @@
     control.addEventListener('change',function(){action(control.value);});
     wrapper.appendChild(control);return wrapper;
   }
-  function render(doc,host,draft,result,actions,prepared){
+  function frameEntry(frame,entries){
+    var match=frame.sourceSnapshotId!==null&&entries.find(function(item){
+      return item.id===frame.sourceSnapshotId;
+    });
+    // No thumbnail for imported camera frames: showing another frame's
+    // screenshot would falsely imply the physical view had been rendered.
+    return match||{name:frame.name,experiment:frame.experiment,thumbnail:null};
+  }
+  function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
+    options=options||{};
+    var entries=options.entries||[];
+    var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
     host.textContent='';
     var heading=el(doc,'div','modern-studio-header');
     heading.appendChild(el(doc,'strong','','Animation Studio · Draft editor'));
     heading.appendChild(el(doc,'span','',draft.frames.length+' frames'));
     host.appendChild(heading);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Load your ordered History shortlist, or import the current Camera Animation. ' +
-      'Editing this draft does not change saved snapshots or your current experiment.'));
+      'Select a thumbnail to edit one keyframe. The current experiment and saved History are not changed.'));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     toolbar.appendChild(button(doc,'Load History shortlist','Replace draft with ordered History shortlist',actions.load));
     toolbar.appendChild(button(doc,'Import Camera Animation','Import existing camera keyframes into draft',actions.importCamera));
@@ -82,32 +95,51 @@
       status.appendChild(list);
     }
     host.appendChild(status);
-    var frames=el(doc,'ol','modern-studio-frames');
+
+    var filmstrip=el(doc,'ol','modern-studio-filmstrip');
+    filmstrip.setAttribute('aria-label','Animation keyframe timeline');
     draft.frames.forEach(function(frame,i){
-      var item=el(doc,'li','modern-studio-frame');
-      var header=el(doc,'div','modern-studio-frame-header');
-      header.appendChild(el(doc,'strong','',(i+1)+'. '+frame.name));
-      var controls=el(doc,'div','modern-studio-toolbar');
-      var earlier=button(doc,'↑','Move animation frame '+(i+1)+' earlier',function(){actions.move(frame.key,-1);});
-      earlier.disabled=i===0;controls.appendChild(earlier);
-      var later=button(doc,'↓','Move animation frame '+(i+1)+' later',function(){actions.move(frame.key,1);});
-      later.disabled=i===draft.frames.length-1;controls.appendChild(later);
-      controls.appendChild(button(doc,'×','Remove animation frame '+(i+1),function(){actions.remove(frame.key);}));
-      header.appendChild(controls);item.appendChild(header);
-      if(frame.sourceSnapshotId!==null)item.appendChild(el(doc,'small','','History snapshot #'+frame.sourceSnapshotId));
-      else item.appendChild(el(doc,'small','','Imported camera view'));
-      var fields=el(doc,'div','modern-studio-frame-fields');
-      fields.appendChild(field(doc,'Frame name',frame.name,'text',function(value){actions.frame(frame.key,'name',value);}));
-      if(i>0)fields.appendChild(field(doc,'Travel to frame (s)',frame.travelMs/1000,'number',
-        function(value){actions.frame(frame.key,'travelMs',value);}));
-      fields.appendChild(field(doc,'Hold after arrival (s)',frame.holdMs/1000,'number',
-        function(value){actions.frame(frame.key,'holdMs',value);}));
-      if(i>0)fields.appendChild(field(doc,'Easing',frame.easing,'select',function(value){
-        actions.frame(frame.key,'easing',value);
-      },[['linear','Linear'],['smoothstep','Ease in / out']]));
-      item.appendChild(fields);frames.appendChild(item);
+      var entry=frameEntry(frame,entries),item=el(doc,'li','modern-studio-filmstrip-item');
+      var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name,function(){
+        if(actions.select)actions.select(frame.key);
+      });
+      pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'');
+      pick.setAttribute('aria-pressed',String(frame===selected));
+      pick.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-keyframe-visual'));
+      var name=el(doc,'strong','modern-studio-keyframe-name',(i+1)+'. '+frame.name);
+      name.title=frame.name;pick.appendChild(name);
+      var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
+      summary.title=summary.textContent;pick.appendChild(summary);
+      item.appendChild(pick);filmstrip.appendChild(item);
     });
-    host.appendChild(frames);
+    host.appendChild(filmstrip);
+    if(selected){
+      var index=draft.frames.indexOf(selected);
+      var panel=el(doc,'section','modern-studio-selected-frame');
+      var header=el(doc,'div','modern-studio-frame-header');
+      header.appendChild(el(doc,'strong','modern-studio-selected-heading',
+        'Selected keyframe · '+(index+1)+' / '+draft.frames.length));
+      var controls=el(doc,'div','modern-studio-toolbar');
+      var earlier=button(doc,'↑','Move animation frame '+(index+1)+' earlier',function(){actions.move(selected.key,-1);});
+      earlier.disabled=index===0;controls.appendChild(earlier);
+      var later=button(doc,'↓','Move animation frame '+(index+1)+' later',function(){actions.move(selected.key,1);});
+      later.disabled=index===draft.frames.length-1;controls.appendChild(later);
+      controls.appendChild(button(doc,'×','Remove animation frame '+(index+1),function(){actions.remove(selected.key);}));
+      header.appendChild(controls);panel.appendChild(header);
+      panel.appendChild(el(doc,'small','modern-studio-frame-source',
+        selected.sourceSnapshotId===null?'Imported camera view':
+          'History snapshot #'+selected.sourceSnapshotId));
+      var fields=el(doc,'div','modern-studio-frame-fields');
+      fields.appendChild(field(doc,'Frame name',selected.name,'text',function(value){actions.frame(selected.key,'name',value);}));
+      if(index>0)fields.appendChild(field(doc,'Travel to frame (s)',selected.travelMs/1000,'number',
+        function(value){actions.frame(selected.key,'travelMs',value);}));
+      fields.appendChild(field(doc,'Hold after arrival (s)',selected.holdMs/1000,'number',
+        function(value){actions.frame(selected.key,'holdMs',value);}));
+      if(index>0)fields.appendChild(field(doc,'Easing',selected.easing,'select',function(value){
+        actions.frame(selected.key,'easing',value);
+      },[['linear','Linear'],['smoothstep','Ease in / out']]));
+      panel.appendChild(fields);host.appendChild(panel);
+    }
     var footer=el(doc,'div','modern-studio-toolbar');
     var prepare=button(doc,'Prepare project','Validate and prepare an in-memory animation project',actions.prepare);
     prepare.disabled=!result.compatible;footer.appendChild(prepare);
@@ -115,8 +147,8 @@
       'Project prepared in memory · Playback and permanent saving come later'));
     host.appendChild(footer);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'This editor is a draft: it does not play, render, export or permanently save an animation. ' +
-      'The History shortlist remains separate and unchanged.'));
+      'This draft cannot play, render, export or permanently save an animation yet. ' +
+      'History shortlist and its ordering remain independent.'));
   }
   return Object.freeze({render:render});
 }));

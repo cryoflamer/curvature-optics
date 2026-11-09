@@ -17,6 +17,41 @@
     return 'Scene · '+(f.scene&&f.scene.geometry&&f.scene.geometry.kind==='flat'?'Flat':'Globe');
   }
   function displayName(entry){return entry.name&&entry.name.trim()?entry.name:label(entry);}
+  // Shared compact identity for the shortlist and Animation Studio. This is
+  // presentation only: never capture a fresh thumbnail or mutate experiment state.
+  function frameSummary(entry){
+    var e=entry.experiment||{},scene=e.scene||{},camera=scene.camera||{};
+    var mode=(entry.features&&entry.features.mode)||(e.display&&e.display.mode)||'scene';
+    function model(surface,atmosphere,radius,profile){
+      var name=surface==='flat'?'Flat':'Globe';
+      if(surface!=='flat'&&Number.isFinite(radius))name+=' R '+Math.round(radius)+' km';
+      name+=' · '+(atmosphere||'Atmosphere ?');
+      if(atmosphere==='temperature-lapse'&&profile&&Number.isFinite(profile.gradientKPerKm))
+        name+=' '+Number(profile.gradientKPerKm.toFixed(2))+' K/km';
+      return name;
+    }
+    var parts=[];
+    if(mode==='compare'&&e.compare&&e.compare.A&&e.compare.B){
+      ['A','B'].forEach(function(side){
+        var p=e.compare[side];
+        parts.push(side+': '+model(p.surface,p.atmosphere,p.radiusKm,p.temperatureProfile));
+      });
+    }else if(mode==='scene'&&scene.surface){
+      parts.push(model(scene.surface.showModel===2?'flat':'globe',scene.atmosphere,
+        Number(scene.surface.rEarth)/1000,scene.temperatureProfile));
+    }else parts.push(label(entry));
+    if(Number.isFinite(camera.Height))parts.push('Camera '+Number(camera.Height.toFixed(2))+' m');
+    return parts.join(' | ');
+  }
+  function frameVisual(doc,entry,className){
+    var visual=el(doc,'div',className);
+    if(entry.thumbnail&&entry.thumbnail.dataUrl){
+      var img=el(doc,'img','modern-storyboard-image');
+      img.src=entry.thumbnail.dataUrl;img.alt=displayName(entry)+' saved screenshot';
+      img.loading='lazy';visual.appendChild(img);
+    }else visual.appendChild(el(doc,'span','modern-storyboard-no-image','No screenshot'));
+    return visual;
+  }
   // The inspector reads the already loaded validated experiment. No IndexedDB
   // query, experiment mutation or optical work is performed while hovering.
   function number(value,digits){
@@ -371,9 +406,13 @@
     ids.forEach(function(id,index){
       var entry=records.get(id);
       if(!entry)return;
-      var item=el(doc,'li');
+      var item=el(doc,'li','modern-history-storyboard-item');
+      item.appendChild(frameVisual(doc,entry,'modern-history-storyboard-visual'));
+      var title=el(doc,'strong','modern-history-storyboard-name',(index+1)+'. '+displayName(entry));
+      title.title=displayName(entry);item.appendChild(title);
+      var detail=el(doc,'span','modern-history-storyboard-detail',frameSummary(entry));
+      detail.title=detail.textContent;item.appendChild(detail);
       var line=el(doc,'div','modern-history-storyboard-frame');
-      line.appendChild(el(doc,'span','modern-history-storyboard-name',displayName(entry)));
       function action(symbol,title,disabled,fn){
         var control=button(doc,symbol,title,fn);control.disabled=disabled;
         control.className='modern-history-storyboard-control';
@@ -398,5 +437,5 @@
     });
   }
   return Object.freeze({render:render,select:select,label:label,displayName:displayName,inspect:inspect,
-    hideInspector:hideInspector,setSize:setSize,renderStoryboardQueue:renderStoryboardQueue});
+    hideInspector:hideInspector,setSize:setSize,renderStoryboardQueue:renderStoryboardQueue,frameSummary:frameSummary,frameVisual:frameVisual});
 }));

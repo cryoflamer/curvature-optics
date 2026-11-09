@@ -386,25 +386,36 @@ test('Named snapshots expose description and automatic physical label in Preview
   ui.hideInspector(host);
 });
 
-test('Storyboard shortlist render preserves order and names without physics, with independent moves/removals',()=>{
+test('Storyboard shortlist renders compact real screenshots and distinct physics summaries without touching experiments',()=>{
   const {doc}=dom(),host=doc.createElement('ol'),calls=[];
   Object.defineProperty(host,'textContent',{get(){return '';},set(value){if(value==='')this.children=[];}});
   const first=entry(12,'scene',false),second=entry(22,'compare',true);
   first.name='Globe sunrise';second.name='Refracted skyline';
+  first.experiment.scene={camera:{Height:2},surface:{showModel:1,rEarth:6371000},atmosphere:'vacuum'};
+  second.experiment.scene={camera:{Height:50}};
+  second.experiment.compare={A:{surface:'globe',radiusKm:6371,atmosphere:'vacuum'},
+    B:{surface:'flat',atmosphere:'temperature-lapse',temperatureProfile:{gradientKPerKm:10}}};
+  const original=structuredClone([first,second]);
   ui.renderStoryboardQueue(doc,host,[22,12],[first,second],{
     move:(id,step)=>calls.push(['move',id,step]),
     remove:id=>calls.push(['remove',id])});
   assert.equal(host.children.length,2);
-  assert.equal(host.children[0].children[0].children[0].textContent,'Refracted skyline');
-  assert.equal(host.children[1].children[0].children[0].textContent,'Globe sunrise');
-  const earlier=host.children[0].children[0].children[1];
-  const later=host.children[0].children[0].children[2];
-  assert.equal(earlier.disabled,true);
-  assert.equal(later.disabled,false);
-  later.listeners.click({stopPropagation(){}});
-  host.children[1].children[0].children[3].listeners.click({stopPropagation(){}});
+  const firstCard=host.children[0],secondCard=host.children[1];
+  assert.match(firstCard.className,/modern-history-storyboard-item/);
+  assert.equal(firstCard.children[0].children[0].tagName,'img');
+  assert.match(firstCard.children[0].children[0].src,/^data:image\/webp/);
+  assert.equal(firstCard.children[1].textContent,'1. Refracted skyline');
+  assert.match(firstCard.children[2].textContent,/A: Globe.*B: Flat.*Camera 50 m/);
+  assert.equal(secondCard.children[0].children[0].textContent,'No screenshot');
+  assert.match(secondCard.children[2].textContent,/Camera 2 m/);
+  const controls=firstCard.children[3];
+  assert.equal(controls.children[0].disabled,true);
+  assert.equal(controls.children[1].disabled,false);
+  controls.children[1].listeners.click({stopPropagation(){}});
+  secondCard.children[3].children[2].listeners.click({stopPropagation(){}});
   assert.deepEqual(calls,[['move',22,1],['remove',12]]);
   ui.renderStoryboardQueue(doc,host,[12],[first,second],{move(){},remove(){}});
   assert.equal(host.children.length,1,'refresh replaces the shortlist; no duplicated DOM nodes');
-  assert.equal(host.children[0].children[0].children[0].textContent,'Globe sunrise');
+  assert.equal(host.children[0].children[1].textContent,'1. Globe sunrise');
+  assert.deepEqual([first,second],original,'render never mutates History or optics');
 });

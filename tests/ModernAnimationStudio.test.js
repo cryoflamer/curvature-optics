@@ -147,7 +147,7 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   const actions={load:()=>calls.push('load'),importCamera:()=>calls.push('import'),
     edit:(...args)=>calls.push(['edit',...args]),frame:(...args)=>calls.push(['frame',...args]),
     move:(...args)=>calls.push(['move',...args]),remove:(...args)=>calls.push(['remove',...args]),
-    prepare:()=>calls.push('prepare')};
+    select:(...args)=>calls.push(['select',...args]),prepare:()=>calls.push('prepare')};
   editor.render(doc,host,draft,studio.inspect(draft),actions,false);
   const buttons=collect(host,n=>n.tagName==='button');
   buttons.find(b=>b.textContent==='Load History shortlist').listeners.click();
@@ -157,8 +157,16 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   const fieldInputs=collect(host,n=>n.tagName==='input');
   fieldInputs[0].value='Named study';fieldInputs[0].listeners.change();
   assert.deepEqual(calls.at(-1),['edit','name','Named study']);
+  const keyframes=collect(host,n=>n.tagName==='button'&&n.className.includes('modern-studio-keyframe'));
+  assert.equal(keyframes.length,2);
+  assert.equal(keyframes[0]['aria-pressed'],'true');
+  keyframes[1].listeners.click();
+  assert.deepEqual(calls.at(-1),['select','history-2']);
+  host.children=[];
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-2'});
   const frameControls=collect(host,n=>n.tagName==='button'&&n.textContent==='↑');
-  frameControls[1].listeners.click();
+  assert.equal(frameControls.length,1,'one selected-frame editor instead of every frame');
+  frameControls[0].listeners.click();
   assert.deepEqual(calls.at(-1),['move','history-2',-1]);
   const broken=clone(b);broken.scene.temperatureProfile.gradientKPerKm=9;
   draft=studio.history([1,2],[entry(1,a),entry(2,broken)]);
@@ -167,6 +175,53 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   const status=collect(host,n=>n.className.includes('modern-studio-status'))[0];
   assert.ok(status.children.some(n=>n.tagName==='ul'));
   assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project')[0].disabled,true);
+});
+
+test('Studio thumbnail filmstrip uses saved History images, selected-only controls and camera placeholders',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=75;
+  let draft=studio.history([1,2],[entry(1,a,'Base'),entry(2,b,'High')]);
+  const image='data:image/webp;base64,YQ==';
+  const saved=[{...entry(1,a,'Base'),thumbnail:{dataUrl:image}},
+    {...entry(2,b,'High'),thumbnail:{dataUrl:image}}];
+  const before=structuredClone([draft,saved]);
+  const {doc,host}=mockDom(),calls=[];
+  const actions={load(){},importCamera(){},edit(){},prepare(){},
+    select:key=>calls.push(['select',key]),frame:(...a)=>calls.push(['frame',...a]),
+    move:(...a)=>calls.push(['move',...a]),remove:key=>calls.push(['remove',key])};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,
+    {entries:saved,selectedKey:'history-2'});
+  const cards=collect(host,n=>n.className.includes('modern-studio-keyframe')&&n.tagName==='button');
+  assert.equal(cards.length,2);
+  assert.equal(cards[0].children[0].children[0].src,image);
+  assert.equal(cards[1]['aria-pressed'],'true');
+  assert.match(cards[1].children[2].textContent,/Camera 75 m/);
+  assert.equal(collect(host,n=>n.className==='modern-studio-selected-frame').length,1);
+  assert.equal(collect(host,n=>n.className==='modern-studio-frame-fields').length,1);
+  assert.equal(collect(host,n=>n.className==='modern-studio-field').length,7,
+    'three global fields plus four selected keyframe fields');
+  const change=collect(host,n=>n.className==='modern-studio-frame-fields')[0];
+  change.children[0].children[1].value='Renamed';
+  change.children[0].children[1].listeners.change();
+  assert.deepEqual(calls.at(-1),['frame','history-2','name','Renamed']);
+  cards[0].listeners.click();
+  assert.deepEqual(calls.at(-1),['select','history-1']);
+  assert.deepEqual([draft,saved],before,'visuals never modify source records or drafts');
+  const imported=studio.importCamera(a,sequence.validate([
+    {name:'Low',camera:a.scene.camera,travelMs:0,holdMs:0,easing:'linear'},
+    {name:'High',camera:b.scene.camera,travelMs:1000,holdMs:0,easing:'linear'}]));
+  host.children=[];
+  editor.render(doc,host,imported,studio.inspect(imported),actions,false,{entries:saved});
+  const placeholders=collect(host,n=>n.className==='modern-storyboard-no-image');
+  assert.equal(placeholders.length,2,'imported camera views do not borrow unrelated History screenshots');
+});
+
+test('Responsive storyboard layout bounds editor width and scrolls thumbnail timelines horizontally',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  assert.match(css,/\.modern-animation-studio\{max-width:1160px;margin:12px auto/);
+  assert.match(css,/\.modern-history-storyboard\{box-sizing:border-box;max-width:1160px/);
+  assert.match(css,/\.modern-history-storyboard ol\{display:flex/);
+  assert.match(css,/\.modern-studio-filmstrip\{display:flex/);
+  assert.match(css,/overflow-x:auto/);
 });
 
 test('Modern shell loads pure project modules ahead of UI and keeps legacy camera controls',()=>{
