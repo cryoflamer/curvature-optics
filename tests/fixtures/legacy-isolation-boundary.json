@@ -345,6 +345,8 @@
       "src/ModelAnimation.js",
       "src/NumFormatter.js",
       "src/Slider.js",
+      "src/animation/ModernAnimationCompatibility.js",
+      "src/animation/ModernAnimationProject.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
@@ -355,7 +357,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 147,
+  "sourceJsCount": 149,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -409,6 +411,24 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationCompatibility.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationProject.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationProject.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationProject.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationProject.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/app/CurvatureAppRuntime.js": {
@@ -547,6 +567,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationProject.js",
         "src/camera/ModernCameraSequence.js"
       ],
       "commonJsTestCallers": [
@@ -2008,6 +2029,7 @@
       "commonJsTestCallers": [
         "tests/AtmosphericVisibility.test.js",
         "tests/ModernAngularGuide.test.js",
+        "tests/ModernAnimationProject.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
@@ -2043,6 +2065,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationCompatibility.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentHistoryFilters.js"
       ],
@@ -2102,6 +2125,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationCompatibility.js",
+        "src/animation/ModernAnimationProject.js",
         "src/ui/modern/ModernExperimentFingerprint.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentLibrary.js"
@@ -2110,6 +2135,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/CurvatureCameraTranslation.test.js",
         "tests/LegacyModernBoundary.test.js",
+        "tests/ModernAnimationProject.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",

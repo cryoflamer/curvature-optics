@@ -353,3 +353,14 @@ retention, and future Storyboards should reference stable in-browser IDs.
 An exported archive can be large when it contains many real-Canvas thumbnails;
 large files may exceed the importer size limit. URLs and bare experiment JSON
 are not complete History backups.
+
+
+## Animation Studio: compatibility foundation
+
+The ordered Storyboard shortlist remains a selection of local History IDs; it
+is **not** yet an animation project. The new pure Animation Studio modules
+convert selected full snapshots into a self-contained, validated animation
+project with independent embedded `baseExperiment`. Snapshot IDs inside the
+project are provenance only, so pruning the source History cannot change
+already-created project data. No new UI or persistent animation-project store
+is added by this stage. See [Animation Architecture Research](modern-animation-research.md).

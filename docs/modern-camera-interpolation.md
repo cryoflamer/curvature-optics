@@ -78,3 +78,13 @@ visual validation is separate from the Node integration tests.
 node --test tests/ModernCameraInterpolator.test.js tests/ModernCameraSequence.test.js tests/ModernCameraNavigation.test.js
 node tools/audit-legacy-isolation.js --check
 ```
+
+
+## Next-generation Animation Studio foundation
+
+The pure Animation Studio foundation (`src/animation/ModernAnimationCompatibility.js`
++ `ModernAnimationProject.js`) permits **camera-only** or **single-physical-parameter**
+animations using self-contained snapshots from Modern History. It reuses the
+existing camera interpolator without changing the present Camera Animation UI,
+serialization, or playback behavior. Read [animation research and API contract](modern-animation-research.md)
+for the exact two-mode invariant, allowed physical channels, and limitations.
