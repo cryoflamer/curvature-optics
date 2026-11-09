@@ -6,15 +6,17 @@
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
   var horizon=root.CurvatureRayHorizon,physicalCamera=root.CurvaturePhysicalCamera;
+  var fastField=root.CurvatureOpticalFastRayField;
   if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
     horizon=require('../optics/OpticalRayHorizon');
     physicalCamera=require('../app/CurvaturePhysicalCamera');
+    fastField=require('../optics/OpticalFastRayField');
   }
-  var api=factory(experiment,horizon,physicalCamera);
+  var api=factory(experiment,horizon,physicalCamera,fastField);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera,fastField){
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
@@ -79,20 +81,39 @@
       throw TypeError('Independent model and Physical renderer are required');
     var renderer=dependencies.renderer,optics=dependencies.optics||null;
     var detector=dependencies.horizon||horizon;
+    var fastQualifier=dependencies.fastField||fastField;
     var sessions={A:optics&&optics.create?optics.create():null,
       B:optics&&optics.create?optics.create():null};
     var models={A:new dependencies.Model(),B:new dependencies.Model()};
     var horizons={A:null,B:null};
-    // The coarse fastEligible check is advisory: the Fast field builder may
-    // reject a specific atmosphere/geometry combination at runtime. Remember
-    // those rejections to avoid retrying an unsupported path on every frame.
+    // A Fast field's qualification may depend on curvature and observer height,
+    // not merely atmosphere + Globe/Flat. Never let a rejected near-flat Globe
+    // sample disable Fast for the original (smaller-radius) Globe state.
     var fastUnsupported=new Set(),fallbackCount=0;
     function fastKey(config){
       var spec=config.spec,model=config.model;
-      return JSON.stringify([model.showModel===2?'flat':'globe',spec.atmosphere,
-        spec.transitionProfile&&spec.transitionProfile.source,
-        spec.transitionProfile&&spec.transitionProfile.weight,
-        spec.inverseProfile&&spec.inverseProfile.weight]);
+      return JSON.stringify([model.showModel,model.rEarth,model.Height,spec.atmosphere,
+        spec.occlusionRadius,spec.temperatureProfile,spec.transitionProfile,
+        spec.inverseProfile]);
+    }
+    function resetFastFailures(){fastUnsupported.clear();fallbackCount=0;}
+    function markFastUnsupported(key){
+      // A continuously changing physical parameter must not grow an unlimited
+      // collection of failed frame-specific probes.
+      if(fastUnsupported.size>=64)fastUnsupported.delete(fastUnsupported.values().next().value);
+      fastUnsupported.add(key);
+    }
+    function fastQualifiedForSample(config){
+      // The production Fast field itself defines which Globe radii admit the
+      // standard local-gradient approximation. Probe that cheap qualification
+      // before constructing and painting the (much more costly) scene.
+      if(config.quality!=='fast'||config.model.showModel!==1||
+        config.spec.atmosphere!=='standard'||!fastQualifier||
+        typeof fastQualifier.create!=='function')return true;
+      var field=fastQualifier.create({geometry:'globe',radius:config.model.rEarth,
+        observerHeight:config.model.Height,atmosphere:'standard',
+        profileOptions:{occlusionRadius:config.spec.occlusionRadius}});
+      return field.mode!=='unsupported';
     }
     function isFastUnsupported(error){
       return error instanceof RangeError &&
@@ -163,14 +184,18 @@
       if(config.quality==='fast'&&fastUnsupported.has(key)){
         config.quality='accurate';config.options.opticalQuality='accurate';
         config.options.previewLod={stride:1};
-        reason='Fast Preview unsupported for this atmosphere / geometry';
+        reason='Fast Preview was rejected for these exact physical parameters';
+      }else if(config.quality==='fast'&&!fastQualifiedForSample(config)){
+        config.quality='accurate';config.options.opticalQuality='accurate';
+        config.options.previewLod={stride:1};
+        reason='Fast standard-Globe approximation is unavailable at this curvature';
       }
       try{result=renderer.renderPhysical(graph,config.model,config.options);}
       catch(error){
         // Retry only the explicitly declared Fast-capability rejection. A
         // failed Accurate render (or any other error) must remain visible.
         if(config.quality!=='fast'||!isFastUnsupported(error))throw error;
-        fastUnsupported.add(key);fallbackCount++;
+        markFastUnsupported(key);fallbackCount++;
         config.quality='accurate';config.options.opticalQuality='accurate';
         config.options.previewLod={stride:1};
         reason=error.message;
@@ -181,7 +206,7 @@
         fallback:reason,fallbackCount:fallbackCount,
         overlays:overlays,result:result};
     }
-    return Object.freeze({build:build,render:render});
+    return Object.freeze({build:build,render:render,resetFastFailures:resetFastFailures});
   }
   return Object.freeze({create:create,fastEligible:fastEligible,opticalQuality:opticalQuality});
 }));

@@ -326,6 +326,50 @@ test('Unsupported fast frame falls back to Accurate, then skips repeated failed 
   assert.deepEqual(source,before,'recovery must not mutate source snapshot');
 });
 
+test('Fast eligibility follows current Globe curvature, not a sticky atmosphere label',()=>{
+  const source=snapshot(),nearFlat=structuredClone(source),calls=[];
+  nearFlat.scene.surface.rEarth=40000000;
+  class FakeModel {Update(){}}
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(g,m,o)=>{
+    calls.push({radius:m.rEarth,quality:o.opticalQuality});return {drawn:7};
+  }}});
+  const graph={Canvas:{}};
+  const before=structuredClone([source,nearFlat]);
+  const start=view.render(source,'A',graph,{quality:'fast',animationMode:'physical'});
+  const unsupported=view.render(nearFlat,'A',graph,{quality:'fast',animationMode:'physical'});
+  const recovered=view.render(source,'A',graph,{quality:'fast',animationMode:'physical'});
+  assert.equal(start.quality,'fast');
+  assert.equal(unsupported.quality,'accurate','near-flat Globe is not fast-qualified');
+  assert.match(unsupported.fallback,/curvature/);
+  assert.equal(unsupported.requestedQuality,'fast');
+  assert.equal(recovered.quality,'fast','return to supported curvature must restore Fast');
+  assert.deepEqual(calls.map(x=>x.quality),['fast','accurate','fast']);
+  assert.equal(recovered.fallbackCount,0,'capability preflight must not record runtime failures');
+  assert.deepEqual([source,nearFlat],before,'quality probes must not change any snapshots');
+});
+
+test('Runtime Fast failure is scoped to physical state, and explicit retry clears it',()=>{
+  const source=snapshot(),other=structuredClone(source),attempts=[];
+  other.scene.surface.rEarth=20000000;
+  class FakeModel {Update(){}}
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(g,m,o)=>{
+    attempts.push([m.rEarth,o.opticalQuality]);
+    if(m.rEarth>19000000&&o.opticalQuality==='fast')throw RangeError(
+      'Fast Preview is unavailable for standard on globe; select Accurate (RK4).');
+    return {drawn:8};
+  }}}),graph={Canvas:{}};
+  assert.equal(view.render(source,'A',graph,{quality:'fast'}).quality,'fast');
+  assert.equal(view.render(other,'A',graph,{quality:'fast'}).quality,'accurate');
+  assert.equal(view.render(other,'A',graph,{quality:'fast'}).quality,'accurate');
+  assert.equal(view.render(source,'A',graph,{quality:'fast'}).quality,'fast');
+  assert.deepEqual(attempts.map(x=>x[1]),['fast','fast','accurate','accurate','fast']);
+  view.resetFastFailures();
+  const explicit=view.render(other,'A',graph,{quality:'fast'});
+  assert.equal(explicit.quality,'accurate');
+  assert.equal(explicit.fallbackCount,1,'a fresh failed Fast probe is counted after reset');
+  assert.deepEqual(attempts.slice(-2).map(x=>x[1]),['fast','accurate']);
+});
+
 test('Fast recovery does not mask arbitrary errors or a failing Accurate retry',()=>{
   const source=snapshot(),graph={Canvas:{}};
   class FakeModel {Update(){}}
@@ -347,7 +391,10 @@ test('Fast recovery does not mask arbitrary errors or a failing Accurate retry',
 
 test('Playback status reports the actual rendered quality and fallback count',()=>{
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(app,/Fast fallback\(s\):/);
+  assert.match(app,/Fast runtime fallback\(s\):/);
+  assert.match(app,/Requested optics:/);
+  assert.match(app,/Effective:/);
+  assert.match(app,/studioPreviewRenderer\.resetFastFailures\(\)/);
   assert.match(app,/b&&b\.fallback&&a\.quality==='fast'/);
   assert.match(app,/quality:'accurate',animationMode:studioPrepared\.mode/);
 });

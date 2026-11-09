@@ -310,7 +310,7 @@ it. This is a renderer capability mismatch, not an invalid animation state.
 The isolated Animation viewport retries **only** the known `RangeError`
 (`Fast Preview is unavailable for … on …; select Accurate (RK4).`) using
 `opticalQuality: accurate` and full object detail. A per-preview-session
-cache avoids repeatedly probing the same unsupported profile and geometry.
+cache avoids repeated failed probes for the **same physical state**, including current Globe radius and camera height; a failure at one curvature cannot ban Fast for other radii.
 Both the selected quality and the fallback count are diagnostic, and the
 original project / working Scene / Compare are untouched. In Compare, if
 model B falls back, model A is also redrawn Accurate to avoid silently
@@ -397,3 +397,34 @@ when the viewport width changes. This preserves the correct dimensions without
 allowing a second, unrelated drawing owner to clear the canvas after it has
 been painted. The change is isolated to the Animation graphs; Scene/Compare
 and the Legacy graph lifetime are unchanged.
+
+
+## Recovering Fast Preview after varying curvature (#140.12.120.4.6)
+
+Fast availability for the `standard` atmosphere on a Globe is **not** a
+property of the two labels `standard + globe` alone. The production
+`OpticalFastRayField` uses a local conformal logarithmic gradient; its
+single-ray approximation is qualified only while that gradient is positive.
+As Globe radius grows towards the Flat endpoint, the gradient can change
+sign. The old fallback cache stored only profile and geometry, so one
+near-Flat rejection incorrectly made all subsequent Globe frames Accurate,
+including a return to the original Earth radius.
+
+`ModernAnimationPreview` now asks the **existing production Fast field** to
+qualify each `standard + globe` physical state before attempting Fast. A
+nonqualified radius is rendered in Accurate RK4 with an explicit reason;
+returning to a qualified radius is eligible for Fast again. Unexpected
+runtime capability rejections are still retried in Accurate, but the
+bounded cache is keyed by the **actual** geometry, radius, observer height,
+and physical atmospheric settings rather than a broad label. Changing the
+requested optics mode explicitly clears runtime failure memory and permits
+a fresh Fast attempt. No unsupported state is forced into approximation.
+
+The Animation diagnostics distinguish **requested** optics from the
+**effective** frame quality, explaining when Fast was not available and
+reporting only actual runtime fallback attempts. Compare A/B continues to
+avoid mixing optical quality within a single frame. The physics,
+interpolation, saved project format, and independent Scene/Compare remain
+unchanged. Regression tests cover Fast → nonqualified curvature → Fast,
+state-specific runtime failure memory, and retry on manual quality change.
+A real-browser visual check in Opera is still necessary.

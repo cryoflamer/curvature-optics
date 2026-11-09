@@ -1202,6 +1202,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationPreview.js",
         "src/optics/CurvaturePhysicalSceneOptics.js"
       ],
       "commonJsTestCallers": [

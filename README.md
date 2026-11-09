@@ -463,9 +463,13 @@ for qualified camera motion); explicit Accurate is also available, while
 **Fast if supported** is an opt-in approximation. When the physical
 renderer rejects a Fast atmosphere/geometry combination at runtime, the
 Animation preview automatically retries that frame using Accurate RK4
-instead of stopping Playback. Rejected combinations are remembered for the
-current preview session, so repeated frames use Accurate directly. The
-render diagnostics expose the actual quality and the number of Fast fallbacks;
+instead of stopping Playback. Runtime rejections are remembered **only for the same physical state**, not
+for all `standard + globe` frames: at near-Flat curvature Fast may be
+unavailable, but returning to a qualified smaller radius restores Fast. The
+production Fast-field qualifier checks curvature before rendering, and
+changing Optics clears cached runtime rejections. Diagnostics distinguish
+**requested** and **effective** quality, explain why Fast was not used, and
+count actual runtime fallbacks;
 other optical failures remain visible rather than being hidden by retries.
 The final Flat frame is still sampled at its exact animation time. The current frame displays
 its sampled time, calculation time, quality per viewport and whether the

@@ -1259,13 +1259,18 @@
       }
       var drawn=a.result||{};
       var fallbacks=Math.max(a.fallbackCount||0,b&&b.fallbackCount||0);
-      var fallbackNote=(a.fallback||b&&b.fallback)?' · Fast → Accurate fallback':'';
-      diagnostic.textContent='Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
+      var fallbackReasons=[a.fallback,b&&b.fallback].filter(Boolean);
+      var requestedLabel={auto:'Auto',fast:'Fast if supported',accurate:'Accurate RK4'}[studioPlaybackQuality];
+      var effectiveLabel=fast?'Fast Preview (approximate)':
+        (b&&b.quality!==a.quality?'Mixed quality':'Accurate RK4');
+      var fallbackNote=fallbackReasons.length?' · Fast unavailable: '+
+        Array.from(new Set(fallbackReasons)).join(' / '):'';
+      diagnostic.textContent='Requested optics: '+requestedLabel+' · Effective: '+effectiveLabel+' · Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
         (studioPlayback.status().durationMs/1000).toFixed(2)+'s · frame '+
         Math.round(spent)+' ms · '+describe(a,isCompare?'A':'Scene')+
         (isCompare?' · '+describe(b,'B'):'')+
         (Number.isFinite(drawn.drawn)?' · '+drawn.drawn+' visible segments':'')+
-        fallbackNote+' · Fast fallback(s): '+fallbacks+
+        fallbackNote+' · Fast runtime fallback(s): '+fallbacks+
         (spent>500?' · slow calculation: playback may skip intermediate frames':'');
     }
     // This timestamp always corresponds to the pixels just drawn. The
@@ -1299,6 +1304,10 @@
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
       studioPlaybackQuality=['auto','fast','accurate'].includes(optics.value)?optics.value:'auto';
+      // Explicit quality changes must allow a fresh Fast probe at the current
+      // physical state; a previous runtime rejection is not a permanent ban.
+      if(studioPreviewRenderer&&typeof studioPreviewRenderer.resetFastFailures==='function')
+        studioPreviewRenderer.resetFastFailures();
       saveStudioDraft(false);
       if(!studioPlayback)return;
       stopStudioPlayback(false);
