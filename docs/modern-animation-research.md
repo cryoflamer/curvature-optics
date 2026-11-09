@@ -204,3 +204,34 @@ editor using stable local IDs, while the project/draft owns validated copies
 of experiment data. A compact staging counter replaces the duplicate shortlist
 strip. The Studio presents the selected History thumbnail; it is not a live
 render. Animation playback remains separate future work.
+
+
+## Implementation update — Isolated Camera Playback
+
+`src/animation/ModernAnimationPlayback.js` is a deterministic absolute-time
+clock over an immutable `ModernAnimationProject` v1. Its `start`, `tick`,
+`pause`, `seek`, `stop`, `sample` and `status` API works without a DOM or
+mutations of the source experiment. Playback is currently **camera-only**;
+physical interpolation remains mathematically available from
+`ModernAnimationProject.sampleAt` but does **not** have a live player yet.
+
+`src/animation/ModernAnimationPreview.js` maps validated sampled experiments
+to **dedicated** `CurveAppClass` instances. Scene uses one viewport and Compare
+uses independent A and B viewports with a common camera. It passes their own
+`CurvaturePhysicalSceneOptics.create()` cache sessions into the existing
+`CurvatureMainCanvasRenderer.renderPhysical`, with the Canvas backend. No
+Scene/Compare model, canvas, mutable UI state, URL, session storage or History
+write is involved. GraphX3DX requires parser-time `document.writeln` for its
+canvases: the distinct preview graphs are created in a fixed-width off-screen
+bootstrap element and moved into Animation only for rendering.
+
+**Performance/accuracy boundary:** a 120 ms minimum spacing between requested
+preview redraws limits work; this is not a promised FPS. Playback time follows
+the monotonic clock rather than the number of optical redraws, therefore
+intermediate display frames can be skipped. The approximation-capable profiles
+use Fast Preview, visibly labeled as such. Temperature-lapse and other
+unsupported fast profiles use Accurate optics even if slow, rather than a
+scientifically misleading approximation. Leaving Animation or hiding the tab
+pauses playback; changing the draft discards its prepared player. The old
+Camera Animation player is unaffected. Browser pixel/FPS validation and
+permanent Animation Project storage remain outstanding.

@@ -496,3 +496,21 @@ Studio draft itself is not saved across reloads. Playback and permanent
 animation-project storage remain out of scope. This interface uses native
 HTML Drag and Drop on desktop plus a touch/pen Pointer Events fallback;
 interactive Opera checks are still needed to confirm its look and feel.
+
+
+## Isolated Camera Animation playback
+
+After arranging compatible camera keyframes in Animation Studio, click
+**Prepare project**. Camera projects open a dedicated optical preview with
+Play, Pause, Stop and timeline seeking. Scene experiments render a single
+physical Canvas; Compare A/B experiments render both models independently
+using the same sampled camera. The original Scene/Compare live canvases and
+working session are never used to paint this preview. The Studio draft still
+lives only in memory; changing frames invalidates the prepared project.
+
+Optical render performance may be below real-time. Timeline position follows
+elapsed clock time, so slow frames are skipped rather than altering animation
+duration. Compatible Fast optical modes are explicitly labeled approximate;
+other profiles use Accurate CPU optics and may be slow. Background tabs and
+workspace switches pause the player. Animation of one physical parameter,
+permanent Animation Project saving, and video export remain future stages.

@@ -327,7 +327,7 @@ is cleared when filters change or Pinned collapses. Checked snapshots can be sen
 The former Storyboard shortlist remains an ordered, browser-local staging
 selection (with missing/deleted IDs pruned), but no longer creates a second
 thumbnail strip inside History. Animation Studio owns frame ordering/timings;
-actual animation playback remains future work.
+physical-parameter playback remains future work.
 See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment URLs and plain JSON remain compatible; named Experiment Library records migrate into History.
 
@@ -359,8 +359,9 @@ loaded through **Import Camera Animation**.
 
 Animation Studio displays a saved-keyframe preview and a selectable frame strip.
 The preview is an existing History thumbnail, **not** freshly computed optical
-playback. Drafts remain in memory; playback and durable Animation Project
-storage have not yet been implemented. The selected workspace tab is a browser
+playback. Drafts remain in memory. Prepared **Camera Animation** projects can now play in
+a dedicated optical viewport; durable Animation Project storage and physical-parameter playback
+are not yet implemented. The selected workspace tab is a browser
 preference, not part of shared experiment JSON or URLs. Explicit shared
 experiment links open their physical Scene/Compare context.
 
@@ -377,3 +378,25 @@ header or **Full History** inside the picker. Dragging does not alter original
 snapshots, active physics, or saved experiment URLs; incompatible sequences
 continue to be rejected on Prepare Project. See the
 [History and Animation guide](docs/modern-experiment-history.md) for details.
+
+
+### Isolated Camera Animation playback
+
+In **Animation**, assemble two or more compatible camera keyframes and click
+**Prepare project**. A separate physical viewport appears **above** the editor
+with **Play**, **Pause**, **Stop** and a seek slider. The preview renders real
+intermediate optical scenes using the production CPU Physical renderer—not
+History thumbnail crossfades. Compare projects render A and B side by side.
+The Scene/Compare camera, state, autosave, History and original Camera Animation
+are **not modified** by preview playback. The preview owns two `CurveAppClass`
+models, two separate GraphX3DX canvases and its own optical cache sessions.
+
+Time is derived from the validated project timeline, not the number of drawn
+frames: slow optics may cause skipped intermediate display frames. Fast Preview
+is labeled **approximate**, while unsupported fast profiles (including
+Temperature lapse) use **Accurate** and may update slowly. Hiding the browser
+tab or leaving Animation pauses playback; editing keyframes invalidates the
+prepared project, which must be prepared again. The preview does not export a
+video or persist a project. **Physical parameter playback is not yet available**.
+See [animation research](docs/modern-animation-research.md) for the clock,
+model-isolation and optical-rendering contract.

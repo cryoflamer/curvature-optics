@@ -27,7 +27,8 @@ test('HTML comments, query strings, entities, duplicate scripts and load orderin
     "<script src='src/a.js?v=2'></script><script src=bare.js></script>";
   assert.deepEqual(extractScriptSources(html), ['src/a.js?v=1&amp;x=2', 'src/a.js?v=2']);
   assert.deepEqual(report.entrypoints.modern.duplicatedLoads,
-    [{file:'src/ui/modern/ModernCompareGraph.js', count:2}]);
+    [{file:'src/ui/modern/ModernAnimationPreviewGraph.js', count:2},
+      {file:'src/ui/modern/ModernCompareGraph.js', count:2}]);
   assert.equal(report.entrypoints.legacy.scriptTags, 101);
   assert.equal(report.entrypoints.legacy.inlineScriptBlocks, 1);
   assert.equal(report.entrypoints.modern.inlineScriptBlocks, 0);

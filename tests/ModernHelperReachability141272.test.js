@@ -17,7 +17,7 @@ const modernScripts = scriptTags.filter(tag => tag.file.startsWith('src/ui/moder
 // This list is an intentional preservation gate, not permission to remove
 // future scripts absent from this test.
 const required = [
-  'ModernAnimationStudioUI.js', 'ModernApp.js', 'ModernApplicationPreferences.js', 'ModernAtmosphericPresentation.js',
+  'ModernAnimationPreviewGraph.js', 'ModernAnimationStudioUI.js', 'ModernApp.js', 'ModernApplicationPreferences.js', 'ModernAtmosphericPresentation.js',
   'ModernAtmosphericShimmer.js', 'ModernCameraDragPreview.js',
   'ModernCameraInteraction.js', 'ModernCameraNavigation.js', 'ModernCameraPerspectiveWarp.js',
   'ModernCompareGraph.js', 'ModernCompareModel.js',
@@ -38,7 +38,7 @@ test('Modern helper inventory remains reviewed and locally available', () => {
   assert.deepEqual(actual, [...required].sort(), 'review newly added/removed modules explicitly');
   for (const name of required) {
     assert.ok(fs.statSync(path.join(modernDir, name)).size > 0, name + ' must have source');
-    assert.equal(tagsFor(name).length, name === 'ModernCompareGraph.js' ? 2 : 1,
+    assert.equal(tagsFor(name).length, ['ModernCompareGraph.js','ModernAnimationPreviewGraph.js'].includes(name) ? 2 : 1,
       name + ' must remain loaded by Modern');
   }
 });
@@ -70,4 +70,14 @@ test('140.12.72: Scene graph remains the local renderer, not write-only private 
 test('140.12.72: absence guard rejects reintroduced write-only graph assignments', () => {
   const introduced = app + '\nstate.graph=graph;\n';
   assert.match(introduced, /\bstate\.graph\b/);
+});
+
+// Animation GraphX3DX instances must be created at parser time, before ModernApp.
+test('Animation previews own independent parser-time Canvas graphs A/B',()=>{
+  const pair=tagsFor('ModernAnimationPreviewGraph.js');
+  assert.equal(pair.length,2);
+  assert.match(pair[0].attributes,/data-animation-side="A"/);
+  assert.match(pair[1].attributes,/data-animation-side="B"/);
+  assert.ok(pair[1].index<tagsFor('ModernApp.js')[0].index);
+  assert.notEqual(pair[0].index,pair[1].index);
 });

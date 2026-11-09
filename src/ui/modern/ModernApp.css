@@ -709,3 +709,34 @@ button{cursor:pointer}
 }
 .modern-studio-filmstrip-item.is-drop-target.is-drop-before{box-shadow:inset 4px 0 #2183d2}
 .modern-studio-filmstrip-item.is-drop-target.is-drop-after{box-shadow:inset -4px 0 #2183d2}
+
+/* Separate rendering surface for Camera Animation; never reuse Scene/Compare canvases. */
+.modern-animation-graph-bootstrap{position:absolute;left:-10000px;top:0;width:960px;
+  visibility:hidden;pointer-events:none}
+.modern-animation-playback{box-sizing:border-box;border:1px solid #bad2e8;background:#f7fbff;
+  border-radius:10px;margin:0 0 18px;padding:14px}
+.modern-animation-playback[hidden]{display:none!important}
+.modern-animation-playback-heading{display:flex;justify-content:space-between;gap:12px;
+  align-items:center;font-size:14px;margin-bottom:9px;color:#1d405e}
+.modern-animation-playback-heading span{font-size:12px;color:#5a748e}
+.modern-animation-playback-panels{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.modern-animation-playback-panels.is-compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+.modern-animation-playback-view{min-width:0;background:white;border:1px solid #c5d6e7;
+  border-radius:7px;overflow:hidden}
+.modern-animation-playback-view[hidden]{display:none!important}
+.modern-animation-playback-view>span{display:block;padding:7px 10px;color:#284f71;
+  font-size:12px;font-weight:700;background:#e8f2fb}
+.modern-animation-playback-canvas{width:100%;min-height:100px;overflow:hidden}
+.modern-animation-playback-canvas>.JsGraph{max-width:100%}
+.modern-animation-playback-controls{display:flex;flex-wrap:wrap;align-items:center;
+  gap:9px;margin-top:12px;color:#3d5b74;font-size:12px}
+.modern-animation-playback-controls button{border:1px solid #9cbddd;border-radius:6px;
+  background:#e7f2fd;color:#255e91;padding:7px 12px;cursor:pointer}
+.modern-animation-playback-controls button:disabled{opacity:.5;cursor:default}
+.modern-animation-playback-controls input[type=range]{flex:1;min-width:130px}
+.modern-animation-playback-controls output{min-width:78px;text-align:right;font-variant-numeric:tabular-nums}
+.modern-animation-playback p{margin:10px 0 0}
+@media(max-width:680px){
+  .modern-animation-playback-panels.is-compare{grid-template-columns:1fr}
+  .modern-animation-playback-controls input[type=range]{flex-basis:100%;order:2}
+}
