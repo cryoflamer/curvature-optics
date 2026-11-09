@@ -161,7 +161,10 @@
       <div><h1>Animation Studio</h1><p>Build a physical animation from saved experiments. The working Scene / Compare remains unchanged.</p></div>
       <button type="button" id="ModernAnimationChooseSnapshots">Choose snapshots from History</button>
     </div>
-    <section id="ModernAnimationStudio" class="modern-animation-studio" aria-label="Animation Studio draft editor"></section>
+    <div class="modern-animation-editor-layout">
+      <aside id="ModernAnimationSnapshotPicker" class="modern-animation-snapshot-picker" aria-label="Saved snapshots for animation" hidden></aside>
+      <section id="ModernAnimationStudio" class="modern-animation-studio" aria-label="Animation Studio draft editor"></section>
+    </div>
     <p id="ModernAnimationStudioMessage" class="modern-library-status" role="status" aria-live="polite"></p>
   </section>
   <div class="modern-workspace" id="ModernWorkspace">

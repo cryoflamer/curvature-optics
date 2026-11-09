@@ -459,3 +459,40 @@ Imported camera keyframes that have no saved screenshot show an explicit
 placeholder. A saved thumbnail is not a recomputation of intermediate optical
 frames. Playback, persistent Animation Project storage and video export are
 still not provided in this stage.
+
+## Drag-and-drop between History and Animation Studio
+
+**Animation → Choose snapshots from History** now toggles a compact, docked
+**Snapshot Picker** beside the Animation Studio timeline. It reads exactly the
+same saved History records and screenshots as the full overlay, with a local
+text search; no new previews are rendered, no experiment is restored, and no
+second snapshot database is introduced. **Full History** still opens the
+complete manager for pinning, renaming, import/export and advanced filters.
+The header History action remains available in every workspace.
+
+- **Reorder:** drag a timeline keyframe by its grip into any gap, or onto the
+  left/right half of another frame. The blue insertion indicator shows the
+  destination. Existing Up/Down buttons remain available for keyboard users.
+- **Insert:** drag a snapshot from the picker into a timeline gap; its saved
+  experiment is copied into the in-memory Studio draft at that position. To
+  insert a group, check several picker cards and drag a checked card; the group
+  follows its displayed order (pinned first), or choose **Add checked**. Small
+  `+` controls in the gaps insert checked snapshots at an exact position.
+- **Touch:** hold and move a grip (⠿) to drag via Pointer Events; tapping the
+  checkbox plus **Add checked** is the non-drag fallback. The timeline scrolls
+  horizontally, including near-edge assistance during drag.
+- **De-duplication:** a History snapshot already in the draft is not inserted
+  again. Imported Camera Animation frames remain intact when saved snapshots
+  are appended. The old **Load staged snapshots** action still explicitly
+  replaces the timeline when used, but the full History **Add selected to
+  Animation** action now appends rather than replacing an active draft.
+- **Validation:** reordering and inserting change only the in-memory frame
+  list, not History, the live Scene/Compare experiment, or its optical render.
+  `ModernAnimationCompatibility` still checks the entire resulting sequence;
+  invalid combinations are shown and cannot be prepared.
+
+Shortlist IDs continue to be stored as legacy staging preferences, while the
+Studio draft itself is not saved across reloads. Playback and permanent
+animation-project storage remain out of scope. This interface uses native
+HTML Drag and Drop on desktop plus a touch/pen Pointer Events fallback;
+interactive Opera checks are still needed to confirm its look and feel.

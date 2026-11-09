@@ -44,6 +44,160 @@
     // screenshot would falsely imply the physical view had been rendered.
     return match||{name:frame.name,experiment:frame.experiment,thumbnail:null};
   }
+  // Native drag-and-drop has a keyboard/button fallback and an explicit
+  // Pointer Events path for touch/pen (HTML5 DnD is unreliable on touch).
+  // Only handles initiate touch drags, so ordinary timeline scrolling remains.
+  function touchSource(doc,handle,payload,actions){
+    if(!handle||!doc||!doc.addEventListener||!doc.elementFromPoint)return;
+    handle.addEventListener('pointerdown',function(down){
+      if(!down||!['touch','pen'].includes(down.pointerType))return;
+      var pointerId=down.pointerId,startX=down.clientX,startY=down.clientY,moved=false,target=null;
+      function findTarget(event){
+        var element=doc.elementFromPoint(event.clientX,event.clientY);
+        var slot=element&&typeof element.closest==='function'&&
+          element.closest('[data-animation-gap]');
+        if(slot&&slot.classList&&slot.classList.contains('modern-studio-filmstrip-item'))
+          setCardDropSide(slot,event);
+        return slot||null;
+      }
+      function move(event){
+        if(event.pointerId!==pointerId)return;
+        if(!moved&&Math.hypot(event.clientX-startX,event.clientY-startY)<9)return;
+        if(!moved){moved=true;actions.dragStart(payload,event);handle.classList&&handle.classList.add('is-dragging');}
+        if(event.preventDefault)event.preventDefault();
+        var next=findTarget(event);
+        var scroller=next&&typeof next.closest==='function'&&next.closest('.modern-studio-filmstrip');
+        if(scroller&&typeof scroller.getBoundingClientRect==='function'){
+          var r=scroller.getBoundingClientRect();
+          if(event.clientX<r.left+38)scroller.scrollLeft-=22;
+          else if(event.clientX>r.right-38)scroller.scrollLeft+=22;
+        }
+        if(target!==next){if(target&&target.classList)target.classList.remove('is-drop-target');
+          target=next;if(target&&target.classList)target.classList.add('is-drop-target');}
+      }
+      function finish(event){
+        if(event.pointerId!==pointerId)return;
+        if(target&&target.classList)target.classList.remove('is-drop-target');
+        if(handle.classList)handle.classList.remove('is-dragging');
+        doc.removeEventListener('pointermove',move);
+        doc.removeEventListener('pointerup',finish);
+        doc.removeEventListener('pointercancel',finish);
+        if(moved){
+          if(event.type!=='pointercancel'&&target)actions.drop(Number(target.getAttribute('data-animation-gap')),event);
+          actions.dragEnd();
+          if(event.preventDefault)event.preventDefault();
+        }
+      }
+      doc.addEventListener('pointermove',move,{passive:false});
+      doc.addEventListener('pointerup',finish);
+      doc.addEventListener('pointercancel',finish);
+    });
+  }
+  function makeDragSource(doc,node,handle,payload,actions){
+    if(!actions.dragStart)return;
+    node.draggable=true;
+    node.addEventListener('dragstart',function(event){actions.dragStart(payload,event);});
+    node.addEventListener('dragend',function(){actions.dragEnd();});
+    touchSource(doc,handle||node,payload,actions);
+  }
+  function setCardDropSide(node,event){
+    var bounds=typeof node.getBoundingClientRect==='function'&&node.getBoundingClientRect();
+    var before=!bounds||!Number.isFinite(event.clientX)||event.clientX<bounds.left+bounds.width/2;
+    var original=Number(node.getAttribute('data-frame-index'));
+    node.setAttribute('data-animation-gap',String(original+(before?0:1)));
+    if(node.classList){node.classList.toggle('is-drop-before',before);
+      node.classList.toggle('is-drop-after',!before);}
+  }
+  function makeDropTarget(node,index,actions,card){
+    node.setAttribute('data-animation-gap',String(index));
+    if(card)node.setAttribute('data-frame-index',String(index));
+    if(!actions.drop)return;
+    node.addEventListener('dragover',function(event){
+      if(!actions.dragOver(event))return;
+      var scroller=typeof node.closest==='function'&&node.closest('.modern-studio-filmstrip');
+      if(scroller&&typeof scroller.getBoundingClientRect==='function'){
+        var r=scroller.getBoundingClientRect();
+        if(event.clientX<r.left+38)scroller.scrollLeft-=18;
+        else if(event.clientX>r.right-38)scroller.scrollLeft+=18;
+      }
+      if(card)setCardDropSide(node,event);
+      if(event.preventDefault)event.preventDefault();
+      if(node.classList)node.classList.add('is-drop-target');
+    });
+    node.addEventListener('dragleave',function(event){
+      if(node.classList&&(!event.relatedTarget||!node.contains||!node.contains(event.relatedTarget))){
+        node.classList.remove('is-drop-target');
+        node.classList.remove('is-drop-before');node.classList.remove('is-drop-after');
+      }
+    });
+    node.addEventListener('drop',function(event){
+      if(card)setCardDropSide(node,event);
+      if(node.classList){node.classList.remove('is-drop-target');
+        node.classList.remove('is-drop-before');node.classList.remove('is-drop-after');}
+      if(event.preventDefault)event.preventDefault();
+      actions.drop(Number(node.getAttribute('data-animation-gap')),event);
+    });
+  }
+  function dropSlot(doc,index,actions,selectedCount){
+    var slot=el(doc,'li','modern-studio-drop-slot');
+    makeDropTarget(slot,index,actions);
+    var add=button(doc,'+','Insert checked snapshots at timeline position '+(index+1),function(){
+      if(actions.insertChecked)actions.insertChecked(index);
+    });
+    add.className='modern-studio-drop-button';add.disabled=!selectedCount;
+    add.title=selectedCount?'Insert '+selectedCount+' selected snapshots':'Drop a frame or snapshot here';
+    slot.appendChild(add);
+    return slot;
+  }
+  function renderPicker(doc,host,entries,actions,options){
+    if(!host||!doc)return;
+    options=options||{};
+    host.hidden=!options.open;
+    if(!options.open){host.textContent='';return;}
+    host.textContent='';
+    var head=el(doc,'div','modern-studio-picker-head');
+    head.appendChild(el(doc,'strong','','Snapshot Picker'));
+    head.appendChild(button(doc,'×','Close Snapshot Picker',actions.pickerClose));
+    host.appendChild(head);
+    host.appendChild(el(doc,'p','modern-studio-hint',
+      'Drag saved snapshots to a gap in the timeline. Check several to insert them together.'));
+    var search=el(doc,'input','modern-studio-picker-search');
+    search.type='search';search.maxLength=160;search.value=options.search||'';
+    search.placeholder='Search saved snapshots…';search.setAttribute('aria-label','Find saved snapshots');
+    search.addEventListener('input',function(){
+      var offset=search.selectionStart;
+      actions.pickerSearch(search.value,offset);
+    });host.appendChild(search);
+    var selected=options.checked||{},n=entries.filter(function(e){return !!selected[e.id];}).length;
+    var tools=el(doc,'div','modern-studio-picker-tools');
+    tools.appendChild(el(doc,'small','',n+' selected · '+entries.length+' found'));
+    var add=button(doc,'Add checked','Add checked snapshots after selected frame',function(){actions.insertChecked();});
+    add.disabled=n===0;tools.appendChild(add);
+    tools.appendChild(button(doc,'Full History','Open complete History management',actions.pickerFullHistory));
+    host.appendChild(tools);
+    var list=el(doc,'ol','modern-studio-picker-list');
+    if(!entries.length)list.appendChild(el(doc,'li','modern-history-empty','No matching snapshots.'));
+    entries.forEach(function(entry){
+      var item=el(doc,'li','modern-studio-picker-card');
+      item.setAttribute('data-picker-id',String(entry.id));
+      var check=el(doc,'input','modern-studio-picker-checkbox');check.type='checkbox';
+      check.checked=!!selected[entry.id];check.setAttribute('aria-label','Select snapshot '+entry.id);
+      check.addEventListener('change',function(){actions.pickerToggle(entry.id,check.checked);});
+      item.appendChild(check);
+      var visual=historyUI.frameVisual(doc,entry,'modern-studio-picker-visual');item.appendChild(visual);
+      var info=el(doc,'div','modern-studio-picker-info');
+      var title=el(doc,'strong','',historyUI.displayName(entry));title.title=title.textContent;
+      info.appendChild(title);
+      var summary=el(doc,'small','',historyUI.frameSummary(entry));
+      summary.title=summary.textContent;info.appendChild(summary);item.appendChild(info);
+      var handle=el(doc,'span','modern-studio-drag-handle','⠿');
+      handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
+      item.appendChild(handle);
+      makeDragSource(doc,item,handle,{kind:'snapshots',id:entry.id},actions);
+      list.appendChild(item);
+    });
+    host.appendChild(list);
+  }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
     options=options||{};
@@ -55,7 +209,7 @@
     heading.appendChild(el(doc,'span','',draft.frames.length+' frames'));
     host.appendChild(heading);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Select a thumbnail to edit one keyframe. Changes stay inside this workspace, not the live experiment.'));
+      'Drag frames to reorder, or drag saved snapshots from the picker into the timeline. Changes never alter the live experiment.'));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
     var load=button(doc,'Load staged snapshots'+(options.stagedCount?' ('+options.stagedCount+')':''),
@@ -116,6 +270,7 @@
     var filmstrip=el(doc,'ol','modern-studio-filmstrip');
     filmstrip.setAttribute('aria-label','Animation keyframe timeline');
     draft.frames.forEach(function(frame,i){
+      filmstrip.appendChild(dropSlot(doc,i,actions,options.pickerSelectedCount||0));
       var entry=frameEntry(frame,entries),item=el(doc,'li','modern-studio-filmstrip-item');
       var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name,function(){
         if(actions.select)actions.select(frame.key);
@@ -127,8 +282,16 @@
       name.title=frame.name;pick.appendChild(name);
       var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
-      item.appendChild(pick);filmstrip.appendChild(item);
+      item.appendChild(pick);
+      makeDropTarget(item,i,actions,true);
+      var handle=el(doc,'span','modern-studio-drag-handle','⠿');
+      handle.title='Drag keyframe to reorder';
+      handle.setAttribute('aria-label','Drag keyframe '+(i+1)+' to reorder');
+      item.appendChild(handle);
+      makeDragSource(doc,item,handle,{kind:'frame',key:frame.key},actions);
+      filmstrip.appendChild(item);
     });
+    filmstrip.appendChild(dropSlot(doc,draft.frames.length,actions,options.pickerSelectedCount||0));
     host.appendChild(filmstrip);
     if(selected){
       var index=draft.frames.indexOf(selected);
@@ -167,5 +330,5 @@
       'This draft cannot play, render, export or permanently save an animation yet. ' +
       'Snapshot selection in History is kept separately until loaded.'));
   }
-  return Object.freeze({render:render});
+  return Object.freeze({render:render,renderPicker:renderPicker});
 }));

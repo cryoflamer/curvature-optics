@@ -653,3 +653,59 @@ button{cursor:pointer}
 .modern-studio-preview-caption strong{font-size:17px;color:#173a58}
 .modern-studio-preview-caption small{display:block;color:#648096;margin-top:16px}
 @media(max-width:650px){.modern-studio-preview{grid-template-columns:1fr}.modern-studio-preview-visual{min-height:135px}}
+
+/* Animation Studio keyframe drag-and-drop. The History-backed picker is
+ * docked alongside the editor rather than obscuring its drop targets. */
+.modern-animation-editor-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+.modern-animation-workspace.has-snapshot-picker{width:min(1530px,calc(100% - 24px))}
+.modern-animation-workspace.has-snapshot-picker .modern-animation-editor-layout{grid-template-columns:minmax(265px,320px) minmax(0,1fr)}
+.modern-animation-snapshot-picker{position:sticky;top:12px;min-width:0;box-sizing:border-box;
+  max-height:calc(100vh - 26px);display:flex;flex-direction:column;background:#f6faff;
+  border:1px solid #c5dced;border-radius:10px;padding:12px;color:#254d6d;font-size:12px}
+.modern-animation-snapshot-picker[hidden]{display:none!important}
+.modern-studio-picker-head,.modern-studio-picker-tools{display:flex;align-items:center;justify-content:space-between;gap:7px}
+.modern-studio-picker-head strong{font-size:14px}
+.modern-studio-picker-head button,.modern-studio-picker-tools button{background:#e8f4fe;
+  border:1px solid #bcd5ec;border-radius:6px;padding:5px 8px;color:#256195;cursor:pointer}
+.modern-studio-picker-tools{flex-wrap:wrap;margin:8px 0}
+.modern-studio-picker-tools button:disabled{opacity:.5;cursor:not-allowed}
+.modern-studio-picker-search{width:100%;box-sizing:border-box;border:1px solid #c7dae9;
+  border-radius:6px;padding:8px;font:inherit;background:white;color:#254d6d}
+.modern-studio-picker-list{min-height:0;overflow:auto;flex:1;list-style:none;margin:0;padding:0;
+  display:flex;flex-direction:column;gap:7px;scrollbar-width:thin}
+.modern-studio-picker-card{display:grid;grid-template-columns:auto 85px minmax(0,1fr) auto;
+  align-items:center;gap:7px;padding:6px;background:white;border:1px solid #d2e2f0;
+  border-radius:8px;min-width:0;cursor:grab}
+.modern-studio-picker-card:hover{border-color:#74a8d4;background:#f0f8ff}
+.modern-studio-picker-checkbox{accent-color:#287ac5;width:16px;height:16px}
+.modern-studio-picker-visual{height:58px;background:#edf4fa;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;border-radius:5px}
+.modern-studio-picker-visual .modern-storyboard-image{max-width:100%;max-height:100%;object-fit:contain}
+.modern-studio-picker-info{display:flex;flex-direction:column;gap:3px;min-width:0}
+.modern-studio-picker-info strong,.modern-studio-picker-info small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.modern-studio-picker-info strong{font-size:11px}
+.modern-studio-picker-info small{color:#657c93;font-size:10px}
+.modern-studio-drag-handle{display:flex;align-items:center;justify-content:center;
+  color:#5482a8;font-size:19px;cursor:grab;touch-action:none;user-select:none;
+  width:23px;min-height:30px;border-radius:5px}
+.modern-studio-drag-handle:hover,.modern-studio-drag-handle.is-dragging{background:#dceeff;color:#245e94}
+.modern-studio-filmstrip{align-items:stretch;gap:3px}
+.modern-studio-filmstrip-item{position:relative;cursor:grab;display:flex;flex-direction:column}
+.modern-studio-filmstrip-item .modern-studio-drag-handle{align-self:center;margin-top:2px;min-height:22px}
+.modern-studio-drop-slot{flex:0 0 19px;min-width:19px;display:flex;align-items:center;
+  justify-content:center;border:2px dashed transparent;border-radius:6px;box-sizing:border-box;
+  transition:background .1s,border-color .1s}
+.modern-studio-drop-slot.is-drop-target{border-color:#2183d2;background:#ceeaff}
+.modern-studio-drop-button{border:0;background:transparent;color:#487ca4;font-size:16px;
+  border-radius:5px;width:16px;min-height:32px;padding:0;cursor:pointer}
+.modern-studio-drop-button:hover:not(:disabled),.modern-studio-drop-button:focus-visible{background:#dceeff;color:#1b6dad}
+.modern-studio-drop-button:disabled{opacity:.36;cursor:default}
+.modern-studio-drop-slot.is-drop-target .modern-studio-drop-button{opacity:1}
+@media(max-width:950px){
+  .modern-animation-workspace.has-snapshot-picker .modern-animation-editor-layout{grid-template-columns:1fr}
+  .modern-animation-snapshot-picker{position:static;max-height:270px}
+  .modern-studio-picker-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));overflow:auto}
+  .modern-studio-picker-card{grid-template-columns:auto 64px minmax(0,1fr) auto}
+}
+.modern-studio-filmstrip-item.is-drop-target.is-drop-before{box-shadow:inset 4px 0 #2183d2}
+.modern-studio-filmstrip-item.is-drop-target.is-drop-after{box-shadow:inset -4px 0 #2183d2}

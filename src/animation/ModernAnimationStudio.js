@@ -31,7 +31,7 @@
   function history(ids,entries,previous){
     if(!Array.isArray(ids)||ids.length>MAX_FRAMES)throw RangeError('Too many selected snapshots');
     var found=new Map(entries.map(function(entry){return [entry.id,entry];}));
-    var old=previous&&previous.source==='history'?new Map(previous.frames.map(function(f){
+    var old=previous?new Map(previous.frames.map(function(f){
       return [f.key,f];
     })):new Map();
     var draft=previous?copy(previous):blank(),seen=new Set();
@@ -112,6 +112,48 @@
     for(var i=1;i<next.frames.length;i++)if(next.frames[i].travelMs<200)next.frames[i].travelMs=5000;
     return next;
   }
+  // A drop index addresses a gap in the original timeline (0…length).
+  // Moving a frame past itself changes the destination by one after removal.
+  function reorder(draft,key,gap){
+    var next=copy(draft),from=next.frames.findIndex(function(f){return f.key===key;});
+    if(from<0||!Number.isInteger(gap)||gap<0||gap>next.frames.length)
+      throw RangeError('Invalid animation drop target');
+    if(gap===from||gap===from+1)return next;
+    var frame=next.frames.splice(from,1)[0];
+    next.frames.splice(gap>from?gap-1:gap,0,frame);
+    normalizeTravel(next);
+    return next;
+  }
+  function normalizeTravel(draft){
+    if(draft.frames.length)draft.frames[0].travelMs=0;
+    for(var i=1;i<draft.frames.length;i++)
+      if(draft.frames[i].travelMs<200)draft.frames[i].travelMs=5000;
+  }
+  // Copy only the requested snapshots into an existing draft. Unlike history(),
+  // insertion must not replace imported camera frames or edited keyframe timing.
+  // Re-selecting a snapshot does not duplicate its stable source ID.
+  function insertSnapshots(draft,ids,entries,gap){
+    if(!Array.isArray(ids)||!Array.isArray(entries)||!Number.isInteger(gap)||
+      gap<0||gap>draft.frames.length)throw RangeError('Invalid animation insertion');
+    var found=new Map(entries.map(function(entry){return [entry.id,entry];}));
+    var existing=new Set(draft.frames.map(function(frame){return frame.sourceSnapshotId;}));
+    var seen=new Set(),next=copy(draft),incoming=[];
+    ids.forEach(function(id){
+      if(seen.has(id)||existing.has(id)||!found.has(id))return;
+      seen.add(id);
+      var entry=found.get(id);
+      incoming.push({key:'history-'+id,sourceSnapshotId:id,
+        name:entry.name||'Frame '+(next.frames.length+incoming.length+1),
+        experiment:state.validate(entry.experiment),travelMs:5000,holdMs:0,easing:'linear'});
+    });
+    if(next.frames.length+incoming.length>MAX_FRAMES)
+      throw RangeError('Animation has a maximum of '+MAX_FRAMES+' keyframes');
+    if(!incoming.length)return next;
+    next.frames.splice.apply(next.frames,[gap,0].concat(incoming));
+    next.source=next.source==='none'||next.source==='history'?'history':'mixed';
+    normalizeTravel(next);
+    return next;
+  }
   function remove(draft,key){
     var next=copy(draft);next.frames=next.frames.filter(function(f){return f.key!==key;});
     if(next.frames.length)next.frames[0].travelMs=0;
@@ -149,5 +191,5 @@
       mode:result.mode,target:result.target});
   }
   return Object.freeze({blank:blank,history:history,importCamera:importCamera,
-    edit:edit,editFrame:editFrame,move:move,remove:remove,inspect:inspect,build:build});
+    edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build});
 }));

@@ -1079,12 +1079,16 @@ test('Animation workspace preference restores UI without changing saved Scene/Co
 });
 
 
-test('History opens over Animation and closes by Escape or backdrop without moving the camera',async()=>{
+test('Animation picker keeps modal History separate; full History closes without camera changes',async()=>{
   const factory={create:()=>({open:()=>Promise.resolve(),list:()=>Promise.resolve([])})};
   const h=boot(experiment([]),{},undefined,undefined,factory),n=h.nodes;
   n.get('ModernAnimationTab').dispatch('click');
   const before={mode:h.app.getMode(),height:h.app.getModel().Height,renders:h.renders.length};
   n.get('ModernAnimationChooseSnapshots').dispatch('click');
+  assert.equal(n.get('ModernHistoryPanel').hidden,true,
+    'choosing snapshots now opens a docked picker, not modal History');
+  assert.equal(n.get('ModernHistoryBackdrop').hidden,true);
+  n.get('ModernHistoryToggle').dispatch('click');
   assert.equal(n.get('ModernHistoryPanel').hidden,false);
   assert.equal(n.get('ModernHistoryBackdrop').hidden,false);
   n.get('ModernHistoryPanel').dispatch('keydown',{key:'Escape'});

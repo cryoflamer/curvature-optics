@@ -133,7 +133,8 @@ function mockDom(){
     className:'',value:'',disabled:false,
     appendChild(node){this.children.push(node);return node;},
     addEventListener(name,fn){this.listeners[name]=fn;},
-    setAttribute(name,value){this[name]=value;}};}};
+    setAttribute(name,value){this[name]=value;},
+    getAttribute(name){return this[name]===undefined?null:String(this[name]);}};}};
   return {doc,host:doc.createElement('section')};
 }
 function collect(node,predicate){
@@ -243,4 +244,172 @@ test('Modern shell loads pure project modules ahead of UI and keeps legacy camer
   assert.match(html,/id="ModernCameraAnimationSection"/);
   assert.match(app,/getAnimationStudioProject/);
   assert.match(app,/studioApi\.importCamera\(experimentSnapshot\(\),cameraSequence,studioDraft\)/);
+});
+
+test('Drag reorder uses target gaps, preserves frame identities and keeps first travel zero',()=>{
+  const a=experiment(),b=clone(a),c=clone(a),d=clone(a);
+  [b,c,d].forEach((e,i)=>{e.scene.camera.Height=30+i*20;});
+  const entries=[entry(1,a,'A'),entry(2,b,'B'),entry(3,c,'C'),entry(4,d,'D')];
+  let draft=studio.history([1,2,3,4],entries);
+  draft=studio.editFrame(draft,'history-2','holdMs','2');
+  draft=studio.reorder(draft,'history-1',3); // gap immediately before original frame 4
+  assert.deepEqual(draft.frames.map(f=>f.sourceSnapshotId),[2,3,1,4]);
+  assert.equal(draft.frames[0].travelMs,0);
+  assert.ok(draft.frames.slice(1).every(f=>f.travelMs>=200));
+  assert.equal(draft.frames[0].holdMs,2000);
+  draft=studio.reorder(draft,'history-4',0);
+  assert.deepEqual(draft.frames.map(f=>f.sourceSnapshotId),[4,2,3,1]);
+  const old=structuredClone(draft);
+  assert.deepEqual(studio.reorder(draft,'history-2',2),draft,'dropping on own right gap is a no-op');
+  assert.deepEqual(draft,old);
+  assert.throws(()=>studio.reorder(draft,'history-1',99),/drop target/);
+  assert.deepEqual(studio.build(draft,'reordered').keyframes.map(f=>f.name),['D','B','C','A']);
+});
+
+test('Snapshot insertion is additive, de-duplicated, self-contained, and accepts ordered multi-add',()=>{
+  const a=experiment(),b=clone(a),c=clone(a),d=clone(a);
+  b.scene.camera.Height=30;c.scene.camera.Height=50;d.scene.camera.Height=70;
+  const entries=[entry(1,a,'A'),entry(2,b,'B'),entry(3,c,'C'),entry(4,d,'D')];
+  const original=structuredClone(entries);
+  let draft=studio.history([1,4],entries);
+  draft=studio.editFrame(draft,'history-4','travelMs','8');
+  draft=studio.insertSnapshots(draft,[2,3,2,4],entries,1);
+  assert.deepEqual(draft.frames.map(f=>f.sourceSnapshotId),[1,2,3,4]);
+  assert.equal(draft.frames[3].travelMs,8000,'previous timing retained');
+  assert.equal(draft.frames[1].name,'B');
+  assert.equal(draft.frames[0].travelMs,0);
+  assert.deepEqual(studio.insertSnapshots(draft,[2,3],entries,2),draft,'no duplicate insertion');
+  assert.equal(studio.inspect(draft).compatible,true);
+  assert.deepEqual(entries,original,'History unchanged');
+  entries[1].experiment.scene.camera.Height=9000;
+  assert.equal(animation.sampleAt(studio.build(draft,'saved'),5000).scene.camera.Height,30,
+    'inserted frame is independent of History mutations');
+  assert.throws(()=>studio.insertSnapshots(draft,[2],entries,-1),/insertion/);
+  assert.throws(()=>studio.insertSnapshots(draft,[2],entries,99),/insertion/);
+});
+
+test('Inserting History snapshots into imported Camera Animation keeps camera frames',()=>{
+  const a=experiment(),b=clone(a),c=clone(a);
+  b.scene.camera.Height=55;c.scene.camera.Height=75;
+  const legacy=sequence.validate([
+    {name:'Imported low',camera:a.scene.camera,travelMs:0,holdMs:300,easing:'linear'},
+    {name:'Imported high',camera:b.scene.camera,travelMs:2500,holdMs:100,easing:'smoothstep'}
+  ]);
+  const old=structuredClone(legacy);
+  let draft=studio.importCamera(a,legacy);
+  draft=studio.insertSnapshots(draft,[3],[entry(3,c,'History camera')],1);
+  assert.equal(draft.source,'mixed');
+  assert.deepEqual(draft.frames.map(f=>f.key),['camera-0','history-3','camera-1']);
+  assert.equal(draft.frames[2].travelMs,2500);
+  assert.equal(draft.frames[2].easing,'smoothstep');
+  assert.deepEqual(legacy,old);
+  assert.equal(studio.inspect(draft).compatible,true);
+  const next=studio.reorder(draft,'history-3',3);
+  assert.deepEqual(next.frames.map(f=>f.key),['camera-0','camera-1','history-3']);
+});
+
+test('Maximum keyframe count and compatibility validation also apply to drag insertion',()=>{
+  const a=experiment();
+  const base=studio.history([1],[entry(1,a)]);
+  const big=structuredClone(base);
+  for(let i=1;i<200;i++)big.frames.push({...big.frames[0],key:'mock-'+i,sourceSnapshotId:null});
+  assert.throws(()=>studio.insertSnapshots(big,[201],[entry(201,a)],200),/maximum/);
+  const incompatible=clone(a);incompatible.scene.camera.Height=70;
+  incompatible.scene.temperatureProfile.gradientKPerKm=3;
+  const draft=studio.insertSnapshots(base,[2],[entry(2,incompatible)],1);
+  assert.equal(studio.inspect(draft).compatible,false);
+  assert.throws(()=>studio.build(draft,'invalid'),/incompatible/);
+});
+
+test('DOM timeline renders droppable gaps and wires frame drag and end',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=55;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),calls=[];
+  const actions={choose(){},load(){},importCamera(){},edit(){},frame(){},select(){},move(){},remove(){},prepare(){},
+    dragStart:(payload,event)=>calls.push(['start',payload]),
+    dragOver:()=>true,drop:(index)=>calls.push(['drop',index]),dragEnd:()=>calls.push('end'),
+    insertChecked:index=>calls.push(['insert',index])};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{pickerSelectedCount:2});
+  const slots=collect(host,n=>n.className==='modern-studio-drop-slot');
+  assert.equal(slots.length,3,'one drop gap before, between and after frames');
+  const cards=collect(host,n=>n.className==='modern-studio-filmstrip-item');
+  assert.equal(cards.length,2);
+  assert.equal(cards[0].draggable,true);
+  cards[1].listeners.dragstart({dataTransfer:{setData(){},effectAllowed:null}});
+  assert.deepEqual(calls.at(-1),['start',{kind:'frame',key:'history-2'}]);
+  let prevented=false;
+  slots[0].listeners.dragover({preventDefault(){prevented=true;}});
+  assert.equal(prevented,true);
+  slots[0].listeners.drop({preventDefault(){}});
+  assert.deepEqual(calls.at(-1),['drop',0]);
+  slots[1].children[0].listeners.click();
+  assert.deepEqual(calls.at(-1),['insert',1]);
+  cards[1].listeners.dragend();
+  assert.equal(calls.at(-1),'end');
+});
+
+test('Snapshot Picker contains saved images, search, bulk select and drag handles',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=95;
+  const {doc,host}=mockDom(),calls=[];
+  const saved=[{...entry(1,a,'First'),thumbnail:{dataUrl:'data:image/webp;base64,YQ=='}},
+    {...entry(2,b,'Second'),thumbnail:null}];
+  const actions={pickerSearch:(...args)=>calls.push(['search',...args]),
+    pickerToggle:(...args)=>calls.push(['toggle',...args]),pickerClose:()=>calls.push('close'),
+    pickerFullHistory:()=>calls.push('full'),insertChecked:()=>calls.push('insert'),
+    dragStart:(...args)=>calls.push(['drag',...args]),dragEnd:()=>calls.push('end')};
+  editor.renderPicker(doc,host,saved,actions,{open:true,search:'test',checked:{1:true}});
+  assert.equal(host.hidden,false);
+  const cards=collect(host,n=>n.className==='modern-studio-picker-card');
+  assert.equal(cards.length,2);
+  assert.equal(cards[0].draggable,true);
+  assert.equal(collect(cards[0],n=>n.tagName==='img')[0].src,saved[0].thumbnail.dataUrl);
+  assert.equal(collect(cards[1],n=>n.className==='modern-storyboard-no-image').length,1);
+  cards[1].children[0].checked=true;cards[1].children[0].listeners.change();
+  assert.deepEqual(calls.at(-1),['toggle',2,true]);
+  cards[0].listeners.dragstart({dataTransfer:{setData(){}}});
+  assert.deepEqual(calls.at(-1)[1],{kind:'snapshots',id:1});
+  const query=collect(host,n=>n.className==='modern-studio-picker-search')[0];
+  query.value='camera';query.listeners.input();
+  assert.equal(calls.at(-1)[1],'camera');
+  editor.renderPicker(doc,host,saved,actions,{open:false});
+  assert.equal(host.hidden,true);
+});
+
+test('Animation workspace renders a docked picker, rather than making History the DnD target',()=>{
+  const root=path.resolve(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(html,/id="ModernAnimationSnapshotPicker"/);
+  assert.ok(html.indexOf('id="ModernAnimationSnapshotPicker"')<html.indexOf('id="ModernAnimationStudio"'));
+  assert.match(css,/\.modern-animation-workspace\.has-snapshot-picker/);
+  assert.match(app,/studioApi\.insertSnapshots\(studioDraft,drag\.ids,entries,index\)/);
+  assert.match(app,/studioApi\.reorder\(studioDraft,drag\.key,index\)/);
+  assert.match(app,/studioUI\.renderPicker\(/);
+  assert.match(app,/toggleAnimationPicker\(!studioPickerOpen\)/);
+});
+
+test('Touch pointer drag resolves drop position without relying on native HTML drag events',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=43;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),docListeners={},calls=[];
+  doc.addEventListener=(name,fn)=>{docListeners[name]=fn;};
+  doc.removeEventListener=name=>{delete docListeners[name];};
+  const dropTarget={getAttribute:name=>name==='data-animation-gap'?'0':null,
+    classList:{add(){},remove(){},contains(){return false;}}};
+  doc.elementFromPoint=()=>({closest:()=>dropTarget});
+  const actions={choose(){},load(){},importCamera(){},edit(){},frame(){},select(){},move(){},remove(){},prepare(){},
+    dragStart:payload=>calls.push(['start',payload]),dragOver(){return true;},
+    dragEnd:()=>calls.push('end'),drop:index=>calls.push(['drop',index]),insertChecked(){}};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false);
+  const handle=collect(host,n=>n.className==='modern-studio-drag-handle')[0];
+  assert.equal(typeof handle.listeners.pointerdown,'function');
+  handle.listeners.pointerdown({pointerType:'touch',pointerId:7,clientX:2,clientY:2});
+  docListeners.pointermove({pointerId:7,clientX:4,clientY:4});
+  assert.equal(calls.length,0,'tap/micro-movement does not drag');
+  docListeners.pointermove({pointerId:7,clientX:60,clientY:5,preventDefault(){}});
+  assert.equal(calls[0][0],'start');
+  docListeners.pointerup({pointerId:7,clientX:60,clientY:5,preventDefault(){},type:'pointerup'});
+  assert.deepEqual(calls.slice(-2),[['drop',0],'end']);
+  assert.equal(docListeners.pointermove,undefined,'pointer listeners removed on completion');
 });

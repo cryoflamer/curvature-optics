@@ -363,3 +363,17 @@ playback. Drafts remain in memory; playback and durable Animation Project
 storage have not yet been implemented. The selected workspace tab is a browser
 preference, not part of shared experiment JSON or URLs. Explicit shared
 experiment links open their physical Scene/Compare context.
+
+### Animation Studio drag-and-drop
+
+In **Animation**, use **Choose snapshots from History** to open a compact
+side-by-side Snapshot Picker. Drag saved screenshots into timeline gaps, or
+reorder existing frames using their drag handles. Drop onto the left or right
+half of a frame to insert before or after it. To add several snapshots, check
+multiple picker cards and drag a checked card, or use **Add checked** / the
+`+` insertion controls. Existing Up/Down and keyboard-accessible buttons
+remain available. The full History manager is still accessible through the
+header or **Full History** inside the picker. Dragging does not alter original
+snapshots, active physics, or saved experiment URLs; incompatible sequences
+continue to be rejected on Prepare Project. See the
+[History and Animation guide](docs/modern-experiment-history.md) for details.
