@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 75,
-      "uniqueScripts": 73,
+      "scriptTags": 76,
+      "uniqueScripts": 74,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -188,6 +188,7 @@
         "src/animation/ModernAnimationProject.js",
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
+        "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationPreview.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
@@ -318,6 +319,7 @@
     ],
     "loadedByModernNotLegacy": [
       "src/animation/ModernAnimationCompatibility.js",
+      "src/animation/ModernAnimationDraftAutosave.js",
       "src/animation/ModernAnimationPlayback.js",
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationProject.js",
@@ -374,7 +376,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 154,
+  "sourceJsCount": 155,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -443,12 +445,23 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/animation/ModernAnimationDraftAutosave.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationDraftAutosave.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/animation/ModernAnimationPlayback.js": {
       "directHtmlLoads": [
         "modern"
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationPlayback.test.js"
       ],
       "commonJsToolCallers": []
@@ -472,6 +485,7 @@
         "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js"
@@ -484,6 +498,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationStudio.test.js"
       ],
       "commonJsToolCallers": []
@@ -2109,6 +2124,7 @@
       "commonJsTestCallers": [
         "tests/AtmosphericVisibility.test.js",
         "tests/ModernAngularGuide.test.js",
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js",
@@ -2210,6 +2226,7 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationCompatibility.js",
+        "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationPreview.js",
         "src/animation/ModernAnimationProject.js",
         "src/animation/ModernAnimationStudio.js",
@@ -2221,6 +2238,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/CurvatureCameraTranslation.test.js",
         "tests/LegacyModernBoundary.test.js",
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js",

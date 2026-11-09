@@ -179,6 +179,28 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project')[0].disabled,true);
 });
 
+test('Studio fields persist valid in-progress edits on input before focus leaves the field',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=60;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),calls=[];
+  const actions={load(){},importCamera(){},edit(){},frame(){},prepare(){},
+    liveEdit:(field,value)=>calls.push(['liveEdit',field,value]),
+    liveFrame:(key,field,value)=>calls.push(['liveFrame',key,field,value])};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-2'});
+  const controls=collect(host,n=>n.tagName==='input'||n.tagName==='textarea');
+  const names=controls.filter(n=>n.type==='text');
+  names[0].value='New draft before F5';names[0].listeners.input();
+  assert.deepEqual(calls.at(-1),['liveEdit','name','New draft before F5']);
+  names[1].value='Renamed frame';names[1].listeners.input();
+  assert.deepEqual(calls.at(-1),['liveFrame','history-2','name','Renamed frame']);
+  const number=controls.find(n=>n.type==='number');
+  number.value='6.2';number.listeners.input();
+  assert.deepEqual(calls.at(-1),['liveFrame','history-2','travelMs','6.2']);
+  const textarea=controls.find(n=>n.tagName==='textarea');
+  textarea.value='An important physical experiment';textarea.listeners.input();
+  assert.deepEqual(calls.at(-1),['liveEdit','description','An important physical experiment']);
+});
+
 test('Studio thumbnail filmstrip uses saved History images, selected-only controls and camera placeholders',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=75;
   let draft=studio.history([1,2],[entry(1,a,'Base'),entry(2,b,'High')]);

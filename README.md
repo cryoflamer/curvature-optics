@@ -397,10 +397,33 @@ is labeled **approximate**, while unsupported fast profiles (including
 Temperature lapse) use **Accurate** and may update slowly. Hiding the browser
 tab or leaving Animation pauses playback; editing keyframes invalidates the
 prepared project, which must be prepared again. The preview does not export a
-video or persist a project. **Physical parameter playback is not yet available**.
+video or create named Library projects. **Physical parameter playback is now available**.
 See [animation research](docs/modern-animation-research.md) for the clock,
 model-isolation and optical-rendering contract.
 
+
+
+### Animation Studio draft autosave and reload recovery (#140.12.120.4.3)
+
+Animation Studio now keeps **one editable draft checkpoint** automatically, independently
+from Scene/Compare Session Autosave and History. Frame order, embedded snapshot
+experiments, names, per-frame timing, easing, selected frame, playback optics quality,
+and the last timeline position are preserved. Changes are saved synchronously to a
+local browser backup and debounced to a separate IndexedDB database. Switching away,
+pausing, hiding the tab, or closing the page also flushes the latest position.
+
+After F5 the editor restores the saved draft. If it was prepared and still compatible,
+its independent playback is reconstructed **paused** at the last saved timeline position;
+no animation starts by itself. Missing History snapshots do not affect the owned
+keyframe states. Even an incomplete/incompatible draft remains editable. Invalid or
+future-version checkpoints are ignored, and late IndexedDB restoration cannot override
+an edit made in the new tab. Extremely large drafts may exceed localStorage quota;
+IndexedDB is the durable fallback, with a visible status if browser storage fails.
+
+This is **working-draft recovery**, not Animation Library: it stores only the current
+draft and does not create named persistent projects or export JSON/video. Creating
+a new draft overwrites the previous autosave; saving several distinct animations
+is planned for #140.12.120.5. The Scene/Compare experiment is not modified.
 
 ### Physical Parameter Playback in Animation Studio (#140.12.120.4)
 

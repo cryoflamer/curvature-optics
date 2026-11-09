@@ -29,6 +29,7 @@
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
+  var studioDraftAutosave=root.CurvatureModernAnimationDraftAutosave;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
@@ -484,6 +485,9 @@
   var studioPlaybackLastPaint=-Infinity;
   var studioPlaybackRenderedAt=null;
   var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
+  var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
+  var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
+  var studioDraftWriteQueue=Promise.resolve(),studioRestorePreviewPending=false;
   var studioPreviewRenderer=null;
   var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
@@ -995,6 +999,102 @@
       var button=newUiEl(id);if(button)button.disabled=historyStoryboardQueue.length===0;
     });
   }
+  // Animation Studio has its OWN single editable checkpoint. Never put the
+  // draft into the physical experiment URL, Session Autosave or History.
+  // LocalStorage is updated synchronously on edit for F5/pagehide; IndexedDB
+  // writes are debounced and serialized so late transactions cannot win.
+  function studioDraftStatus(message,error){
+    var node=newUiEl('ModernAnimationDraftStatus');
+    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
+  }
+  function studioDraftRecord(){
+    var stamp=Math.max(Date.now(),studioDraftSavedAt+1);
+    var record=studioDraftAutosave.checkpoint({draft:studioDraft,
+      selectedKey:studioSelectedKey,quality:studioPlaybackQuality,
+      prepared:!!studioPrepared,
+      positionMs:studioPlayback?studioPlayback.status().positionMs:0},stamp);
+    studioDraftSavedAt=stamp;
+    return record;
+  }
+  function writeStudioDraftIndexedDB(){
+    if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
+    if(!studioDraftCheckpoint||!root.indexedDB||!studioDraftAutosave)return;
+    var checkpoint=studioDraftCheckpoint;
+    studioDraftWriteQueue=studioDraftWriteQueue.catch(function(){return null;}).then(function(){
+      return studioDraftAutosave.write(root.indexedDB,checkpoint);
+    }).catch(function(error){
+      studioDraftStatus('Animation draft saved locally; IndexedDB unavailable: '+error.message,true);
+    });
+  }
+  function saveStudioDraft(throttled){
+    if(!studioDraftAutosave||!studioDraft)return;
+    var now=Date.now();
+    if(throttled&&now-studioDraftLastPositionSave<1200)return;
+    studioDraftLastPositionSave=now;
+    studioDraftGeneration++;
+    try{
+      studioDraftCheckpoint=studioDraftRecord();
+      var saved=false;
+      try{saved=studioDraftAutosave.writeLocal(preferencesStorage(),studioDraftCheckpoint);}
+      catch(error){studioDraftStatus('Local animation backup failed: '+error.message+'; trying IndexedDB.',true);}
+      if(!saved&&!root.indexedDB)studioDraftStatus('Animation draft cannot be saved: browser storage unavailable.',true);
+      else if(saved)studioDraftStatus('Animation draft autosaved · paused position and keyframes will restore after reload.',false);
+      if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+      studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
+    }catch(error){studioDraftStatus('Animation draft save failed: '+error.message,true);}
+  }
+  function restoreStudioDraft(record){
+    if(!record||!studioDraftAutosave||!studioApi)return;
+    // Records are strictly versioned and include full owned experiments. An
+    // incompatible animation is a valid draft, but must not auto-prepare.
+    var saved=studioDraftAutosave.normalize(record);
+    studioDraft=saved.draft;studioSelectedKey=saved.selectedKey;
+    studioPlaybackQuality=saved.quality;studioDraftSavedAt=saved.savedAt;
+    studioPrepared=null;studioPlayback=null;studioPlaybackRenderedAt=null;
+    studioPlaybackLastPaint=-Infinity;studioRestorePreviewPending=false;
+    if(saved.prepared&&studioPlaybackApi){
+      try{
+        studioPrepared=studioApi.build(studioDraft,'studio_draft');
+        studioPlayback=studioPlaybackApi.create(studioPrepared);
+        studioPlayback.seek(saved.positionMs,profileNow());
+        studioRestorePreviewPending=true;
+      }catch(error){studioPrepared=null;studioPlayback=null;
+        studioDraftStatus('Draft restored; re-prepare it to play: '+error.message,true);}
+    }
+    var optics=newUiEl('ModernAnimationPlaybackOptics');
+    if(optics)optics.value=studioPlaybackQuality;
+    syncStudioPlaybackControls();
+  }
+  function bindStudioDraftPersistence(){
+    if(!studioDraftAutosave)return;
+    var local=studioDraftAutosave.readLocal(preferencesStorage());
+    if(local){try{restoreStudioDraft(local);
+      studioDraftStatus('Animation draft restored from browser backup (playback paused).',false);
+    }catch(error){studioDraftStatus('Animation draft backup could not be restored: '+error.message,true);}}
+    var generation=studioDraftGeneration;
+    if(root.indexedDB)studioDraftAutosave.read(root.indexedDB).then(function(remote){
+      if(studioDraftGeneration!==generation)return; // never overwrite new user edits
+      var best=studioDraftAutosave.newer(local,remote);
+      if(best&&(!local||best.savedAt>local.savedAt)){
+        restoreStudioDraft(best);studioDraftCheckpoint=best;
+        studioDraftStatus('Animation draft restored from IndexedDB (playback paused).',false);
+        if(experimentHistory)refreshHistoryList().catch(function(){/* retain restored draft */});
+      }
+    }).catch(function(error){
+      if(!local)studioDraftStatus('Animation draft recovery unavailable: '+error.message,true);
+    });
+    if(root.addEventListener){
+      root.addEventListener('pagehide',function(){
+        if(studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
+      });
+      root.addEventListener('beforeunload',function(){
+        if(studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
+      });
+    }
+    if(document.addEventListener)document.addEventListener('visibilitychange',function(){
+      if(document.hidden&&studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
+    });
+  }
   // Staging IDs survive History filtering; actual animation states are copied
   // into the draft only on explicit hand-off. Missing IDs are pruned by History.
   function stopStudioPlayback(clear){
@@ -1102,7 +1202,8 @@
       renderStudioPlaybackSample(!next.playing);
       syncStudioPlaybackControls();
       if(next.playing)studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
-      else{
+      saveStudioDraft(!!next.playing);
+      if(!next.playing){
         var status=newUiEl('ModernAnimationPlaybackStatus');
         if(status)status.textContent='Animation finished · live Scene / Compare unchanged.';
       }
@@ -1116,6 +1217,7 @@
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
       studioPlaybackQuality=['auto','fast','accurate'].includes(optics.value)?optics.value:'auto';
+      saveStudioDraft(false);
       if(!studioPlayback)return;
       stopStudioPlayback(false);
       studioPlaybackLastPaint=-Infinity;
@@ -1137,16 +1239,18 @@
       if(status)status.textContent=(studioPrepared.mode==='camera'?'Camera':'Physical')+
         ' animation playing in an independent optical viewport.';
       renderStudioPlaybackSample(true);syncStudioPlaybackControls();
+      saveStudioDraft(false);
       if(studioPlaybackFrame===null)studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
     });});
     var pause=newUiEl('ModernAnimationPlaybackPause');
     if(pause)pause.addEventListener('click',function(){safely(function(){
-      stopStudioPlayback(false);
+      stopStudioPlayback(false);saveStudioDraft(false);
       var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Paused.';
     });});
     var stop=newUiEl('ModernAnimationPlaybackStop');
     if(stop)stop.addEventListener('click',function(){safely(function(){
       stopStudioPlayback(false);if(studioPlayback)studioPlayback.stop();
+      saveStudioDraft(false);
       renderStudioPlaybackSample(true);syncStudioPlaybackControls();
       var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Stopped at first keyframe.';
     });});
@@ -1154,11 +1258,12 @@
     if(seek)seek.addEventListener('input',function(){safely(function(){
       if(!studioPlayback)return;
       studioPlayback.seek(studioPlayback.status().durationMs*Number(seek.value)/1000,profileNow());
+      saveStudioDraft(false);
       studioPlaybackLastPaint=-Infinity;
       renderStudioPlaybackSample(true);syncStudioPlaybackControls();
     });});
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden&&studioPlayback){stopStudioPlayback(false);
+      if(document.hidden&&studioPlayback){stopStudioPlayback(false);saveStudioDraft(false);
         var status=newUiEl('ModernAnimationPlaybackStatus');
         if(status)status.textContent='Paused while the tab is hidden.';
       }
@@ -1170,6 +1275,7 @@
     studioSelectedKey=null;studioFilmstripScroll=0;
     studioDraft=studioApi.history(historyStoryboardQueue,entries,studioDraft);
     stopStudioPlayback(true);studioPrepared=null;
+    saveStudioDraft(false);
     renderAnimationStudio(entries);
   }
   function animationPickerEntries(entries){
@@ -1210,6 +1316,7 @@
       studioDraft=next;stopStudioPlayback(true);studioPrepared=null;
       if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
         studioSelectedKey=next.frames.length?next.frames[0].key:null;
+      saveStudioDraft(false);
       var status=newUiEl('ModernAnimationStudioMessage');
       if(status){status.textContent='';status.classList.remove('is-error');}
       renderAnimationStudio(entries);
@@ -1233,8 +1340,18 @@
       frame:function(key,field,value){safe(function(){
         update(studioApi.editFrame(studioDraft,key,field,value));
       });},
+      liveEdit:function(field,value){
+        try{studioDraft=studioApi.edit(studioDraft,field,value);
+          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
+        }catch(error){/* Temporary invalid text is reported by the committed change event. */}
+      },
+      liveFrame:function(key,field,value){
+        try{studioDraft=studioApi.editFrame(studioDraft,key,field,value);
+          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
+        }catch(error){/* Do not persist incomplete or invalid intermediate numbers. */}
+      },
       select:function(key){
-        studioSelectedKey=key;renderAnimationStudio(entries);
+        studioSelectedKey=key;saveStudioDraft(false);renderAnimationStudio(entries);
         var active=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-active');
         if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
       },
@@ -1250,6 +1367,7 @@
         stopStudioPlayback(true);
         studioPrepared=studioApi.build(studioDraft,'studio_draft');
         studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
+        saveStudioDraft(false);
         syncStudioPlaybackControls();
         if(studioPlayback)renderStudioPlaybackSample(true);
         renderAnimationStudio(entries);
@@ -1372,6 +1490,12 @@
     }
     var strip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(strip)strip.scrollLeft=studioFilmstripScroll;
+    if(studioRestorePreviewPending&&studioPlayback&&animationWorkspaceOpen){
+      studioRestorePreviewPending=false;
+      try{renderStudioPlaybackSample(true);}catch(error){
+        studioDraftStatus('Animation restored; preview needs manual retry: '+error.message,true);
+      }
+    }
   }
   var historyMetadataEditingId=null;
   function closeHistoryMetadataEditor(){
@@ -3690,7 +3814,9 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode,remember){
-    if(mode!=='animation'&&animationWorkspaceOpen)stopStudioPlayback(false);
+    if(mode!=='animation'&&animationWorkspaceOpen){
+      stopStudioPlayback(false);if(studioPlayback)saveStudioDraft(false);
+    }
     if(!['scene','compare','animation','demos'].includes(mode))
       throw RangeError('Invalid Modern UI mode');
     if(mode==='animation'){
@@ -4062,6 +4188,7 @@
     });
   }
   function bind(){
+    bindStudioDraftPersistence();
     bindStudioPlayback();
     bindCameraDrag();
     bindCameraKeyboard();
@@ -4198,6 +4325,11 @@
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     getHistoryStore:function(){return experimentHistory;},
     getStudioPlayback:function(){return studioPlayback?studioPlayback.status():null;},
+    getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?
+      studioDraftAutosave.checkpoint({draft:studioDraft,selectedKey:studioSelectedKey,
+        quality:studioPlaybackQuality,prepared:!!studioPrepared,
+        positionMs:studioPlayback?studioPlayback.status().positionMs:0},
+        Math.max(1,studioDraftSavedAt||Date.now())):null;},
     getAnimationStudioProject:function(){return studioPrepared&&studioProjects?
       studioProjects.validate(studioPrepared):null;},
     getWorkspaceState:function(){return {mode:animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode,

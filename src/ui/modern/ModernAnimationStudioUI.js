@@ -1,4 +1,4 @@
-/* Compact DOM-only editor for an in-memory animation draft. The filmstrip
+/* Compact DOM-only editor for an autosaved animation draft. The filmstrip
  * resolves saved thumbnails from History but never captures or renders optics.
  */
 (function(root,factory){
@@ -19,7 +19,7 @@
     node.type='button';node.setAttribute('aria-label',description);node.addEventListener('click',action);
     return node;
   }
-  function field(doc,label,value,kind,action,options){
+  function field(doc,label,value,kind,action,options,liveAction){
     var wrapper=el(doc,'label','modern-studio-field');
     wrapper.appendChild(el(doc,'span','',label));
     var control=el(doc,kind==='textarea'?'textarea':kind==='select'?'select':'input');
@@ -33,6 +33,9 @@
       control.min='0';control.max='120';control.step='0.1';
     }else if(kind==='text')control.maxLength=120;
     control.value=String(value);
+    // Persist valid in-progress edits before blur/F5 without rebuilding the
+    // form on every keystroke (which would lose input focus/caret position).
+    if(liveAction&&kind!=='select')control.addEventListener('input',function(){liveAction(control.value);});
     control.addEventListener('change',function(){action(control.value);});
     wrapper.appendChild(control);return wrapper;
   }
@@ -218,8 +221,10 @@
     toolbar.appendChild(button(doc,'Import Camera Animation','Import existing camera keyframes into draft',actions.importCamera));
     host.appendChild(toolbar);
     var basics=el(doc,'div','modern-studio-basics');
-    basics.appendChild(field(doc,'Project name',draft.name,'text',function(value){actions.edit('name',value);}));
-    basics.appendChild(field(doc,'Description',draft.description,'textarea',function(value){actions.edit('description',value);}));
+    basics.appendChild(field(doc,'Project name',draft.name,'text',function(value){actions.edit('name',value);},null,
+      function(value){if(actions.liveEdit)actions.liveEdit('name',value);}));
+    basics.appendChild(field(doc,'Description',draft.description,'textarea',function(value){actions.edit('description',value);},null,
+      function(value){if(actions.liveEdit)actions.liveEdit('description',value);}));
     basics.appendChild(field(doc,'Animation mode',draft.mode,'select',function(value){actions.edit('mode',value);},
       [['auto','Auto-detect'],['camera','Camera motion'],['physical','One physical parameter']]));
     if(draft.mode==='physical'){
@@ -310,11 +315,14 @@
         selected.sourceSnapshotId===null?'Imported camera view':
           'History snapshot #'+selected.sourceSnapshotId));
       var fields=el(doc,'div','modern-studio-frame-fields');
-      fields.appendChild(field(doc,'Frame name',selected.name,'text',function(value){actions.frame(selected.key,'name',value);}));
+      fields.appendChild(field(doc,'Frame name',selected.name,'text',function(value){actions.frame(selected.key,'name',value);},null,
+        function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'name',value);}));
       if(index>0)fields.appendChild(field(doc,'Travel to frame (s)',selected.travelMs/1000,'number',
-        function(value){actions.frame(selected.key,'travelMs',value);}));
+        function(value){actions.frame(selected.key,'travelMs',value);},null,
+        function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'travelMs',value);}));
       fields.appendChild(field(doc,'Hold after arrival (s)',selected.holdMs/1000,'number',
-        function(value){actions.frame(selected.key,'holdMs',value);}));
+        function(value){actions.frame(selected.key,'holdMs',value);},null,
+        function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'holdMs',value);}));
       if(index>0)fields.appendChild(field(doc,'Easing',selected.easing,'select',function(value){
         actions.frame(selected.key,'easing',value);
       },[['linear','Linear'],['smoothstep','Ease in / out']]));
@@ -324,11 +332,11 @@
     var prepare=button(doc,'Prepare project','Validate and prepare an in-memory animation project',actions.prepare);
     prepare.disabled=!result.compatible;footer.appendChild(prepare);
     if(prepared)footer.appendChild(el(doc,'span','modern-studio-prepared',
-      'Project prepared in memory · Isolated playback is available above; saving comes later'));
+      'Prepared · Draft autosaved for reload; named Animation Library comes later'));
     host.appendChild(footer);
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Prepare a compatible Camera or Physical Animation to play in the independent optical viewport above. ' +
-      'Export and permanent saving are not implemented yet.'));
+      'Draft autosave restores your work after F5; named project Library and export are not implemented yet.'));
   }
   return Object.freeze({render:render,renderPicker:renderPicker});
 }));

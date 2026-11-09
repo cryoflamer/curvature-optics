@@ -321,4 +321,31 @@ At the end of the absolute-time sequence, the terminal sampled state is
 rendered (including exactly Flat where applicable). Recovery does not
 rewind the clock or change timing. Rendering may still be too slow for
 smooth playback; browser verification of visual fidelity and completion is
-required. Persistent project storage remains a separate planned feature.
+required. Named Animation Library project storage remains a separate planned feature.
+
+## Editable Animation Studio checkpoint (#140.12.120.4.3)
+
+The Studio editor now has a dedicated `ModernAnimationDraftAutosave` module,
+separate from `ModernSessionAutosave` and History. It validates a versioned
+checkpoint with the entire editable `ModernAnimationStudio` draft, not just
+source History IDs: names, per-frame full `ModernExperimentState` values,
+frame ordering, timing, easing, selection, optics quality, prepared flag,
+and deterministic playback position in milliseconds. Incomplete drafts and
+physically incompatible keyframes are valid *editable* checkpoints; only a
+compatible prepared draft is rebuilt into `ModernAnimationProject` on restore.
+The playback controller is always paused after restore. Rendering its paused
+position is deferred until the Animation workspace becomes visible, avoiding
+a hidden expensive RK4 redraw.
+
+LocalStorage provides a synchronous pagehide/reload backup. A distinct
+IndexedDB store contains the same self-contained record, with serialized
+transaction writes and a short debounce. The newest validated timestamp
+wins during startup. Async restore is generation-gated so an older record
+that arrives after a new user edit cannot overwrite that edit. Updating
+position during Play is throttled; Pause, Stop, Seek, editor mutations,
+visibility changes and pagehide persist immediately locally. Corrupted or
+unsupported versions are ignored. Browser storage failures are reported
+without deleting existing History or replacing the working Scene/Compare.
+
+There is still only *one* recoverable working draft; the multi-project
+Animation Library and portable import/export are planned separately.
