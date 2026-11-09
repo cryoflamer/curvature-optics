@@ -710,7 +710,7 @@ button{cursor:pointer}
 .modern-studio-filmstrip-item.is-drop-target.is-drop-before{box-shadow:inset 4px 0 #2183d2}
 .modern-studio-filmstrip-item.is-drop-target.is-drop-after{box-shadow:inset -4px 0 #2183d2}
 
-/* Separate rendering surface for Camera Animation; never reuse Scene/Compare canvases. */
+/* Separate rendering surface for Animation; never reuse Scene/Compare canvases. */
 .modern-animation-graph-bootstrap{position:absolute;left:-10000px;top:0;width:960px;
   visibility:hidden;pointer-events:none}
 .modern-animation-playback{box-sizing:border-box;border:1px solid #bad2e8;background:#f7fbff;
@@ -719,6 +719,8 @@ button{cursor:pointer}
 .modern-animation-playback-heading{display:flex;justify-content:space-between;gap:12px;
   align-items:center;font-size:14px;margin-bottom:9px;color:#1d405e}
 .modern-animation-playback-heading span{font-size:12px;color:#5a748e}
+.modern-animation-playback-heading #ModernAnimationPlaybackParameter{font-weight:600;color:#275477}
+.modern-animation-playback-heading #ModernAnimationPlaybackParameter[hidden]{display:none!important}
 .modern-animation-playback-panels{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .modern-animation-playback-panels.is-compare{grid-template-columns:repeat(2,minmax(0,1fr))}
 .modern-animation-playback-view{min-width:0;background:white;border:1px solid #c5d6e7;

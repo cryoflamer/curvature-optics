@@ -1,4 +1,4 @@
-/* Clock-only controller for deterministic, isolated Camera Animation playback.
+/* Clock-only controller for deterministic, isolated Camera / Physical Animation playback.
  * The renderer receives owned samples; neither a live experiment nor History
  * is read or written by this controller. Clock time never depends on frame count.
  */
@@ -12,7 +12,6 @@
   'use strict';
   function create(project){
     var owned=projects.validate(project);
-    if(owned.mode!=='camera')throw RangeError('Only Camera Animation playback is available');
     var duration=projects.totalMs(owned),position=0,startedAt=0,playing=false;
     function clamp(ms){
       if(typeof ms!=='number'||!Number.isFinite(ms))throw RangeError('Invalid playback time');
@@ -40,5 +39,20 @@
     return Object.freeze({project:owned,sample:sample,status:status,start:start,tick:tick,
       pause:pause,seek:seek,stop:stop});
   }
-  return Object.freeze({create:create});
+  // A label of the sampled *physical* value, not an arbitrary transition
+  // percentage. Never derive it from the live workspace controls.
+  function describeSample(project,sample){
+    if(project.mode!=='physical')return '';
+    var target=project.target;
+    var side=target.scope;
+    var spec=side==='scene'?sample.scene:sample.compare[side];
+    var prefix=side==='scene'?'Scene':('Model '+side);
+    if(target.parameter==='temperatureProfile.gradientKPerKm')
+      return prefix+' · Temperature gradient '+spec.temperatureProfile.gradientKPerKm.toFixed(2)+' K/km';
+    var flat=side==='scene'?spec.surface.showModel===2:spec.surface==='flat';
+    if(flat)return prefix+' · Flat (curvature = 0)';
+    var radiusKm=side==='scene'?spec.surface.rEarth/1000:spec.radiusKm;
+    return prefix+' · Globe R = '+radiusKm.toLocaleString('en-US',{maximumFractionDigits:1})+' km';
+  }
+  return Object.freeze({create:create,describeSample:describeSample});
 }));

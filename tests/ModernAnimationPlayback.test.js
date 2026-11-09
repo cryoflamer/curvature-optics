@@ -55,12 +55,74 @@ test('Seek is clamped and invalid clocks are rejected without mutation',()=>{
   assert.throws(()=>t.tick(NaN),/clock/);
   t.start(100);t.seek(2000,500);assert.equal(t.tick(1500).positionMs,3000);
 });
-test('Physical projects are explicitly excluded from camera playback',()=>{
-  const a=snapshot(),b=structuredClone(a);
-  b.scene.temperatureProfile.gradientKPerKm=7;
+test('Physical gradient uses the same absolute-time player and retains the fixed camera',()=>{
+  const a=snapshot(),b=structuredClone(a),camera=structuredClone(a.scene.camera);
   a.scene.atmosphere='temperature-lapse';b.scene.atmosphere='temperature-lapse';
-  const physical=project.create([{experiment:a},{experiment:b}],{id:'physical_case',name:'Physical'});
-  assert.throws(()=>playback.create(physical),/Only Camera Animation/);
+  a.scene.temperatureProfile.gradientKPerKm=-6.5;
+  b.scene.temperatureProfile.gradientKPerKm=10;
+  const original=structuredClone([a,b]);
+  const p=project.create([{experiment:a,holdMs:500},{experiment:b,travelMs:4000,holdMs:500}],
+    {id:'physical_gradient',name:'Temperature study'});
+  const controller=playback.create(p);
+  controller.start(100);controller.tick(2600);
+  assert.equal(controller.status().positionMs,2500);
+  const sample=controller.sample();
+  assert.ok(Math.abs(sample.scene.temperatureProfile.gradientKPerKm-1.75)<1e-10);
+  assert.deepEqual(sample.scene.camera,camera,'camera must remain fixed');
+  assert.match(playback.describeSample(p,sample),/Temperature gradient 1.75 K\/km/);
+  controller.pause(2600);controller.tick(6500);
+  assert.equal(controller.status().positionMs,2500,'pause freezes physical changes');
+  controller.seek(5000,6500);
+  assert.equal(controller.sample().scene.temperatureProfile.gradientKPerKm,10);
+  controller.stop();
+  assert.equal(controller.sample().scene.temperatureProfile.gradientKPerKm,-6.5);
+  assert.deepEqual([a,b],original,'neither history source snapshot is modified');
+  assert.equal(playback.describeSample(cameraProject(),snapshot()),'');
+});
+test('Globe to exact Flat and reverse can be played/seeked without moving the camera',()=>{
+  const a=snapshot(),flat=structuredClone(a);
+  flat.scene.surface.showModel=2;
+  const p=project.create([{experiment:a},{experiment:flat,travelMs:5000}],
+    {id:'physical_curvature',name:'Curvature'});
+  const controller=playback.create(p),camera=structuredClone(a.scene.camera);
+  controller.seek(2500,0);
+  const middle=controller.sample();
+  assert.equal(middle.scene.surface.showModel,1);
+  assert.ok(Math.abs(middle.scene.surface.rEarth-12742000)<1e-5);
+  assert.match(playback.describeSample(p,middle),/Globe R = 12,742 km/);
+  controller.seek(5000,0);
+  const final=controller.sample();
+  assert.equal(final.scene.surface.showModel,2,'exact zero curvature is Flat');
+  assert.match(playback.describeSample(p,final),/Flat \(curvature = 0\)/);
+  assert.deepEqual(final.scene.camera,camera);
+  const reverse=playback.create(project.create([{experiment:flat},{experiment:a}],
+    {id:'physical_reverse',name:'Flat to globe'}));
+  assert.equal(reverse.sample().scene.surface.showModel,2);
+  reverse.seek(2500,0);
+  assert.equal(reverse.sample().scene.surface.showModel,1);
+});
+test('Physical Compare playback changes only chosen A while B/camera are fixed',()=>{
+  const a=snapshot('compare'),b=structuredClone(a);
+  b.compare.A.radiusKm=12742;
+  const p=project.create([{experiment:a},{experiment:b}],{id:'compare_curvature',name:'Compare curvature'});
+  const controller=playback.create(p);
+  controller.seek(2500,0);
+  const sample=controller.sample();
+  assert.equal(sample.display.mode,'compare');
+  assert.ok(Math.abs(sample.compare.A.radiusKm-8494.666666666666)<1e-9);
+  assert.deepEqual(sample.compare.B,a.compare.B);
+  assert.deepEqual(sample.scene.camera,a.scene.camera);
+  assert.match(playback.describeSample(p,sample),/^Model A · Globe R/);
+});
+test('Near-flat physical samples reject unsupported radii, not silently switch to Flat',()=>{
+  const a=snapshot(),b=structuredClone(a);
+  a.scene.surface.rEarth=1e16;b.scene.surface.showModel=2;
+  const p=project.create([{experiment:a},{experiment:b}],{id:'extreme_case',name:'Extreme'});
+  const controller=playback.create(p);
+  controller.seek(2500,0);
+  assert.throws(()=>controller.sample(),/supported radius/);
+  controller.seek(5000,0);
+  assert.equal(controller.sample().scene.surface.showModel,2);
 });
 test('Independent preview models retain source physics and separate optical sessions',()=>{
   const source=snapshot('compare'),before=structuredClone(source),calls=[];
@@ -89,6 +151,52 @@ test('Independent preview models retain source physics and separate optical sess
   assert.equal(calls[2].model.Height,120);
   assert.equal(calls[0].options.cacheSession,calls[2].options.cacheSession);
 });
+test('Physical intermediate samples are mapped to separate production preview models',()=>{
+  const scene=snapshot(),flat=structuredClone(scene),calls=[];
+  flat.scene.surface.showModel=2;
+  const p=project.create([{experiment:scene},{experiment:flat}],
+    {id:'physical_scene_render',name:'Curvature'});
+  const controller=playback.create(p);
+  class FakeModel { Update(){} }
+  const renderer=preview.create({Model:FakeModel,renderer:{renderPhysical:(graph,model,options)=>{
+    calls.push({model,options,geometry:model.showModel,radius:model.rEarth,graph});
+    return {drawn:true};
+  }}});
+  const graph={Canvas:{}};
+  controller.seek(2500,0);renderer.render(controller.sample(),'A',graph);
+  controller.seek(5000,0);renderer.render(controller.sample(),'A',graph);
+  assert.equal(calls[0].geometry,1);
+  assert.ok(Math.abs(calls[0].radius-12742000)<1e-5);
+  assert.equal(calls[1].geometry,2);
+  assert.equal(calls[0].model,calls[1].model,'isolated model is reused, not live model');
+  assert.equal(scene.scene.surface.showModel,1);
+});
+test('Compare gradient playback sends only A changing lapse to Accurate renderer',()=>{
+  const a=snapshot('compare'),b=structuredClone(a),calls=[];
+  a.compare.A.atmosphere=b.compare.A.atmosphere='temperature-lapse';
+  a.compare.A.temperatureProfile.gradientKPerKm=-6;
+  b.compare.A.temperatureProfile.gradientKPerKm=8;
+  const p=project.create([{experiment:a},{experiment:b}],
+    {id:'compare_gradient',name:'Compare A gradient'});
+  const clock=playback.create(p),before=structuredClone(a);
+  clock.seek(2500,0);
+  const sampled=clock.sample();
+  class FakeModel { Update(){} }
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(graph,model,options)=>{
+    calls.push({options,model});return {};
+  }}});
+  view.render(sampled,'A',{Canvas:{}});
+  view.render(sampled,'B',{Canvas:{}});
+  assert.equal(calls[0].options.opticalQuality,'accurate');
+  assert.equal(calls[0].options.atmosphere,'temperature-lapse');
+  assert.equal(calls[0].options.temperatureProfile.gradientKPerKm,1);
+  assert.equal(calls[1].options.atmosphere,a.compare.B.atmosphere);
+  assert.equal(calls[1].options.temperatureProfile.gradientKPerKm,
+    a.compare.B.temperatureProfile.gradientKPerKm);
+  assert.deepEqual(sampled.scene.camera,a.scene.camera);
+  assert.deepEqual(a,before);
+  assert.match(playback.describeSample(p,sampled),/Model A · Temperature gradient 1.00 K\/km/);
+});
 test('Temperature-lapse preview uses accurate optics, not a false fast approximation',()=>{
   const e=snapshot();e.scene.atmosphere='temperature-lapse';
   class FakeModel {Update(){}}
@@ -106,6 +214,8 @@ test('Animation uses distinct parser-time Canvas graphs, not live Scene/Compare 
   assert.match(html,/src="src\/ui\/modern\/ModernAnimationPreviewGraph.js" data-animation-side="A"/);
   assert.match(html,/src="src\/ui\/modern\/ModernAnimationPreviewGraph.js" data-animation-side="B"/);
   assert.match(app,/studioPlaybackApi\.create\(studioPrepared\)/);
+  assert.match(app,/studioPlaybackApi\.describeSample\(studioPrepared,sampled\)/);
+  assert.match(html,/id="ModernAnimationPlaybackParameter"/);
   assert.match(app,/studioPreviewRenderer\.render\(sampled,'A',graphs\.A\)/);
   assert.doesNotMatch(app.slice(app.indexOf('function renderStudioPlaybackSample('),app.indexOf('function studioPlaybackTick(')),
     /applyExperiment\(|redraw\(|scheduleExperimentSave\(|queueHistoryAuto\(/);

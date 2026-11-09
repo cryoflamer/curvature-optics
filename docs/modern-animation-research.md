@@ -211,9 +211,8 @@ render. Animation playback remains separate future work.
 `src/animation/ModernAnimationPlayback.js` is a deterministic absolute-time
 clock over an immutable `ModernAnimationProject` v1. Its `start`, `tick`,
 `pause`, `seek`, `stop`, `sample` and `status` API works without a DOM or
-mutations of the source experiment. Playback is currently **camera-only**;
-physical interpolation remains mathematically available from
-`ModernAnimationProject.sampleAt` but does **not** have a live player yet.
+mutations of the source experiment. At #140.12.120.3, playback was **camera-only**. Physical playback was
+subsequently enabled in #140.12.120.4, as described below.
 
 `src/animation/ModernAnimationPreview.js` maps validated sampled experiments
 to **dedicated** `CurveAppClass` instances. Scene uses one viewport and Compare
@@ -235,3 +234,30 @@ scientifically misleading approximation. Leaving Animation or hiding the tab
 pauses playback; changing the draft discards its prepared player. The old
 Camera Animation player is unaffected. Browser pixel/FPS validation and
 permanent Animation Project storage remain outstanding.
+
+
+## Implementation update — Physical Parameter Playback (#140.12.120.4)
+
+The isolated `ModernAnimationPlayback` clock now accepts both validated modes
+(`camera` and `physical`), without adding a second timing engine.
+The Animation workspace previews a sampled `ModernAnimationProject` state
+through the **same independent physical renderer** used by camera playback.
+Physical mode supports a single active target channel across the whole project:
+`surface.curvature` (including exact Flat at κ = 0) **or**
+`temperatureProfile.gradientKPerKm` for a fixed `temperature-lapse` atmosphere.
+In Compare, only the chosen A/B model changes and both views retain their
+common fixed camera. The preview identifies the current radius/Flat state or
+temperature gradient; this is true physics sampling, not a crossfade.
+
+The editor's Prepare project action now enables Play/Pause/Stop/Seek for
+compatible physical projects. Source History and live Scene/Compare are not
+modified, and a new draft invalidates the prepared player. Accurate optics
+are used for temperature-lapse; other profiles retain the existing explicit
+Fast Preview/Accurate selection. The 120 ms preview redraw throttle and
+clock-driven frame skipping still apply. Export, persistent projects, and
+real-browser pixel/FPS tests remain outstanding.
+
+**Near-flat caveat:** sampled curvature is validated against the existing
+ExperimentState representation. Extremely large implied radii beyond its
+supported bound produce a clear playback error rather than silently
+substituting Flat or altering the physics.

@@ -263,7 +263,7 @@
       previewCaption.appendChild(el(doc,'strong','',selected.name));
       previewCaption.appendChild(el(doc,'p','',historyUI.frameSummary(previewEntry)));
       previewCaption.appendChild(el(doc,'small','',
-        'Saved thumbnail · use the independent optical viewport above to play a prepared camera project.'));
+        'Saved thumbnail · use the independent optical viewport above to play a prepared project.'));
       preview.appendChild(previewCaption);host.appendChild(preview);
     }
 
@@ -324,11 +324,11 @@
     var prepare=button(doc,'Prepare project','Validate and prepare an in-memory animation project',actions.prepare);
     prepare.disabled=!result.compatible;footer.appendChild(prepare);
     if(prepared)footer.appendChild(el(doc,'span','modern-studio-prepared',
-      'Project prepared in memory · Camera playback is available above; saving comes later'));
+      'Project prepared in memory · Isolated playback is available above; saving comes later'));
     host.appendChild(footer);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Prepare a compatible Camera Animation to play it in the independent optical viewport above. ' +
-      'Physical animation playback, export and permanent saving are not implemented yet.'));
+      'Prepare a compatible Camera or Physical Animation to play in the independent optical viewport above. ' +
+      'Export and permanent saving are not implemented yet.'));
   }
   return Object.freeze({render:render,renderPicker:renderPicker});
 }));

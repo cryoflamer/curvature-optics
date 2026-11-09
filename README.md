@@ -400,3 +400,15 @@ prepared project, which must be prepared again. The preview does not export a
 video or persist a project. **Physical parameter playback is not yet available**.
 See [animation research](docs/modern-animation-research.md) for the clock,
 model-isolation and optical-rendering contract.
+
+
+### Physical Parameter Playback in Animation Studio (#140.12.120.4)
+
+A compatible saved-snapshot animation can now be played directly in the
+independent Animation Studio optical view, including Earth curvature
+(Globe ↔ Flat) or a single active temperature gradient with a fixed camera.
+Prepare the project, then Play/Pause/Stop/Seek; the parameter shown above
+the viewport tracks the current physical frame. Scene/Compare and History
+remain unchanged. Temperature-lapse uses Accurate optics (potentially slow);
+absolute-time playback may skip displayed frames. See
+[`docs/modern-animation-research.md`](docs/modern-animation-research.md).
