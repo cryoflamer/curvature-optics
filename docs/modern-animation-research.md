@@ -376,3 +376,24 @@ format, no optical formula change, and no new History entry.
 Automated tests exercise delayed startup, saved-position rendering, first-frame
 Stop/Prepare wiring, cancellations, resizing, hidden workspaces and retries.
 Actual Canvas visibility after Opera F5 still requires user-side verification.
+
+
+## Paused-preview Canvas ownership after F5
+
+The isolated `ModernAnimationPreviewGraph` uses a parser-time `GraphX3DX`
+instance, but the Animation Studio calls the shared physical painter directly
+through `ModernAnimationPreview.render()`. The graph must therefore **not** have
+its own `DrawFunc` or a polling resize loop. A pending legacy `Draw()` runs
+`AutoReset/AutoClear` before invoking the callback; when that callback was an
+empty placeholder, it erased a successfully rendered paused frame a moment
+later. This produced a white viewport even while diagnostics said the frame
+was ready and reported nonzero optical segments.
+
+The preview bootstrap now leaves `DrawFunc` unset, cancels pending legacy
+draws, and stops the graph's independent resize polling. The physical painter
+continues to call `UpdateCanvasSize()` synchronously **before** rendering, and
+the Animation workspace's `ResizeObserver` schedules a new paused-frame render
+when the viewport width changes. This preserves the correct dimensions without
+allowing a second, unrelated drawing owner to clear the canvas after it has
+been painted. The change is isolated to the Animation graphs; Scene/Compare
+and the Legacy graph lifetime are unchanged.
