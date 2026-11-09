@@ -189,3 +189,18 @@ ExperimentState (наприклад, поблизу Flat за початково
 вимірювання FPS, PNG/відео-експорт. Зокрема, успішний `sampleAt`
 підтверджує коректність підстановки параметрів, **не** піксельну
 еквівалентність готового рендеру — її потрібно перевірити окремо.
+
+
+## Implementation update — Animation workspace restructure
+
+After the core compatibility/model layer and compact Studio editor, the Studio
+was moved from the expandable History panel to its own **Animation** workspace.
+`state.mode` remains strictly `scene`/`compare` (or the existing Demos special
+case); UI selection of Animation only changes workspace visibility and a
+separate `workspace.mode` preference. It does not become a physical mode or
+produce new render/history events. History is a bounded overlay that can be
+opened from any workspace. Selected History cards are transferred to the
+editor using stable local IDs, while the project/draft owns validated copies
+of experiment data. A compact staging counter replaces the duplicate shortlist
+strip. The Studio presents the selected History thumbnail; it is not a live
+render. Animation playback remains separate future work.

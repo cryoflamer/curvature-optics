@@ -627,3 +627,29 @@ button{cursor:pointer}
   .modern-studio-basics{grid-template-columns:1fr}
   .modern-history-storyboard-item{flex-basis:144px}
   .modern-studio-filmstrip-item{flex-basis:144px}}
+
+/* Animation is a dedicated UI workspace, never a third physical experiment mode.
+ * History is an overlay; opening it must not resize the active optical canvas. */
+#ModernWorkspace[hidden],#ModernAnimationWorkspace[hidden],#ModernHistoryBackdrop[hidden]{display:none!important}
+.modern-animation-workspace{box-sizing:border-box;width:min(1220px,calc(100% - 40px));margin:26px auto 48px}
+.modern-animation-workspace-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:16px}
+.modern-animation-workspace-heading h1{font-size:24px;margin:0 0 6px;color:#183550}
+.modern-animation-workspace-heading p{font-size:13px;line-height:1.5;color:#637c94;margin:0}
+.modern-animation-workspace-heading button{border:1px solid #9bbfdf;border-radius:8px;background:#e6f3ff;color:#1f5f99;padding:10px 15px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
+.modern-animation-workspace .modern-animation-studio{max-width:none;width:100%;box-sizing:border-box;margin:0}
+.modern-history-backdrop{position:fixed;inset:0;z-index:1100;background:#11253d92}
+.modern-history{position:fixed;inset:clamp(12px,3vh,32px) max(14px,calc((100vw - 1400px)/2));z-index:1101;box-sizing:border-box;max-height:94vh;overflow-y:auto;border:1px solid #b5d0e8;border-radius:12px;box-shadow:0 20px 65px #0a213856}
+.modern-history .modern-history-gallery{max-height:38vh}
+.modern-history-handoff{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border:1px solid #d2e2f0;border-radius:8px;background:#f5faff;padding:10px 12px;font-size:12px;color:#315b7f}
+.modern-history-handoff span{margin-right:auto}
+.modern-history-handoff button{border:1px solid #b7d0e7;border-radius:7px;background:#fff;color:#205d96;padding:7px 11px;cursor:pointer}
+.modern-history-handoff button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:650px){.modern-animation-workspace{width:calc(100% - 20px);margin:12px auto}.modern-animation-workspace-heading{align-items:stretch;flex-direction:column}.modern-history{inset:8px;max-height:calc(100vh - 16px);padding:12px}.modern-history .modern-history-gallery{max-height:42vh}}
+
+.modern-studio-preview{display:grid;grid-template-columns:minmax(0,2fr) minmax(185px,1fr);gap:15px;padding:13px;border:1px solid #d9e6f0;border-radius:9px;background:#f5f9fd;margin:12px 0}
+.modern-studio-preview-visual{display:flex;align-items:center;justify-content:center;min-height:215px;max-height:400px;background:#fff;border:1px solid #d6e3ef;border-radius:7px;overflow:hidden}
+.modern-studio-preview-visual .modern-storyboard-image{width:100%;height:auto;max-height:400px;object-fit:contain}
+.modern-studio-preview-caption{align-self:center;min-width:0;overflow-wrap:anywhere;font-size:13px;color:#2f587d;line-height:1.5}
+.modern-studio-preview-caption strong{font-size:17px;color:#173a58}
+.modern-studio-preview-caption small{display:block;color:#648096;margin-top:16px}
+@media(max-width:650px){.modern-studio-preview{grid-template-columns:1fr}.modern-studio-preview-visual{min-height:135px}}

@@ -144,16 +144,17 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   const a=experiment(),b=clone(a);b.scene.camera.Height=50;
   let draft=studio.history([1,2],[entry(1,a,'First'),entry(2,b,'Second')]);
   const {doc,host}=mockDom(),calls=[];
-  const actions={load:()=>calls.push('load'),importCamera:()=>calls.push('import'),
+  const actions={choose:()=>calls.push('choose'),load:()=>calls.push('load'),importCamera:()=>calls.push('import'),
     edit:(...args)=>calls.push(['edit',...args]),frame:(...args)=>calls.push(['frame',...args]),
     move:(...args)=>calls.push(['move',...args]),remove:(...args)=>calls.push(['remove',...args]),
     select:(...args)=>calls.push(['select',...args]),prepare:()=>calls.push('prepare')};
-  editor.render(doc,host,draft,studio.inspect(draft),actions,false);
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{stagedCount:2});
   const buttons=collect(host,n=>n.tagName==='button');
-  buttons.find(b=>b.textContent==='Load History shortlist').listeners.click();
+  buttons.find(b=>b.textContent==='Choose from History').listeners.click();
+  buttons.find(b=>b.textContent==='Load staged snapshots (2)').listeners.click();
   buttons.find(b=>b.textContent==='Import Camera Animation').listeners.click();
   buttons.find(b=>b.textContent==='Prepare project').listeners.click();
-  assert.deepEqual(calls,['load','import','prepare']);
+  assert.deepEqual(calls,['choose','load','import','prepare']);
   const fieldInputs=collect(host,n=>n.tagName==='input');
   fieldInputs[0].value='Named study';fieldInputs[0].listeners.change();
   assert.deepEqual(calls.at(-1),['edit','name','Named study']);
@@ -206,20 +207,24 @@ test('Studio thumbnail filmstrip uses saved History images, selected-only contro
   cards[0].listeners.click();
   assert.deepEqual(calls.at(-1),['select','history-1']);
   assert.deepEqual([draft,saved],before,'visuals never modify source records or drafts');
+  const previews=collect(host,n=>n.className==='modern-studio-preview');
+  assert.equal(previews.length,1);
+  assert.equal(collect(previews[0],n=>n.tagName==='img')[0].src,image);
   const imported=studio.importCamera(a,sequence.validate([
     {name:'Low',camera:a.scene.camera,travelMs:0,holdMs:0,easing:'linear'},
     {name:'High',camera:b.scene.camera,travelMs:1000,holdMs:0,easing:'linear'}]));
   host.children=[];
   editor.render(doc,host,imported,studio.inspect(imported),actions,false,{entries:saved});
   const placeholders=collect(host,n=>n.className==='modern-storyboard-no-image');
-  assert.equal(placeholders.length,2,'imported camera views do not borrow unrelated History screenshots');
+  assert.equal(placeholders.length,3,'imported camera views, including selected preview, do not borrow unrelated History screenshots');
 });
 
 test('Responsive storyboard layout bounds editor width and scrolls thumbnail timelines horizontally',()=>{
   const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
   assert.match(css,/\.modern-animation-studio\{max-width:1160px;margin:12px auto/);
-  assert.match(css,/\.modern-history-storyboard\{box-sizing:border-box;max-width:1160px/);
-  assert.match(css,/\.modern-history-storyboard ol\{display:flex/);
+  assert.match(css,/\.modern-animation-workspace\{box-sizing:border-box;width:min\(1220px/);
+  assert.match(css,/\.modern-history\{position:fixed/);
+  assert.match(css,/\.modern-studio-preview\{display:grid/);
   assert.match(css,/\.modern-studio-filmstrip\{display:flex/);
   assert.match(css,/overflow-x:auto/);
 });
@@ -231,6 +236,10 @@ test('Modern shell loads pure project modules ahead of UI and keeps legacy camer
   assert.ok(html.indexOf('ModernAnimationCompatibility.js')<html.indexOf('ModernAnimationStudio.js'));
   assert.ok(html.indexOf('ModernAnimationStudio.js')<html.indexOf('ModernAnimationStudioUI.js'));
   assert.match(html,/id="ModernAnimationStudio"/);
+  assert.match(html,/id="ModernAnimationWorkspace"/);
+  assert.ok(html.indexOf('id="ModernAnimationStudio"')>html.indexOf('id="ModernHistoryPanel"'));
+  assert.match(html,/id="ModernAnimationTab"/);
+  assert.doesNotMatch(html,/id="ModernHistoryStoryboardQueue"/);
   assert.match(html,/id="ModernCameraAnimationSection"/);
   assert.match(app,/getAnimationStudioProject/);
   assert.match(app,/studioApi\.importCamera\(experimentSnapshot\(\),cameraSequence,studioDraft\)/);

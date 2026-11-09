@@ -45,7 +45,7 @@
     SECTION_KEYS.forEach(function(key){if(typeof source[key]==='boolean')sections[key]=source[key];});
     return Object.freeze({
       // null preserves the mode/model embedded in pre-workspace experiments.
-      mode:['scene','compare','demos'].includes(data.mode)?data.mode:null,
+      mode:['scene','compare','animation','demos'].includes(data.mode)?data.mode:null,
       sceneTab:TABS.includes(data.sceneTab)?data.sceneTab:'Camera',
       compareTab:TABS.includes(data.compareTab)?data.compareTab:'Camera',
       compareModel:['A','B'].includes(data.compareModel)?data.compareModel:null,

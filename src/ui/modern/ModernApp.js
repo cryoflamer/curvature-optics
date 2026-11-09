@@ -534,6 +534,15 @@
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
   }
+  var animationWorkspaceOpen=false;
+  function syncWorkspaceVisibility(){
+    var physical=newUiEl('ModernWorkspace'),animation=newUiEl('ModernAnimationWorkspace');
+    if(physical)physical.hidden=animationWorkspaceOpen;
+    if(animation)animation.hidden=!animationWorkspaceOpen;
+    var tab=newUiEl('ModernAnimationTab');
+    if(tab){tab.classList.toggle('is-active',animationWorkspaceOpen);
+      tab.setAttribute('aria-pressed',String(animationWorkspaceOpen));}
+  }
   function workspaceScope(){return state.demosActive?'scene':state.mode==='compare'?'compare':'scene';}
   function workspaceSectionValue(scope,suffix){
     var key=scope+'.'+suffix;
@@ -663,6 +672,7 @@
       syncHistoryFilterControls();
       var historyPanel=newUiEl('ModernHistoryPanel'),historyToggle=newUiEl('ModernHistoryToggle');
       if(historyPanel)historyPanel.hidden=true;
+      var historyBackdrop=newUiEl('ModernHistoryBackdrop');if(historyBackdrop)historyBackdrop.hidden=true;
       if(historyToggle)historyToggle.setAttribute('aria-expanded','false');
       if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
       var historySizeControl=newUiEl('ModernHistorySize');
@@ -962,26 +972,22 @@
     if(select)select.disabled=!historyShownIds.length||count===historyShownIds.length;
   }
   function renderHistoryStoryboard(entries){
-    var queue=newUiEl('ModernHistoryStoryboardQueue'),count=newUiEl('ModernHistoryQueueCount');
-    if(count)count.textContent=historyStoryboardQueue.length+' '+(historyStoryboardQueue.length===1?'frame':'frames');
-    var clear=newUiEl('ModernHistoryQueueClear');
-    if(clear)clear.disabled=historyStoryboardQueue.length===0;
-    var previousScroll=queue?queue.scrollLeft:0;
-    if(historyUI&&historyUI.renderStoryboardQueue)
-      historyUI.renderStoryboardQueue(document,queue,historyStoryboardQueue,entries,{
-        move:function(id,step){
-          var pos=historyStoryboardQueue.indexOf(id),next=pos+step;
-          if(pos<0||next<0||next>=historyStoryboardQueue.length)return;
-          var item=historyStoryboardQueue.splice(pos,1)[0];
-          historyStoryboardQueue.splice(next,0,item);
-          saveApplicationPreferences();renderHistoryStoryboard(entries);
-        },
-        remove:function(id){
-          historyStoryboardQueue=historyStoryboardQueue.filter(function(value){return value!==id;});
-          saveApplicationPreferences();renderHistoryStoryboard(entries);
-        }
-      });
-    if(queue)queue.scrollLeft=previousScroll;
+    var count=newUiEl('ModernHistoryQueueCount');
+    if(count)count.textContent=historyStoryboardQueue.length+' '+
+      (historyStoryboardQueue.length===1?'frame':'frames');
+    ['ModernHistoryQueueClear','ModernHistoryQueueOpen'].forEach(function(id){
+      var button=newUiEl(id);if(button)button.disabled=historyStoryboardQueue.length===0;
+    });
+  }
+  // Staging IDs survive History filtering; actual animation states are copied
+  // into the draft only on explicit hand-off. Missing IDs are pruned by History.
+  function loadStagedAnimation(entries){
+    if(!studioApi)throw Error('Animation Studio is unavailable');
+    if(!historyStoryboardQueue.length)throw RangeError('Select snapshots for animation first');
+    studioSelectedKey=null;studioFilmstripScroll=0;
+    studioDraft=studioApi.history(historyStoryboardQueue,entries,studioDraft);
+    studioPrepared=null;
+    renderAnimationStudio(entries);
   }
   // Animation Studio is a temporary, self-contained draft, not a new History
   // store or a live renderer. The shortlist and old camera sequence are read
@@ -1010,9 +1016,10 @@
     }
     function safe(action){try{action();}catch(error){report(error);}}
     studioUI.render(document,host,studioDraft,assessment,{
+      choose:function(){setHistoryOpen(true);},
       load:function(){safe(function(){
         studioSelectedKey=null;studioFilmstripScroll=0;
-        update(studioApi.history(historyStoryboardQueue,entries,studioDraft));
+        loadStagedAnimation(entries);
       });},
       importCamera:function(){safe(function(){
         studioSelectedKey=null;studioFilmstripScroll=0;
@@ -1042,7 +1049,7 @@
         if(status){status.classList.remove('is-error');
           status.textContent='Animation project prepared in memory. Playback and permanent saving are not implemented yet.';}
       });}
-    },!!studioPrepared,{selectedKey:studioSelectedKey,entries:entries});
+    },!!studioPrepared,{selectedKey:studioSelectedKey,entries:entries,stagedCount:historyStoryboardQueue.length});
     var strip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(strip)strip.scrollLeft=studioFilmstripScroll;
   }
@@ -1201,6 +1208,21 @@
       document.body.appendChild(anchor);anchor.click();anchor.remove();
     }finally{setTimeout(function(){URL.revokeObjectURL(address);},1000);}
   }
+  function setHistoryOpen(open){
+    var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
+    if(!panel||!toggle)return;
+    historyPanelOpen=!!open;panel.hidden=!historyPanelOpen;
+    var backdrop=newUiEl('ModernHistoryBackdrop');if(backdrop)backdrop.hidden=!historyPanelOpen;
+    toggle.setAttribute('aria-expanded',String(historyPanelOpen));
+    saveApplicationPreferences();
+    if(historyPanelOpen){
+      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+      if(typeof panel.focus==='function')panel.focus();
+    }else{
+      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
+      if(typeof toggle.focus==='function')toggle.focus();
+    }
+  }
   function bindHistory(){
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
@@ -1284,18 +1306,17 @@
     function handle(operation){
       Promise.resolve().then(operation).catch(function(error){historyStatus(error.message,true);});
     }
-    function setHistoryOpen(open){
-      historyPanelOpen=!!open;panel.hidden=!historyPanelOpen;
-      toggle.setAttribute('aria-expanded',String(historyPanelOpen));
-      saveApplicationPreferences();
-      if(historyPanelOpen)handle(function(){return refreshHistoryList();});
-      else if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
-    }
     toggle.addEventListener('click',function(){setHistoryOpen(panel.hidden);});
+    var historyBackdrop=newUiEl('ModernHistoryBackdrop');
+    if(historyBackdrop)historyBackdrop.addEventListener('click',function(){setHistoryOpen(false);});
+    if(typeof panel.addEventListener==='function')panel.addEventListener('keydown',function(event){
+      if(event&&event.key==='Escape'){event.preventDefault();setHistoryOpen(false);}
+    });
     el('ModernHistoryClose').addEventListener('click',function(){setHistoryOpen(false);});
     // The preference is applied before IndexedDB has finished opening. Once
     // open() resolves, refreshHistoryList() populates the visible panel.
     panel.hidden=!historyPanelOpen;
+    if(historyBackdrop)historyBackdrop.hidden=!historyPanelOpen;
     toggle.setAttribute('aria-expanded',String(historyPanelOpen));
     el('ModernHistorySelect').addEventListener('change',function(){
       handle(function(){return refreshHistoryList();});
@@ -1317,9 +1338,7 @@
     var queueChecked=newUiEl('ModernHistoryQueueChecked');
     if(queueChecked)queueChecked.addEventListener('click',function(){handle(function(){
       var selected=new Set(historyVisibleSelectedIds());
-      if(!selected.size)throw RangeError('Select shown snapshots first');
-      // The gallery ordering, not record ID or checkbox click order, defines
-      // insertion order. Existing picks are neither duplicated nor reordered.
+      if(!selected.size)throw RangeError('Select visible snapshots first');
       var added=0;
       historyShownIds.forEach(function(id){
         if(selected.has(id)&&!historyStoryboardQueue.includes(id)&&historyStoryboardQueue.length<200){
@@ -1328,13 +1347,23 @@
       });
       historyMultiSelection=Object.create(null);
       saveApplicationPreferences();
-      historyStatus('Added '+added+' snapshots to Storyboard shortlist (max 200).');
-      return refreshHistoryList();
+      return refreshHistoryList().then(function(entries){
+        setHistoryOpen(false);setMode('animation');
+        try{loadStagedAnimation(entries);}
+        catch(error){historyStatus(error.message,true);
+          var message=newUiEl('ModernAnimationStudioMessage');
+          if(message){message.classList.add('is-error');message.textContent=error.message;}}
+      });
+    });});
+    var openStaged=newUiEl('ModernHistoryQueueOpen');
+    if(openStaged)openStaged.addEventListener('click',function(){handle(function(){
+      return refreshHistoryList().then(function(entries){
+        setHistoryOpen(false);setMode('animation');loadStagedAnimation(entries);
+      });
     });});
     var clearQueue=newUiEl('ModernHistoryQueueClear');
     if(clearQueue)clearQueue.addEventListener('click',function(){
-      historyStoryboardQueue=[];
-      saveApplicationPreferences();
+      historyStoryboardQueue=[];saveApplicationPreferences();
       refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
     });
     var pinChecked=newUiEl('ModernHistoryPinChecked');
@@ -3336,6 +3365,30 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode,remember){
+    if(!['scene','compare','animation','demos'].includes(mode))
+      throw RangeError('Invalid Modern UI mode');
+    if(mode==='animation'){
+      // A UI-only mode; physical state.mode is retained as Scene/Compare.
+      // Never serialize 'animation' in an experiment or start optical redraws.
+      stopCameraTransition(false,'Animation workspace opened',false);
+      stopAutoCameraPreview();stopCameraKeyboard(true);abortCameraDrag();cancelEdits();
+      if(persistence.dirty)flushWorkingSession();
+      if(state.demosActive&&root.CurvatureModernDemos)root.CurvatureModernDemos.deactivate();
+      state.demosActive=false;
+      var demosPanel=newUiEl('ModernDemosPanel');if(demosPanel)demosPanel.hidden=true;
+      var demosTab=newUiEl('ModernDemosTab');
+      if(demosTab){demosTab.classList.remove('is-active');demosTab.setAttribute('aria-pressed','false');}
+      ['ModernSceneTab','ModernCompareTab'].forEach(function(id){
+        var tab=el(id);tab.classList.remove('is-active');tab.setAttribute('aria-pressed','false');
+      });
+      animationWorkspaceOpen=true;syncWorkspaceVisibility();
+      if(remember!==false&&workspaceState.mode!=='animation'){
+        workspaceState.mode='animation';saveApplicationPreferences();
+      }
+      if(experimentHistory)refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+      return;
+    }
+    animationWorkspaceOpen=false;syncWorkspaceVisibility();
     if(state.mode!==mode)resetHistoryBaseline();
     if(remember!==false&&mode!==workspaceState.mode){workspaceState.mode=mode;saveApplicationPreferences();}
     stopCameraTransition(false,'Transition interrupted by workspace switch',false);
@@ -3753,6 +3806,10 @@
     el('ModernRender').addEventListener('click',redraw);
     el('ModernSceneTab').addEventListener('click',function(){setMode('scene');});
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
+    var animationTab=newUiEl('ModernAnimationTab');
+    if(animationTab)animationTab.addEventListener('click',function(){setMode('animation');});
+    var chooseSnapshots=newUiEl('ModernAnimationChooseSnapshots');
+    if(chooseSnapshots)chooseSnapshots.addEventListener('click',function(){setHistoryOpen(true);});
     var demosTab=newUiEl('ModernDemosTab');
     if(demosTab)demosTab.addEventListener('click',function(){setMode('demos');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
@@ -3767,7 +3824,7 @@
       var params=typeof URLSearchParams==='function'?
         new URLSearchParams(root.location&&root.location.search||''):{get:function(){return null;}};
       if(!persistence.explicitUrl){
-        if(workspaceState.mode)state.mode=workspaceState.mode;
+        if(['scene','compare','demos'].includes(workspaceState.mode))state.mode=workspaceState.mode;
         if(workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
       }
       var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
@@ -3778,6 +3835,7 @@
       else {applyWorkspaceSections();
         if(typeof document.querySelector==='function')activateSettings(workspaceState.sceneTab,false,false);
         redraw();}
+      if(!persistence.explicitUrl&&workspaceState.mode==='animation')setMode('animation',false);
       if(restored||state.compareConfig)syncCompareEditor();
       // Only user edits after complete restore are eligible for autosave.
       // Initial model construction must not overwrite either storage copy.
@@ -3796,6 +3854,7 @@
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
   root.CurvatureModernApp={getModel:function(){return model;},getMode:function(){return state.demosActive?'demos':state.mode;},
+    getWorkspaceMode:function(){return animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;},
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
     getCompareModels:function(){return state.comparePair;},
@@ -3813,7 +3872,7 @@
     getHistoryStore:function(){return experimentHistory;},
     getAnimationStudioProject:function(){return studioPrepared&&studioProjects?
       studioProjects.validate(studioPrepared):null;},
-    getWorkspaceState:function(){return {mode:state.demosActive?'demos':state.mode,
+    getWorkspaceState:function(){return {mode:animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode,
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:state.compareSelected,sections:Object.assign({},workspaceState.sections)};},
     // Atmospheric presentation remains independently inspectable through DevTools.

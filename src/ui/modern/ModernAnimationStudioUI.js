@@ -55,9 +55,12 @@
     heading.appendChild(el(doc,'span','',draft.frames.length+' frames'));
     host.appendChild(heading);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Select a thumbnail to edit one keyframe. The current experiment and saved History are not changed.'));
+      'Select a thumbnail to edit one keyframe. Changes stay inside this workspace, not the live experiment.'));
     var toolbar=el(doc,'div','modern-studio-toolbar');
-    toolbar.appendChild(button(doc,'Load History shortlist','Replace draft with ordered History shortlist',actions.load));
+    toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
+    var load=button(doc,'Load staged snapshots'+(options.stagedCount?' ('+options.stagedCount+')':''),
+      'Replace draft with ordered saved snapshot selection',actions.load);
+    load.disabled=!options.stagedCount;toolbar.appendChild(load);
     toolbar.appendChild(button(doc,'Import Camera Animation','Import existing camera keyframes into draft',actions.importCamera));
     host.appendChild(toolbar);
     var basics=el(doc,'div','modern-studio-basics');
@@ -95,6 +98,20 @@
       status.appendChild(list);
     }
     host.appendChild(status);
+
+    if(selected){
+      var previewEntry=frameEntry(selected,entries);
+      var preview=el(doc,'section','modern-studio-preview');
+      preview.setAttribute('aria-label','Selected saved keyframe preview');
+      var previewVisual=historyUI.frameVisual(doc,previewEntry,'modern-studio-preview-visual');
+      preview.appendChild(previewVisual);
+      var previewCaption=el(doc,'div','modern-studio-preview-caption');
+      previewCaption.appendChild(el(doc,'strong','',selected.name));
+      previewCaption.appendChild(el(doc,'p','',historyUI.frameSummary(previewEntry)));
+      previewCaption.appendChild(el(doc,'small','',
+        'Saved thumbnail only · animated optical playback is not available yet.'));
+      preview.appendChild(previewCaption);host.appendChild(preview);
+    }
 
     var filmstrip=el(doc,'ol','modern-studio-filmstrip');
     filmstrip.setAttribute('aria-label','Animation keyframe timeline');
@@ -148,7 +165,7 @@
     host.appendChild(footer);
     host.appendChild(el(doc,'p','modern-studio-hint',
       'This draft cannot play, render, export or permanently save an animation yet. ' +
-      'History shortlist and its ordering remain independent.'));
+      'Snapshot selection in History is kept separately until loaded.'));
   }
   return Object.freeze({render:render});
 }));

@@ -1043,3 +1043,56 @@ test('edited shared URL reload resumes the same tab without rewriting the incomi
   assert.equal(newLink.app.getModel().Height,91,
     'another shared link wins even if old tab history state was carried over');
 });
+
+
+test('Animation workspace navigation is UI-only: no optical render or experiment mutation',()=>{
+  const h=boot(),n=h.nodes,m=h.app.getModel();
+  n.get('ModernCompareTab').dispatch('click');
+  const before={height:m.Height,pan:m.Pan,east:m.CameraEast,compare:h.app.getCompareConfig()};
+  const rendered=h.renders.length;
+  n.get('ModernAnimationTab').dispatch('click');
+  assert.equal(h.app.getWorkspaceMode(),'animation');
+  assert.equal(h.app.getMode(),'compare','physical mode stays Compare');
+  assert.equal(h.app.getWorkspaceState().mode,'animation');
+  assert.equal(n.get('ModernWorkspace').hidden,true);
+  assert.equal(n.get('ModernAnimationWorkspace').hidden,false);
+  assert.equal(h.renders.length,rendered,'navigation does not retrace optics');
+  assert.deepEqual({height:m.Height,pan:m.Pan,east:m.CameraEast,compare:h.app.getCompareConfig()},before);
+  const stored=preferences.read(h.win.localStorage);
+  assert.equal(stored.workspace.mode,'animation');
+  n.get('ModernCompareTab').dispatch('click');
+  assert.equal(n.get('ModernWorkspace').hidden,false);
+  assert.equal(n.get('ModernAnimationWorkspace').hidden,true);
+  assert.equal(h.app.getWorkspaceMode(),'compare');
+  assert.equal(h.app.getMode(),'compare');
+});
+
+test('Animation workspace preference restores UI without changing saved Scene/Compare physics',()=>{
+  const before=experiment([]);
+  const saved=preferences.normalize({workspace:{mode:'animation'}});
+  const h=boot(before,{[preferences.STORAGE_KEY]:JSON.stringify(saved)});
+  assert.equal(h.app.getWorkspaceMode(),'animation');
+  assert.equal(h.app.getMode(),'compare');
+  assert.equal(h.app.getModel().Height,before.scene.camera.Height);
+  assert.equal(h.nodes.get('ModernWorkspace').hidden,true);
+  assert.equal(h.nodes.get('ModernAnimationWorkspace').hidden,false);
+});
+
+
+test('History opens over Animation and closes by Escape or backdrop without moving the camera',async()=>{
+  const factory={create:()=>({open:()=>Promise.resolve(),list:()=>Promise.resolve([])})};
+  const h=boot(experiment([]),{},undefined,undefined,factory),n=h.nodes;
+  n.get('ModernAnimationTab').dispatch('click');
+  const before={mode:h.app.getMode(),height:h.app.getModel().Height,renders:h.renders.length};
+  n.get('ModernAnimationChooseSnapshots').dispatch('click');
+  assert.equal(n.get('ModernHistoryPanel').hidden,false);
+  assert.equal(n.get('ModernHistoryBackdrop').hidden,false);
+  n.get('ModernHistoryPanel').dispatch('keydown',{key:'Escape'});
+  assert.equal(n.get('ModernHistoryPanel').hidden,true);
+  assert.equal(n.get('ModernHistoryBackdrop').hidden,true);
+  n.get('ModernHistoryToggle').dispatch('click');
+  n.get('ModernHistoryBackdrop').dispatch('click');
+  assert.equal(n.get('ModernHistoryPanel').hidden,true);
+  assert.deepEqual({mode:h.app.getMode(),height:h.app.getModel().Height,renders:h.renders.length},before);
+  assert.equal(h.app.getWorkspaceMode(),'animation');
+});

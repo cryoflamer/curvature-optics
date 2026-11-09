@@ -467,6 +467,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
   let queue=JSON.parse(rootWindow.localStorage.data.get(
     'curvature-modern-application-preferences-v1')).historyStoryboardQueue;
   assert.deepEqual(queue,[pair.id]);
+  nodes.get('ModernHistoryToggle').listeners.click(); // reopen the overlay to select more
   kind.value='scene';kind.listeners.change();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistoryMultiCount').textContent,'0 shown snapshots selected',
@@ -484,7 +485,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
   const shownScene=[...sceneRecords.filter(e=>e.pinned),...sceneRecords.filter(e=>!e.pinned)];
   assert.deepEqual(queue,[pair.id,...shownScene.map(e=>e.id)],
     'shortlist follows displayed Pinned then Recent order, not numeric IDs');
-  assert.equal(nodes.get('ModernHistoryStoryboardQueue').children.length,4);
+  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'4 frames');
+  assert.equal(app.getWorkspaceMode(),'animation','history handoff opens the separate workspace');
   nodes.get('ModernHistorySelectVisible').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   nodes.get('ModernHistoryQueueChecked').listeners.click();
@@ -492,11 +494,9 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.deepEqual(JSON.parse(rootWindow.localStorage.data.get(
     'curvature-modern-application-preferences-v1')).historyStoryboardQueue,queue,
     're-adding a checked card never duplicates or reorders earlier picks');
-  const storyboardList=nodes.get('ModernHistoryStoryboardQueue');
-  storyboardList.children[1].children[3].children[0].listeners.click({stopPropagation(){}});
-  assert.equal(JSON.parse(rootWindow.localStorage.data.get(
-    'curvature-modern-application-preferences-v1')).historyStoryboardQueue[0],shownScene[0].id,
-    'moving a picked frame changes saved order without rewriting a snapshot');
+  // Frame reordering now belongs to the Studio timeline, not a second History strip.
+  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'4 frames');
+  nodes.get('ModernHistoryToggle').listeners.click(); // handoff closed the overlay
   // Bulk operations cannot silently delete pinned or filtered-out records.
   nodes.get('ModernHistorySelectVisible').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));

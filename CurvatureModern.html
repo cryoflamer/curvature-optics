@@ -87,11 +87,13 @@
     <nav class="modern-tabs" aria-label="Workspace modes">
       <button class="modern-tab is-active" id="ModernSceneTab" type="button" aria-pressed="true">Scene</button>
       <button class="modern-tab" id="ModernCompareTab" type="button" aria-pressed="false">Compare</button>
+      <button class="modern-tab" id="ModernAnimationTab" type="button" aria-pressed="false">Animation</button>
       <button class="modern-tab" id="ModernDemosTab" type="button" aria-pressed="false">Demos</button>
     </nav>
     <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
-  <section id="ModernHistoryPanel" class="modern-library modern-history" aria-label="Experiment history" hidden>
+  <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
+  <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
     <p class="modern-history-hint">Double-click a snapshot to restore it; one click selects it. Use ✎ to name it or add notes. Hover for a larger preview and physical settings; use Space on the focused image or tap on touch devices to keep it open. <span title="Automatic snapshots follow physical changes, not camera moves, animation playback or editor tabs. Manual snapshots retain the full experiment and camera.">Automatic history tracks physics only.</span></p>
     <div class="modern-history-toolbar"><div class="modern-library-row"><label for="ModernHistorySelect">Selected snapshot</label><select id="ModernHistorySelect"><option value="">No snapshots yet</option></select></div><label class="modern-history-sort">Order <select id="ModernHistorySort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label><label class="modern-history-size" for="ModernHistorySize">Cards <select id="ModernHistorySize" aria-label="History card size"><option value="small">S · Compact</option><option value="medium">M · Medium</option><option value="large">L · Large</option></select></label></div>
@@ -124,14 +126,12 @@
       <span id="ModernHistoryFilterCount" role="status" aria-live="polite">Showing 0 of 0 snapshots</span>
     </div>
     <div id="ModernHistoryGallery" class="modern-history-gallery" aria-label="Saved experiment thumbnails"></div>
-    <div class="modern-history-bulk" role="group" aria-label="Bulk selection of visible snapshots"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistorySelectVisible" type="button">Select shown</button><button id="ModernHistoryClearChecked" type="button">Clear selection</button><button id="ModernHistoryPinChecked" type="button">Pin checked</button><button id="ModernHistoryDeleteChecked" type="button">Delete checked</button><button id="ModernHistoryQueueChecked" type="button">Add to storyboard list</button></div>
-    <section class="modern-history-storyboard" aria-label="Storyboard shortlist">
-      <div class="modern-history-storyboard-heading"><strong>Storyboard shortlist</strong><span id="ModernHistoryQueueCount" role="status">0 frames</span><button id="ModernHistoryQueueClear" type="button">Clear list</button></div>
-      <p>Choose saved snapshots in order, then load them into Animation Studio below. The shortlist does not protect unpinned automatic snapshots from cleanup.</p>
-      <ol id="ModernHistoryStoryboardQueue" aria-label="Storyboard frame order"></ol>
-    </section>
-    <section id="ModernAnimationStudio" class="modern-animation-studio" aria-label="Animation Studio draft editor"></section>
-    <p id="ModernAnimationStudioMessage" class="modern-library-status" role="status" aria-live="polite"></p>
+    <div class="modern-history-bulk" role="group" aria-label="Bulk selection of visible snapshots"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistorySelectVisible" type="button">Select shown</button><button id="ModernHistoryClearChecked" type="button">Clear selection</button><button id="ModernHistoryPinChecked" type="button">Pin checked</button><button id="ModernHistoryDeleteChecked" type="button">Delete checked</button><button id="ModernHistoryQueueChecked" type="button">Add selected to Animation</button></div>
+    <div class="modern-history-handoff" role="group" aria-label="Animation frame selection">
+      <span>Animation selection: <strong id="ModernHistoryQueueCount">0 frames</strong></span>
+      <button type="button" id="ModernHistoryQueueOpen">Open in Animation</button>
+      <button type="button" id="ModernHistoryQueueClear">Clear selection</button>
+    </div>
     <div class="modern-library-buttons"><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryPin">Pin / unpin selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>
     <div class="modern-history-portable" aria-label="History import and export">
       <button type="button" id="ModernHistoryExportSelected">Export selected snapshot</button>
@@ -156,6 +156,14 @@
     </form>
   </dialog>
   <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
+  <section id="ModernAnimationWorkspace" class="modern-animation-workspace" aria-label="Animation workspace" hidden>
+    <div class="modern-animation-workspace-heading">
+      <div><h1>Animation Studio</h1><p>Build a physical animation from saved experiments. The working Scene / Compare remains unchanged.</p></div>
+      <button type="button" id="ModernAnimationChooseSnapshots">Choose snapshots from History</button>
+    </div>
+    <section id="ModernAnimationStudio" class="modern-animation-studio" aria-label="Animation Studio draft editor"></section>
+    <p id="ModernAnimationStudioMessage" class="modern-library-status" role="status" aria-live="polite"></p>
+  </section>
   <div class="modern-workspace" id="ModernWorkspace">
     <section class="modern-demos-panel" id="ModernDemosPanel" aria-label="Legacy demonstrations" hidden>
       <div class="modern-demos-heading"><div><h1 id="ModernDemoTitle">Demos · Transmission Line</h1><p>Nine original fast Legacy animations, controlled from Modern.</p></div><span class="modern-mode-pill">FAST / LEGACY</span></div>

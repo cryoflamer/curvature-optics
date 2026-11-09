@@ -32,7 +32,7 @@ Reset experiment clears both copies (the page is not navigated until IDB clear
 succeeds). On initial boot neither History nor the working-session checkpoint is
 silently created merely because defaults were rendered.
 
-The **History panel visibility** itself is stored as `historyPanelOpen` in
+The **History overlay visibility** itself is stored as `historyPanelOpen` in
 `curvature-modern-application-preferences-v1` and applied before History data
 is loaded; opening and closing via either control updates the preference.
 Reset Application Preferences closes it; Reset Workspace Layout does not.
@@ -175,7 +175,7 @@ Scene excludes A/B constraints, and that the same IDs appear in the dropdown and
 reload with History open, then clear filters and verify all original records
 remain unchanged. Check that the no-matches message differs from empty History.
 
-## Bulk selection and Storyboard shortlist
+## Bulk selection and Animation staging (current; formerly Storyboard shortlist)
 
 The **Select shown** action checks only the currently rendered cards (respecting
 filters, sort order, and a collapsed Pinned section). **Clear selection** resets
@@ -184,21 +184,26 @@ shown checked records only; pinned deletion remains blocked and explicitly
 confirmed. Changing a filter or collapsing Pinned clears checkboxes rather
 than allowing hidden records to be deleted accidentally.
 
-**Add to storyboard list** copies checked visible snapshot **IDs** into a
-separate ordered shortlist. Its order is determined by the displayed gallery,
-including its current oldest/newest sort, and further picks append without
-duplicating previous ones. Each item shows its current name, can be moved
-up/down or removed, and the entire list can be cleared. Picks persist in local
-Application Preferences (up to 200 unique IDs); deleted/cleared History records
-are pruned automatically. It is a **selection plan**, not an animation: it does
-not store experiment copies, change physics, export a Storyboard, or rerender.
-The list is independent of Pin: unpinned auto snapshots may be removed by
-automatic cleanup and then disappear from the shortlist. Pin important ones.
+**Add selected to Animation** copies checked visible snapshot **IDs** into an
+ordered staging selection, then opens the separate Animation workspace and
+loads the selected states into its in-memory draft. Order follows the displayed
+gallery, including oldest/newest sorting and Pinned/Recent grouping; further
+picks append without duplication. **Open in Animation** loads the current
+staging selection, and **Clear selection** in the staging bar empties it. The
+selection is kept in Application Preferences (up to 200 unique History IDs),
+with deleted snapshots pruned automatically. It is not itself an animation,
+does not rerender optics and is independent of Pin. Pin important automatic
+snapshots to protect them from pruning.
 
-Manual check: save several snapshots, filter and select shown, add to the
-shortlist, then switch filters and add more. Verify ordering, duplicate
-suppression, persistence after reload, name updates, and pruning after deletion.
-Try collapsing Pinned: only rendered cards can be selected for bulk operations.
+Reordering and frame timing now belong to **Animation Studio**, rather than a
+second thumbnail strip in History. To gather more frames, use **Choose
+snapshots from History** inside Animation, check them and press **Add selected
+to Animation**. Reloading the staged selection replaces the draft's frame list
+but preserves timing for matching IDs; it does not alter the live experiment.
+
+Manual check: select saved experiments with filters and sorting, send them to
+Animation, return to History to add more, and confirm that the Studio timeline
+reflects the new staged order without creating a duplicate History shortlist.
 
 ## Comparison semantics and future steps
 
@@ -365,7 +370,7 @@ project are provenance only, so pruning the source History cannot change
 already-created project data. No new UI or persistent animation-project store
 is added by this stage. See [Animation Architecture Research](modern-animation-research.md).
 
-## Animation Studio draft editor (#140.12.120.2)
+## Animation Studio draft editor (original #140.12.120.2 behavior; superseded below)
 
 Under the ordered **Storyboard shortlist**, History now contains an **Animation
 Studio · Draft editor**. Select at least two snapshots in History using the
@@ -401,7 +406,7 @@ store or portable animation export yet; those are upcoming stages. Reloading
 the page resets the editor draft. History snapshot IDs in a prepared project
 are optional provenance, not runtime dependencies.
 
-## Compact Storyboard and Animation Studio editor (#140.12.120.2.1)
+## Compact Storyboard and Animation Studio editor (original #140.12.120.2.1 behavior; superseded below)
 
 The **Storyboard shortlist** now presents an ordered, horizontally scrolling
 strip of compact screenshot cards, using the existing saved History thumbnails.
@@ -426,3 +431,31 @@ small and horizontally scrollable instead of stretching to the screen width.
 This change is **presentation-only**: it does not alter the compatibility
 validator, `ModernAnimationProject`, existing History ID semantics or live
 physics. The Studio draft still lives in memory, with no playback or export.
+
+
+## Current Animation workspace and History overlay
+
+**Scene / Compare / Animation / Demos** are the four visible Modern tabs.
+Animation is **a UI workspace, never an experiment physics mode**: the
+underlying saved `state.mode` stays Scene or Compare, and changing to Animation
+does not modify camera, atmosphere, surface, objects, session JSON, History or
+rendered optical data. Returning to the physical workspace refreshes its
+existing viewport. The last UI tab is kept in Application Preferences;
+explicit shared experiment URLs retain their own Scene/Compare context.
+
+History is a bounded, scrollable **overlay**, accessible from any workspace
+through the header or **Choose snapshots from History** in Animation. The
+backdrop, Close button and Escape close it without shifting the current
+viewport down. Selection is handed to Animation by **Add selected to
+Animation**. The redundant permanent Storyboard shortlist strip and its
+second rendering of thumbnails have been removed; its ordered, stable-ID
+staging data survives for existing users and remains independent of the owned
+Animation draft. The staging bar shows the number of selected snapshots and
+provides Open/Clear actions.
+
+Animation Studio presents a larger **saved-thumbnail preview** of the selected
+keyframe above one horizontal timeline and the selected frame's fields.
+Imported camera keyframes that have no saved screenshot show an explicit
+placeholder. A saved thumbnail is not a recomputation of intermediate optical
+frames. Playback, persistent Animation Project storage and video export are
+still not provided in this stage.

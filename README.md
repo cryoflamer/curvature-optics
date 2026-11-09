@@ -323,16 +323,43 @@ Compare A/B physical choices match either model, but combined Geometry and
 Atmosphere must apply to the same side. **Geometry A/B** and **Refraction A/B**
 Same/Different use the active physical parameters, not merely model labels.
 **Select shown** checks only currently rendered cards; temporary bulk selection
-is cleared when filters change or Pinned collapses. Checked snapshots can be
-appended, without duplicates, to an ordered **Storyboard shortlist**, whose
-stable History IDs persist in browser-local preferences. Frames may be moved
-up/down or removed, and missing/deleted entries are pruned. The shortlist is
-not yet an animation; Storyboard editing and playback remain future stages.
+is cleared when filters change or Pinned collapses. Checked snapshots can be sent in display order to **Animation Studio**.
+The former Storyboard shortlist remains an ordered, browser-local staging
+selection (with missing/deleted IDs pruned), but no longer creates a second
+thumbnail strip inside History. Animation Studio owns frame ordering/timings;
+actual animation playback remains future work.
 See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment URLs and plain JSON remain compatible; named Experiment Library records migrate into History.
 
 History snapshots support optional saved names/descriptions via ✎, independent of experiment JSON and Pin. **History replaces the former Experiment Library panel:** it provides **Export selected snapshot**, **Export all snapshots** and **Import JSON** for portable backups containing names, notes, pins and existing thumbnails. **Export current experiment JSON** retains the plain version-1 format for sharing with older Curvature builds. Old named localStorage Library entries are copied to History at first launch; the original data is not deleted. See `docs/modern-experiment-history.md` for migration and JSON compatibility details.
 
 - [Animation Studio architecture research and #120.1 compatibility/project API](docs/modern-animation-research.md): two mutually exclusive animation modes, physical interpolation limits, self-contained keyframes and planned integration.
-- **Animation Studio draft editor (#120.2)**: History shortlist → Load History shortlist, or import the existing Camera Animation; check camera-only / one-physical-channel compatibility and adjust names, order, travel, hold and easing before preparing an in-memory project. No playback or persistent animation project yet; see [History guide](docs/modern-experiment-history.md).
-- **Compact Animation Studio (#120.2.1)**: the History shortlist and Studio now show saved screenshot thumbnails in horizontally scrolling strips; Studio edits only the selected keyframe. Both panels have bounded widths. Missing screenshots are labeled without optical recapture; see the [History guide](docs/modern-experiment-history.md).
+- **Animation Studio draft editor (#120.2)** (historical handoff, replaced by the separate Animation workspace): load selected History snapshots or import the existing Camera Animation; check camera-only / one-physical-channel compatibility and adjust names, order, travel, hold and easing before preparing an in-memory project. No playback or persistent animation project yet; see [History guide](docs/modern-experiment-history.md).
+- **Compact Animation Studio (#120.2.1)** (superseded layout): History shortlist and Studio showed saved screenshot thumbnails in horizontally scrolling strips; Studio edits only the selected keyframe. Both panels have bounded widths. Missing screenshots are labeled without optical recapture; see the [History guide](docs/modern-experiment-history.md).
+
+
+### Animation workspace (UI restructure)
+
+Modern has an **Animation** workspace alongside Scene, Compare and Demos. It is
+**not** a physical experiment mode: changing tabs does not change Scene/Compare
+optics, create a History checkpoint or render an animation. The current
+Scene/Compare experiment and the old Camera Animation remain available when
+returning to their respective screens.
+
+**History** opens as an overlay instead of pushing the viewport down the page.
+Filter and select snapshot cards, then use **Add selected to Animation**: the
+selected IDs are staged in display order, de-duplicated and handed to the
+Animation Studio timeline. Choose more snapshots from the editor via **Choose
+snapshots from History**. The previous storyboard shortlist is retained as
+local staging preferences for compatibility but no longer renders a second
+thumbnail strip in History; the Studio owns ordering and timings. Loading a
+new selection replaces the draft's frame list while preserving per-ID timings
+where applicable. Previously imported Camera Animation frames can still be
+loaded through **Import Camera Animation**.
+
+Animation Studio displays a saved-keyframe preview and a selectable frame strip.
+The preview is an existing History thumbnail, **not** freshly computed optical
+playback. Drafts remain in memory; playback and durable Animation Project
+storage have not yet been implemented. The selected workspace tab is a browser
+preference, not part of shared experiment JSON or URLs. Explicit shared
+experiment links open their physical Scene/Compare context.
