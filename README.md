@@ -412,3 +412,19 @@ the viewport tracks the current physical frame. Scene/Compare and History
 remain unchanged. Temperature-lapse uses Accurate optics (potentially slow);
 absolute-time playback may skip displayed frames. See
 [`docs/modern-animation-research.md`](docs/modern-animation-research.md).
+
+#### Animation optical diagnostics
+
+In **Animation**, the **Optics** selector controls the isolated renderer.
+**Auto** means Accurate RK4 for curvature/temperature animations (Fast only
+for qualified camera motion); explicit Accurate is also available, while
+**Fast if supported** is an opt-in approximation. The current frame displays
+its sampled time, calculation time, quality per viewport and whether the
+Eye level and Traced horizon overlays were drawn or were unavailable.
+Eye level and the exact forward-RK4 Traced horizon respect the original
+snapshot's display flags. Exact horizon is unavailable in Fast Preview; a
+finite horizon that is unresolved or outside the field of view is not drawn.
+During a slow render the playback clock may move ahead of the last rendered
+frame, which is reported separately. The atmospheric temperature column is
+not yet supported in the isolated Animation viewport. Details: [animation
+research](docs/modern-animation-research.md).

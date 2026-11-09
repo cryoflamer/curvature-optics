@@ -216,7 +216,90 @@ test('Animation uses distinct parser-time Canvas graphs, not live Scene/Compare 
   assert.match(app,/studioPlaybackApi\.create\(studioPrepared\)/);
   assert.match(app,/studioPlaybackApi\.describeSample\(studioPrepared,sampled\)/);
   assert.match(html,/id="ModernAnimationPlaybackParameter"/);
-  assert.match(app,/studioPreviewRenderer\.render\(sampled,'A',graphs\.A\)/);
+  assert.match(app,/studioPreviewRenderer\.render\(sampled,'A',graphs\.A,renderOptions\)/);
   assert.doesNotMatch(app.slice(app.indexOf('function renderStudioPlaybackSample('),app.indexOf('function studioPlaybackTick(')),
     /applyExperiment\(|redraw\(|scheduleExperimentSave\(|queueHistoryAuto\(/);
+});
+
+
+test('Physical Globe/Flat sample at 0.2 seconds uses curvature and the same displayed time',()=>{
+  const globe=snapshot(),flat=structuredClone(globe);
+  flat.scene.surface.showModel=2;
+  const p=project.create([{experiment:globe},{experiment:flat,travelMs:5000}],
+    {id:'clock_diagnostic',name:'Clock parity'});
+  const c=playback.create(p);
+  c.start(1000);c.tick(1200);
+  assert.equal(c.status().positionMs,200);
+  const sampled=c.sample();
+  assert.ok(Math.abs(sampled.scene.surface.rEarth-6371000/0.96)<0.000001);
+  assert.match(playback.describeSample(p,sampled),/Globe R = 6,636.5 km/);
+});
+
+test('Physical optics defaults to Accurate even when Fast supports the profile',()=>{
+  const e=snapshot();
+  class FakeModel { Update(){} }
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:()=>({})}});
+  assert.equal(view.build(e,'A',{animationMode:'physical'}).quality,'accurate');
+  assert.equal(view.build(e,'A',{animationMode:'camera'}).quality,'fast');
+  assert.equal(view.build(e,'A',{animationMode:'physical',quality:'fast'}).quality,'fast');
+  assert.equal(view.build(e,'A',{animationMode:'camera',quality:'accurate'}).quality,'accurate');
+  assert.equal(view.build(e,'A',{animationMode:'physical'}).options.previewLod.stride,1);
+  e.scene.atmosphere='temperature-lapse';
+  assert.equal(view.build(e,'A',{animationMode:'physical',quality:'fast'}).quality,'accurate');
+  assert.throws(()=>view.build(e,'A',{quality:'invented'}),/optics choice/);
+});
+
+test('Independent animation overlays draw eye-level and certified traced horizon only on Accurate',()=>{
+  const e=snapshot(),drawn=[],calls=[];
+  e.display.eyeLevel=true;const before=structuredClone(e);
+  class FakeModel { Update(){this.camViewAngle=.25;this.rFEarth=6371000;} }
+  const ctx={save(){},restore(){},setTransform(){},setLineDash(){},beginPath(){},
+    moveTo(){},lineTo(){},stroke(){drawn.push('stroke');},fillText(text){drawn.push(text);}};
+  const graph={Canvas:{width:900,height:600,getContext(){return ctx;}}};
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(g,m,o)=>{
+    calls.push(o.opticalQuality);return {};}},horizon:{diagnose(args){
+    calls.push(args);return {status:'resolved',angleDegrees:-.12};
+  }}});
+  const a=view.render(e,'A',graph,{animationMode:'physical'});
+  assert.equal(a.quality,'accurate');
+  assert.equal(a.overlays.eyeLevel,'drawn');
+  assert.match(a.overlays.horizon,/drawn/);
+  assert.ok(drawn.includes('Eye level · 0°'));
+  assert.ok(drawn.includes('Traced horizon · -0.1200°'));
+  assert.equal(calls.filter(c=>typeof c==='object').length,1);
+  view.render(e,'A',graph,{animationMode:'physical'});
+  assert.equal(calls.filter(c=>typeof c==='object').length,1,'cached per viewport');
+  drawn.length=0;
+  const fast=view.render(e,'A',graph,{animationMode:'physical',quality:'fast'});
+  assert.equal(fast.overlays.eyeLevel,'drawn');
+  assert.equal(fast.overlays.horizon,'disabled in Fast Preview');
+  assert.ok(!drawn.some(s=>s.startsWith('Traced horizon')),'no false horizon in Fast');
+  assert.deepEqual(e,before,'rendering never changes saved experiment');
+});
+
+test('Unresolved or outside-view traced horizon is diagnosed without a fabricated stripe',()=>{
+  const e=snapshot(),drawn=[];e.display.eyeLevel=true;
+  class FakeModel {Update(){this.camViewAngle=.25;this.rFEarth=6371000;}}
+  const ctx={save(){},restore(){},setTransform(){},setLineDash(){},beginPath(){},
+    moveTo(){},lineTo(){},stroke(){},fillText(text){drawn.push(text);}};
+  const graph={Canvas:{width:900,height:600,getContext:()=>ctx}};
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:()=>({})},
+    horizon:{diagnose:()=>({status:'unresolved',reason:'No tangent'})}});
+  const out=view.render(e,'A',graph,{animationMode:'physical'});
+  assert.match(out.overlays.horizon,/unresolved/);
+  assert.ok(!drawn.some(text=>text.startsWith('Traced horizon')));
+  e.display.eyeLevel=false;
+  const out2=view.render(e,'B',graph,{animationMode:'physical'});
+  assert.equal(out2.overlays.eyeLevel,'disabled');
+});
+
+test('Playback quality and rendered frame time are displayed distinctly from the clock',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(html,/id="ModernAnimationPlaybackOptics"/);
+  assert.match(html,/id="ModernAnimationPlaybackDiagnostics"/);
+  assert.match(app,/var renderedAt=studioPlayback.status\(\).positionMs/);
+  assert.match(app,/studioPlaybackRenderedAt=renderedAt/);
+  assert.match(app,/image at /);
+  assert.match(app,/studioPrepared.mode/);
 });

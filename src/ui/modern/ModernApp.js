@@ -482,6 +482,8 @@
   var studioPlayback=null;
   var studioPlaybackFrame=null;
   var studioPlaybackLastPaint=-Infinity;
+  var studioPlaybackRenderedAt=null;
+  var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
   var studioPreviewRenderer=null;
   var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
@@ -998,7 +1000,7 @@
   function stopStudioPlayback(clear){
     if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
     if(studioPlayback)studioPlayback.pause(profileNow());
-    if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;}
+    if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;}
     syncStudioPlaybackControls();
   }
   function syncStudioPlaybackControls(){
@@ -1011,7 +1013,9 @@
     var seek=newUiEl('ModernAnimationPlaybackSeek');
     if(seek)seek.value=String(info.durationMs?Math.round(1000*info.positionMs/info.durationMs):0);
     var clock=newUiEl('ModernAnimationPlaybackTime');
-    if(clock)clock.textContent=(info.positionMs/1000).toFixed(1)+' / '+(info.durationMs/1000).toFixed(1)+' s';
+    if(clock)clock.textContent=(info.positionMs/1000).toFixed(1)+' / '+(info.durationMs/1000).toFixed(1)+' s'+
+      (studioPlaybackRenderedAt!==null&&Math.abs(info.positionMs-studioPlaybackRenderedAt)>500?
+        ' (image at '+(studioPlaybackRenderedAt/1000).toFixed(1)+'s)':'');
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
     var pause=newUiEl('ModernAnimationPlaybackPause');if(pause)pause.disabled=!info.playing;
   }
@@ -1037,6 +1041,7 @@
     if(!studioPreviewRenderer)studioPreviewRenderer=studioPreviewApi.create({
       Model:root.CurveAppClass,renderer:root.CurvatureMainCanvasRenderer,
       optics:root.CurvaturePhysicalSceneOptics});
+    var renderedAt=studioPlayback.status().positionMs;
     var sampled=studioPlayback.sample();
     var parameter=newUiEl('ModernAnimationPlaybackParameter');
     if(parameter){
@@ -1050,12 +1055,34 @@
     var label=newUiEl('ModernAnimationPlaybackLabelA');
     if(label)label.textContent=isCompare?'Model A':'Scene';
     var graphs=root.CurvatureModernAnimationGraphs;
-    var a=studioPreviewRenderer.render(sampled,'A',graphs.A);
-    var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B):null;
-    var quality=a.quality==='fast'&&(!b||b.quality==='fast')?
-      'Fast Preview · approximate':'Accurate optics · may update slowly';
+    var renderOptions={quality:studioPlaybackQuality,animationMode:studioPrepared.mode};
+    var begun=profileNow();
+    var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
+    var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
+    var spent=profileNow()-begun;
+    var fast=a.quality==='fast'&&(!b||b.quality==='fast');
     var qualityNode=newUiEl('ModernAnimationPlaybackQuality');
-    if(qualityNode)qualityNode.textContent=quality;
+    if(qualityNode)qualityNode.textContent=fast?'Fast Preview · approximate':
+      'Accurate RK4 optics'+(b&&b.quality!==a.quality?' / mixed quality':'');
+    var diagnostic=newUiEl('ModernAnimationPlaybackDiagnostics');
+    if(diagnostic){
+      function describe(view,side){
+        if(!view)return '';
+        var overlays=view.overlays||{};
+        return side+': '+view.quality+' · eye level '+(overlays.eyeLevel||'unknown')+
+          ' · horizon '+(overlays.horizon||'unknown');
+      }
+      var drawn=a.result||{};
+      diagnostic.textContent='Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
+        (studioPlayback.status().durationMs/1000).toFixed(2)+'s · frame '+
+        Math.round(spent)+' ms · '+describe(a,isCompare?'A':'Scene')+
+        (isCompare?' · '+describe(b,'B'):'')+
+        (Number.isFinite(drawn.drawn)?' · '+drawn.drawn+' visible segments':'')+
+        (spent>500?' · slow calculation: playback may skip intermediate frames':'');
+    }
+    // This timestamp always corresponds to the pixels just drawn. The
+    // playback clock may advance during synchronous Accurate rendering.
+    studioPlaybackRenderedAt=renderedAt;
     studioPlaybackLastPaint=profileNow();
   }
   function studioPlaybackTick(now){
@@ -1079,6 +1106,16 @@
     }
   }
   function bindStudioPlayback(){
+    var optics=newUiEl('ModernAnimationPlaybackOptics');
+    if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
+      studioPlaybackQuality=['auto','fast','accurate'].includes(optics.value)?optics.value:'auto';
+      if(!studioPlayback)return;
+      stopStudioPlayback(false);
+      studioPlaybackLastPaint=-Infinity;
+      try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
+      catch(error){var status=newUiEl('ModernAnimationPlaybackStatus');
+        if(status)status.textContent='Playback optics: '+error.message;}
+    });}
     var play=newUiEl('ModernAnimationPlaybackPlay');
     if(!play)return;
     function safely(fn){try{fn();}catch(error){

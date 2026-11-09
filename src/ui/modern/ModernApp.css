@@ -735,6 +735,10 @@ button{cursor:pointer}
 .modern-animation-playback-controls button{border:1px solid #9cbddd;border-radius:6px;
   background:#e7f2fd;color:#255e91;padding:7px 12px;cursor:pointer}
 .modern-animation-playback-controls button:disabled{opacity:.5;cursor:default}
+.modern-animation-playback-controls select{max-width:280px;border:1px solid #9cbddd;
+  border-radius:6px;background:white;padding:7px;color:#255e91}
+.modern-animation-playback-diagnostics{font-size:11px;line-height:1.5;color:#456680;
+  overflow-wrap:anywhere}
 .modern-animation-playback-controls input[type=range]{flex:1;min-width:130px}
 .modern-animation-playback-controls output{min-width:78px;text-align:right;font-variant-numeric:tabular-nums}
 .modern-animation-playback p{margin:10px 0 0}

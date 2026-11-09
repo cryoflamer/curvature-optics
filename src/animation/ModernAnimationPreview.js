@@ -1,14 +1,20 @@
 /* Dedicated optical viewport renderer for sampled animation experiments.
- * All models and optical cache sessions belong to this instance, not ModernApp.
- * The existing production Physical renderer remains the single painter.
+ * All models, horizon diagnostics and optical cache sessions belong to this
+ * instance, never to the live Scene / Compare workspace. The same production
+ * physical painter is used; screen-only guides are composed afterwards.
  */
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
-  if(typeof module==='object'&&module.exports)experiment=require('../ui/modern/ModernExperimentState');
-  var api=factory(experiment);
+  var horizon=root.CurvatureRayHorizon,physicalCamera=root.CurvaturePhysicalCamera;
+  if(typeof module==='object'&&module.exports){
+    experiment=require('../ui/modern/ModernExperimentState');
+    horizon=require('../optics/OpticalRayHorizon');
+    physicalCamera=require('../app/CurvaturePhysicalCamera');
+  }
+  var api=factory(experiment,horizon,physicalCamera);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera){
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
@@ -17,15 +23,68 @@
       (spec.surface==='flat'&&(spec.atmosphere==='exponential-occlusion'||
       (spec.atmosphere==='inverse-temperature'&&spec.inverseProfile.weight===1)));
   }
+  function opticalQuality(spec,choice,animationMode){
+    if(!['auto','fast','accurate'].includes(choice))throw RangeError('Invalid animation optics choice');
+    if(choice==='accurate'||(choice==='auto'&&animationMode==='physical'))return 'accurate';
+    return fastEligible(spec)?'fast':'accurate';
+  }
+  // Same observer-fixed angular projection as the live Modern eye-level guide.
+  // The diagnostic itself comes from the same forward RK4 horizon tracer.
+  function angleY(graph,model,degrees){
+    var canvas=graph.Canvas,aspect=model.deviceRatio,fov=model.camViewAngle;
+    if(!canvas||!(canvas.width>0&&canvas.height>0&&aspect>0&&fov>0))return null;
+    var halfTan=Math.tan(fov/2)/Math.sqrt(1+aspect*aspect);
+    var tilt=model.Nick*Math.PI/180;
+    var aim=model.viewcenterHorizon===3?0:physicalCamera.create(model).aimDip;
+    var relative=degrees*Math.PI/180-(tilt-aim);
+    var y=canvas.height/2-canvas.height*Math.tan(relative)/(2*halfTan);
+    return Number.isFinite(y)&&y>=0&&y<=canvas.height?y:null;
+  }
+  function line(graph,model,degrees,color,label,dashed){
+    var y=angleY(graph,model,degrees);
+    if(y===null)return false;
+    var canvas=graph.Canvas,ctx=canvas.getContext('2d');
+    ctx.save();
+    try{
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.strokeStyle=color.stroke;ctx.fillStyle=color.text;
+      ctx.lineWidth=Math.max(1,canvas.width/(dashed?850:900));
+      if(dashed&&ctx.setLineDash)ctx.setLineDash([7,5]);
+      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
+      if(dashed&&ctx.setLineDash)ctx.setLineDash([]);
+      ctx.font=Math.max(11,Math.round(canvas.width/65))+'px Arial, sans-serif';
+      ctx.textBaseline=y<18?'top':'bottom';
+      ctx.fillText(label,8,y<18?y+3:y-4);
+    }finally{ctx.restore();}
+    return true;
+  }
+  function horizonOptions(model,spec){
+    var atmosphere=spec.atmosphere;
+    if(atmosphere==='profile-transition'&&spec.transitionProfile){
+      if(spec.transitionProfile.weight===0)atmosphere=spec.transitionProfile.source;
+      else if(spec.transitionProfile.weight===1)atmosphere='exponential-occlusion';
+    }
+    return {geometry:model.showModel===2?'flat':'globe',radius:model.rEarth,
+      observerHeight:model.Height,atmosphere:atmosphere,
+      profileOptions:atmosphere==='temperature-lapse'?spec.temperatureProfile:
+        atmosphere==='profile-transition'?{temperatureProfile:spec.temperatureProfile,
+          transitionProfile:spec.transitionProfile,occlusionRadius:spec.occlusionRadius}:
+        atmosphere==='inverse-temperature'?{temperatureProfile:spec.temperatureProfile,
+          inverseProfile:spec.inverseProfile,occlusionRadius:spec.occlusionRadius}:
+        {occlusionRadius:spec.occlusionRadius}};
+  }
   function create(dependencies){
     if(!dependencies||typeof dependencies.Model!=='function'||
       !dependencies.renderer||typeof dependencies.renderer.renderPhysical!=='function')
       throw TypeError('Independent model and Physical renderer are required');
     var renderer=dependencies.renderer,optics=dependencies.optics||null;
+    var detector=dependencies.horizon||horizon;
     var sessions={A:optics&&optics.create?optics.create():null,
       B:optics&&optics.create?optics.create():null};
     var models={A:new dependencies.Model(),B:new dependencies.Model()};
-    function build(data,side){
+    var horizons={A:null,B:null};
+    function build(data,side,options){
+      options=options||{};
       var validated=experiment.validate(data),scene=validated.scene;
       var compare=validated.display.mode==='compare';
       if(!['A','B'].includes(side))throw RangeError('Invalid preview side');
@@ -39,21 +98,58 @@
       model.rEarth=compare?spec.radiusKm*1000:scene.surface.rEarth;
       model.Update();
       var geometry=model.showModel===2?'flat':'globe';
-      return {model:model,options:{atmosphere:spec.atmosphere,
+      var requested=options.quality||'auto',mode=options.animationMode||'camera';
+      var quality=opticalQuality(Object.assign({},spec,{surface:geometry}),requested,mode);
+      return {model:model,spec:spec,display:validated.display,quality:quality,
+        requestedQuality:requested,options:{atmosphere:spec.atmosphere,
         occlusionRadius:spec.occlusionRadius,visibility:spec.visibility,
         temperatureProfile:spec.temperatureProfile,transitionProfile:spec.transitionProfile,
         inverseProfile:spec.inverseProfile,interactive:false,geometryBackend:'canvas',
-        opticalQuality:fastEligible(Object.assign({},spec,{surface:geometry}))?'fast':'accurate',
-        previewLod:{stride:4},cacheSession:sessions[side]||undefined}};
+        opticalQuality:quality,previewLod:{stride:quality==='fast'?4:1},
+        cacheSession:sessions[side]||undefined}};
     }
-    function render(data,side,graph){
+    function guides(config,side,graph){
+      var display=config.display,canvas=graph.Canvas;
+      // Synthetic graph harnesses do not have a Canvas 2D context.
+      if(!canvas||typeof canvas.getContext!=='function'||!canvas.getContext('2d'))
+        return {eyeLevel:'unavailable',horizon:'unavailable'};
+      var eye='disabled',traced='disabled';
+      if(display.eyeLevel){
+        eye=line(graph,config.model,0,{stroke:'#159447',text:'#117b3b'},'Eye level · 0°',false)?
+          'drawn':'outside view';
+      }
+      if(display.horizon){
+        if(config.quality!=='accurate')traced='disabled in Fast Preview';
+        else if(!detector||typeof detector.diagnose!=='function')traced='tracer unavailable';
+        else{
+          var params=horizonOptions(config.model,config.spec),key=JSON.stringify(params);
+          if(!horizons[side]||horizons[side].key!==key){
+            var measured;
+            try{measured=detector.diagnose(params);}
+            catch(error){measured={status:'unresolved',reason:error.message};}
+            horizons[side]={key:key,result:measured};
+          }
+          var result=horizons[side].result;
+          if(result.status!=='resolved')traced=result.status+' (no certified finite tangent)';
+          else if(config.model.Roll!==0)traced='omitted for camera roll';
+          else traced=line(graph,config.model,result.angleDegrees,
+            {stroke:'#d48313',text:'#ad640a'},
+            'Traced horizon · '+result.angleDegrees.toFixed(4)+'°',true)?
+            'drawn · '+result.angleDegrees.toFixed(4)+'°':'outside view';
+        }
+      }
+      return {eyeLevel:eye,horizon:traced};
+    }
+    function render(data,side,graph,options){
       if(!graph||!graph.Canvas)throw TypeError('Independent preview Canvas required');
-      var config=build(data,side);
+      var config=build(data,side,options);
       if(typeof graph.UpdateCanvasSize==='function')graph.UpdateCanvasSize();
       var result=renderer.renderPhysical(graph,config.model,config.options);
-      return {quality:config.options.opticalQuality,result:result};
+      var overlays=guides(config,side,graph);
+      return {quality:config.quality,requestedQuality:config.requestedQuality,
+        overlays:overlays,result:result};
     }
     return Object.freeze({build:build,render:render});
   }
-  return Object.freeze({create:create,fastEligible:fastEligible});
+  return Object.freeze({create:create,fastEligible:fastEligible,opticalQuality:opticalQuality});
 }));

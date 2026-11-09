@@ -180,6 +180,12 @@
         <div id="ModernAnimationPlaybackViewB" class="modern-animation-playback-view" hidden><span>Model B</span><div id="ModernAnimationCanvasB" class="modern-animation-playback-canvas"></div></div>
       </div>
       <div class="modern-animation-playback-controls">
+        <label for="ModernAnimationPlaybackOptics">Optics</label>
+        <select id="ModernAnimationPlaybackOptics" title="Physical animation defaults to Accurate RK4; Fast is approximate and is available only for qualified atmospheric profiles">
+          <option value="auto">Auto · Accurate physical / Fast camera</option>
+          <option value="accurate">Accurate RK4 · all frames</option>
+          <option value="fast">Fast if supported · approximate</option>
+        </select>
         <button type="button" id="ModernAnimationPlaybackPlay">Play</button>
         <button type="button" id="ModernAnimationPlaybackPause" disabled>Pause</button>
         <button type="button" id="ModernAnimationPlaybackStop">Stop</button>
@@ -187,6 +193,7 @@
         <input type="range" id="ModernAnimationPlaybackSeek" min="0" max="1000" value="0" step="1" aria-label="Seek animation timeline">
         <output id="ModernAnimationPlaybackTime">0.0 / 0.0 s</output>
       </div>
+      <p id="ModernAnimationPlaybackDiagnostics" class="modern-animation-playback-diagnostics" role="status" aria-live="off">Diagnostics appear after rendering.</p>
       <p id="ModernAnimationPlaybackStatus" class="modern-studio-hint" role="status" aria-live="polite">Prepared project ready for preview.</p>
     </section>
     <div class="modern-animation-editor-layout">

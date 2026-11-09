@@ -261,3 +261,40 @@ real-browser pixel/FPS tests remain outstanding.
 ExperimentState representation. Extremely large implied radii beyond its
 supported bound produce a clear playback error rather than silently
 substituting Flat or altering the physics.
+
+## Rendering diagnostics and parity with Scene (#140.12.120.4.1)
+
+The original isolated `ModernAnimationPreview` passed a sampled experiment to
+`CurvatureMainCanvasRenderer.renderPhysical`, but did not draw Modern's
+screen-space Eye level and Traced horizon overlays. Those annotations are **not**
+physical objects and must be painted *after* optical composition. The isolated
+viewport now uses the same observer-angle projection and forward RK4
+`CurvatureRayHorizon.diagnose()` calculation as Scene/Compare, with a horizon
+cache owned separately by each preview side. It respects the snapshot's
+`display.eyeLevel` and `display.horizon` flags. The horizon is **never**
+replaced by an analytical geometric dip: an unresolved/ambiguous finite
+first-contact diagnostic produces no fabricated line. Camera roll or an
+out-of-view angle also suppresses that overlay, with an explicit diagnostic.
+Exact traced horizon is disabled in Fast Preview, just as in the main view.
+
+The optical-quality control in Animation supports **Auto** (qualified Fast for
+camera motion; **Accurate RK4 by default for physical animation**), explicit
+Accurate and opt-in approximate Fast for eligible atmospheres. An unsupported
+Fast profile still uses Accurate rather than falsely claiming to render an
+unsupported approximate model. Accurate renders use full object detail
+(`previewLod.stride = 1`) and can be much slower, especially with an exact
+horizon diagnostic and changing curvature. This is not a frame-rate promise.
+The temperature column (another screen-space presentation layer) is not yet
+ported to the independent Animation viewport.
+
+The UI reports each frame's **sampled animation time**, elapsed render time,
+actual quality per viewport and Eye level / Traced horizon status. The timeline
+may be ahead of the most recently *rendered* sample when the synchronous RK4
+calculation is slow; this discrepancy is displayed explicitly rather than
+misrepresenting an old image as the current time. The deterministic clock still
+skips frames when necessary. A 0.2 s sample of a 5 s linear Globe (6371 km)
+→ Flat transition has radius `6371 / (1 - 0.2/5) ≈ 6636.46 km`; unit tests
+confirm that project interpolation itself is correct. An apparent different
+radius paired with that clock label in a screenshot is **not by itself proof**
+of a faulty curvature formula. A real-browser pixel-parity/performance check
+at identical saved Scene and Animation states is still required.

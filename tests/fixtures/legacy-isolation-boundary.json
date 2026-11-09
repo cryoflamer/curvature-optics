@@ -557,6 +557,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationPreview.js",
         "src/app/CurvatureMainCanvasRenderer.js"
       ],
       "commonJsTestCallers": [
@@ -1223,7 +1224,9 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationPreview.js"
+      ],
       "commonJsTestCallers": [
         "tests/OpticalRayHorizon.test.js"
       ],
