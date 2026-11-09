@@ -425,6 +425,25 @@ draft and does not create named persistent projects or export JSON/video. Creati
 a new draft overwrites the previous autosave; saving several distinct animations
 is planned for #140.12.120.5. The Scene/Compare experiment is not modified.
 
+### Animation preview initial frame and reload redraw
+
+A prepared Animation Studio project now **renders its sampled physical frame on
+Prepare and after F5**, while staying paused. The restored timeline position is
+used rather than silently starting from 0; Stop returns to time 0 and renders
+the first keyframe. Seek renders the requested intermediate state. The first
+frame is painted after the Animation workspace is visible and its independent
+GraphX3DX canvases have acquired their layout dimensions, avoiding a blank
+viewport when an early resize clears the Canvas. A paused frame is repainted
+when the viewport width changes. The transient `Rendering physical frame…`
+message identifies a still-pending calculation; failures remain visible with a
+**Retry frame** action, not a fabricated snapshot/crossfade. Playback never
+autostarts during recovery and never changes the live Scene/Compare.
+
+For verification: Prepare → first frame; F5 at a nonzero timeline position →
+paused physical frame at that exact time; Stop → first frame; Seek → sampled
+intermediate frame. The `Rendered t=` diagnostic must match the painted frame.
+In-browser verification of actual pixels and performance is still needed.
+
 ### Physical Parameter Playback in Animation Studio (#140.12.120.4)
 
 A compatible saved-snapshot animation can now be played directly in the

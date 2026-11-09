@@ -349,3 +349,30 @@ without deleting existing History or replacing the working Scene/Compare.
 
 There is still only *one* recoverable working draft; the multi-project
 Animation Library and portable import/export are planned separately.
+
+## Initial physical preview after Prepare / F5
+
+A prepared project has a visible physical preview without requiring Play. The
+independent GraphX3DX graphs are constructed in an off-screen bootstrap and
+attached to the Animation workspace; rendering before that workspace has a
+measurable layout can produce an empty/cleared Canvas even though the optical
+solver reported a successful frame. The Animation UI therefore schedules an
+initial render across two browser layout frames, waits for a nonzero viewport
+width, and uses the exact saved `ModernAnimationPlayback.positionMs` from
+`ModernAnimationDraftAutosave`. It **does not advance the clock**. The same
+render path handles freshly prepared projects, restored drafts, return to the
+Animation tab, and Stop (after resetting the clock to the first frame). Seek
+continues to sample directly. A resize observer redraws paused frames if the
+viewport width changes after their initial paint.
+
+Pending redraws are generation-guarded and canceled by later state changes or
+Play, so stale callbacks cannot paint the wrong project or timeline position.
+The UI marks a frame as rendering until the real physical painter completes;
+errors show a diagnostic and **Retry frame**, never a screenshot masquerading as
+a valid interpolated physical result. The independent physical renderer and
+its quality/fallback policy remain unchanged. There is no new persistence
+format, no optical formula change, and no new History entry.
+
+Automated tests exercise delayed startup, saved-position rendering, first-frame
+Stop/Prepare wiring, cancellations, resizing, hidden workspaces and retries.
+Actual Canvas visibility after Opera F5 still requires user-side verification.

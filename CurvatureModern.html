@@ -177,8 +177,8 @@
         <span id="ModernAnimationPlaybackParameter" role="status" hidden></span>
       </div>
       <div id="ModernAnimationPlaybackPanels" class="modern-animation-playback-panels">
-        <div class="modern-animation-playback-view"><span id="ModernAnimationPlaybackLabelA">Scene</span><div id="ModernAnimationCanvasA" class="modern-animation-playback-canvas"></div></div>
-        <div id="ModernAnimationPlaybackViewB" class="modern-animation-playback-view" hidden><span>Model B</span><div id="ModernAnimationCanvasB" class="modern-animation-playback-canvas"></div></div>
+        <div class="modern-animation-playback-view"><span id="ModernAnimationPlaybackLabelA">Scene</span><div id="ModernAnimationCanvasA" class="modern-animation-playback-canvas"><div id="ModernAnimationFrameLoadingA" class="modern-animation-frame-loading" hidden>Rendering physical frame…</div></div></div>
+        <div id="ModernAnimationPlaybackViewB" class="modern-animation-playback-view" hidden><span>Model B</span><div id="ModernAnimationCanvasB" class="modern-animation-playback-canvas"><div id="ModernAnimationFrameLoadingB" class="modern-animation-frame-loading" hidden>Rendering physical frame…</div></div></div>
       </div>
       <div class="modern-animation-playback-controls">
         <label for="ModernAnimationPlaybackOptics">Optics</label>
@@ -190,6 +190,7 @@
         <button type="button" id="ModernAnimationPlaybackPlay">Play</button>
         <button type="button" id="ModernAnimationPlaybackPause" disabled>Pause</button>
         <button type="button" id="ModernAnimationPlaybackStop">Stop</button>
+        <button type="button" id="ModernAnimationPlaybackRetry" title="Redraw current physical frame without starting playback">Retry frame</button>
         <label for="ModernAnimationPlaybackSeek">Timeline</label>
         <input type="range" id="ModernAnimationPlaybackSeek" min="0" max="1000" value="0" step="1" aria-label="Seek animation timeline">
         <output id="ModernAnimationPlaybackTime">0.0 / 0.0 s</output>

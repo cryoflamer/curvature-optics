@@ -488,6 +488,8 @@
   var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
   var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
   var studioDraftWriteQueue=Promise.resolve(),studioRestorePreviewPending=false;
+  var studioInitialPaintFrame=null,studioInitialPaintToken=0;
+  var studioPreviewObservedWidths={A:0,B:0};
   var studioPreviewRenderer=null;
   var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
@@ -1051,6 +1053,7 @@
     studioDraft=saved.draft;studioSelectedKey=saved.selectedKey;
     studioPlaybackQuality=saved.quality;studioDraftSavedAt=saved.savedAt;
     studioPrepared=null;studioPlayback=null;studioPlaybackRenderedAt=null;
+    cancelStudioInitialPaint();
     studioPlaybackLastPaint=-Infinity;studioRestorePreviewPending=false;
     if(saved.prepared&&studioPlaybackApi){
       try{
@@ -1064,6 +1067,7 @@
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics)optics.value=studioPlaybackQuality;
     syncStudioPlaybackControls();
+    if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('restored');
   }
   function bindStudioDraftPersistence(){
     if(!studioDraftAutosave)return;
@@ -1098,6 +1102,7 @@
   // Staging IDs survive History filtering; actual animation states are copied
   // into the draft only on explicit hand-off. Missing IDs are pruned by History.
   function stopStudioPlayback(clear){
+    if(clear)cancelStudioInitialPaint();
     if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
     if(studioPlayback)studioPlayback.pause(profileNow());
     if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;}
@@ -1131,6 +1136,82 @@
         host.appendChild(graph.ContainerDiv);
     });
     return true;
+  }
+  // GraphX3DX starts in a hidden bootstrap container and its canvas can be
+  // resized/cleared when the independent viewport first becomes visible.
+  // Paint AFTER layout, not during draft recovery or while the panel is hidden.
+  // A later restore/prepare/seek invalidates pending callbacks by generation.
+  function cancelStudioInitialPaint(){
+    studioInitialPaintToken++;
+    if(studioInitialPaintFrame!==null){cancelAnimationFrame(studioInitialPaintFrame);
+      studioInitialPaintFrame=null;}
+  }
+  function studioFrameLoading(loading,message){
+    ['A','B'].forEach(function(side){
+      var notice=newUiEl('ModernAnimationFrameLoading'+side);
+      if(notice){notice.hidden=!loading;if(loading)notice.textContent=message;}
+    });
+  }
+  function scheduleStudioInitialPaint(reason){
+    if(!studioPlayback||!studioPrepared)return;
+    studioRestorePreviewPending=true;
+    cancelStudioInitialPaint();
+    if(!animationWorkspaceOpen||document.hidden)return;
+    var token=studioInitialPaintToken,attempts=0;
+    var position=studioPlayback.status().positionMs;
+    studioFrameLoading(true,'Rendering physical frame at '+(position/1000).toFixed(2)+' s…');
+    var status=newUiEl('ModernAnimationPlaybackStatus');
+    if(status)status.textContent=(reason==='restored'?'Restored project · ':'')+
+      'Rendering the '+(position===0?'first':'saved')+' frame (playback paused)…';
+    // Two layout frames allow the hidden workspace and its parser-created
+    // GraphX3DX canvas to acquire final dimensions before pixel painting.
+    function next(){studioInitialPaintFrame=requestAnimationFrame(paint);}
+    function paint(){
+      studioInitialPaintFrame=null;
+      if(token!==studioInitialPaintToken||!studioPlayback||!studioPrepared||
+         !animationWorkspaceOpen||document.hidden)return;
+      var host=newUiEl('ModernAnimationCanvasA');
+      if(host&&typeof host.getBoundingClientRect==='function'&&
+         host.getBoundingClientRect().width<2&&attempts++<12){next();return;}
+      try{
+        studioPlaybackLastPaint=-Infinity;
+        renderStudioPlaybackSample(true);
+        studioRestorePreviewPending=false;
+        studioFrameLoading(false,'');
+        syncStudioPlaybackControls();
+        var ready=newUiEl('ModernAnimationPlaybackStatus');
+        if(ready)ready.textContent='Frame at '+(studioPlaybackRenderedAt/1000).toFixed(2)+
+          ' s ready · playback paused.';
+      }catch(error){
+        studioFrameLoading(true,'Physical frame unavailable · use Retry frame');
+        var failed=newUiEl('ModernAnimationPlaybackStatus');
+        if(failed)failed.textContent='Unable to render frame: '+error.message+' · Retry frame is available.';
+      }
+    }
+    studioInitialPaintFrame=requestAnimationFrame(function(){
+      if(token===studioInitialPaintToken)next();
+    });
+  }
+  function observeStudioPreviewSize(){
+    function resized(){
+      if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen||
+         studioPlayback.status().playing)return;
+      var changed=false;
+      ['A','B'].forEach(function(side){
+        var host=newUiEl('ModernAnimationCanvas'+side);
+        if(!host||typeof host.getBoundingClientRect!=='function')return;
+        var width=Math.round(host.getBoundingClientRect().width);
+        if(width>1&&studioPreviewObservedWidths[side]!==width){
+          studioPreviewObservedWidths[side]=width;changed=true;
+        }
+      });
+      if(changed)scheduleStudioInitialPaint('resized');
+    }
+    if(typeof root.ResizeObserver==='function'){
+      var observer=new root.ResizeObserver(resized);
+      ['A','B'].forEach(function(side){var host=newUiEl('ModernAnimationCanvas'+side);
+        if(host)observer.observe(host);});
+    }else if(root.addEventListener)root.addEventListener('resize',resized);
   }
   function renderStudioPlaybackSample(force){
     if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen)return;
@@ -1191,6 +1272,7 @@
     // playback clock may advance during synchronous Accurate rendering.
     studioPlaybackRenderedAt=renderedAt;
     studioPlaybackLastPaint=profileNow();
+    studioFrameLoading(false,'');
   }
   function studioPlaybackTick(now){
     studioPlaybackFrame=null;
@@ -1234,6 +1316,7 @@
     }}
     play.addEventListener('click',function(){safely(function(){
       if(!studioPlayback)throw Error('Prepare a compatible animation project first');
+      cancelStudioInitialPaint();
       studioPlayback.start(profileNow());
       var status=newUiEl('ModernAnimationPlaybackStatus');
       if(status)status.textContent=(studioPrepared.mode==='camera'?'Camera':'Physical')+
@@ -1250,22 +1333,28 @@
     var stop=newUiEl('ModernAnimationPlaybackStop');
     if(stop)stop.addEventListener('click',function(){safely(function(){
       stopStudioPlayback(false);if(studioPlayback)studioPlayback.stop();
-      saveStudioDraft(false);
-      renderStudioPlaybackSample(true);syncStudioPlaybackControls();
-      var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Stopped at first keyframe.';
+      saveStudioDraft(false);syncStudioPlaybackControls();
+      scheduleStudioInitialPaint('first');
     });});
     var seek=newUiEl('ModernAnimationPlaybackSeek');
     if(seek)seek.addEventListener('input',function(){safely(function(){
       if(!studioPlayback)return;
       studioPlayback.seek(studioPlayback.status().durationMs*Number(seek.value)/1000,profileNow());
-      saveStudioDraft(false);
+      cancelStudioInitialPaint();saveStudioDraft(false);
       studioPlaybackLastPaint=-Infinity;
       renderStudioPlaybackSample(true);syncStudioPlaybackControls();
     });});
+    var retry=newUiEl('ModernAnimationPlaybackRetry');
+    if(retry)retry.addEventListener('click',function(){
+      if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
+    });
+    observeStudioPreviewSize();
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
       if(document.hidden&&studioPlayback){stopStudioPlayback(false);saveStudioDraft(false);
         var status=newUiEl('ModernAnimationPlaybackStatus');
         if(status)status.textContent='Paused while the tab is hidden.';
+      }else if(studioPlayback&&animationWorkspaceOpen&&studioRestorePreviewPending){
+        scheduleStudioInitialPaint('visible');
       }
     });
   }
@@ -1369,7 +1458,7 @@
         studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
         saveStudioDraft(false);
         syncStudioPlaybackControls();
-        if(studioPlayback)renderStudioPlaybackSample(true);
+        if(studioPlayback)scheduleStudioInitialPaint('prepared');
         renderAnimationStudio(entries);
         var status=newUiEl('ModernAnimationStudioMessage');
         if(status){status.classList.remove('is-error');
@@ -1490,11 +1579,9 @@
     }
     var strip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(strip)strip.scrollLeft=studioFilmstripScroll;
-    if(studioRestorePreviewPending&&studioPlayback&&animationWorkspaceOpen){
-      studioRestorePreviewPending=false;
-      try{renderStudioPlaybackSample(true);}catch(error){
-        studioDraftStatus('Animation restored; preview needs manual retry: '+error.message,true);
-      }
+    if(studioRestorePreviewPending&&studioPlayback&&animationWorkspaceOpen&&
+       studioInitialPaintFrame===null&&studioPlaybackRenderedAt===null){
+      scheduleStudioInitialPaint('restored');
     }
   }
   var historyMetadataEditingId=null;
@@ -3815,7 +3902,8 @@
   }
   function setMode(mode,remember){
     if(mode!=='animation'&&animationWorkspaceOpen){
-      stopStudioPlayback(false);if(studioPlayback)saveStudioDraft(false);
+      cancelStudioInitialPaint();stopStudioPlayback(false);
+      if(studioPlayback)saveStudioDraft(false);
     }
     if(!['scene','compare','animation','demos'].includes(mode))
       throw RangeError('Invalid Modern UI mode');
@@ -3834,6 +3922,7 @@
         var tab=el(id);tab.classList.remove('is-active');tab.setAttribute('aria-pressed','false');
       });
       animationWorkspaceOpen=true;syncWorkspaceVisibility();
+      if(studioPlayback)scheduleStudioInitialPaint('opened');
       if(remember!==false&&workspaceState.mode!=='animation'){
         workspaceState.mode='animation';saveApplicationPreferences();
       }

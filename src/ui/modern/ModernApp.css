@@ -728,7 +728,11 @@ button{cursor:pointer}
 .modern-animation-playback-view[hidden]{display:none!important}
 .modern-animation-playback-view>span{display:block;padding:7px 10px;color:#284f71;
   font-size:12px;font-weight:700;background:#e8f2fb}
-.modern-animation-playback-canvas{width:100%;min-height:100px;overflow:hidden}
+.modern-animation-playback-canvas{width:100%;min-height:100px;position:relative;overflow:hidden}
+.modern-animation-frame-loading{position:absolute;z-index:1;inset:0;display:flex;
+  align-items:center;justify-content:center;pointer-events:none;background:rgba(255,255,255,.91);
+  color:#365a77;font-size:13px;text-align:center;padding:12px}
+.modern-animation-frame-loading[hidden]{display:none!important}
 .modern-animation-playback-canvas>.JsGraph{max-width:100%}
 .modern-animation-playback-controls{display:flex;flex-wrap:wrap;align-items:center;
   gap:9px;margin-top:12px;color:#3d5b74;font-size:12px}
