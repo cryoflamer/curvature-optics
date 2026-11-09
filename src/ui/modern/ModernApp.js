@@ -24,6 +24,9 @@
   var historyUI=root.CurvatureModernExperimentHistoryUI;
   var historyFiltersApi=root.CurvatureModernExperimentHistoryFilters;
   var sessionAutosave=root.CurvatureModernSessionAutosave;
+  var studioApi=root.CurvatureModernAnimationStudio;
+  var studioUI=root.CurvatureModernAnimationStudioUI;
+  var studioProjects=root.CurvatureModernAnimationProject;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
@@ -470,6 +473,8 @@
   var historyPinnedCollapsed=false;
   var historyPanelOpen=false;
   var historyStoryboardQueue=[];
+  var studioDraft=studioApi?studioApi.blank():null;
+  var studioPrepared=null;
   var historyFilters={query:'',mode:'all',geometry:'any',atmosphere:'any',
     geometryRelation:'any',refractionRelation:'any'};
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
@@ -974,6 +979,47 @@
         }
       });
   }
+  // Animation Studio is a temporary, self-contained draft, not a new History
+  // store or a live renderer. The shortlist and old camera sequence are read
+  // only when the user explicitly imports them into the editor.
+  function renderAnimationStudio(entries){
+    var host=newUiEl('ModernAnimationStudio');
+    if(!studioApi||!studioUI||!host)return;
+    if(!studioDraft)studioDraft=studioApi.blank();
+    var assessment=studioApi.inspect(studioDraft);
+    function update(next){
+      studioDraft=next;studioPrepared=null;
+      var status=newUiEl('ModernAnimationStudioMessage');
+      if(status){status.textContent='';status.classList.remove('is-error');}
+      renderAnimationStudio(entries);
+    }
+    function report(error){
+      var status=newUiEl('ModernAnimationStudioMessage');
+      if(status){status.textContent=error.message;status.classList.add('is-error');}
+    }
+    function safe(action){try{action();}catch(error){report(error);}}
+    studioUI.render(document,host,studioDraft,assessment,{
+      load:function(){safe(function(){
+        update(studioApi.history(historyStoryboardQueue,entries,studioDraft));
+      });},
+      importCamera:function(){safe(function(){
+        update(studioApi.importCamera(experimentSnapshot(),cameraSequence,studioDraft));
+      });},
+      edit:function(field,value){safe(function(){update(studioApi.edit(studioDraft,field,value));});},
+      frame:function(key,field,value){safe(function(){
+        update(studioApi.editFrame(studioDraft,key,field,value));
+      });},
+      move:function(key,step){safe(function(){update(studioApi.move(studioDraft,key,step));});},
+      remove:function(key){safe(function(){update(studioApi.remove(studioDraft,key));});},
+      prepare:function(){safe(function(){
+        studioPrepared=studioApi.build(studioDraft,'studio_draft');
+        renderAnimationStudio(entries);
+        var status=newUiEl('ModernAnimationStudioMessage');
+        if(status){status.classList.remove('is-error');
+          status.textContent='Animation project prepared in memory. Playback and permanent saving are not implemented yet.';}
+      });}
+    },!!studioPrepared);
+  }
   var historyMetadataEditingId=null;
   function closeHistoryMetadataEditor(){
     var dialog=newUiEl('ModernHistoryMetadataDialog');
@@ -1020,6 +1066,7 @@
         historyStoryboardQueue=surviving;saveApplicationPreferences();
       }
       renderHistoryStoryboard(entries);
+      renderAnimationStudio(entries);
       var visible=historyFiltersApi?historyFiltersApi.filter(entries,historyFilters):entries;
       var count=newUiEl('ModernHistoryFilterCount');
       if(count)count.textContent='Showing '+visible.length+' of '+entries.length+' snapshots';
@@ -3738,6 +3785,8 @@
     getCameraTransition:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     getHistoryStore:function(){return experimentHistory;},
+    getAnimationStudioProject:function(){return studioPrepared&&studioProjects?
+      studioProjects.validate(studioPrepared):null;},
     getWorkspaceState:function(){return {mode:state.demosActive?'demos':state.mode,
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:state.compareSelected,sections:Object.assign({},workspaceState.sections)};},

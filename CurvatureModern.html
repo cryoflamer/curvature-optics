@@ -72,6 +72,10 @@
 <script src="src/ui/modern/ModernExperimentHistory.js"></script>
 <script src="src/ui/modern/ModernExperimentHistoryUI.js"></script>
 <script src="src/ui/modern/ModernExperimentHistoryFilters.js"></script>
+<script src="src/animation/ModernAnimationCompatibility.js"></script>
+<script src="src/animation/ModernAnimationProject.js"></script>
+<script src="src/animation/ModernAnimationStudio.js"></script>
+<script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
 </head>
@@ -123,9 +127,11 @@
     <div class="modern-history-bulk" role="group" aria-label="Bulk selection of visible snapshots"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistorySelectVisible" type="button">Select shown</button><button id="ModernHistoryClearChecked" type="button">Clear selection</button><button id="ModernHistoryPinChecked" type="button">Pin checked</button><button id="ModernHistoryDeleteChecked" type="button">Delete checked</button><button id="ModernHistoryQueueChecked" type="button">Add to storyboard list</button></div>
     <section class="modern-history-storyboard" aria-label="Storyboard shortlist">
       <div class="modern-history-storyboard-heading"><strong>Storyboard shortlist</strong><span id="ModernHistoryQueueCount" role="status">0 frames</span><button id="ModernHistoryQueueClear" type="button">Clear list</button></div>
-      <p>Ordered saved snapshots for a future Storyboard. The list does not create an animation or protect unpinned automatic snapshots from cleanup.</p>
+      <p>Choose saved snapshots in order, then load them into Animation Studio below. The shortlist does not protect unpinned automatic snapshots from cleanup.</p>
       <ol id="ModernHistoryStoryboardQueue" aria-label="Storyboard frame order"></ol>
     </section>
+    <section id="ModernAnimationStudio" class="modern-animation-studio" aria-label="Animation Studio draft editor"></section>
+    <p id="ModernAnimationStudioMessage" class="modern-library-status" role="status" aria-live="polite"></p>
     <div class="modern-library-buttons"><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryPin">Pin / unpin selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>
     <div class="modern-history-portable" aria-label="History import and export">
       <button type="button" id="ModernHistoryExportSelected">Export selected snapshot</button>

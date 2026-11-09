@@ -563,3 +563,38 @@ button{cursor:pointer}
 .modern-history-filters button:hover{background:#e2effb}
 .modern-history-filters #ModernHistoryFilterCount{font-size:12px;color:#456580;
   white-space:nowrap;align-self:center;margin-left:auto}
+
+/* Animation Studio: isolated editor for validated History/Camera keyframes. */
+.modern-animation-studio{margin:12px 0;border:1px solid #b6d0e8;background:#fff;
+  border-radius:10px;padding:13px;color:#234867;font-size:12px}
+.modern-studio-header,.modern-studio-frame-header{display:flex;align-items:center;
+  justify-content:space-between;gap:10px;flex-wrap:wrap}
+.modern-studio-header strong{font-size:15px;color:#245d8e}
+.modern-studio-header span{color:#58788e}
+.modern-studio-hint{color:#607d94;font-size:11px;line-height:1.55;margin:7px 0}
+.modern-studio-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.modern-studio-action{border:1px solid #b8d1e5;background:#edf6ff;
+  border-radius:6px;padding:6px 9px;color:#235d91;cursor:pointer;font-size:12px}
+.modern-studio-action:hover,.modern-studio-action:focus-visible{background:#dceefd}
+.modern-studio-action:disabled{opacity:.45;cursor:not-allowed}
+.modern-studio-basics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));
+  gap:9px;margin:12px 0}
+.modern-studio-field{display:flex;flex-direction:column;gap:4px;min-width:0;color:#436987}
+.modern-studio-field>span{font-size:11px;font-weight:600}
+.modern-studio-field input,.modern-studio-field select,.modern-studio-field textarea{box-sizing:border-box;
+  width:100%;min-width:0;border:1px solid #c5d8e8;border-radius:6px;background:#fff;
+  color:#1e4667;padding:7px;font:inherit;font-size:12px}
+.modern-studio-status{padding:10px 12px;background:#f2f7fd;border:1px solid #d3e2f1;
+  border-radius:7px;margin:9px 0;white-space:normal;overflow-wrap:anywhere}
+.modern-studio-status.is-ready{background:#effaf4;border-color:#b5dfc7;color:#256349}
+.modern-studio-status.is-invalid{background:#fff8f2;border-color:#f0d7b8;color:#79512a}
+.modern-studio-status ul{margin:6px 0 0;padding-left:20px;max-height:150px;overflow:auto}
+.modern-studio-frames{padding:0;margin:8px 0 12px;list-style:none;max-height:420px;overflow-y:auto}
+.modern-studio-frame{border:1px solid #dbe7f2;border-radius:7px;padding:9px;margin:7px 0}
+.modern-studio-frame-header strong{min-width:0;overflow-wrap:anywhere}
+.modern-studio-frame>small{color:#6e8397}
+.modern-studio-frame-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr));
+  gap:8px;margin-top:7px}
+.modern-studio-prepared{color:#347355;font-size:11px}
+@media(max-width:550px){.modern-animation-studio{padding:10px}
+  .modern-studio-basics{grid-template-columns:1fr}}

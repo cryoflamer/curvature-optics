@@ -364,3 +364,39 @@ project with independent embedded `baseExperiment`. Snapshot IDs inside the
 project are provenance only, so pruning the source History cannot change
 already-created project data. No new UI or persistent animation-project store
 is added by this stage. See [Animation Architecture Research](modern-animation-research.md).
+
+## Animation Studio draft editor (#140.12.120.2)
+
+Under the ordered **Storyboard shortlist**, History now contains an **Animation
+Studio · Draft editor**. Select at least two snapshots in History using the
+existing checkboxes and **Add to storyboard list**, then select **Load History
+shortlist** in Studio. This copies the current snapshot states into an
+in-memory draft, independent of subsequent edits, deletion and pruning of the
+History source records. The shortlist remains unchanged when Studio frames
+are reordered or removed. To include newly selected snapshots, load the
+shortlist again (existing frame timings for matching History IDs are retained).
+
+Alternatively select **Import Camera Animation** to copy the active Scene or
+Compare experiment's existing Camera Animation keyframes, including their
+camera poses, names and timing. Import does not replace the live experiment,
+mutate the original camera sequence, or add anything to History. The previous
+Camera Animation editor and its playback controls remain intact for now.
+
+The editor supports project name and description, Auto-detect / Camera motion /
+one physical parameter, the explicit physical viewport (Scene or Compare A/B)
+and either curvature or temperature gradient. It provides per-frame names,
+incoming travel duration, arrival hold, easing, reorder and removal. The first
+frame has no incoming travel. Validation evaluates **all** frames with
+`ModernAnimationCompatibility` and shows structured offending paths, such as
+`camera.Height` and `scene.temperatureProfile.gradientKPerKm`. Invalid or
+ambiguous combinations cannot be prepared. The **Prepare project** button
+uses `ModernAnimationProject.create` to produce an independent, validated
+project; for developer inspection it is accessible through
+`CurvatureModernApp.getAnimationStudioProject()` after preparation.
+
+**Scope limit:** the editor and prepared project live **only in page memory**.
+Only the preexisting ordered shortlist is persisted as a browser preference.
+There is no Play, Seek, accurate frame rendering, permanent Animation Project
+store or portable animation export yet; those are upcoming stages. Reloading
+the page resets the editor draft. History snapshot IDs in a prepared project
+are optional provenance, not runtime dependencies.

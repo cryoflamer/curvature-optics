@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 67,
-      "uniqueScripts": 66,
+      "scriptTags": 71,
+      "uniqueScripts": 70,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -184,6 +184,10 @@
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentHistoryUI.js",
         "src/ui/modern/ModernExperimentHistoryFilters.js",
+        "src/animation/ModernAnimationCompatibility.js",
+        "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationStudio.js",
+        "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
         "src/ui/modern/ModernApp.js",
@@ -305,6 +309,9 @@
       "src/ui/panels/ViewSliders.js"
     ],
     "loadedByModernNotLegacy": [
+      "src/animation/ModernAnimationCompatibility.js",
+      "src/animation/ModernAnimationProject.js",
+      "src/animation/ModernAnimationStudio.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
       "src/geometry/CurvatureCameraTranslation.js",
@@ -314,6 +321,7 @@
       "src/optics/OpticalRayHorizon.js",
       "src/renderers/CurvatureAtmosphericVisibility.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
+      "src/ui/modern/ModernAnimationStudioUI.js",
       "src/ui/modern/ModernApp.js",
       "src/ui/modern/ModernApplicationPreferences.js",
       "src/ui/modern/ModernAtmosphericPresentation.js",
@@ -345,8 +353,6 @@
       "src/ModelAnimation.js",
       "src/NumFormatter.js",
       "src/Slider.js",
-      "src/animation/ModernAnimationCompatibility.js",
-      "src/animation/ModernAnimationProject.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
@@ -357,7 +363,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 149,
+  "sourceJsCount": 151,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -414,9 +420,12 @@
       "commonJsToolCallers": []
     },
     "src/animation/ModernAnimationCompatibility.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [
-        "src/animation/ModernAnimationProject.js"
+        "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationProject.test.js"
@@ -424,10 +433,25 @@
       "commonJsToolCallers": []
     },
     "src/animation/ModernAnimationProject.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationStudio.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationProject.test.js",
+        "tests/ModernAnimationStudio.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationStudio.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernAnimationProject.test.js"
+        "tests/ModernAnimationStudio.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -581,9 +605,11 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationStudio.js",
         "src/ui/modern/ModernExperimentState.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationStudio.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js"
       ],
@@ -1895,6 +1921,16 @@
       "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernAnimationStudioUI.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationStudio.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernApp.js": {
       "directHtmlLoads": [
         "modern"
@@ -2030,6 +2066,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/ModernAngularGuide.test.js",
         "tests/ModernAnimationProject.test.js",
+        "tests/ModernAnimationStudio.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
@@ -2127,6 +2164,7 @@
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationCompatibility.js",
         "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationStudio.js",
         "src/ui/modern/ModernExperimentFingerprint.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentLibrary.js"
@@ -2136,6 +2174,7 @@
         "tests/CurvatureCameraTranslation.test.js",
         "tests/LegacyModernBoundary.test.js",
         "tests/ModernAnimationProject.test.js",
+        "tests/ModernAnimationStudio.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",

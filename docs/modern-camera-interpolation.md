@@ -88,3 +88,19 @@ animations using self-contained snapshots from Modern History. It reuses the
 existing camera interpolator without changing the present Camera Animation UI,
 serialization, or playback behavior. Read [animation research and API contract](modern-animation-research.md)
 for the exact two-mode invariant, allowed physical channels, and limitations.
+
+## Animation Studio editor (transition stage)
+
+`src/animation/ModernAnimationStudio.js` provides pure, side-effect-free draft
+helpers: `blank`, `history`, `importCamera`, `edit`, `editFrame`, `move`,
+`remove`, `inspect` and `build`. The History draft owns the source experiment
+payloads; old Camera Animation import captures copies of the active experiment
+with each saved camera pose, preserving `travelMs`, `holdMs` and `easing`.
+The existing camera sequence still runs independently from the live Camera
+panel. `src/ui/modern/ModernAnimationStudioUI.js` renders the lightweight DOM
+editor within History; `ModernApp.js` wires its actions and exposes only an
+explicitly prepared project to DevTools. Read [History](modern-experiment-history.md)
+for usage and the limitations of this in-memory editor.
+
+The project is not yet applied to a renderer and must not be mistaken for a
+live animation. No intermediate optical frames are computed while editing.
