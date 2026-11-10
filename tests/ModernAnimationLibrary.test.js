@@ -96,7 +96,7 @@ test('named projects round-trip without History and retain exact physical endpoi
 test('Save As owns another ID and Save Changes uses optimistic revisions',async()=>{
   const db=memoryIndexedDB();const sourceDraft=source();
   const first=await library.create(db,studio.build(sourceDraft,'animation_a'),'fast',100);
-  const second=await library.create(db,studio.build(sourceDraft,'animation_b'),'accurate',120);
+  const second=await library.create(db,studio.build(sourceDraft,'animation_b'),'accurate',120,null,true);
   assert.equal((await library.list(db))[0].id,'animation_b');
   await assert.rejects(library.create(db,first.project,'fast',130),/already exists/);
   const changed=studio.edit(sourceDraft,'description','A later explanation');
@@ -110,6 +110,79 @@ test('Save As owns another ID and Save Changes uses optimistic revisions',async(
   assert.equal(await library.remove(db,'animation_a'),false);
   assert.equal((await library.list(db)).length,1);
   assert.equal(second.project.name,'Globe to Flat');
+});
+
+test('semantic fingerprint ignores metadata and inactive controls but preserves animation content',()=>{
+  const base=studio.build(source(),'first');
+  const clone=structuredClone(base);
+  clone.id='another';clone.name='Another title';clone.description='A second description';
+  clone.keyframes.forEach((f,i)=>{f.name='Alternative '+i;f.sourceSnapshotId=null;});
+  clone.baseExperiment.compare.A.radiusKm=9000; // inactive in Scene
+  assert.equal(library.fingerprint(base),library.fingerprint(clone));
+  const differentTime=structuredClone(clone);differentTime.keyframes[1].travelMs+=200;
+  assert.notEqual(library.fingerprint(base),library.fingerprint(differentTime));
+  const differentHold=structuredClone(clone);differentHold.keyframes[0].holdMs+=300;
+  assert.notEqual(library.fingerprint(base),library.fingerprint(differentHold));
+  const differentEasing=structuredClone(clone);differentEasing.keyframes[1].easing='smoothstep';
+  assert.notEqual(library.fingerprint(base),library.fingerprint(differentEasing));
+  const differentEndpoint=structuredClone(clone);differentEndpoint.keyframes[1].value=1/10000000;
+  assert.notEqual(library.fingerprint(base),library.fingerprint(differentEndpoint));
+  const differentObjects=structuredClone(clone);differentObjects.baseExperiment.scene.objects.ObjDist[0]+=10;
+  assert.notEqual(library.fingerprint(base),library.fingerprint(differentObjects));
+  const reversed=structuredClone(clone);reversed.keyframes.reverse();
+  // First frame travelMs must remain zero, so move the physical values only.
+  reversed.keyframes[0].travelMs=0;reversed.keyframes[1].travelMs=5000;
+  assert.notEqual(library.fingerprint(base),library.fingerprint(reversed));
+});
+
+test('duplicate create is blocked atomically, Save copy anyway is explicit, and groups are review-only',async()=>{
+  const db=memoryIndexedDB(),base=studio.build(source(),'semantic_a');
+  await library.create(db,base,'accurate',100);
+  const duplicate=structuredClone(base);duplicate.id='semantic_b';
+  duplicate.name='Different title';duplicate.description='Notes';
+  duplicate.keyframes[0].name='Origin';duplicate.keyframes[1].sourceSnapshotId=null;
+  let conflict;
+  try{await library.create(db,duplicate,'fast',200);}catch(error){conflict=error;}
+  assert.equal(conflict.code,'ANIMATION_DUPLICATE');
+  assert.equal(conflict.existingId,'semantic_a');
+  assert.equal(conflict.existingName,base.name);
+  assert.equal((await library.list(db)).length,1);
+  const copy=await library.create(db,duplicate,'fast',201,null,true);
+  assert.equal(copy.id,'semantic_b');
+  assert.equal(library.findDuplicates(await library.list(db))[0].length,2);
+  assert.equal(await library.remove(db,'semantic_a'),true);
+  assert.equal(library.findDuplicates(await library.list(db)).length,0);
+  const revised=structuredClone(base);revised.id='different_timing';revised.keyframes[1].travelMs+=500;
+  await library.create(db,revised,'auto',202);
+  assert.equal((await library.list(db)).length,2);
+});
+
+test('library UI warns before duplicates and offers explicit copy plus manual review',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',
+    className:'',value:'',disabled:false,appendChild(node){this.children.push(node);return node;},
+    addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(name,v){this[name]=v;}};}};
+  const host=doc.createElement('section'),original=studio.build(source(),'one'),copy=structuredClone(original);
+  copy.id='two';copy.name='Other title';
+  const a=library.record(original,'auto','one',10,11),b=library.record(copy,'fast','two',12,13);
+  const calls=[],actions={save:()=>{},saveAs:()=>{},saveChanges:()=>{},
+    toggleExpanded:()=>{},toggleDuplicates:()=>calls.push('review'),
+    openDuplicate:()=>calls.push('existing'),forceCopy:()=>calls.push('force'),
+    open:id=>calls.push(['open',id]),remove:id=>calls.push(['delete',id]),
+    select:()=>{},renameStart:()=>{},renameCancel:()=>{},rename:()=>{}};
+  ui.renderLibrary(doc,host,[a,b],{expanded:true,duplicate:{id:'one',name:original.name},
+    duplicateGroups:library.findDuplicates([a,b]),showDuplicates:true},actions);
+  const nodes=(function walk(n){return [n,...n.children.flatMap(walk)];})(host);
+  for(const [label,value] of [['Open existing','existing'],['Save copy anyway','force'],
+    ['Hide duplicates','review']]){
+    nodes.find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
+    assert.equal(calls.at(-1),value);
+  }
+  assert.ok(nodes.some(n=>n.textContent.includes('none will be deleted automatically')));
+  assert.equal(nodes.filter(n=>n.className==='modern-animation-library-duplicate-entry').length,2);
+  nodes.find(n=>n.className==='modern-animation-library-duplicate-entry').children
+    .find(n=>n.textContent==='Delete').listeners.click();
+  assert.deepEqual(calls.at(-1),['delete','one']);
 });
 
 test('invalid projects never enter storage and malformed records are rejected',async()=>{
@@ -157,6 +230,7 @@ test('classic-browser script loading has no CommonJS dependency and can save via
   ];
   const requiredScriptOrder=[
     'src/ui/modern/ModernExperimentThumbnail.js',
+    'src/animation/ModernAnimationCompatibility.js',
     'src/animation/ModernAnimationProject.js',
     'src/animation/ModernAnimationLibrary.js'
   ];
@@ -168,7 +242,8 @@ test('classic-browser script loading has no CommonJS dependency and can save via
     'thumbnail and project must load before Animation Library');
   // The project's UMD script has its own tests; supply its validated API as
   // the prior <script> global and execute the library/thumbnail scripts as-is.
-  const browser=vm.createContext({CurvatureModernAnimationProject:animation});
+  const browser=vm.createContext({CurvatureModernAnimationProject:animation,
+    CurvatureModernAnimationCompatibility:require('../src/animation/ModernAnimationCompatibility')});
   assert.equal(vm.runInContext('typeof require',browser),'undefined');
   assert.equal(vm.runInContext('typeof module',browser),'undefined');
   for(const file of files){

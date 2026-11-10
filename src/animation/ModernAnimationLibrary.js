@@ -5,14 +5,16 @@
 (function(root,factory){
   var projects=root.CurvatureModernAnimationProject;
   var thumbnails=root.CurvatureModernExperimentThumbnail;
+  var compatibility=root.CurvatureModernAnimationCompatibility;
   if(typeof module==='object'&&module.exports){
     projects=require('./ModernAnimationProject');
     thumbnails=require('../ui/modern/ModernExperimentThumbnail');
+    compatibility=require('./ModernAnimationCompatibility');
   }
-  var api=factory(projects,thumbnails);
+  var api=factory(projects,thumbnails,compatibility);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationLibrary=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,thumbnails){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,thumbnails,compatibility){
   'use strict';
   var VERSION=1,DATABASE='curvature-modern-animation-library',STORE='projects';
   function validId(id){
@@ -45,6 +47,35 @@
     var token=crypto&&typeof crypto.randomUUID==='function'?crypto.randomUUID().replace(/-/g,''):
       Math.floor(Math.random()*0x100000000).toString(36)+Math.floor(Math.random()*0x100000000).toString(36);
     return validId('animation_'+(now||Date.now()).toString(36)+'_'+token);
+  }
+  // Semantic identity: the complete animation, NOT its title, browser ID,
+  // source History IDs, screenshot, optics preference, or current playback time.
+  // The existing compatibility normalizer removes inactive physical controls.
+  // Camera pose lives in keyframe values for camera-motion projects, so the
+  // otherwise irrelevant base camera is excluded only in that mode.
+  function fingerprint(project){
+    var p=projects.validate(project),fixed=compatibility.effective(p.baseExperiment);
+    if(p.mode==='camera')delete fixed.camera;
+    return JSON.stringify({mode:p.mode,target:p.target,fixed:fixed,
+      keyframes:p.keyframes.map(function(frame){return {
+        value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing
+      };})});
+  }
+  function findDuplicates(entries){
+    var buckets=new Map();
+    (entries||[]).forEach(function(entry){
+      var normalized=normalize(entry),key=fingerprint(normalized.project);
+      if(!buckets.has(key))buckets.set(key,[]);
+      buckets.get(key).push(normalized);
+    });
+    return Array.from(buckets.values()).filter(function(group){return group.length>1;});
+  }
+  function duplicateError(existing){
+    var error=Error('Identical animation already saved: '+existing.project.name);
+    error.code='ANIMATION_DUPLICATE';
+    error.existingId=existing.id;
+    error.existingName=existing.project.name;
+    return error;
   }
   function record(project,optics,id,createdAt,updatedAt,thumbnail){
     var valid=projects.validate(project);
@@ -102,12 +133,23 @@
       req.onsuccess=function(){try{finish(req.result?normalize(req.result):null);}catch(error){abort(error);}};
     });
   }
-  function create(indexedDB,project,optics,now,thumbnail){
+  function create(indexedDB,project,optics,now,thumbnail,allowDuplicate){
     var time=stamp(now||Date.now()),data=record(project,optics,project.id,time,time,thumbnail);
     return transaction(indexedDB,'readwrite',function(store,finish,abort){
-      var read=store.get(data.id);
-      read.onsuccess=function(){if(read.result){abort(Error('Animation Library project already exists'));return;}
-        try{store.add(data);finish(data);}catch(error){abort(error);}};
+      // Check ALL existing rows in the same readwrite transaction as add().
+      // A second tab cannot race this check and silently create a copy.
+      var read=store.getAll();
+      read.onsuccess=function(){try{
+        var entries=(read.result||[]).map(normalize);
+        if(entries.some(function(entry){return entry.id===data.id;}))
+          throw Error('Animation Library project already exists');
+        if(!allowDuplicate){
+          var key=fingerprint(data.project);
+          var existing=entries.find(function(entry){return fingerprint(entry.project)===key;});
+          if(existing)throw duplicateError(existing);
+        }
+        store.add(data);finish(data);
+      }catch(error){abort(error);}};
     });
   }
   function update(indexedDB,project,optics,expectedRevision,now,thumbnail){
@@ -157,5 +199,6 @@
   }
   return Object.freeze({VERSION:VERSION,DATABASE:DATABASE,STORE:STORE,
     normalize:normalize,makeId:makeId,record:record,
+    fingerprint:fingerprint,findDuplicates:findDuplicates,
     list:list,get:get,create:create,update:update,rename:rename,remove:remove});
 }));

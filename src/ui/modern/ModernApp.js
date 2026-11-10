@@ -489,6 +489,7 @@
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
+  var studioLibraryDuplicate=null,studioLibraryShowDuplicates=false;
   var studioLibraryScroll=0;
   var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
   var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
@@ -1031,10 +1032,16 @@
       canSave:!!(studioApi&&studioDraft&&studioApi.inspect(studioDraft).compatible),
       dirty:studioLibraryDirty(),busy:studioLibraryBusy,
       expanded:studioLibraryExpanded,renameId:studioLibraryRenamingId,
+      duplicate:studioLibraryDuplicate,showDuplicates:studioLibraryShowDuplicates,
+      duplicateGroups:studioLibrary&&studioLibrary.findDuplicates?
+        studioLibrary.findDuplicates(studioLibraryEntries):[],
       message:studioLibraryMessage,error:studioLibraryError
     },{
       select:function(id){studioLibrarySelected=id;renderStudioLibrary();},
       toggleExpanded:function(){studioLibraryExpanded=!studioLibraryExpanded;renderStudioLibrary();},
+      toggleDuplicates:function(){studioLibraryShowDuplicates=!studioLibraryShowDuplicates;renderStudioLibrary();},
+      openDuplicate:function(){if(studioLibraryDuplicate)openNamedAnimation(studioLibraryDuplicate.id);},
+      forceCopy:function(){saveNamedAnimation(false,true);},
       renameStart:function(id){studioLibraryRenamingId=id;studioLibraryExpanded=true;renderStudioLibrary();},
       renameCancel:function(){studioLibraryRenamingId='';renderStudioLibrary();},
       rename:function(id,name){renameNamedAnimation(id,name);},
@@ -1121,7 +1128,7 @@
       studioLibraryError=true;
     }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
   }
-  function saveNamedAnimation(replace){
+  function saveNamedAnimation(replace,forceDuplicate){
     if(!studioLibrary||studioLibraryBusy)return;
     var project,quality=studioPlaybackQuality,active=studioLibraryActive;
     try{
@@ -1129,19 +1136,32 @@
       var id=replace?active.id:studioLibrary.makeId(root.crypto);
       project=studioApi.build(studioDraft,id);
     }catch(error){studioLibraryNotice('Cannot save animation: '+error.message,true);return;}
+    var key=studioLibrary.fingerprint(project);
+    if(forceDuplicate&&(!studioLibraryDuplicate||studioLibraryDuplicate.fingerprint!==key)){
+      studioLibraryDuplicate=null;
+      studioLibraryNotice('Animation changed; try Save As again before creating a copy.',true);
+      return;
+    }
+    if(!forceDuplicate)studioLibraryDuplicate=null;
     var image=studioLibraryThumbnail(project);
     studioLibraryBusy=true;studioLibraryNotice('Saving named animation…',false);
     var operation=replace?
       studioLibrary.update(root.indexedDB,project,quality,active.updatedAt,undefined,image):
-      studioLibrary.create(root.indexedDB,project,quality,undefined,image);
+      studioLibrary.create(root.indexedDB,project,quality,undefined,image,!!forceDuplicate);
     operation.then(function(saved){
-      studioLibraryActive=saved;studioLibraryPending=null;
+      studioLibraryActive=saved;studioLibraryPending=null;studioLibraryDuplicate=null;
       studioLibrarySelected=saved.id;
       studioLibraryMessage=(replace?'Saved changes to ':'Saved new animation: ')+saved.project.name;
       studioLibraryError=false;
       saveStudioDraft(false);
       return refreshStudioLibrary();
-    }).catch(function(error){studioLibraryNotice('Animation was not saved: '+error.message,true);})
+    }).catch(function(error){
+      if(error.code==='ANIMATION_DUPLICATE'){
+        studioLibraryDuplicate={id:error.existingId,name:error.existingName,fingerprint:key};
+        studioLibrarySelected=error.existingId;
+        studioLibraryNotice('This animation is already saved as '+error.existingName+'.',false);
+      }else studioLibraryNotice('Animation was not saved: '+error.message,true);
+    })
       .then(function(){studioLibraryBusy=false;renderStudioLibrary();});
   }
   function openNamedAnimation(id){
@@ -1160,6 +1180,7 @@
       stopStudioPlayback(true);
       studioDraft=draft;studioSelectedKey=draft.frames[0].key;
       studioFilmstripScroll=0;studioLibraryActive=record;studioLibraryPending=null;
+      studioLibraryDuplicate=null;
       studioPlaybackQuality=record.quality;
       studioPrepared=studioApi.build(draft,'studio_draft');
       studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;

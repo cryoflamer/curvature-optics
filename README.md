@@ -528,6 +528,21 @@ records require no migration. JSON import/export belongs to #140.12.120.5.3.
 There is no video export, background rendering, change to optical physics,
 new HTML entrypoint, or Legacy change.
 
+### Animation Library duplicate protection
+
+**Save animation** and **Save As** compare the full semantic animation (active
+physical state, animation channel, ordered frame values, travel/hold durations
+and easing) with all saved projects. Titles, descriptions, History source IDs,
+screenshots, creation dates, saved optics preference and the current playback
+position do **not** make a different animation. The duplicate check and insert
+run inside one IndexedDB read-write transaction, including competing tabs.
+An existing match offers **Open existing** or an explicit **Save copy anyway**;
+no automatic copy is made. **Find duplicates** groups old identical library
+records for manual review with Open/Delete, but never deletes anything itself.
+Save changes still updates the selected project's revision explicitly. The
+same semantic comparison can be reused by future JSON import, without changing
+its format in this patch.
+
 **Browser loader regression:** the library uses the same UMD script as Node,
 but `require()` must be guarded by the CommonJS branch. A classic-browser
 VM smoke test now checks script loading without Node globals and a named

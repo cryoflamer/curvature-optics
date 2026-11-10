@@ -799,3 +799,18 @@ button{cursor:pointer}
 @media(max-width:550px){.modern-animation-library{padding:10px}
   .modern-animation-library-card{flex-basis:190px}
   .modern-animation-library-visual{height:98px}}
+
+/* Duplicate prevention is intentional, while removal of old copies is manual. */
+.modern-animation-library-duplicate-warning,.modern-animation-library-duplicate-review{
+  margin-top:9px;padding:9px 11px;border:1px solid #c0d8ea;border-radius:7px;
+  background:#f2f8fe;color:#254e70;font-size:11px}
+.modern-animation-library-duplicate-warning{border-color:#e8d4a4;background:#fff9eb}
+.modern-animation-library-duplicate-actions,.modern-animation-library-duplicate-entry{
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:6px}
+.modern-animation-library-duplicate-warning button,.modern-animation-library-duplicate-review button{
+  padding:5px 8px;border:1px solid #a9c8e0;border-radius:5px;background:#fff;
+  color:#225d92;cursor:pointer}
+.modern-animation-library-duplicate-entry span{flex:1;min-width:110px;overflow-wrap:anywhere}
+.modern-animation-library-duplicate-group{margin-top:7px;padding:7px 9px;
+  background:#fff;border-radius:5px}
+.modern-animation-library-duplicate-group small{color:#647f96}

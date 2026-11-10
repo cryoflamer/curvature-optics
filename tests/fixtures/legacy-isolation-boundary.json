@@ -439,10 +439,12 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationProject.js",
         "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationProject.test.js"
       ],
       "commonJsToolCallers": []

@@ -180,6 +180,10 @@
       options.busy||!options.activeId||!options.dirty||!options.canSave);
     action('Save As','Save an independent copy of the current animation',actions.saveAs,
       options.busy||!options.canSave);
+    if((options.duplicateGroups||[]).length){
+      action(options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
+        'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
+    }
     host.appendChild(row);
     var message=el(doc,'p','modern-animation-library-note',options.activeId?
       'Editing saved project'+(options.dirty?' · Unsaved changes':' · All changes saved'):
@@ -187,6 +191,36 @@
     host.appendChild(message);
     if(options.message){var note=el(doc,'p','modern-animation-library-message'+
       (options.error?' is-error':''),options.message);note.setAttribute('role','status');host.appendChild(note);}
+    if(options.duplicate){
+      var warning=el(doc,'div','modern-animation-library-duplicate-warning');
+      warning.appendChild(el(doc,'strong','','Identical animation already saved: '+options.duplicate.name));
+      var duplicateActions=el(doc,'div','modern-animation-library-duplicate-actions');
+      var openExisting=button(doc,'Open existing','Open identical saved animation',actions.openDuplicate);
+      openExisting.disabled=!!options.busy;duplicateActions.appendChild(openExisting);
+      var forceCopy=button(doc,'Save copy anyway','Explicitly save a duplicate animation',actions.forceCopy);
+      forceCopy.disabled=!!options.busy;duplicateActions.appendChild(forceCopy);
+      warning.appendChild(duplicateActions);host.appendChild(warning);
+    }
+    if(options.showDuplicates&&(options.duplicateGroups||[]).length){
+      var review=el(doc,'div','modern-animation-library-duplicate-review');
+      review.appendChild(el(doc,'strong','','Existing identical projects — none will be deleted automatically'));
+      options.duplicateGroups.forEach(function(group,index){
+        var section=el(doc,'div','modern-animation-library-duplicate-group');
+        section.appendChild(el(doc,'small','',
+          'Group '+(index+1)+' · '+group.length+' identical animations'));
+        group.forEach(function(entry){
+          var item=el(doc,'div','modern-animation-library-duplicate-entry');
+          item.appendChild(el(doc,'span','',entry.project.name));
+          var open=button(doc,'Open','Open '+entry.project.name,function(){actions.open(entry.id);});
+          open.disabled=!!options.busy;item.appendChild(open);
+          var remove=button(doc,'Delete','Delete '+entry.project.name+' after confirmation',function(){actions.remove(entry.id);});
+          remove.disabled=!!options.busy;item.appendChild(remove);
+          section.appendChild(item);
+        });
+        review.appendChild(section);
+      });
+      host.appendChild(review);
+    }
     if(!entries.length){host.appendChild(el(doc,'p','modern-animation-library-empty',
       'No saved animations yet. Prepare an animation and use Save animation to keep it here.'));return;}
     if(options.expanded===false)return;

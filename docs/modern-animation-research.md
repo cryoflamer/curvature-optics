@@ -483,3 +483,23 @@ check used by Save changes. The draft remains independent: when its name
 matches the previous saved name, it follows an explicit rename without
 silently saving other draft modifications. Portable JSON import/export is
 reserved for #140.12.120.5.3.
+
+## Duplicate-aware Animation Library (#140.12.120.5.2.2)
+
+`ModernAnimationLibrary.fingerprint(project)` serializes the **validated active
+experiment** using `ModernAnimationCompatibility.effective`, animation mode,
+physical target, and ordered keyframe values, travel/hold times and easing.
+For camera-motion projects, the base camera is intentionally excluded: each
+camera pose is already represented in a keyframe. The active scene or Compare
+models, objects, display flags and fixed camera (physical mode) remain part
+of identity. Inactive controls, provenance IDs, frame titles, project name,
+notes, screenshot, revision, optics preference and playback cursor do not.
+
+`create` checks existing fingerprints in the same IndexedDB `readwrite`
+transaction as insertion. A matching project raises `ANIMATION_DUPLICATE`
+with the existing ID/name. The UI offers Open existing, and an explicit
+Save copy anyway action using the same current-draft fingerprint. Force-save
+is never automatic. `findDuplicates` groups historical copies for manual
+review; a group offers the existing Open/Delete actions with their normal
+confirmation rules, never automatic cleanup. Stored schemas and animation
+physics are unchanged. This same API should be reused in future JSON import.
