@@ -80,6 +80,22 @@ animation, select **Save animation**, reload, and use **Open** from the saved
 project gallery. Verify no `ReferenceError` appears in DevTools; do not delete
 existing History or browser storage to troubleshoot a loader error.
 
+## Portable animation files acceptance
+
+Use Animation Studio → Animation Library to **Export selected**, **Export all**
+and **Import JSON**. The export envelope uses format
+`curvature-modern-animations` v1. An imported project receives a fresh local
+ID; duplicate physics and timing are reused rather than copied. Confirm the
+reported created/reused counts, the restored preview and playback after F5,
+and the unchanged Scene/Compare and working Studio draft. Import a file twice:
+the second pass must report zero created. A malformed, unsupported-version or
+oversized JSON must fail without partially importing a valid first record.
+
+Run `node --test tests/ModernAnimationLibrary.test.js` to exercise portable
+round-trips, whole-file validation, duplicate detection and UMD loading without
+CommonJS globals. A successful Node VM test does **not** establish that the
+Opera file chooser, download or IndexedDB behaves correctly.
+
 ## Protected reference data
 
 - `tests/fixtures/legacy-browser-references.zip` and `legacy-browser-reference-lock.json` freeze **six** original Opera Legacy Canvas samples (TransLine 0/4/7 and Bedford 0/3/6, zero-based source indices). The validator uses PNG CRC and byte/pixel SHA-256 plus state/model consistency. These are **Legacy regression observations** only.

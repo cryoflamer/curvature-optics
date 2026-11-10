@@ -1048,6 +1048,9 @@
       save:function(){saveNamedAnimation(false);},
       saveAs:function(){saveNamedAnimation(false);},
       saveChanges:function(){saveNamedAnimation(true);},
+      exportSelected:function(){exportNamedAnimations(false);},
+      exportAll:function(){exportNamedAnimations(true);},
+      importFile:function(file){importNamedAnimations(file);},
       open:function(id){openNamedAnimation(id);},
       remove:function(id){deleteNamedAnimation(id);}
     });
@@ -1086,6 +1089,41 @@
       if(studioLibraryActive)studioLibrarySelected=studioLibraryActive.id;
       renderStudioLibrary();return entries;
     }).catch(function(error){studioLibraryNotice('Animation Library unavailable: '+error.message,true);return [];});
+  }
+  function exportNamedAnimations(all){
+    if(!studioLibrary||studioLibraryBusy)return;
+    try{
+      var entries=all?studioLibraryEntries:studioLibraryEntries.filter(function(entry){
+        return entry.id===studioLibrarySelected;
+      });
+      if(!entries.length)throw Error('Select a saved animation first');
+      downloadHistoryJson(studioLibrary.exportPortable(entries),
+        all?'curvature-animations.json':'curvature-animation.json');
+      studioLibraryNotice('Exported '+entries.length+' complete animation'+
+        (entries.length===1?'':'s')+' to portable JSON.',false);
+    }catch(error){studioLibraryNotice('Animation export failed: '+error.message,true);}
+  }
+  function importNamedAnimations(file){
+    if(studioLibraryBusy||!studioLibrary||!file)return;
+    if(!root.indexedDB){studioLibraryNotice('Animation Library requires IndexedDB.',true);return;}
+    if(file.size>studioLibrary.MAX_PORTABLE_LENGTH){
+      studioLibraryNotice('Animation JSON file is too large.',true);return;
+    }
+    studioLibraryBusy=true;studioLibraryNotice('Checking animation JSON…',false);
+    Promise.resolve().then(function(){return file.text();}).then(function(contents){
+      var entries=studioLibrary.parsePortable(contents);
+      return studioLibrary.importEntries(root.indexedDB,entries,undefined,root.crypto);
+    }).then(function(result){
+      studioLibraryExpanded=true;
+      studioLibrarySelected=result.createdIds[0]||result.reusedIds[0]||studioLibrarySelected;
+      studioLibraryMessage='Imported '+result.created+' animations; '+result.reused+
+        ' already present (including repeated entries in the file). Working draft unchanged.';
+      studioLibraryError=false;
+      return refreshStudioLibrary();
+    }).catch(function(error){
+      studioLibraryMessage='Animation import failed: '+error.message;
+      studioLibraryError=true;
+    }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
   }
   function bindStudioLibrary(){refreshStudioLibrary();}
   function studioLibraryThumbnail(project){

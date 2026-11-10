@@ -180,6 +180,18 @@
       options.busy||!options.activeId||!options.dirty||!options.canSave);
     action('Save As','Save an independent copy of the current animation',actions.saveAs,
       options.busy||!options.canSave);
+    action('Export selected','Export the selected named animation as portable JSON',actions.exportSelected,
+      options.busy||!entries.some(function(e){return e.id===options.selectedId;}));
+    action('Export all','Export all saved animations as portable JSON',actions.exportAll,
+      options.busy||!entries.length);
+    var importInput=el(doc,'input');importInput.type='file';importInput.accept='.json,application/json';
+    importInput.hidden=true;importInput.setAttribute('aria-label','Import animation JSON file');
+    importInput.addEventListener('change',function(){
+      var file=importInput.files&&importInput.files[0];if(file)actions.importFile(file);
+      importInput.value='';
+    });
+    action('Import JSON','Import saved animations from a JSON file',function(){importInput.click();},options.busy);
+    row.appendChild(importInput);
     if((options.duplicateGroups||[]).length){
       action(options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
@@ -441,7 +453,7 @@
       controls.appendChild(button(doc,'×','Remove animation frame '+(index+1),function(){actions.remove(selected.key);}));
       header.appendChild(controls);panel.appendChild(header);
       panel.appendChild(el(doc,'small','modern-studio-frame-source',
-        selected.sourceSnapshotId===null?'Imported camera view':
+        selected.sourceSnapshotId===null?'Self-contained animation keyframe':
           'History snapshot #'+selected.sourceSnapshotId));
       var fields=el(doc,'div','modern-studio-frame-fields');
       fields.appendChild(field(doc,'Frame name',selected.name,'text',function(value){actions.frame(selected.key,'name',value);},null,
@@ -465,7 +477,7 @@
     host.appendChild(footer);
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Prepare a compatible Camera or Physical Animation to play in the independent optical viewport above. ' +
-      'Draft autosave restores your work after F5; use Animation Library above for named saves. Portable JSON export is planned.'));
+      'Draft autosave restores your work after F5; use Animation Library above for named saves and portable JSON sharing.'));
   }
   return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary});
 }));

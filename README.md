@@ -524,7 +524,8 @@ screenshot** placeholder and their physical parameters, never a fabricated
 image. If the first physical frame changes, Save changes discards the stale
 preview; renaming changes metadata alone, preserves all keyframes and is
 revision-checked against edits from other browser tabs. Existing library
-records require no migration. JSON import/export belongs to #140.12.120.5.3.
+records require no migration. Portable JSON import/export is available from the
+Animation Library toolbar.
 There is no video export, background rendering, change to optical physics,
 new HTML entrypoint, or Legacy change.
 
@@ -540,8 +541,32 @@ An existing match offers **Open existing** or an explicit **Save copy anyway**;
 no automatic copy is made. **Find duplicates** groups old identical library
 records for manual review with Open/Delete, but never deletes anything itself.
 Save changes still updates the selected project's revision explicitly. The
-same semantic comparison can be reused by future JSON import, without changing
-its format in this patch.
+same semantic comparison is also used by portable JSON import.
+
+### Portable Animation Library JSON
+
+In **Animation → Animation Library**, use **Select** on a card followed by
+**Export selected** to download one project, or choose **Export all** to back
+up the entire named library. **Import JSON** restores a file from either
+export action, or a standalone validated v1 Animation Project. Files contain
+complete physical states, ordered keyframe values, timing, labels, optional
+saved screenshots, chosen Optics quality and the saved dates; they are **not
+video files** and do not include playback frames. The named library is kept
+separately from the working draft and Scene/Compare.
+
+The portable envelope is `format: "curvature-modern-animations"`, `version: 1`,
+with an `animations` array. The import validates every entry before any write;
+unsupported versions, corrupt or oversized files and invalid physics are
+rejected. Inside **one IndexedDB transaction**, imports compare the same
+semantic fingerprint as Save As, skipping identical existing projects and
+repetitions within the file. Imported projects receive fresh **local** IDs
+rather than overwriting the original ID, and dates, names, descriptions,
+quality and genuine stored thumbnails are retained. Cross-browser import
+clears browser-local History source IDs to avoid displaying unrelated thumbnails
+from the destination History. No import silently edits
+or replaces the current Studio draft; open a restored project explicitly.
+Import reports how many records were created versus already present. Keep
+JSON backups outside the browser if the library is important to preserve.
 
 **Browser loader regression:** the library uses the same UMD script as Node,
 but `require()` must be guarded by the CommonJS branch. A classic-browser

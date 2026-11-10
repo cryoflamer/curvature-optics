@@ -349,7 +349,7 @@ unsupported versions are ignored. Browser storage failures are reported
 without deleting existing History or replacing the working Scene/Compare.
 
 There is still only *one* recoverable working draft; the separate multi-project
-Animation Library was added in #140.12.120.5.1. Portable import/export remains planned.
+Animation Library was added in #140.12.120.5.1. Portable import/export is described below.
 
 ## Initial physical preview after Prepare / F5
 
@@ -481,8 +481,7 @@ the saved project's name and update timestamp, preserving every physical
 state, keyframe and existing thumbnail. It shares the optimistic revision
 check used by Save changes. The draft remains independent: when its name
 matches the previous saved name, it follows an explicit rename without
-silently saving other draft modifications. Portable JSON import/export is
-reserved for #140.12.120.5.3.
+silently saving other draft modifications. Portable JSON import/export is supported by the library.
 
 ## Duplicate-aware Animation Library (#140.12.120.5.2.2)
 
@@ -502,4 +501,34 @@ Save copy anyway action using the same current-draft fingerprint. Force-save
 is never automatic. `findDuplicates` groups historical copies for manual
 review; a group offers the existing Open/Delete actions with their normal
 confirmation rules, never automatic cleanup. Stored schemas and animation
-physics are unchanged. This same API should be reused in future JSON import.
+physics are unchanged. The JSON importer now reuses this fingerprint inside an atomic IndexedDB transaction.
+
+## Portable Animation Library JSON (implementation)
+
+`ModernAnimationLibrary.exportPortable(records)` produces a versioned
+`curvature-modern-animations` JSON envelope containing 1–200 validated
+library records (`project`, `quality`, optional `thumbnail`, `createdAt`,
+`updatedAt`). The complete owned physical baseline and keyframe values are
+embedded in each `ModernAnimationProject`. A standalone v1 Animation Project
+can also be imported with default `auto` optics. The browser-facing toolbar
+offers **Export selected**, **Export all** and **Import JSON**; no video frames,
+wall-clock playback position or browser-local active draft are exported.
+
+`parsePortable(contents)` rejects unknown envelopes and fields, invalid
+projects, incompatible stored screenshots, bad timestamps or oversized JSON.
+`importEntries(indexedDB, entries)` validates the **entire** file before
+starting a single read-write IndexedDB transaction. Every record gets a fresh
+local ID; source History IDs are cleared because they could otherwise refer to
+unrelated snapshots on the destination machine. Full
+semantic animation fingerprints are compared against persisted records and
+against earlier entries within the same import, avoiding automatic duplicates.
+The operation returns created/reused counts and never overwrites existing
+records, alters the current working draft or modifies the optical renderer.
+
+**Browser acceptance:** save a named Globe → Flat animation, export selected
+and all, import into a separate local browser profile, open the imported
+project, check endpoint physics and playback, then import the same file a
+second time and confirm `0 created`. Confirm that a corrupt file leaves the
+library untouched and that thumbnails only appear when genuine snapshots
+were included. Automated tests verify the data and classic-browser UMD
+boundary; they are not substitutes for checking Opera's file picker or downloads.

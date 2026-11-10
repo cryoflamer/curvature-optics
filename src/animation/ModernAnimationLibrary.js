@@ -17,6 +17,8 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(projects,thumbnails,compatibility){
   'use strict';
   var VERSION=1,DATABASE='curvature-modern-animation-library',STORE='projects';
+  var PORTABLE_FORMAT='curvature-modern-animations',PORTABLE_VERSION=1;
+  var MAX_PORTABLE_ITEMS=200,MAX_PORTABLE_LENGTH=50000000;
   function validId(id){
     if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(id))
       throw RangeError('Invalid animation library ID');
@@ -60,6 +62,97 @@
       keyframes:p.keyframes.map(function(frame){return {
         value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing
       };})});
+  }
+  // Portable files own complete projects (including all keyframe physics).
+  // Browser-local record IDs are only source provenance: importing always
+  // assigns fresh IDs, so a file cannot overwrite existing named animations.
+  function portableItem(value){
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).some(function(key){return ![
+        'project','quality','thumbnail','createdAt','updatedAt'].includes(key);}))
+      throw RangeError('Invalid portable animation entry');
+    var project=projects.validate(value.project);
+    var createdAt=value.createdAt==null?null:stamp(value.createdAt);
+    var updatedAt=value.updatedAt==null?null:stamp(value.updatedAt);
+    if((createdAt===null)!==(updatedAt===null)||
+      (createdAt!==null&&updatedAt<createdAt))
+      throw RangeError('Invalid portable animation timestamps');
+    return {project:project,quality:quality(value.quality),
+      thumbnail:thumbnails.validate(value.thumbnail||null,project.baseExperiment.display.mode),
+      createdAt:createdAt,updatedAt:updatedAt};
+  }
+  function exportPortable(entries){
+    if(!Array.isArray(entries)||!entries.length||entries.length>MAX_PORTABLE_ITEMS)
+      throw RangeError('Select 1–'+MAX_PORTABLE_ITEMS+' animations to export');
+    var animations=entries.map(function(entry){
+      var normalized=normalize(entry);
+      return portableItem({project:normalized.project,quality:normalized.quality,
+        thumbnail:normalized.thumbnail,createdAt:normalized.createdAt,
+        updatedAt:normalized.updatedAt});
+    });
+    var result=JSON.stringify({format:PORTABLE_FORMAT,version:PORTABLE_VERSION,
+      animations:animations},null,2)+'\n';
+    if(result.length>MAX_PORTABLE_LENGTH)throw RangeError('Animation JSON export is too large');
+    return result;
+  }
+  function parsePortable(text){
+    if(typeof text!=='string'||text.length>MAX_PORTABLE_LENGTH)
+      throw RangeError('Animation JSON file too large');
+    var value=JSON.parse(text);
+    // Accept a standalone validated v1 Animation Project for convenient
+    // interoperability; a portable bundle is the canonical export format.
+    if(value&&value.version===projects.VERSION&&value.keyframes&&value.baseExperiment)
+      return [portableItem({project:value,quality:'auto'})];
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).sort().join(',')!=='animations,format,version'||
+      value.format!==PORTABLE_FORMAT||value.version!==PORTABLE_VERSION||
+      !Array.isArray(value.animations)||!value.animations.length||
+      value.animations.length>MAX_PORTABLE_ITEMS)
+      throw RangeError('Unsupported animation JSON format');
+    return value.animations.map(portableItem);
+  }
+  // A single IndexedDB transaction checks all existing projects and adds
+  // new ones. Duplicate animations, including repetitions inside the file,
+  // are reused by content; neither their metadata nor the active draft changes.
+  function importEntries(indexedDB,items,now,crypto){
+    if(!Array.isArray(items)||!items.length||items.length>MAX_PORTABLE_ITEMS)
+      throw RangeError('Import needs 1–'+MAX_PORTABLE_ITEMS+' animations');
+    var incoming=items.map(portableItem); // all validation BEFORE storage writes
+    var time=stamp(now||Date.now());
+    return transaction(indexedDB,'readwrite',function(store,finish,abort){
+      var read=store.getAll();
+      read.onsuccess=function(){try{
+        var current=(read.result||[]).map(normalize),seen=new Map();
+        var ids=new Set(),created=[],reused=[];
+        current.forEach(function(entry){
+          ids.add(entry.id);var key=fingerprint(entry.project);
+          if(!seen.has(key))seen.set(key,entry.id);
+        });
+        incoming.forEach(function(item,index){
+          var key=fingerprint(item.project),existingId=seen.get(key);
+          if(existingId){reused.push(existingId);return;}
+          var id,attempt=0;
+          do{
+            id=makeId(crypto,time+index+attempt);
+            if(++attempt>100)throw Error('Cannot allocate a unique animation ID');
+          }while(ids.has(id));
+          ids.add(id);seen.set(key,id);
+          // History IDs are browser-local and can point at unrelated scenes
+          // on the destination machine. Clear provenance to prevent Studio
+          // from presenting someone else's screenshot as an imported frame.
+          var project=projects.validate(Object.assign({},item.project,{id:id,
+            keyframes:item.project.keyframes.map(function(frame){
+              return Object.assign({},frame,{sourceSnapshotId:null});
+            })}));
+          var createdAt=item.createdAt===null?time:item.createdAt;
+          var updatedAt=item.updatedAt===null?time:item.updatedAt;
+          var entry=record(project,item.quality,id,createdAt,updatedAt,item.thumbnail);
+          store.add(entry);created.push(entry);
+        });
+        finish({created:created.length,reused:reused.length,
+          createdIds:created.map(function(entry){return entry.id;}),reusedIds:reused});
+      }catch(error){abort(error);}};
+    });
   }
   function findDuplicates(entries){
     var buckets=new Map();
@@ -200,5 +293,8 @@
   return Object.freeze({VERSION:VERSION,DATABASE:DATABASE,STORE:STORE,
     normalize:normalize,makeId:makeId,record:record,
     fingerprint:fingerprint,findDuplicates:findDuplicates,
+    PORTABLE_FORMAT:PORTABLE_FORMAT,PORTABLE_VERSION:PORTABLE_VERSION,
+    MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
+    exportPortable:exportPortable,parsePortable:parsePortable,importEntries:importEntries,
     list:list,get:get,create:create,update:update,rename:rename,remove:remove});
 }));

@@ -258,6 +258,12 @@ test('classic-browser script loading has no CommonJS dependency and can save via
   assert.equal(saved.project.name,'Globe to Flat');
   assert.equal(saved.thumbnail.dataUrl,image.dataUrl);
   assert.equal((await browserLibrary.list(db)).length,1);
+  const portable=browserLibrary.exportPortable([saved]);
+  const restored=browserLibrary.parsePortable(portable);
+  assert.equal(restored[0].project.name,'Globe to Flat');
+  const reimported=await browserLibrary.importEntries(db,restored,200);
+  assert.equal(reimported.created,0);
+  assert.equal(reimported.reused,1);
   assert.equal((await browserLibrary.get(db,'browser_saved')).project.id,'browser_saved');
   const changed=studio.edit(source(),'description','Browser storage round-trip');
   const updated=await browserLibrary.update(db,studio.build(changed,'browser_saved'),
@@ -356,7 +362,7 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   assert.deepEqual(calls.at(-1),['renameStart','animation_a']);
   host.children=[];ui.renderLibrary(doc,host,entries,
     {selectedId:'animation_a',renameId:'animation_a',expanded:true},actions);
-  const input=nodes().find(n=>n.tagName==='input');input.value='New title';
+  const input=nodes().find(n=>n.tagName==='input'&&n.type==='text');input.value='New title';
   nodes().find(n=>n.tagName==='button'&&n.textContent==='Save name').listeners.click();
   assert.deepEqual(calls.at(-1),['rename','animation_a','New title']);
   host.children=[];ui.renderLibrary(doc,host,entries,{selectedId:'',expanded:false},actions);
@@ -365,4 +371,117 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   assert.equal(calls.at(-1),'toggle');
   host.children=[];ui.renderLibrary(doc,host,[],{selectedId:'',canSave:false},actions);
   assert.equal(nodes().find(n=>n.textContent==='Save animation').disabled,true);
+});
+
+
+test('portable Animation Library JSON round-trips complete projects, annotations and genuine thumbnails',async()=>{
+  const sourceDb=memoryIndexedDB(),targetDb=memoryIndexedDB();
+  const original=studio.build(studio.edit(source(),'description','Surface study with saved notes'),'portable_one');
+  const image={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
+  await library.create(sourceDb,original,'fast',1234,image);
+  const another=structuredClone(original);
+  another.id='portable_two';another.name='Slower curvature';another.keyframes[1].travelMs=11000;
+  await library.create(sourceDb,another,'accurate',4321);
+  const exported=library.exportPortable(await library.list(sourceDb));
+  const parsed=JSON.parse(exported);
+  assert.equal(parsed.format,library.PORTABLE_FORMAT);
+  assert.equal(parsed.version,library.PORTABLE_VERSION);
+  assert.equal(parsed.animations.length,2);
+  assert.equal(parsed.animations[1].project.description,'Surface study with saved notes');
+  const imported=library.parsePortable(exported);
+  const result=await library.importEntries(targetDb,imported,9999,{randomUUID:()=> '0000-1111'});
+  assert.deepEqual([result.created,result.reused],[2,0]);
+  const entries=await library.list(targetDb);
+  assert.equal(entries.length,2);
+  assert.ok(entries.every(e=>!['portable_one','portable_two'].includes(e.id)),
+    'imported files never overwrite a local ID');
+  assert.deepEqual(entries.map(e=>e.project.name).sort(),['Globe to Flat','Slower curvature'].sort());
+  assert.equal(entries.find(e=>e.project.name==='Globe to Flat').createdAt,1234);
+  const stored=entries.find(e=>e.project.name==='Globe to Flat');
+  assert.equal(stored.thumbnail.dataUrl,image.dataUrl);
+  assert.equal(stored.quality,'fast');
+  assert.equal(stored.project.description,'Surface study with saved notes');
+  assert.ok(stored.project.keyframes.every(f=>f.sourceSnapshotId===null),
+    'a different browser must not resolve stale History IDs to unrelated screenshots');
+  assert.equal(animation.sampleAt(stored.project,5000).scene.surface.showModel,2);
+  assert.equal((await library.list(sourceDb)).length,2,'export never mutates the source');
+  assert.equal((await library.list(targetDb)).length,2,'import does not require History');
+});
+
+test('repeat and intra-file duplicate imports reuse existing content without changing originals',async()=>{
+  const db=memoryIndexedDB(),original=studio.build(source(),'original');
+  await library.create(db,original,'auto',100);
+  const other=structuredClone(original);other.id='different';other.keyframes[1].travelMs=6000;
+  const file=library.exportPortable([
+    library.record({...original,id:'external1',name:'Renamed export'},'fast','external1',10,20),
+    library.record({...original,id:'external2',name:'A second title'},'accurate','external2',10,20),
+    library.record(other,'accurate','different',30,40)
+  ]);
+  const first=await library.importEntries(db,library.parsePortable(file),400);
+  assert.deepEqual([first.created,first.reused],[1,2]);
+  assert.equal((await library.get(db,'original')).project.name,original.name);
+  const second=await library.importEntries(db,library.parsePortable(file),500);
+  assert.deepEqual([second.created,second.reused],[0,3]);
+  assert.equal((await library.list(db)).length,2);
+  assert.equal((await library.get(db,'original')).quality,'auto',
+    'duplicate import cannot overwrite metadata or optics preference');
+});
+
+test('single Animation Project is supported, but unsupported and malformed bundles never write',async()=>{
+  const db=memoryIndexedDB(),project=studio.build(source(),'single_project');
+  const parsed=library.parsePortable(JSON.stringify(project));
+  assert.equal(parsed.length,1);assert.equal(parsed[0].quality,'auto');
+  const added=await library.importEntries(db,parsed,777);
+  assert.equal(added.created,1);
+  const file=JSON.parse(library.exportPortable([library.record(project,'fast',project.id,1,2)]));
+  for(const broken of [
+    {...file,version:100},
+    {...file,animations:[]},
+    {...file,animations:[...file.animations,{project:{version:99},quality:'auto'}]},
+    {...file,animations:[{...file.animations[0],quality:'unsupported'}]},
+    {...file,animations:[{...file.animations[0],thumbnail:{dataUrl:'not-an-image',width:5,height:5,mode:'scene'}}]},
+    {...file,animations:[{...file.animations[0],createdAt:100,updatedAt:5}]},
+    {...file,animations:[{...file.animations[0],extra:'unexpected'}]},
+    {...file,unrecognized:true}
+  ]){
+    assert.throws(()=>library.parsePortable(JSON.stringify(broken)),/Invalid|Unsupported|thumbnail|text|optics|version|timestamp|fields|format/);
+    assert.equal((await library.list(db)).length,1);
+  }
+  assert.throws(()=>library.parsePortable('{invalid'),SyntaxError);
+  assert.throws(()=>library.exportPortable([]),/Select/);
+  assert.equal((await library.list(db)).length,1);
+});
+
+test('import is all-or-nothing when validation fails before IndexedDB writes',async()=>{
+  const db=memoryIndexedDB(),project=studio.build(source(),'valid');
+  const good=library.parsePortable(library.exportPortable([library.record(project,'auto',project.id,10,10)]))[0];
+  const bad={...good,project:{...good.project,name:''}};
+  assert.throws(()=>library.importEntries(db,[good,bad],100),/text/);
+  assert.equal((await library.list(db)).length,0);
+  await assert.rejects(library.importEntries(null,[good],100),/IndexedDB/);
+  assert.equal((await library.list(db)).length,0);
+});
+
+test('Animation Library UI exposes portable export and file import without modifying draft',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const calls=[];
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},value:'',
+    setAttribute(n,v){this[n]=v;},appendChild(n){this.children.push(n);return n;},
+    addEventListener(n,fn){this.listeners[n]=fn;},click(){this.clicked=true;}};}};
+  const host=doc.createElement('section'),record=library.record(studio.build(source(),'saved_1'),
+    'auto','saved_1',10,10);
+  const noop=()=>{};
+  const actions={save:noop,saveChanges:noop,saveAs:noop,select:noop,open:noop,
+    renameStart:noop,remove:noop,toggleExpanded:noop,
+    exportSelected:()=>calls.push('selected'),exportAll:()=>calls.push('all'),
+    importFile:file=>calls.push(file.name)};
+  ui.renderLibrary(doc,host,[record],{selectedId:'saved_1',expanded:false},actions);
+  const nodes=(function walk(node){return [node,...node.children.flatMap(walk)];})(host);
+  function press(label){nodes.find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();}
+  press('Export selected');press('Export all');press('Import JSON');
+  const input=nodes.find(n=>n.tagName==='input'&&n.type==='file');
+  assert.equal(input.clicked,true);
+  input.files=[{name:'backup.json'}];input.listeners.change();
+  assert.deepEqual(calls,['selected','all','backup.json']);
+  assert.equal(input.value,'');
 });
