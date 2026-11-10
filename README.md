@@ -504,8 +504,26 @@ If a different tab changes a named project before **Save changes**, a revision
 check rejects the stale write; use **Open** or **Save As** instead. An unavailable
 IndexedDB database is reported rather than claiming that a project was saved.
 
-This patch implements durable model operations and an initial small toolbar;
-rich project cards, thumbnail management and in-place rename are planned for
-#140.12.120.5.2, while JSON import/export belongs to #140.12.120.5.3.
+### Animation Library visual gallery (#140.12.120.5.2)
+
+The toolbar is now followed by a **collapsible horizontal gallery of compact
+saved-project cards**. Each card shows the project name, Camera or Physical
+animation type, animated variable, keyframe count, total duration, updated
+date, a short description and a first-frame physics summary. Use **Open**,
+**Rename**, or **Delete** directly from a card; **Select** highlights a project
+without overwriting the draft. Save animation, Save changes, and Save As remain
+explicit actions above the gallery. A saved project with unsaved draft edits is
+clearly identified.
+
+When the initial keyframe exactly matches a History snapshot with a genuine
+screenshot, the library stores a bounded copy of that image in its own
+IndexedDB record. Deleting the source History snapshot does **not** erase this
+preview or the self-contained physical animation. Imported camera sequences
+and older saved projects without screenshots display an honest **No saved
+screenshot** placeholder and their physical parameters, never a fabricated
+image. If the first physical frame changes, Save changes discards the stale
+preview; renaming changes metadata alone, preserves all keyframes and is
+revision-checked against edits from other browser tabs. Existing library
+records require no migration. JSON import/export belongs to #140.12.120.5.3.
 There is no video export, background rendering, change to optical physics,
 new HTML entrypoint, or Legacy change.

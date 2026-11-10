@@ -152,27 +152,24 @@
     slot.appendChild(add);
     return slot;
   }
-  // Minimal named-library controls. Detailed cards/thumbnails belong to the
-  // subsequent Library UX phase; this toolbar already makes saves usable.
+  // A compact visual library, not another keyframe editor. Preview images are
+  // persisted screenshots when available; never pretend a placeholder was
+  // calculated from a saved physical project.
   function renderLibrary(doc,host,entries,options,actions){
     if(!host||!doc)return;
     options=options||{};entries=entries||[];host.textContent='';
     var head=el(doc,'div','modern-animation-library-heading');
     head.appendChild(el(doc,'strong','','Animation Library'));
     head.appendChild(el(doc,'small','',entries.length+' saved '+(entries.length===1?'project':'projects')));
+    if(entries.length){
+      var fold=button(doc,options.expanded===false?'Show projects':'Hide projects',
+        'Toggle saved animation gallery',actions.toggleExpanded);
+      fold.className+=' modern-animation-library-fold';
+      fold.setAttribute('aria-expanded',String(options.expanded!==false));
+      head.appendChild(fold);
+    }
     host.appendChild(head);
     var row=el(doc,'div','modern-animation-library-controls');
-    var select=el(doc,'select');select.setAttribute('aria-label','Saved animation projects');
-    var placeholder=el(doc,'option','',entries.length?'Choose a saved animation…':'No saved animations yet');
-    placeholder.value='';select.appendChild(placeholder);
-    entries.forEach(function(entry){
-      var p=entry.project,option=el(doc,'option','',p.name+' · '+
-        (p.mode==='camera'?'Camera':'Physical')+' · '+p.keyframes.length+' frames');
-      option.value=entry.id;select.appendChild(option);
-    });
-    select.value=options.selectedId||'';
-    select.addEventListener('change',function(){actions.select(select.value);});
-    row.appendChild(select);
     function action(label,description,callback,disabled){
       var control=button(doc,label,description,callback);control.disabled=!!disabled;
       row.appendChild(control);
@@ -183,10 +180,6 @@
       options.busy||!options.activeId||!options.dirty||!options.canSave);
     action('Save As','Save an independent copy of the current animation',actions.saveAs,
       options.busy||!options.canSave);
-    action('Open','Open selected animation in the editor',actions.open,
-      options.busy||!options.selectedId);
-    action('Delete','Delete selected saved animation',actions.remove,
-      options.busy||!options.selectedId);
     host.appendChild(row);
     var message=el(doc,'p','modern-animation-library-note',options.activeId?
       'Editing saved project'+(options.dirty?' · Unsaved changes':' · All changes saved'):
@@ -194,6 +187,65 @@
     host.appendChild(message);
     if(options.message){var note=el(doc,'p','modern-animation-library-message'+
       (options.error?' is-error':''),options.message);note.setAttribute('role','status');host.appendChild(note);}
+    if(!entries.length){host.appendChild(el(doc,'p','modern-animation-library-empty',
+      'No saved animations yet. Prepare an animation and use Save animation to keep it here.'));return;}
+    if(options.expanded===false)return;
+    var list=el(doc,'div','modern-animation-library-gallery');
+    list.setAttribute('aria-label','Saved animation projects');
+    entries.forEach(function(entry){
+      var p=entry.project,selected=entry.id===options.selectedId;
+      var card=el(doc,'article','modern-animation-library-card'+(selected?' is-selected':'')+
+        (entry.id===options.activeId?' is-editing':''));
+      card.setAttribute('data-animation-id',entry.id);
+      var visual=historyUI.frameVisual(doc,{name:p.name,experiment:p.baseExperiment,
+        thumbnail:entry.thumbnail},'modern-animation-library-visual');
+      if(!entry.thumbnail)visual.appendChild(el(doc,'small','modern-animation-library-no-preview',
+        'No saved screenshot'));
+      card.appendChild(visual);
+      var info=el(doc,'div','modern-animation-library-card-info');
+      var title=el(doc,'strong','modern-animation-library-card-title',p.name);
+      title.title=p.name;info.appendChild(title);
+      var duration=p.keyframes.reduce(function(sum,frame){return sum+frame.travelMs+frame.holdMs;},0)/1000;
+      info.appendChild(el(doc,'small','modern-animation-library-card-meta',
+        (p.mode==='camera'?'Camera motion':p.target.parameter==='surface.curvature'?
+          'Earth curvature':'Temperature gradient')+' · '+p.keyframes.length+
+        ' frames · '+duration.toFixed(1)+' s'));
+      var summary=el(doc,'small','modern-animation-library-card-summary',
+        historyUI.frameSummary({experiment:p.baseExperiment}));
+      summary.title=summary.textContent;info.appendChild(summary);
+      if(p.description){var desc=el(doc,'small','modern-animation-library-card-summary',p.description);
+        desc.title=p.description;info.appendChild(desc);}
+      info.appendChild(el(doc,'small','modern-animation-library-card-updated',
+        'Updated '+new Date(entry.updatedAt).toLocaleString()));
+      card.appendChild(info);
+      if(options.renameId===entry.id){
+        var editor=el(doc,'div','modern-animation-library-rename');
+        var name=el(doc,'input');name.type='text';name.value=p.name;name.maxLength=120;
+        name.setAttribute('aria-label','New name for '+p.name);editor.appendChild(name);
+        function submit(){if(!options.busy)actions.rename(entry.id,name.value);}
+        name.addEventListener('keydown',function(event){
+          if(event.key==='Enter'){if(event.preventDefault)event.preventDefault();submit();}
+          if(event.key==='Escape')actions.renameCancel();
+        });
+        var submitButton=button(doc,'Save name','Save renamed animation',submit);
+        submitButton.disabled=!!options.busy;editor.appendChild(submitButton);
+        editor.appendChild(button(doc,'Cancel','Cancel animation rename',actions.renameCancel));
+        card.appendChild(editor);
+      }else{
+        var controls=el(doc,'div','modern-animation-library-card-actions');
+        var select=button(doc,'Select','Select saved animation '+p.name,function(){actions.select(entry.id);});
+        select.setAttribute('aria-pressed',String(selected));controls.appendChild(select);
+        var open=button(doc,'Open','Open saved animation '+p.name,function(){actions.open(entry.id);});
+        open.disabled=!!options.busy;controls.appendChild(open);
+        var rename=button(doc,'Rename','Rename saved animation '+p.name,function(){actions.renameStart(entry.id);});
+        rename.disabled=!!options.busy;controls.appendChild(rename);
+        var remove=button(doc,'Delete','Delete saved animation '+p.name,function(){actions.remove(entry.id);});
+        remove.disabled=!!options.busy;controls.appendChild(remove);
+        card.appendChild(controls);
+      }
+      list.appendChild(card);
+    });
+    host.appendChild(list);
   }
   function renderPicker(doc,host,entries,actions,options){
     if(!host||!doc)return;

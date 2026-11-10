@@ -456,5 +456,30 @@ starts prepared Playback *paused* at the first frame. Saving is explicit;
 autosave remains scoped to the current editable draft and can restore the
 associated library ID/revision after reload (old v1 checkpoints remain valid).
 A stale revision or IndexedDB failure must produce a visible error, not a
-false success message. Detailed library cards and portable JSON interchange
-are deferred to the next two phases. No separate rendering engine is added.
+false success message. No separate rendering engine is added.
+
+## Visual Animation Library and rename (#140.12.120.5.2)
+
+The saved-project list is a horizontally scrollable, collapsible gallery of
+cards with Open / Select / Rename / Delete and summary data derived from the
+immutable Animation Project. The card's duration is the sum of keyframe
+travel and hold times; this is metadata, not playback rendering. Save, Save As
+and Save changes remain explicitly tied to the current working draft.
+
+Named library records may now carry an optional validated and bounded
+`ModernExperimentThumbnail`. A screenshot is copied from History only if the
+entire first-frame experiment matches the stored project's base experiment.
+The library owns this copy, so deleting the source History entry does not
+remove the screenshot. An absent screenshot is explicitly labeled as such;
+there is no invented physical render, no additional ray calculation and no
+requirement to retain History. Old IndexedDB records without `thumbnail`
+normalize to `thumbnail: null`. Changes to the first frame invalidate the
+previous screenshot unless a matching new one is available.
+
+`ModernAnimationLibrary.rename(db, id, name, expectedRevision)` changes only
+the saved project's name and update timestamp, preserving every physical
+state, keyframe and existing thumbnail. It shares the optimistic revision
+check used by Save changes. The draft remains independent: when its name
+matches the previous saved name, it follows an explicit rename without
+silently saving other draft modifications. Portable JSON import/export is
+reserved for #140.12.120.5.3.

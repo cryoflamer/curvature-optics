@@ -157,7 +157,44 @@ test('saved project association survives F5 without changing older draft checkpo
   assert.throws(()=>autosave.checkpoint({...basic,libraryId:'animation_abc',libraryRevision:null},1001),/revision/);
 });
 
-test('Animation Library controls open real actions and show unsaved edits without duplicating editor',()=>{
+test('saved thumbnails are bounded, optional and detached from History',async()=>{
+  const db=memoryIndexedDB(),project=studio.build(source(),'visual_one');
+  const image={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
+  const saved=await library.create(db,project,'auto',101,image);
+  assert.deepEqual(saved.thumbnail,image);
+  assert.deepEqual((await library.get(db,project.id)).thumbnail,image);
+  const changed=studio.edit(source(),'description','Changed notes');
+  const updated=await library.update(db,studio.build(changed,project.id),'fast',101,103);
+  assert.deepEqual(updated.thumbnail,image,'editing timing/description retains physical first-frame image');
+  // Malformed or misleading screenshots must be rejected before a durable write.
+  assert.throws(()=>library.record(project,'auto',project.id,1,2,{...image,mode:'compare'}),
+    /thumbnail/);
+  const changedPhysics=source();
+  changedPhysics.frames.forEach(f=>{f.experiment.scene.camera.Height=35;});
+  const resaved=await library.update(db,studio.build(changedPhysics,project.id),'fast',103,105);
+  assert.equal(resaved.thumbnail,null,'a changed initial physical frame invalidates the old screenshot');
+  const old={...updated};delete old.thumbnail;
+  assert.equal(library.normalize(old).thumbnail,null);
+});
+
+test('rename changes only saved metadata with revision safety and preserves preview',async()=>{
+  const db=memoryIndexedDB(),project=studio.build(source(),'rename_one');
+  const image={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
+  await library.create(db,project,'accurate',100,image);
+  const renamed=await library.rename(db,'rename_one','Curvature experiment',100,150);
+  assert.equal(renamed.project.name,'Curvature experiment');
+  assert.deepEqual(renamed.project.baseExperiment,project.baseExperiment);
+  assert.deepEqual(renamed.project.keyframes,project.keyframes);
+  assert.deepEqual(renamed.thumbnail,image);
+  assert.equal(renamed.quality,'accurate');
+  assert.equal(renamed.createdAt,100);
+  assert.equal(renamed.updatedAt,150);
+  await assert.rejects(library.rename(db,'rename_one','Stale',100,160),/another tab/);
+  await assert.rejects(library.rename(db,'rename_one','',150,160),/text/);
+  assert.equal((await library.get(db,'rename_one')).project.name,'Curvature experiment');
+});
+
+test('Animation Library gallery shows cards, genuine images, rename and direct open',()=>{
   const ui=require('../src/ui/modern/ModernAnimationStudioUI');
   const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},
     textContent:'',className:'',value:'',disabled:false,
@@ -165,23 +202,42 @@ test('Animation Library controls open real actions and show unsaved edits withou
     addEventListener(name,fn){this.listeners[name]=fn;},
     setAttribute(name,value){this[name]=value;}};}};
   const host=doc.createElement('section'),project=studio.build(source(),'animation_a'),calls=[];
+  const preview={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
+  const entries=[library.record(project,'auto','animation_a',10,11,preview)];
   const actions={select:id=>calls.push(['select',id]),save:()=>calls.push('save'),
     saveAs:()=>calls.push('saveAs'),saveChanges:()=>calls.push('saveChanges'),
-    open:()=>calls.push('open'),remove:()=>calls.push('delete')};
-  ui.renderLibrary(doc,host,[library.record(project,'auto','animation_a',10,11)],
-    {selectedId:'animation_a',activeId:'animation_a',canSave:true,dirty:true},actions);
-  const nodes=(function collect(n){return [n,...n.children.flatMap(collect)];})(host);
-  assert.equal(nodes.find(n=>n.tagName==='select').value,'animation_a');
-  assert.ok(nodes.find(n=>n.textContent==='Editing saved project · Unsaved changes'));
-  assert.equal(nodes.find(n=>n.textContent==='Save animation').disabled,true,
-    'opened project uses explicit Save changes or Save As');
-  for(const [label,action] of [['Save changes','saveChanges'],
-      ['Save As','saveAs'],['Open','open'],['Delete','delete']]){
-    const button=nodes.find(n=>n.tagName==='button'&&n.textContent===label);
-    assert.equal(button.disabled,false);button.listeners.click();
-    assert.equal(calls.at(-1),action);
+    open:id=>calls.push(['open',id]),remove:id=>calls.push(['delete',id]),
+    renameStart:id=>calls.push(['renameStart',id]),
+    renameCancel:()=>calls.push('renameCancel'),
+    rename:(id,name)=>calls.push(['rename',id,name]),
+    toggleExpanded:()=>calls.push('toggle')};
+  function nodes(){return (function collect(n){return [n,...n.children.flatMap(collect)];})(host);}
+  ui.renderLibrary(doc,host,entries,
+    {selectedId:'animation_a',activeId:'animation_a',canSave:true,dirty:true,expanded:true},actions);
+  assert.ok(nodes().find(n=>n.textContent==='Editing saved project · Unsaved changes'));
+  assert.equal(nodes().find(n=>n.tagName==='img').src,preview.dataUrl);
+  assert.ok(nodes().find(n=>n.textContent==='Physical · Surface curvature' ||
+    n.textContent.includes('Earth curvature · 2 frames')));
+  assert.equal(nodes().find(n=>n.textContent==='Save animation').disabled,true);
+  for(const [label,value] of [['Save changes','saveChanges'],['Save As','saveAs']]){
+    nodes().find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
+    assert.equal(calls.at(-1),value);
   }
+  nodes().find(n=>n.tagName==='button'&&n.textContent==='Open').listeners.click();
+  assert.deepEqual(calls.at(-1),['open','animation_a']);
+  nodes().find(n=>n.tagName==='button'&&n.textContent==='Delete').listeners.click();
+  assert.deepEqual(calls.at(-1),['delete','animation_a']);
+  nodes().find(n=>n.tagName==='button'&&n.textContent==='Rename').listeners.click();
+  assert.deepEqual(calls.at(-1),['renameStart','animation_a']);
+  host.children=[];ui.renderLibrary(doc,host,entries,
+    {selectedId:'animation_a',renameId:'animation_a',expanded:true},actions);
+  const input=nodes().find(n=>n.tagName==='input');input.value='New title';
+  nodes().find(n=>n.tagName==='button'&&n.textContent==='Save name').listeners.click();
+  assert.deepEqual(calls.at(-1),['rename','animation_a','New title']);
+  host.children=[];ui.renderLibrary(doc,host,entries,{selectedId:'',expanded:false},actions);
+  assert.equal(nodes().filter(n=>n.className.includes('modern-animation-library-card')).length,0);
+  nodes().find(n=>n.textContent==='Show projects').listeners.click();
+  assert.equal(calls.at(-1),'toggle');
   host.children=[];ui.renderLibrary(doc,host,[],{selectedId:'',canSave:false},actions);
-  const empty=(function collect(n){return [n,...n.children.flatMap(collect)];})(host);
-  assert.equal(empty.find(n=>n.textContent==='Save animation').disabled,true);
+  assert.equal(nodes().find(n=>n.textContent==='Save animation').disabled,true);
 });

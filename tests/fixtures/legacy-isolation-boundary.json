@@ -2286,6 +2286,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationLibrary.js",
         "src/ui/modern/ModernExperimentHistory.js"
       ],
       "commonJsTestCallers": [
