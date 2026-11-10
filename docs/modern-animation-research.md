@@ -542,3 +542,13 @@ measures actual isolated frame and optical phase timings and can compare live
 Scene/Compare Canvas pixels only for precisely matching states, optics and
 backing sizes; skipped checks are explicitly **not comparable**, not passing.
 These measurements do not certify a final video exporter.
+
+
+## Offline deterministic PNG frames (#140.12.120.7)
+
+An offline export backend now samples an owned `ModernAnimationProject` at a
+fixed FPS independently of live Playback. Frames are rendered in Accurate RK4
+using isolated fixed-size canvases and packaged into a ZIP with a timestamped
+manifest. This is a **PNG sequence**, not a video file; see
+[`modern-animation-frame-export.md`](modern-animation-frame-export.md) for the
+explicit endpoint, archive, cancellation, memory limits and browser acceptance.

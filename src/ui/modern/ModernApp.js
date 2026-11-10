@@ -29,6 +29,8 @@
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
+  var studioFrameExportApi=root.CurvatureModernAnimationFrameExport;
+  var studioFrameExportTask=null;
   var studioQualityApi=root.CurvatureModernAnimationQualityAudit;
   var studioQualityAudit=studioQualityApi?studioQualityApi.create():null;
   var studioLastQualityFrame=null;
@@ -1369,6 +1371,7 @@
     if(!stage)return;
     var ready=!!(studioPrepared&&studioPlayback);
     stage.hidden=!ready;
+    syncStudioFrameExportControls();
     if(!ready)return;
     var info=studioPlayback.status();
     var seek=newUiEl('ModernAnimationPlaybackSeek');
@@ -1670,6 +1673,84 @@
     });
     syncStudioQualitySummary();
   }
+  // Offline frame export is isolated from the current Scene, History and even
+  // the on-screen Animation playback graph. The entire project is snapshotted
+  // at Start and every PNG uses Accurate RK4 at an invariant backing size.
+  function syncStudioFrameExportControls(){
+    var start=newUiEl('ModernAnimationFrameExportStart');
+    var cancel=newUiEl('ModernAnimationFrameExportCancel');
+    if(start)start.disabled=!!studioFrameExportTask||!studioPrepared;
+    if(cancel)cancel.disabled=!studioFrameExportTask;
+  }
+  function bindStudioFrameExport(){
+    var api=studioFrameExportApi;
+    var start=newUiEl('ModernAnimationFrameExportStart');
+    var cancel=newUiEl('ModernAnimationFrameExportCancel');
+    if(!start||!cancel)return;
+    function message(text){var node=newUiEl('ModernAnimationFrameExportStatus');
+      if(node)node.textContent=text;}
+    cancel.addEventListener('click',function(){
+      if(studioFrameExportTask){studioFrameExportTask.cancelled=true;
+        message('Cancel requested · finishing the current synchronous optical calculation…');}
+    });
+    start.addEventListener('click',async function(){
+      if(studioFrameExportTask)return;
+      if(!api||!studioPreviewApi||!studioPrepared){message('Prepare a valid animation before exporting.');return;}
+      var task={cancelled:false};
+      studioFrameExportTask=task;
+      syncStudioFrameExportControls();
+      var progress=newUiEl('ModernAnimationFrameExportProgress');
+      if(progress){progress.value=0;progress.max=100;}
+      try{
+        if(!previewGraphsReady())throw Error('GraphX3DX preview reference is unavailable');
+        var fps=Number(newUiEl('ModernAnimationFrameExportFps').value);
+        var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
+        var sourceProject=studioProjects.validate(studioPrepared);
+        var plan=api.plan(sourceProject,{fps:fps,width:size[0],height:size[1]});
+        var graphs={};
+        plan.sides.forEach(function(side){
+          var canvas=document.createElement('canvas');
+          canvas.width=plan.width;canvas.height=plan.height;
+          graphs[side]=api.graphForCanvas(root.CurvatureModernAnimationGraphs[side],canvas);
+        });
+        // A new owned optical session keeps export caches independent from
+        // interactive animation. Never mutate root.CurvatureModernAnimationGraphs.
+        var painter=studioPreviewApi.create({Model:root.CurveAppClass,
+          renderer:root.CurvatureMainCanvasRenderer,optics:root.CurvaturePhysicalSceneOptics});
+        message('Rendering '+plan.timesMs.length+' timestamps × '+plan.sides.length+
+          ' view(s), Accurate RK4 · this can take longer than the video duration.');
+        var result=await api.run({project:sourceProject,fps:fps,width:plan.width,height:plan.height,
+          cancel:task,
+          yieldUi:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
+          render:function(sample,side,dimensions){
+            var graph=graphs[side];
+            // Reset the offscreen 2D context and clipping for each frame.
+            // Width/height never depend on the visible workspace or DPR.
+            graph.Canvas.width=dimensions.width;graph.Canvas.height=dimensions.height;
+            var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:sourceProject.mode});
+            return {quality:report.quality,canvas:graph.Canvas,metrics:report.result};
+          },
+          onProgress:function(info){
+            if(progress)progress.value=100*info.completed/info.total;
+            message('Rendered '+info.completed+' / '+info.total+' timestamps · t='+
+              (info.timeMs/1000).toFixed(2)+' s · Accurate RK4');
+          }
+        });
+        if(result.cancelled){message('PNG export cancelled; no partial archive was saved.');return;}
+        if(task.cancelled){message('PNG export cancelled; no archive was saved.');return;}
+        var url=root.URL.createObjectURL(result.blob);
+        try{
+          var link=document.createElement('a');
+          link.href=url;link.download='curvature-animation-frames.zip';
+          document.body.appendChild(link);link.click();link.remove();
+        }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
+        message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+
+          result.manifest.sides.length+' view(s), including exact final frame.');
+      }catch(error){message('PNG export failed: '+error.message+' · No partial archive saved.');}
+      finally{studioFrameExportTask=null;syncStudioFrameExportControls();}
+    });
+    syncStudioFrameExportControls();
+  }
   function bindStudioPlayback(){
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
@@ -1728,6 +1809,7 @@
       if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
     });
     bindStudioQualityAudit();
+    bindStudioFrameExport();
     observeStudioPreviewSize();
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
       if(document.hidden&&studioPlayback){stopStudioPlayback(false);saveStudioDraft(false);
