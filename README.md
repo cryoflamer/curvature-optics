@@ -527,3 +527,10 @@ revision-checked against edits from other browser tabs. Existing library
 records require no migration. JSON import/export belongs to #140.12.120.5.3.
 There is no video export, background rendering, change to optical physics,
 new HTML entrypoint, or Legacy change.
+
+**Browser loader regression:** the library uses the same UMD script as Node,
+but `require()` must be guarded by the CommonJS branch. A classic-browser
+VM smoke test now checks script loading without Node globals and a named
+project IndexedDB round-trip (`node --test tests/ModernAnimationLibrary.test.js`).
+If the library reports unavailable storage, inspect the browser console before
+changing IndexedDB settings or deleting saved data.

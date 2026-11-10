@@ -1051,7 +1051,11 @@
     studioLibraryMessage=message;studioLibraryError=!!error;renderStudioLibrary();
   }
   function refreshStudioLibrary(){
-    if(!studioLibrary||!root.indexedDB){
+    if(!studioLibrary){
+      studioLibraryNotice('Animation Library module failed to load; check the browser console.',true);
+      return Promise.resolve([]);
+    }
+    if(!root.indexedDB){
       studioLibraryNotice('Named animations require browser IndexedDB storage.',true);
       return Promise.resolve([]);
     }

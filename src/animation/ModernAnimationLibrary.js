@@ -5,9 +5,10 @@
 (function(root,factory){
   var projects=root.CurvatureModernAnimationProject;
   var thumbnails=root.CurvatureModernExperimentThumbnail;
-  if(typeof module==='object'&&module.exports)
+  if(typeof module==='object'&&module.exports){
     projects=require('./ModernAnimationProject');
     thumbnails=require('../ui/modern/ModernExperimentThumbnail');
+  }
   var api=factory(projects,thumbnails);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationLibrary=api;

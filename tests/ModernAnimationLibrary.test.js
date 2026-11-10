@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 const library=require('../src/animation/ModernAnimationLibrary');
 const studio=require('../src/animation/ModernAnimationStudio');
 const animation=require('../src/animation/ModernAnimationProject');
@@ -141,6 +142,55 @@ test('HTML load order and application expose named project save/open actions sep
   assert.match(ui,/Save changes/);
   assert.match(ui,/Save As/);
   assert.match(app,/Opening a saved animation replaces the current draft/);
+  assert.match(app,/Animation Library module failed to load; check the browser console/);
+});
+
+test('classic-browser script loading has no CommonJS dependency and can save via IndexedDB',async()=>{
+  // Node tests previously missed a top-level require() executed outside its
+  // CommonJS guard. Execute the REAL browser-facing UMD scripts with neither
+  // require nor module defined, as in Opera's classic <script> environment.
+  const root=path.join(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const files=[
+    'src/ui/modern/ModernExperimentThumbnail.js',
+    'src/animation/ModernAnimationLibrary.js'
+  ];
+  const requiredScriptOrder=[
+    'src/ui/modern/ModernExperimentThumbnail.js',
+    'src/animation/ModernAnimationProject.js',
+    'src/animation/ModernAnimationLibrary.js'
+  ];
+  const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)]
+    .map(match=>match[1].split('?')[0]);
+  const positions=requiredScriptOrder.map(file=>scripts.indexOf(file));
+  assert.ok(positions.every(index=>index>=0),'every library dependency is loaded by Modern HTML');
+  assert.ok(positions.every((index,i)=>i===0||index>positions[i-1]),
+    'thumbnail and project must load before Animation Library');
+  // The project's UMD script has its own tests; supply its validated API as
+  // the prior <script> global and execute the library/thumbnail scripts as-is.
+  const browser=vm.createContext({CurvatureModernAnimationProject:animation});
+  assert.equal(vm.runInContext('typeof require',browser),'undefined');
+  assert.equal(vm.runInContext('typeof module',browser),'undefined');
+  for(const file of files){
+    vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),browser,{filename:file});
+  }
+  const browserLibrary=browser.CurvatureModernAnimationLibrary;
+  assert.ok(browserLibrary,'the browser must expose a usable library');
+  assert.equal(typeof browserLibrary.create,'function');
+  const db=memoryIndexedDB(),project=studio.build(source(),'browser_saved');
+  const image={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
+  const saved=await browserLibrary.create(db,project,'auto',100,image);
+  assert.equal(saved.project.name,'Globe to Flat');
+  assert.equal(saved.thumbnail.dataUrl,image.dataUrl);
+  assert.equal((await browserLibrary.list(db)).length,1);
+  assert.equal((await browserLibrary.get(db,'browser_saved')).project.id,'browser_saved');
+  const changed=studio.edit(source(),'description','Browser storage round-trip');
+  const updated=await browserLibrary.update(db,studio.build(changed,'browser_saved'),
+    'accurate',100,150);
+  assert.equal(updated.project.description,'Browser storage round-trip');
+  assert.equal((await browserLibrary.get(db,'browser_saved')).quality,'accurate');
+  assert.equal(await browserLibrary.remove(db,'browser_saved'),true);
+  assert.equal((await browserLibrary.list(db)).length,0);
 });
 
 test('saved project association survives F5 without changing older draft checkpoints',()=>{

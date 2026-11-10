@@ -60,6 +60,26 @@ node --test tests/*.test.js
 3. **Modern Compare:** verify A/B independent surface/atmosphere inputs, shared camera/objects, and scene export/import. Under **Atmosphere**, enable **Atmospheric extinction / haze** in Scene and Compare; try visibility ranges 15 km and 100 km with Globe and Flat. Compare A/B refraction settings must remain independent, but haze is one shared flag and range across both views; switching model tabs must not change either haze control. Toggling haze off restores the untouched reference colours, and changing its range must reuse cached optics. Old shared URLs should load with extinction off, while new ones retain the chosen settings. Use **Canvas 2D** first; optionally check **WebGL2** and the capability report without assuming GPU optical computing.
 4. Record browser/OS, viewport size, DPR, input configuration and failure mode if reporting a bug. If exporting new Legacy references, use a **new ZIP**, never overwrite the frozen canonical archive without reviewed evidence.
 
+## Animation Library classic-browser loading smoke test
+
+`CurvatureModern.html` loads Animation Library as a **classic browser script**,
+not as a CommonJS module. Any `require()` calls in its UMD wrapper must remain
+inside the `module.exports` branch; Node-only tests can otherwise pass while
+Opera fails at script evaluation, preventing IndexedDB initialization.
+
+```sh
+node --test tests/ModernAnimationLibrary.test.js
+```
+
+The focused suite executes the actual thumbnail and Animation Library source
+in a VM without `module` or `require`, checks HTML dependency ordering and
+round-trips a named project through a test IndexedDB implementation. It also
+runs the existing Node persistence and revision tests. This **does not** replace
+an Opera acceptance check: serve `CurvatureModern.html` over HTTP, prepare an
+animation, select **Save animation**, reload, and use **Open** from the saved
+project gallery. Verify no `ReferenceError` appears in DevTools; do not delete
+existing History or browser storage to troubleshoot a loader error.
+
 ## Protected reference data
 
 - `tests/fixtures/legacy-browser-references.zip` and `legacy-browser-reference-lock.json` freeze **six** original Opera Legacy Canvas samples (TransLine 0/4/7 and Bedford 0/3/6, zero-based source indices). The validator uses PNG CRC and byte/pixel SHA-256 plus state/model consistency. These are **Legacy regression observations** only.
