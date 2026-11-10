@@ -532,3 +532,13 @@ second time and confirm `0 created`. Confirm that a corrupt file leaves the
 library untouched and that thumbnails only appear when genuine snapshots
 were included. Automated tests verify the data and classic-browser UMD
 boundary; they are not substitutes for checking Opera's file picker or downloads.
+
+
+### Performance / pixel parity audit
+
+The optional read-only diagnostic added after Animation Library is documented
+in [`modern-animation-quality-audit.md`](modern-animation-quality-audit.md). It
+measures actual isolated frame and optical phase timings and can compare live
+Scene/Compare Canvas pixels only for precisely matching states, optics and
+backing sizes; skipped checks are explicitly **not comparable**, not passing.
+These measurements do not certify a final video exporter.

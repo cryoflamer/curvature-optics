@@ -574,3 +574,13 @@ VM smoke test now checks script loading without Node globals and a named
 project IndexedDB round-trip (`node --test tests/ModernAnimationLibrary.test.js`).
 If the library reports unavailable storage, inspect the browser console before
 changing IndexedDB settings or deleting saved data.
+
+
+### Animation performance and pixel parity
+
+After #140.12.120.6 the Animation Studio has a collapsible **Performance & pixel parity**
+probe showing bounded frame p50/p95, cache hit/miss metrics and an explicit
+Scene/Compare RGBA comparison when identical physical state, bitmap dimensions
+and optical quality are available. This is diagnostic evidence, **not** an
+automatically passed browser pixel-parity baseline. See
+[`docs/modern-animation-quality-audit.md`](docs/modern-animation-quality-audit.md).

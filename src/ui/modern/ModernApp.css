@@ -814,3 +814,10 @@ button{cursor:pointer}
 .modern-animation-library-duplicate-group{margin-top:7px;padding:7px 9px;
   background:#fff;border-radius:5px}
 .modern-animation-library-duplicate-group small{color:#647f96}
+
+/* Opt-in readback; performance measurements remain bounded, without forcing a frame. */
+.modern-animation-quality-section{margin-top:9px;border-top:1px solid #d5e1ee;padding-top:8px;font-size:12px;color:#38516a}
+.modern-animation-quality-section summary{font-weight:600;cursor:pointer}
+.modern-animation-quality-section p{margin:7px 0;line-height:1.45;overflow-wrap:anywhere}
+.modern-animation-quality-actions{display:flex;flex-wrap:wrap;gap:6px}
+.modern-animation-quality-actions button{font-size:12px;max-width:100%}

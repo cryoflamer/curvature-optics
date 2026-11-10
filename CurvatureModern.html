@@ -79,6 +79,7 @@
 <script src="src/animation/ModernAnimationDraftAutosave.js"></script>
 <script src="src/animation/ModernAnimationLibrary.js"></script>
 <script src="src/animation/ModernAnimationPreview.js"></script>
+<script src="src/animation/ModernAnimationQualityAudit.js"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
@@ -198,6 +199,17 @@
         <output id="ModernAnimationPlaybackTime">0.0 / 0.0 s</output>
       </div>
       <p id="ModernAnimationPlaybackDiagnostics" class="modern-animation-playback-diagnostics" role="status" aria-live="off">Diagnostics appear after rendering.</p>
+      <details id="ModernAnimationQualitySection" class="modern-animation-quality-section">
+        <summary>Performance &amp; pixel parity (diagnostic)</summary>
+        <p>Live frame timings are measured at the actual optics and resolution. Pixel comparison is available only when the previous Scene/Compare frame has the same experiment, optics, backend and Canvas dimensions; no rescaling or silent tolerance is applied.</p>
+        <div class="modern-animation-quality-actions">
+          <button type="button" id="ModernAnimationQualityCompare">Compare current frame with Scene/Compare</button>
+          <button type="button" id="ModernAnimationQualityClear">Clear measurements</button>
+          <button type="button" id="ModernAnimationQualityExport">Export audit JSON</button>
+        </div>
+        <p id="ModernAnimationQualitySummary" role="status" aria-live="polite">No frames measured yet.</p>
+        <p id="ModernAnimationQualityParity" role="status" aria-live="polite">Pixel parity not checked.</p>
+      </details>
       <p id="ModernAnimationPlaybackStatus" class="modern-studio-hint" role="status" aria-live="polite">Prepared project ready for preview.</p>
     </section>
     <div class="modern-animation-editor-layout">

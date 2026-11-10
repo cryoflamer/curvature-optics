@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 77,
-      "uniqueScripts": 75,
+      "scriptTags": 78,
+      "uniqueScripts": 76,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -191,6 +191,7 @@
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPreview.js",
+        "src/animation/ModernAnimationQualityAudit.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
@@ -325,6 +326,7 @@
       "src/animation/ModernAnimationPlayback.js",
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationProject.js",
+      "src/animation/ModernAnimationQualityAudit.js",
       "src/animation/ModernAnimationStudio.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
@@ -378,7 +380,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 156,
+  "sourceJsCount": 157,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -506,6 +508,16 @@
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationQualityAudit.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationQualityAudit.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2148,6 +2160,7 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
+        "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
@@ -2185,10 +2198,12 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationCompatibility.js",
+        "src/animation/ModernAnimationQualityAudit.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentHistoryFilters.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentHistoryFilters.test.js",
         "tests/ModernExperimentVisualHistory.test.js"
@@ -2250,6 +2265,7 @@
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationPreview.js",
         "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationQualityAudit.js",
         "src/animation/ModernAnimationStudio.js",
         "src/ui/modern/ModernExperimentFingerprint.js",
         "src/ui/modern/ModernExperimentHistory.js",
@@ -2263,6 +2279,7 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
+        "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
