@@ -589,11 +589,18 @@ automatically passed browser pixel-parity baseline. See
 ### Deterministic Animation PNG export
 
 For any compatible draft or prepared project, open **Animation playback → Export PNG frames**.
-Choose FPS and fixed frame size, then **Render PNG ZIP**. A background Web Worker rerenders
-*every* indexed sample in Accurate RK4 on private OffscreenCanvases, including the exact
-last keyframe; Compare A/B produces a synchronized PNG for each side. A
-`manifest.json` lists microsecond timestamps and image paths. Progress displays completed timestamps and elapsed/estimated remaining time.
-**Cancel export** terminates the Worker immediately, even during a synchronous RK4 frame. This uses bounded in-memory
-ZIP32 with PNGs: ≤751 timestamps and ≤192 MiB of PNG data, with no MP4/WebM
-encoding yet. It does not alter Scene/Compare, History, the active player clock
-or autosaved drafts. Export now uses one background Web Worker and an independent OffscreenCanvas, keeping the UI responsive; **Cancel** terminates even an in-flight Accurate frame. It displays completed frames, elapsed time and an estimated remaining time. Exported PNGs embed the same **opaque white background** seen behind the live transparent Canvas, without changing Accurate physics or edge antialiasing. See [frame export design and limits](docs/modern-animation-frame-export.md).
+Choose FPS, frame size and **Render workers** (`Auto`, `1`, `2` or `4`), then
+**Render PNG ZIP**. Auto conservatively uses up to four render workers based
+on browser-reported CPU concurrency. Each worker owns its Accurate RK4 optical
+contexts and fixed-size `OffscreenCanvas` objects. Frame indices are dynamically
+scheduled, so slow frames do not hold up the other renderers; a separate ZIP
+worker reorders finished PNGs by exact timestamp and writes `manifest.json`.
+Compare A/B gets synchronized images for every timestamp, including the final
+keyframe. The manifest records `renderWorkers` and `renderElapsedMs` to help
+compare a baseline (one worker) with parallel exports. The main thread remains
+responsive and displays completed frames, ETA and the ZIP packing phase.
+**Cancel export** terminates every worker immediately, without a partial ZIP.
+The 751-timestamp / 192-MiB bounded ZIP32 limit, opaque white PNG background,
+and isolation from live Scene/Compare, Playback, History and drafts are retained.
+This is still a PNG sequence; MP4/WebM encoding is not yet supported.
+See [frame export design and limits](docs/modern-animation-frame-export.md).

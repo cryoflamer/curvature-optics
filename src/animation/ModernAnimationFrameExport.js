@@ -115,56 +115,97 @@
     });
   }
   function pad(index){return String(index).padStart(5,'0');}
-  // options.render(sample, side, dimensions) MUST render Accurate optics on an
-  // isolated fixed-size Canvas and return {canvas,quality}. The runner refuses
-  // approximate or mixed frames; a fallback can never silently enter export.
-  async function run(settings){
-    if(!settings||typeof settings.render!=='function')throw TypeError('Export renderer required');
-    var p=plan(settings.project,settings),cancel=settings.cancel||{},entries=[],frames=[];
-    var yieldUi=typeof settings.yieldUi==='function'?settings.yieldUi:function(){return Promise.resolve();};
-    var progress=typeof settings.onProgress==='function'?settings.onProgress:function(){};
-    for(var i=0;i<p.timesMs.length;i++){
-      await yieldUi();
-      if(cancel.cancelled)return {cancelled:true,framesCompleted:i,totalFrames:p.timesMs.length};
-      var time=p.timesMs[i],sample=projects.sampleAt(p.project,time),row={index:i,timeMs:time,
-        timestampUs:Math.round(time*1000),images:{}};
-      for(var j=0;j<p.sides.length;j++){
-        if(cancel.cancelled)return {cancelled:true,framesCompleted:i,totalFrames:p.timesMs.length};
-        var side=p.sides[j],image=await settings.render(sample,side,{width:p.width,height:p.height,
-          index:i,timeMs:time});
-        if(!image||image.quality!=='accurate'||(image.metrics&&
-          image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
-          image.canvas.width!==p.width||image.canvas.height!==p.height)
-          throw Error('Export frame is not Accurate RK4 at fixed resolution');
-        // A live Canvas is displayed over white CSS; a PNG has no CSS.
-        // Composite only after the final Accurate paint, on every export path.
-        compositeOpaqueWhite(image.canvas);
-        var bytes=await toPng(image.canvas);
-        if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
-          throw Error('Invalid PNG data from export Canvas');
-        var name='frames/frame_'+pad(i)+'_'+side+'.png';
-        entries.push({name:name,data:bytes});row.images[side]=name;
-        if(image.metrics){
-          if(!row.renderStats)row.renderStats={};
-          var metrics=image.metrics,timing=metrics.timings||{};
-          row.renderStats[side]={opticsMs:Number.isFinite(timing.opticsMs)?timing.opticsMs:null,
-            unresolved:Number.isFinite(metrics.unresolved)?metrics.unresolved:null,
-            fillUnresolved:Number.isFinite(metrics.fillUnresolved)?metrics.fillUnresolved:null,
-            budgetExceeded:!!metrics.budgetExceeded,cacheReused:!!metrics.cacheReused};
-        }
+  // A timestamp is independent of its neighbors. Both the single-worker
+  // runner and parallel workers use the same painting, compositing, PNG
+  // encoding and optical-quality checks; a different scheduling order must
+  // never select Fast or omit an A/B side.
+  async function renderTimestamp(p,index,render,cancel){
+    if(!p||!Array.isArray(p.timesMs)||!Number.isInteger(index)||
+      index<0||index>=p.timesMs.length||typeof render!=='function')
+      throw RangeError('Invalid export timestamp or renderer');
+    var time=p.timesMs[index],sample=projects.sampleAt(p.project,time);
+    var row={index:index,timeMs:time,timestampUs:Math.round(time*1000),images:{}};
+    var entries=[];
+    for(var j=0;j<p.sides.length;j++){
+      if(cancel&&cancel.cancelled)return null;
+      var side=p.sides[j],image=await render(sample,side,{width:p.width,height:p.height,
+        index:index,timeMs:time});
+      if(!image||image.quality!=='accurate'||(image.metrics&&
+        image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
+        image.canvas.width!==p.width||image.canvas.height!==p.height)
+        throw Error('Export frame is not Accurate RK4 at fixed resolution');
+      compositeOpaqueWhite(image.canvas);
+      var bytes=await toPng(image.canvas);
+      if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
+        throw Error('Invalid PNG data from export Canvas');
+      var name='frames/frame_'+pad(index)+'_'+side+'.png';
+      entries.push({name:name,data:bytes});row.images[side]=name;
+      if(image.metrics){
+        if(!row.renderStats)row.renderStats={};
+        var metrics=image.metrics,timing=metrics.timings||{};
+        row.renderStats[side]={opticsMs:Number.isFinite(timing.opticsMs)?timing.opticsMs:null,
+          unresolved:Number.isFinite(metrics.unresolved)?metrics.unresolved:null,
+          fillUnresolved:Number.isFinite(metrics.fillUnresolved)?metrics.fillUnresolved:null,
+          budgetExceeded:!!metrics.budgetExceeded,cacheReused:!!metrics.cacheReused};
       }
-      frames.push(row);
-      progress({completed:i+1,total:p.timesMs.length,timeMs:time});
     }
-    if(cancel.cancelled)return {cancelled:true,framesCompleted:frames.length,totalFrames:p.timesMs.length};
+    return {row:row,entries:entries};
+  }
+  // Assemble in timestamp order, not completion order. Validate all entries
+  // before emitting an archive; never produce partial/duplicated frame ZIPs.
+  function assemble(p,completed,exportInfo){
+    if(!p||!Array.isArray(p.timesMs)||!Array.isArray(completed)||
+      completed.length!==p.timesMs.length)throw Error('Incomplete PNG frame sequence');
+    var frames=[],entries=[];
+    completed.forEach(function(frame,index){
+      if(!frame||!frame.row||frame.row.index!==index||
+        frame.row.timeMs!==p.timesMs[index]||
+        frame.row.timestampUs!==Math.round(p.timesMs[index]*1000)||
+        !Array.isArray(frame.entries)||frame.entries.length!==p.sides.length)
+        throw Error('Invalid PNG frame index or timestamp');
+      p.sides.forEach(function(side,j){
+        var entry=frame.entries[j],name='frames/frame_'+pad(index)+'_'+side+'.png';
+        if(!entry||entry.name!==name||frame.row.images[side]!==name||
+          !(entry.data instanceof Uint8Array)||entry.data.length<8||
+          entry.data[0]!==137||entry.data[1]!==80||entry.data[2]!==78||entry.data[3]!==71)
+          throw Error('Invalid PNG frame entry: '+name);
+        entries.push(entry);
+      });
+      frames.push(frame.row);
+    });
     var manifest={schema:'curvature-animation-png-sequence',version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       physicalTarget:p.project.target,project:p.project,quality:'accurate',
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
       endpointIncluded:true,sides:p.sides.slice(),backgroundColor:'#ffffff',
       frameCount:frames.length,frames:frames};
+    if(exportInfo){
+      if(!Number.isInteger(exportInfo.workers)||exportInfo.workers<1||exportInfo.workers>4||
+        !Number.isFinite(exportInfo.renderElapsedMs)||exportInfo.renderElapsedMs<0)
+        throw RangeError('Invalid parallel export diagnostics');
+      manifest.renderWorkers=exportInfo.workers;
+      manifest.renderElapsedMs=Math.round(exportInfo.renderElapsedMs);
+    }
     entries.unshift({name:'manifest.json',data:ascii(JSON.stringify(manifest,null,2))});
     return {cancelled:false,blob:zip(entries),manifest:manifest};
+  }
+  // Sequential compatibility runner (also used as a parity reference).
+  async function run(settings){
+    if(!settings||typeof settings.render!=='function')throw TypeError('Export renderer required');
+    var p=plan(settings.project,settings),cancel=settings.cancel||{},completed=[];
+    var yieldUi=typeof settings.yieldUi==='function'?settings.yieldUi:function(){return Promise.resolve();};
+    var progress=typeof settings.onProgress==='function'?settings.onProgress:function(){};
+    for(var i=0;i<p.timesMs.length;i++){
+      await yieldUi();
+      if(cancel.cancelled)return {cancelled:true,framesCompleted:i,totalFrames:p.timesMs.length};
+      var frame=await renderTimestamp(p,i,settings.render,cancel);
+      if(!frame||cancel.cancelled)
+        return {cancelled:true,framesCompleted:i,totalFrames:p.timesMs.length};
+      completed.push(frame);
+      progress({completed:i+1,total:p.timesMs.length,timeMs:p.timesMs[i]});
+    }
+    if(cancel.cancelled)return {cancelled:true,framesCompleted:completed.length,totalFrames:p.timesMs.length};
+    return assemble(p,completed);
   }
   // Isolated clone of the GraphX3DX viewport plumbing. Methods use `this`,
   // and every mutable camera/window transform gets its own object. The source
@@ -197,6 +238,7 @@
     graph.UpdateCanvasSize=function(){};graph.ResizeTimer=null;
     return graph;
   }
-  return Object.freeze({plan:plan,run:run,zip:zip,graphForCanvas:graphForCanvas,
+  return Object.freeze({plan:plan,run:run,renderTimestamp:renderTimestamp,assemble:assemble,
+    zip:zip,graphForCanvas:graphForCanvas,
     compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});
 }));

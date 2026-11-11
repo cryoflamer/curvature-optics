@@ -374,6 +374,7 @@
       "src/ModelAnimation.js",
       "src/NumFormatter.js",
       "src/Slider.js",
+      "src/animation/ModernAnimationArchiveWorker.js",
       "src/animation/ModernAnimationFrameWorker.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
@@ -385,7 +386,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 160,
+  "sourceJsCount": 161,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -441,6 +442,12 @@
       "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
+    "src/animation/ModernAnimationArchiveWorker.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
     "src/animation/ModernAnimationBackgroundExport.js": {
       "directHtmlLoads": [
         "modern"
@@ -486,7 +493,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundExport.test.js",
-        "tests/ModernAnimationFrameExport.test.js"
+        "tests/ModernAnimationFrameExport.test.js",
+        "tests/ModernAnimationParallelExport.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -542,6 +550,7 @@
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationParallelExport.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js"
@@ -2197,6 +2206,7 @@
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationParallelExport.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
@@ -2318,6 +2328,7 @@
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationParallelExport.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",

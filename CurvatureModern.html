@@ -214,13 +214,16 @@
       </details>
       <details id="ModernAnimationFrameExportSection" class="modern-animation-frame-export">
         <summary>Export PNG frames · deterministic (offline)</summary>
-        <p>A background Web Worker calculates every timestamp in Accurate RK4, without blocking the page. Each PNG uses the same fixed resolution; the ZIP includes a manifest and the exact final frame.</p>
+        <p>A pool of background Web Workers calculates independent timestamps in Accurate RK4. A separate worker assembles the ZIP in timestamp order without blocking the page; the exact final frame is included.</p>
         <div class="modern-animation-frame-export-controls">
           <label for="ModernAnimationFrameExportFps">FPS
             <select id="ModernAnimationFrameExportFps"><option value="10">10</option><option value="25" selected>25</option><option value="30">30</option><option value="5">5</option></select>
           </label>
           <label for="ModernAnimationFrameExportSize">Frame size
             <select id="ModernAnimationFrameExportSize"><option value="640x360">640 × 360</option><option value="960x540" selected>960 × 540</option><option value="1280x720">1280 × 720</option></select>
+          </label>
+          <label for="ModernAnimationFrameExportWorkers">Render workers
+            <select id="ModernAnimationFrameExportWorkers"><option value="auto" selected>Auto (up to 4)</option><option value="1">1 · baseline</option><option value="2">2</option><option value="4">4</option></select>
           </label>
           <button type="button" id="ModernAnimationFrameExportStart">Render PNG ZIP</button>
           <button type="button" id="ModernAnimationFrameExportCancel" disabled>Cancel export</button>

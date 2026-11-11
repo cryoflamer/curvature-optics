@@ -1674,8 +1674,8 @@
     });
     syncStudioQualitySummary();
   }
-  // Worker owns all optical calculations, canvas pixels and ZIP assembly.
-  // Main thread only validates the frozen draft and displays progress. No
+  // Render workers own optical calculations and PNG encoding; an archive
+  // worker writes the ZIP. The UI only schedules work and displays progress. No
   // silent synchronous fallback if Worker/OffscreenCanvas is unavailable.
   function syncStudioFrameExportControls(){
     var start=newUiEl('ModernAnimationFrameExportStart');
@@ -1701,8 +1701,8 @@
     cancel.addEventListener('click',function(){
       if(!studioFrameExportTask)return;
       studioFrameExportTask.controller.cancel();
-      // Terminate() stops even a blocked synchronous RK4 calculation.
-      message('PNG export cancelled. The worker was terminated; no archive was saved.');
+      // Terminate every worker, even if an Accurate RK4 calculation is blocked.
+      message('PNG export cancelled. Render and archive workers terminated; no ZIP saved.');
     });
     start.addEventListener('click',async function(){
       if(studioFrameExportTask)return;
@@ -1710,7 +1710,9 @@
         message('PNG export modules did not load. Check the browser console.');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js'});
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js',
+        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js',
+        hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};
       studioFrameExportTask=task;
       syncStudioFrameExportControls();
@@ -1722,22 +1724,27 @@
         var fps=Number(newUiEl('ModernAnimationFrameExportFps').value);
         var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
         var plan=studioFrameExportApi.plan(project,{fps:fps,width:size[0],height:size[1]});
+        var workerSelection=newUiEl('ModernAnimationFrameExportWorkers').value;
+        var workerCount=workerSelection==='auto'?'auto':Number(workerSelection);
         var startAt=profileNow();
-        message('Starting background worker · 0 / '+plan.timesMs.length+
+        message('Starting background worker pool · 0 / '+plan.timesMs.length+
           ' timestamps, '+plan.sides.length+' view(s) · Accurate RK4. Cancel is available.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
-          width:plan.width,height:plan.height,
+          width:plan.width,height:plan.height,workerCount:workerCount,
           onReady:function(info){
-            message('Worker ready · calculating Accurate RK4, frame 1 / '+info.total+'…');
+            message(info.workers+' render worker(s) ready · calculating Accurate RK4 · '+
+              info.total+' timestamps. ZIP assembly is also in the background.');
           },
           onProgress:function(info){
             if(progress)progress.value=100*info.completed/info.total;
             var elapsed=info.elapsedMs/1000;
             var remaining=info.completed?Math.max(0,(elapsed/info.completed)*(info.total-info.completed)):0;
-            message('Rendered '+info.completed+' / '+info.total+' timestamps · t='+
-              (info.timeMs/1000).toFixed(2)+' s · elapsed '+elapsed.toFixed(1)+
-              ' s · estimated remaining '+Math.ceil(remaining)+' s · Accurate RK4');
-          }
+            message('Rendered '+info.completed+' / '+info.total+' timestamps · last t='+
+              (info.timeMs/1000).toFixed(2)+' s (out-of-order) · elapsed '+elapsed.toFixed(1)+
+              ' s · estimated remaining '+Math.ceil(remaining)+' s · '+
+              info.workers+' workers · Accurate RK4');
+          },
+          onPacking:function(){message('All PNGs rendered · assembling ZIP in background…');}
         });
         if(result.cancelled)return;
         var url=root.URL.createObjectURL(result.blob);
@@ -1748,7 +1755,7 @@
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
         message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+
           result.manifest.sides.length+' view(s), including exact final frame · '+
-          ((profileNow()-startAt)/1000).toFixed(1)+' s.');
+          result.workers+' worker(s) · total '+((profileNow()-startAt)/1000).toFixed(1)+' s.');
       }catch(error){message('PNG export failed: '+error.message+' · No partial archive saved.');}
       finally{if(studioFrameExportTask===task)studioFrameExportTask=null;
         syncStudioFrameExportControls();}

@@ -86,38 +86,67 @@ function createGraph(canvas){
 }
 
 function errorMessage(error){return String(error&&error.message||error);}
-var active=false;
+function setup(data){
+  if(typeof OffscreenCanvas!=='function')
+    throw Error('OffscreenCanvas is not available in this browser worker');
+  var api=self.CurvatureModernAnimationFrameExport;
+  var plan=api.plan(data.project,{fps:data.fps,width:data.width,height:data.height});
+  var contexts={};
+  plan.sides.forEach(function(side){
+    contexts[side]=createGraph(new OffscreenCanvas(plan.width,plan.height));
+  });
+  var painter=self.CurvatureModernAnimationPreview.create({
+    Model:self.CurveAppClass,
+    renderer:self.CurvatureMainCanvasRenderer,
+    optics:self.CurvaturePhysicalSceneOptics
+  });
+  function render(sample,side,dimensions){
+    var graph=contexts[side];
+    // Reset backing pixels and 2D state independently for every timestamp.
+    graph.Canvas.width=dimensions.width;
+    graph.Canvas.height=dimensions.height;
+    var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:plan.project.mode});
+    return {quality:report.quality,canvas:graph.Canvas,metrics:report.result};
+  }
+  return {plan:plan,render:render};
+}
+var active=false,parallel=null;
 self.onmessage=async function(event){
-  var data=event.data;
-  if(!data||data.type!=='start'||active)return;
+  var data=event&&event.data;
+  if(!data)return;
+  if(data.type==='init'){
+    if(active||parallel){self.postMessage({type:'error',message:'Worker already initialized'});return;}
+    try{
+      parallel=setup(data);
+      self.postMessage({type:'ready',total:parallel.plan.timesMs.length,
+        sides:parallel.plan.sides.length});
+    }catch(error){self.postMessage({type:'error',message:errorMessage(error)});}
+    return;
+  }
+  if(data.type==='render'){
+    if(!parallel||active){self.postMessage({type:'error',message:'Worker is not ready for a timestamp'});return;}
+    active=true;
+    try{
+      var frame=await self.CurvatureModernAnimationFrameExport.renderTimestamp(
+        parallel.plan,data.index,parallel.render);
+      // Transfer PNG buffers instead of copying potentially hundreds of MiB.
+      self.postMessage({type:'frame',index:data.index,frame:frame},
+        frame.entries.map(function(entry){return entry.data.buffer;}));
+    }catch(error){self.postMessage({type:'error',message:errorMessage(error)});}
+    finally{active=false;}
+    return;
+  }
+  // Legacy one-worker protocol retained for parity tests and older callers.
+  if(data.type!=='start'||active||parallel)return;
   active=true;
   try{
-    if(typeof OffscreenCanvas!=='function')
-      throw Error('OffscreenCanvas is not available in this browser worker');
-    var api=self.CurvatureModernAnimationFrameExport;
-    var plan=api.plan(data.project,{fps:data.fps,width:data.width,height:data.height});
-    var contexts={};
-    plan.sides.forEach(function(side){
-      contexts[side]=createGraph(new OffscreenCanvas(plan.width,plan.height));
-    });
-    var painter=self.CurvatureModernAnimationPreview.create({
-      Model:self.CurveAppClass,
-      renderer:self.CurvatureMainCanvasRenderer,
-      optics:self.CurvaturePhysicalSceneOptics
-    });
+    var session=setup(data),plan=session.plan;
     self.postMessage({type:'ready',total:plan.timesMs.length,sides:plan.sides.length});
     var start=performance.now();
-    var result=await api.run({project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
-      // Yield between frames so progress messages are delivered promptly.
+    var result=await self.CurvatureModernAnimationFrameExport.run({
+      project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
       yieldUi:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
-      render:function(sample,side,dimensions){
-        var graph=contexts[side];
-        // Clearing the backing store resets 2D state for each independent frame.
-        graph.Canvas.width=dimensions.width;
-        graph.Canvas.height=dimensions.height;
-        var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:plan.project.mode});
-        return {quality:report.quality,canvas:graph.Canvas,metrics:report.result};
-      },
+      render:session.render,
       onProgress:function(info){self.postMessage({type:'progress',completed:info.completed,
         total:info.total,timeMs:info.timeMs,elapsedMs:performance.now()-start});}
     });
