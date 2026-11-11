@@ -32,6 +32,7 @@ class FakeWorker{
     this.sent.push({data,transfer});
     if(data.type==='init'||data.type==='video-init'){
       this.plan=video.plan(data.project,data);
+      if(this.encoder)this.format=data.format||'webm';
       if(this.encoder){this.pending=new Map();this.submitted=0;this.maxBuffered=0;}
       queueMicrotask(()=>this.emit({type:'ready',total:this.plan.frameCount,
         sides:this.plan.sides.length,workers:data.workers}));
@@ -57,8 +58,8 @@ class FakeWorker{
         }
         if(this.submitted===this.plan.frameCount){
           this.emit({type:'muxing',total:this.submitted});
-          this.emit({type:'complete',blob:new Blob(['test'],{type:this.plan.sides.length===1?'video/webm':'application/zip'}),
-            filename:'test.webm',manifest:{frameCount:this.plan.frameCount,
+          this.emit({type:'complete',blob:new Blob(['test'],{type:this.plan.sides.length===1?'video/'+this.format:'application/zip'}),
+            filename:'test.'+this.format,manifest:{format:data.fakeFormat||this.format||'webm',frameCount:this.plan.frameCount,
               durationUs:this.plan.durationUs,sides:Array.from(this.plan.sides)}});
         }
       });
@@ -110,4 +111,17 @@ test('renderer errors reject WebM without a partial file',async()=>{
   await assert.rejects(api.start({project:make(),fps:5,width:640,height:360}),/RK4 failed/);
   assert.ok(FakeWorker.instances.every(w=>w.closed));
   FakeWorker.errorAt=-1;
+});
+
+test('MP4 controller preserves bounded scheduling, format, and Compare ZIP',async()=>{
+  FakeWorker.reset();
+  const result=await background.create({WorkerCtor:FakeWorker,hardwareConcurrency:4}).start({
+    project:make('compare'),fps:5,width:640,height:360,workerCount:2,format:'mp4'});
+  assert.equal(result.blob.type,'application/zip');
+  assert.equal(result.manifest.format,'mp4');
+  assert.equal(FakeWorker.instances[0].sent[0].data.format,'mp4');
+  assert.ok(FakeWorker.instances[0].maxBuffered<=8);
+  assert.ok(FakeWorker.instances.every(w=>w.closed));
+  assert.throws(()=>background.create({WorkerCtor:FakeWorker}).start({
+    project:make(),fps:5,width:640,height:360,format:'avi'}),/format/);
 });

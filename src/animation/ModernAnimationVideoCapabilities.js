@@ -19,7 +19,8 @@
     var base={width:width,height:height,bitrate:2500000,framerate:fps};
     return [
       {format:'webm',name:'VP9',config:Object.assign({codec:'vp09.00.10.08'},base)},
-      {format:'mp4',name:'H.264',config:Object.assign({codec:'avc1.42E01F'},base)}
+      {format:'mp4',name:'H.264',config:Object.assign({codec:'avc1.42E01F',
+        avc:{format:'avc'}},base)}
     ];
   }
   async function inspectWorker(runtime,settings){
@@ -47,7 +48,9 @@
     return {offscreenCanvas2d:canvas2d,videoFrame:frame,videoEncoder:encoder,
       codecs:results,containerMuxerInstalled:!!(runtime&&
         runtime.CurvatureModernAnimationWebMMuxer&&
-        typeof runtime.CurvatureModernAnimationWebMMuxer.create==='function')};
+        typeof runtime.CurvatureModernAnimationWebMMuxer.create==='function'),
+      mp4MuxerInstalled:!!(runtime&&runtime.CurvatureModernAnimationMP4Muxer&&
+        typeof runtime.CurvatureModernAnimationMP4Muxer.create==='function')};
   }
   function probe(settings){
     settings=settings||{};

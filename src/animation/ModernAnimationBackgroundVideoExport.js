@@ -34,6 +34,8 @@
       var count=pngBackground.countFor(options.workerCount,
         settings.hardwareConcurrency,plan.frameCount);
       var quality=options.quality===undefined?'standard':options.quality;
+      var format=options.format===undefined?'webm':options.format;
+      if(!['webm','mp4'].includes(format))throw RangeError('Invalid video export format');
       if(!['standard','high'].includes(quality))throw RangeError('Invalid WebM quality preset');
       // At most 2 frames per renderer may be outstanding, up to eight total.
       // Each Compare slot contains A and B; the entire bundle gets one credit.
@@ -82,20 +84,20 @@
         }
         try{
           encoder=new WorkerCtor(encoderUrl);workers.push(encoder);
-          wireErrors(encoder,'WebM encoder worker');
+          wireErrors(encoder,'Video encoder worker');
           encoder.onmessage=function(event){
             if(done)return;
             var value=event&&event.data||{};
             if(value.type==='ready'){
               if(encoderReady||value.total!==plan.frameCount||
                 value.sides!==plan.sides.length||value.workers!==count){
-                fail('WebM encoder returned invalid initialization');return;
+                fail('Video encoder returned invalid initialization');return;
               }
               encoderReady=true;launch();
             }else if(value.type==='progress'){
               if(!Number.isInteger(value.submitted)||value.submitted<=submitted||
                 value.submitted>plan.frameCount||value.total!==plan.frameCount){
-                fail('WebM encoder returned invalid sequential progress');return;
+                fail('Video encoder returned invalid sequential progress');return;
               }
               submitted=value.submitted;
               try{if(typeof options.onProgress==='function')options.onProgress(
@@ -111,12 +113,13 @@
                 value.manifest.durationUs!==plan.durationUs||
                 !Array.isArray(value.manifest.sides)||
                 value.manifest.sides.join(',')!==plan.sides.join(',')||
-                value.blob.type!==(plan.sides.length===1?'video/webm':'application/zip')){
-                fail('Encoder returned an incomplete WebM export');return;
+                value.blob.type!==(plan.sides.length===1?'video/'+format:'application/zip')||
+                value.manifest.format!==format){
+                fail('Encoder returned an incomplete video export');return;
               }
               finish(null,{cancelled:false,blob:value.blob,filename:value.filename,
                 manifest:value.manifest,workers:count});
-            }else if(value.type==='error')fail('WebM encoder failed: '+String(value.message||'unknown error'));
+            }else if(value.type==='error')fail('Video encoder failed: '+String(value.message||'unknown error'));
           };
           for(var i=0;i<count;i++){
             var worker=new WorkerCtor(rendererUrl);
@@ -153,7 +156,7 @@
             })(slot);
           }
           encoder.postMessage({type:'init',project:plan.project,width:plan.width,
-            height:plan.height,fps:plan.fps,workers:count,quality:quality});
+            height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
             project:plan.project,width:plan.width,height:plan.height,fps:plan.fps});});
         }catch(error){finish(error);}

@@ -1705,8 +1705,8 @@
     var status=newUiEl('ModernAnimationVideoExportStatus');
     if(status&&!studioVideoExportTask){
       if(ready&&status.textContent.indexOf('Add at least two compatible keyframes.')===0)
-        status.textContent='Ready for WebM export · VP9 support is checked in the encoding Worker.';
-      else if(!ready&&status.textContent.indexOf('Ready for WebM export')===0)
+        status.textContent='Ready for video export · codec support is checked in the encoding Worker.';
+      else if(!ready&&status.textContent.indexOf('Ready for video export')===0)
         status.textContent='Add at least two compatible keyframes to export video.';
     }
   }
@@ -1720,7 +1720,7 @@
     cancel.addEventListener('click',function(){
       if(!studioVideoExportTask)return;
       studioVideoExportTask.controller.cancel();
-      message('WebM export cancelled. All render and encoder workers terminated; no video saved.');
+      message('Video export cancelled. All render and encoder workers terminated; no video saved.');
     });
     start.addEventListener('click',async function(){
       if(studioVideoExportTask||studioFrameExportTask)return;
@@ -1742,24 +1742,26 @@
         var selected=newUiEl('ModernAnimationVideoExportWorkers').value;
         var workers=selected==='auto'?'auto':Number(selected);
         var quality=newUiEl('ModernAnimationVideoExportQuality').value;
+        var format=newUiEl('ModernAnimationVideoExportFormat').value;
+        var codecLabel=format==='mp4'?'H.264 MP4':'VP9 WebM';
         var started=profileNow();
-        message('Starting VP9 render and encoder workers · '+plan.frameCount+
+        message('Starting '+codecLabel+' render and encoder workers · '+plan.frameCount+
           ' video intervals · '+plan.sides.length+' view(s) · Accurate RK4.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
-          width:plan.width,height:plan.height,workerCount:workers,quality:quality,
+          width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
           onReady:function(info){
-            message(info.workers+' render worker(s) ready · VP9 WebM encoding in a separate worker · '+
+            message(info.workers+' render worker(s) ready · '+codecLabel+' encoding in a separate worker · '+
               info.total+' video frames. Cancel is available.');
           },
           onProgress:function(info){
             if(progress)progress.value=100*info.submitted/info.total;
             var elapsed=info.elapsedMs/1000;
             var left=info.submitted?elapsed*(info.total-info.submitted)/info.submitted:0;
-            message('VP9 submitted '+info.submitted+' / '+info.total+' frames · elapsed '+
+            message(codecLabel+' submitted '+info.submitted+' / '+info.total+' frames · elapsed '+
               elapsed.toFixed(1)+' s · estimated remaining '+Math.ceil(left)+
               ' s · '+info.workers+' Accurate RK4 workers');
           },
-          onMuxing:function(){message('Rendering complete · finalizing VP9 and building WebM container…');}
+          onMuxing:function(){message('Rendering complete · finalizing '+codecLabel+' container…');}
         });
         if(result.cancelled)return;
         var url=root.URL.createObjectURL(result.blob);
@@ -1769,10 +1771,10 @@
           document.body.appendChild(link);link.click();link.remove();
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
         if(progress)progress.value=100;
-        message('WebM export ready: '+result.manifest.frameCount+' frames × '+
+        message(codecLabel+' export ready: '+result.manifest.frameCount+' frames × '+
           result.manifest.sides.length+' view(s), '+(result.manifest.durationUs/1e6).toFixed(3)+
           ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+' s total.');
-      }catch(error){message('WebM export failed: '+error.message+' · No partial video saved.');}
+      }catch(error){message('Video export failed: '+error.message+' · No partial video saved.');}
       finally{if(studioVideoExportTask===task)studioVideoExportTask=null;
         syncStudioFrameExportControls();}
     });

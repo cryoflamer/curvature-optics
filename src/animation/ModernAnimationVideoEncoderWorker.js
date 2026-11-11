@@ -1,4 +1,4 @@
-/* Dedicated offline VP9 encoder and WebM muxer. VideoFrames arrive transferred
+/* Dedicated offline VP9/WebM or H.264/MP4 encoder and muxer. VideoFrames arrive transferred
  * from isolated Accurate RK4 render workers via a bounded controller window.
  * decode-order output is kept compressed; RGBA frames are closed immediately
  * after WebCodecs accepts them. Cancel terminates this entire worker.
@@ -13,7 +13,8 @@ importScripts(
   'ModernAnimationFrameExport.js',
   'ModernAnimationVideoPipeline.js',
   'ModernAnimationVideoCapabilities.js',
-  'ModernAnimationWebMMuxer.js'
+  'ModernAnimationWebMMuxer.js',
+  'ModernAnimationMP4Muxer.js'
 );
 var session=null,initializing=false,failed=false;
 var MAX_ENCODER_QUEUE=3;
@@ -45,28 +46,28 @@ async function maybeFinish(){
       return {side:side,blob:current.muxers[side].finish(),
         bytes:current.muxers[side].bytes()};
     });
-    var p=current.plan,manifest={schema:'curvature-animation-webm',version:1,
+    var p=current.plan,manifest={schema:'curvature-animation-'+current.format,version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
-      physicalTarget:p.project.target,codec:'vp09.00.10.08',quality:'accurate',
+      physicalTarget:p.project.target,codec:current.codec,format:current.format,quality:'accurate',
       width:p.width,height:p.height,fps:p.fps,frameCount:p.frameCount,
       durationUs:p.durationUs,sides:p.sides.slice(),
       endSampleTimeMs:p.frames[p.frameCount-1].sampleTimeMs,
       bitrate:current.bitrate,renderWorkers:current.workers,
       elapsedMs:performance.now()-current.start};
     var blob,filename;
-    if(files.length===1){blob=files[0].blob;filename='curvature-animation.webm';}
+    if(files.length===1){blob=files[0].blob;filename='curvature-animation.'+current.format;}
     else{
       // One user gesture and one download for Compare A/B, not two potentially
       // blocked simultaneous browser downloads. ZIP is assembled in this Worker.
       var entries=[];
       for(var i=0;i<files.length;i++){
-        entries.push({name:'curvature-animation-'+files[i].side+'.webm',
+        entries.push({name:'curvature-animation-'+files[i].side+'.'+current.format,
           data:new Uint8Array(await files[i].blob.arrayBuffer())});
       }
       entries.push({name:'manifest.json',data:new TextEncoder().encode(
         JSON.stringify(manifest,null,2)+'\n')});
       blob=self.CurvatureModernAnimationFrameExport.zip(entries);
-      filename='curvature-animation-webm-compare.zip';
+      filename='curvature-animation-'+current.format+'-compare.zip';
     }
     if(failed||session!==current)return;
     self.postMessage({type:'complete',blob:blob,filename:filename,manifest:manifest});
@@ -83,24 +84,29 @@ async function init(data){
     var plan=pipeline.plan(data.project,data);
     if(!Number.isInteger(data.workers)||data.workers<1||data.workers>4)
       throw RangeError('Invalid video render worker count');
+    var format=data.format===undefined?'webm':data.format;
+    if(format!=='webm'&&format!=='mp4')throw RangeError('Unsupported video format');
+    var codec=format==='mp4'?'avc1.42E01F':'vp09.00.10.08';
     var multiplier=data.quality==='high'?2:data.quality==='standard'?1:null;
     if(multiplier===null)throw RangeError('Unsupported video quality preset');
     var bitrate=Math.round(Math.max(400000,Math.min(8000000,
       2500000*(plan.width*plan.height)/(960*540)*plan.fps/25*multiplier)));
-    var config={codec:'vp09.00.10.08',width:plan.width,height:plan.height,
+    var config={codec:codec,width:plan.width,height:plan.height,
       framerate:plan.fps,bitrate:bitrate};
+    if(format==='mp4')config.avc={format:'avc'};
     var supported=await VideoEncoder.isConfigSupported(config);
-    if(!supported||!supported.supported)throw Error('VP9 WebCodecs configuration unavailable');
+    if(!supported||!supported.supported)throw Error(codec+' WebCodecs configuration unavailable');
     var muxers={},encoders=[],durations=new Map();
     plan.frames.forEach(function(t){durations.set(t.timestampUs,t.durationUs);});
     plan.sides.forEach(function(side){
-      muxers[side]=self.CurvatureModernAnimationWebMMuxer.create(plan);
+      muxers[side]=(format==='mp4'?self.CurvatureModernAnimationMP4Muxer:
+        self.CurvatureModernAnimationWebMMuxer).create(plan);
       var encoder=new VideoEncoder({
-        output:function(chunk){
+        output:function(chunk,metadata){
           try{
             var duration=durations.get(chunk.timestamp);
-            if(duration===undefined)throw Error('Unexpected encoded VP9 timestamp');
-            muxers[side].add(chunk,duration);
+            if(duration===undefined)throw Error('Unexpected encoded video timestamp');
+            muxers[side].add(chunk,duration,metadata);
           }catch(error){fail(error);}
         },
         error:function(error){fail(error);}
@@ -125,9 +131,10 @@ async function init(data){
       }
     });
     session={plan:plan,workers:data.workers,gate:gate,encoders:encoders,
-      muxers:muxers,bitrate:bitrate,finishing:false,start:performance.now()};
+      muxers:muxers,bitrate:bitrate,format:format,codec:codec,
+      finishing:false,start:performance.now()};
     self.postMessage({type:'ready',total:plan.frameCount,sides:plan.sides.length,
-      workers:data.workers,codec:config.codec,bitrate:bitrate});
+      workers:data.workers,codec:config.codec,format:format,bitrate:bitrate});
   }finally{initializing=false;}
 }
 self.onmessage=function(event){

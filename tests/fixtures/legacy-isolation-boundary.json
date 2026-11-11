@@ -382,6 +382,7 @@
       "src/Slider.js",
       "src/animation/ModernAnimationArchiveWorker.js",
       "src/animation/ModernAnimationFrameWorker.js",
+      "src/animation/ModernAnimationMP4Muxer.js",
       "src/animation/ModernAnimationVideoEncoderWorker.js",
       "src/animation/ModernAnimationVideoProbeWorker.js",
       "src/animation/ModernAnimationWebMMuxer.js",
@@ -395,7 +396,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 167,
+  "sourceJsCount": 168,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -534,6 +535,14 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationLibrary.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationMP4Muxer.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationMP4Muxer.test.js"
       ],
       "commonJsToolCallers": []
     },

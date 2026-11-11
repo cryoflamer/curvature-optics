@@ -18,6 +18,7 @@ test('VP9 and H.264 are probed independently in dedicated worker runtime',async(
   assert.equal(report.codecs[0].supported,true);
   assert.equal(report.codecs[1].supported,false);
   assert.deepEqual(seen.map(x=>x.codec),['vp09.00.10.08','avc1.42E01F']);
+  assert.equal(seen[1].avc.format,'avc');
   assert.ok(seen.every(c=>c.width===960&&c.height===540&&c.framerate===25));
 });
 test('missing Worker WebCodecs does not falsely report codec support',async()=>{

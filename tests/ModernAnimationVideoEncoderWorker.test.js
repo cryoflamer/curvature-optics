@@ -27,7 +27,7 @@ function sandbox(){
   const dir=path.resolve(__dirname,'../src/animation'),messages=[];
   const workers=[];
   class FakeEncoder{
-    static async isConfigSupported(config){return {supported:config.codec==='vp09.00.10.08'};}
+    static async isConfigSupported(config){return {supported:['vp09.00.10.08','avc1.42E01F'].includes(config.codec)};}
     constructor(callbacks){this.callbacks=callbacks;this.queue=0;this.outputs=[];
       this.handlers=[];this.closed=false;workers.push(this);}
     configure(config){this.config=config;}
@@ -38,9 +38,12 @@ function sandbox(){
       assert.equal(this.closed,false);
       this.queue++;
       const output=Promise.resolve().then(()=>{
+        const mp4=this.config.codec==='avc1.42E01F';
+        const bytes=mp4?Uint8Array.from([0,0,0,2,0x65,0x88]):Uint8Array.from([0x82,5,4,3,2]);
         this.callbacks.output({timestamp:frame.timestamp,
-          type:params.keyFrame?'key':'delta',byteLength:5,
-          copyTo(out){out.set(Uint8Array.from([0x82,5,4,3,2]));}});
+          type:params.keyFrame?'key':'delta',byteLength:bytes.length,
+          copyTo(out){out.set(bytes);}},mp4?{decoderConfig:{description:
+          Uint8Array.from([1,66,0,31,255,225,0,3,0x67,0x42,0x1f,1,0,2,0x68,0xce]).buffer}}:undefined);
         this.queue--;
         this.handlers.forEach(fn=>fn());
       });
@@ -50,7 +53,7 @@ function sandbox(){
     close(){this.closed=true;}
   }
   const root=vm.createContext({console,performance,TextEncoder,Uint8Array,Blob,
-    Map,Set,Promise,VideoEncoder:FakeEncoder,VideoFrame:class VideoFrame{},
+    Map,Set,Promise,ArrayBuffer,VideoEncoder:FakeEncoder,VideoFrame:class VideoFrame{},
     postMessage:v=>messages.push(v)});
   root.self=root;
   root.importScripts=(...scripts)=>scripts.forEach(script=>{
@@ -119,4 +122,44 @@ test('encoder worker rejects unexpected frames without completing a partial file
   assert.equal(messages.at(-1).type,'error');
   assert.equal(messages.some(x=>x.type==='complete'),false);
   assert.ok(bad.frames.A.closed);
+});
+
+test('encoder worker H.264 outputs valid MP4 media boxes and selected format',async()=>{
+  const p=project(),plan=video.plan(p,{fps:5,width:640,height:360});
+  const {root,messages,workers}=sandbox();
+  root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
+    quality:'standard',workers:2,format:'mp4'}});
+  await tick();
+  assert.equal(messages.at(-1).type,'ready');
+  assert.equal(workers[0].config.codec,'avc1.42E01F');
+  assert.equal(workers[0].config.avc.format,'avc');
+  const all=plan.frames.map(t=>frame(plan,t.index));
+  for(const idx of [4,1,0,3,2])root.onmessage({data:{type:'frame',frame:all[idx]}});
+  await tick();await tick();
+  const result=messages.find(x=>x.type==='complete');
+  assert.ok(result);
+  assert.equal(result.blob.type,'video/mp4');
+  assert.equal(result.manifest.format,'mp4');
+  assert.equal(result.filename,'curvature-animation.mp4');
+  const bytes=Buffer.from(await result.blob.arrayBuffer());
+  for(const tag of ['ftyp','moov','avc1','avcC','stts','stss','mdat'])
+    assert.ok(bytes.includes(Buffer.from(tag)),tag);
+  assert.ok(all.every(x=>Object.values(x.frames).every(f=>f.closed)));
+  assert.ok(workers.every(w=>w.closed));
+});
+test('encoder worker MP4 Compare creates synchronized MP4 files inside ZIP',async()=>{
+  const p=project('compare'),plan=video.plan(p,{fps:5,width:640,height:360});
+  const {root,messages}=sandbox();
+  root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
+    quality:'high',workers:2,format:'mp4'}});
+  await tick();
+  for(const t of plan.frames)root.onmessage({data:{type:'frame',frame:frame(plan,t.index)}});
+  await tick();await tick();
+  const result=messages.find(x=>x.type==='complete');
+  assert.ok(result);
+  assert.equal(result.blob.type,'application/zip');
+  const bytes=Buffer.from(await result.blob.arrayBuffer());
+  assert.ok(bytes.includes(Buffer.from('curvature-animation-A.mp4')));
+  assert.ok(bytes.includes(Buffer.from('curvature-animation-B.mp4')));
+  assert.equal(result.manifest.sides.length,2);
 });
