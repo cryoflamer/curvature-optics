@@ -450,21 +450,41 @@ History records or snapshot thumbnails.
 - `ModernAnimationStudio.fromProject(project)`: reconstruct independently
   editable keyframe experiments from the baseline and per-frame arrival times.
 
-The Animation workspace offers Save animation / Save As / Save changes / Open /
-Delete. Opening validates the entire record before replacing the draft and
+The original Animation workspace offered Save animation / Save As / Save changes / Open /
+Delete (see the lifecycle revision below). Opening validates the entire record before replacing the draft and
 starts prepared Playback *paused* at the first frame. Saving is explicit;
 autosave remains scoped to the current editable draft and can restore the
 associated library ID/revision after reload (old v1 checkpoints remain valid).
 A stale revision or IndexedDB failure must produce a visible error, not a
 false success message. No separate rendering engine is added.
 
+## Animation Project lifecycle and unsaved work
+
+Animation Library offers **New project**, **Save**, **Save As**, **Open**, and
+**Delete**. New project creates an empty, unlinked working draft; it never
+removes or overwrites any named animation, and immediately updates the existing
+draft-autosave checkpoint. Save creates a named record for an unlinked draft,
+otherwise it updates the currently opened project using its optimistic revision.
+Save As always requests a new project ID; content-duplicate warnings still
+require an explicit confirmation to preserve the existing library semantics.
+
+New and Open detect unsaved work: an edited named project, or any nonblank
+unlinked draft (an autosaved draft alone is **not** a named save). The editor
+shows explicit **Save and continue**, **Discard and continue**, and **Cancel**
+choices. Saving must succeed before the requested switch; failures, duplicates,
+and stale revisions leave the draft open and the choice available. Incomplete
+projects cannot be saved to the named library, so that choice is disabled until
+the draft is compatible. Discard affects only the single working draft, never
+previously saved named projects. Opening an animation remains asynchronous and
+generation-guarded against concurrent edits.
+
 ## Visual Animation Library and rename (#140.12.120.5.2)
 
 The saved-project list is a horizontally scrollable, collapsible gallery of
 cards with Open / Select / Rename / Delete and summary data derived from the
 immutable Animation Project. The card's duration is the sum of keyframe
-travel and hold times; this is metadata, not playback rendering. Save, Save As
-and Save changes remain explicitly tied to the current working draft.
+travel and hold times; this is metadata, not playback rendering. Save and Save As
+are explicitly tied to the current working draft.
 
 Named library records may now carry an optional validated and bounded
 `ModernExperimentThumbnail`. A screenshot is copied from History only if the

@@ -212,9 +212,11 @@ test('HTML load order and application expose named project save/open actions sep
   assert.match(app,/studioLibrary\.get\(/);
   assert.match(app,/studioLibrary\.remove\(/);
   assert.match(app,/studioLibraryActive\.updatedAt/);
-  assert.match(ui,/Save changes/);
+  assert.match(ui,/New project/);
+  assert.match(ui,/Save and continue/);
   assert.match(ui,/Save As/);
-  assert.match(app,/Opening a saved animation replaces the current draft/);
+  assert.match(app,/function requestStudioSwitch\(kind,id\)/);
+  assert.match(app,/function studioHasUnsavedWork\(\)/);
   assert.match(app,/Animation Library module failed to load; check the browser console/);
 });
 
@@ -336,7 +338,9 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   const preview={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
   const entries=[library.record(project,'auto','animation_a',10,11,preview)];
   const actions={select:id=>calls.push(['select',id]),save:()=>calls.push('save'),
-    saveAs:()=>calls.push('saveAs'),saveChanges:()=>calls.push('saveChanges'),
+    saveAs:()=>calls.push('saveAs'),newProject:()=>calls.push('newProject'),
+    saveBeforeSwitch:()=>calls.push('saveBeforeSwitch'),
+    discardSwitch:()=>calls.push('discardSwitch'),cancelSwitch:()=>calls.push('cancelSwitch'),
     open:id=>calls.push(['open',id]),remove:id=>calls.push(['delete',id]),
     renameStart:id=>calls.push(['renameStart',id]),
     renameCancel:()=>calls.push('renameCancel'),
@@ -345,12 +349,12 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   function nodes(){return (function collect(n){return [n,...n.children.flatMap(collect)];})(host);}
   ui.renderLibrary(doc,host,entries,
     {selectedId:'animation_a',activeId:'animation_a',canSave:true,dirty:true,expanded:true},actions);
-  assert.ok(nodes().find(n=>n.textContent==='Editing saved project · Unsaved changes'));
+  assert.ok(nodes().some(n=>n.textContent==='Editing: Globe to Flat · Unsaved changes' ||
+    n.textContent==='Editing: saved project · Unsaved changes'));
   assert.equal(nodes().find(n=>n.tagName==='img').src,preview.dataUrl);
   assert.ok(nodes().find(n=>n.textContent==='Physical · Surface curvature' ||
     n.textContent.includes('Earth curvature · 2 frames')));
-  assert.equal(nodes().find(n=>n.textContent==='Save animation').disabled,true);
-  for(const [label,value] of [['Save changes','saveChanges'],['Save As','saveAs']]){
+  for(const [label,value] of [['New project','newProject'],['Save','save'],['Save As','saveAs']]){
     nodes().find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
     assert.equal(calls.at(-1),value);
   }
@@ -370,7 +374,7 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   nodes().find(n=>n.textContent==='Show projects').listeners.click();
   assert.equal(calls.at(-1),'toggle');
   host.children=[];ui.renderLibrary(doc,host,[],{selectedId:'',canSave:false},actions);
-  assert.equal(nodes().find(n=>n.textContent==='Save animation').disabled,true);
+  assert.equal(nodes().find(n=>n.textContent==='Save').disabled,true);
 });
 
 
@@ -484,4 +488,156 @@ test('Animation Library UI exposes portable export and file import without modif
   input.files=[{name:'backup.json'}];input.listeners.change();
   assert.deepEqual(calls,['selected','all','backup.json']);
   assert.equal(input.value,'');
+});
+
+test('project lifecycle exposes New, Save, Save As and all three unsaved-change choices',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',className:'',
+    value:'',disabled:false,appendChild(node){this.children.push(node);return node;},
+    addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section'),calls=[];
+  const actions={newProject:()=>calls.push('new'),save:()=>calls.push('save'),
+    saveAs:()=>calls.push('saveAs'),saveBeforeSwitch:()=>calls.push('saveBefore'),
+    discardSwitch:()=>calls.push('discard'),cancelSwitch:()=>calls.push('cancel')};
+  const nodes=()=>{const walk=n=>[n,...n.children.flatMap(walk)];return walk(host);};
+  ui.renderLibrary(doc,host,[],{canSave:true,unsaved:true,pendingChange:'new'},actions);
+  const btn=label=>nodes().find(n=>n.tagName==='button'&&n.textContent===label);
+  for(const [label,event] of [['New project','new'],['Save','save'],['Save As','saveAs'],
+    ['Save and continue','saveBefore'],['Discard and continue','discard'],['Cancel','cancel']]){
+    btn(label).listeners.click();assert.equal(calls.at(-1),event);
+  }
+  assert.ok(nodes().some(n=>n.textContent.includes('Save the current animation before creating')));
+  assert.ok(nodes().some(n=>n.textContent.includes('Not linked to any saved animation')));
+  host.children=[];
+  ui.renderLibrary(doc,host,[],{canSave:false,pendingChange:'open'},actions);
+  assert.equal(btn('Save and continue').disabled,true);
+  assert.equal(btn('Discard and continue').disabled,false);
+  assert.ok(nodes().some(n=>n.textContent.includes('before opening another project')));
+});
+
+function projectLifecycleHarness(){
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const excerpt=(first,last)=>{
+    const a=app.indexOf('  '+first),b=app.indexOf('  '+last);
+    assert.ok(a>=0&&b>a,`missing ${first}`);return app.slice(a,b);
+  };
+  const stored=new Map(),events=[];
+  const oldDraft={name:'Existing work',description:'',mode:'auto',target:'auto',source:'history',
+    frames:[{key:'a'},{key:'b'}]};
+  stored.set('old',{id:'old',updatedAt:1,quality:'auto',
+    project:{id:'old',name:'Existing work',frames:[{key:'a'},{key:'b'}]}});
+  stored.set('other',{id:'other',updatedAt:2,quality:'fast',
+    project:{id:'other',name:'Other work',frames:[{key:'a'},{key:'b'}]}});
+  let rejectSave=false,sequence=0;
+  const studioApi={blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
+    source:'none',frames:[]};},build(draft,id){
+    if(draft.frames.length<2)throw Error('not enough frames');
+    return {id,name:draft.name,frames:draft.frames};
+  },fromProject(p){return {name:p.name,description:'',mode:'auto',target:'auto',source:'mixed',
+    frames:p.frames.map(f=>({...f}))};}};
+  const ctx={Promise,Date,Object,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
+    studioLibraryActive:stored.get('old'),studioLibraryPending:null,
+    studioLibrarySelected:'old',studioLibraryEntries:[...stored.values()],
+    studioLibraryBusy:false,studioLibraryDuplicate:null,studioLifecyclePending:null,
+    studioPlaybackQuality:'auto',studioLibraryError:false,studioLibraryMessage:'',
+    studioDraftGeneration:0,studioSelectedKey:'a',studioFilmstripScroll:0,
+    studioLibraryRenamingId:'',studioPickerOpen:false,studioPickerSearch:'',
+    studioPickerScroll:0,studioPickerChecked:{},studioDragSession:null,
+    studioRestorePreviewPending:false,studioPrepared:null,studioPlayback:null,
+    studioPlaybackApi:null,animationWorkspaceOpen:false,experimentHistory:null,
+    studioHistoryEntries:[],studioLibraryDirty(){return ctx.studioDraft.name!==
+      ctx.studioLibraryActive.project.name||ctx.studioDraft.frames.length!==2;},
+    studioLibraryThumbnail(){return null;},
+    studioLibraryNotice(text){ctx.studioLibraryMessage=text;events.push(text);},
+    renderStudioLibrary(){events.push('library UI');},
+    renderAnimationStudio(){events.push('editor UI');},
+    saveStudioDraft(){ctx.studioDraftGeneration++;events.push('checkpoint');},
+    stopStudioPlayback(){events.push('stopped');},
+    syncStudioPlaybackControls(){},syncWorkspaceVisibility(){},
+    newUiEl(){return null;},
+    refreshStudioLibrary(){ctx.studioLibraryEntries=[...stored.values()];return Promise.resolve([]);},
+    studioLibrary:{fingerprint(){return 'content';},makeId(){return 'created-'+(++sequence);},
+      create(db,p){if(rejectSave)return Promise.reject(Error('storage unavailable'));
+        const saved={id:p.id,updatedAt:10,quality:'auto',project:p};stored.set(saved.id,saved);
+        return Promise.resolve(saved);},
+      update(db,p){if(rejectSave)return Promise.reject(Error('stale revision'));
+        const saved={id:p.id,updatedAt:20,quality:'auto',project:p};stored.set(saved.id,saved);
+        return Promise.resolve(saved);},
+      get(db,id){return Promise.resolve(stored.get(id));}}
+  };
+  vm.runInNewContext(
+    excerpt('function studioHasUnsavedWork(){','function renderStudioLibrary(){')+'\n'+
+    excerpt('function saveNamedAnimation(replace,forceDuplicate){','function deleteNamedAnimation(id){'),ctx);
+  const tick=async()=>{await new Promise(resolve=>setImmediate(resolve));};
+  return {ctx,stored,events,tick,failSave(value){rejectSave=value;}};
+}
+
+test('New project is a separate autosaved blank draft and does not mutate existing library record',()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.requestStudioSwitch('new');
+  assert.equal(ctx.studioLifecyclePending,null,'saved and unchanged project needs no prompt');
+  assert.equal(ctx.studioLibraryActive,null);
+  assert.equal(ctx.studioDraft.frames.length,0);
+  assert.equal(ctx.studioDraft.name,'Animation study');
+  assert.equal(ctx.studioLibrarySelected,'');
+  assert.equal(ctx.studioPlaybackQuality,'auto');
+  assert.equal(stored.get('old').project.name,'Existing work');
+  assert.ok(h.events.includes('checkpoint'));
+  assert.equal(ctx.studioHasUnsavedWork(),false);
+});
+
+test('New and Open preserve unsaved work until Save, Discard or Cancel is chosen',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Edited work'};
+  ctx.requestStudioSwitch('new');
+  assert.equal(ctx.studioLifecyclePending.kind,'new');
+  assert.equal(ctx.studioDraft.name,'Edited work');
+  ctx.studioLifecyclePending=null; // Cancel action just clears pending; no state mutation.
+  assert.equal(ctx.studioDraft.name,'Edited work');
+  ctx.requestStudioSwitch('open','other');
+  assert.equal(ctx.studioLifecyclePending.kind,'open');
+  ctx.continueStudioSwitch(false); // Discard and continue.
+  await h.tick();
+  assert.equal(ctx.studioLibraryActive.id,'other');
+  assert.equal(ctx.studioDraft.name,'Other work');
+  assert.equal(stored.get('old').project.name,'Existing work');
+});
+
+test('Save and continue waits for the save to succeed and keeps the draft on failure',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Updated before switching'};
+  ctx.requestStudioSwitch('new');
+  h.failSave(true);ctx.saveBeforeStudioSwitch();await h.tick();
+  assert.equal(ctx.studioDraft.name,'Updated before switching');
+  assert.equal(ctx.studioLifecyclePending.kind,'new');
+  assert.equal(ctx.studioLibraryActive.id,'old');
+  assert.match(ctx.studioLibraryMessage,/stale revision/);
+  h.failSave(false);ctx.saveBeforeStudioSwitch();await h.tick();
+  assert.equal(stored.get('old').project.name,'Updated before switching');
+  assert.equal(ctx.studioLibraryActive,null);
+  assert.equal(ctx.studioLifecyclePending,null);
+  assert.equal(ctx.studioDraft.frames.length,0);
+});
+
+test('saving an unlinked draft before opening creates a new record, never overwrites the selected card',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.studioLibraryActive=null;ctx.studioLibrarySelected='old';
+  ctx.studioDraft={...ctx.studioDraft,name:'Independent draft'};
+  ctx.requestStudioSwitch('open','other');
+  ctx.saveBeforeStudioSwitch();await h.tick();
+  assert.equal(stored.get('old').project.name,'Existing work');
+  assert.equal(stored.get('created-1').project.name,'Independent draft');
+  assert.equal(ctx.studioLibraryActive.id,'other');
+  assert.equal(ctx.studioDraft.name,'Other work');
+});
+
+test('opening a saved animation is generation-guarded against concurrent edits',async()=>{
+  const h=projectLifecycleHarness(),{ctx}=h;
+  ctx.requestStudioSwitch('open','other');
+  // The code must refuse an older IndexedDB response if the user edits meanwhile.
+  ctx.studioDraftGeneration++;
+  await h.tick();
+  assert.equal(ctx.studioDraft.name,'Existing work');
+  assert.equal(ctx.studioLibraryActive.id,'old');
+  assert.match(ctx.studioLibraryMessage,/Draft changed while opening/);
 });

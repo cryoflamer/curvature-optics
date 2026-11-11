@@ -174,11 +174,11 @@
       var control=button(doc,label,description,callback);control.disabled=!!disabled;
       row.appendChild(control);
     }
-    action('Save animation','Save current animation as a new named project',actions.save,
-      options.busy||!options.canSave||!!options.activeId);
-    action('Save changes','Update the opened named animation',actions.saveChanges,
-      options.busy||!options.activeId||!options.dirty||!options.canSave);
-    action('Save As','Save an independent copy of the current animation',actions.saveAs,
+    action('New project','Start a separate empty animation without modifying saved projects',
+      actions.newProject,options.busy);
+    action('Save',options.activeId?'Save changes to the opened project':'Save draft as a named project',
+      actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
+    action('Save As','Save an independent copy with a new project ID',actions.saveAs,
       options.busy||!options.canSave);
     action('Export selected','Export the selected named animation as portable JSON',actions.exportSelected,
       options.busy||!entries.some(function(e){return e.id===options.selectedId;}));
@@ -198,9 +198,34 @@
     }
     host.appendChild(row);
     var message=el(doc,'p','modern-animation-library-note',options.activeId?
-      'Editing saved project'+(options.dirty?' · Unsaved changes':' · All changes saved'):
-      'Current draft is separate from saved animations. Opening a project replaces this draft.');
+      'Editing: '+(options.activeName||'saved project')+
+        (options.dirty?' · Unsaved changes':' · All changes saved'):
+      'New draft'+(options.unsaved?' · Unsaved changes':'')+
+        ' · Not linked to any saved animation');
     host.appendChild(message);
+    if(options.pendingChange){
+      var pending=el(doc,'div','modern-animation-library-pending');
+      pending.setAttribute('role','group');
+      pending.setAttribute('aria-label','Unsaved animation changes');
+      pending.appendChild(el(doc,'strong','','Unsaved changes'));
+      pending.appendChild(el(doc,'p','',options.pendingChange==='new'?
+        'Save the current animation before creating a new project?':
+        'Save the current animation before opening another project?'));
+      var choices=el(doc,'div','modern-animation-library-pending-actions');
+      var save=button(doc,'Save and continue','Save current work before switching projects',
+        actions.saveBeforeSwitch);
+      save.disabled=!!options.busy||!options.canSave;
+      choices.appendChild(save);
+      var discard=button(doc,'Discard and continue','Discard current unsaved changes',
+        actions.discardSwitch);
+      discard.disabled=!!options.busy;choices.appendChild(discard);
+      var cancel=button(doc,'Cancel','Stay with the current animation',actions.cancelSwitch);
+      cancel.disabled=!!options.busy;choices.appendChild(cancel);
+      pending.appendChild(choices);
+      if(!options.canSave)pending.appendChild(el(doc,'small','',
+        'This draft cannot be saved as a project yet; complete its keyframes or cancel.'));
+      host.appendChild(pending);
+    }
     if(options.message){var note=el(doc,'p','modern-animation-library-message'+
       (options.error?' is-error':''),options.message);note.setAttribute('role','status');host.appendChild(note);}
     if(options.duplicate){

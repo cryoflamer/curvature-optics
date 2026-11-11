@@ -792,6 +792,13 @@ button{cursor:pointer}
 .modern-animation-library-note,.modern-animation-library-message,.modern-animation-library-empty{
   margin:7px 0 0;color:#627b96;font-size:11px;line-height:1.5}
 .modern-animation-library-message.is-error{color:#a43138}
+.modern-animation-library-pending{margin:10px 0;padding:10px;border:1px solid #d5a45a;
+  border-radius:7px;background:#fff8e9;color:#604a2d}
+.modern-animation-library-pending p{margin:5px 0 9px}
+.modern-animation-library-pending small{display:block;margin-top:6px;color:#8a5c25}
+.modern-animation-library-pending-actions{display:flex;flex-wrap:wrap;gap:7px}
+.modern-animation-library-pending-actions button{padding:6px 9px;border:1px solid #bea075;
+  background:#fff;border-radius:6px;color:#604a2d;cursor:pointer}
 .modern-animation-library-gallery{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
   margin:10px 0 0;padding:2px 2px 10px;scrollbar-width:thin}
 .modern-animation-library-card{box-sizing:border-box;flex:0 0 226px;min-width:0;
