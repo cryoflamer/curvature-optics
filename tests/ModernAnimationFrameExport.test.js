@@ -142,17 +142,28 @@ test('browser script loads without CommonJS and exposes export API',()=>{
   vm.runInNewContext(source,context,{filename:'ModernAnimationFrameExport.js'});
   assert.equal(context.CurvatureModernAnimationFrameExport.plan(make()).timesMs.length,126);
 });
-test('Modern export is wired only into Animation, not working Scene or History',()=>{
+test('OffscreenCanvas PNG encoding works without callback toBlob',async()=>{
+  const out=await frames.run({project:make(),fps:5,width:640,height:360,
+    render:async()=>({canvas:{width:640,height:360,
+      convertToBlob:async opts=>{
+        assert.equal(opts.type,'image/png');return new Blob([png],{type:'image/png'});
+      }},quality:'accurate'})});
+  assert.equal(out.manifest.frameCount,26);
+  assert.equal(entriesFromZip(await out.blob.arrayBuffer()).length,27);
+});
+test('Modern export uses a Web Worker and never does optical painting on the UI thread',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
   const js=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   assert.match(html,/src="src\/animation\/ModernAnimationFrameExport\.js"/);
-  assert.ok(html.indexOf('ModernAnimationFrameExport.js')<html.indexOf('src/ui/modern/ModernApp.js'));
+  assert.match(html,/src="src\/animation\/ModernAnimationBackgroundExport\.js"/);
+  assert.ok(html.indexOf('ModernAnimationFrameExport.js')<html.indexOf('ModernAnimationBackgroundExport.js'));
+  assert.ok(html.indexOf('ModernAnimationBackgroundExport.js')<html.indexOf('src/ui/modern/ModernApp.js'));
   assert.match(html,/id="ModernAnimationFrameExportStart"/);
   assert.match(html,/id="ModernAnimationFrameExportCancel"/);
-  assert.match(js,/api\.run\(/);
-  assert.match(js,/graphForCanvas\(root\.CurvatureModernAnimationGraphs/);
   const code=js.slice(js.indexOf('  function bindStudioFrameExport(){'),
     js.indexOf('  function bindStudioPlayback(){'));
-  assert.doesNotMatch(code,/applyExperiment\(|queueHistoryAuto\(|scheduleExperimentSave\(/);
-  assert.match(code,/quality:'accurate'/);
+  assert.match(code,/controller\.start\(/);
+  assert.match(code,/controller\.cancel\(/);
+  assert.doesNotMatch(code,/api\.run\(|graphForCanvas\(|painter\.render\(|applyExperiment\(|queueHistoryAuto\(/);
+  assert.match(code,/studioApi\.build\(studioDraft/);
 });

@@ -81,6 +81,7 @@
 <script src="src/animation/ModernAnimationPreview.js"></script>
 <script src="src/animation/ModernAnimationQualityAudit.js"></script>
 <script src="src/animation/ModernAnimationFrameExport.js"></script>
+<script src="src/animation/ModernAnimationBackgroundExport.js"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
@@ -213,7 +214,7 @@
       </details>
       <details id="ModernAnimationFrameExportSection" class="modern-animation-frame-export">
         <summary>Export PNG frames · deterministic (offline)</summary>
-        <p>Each timestamp is calculated in Accurate RK4 at one fixed resolution, including the exact final frame. The ZIP contains PNGs and a manifest; no frames are skipped.</p>
+        <p>A background Web Worker calculates every timestamp in Accurate RK4, without blocking the page. Each PNG uses the same fixed resolution; the ZIP includes a manifest and the exact final frame.</p>
         <div class="modern-animation-frame-export-controls">
           <label for="ModernAnimationFrameExportFps">FPS
             <select id="ModernAnimationFrameExportFps"><option value="10">10</option><option value="25" selected>25</option><option value="30">30</option><option value="5">5</option></select>
@@ -225,7 +226,7 @@
           <button type="button" id="ModernAnimationFrameExportCancel" disabled>Cancel export</button>
         </div>
         <progress id="ModernAnimationFrameExportProgress" max="100" value="0" aria-label="PNG export progress"></progress>
-        <p id="ModernAnimationFrameExportStatus" role="status" aria-live="polite">Prepare a project to export deterministic frames.</p>
+        <p id="ModernAnimationFrameExportStatus" role="status" aria-live="polite">Add at least two compatible keyframes. Export uses the current draft or prepared project.</p>
       </details>
       <p id="ModernAnimationPlaybackStatus" class="modern-studio-hint" role="status" aria-live="polite">Prepared project ready for preview.</p>
     </section>

@@ -73,9 +73,17 @@
     return new Blob(parts.concat(central,[Uint8Array.from(end)]),{type:'application/zip'});
   }
   function toPng(canvas){
+    // OffscreenCanvas in a dedicated Worker uses convertToBlob(), whereas
+    // HTMLCanvasElement in the legacy test adapter uses callback-based toBlob().
+    if(canvas&&typeof canvas.convertToBlob==='function'){
+      return canvas.convertToBlob({type:'image/png'}).then(function(blob){
+        if(!blob||blob.type!=='image/png')throw Error('Canvas PNG encoding failed');
+        return blob.arrayBuffer().then(function(buffer){return new Uint8Array(buffer);});
+      });
+    }
     return new Promise(function(resolve,reject){
       if(!canvas||typeof canvas.toBlob!=='function'){
-        reject(Error('PNG encoding requires an export Canvas with toBlob'));return;
+        reject(Error('PNG encoding requires Canvas.toBlob or OffscreenCanvas.convertToBlob'));return;
       }
       try{canvas.toBlob(function(blob){
         if(!blob||blob.type!=='image/png'){reject(Error('Canvas PNG encoding failed'));return;}

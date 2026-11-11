@@ -586,14 +586,14 @@ automatically passed browser pixel-parity baseline. See
 [`docs/modern-animation-quality-audit.md`](docs/modern-animation-quality-audit.md).
 
 
-### Deterministic Animation PNG export (#140.12.120.7)
+### Deterministic Animation PNG export
 
-After **Prepare project**, open **Animation playback → Export PNG frames**.
-Choose FPS and fixed frame size, then **Render PNG ZIP**. The export rerenders
-*every* indexed sample in Accurate RK4 on detached Canvases, including the exact
+For any compatible draft or prepared project, open **Animation playback → Export PNG frames**.
+Choose FPS and fixed frame size, then **Render PNG ZIP**. A background Web Worker rerenders
+*every* indexed sample in Accurate RK4 on private OffscreenCanvases, including the exact
 last keyframe; Compare A/B produces a synchronized PNG for each side. A
-`manifest.json` lists microsecond timestamps and image paths. Progress and
-**Cancel export** are available between frames. This uses bounded in-memory
+`manifest.json` lists microsecond timestamps and image paths. Progress displays completed timestamps and elapsed/estimated remaining time.
+**Cancel export** terminates the Worker immediately, even during a synchronous RK4 frame. This uses bounded in-memory
 ZIP32 with PNGs: ≤751 timestamps and ≤192 MiB of PNG data, with no MP4/WebM
 encoding yet. It does not alter Scene/Compare, History, the active player clock
-or autosaved drafts. See [frame export design and limits](docs/modern-animation-frame-export.md).
+or autosaved drafts. Export now uses one background Web Worker and an independent OffscreenCanvas, keeping the UI responsive; **Cancel** terminates even an in-flight Accurate frame. It displays completed frames, elapsed time and an estimated remaining time. See [frame export design and limits](docs/modern-animation-frame-export.md).

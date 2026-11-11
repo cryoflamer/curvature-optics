@@ -30,6 +30,7 @@
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
   var studioFrameExportApi=root.CurvatureModernAnimationFrameExport;
+  var studioBackgroundExportApi=root.CurvatureModernAnimationBackgroundExport;
   var studioFrameExportTask=null;
   var studioQualityApi=root.CurvatureModernAnimationQualityAudit;
   var studioQualityAudit=studioQualityApi?studioQualityApi.create():null;
@@ -1673,71 +1674,72 @@
     });
     syncStudioQualitySummary();
   }
-  // Offline frame export is isolated from the current Scene, History and even
-  // the on-screen Animation playback graph. The entire project is snapshotted
-  // at Start and every PNG uses Accurate RK4 at an invariant backing size.
+  // Worker owns all optical calculations, canvas pixels and ZIP assembly.
+  // Main thread only validates the frozen draft and displays progress. No
+  // silent synchronous fallback if Worker/OffscreenCanvas is unavailable.
   function syncStudioFrameExportControls(){
     var start=newUiEl('ModernAnimationFrameExportStart');
     var cancel=newUiEl('ModernAnimationFrameExportCancel');
-    if(start)start.disabled=!!studioFrameExportTask||!studioPrepared;
+    var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
+    if(start)start.disabled=!!studioFrameExportTask||!ready||!studioBackgroundExportApi;
     if(cancel)cancel.disabled=!studioFrameExportTask;
+    var status=newUiEl('ModernAnimationFrameExportStatus');
+    if(status&&!studioFrameExportTask){
+      if(ready&&status.textContent.indexOf('Add at least two compatible keyframes.')===0)
+        status.textContent='Ready to export. The current draft will be validated automatically; no separate Prepare required.';
+      else if(!ready&&status.textContent.indexOf('Ready to export.')===0)
+        status.textContent='Add at least two compatible keyframes to enable background export.';
+    }
   }
   function bindStudioFrameExport(){
-    var api=studioFrameExportApi;
     var start=newUiEl('ModernAnimationFrameExportStart');
     var cancel=newUiEl('ModernAnimationFrameExportCancel');
     if(!start||!cancel)return;
+    var progress=newUiEl('ModernAnimationFrameExportProgress');
     function message(text){var node=newUiEl('ModernAnimationFrameExportStatus');
       if(node)node.textContent=text;}
     cancel.addEventListener('click',function(){
-      if(studioFrameExportTask){studioFrameExportTask.cancelled=true;
-        message('Cancel requested · finishing the current synchronous optical calculation…');}
+      if(!studioFrameExportTask)return;
+      studioFrameExportTask.controller.cancel();
+      // Terminate() stops even a blocked synchronous RK4 calculation.
+      message('PNG export cancelled. The worker was terminated; no archive was saved.');
     });
     start.addEventListener('click',async function(){
       if(studioFrameExportTask)return;
-      if(!api||!studioPreviewApi||!studioPrepared){message('Prepare a valid animation before exporting.');return;}
-      var task={cancelled:false};
+      if(!studioFrameExportApi||!studioBackgroundExportApi){
+        message('PNG export modules did not load. Check the browser console.');return;
+      }
+      var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js'});
+      var task={controller:controller};
       studioFrameExportTask=task;
       syncStudioFrameExportControls();
-      var progress=newUiEl('ModernAnimationFrameExportProgress');
-      if(progress){progress.value=0;progress.max=100;}
+      if(progress){progress.max=100;progress.removeAttribute('value');}
       try{
-        if(!previewGraphsReady())throw Error('GraphX3DX preview reference is unavailable');
+        // Export is independent of Playback's Prepare button: a valid draft
+        // can be exported directly, even after an edit invalidated playback.
+        var project=studioPrepared||studioApi.build(studioDraft,'studio_export');
         var fps=Number(newUiEl('ModernAnimationFrameExportFps').value);
         var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
-        var sourceProject=studioProjects.validate(studioPrepared);
-        var plan=api.plan(sourceProject,{fps:fps,width:size[0],height:size[1]});
-        var graphs={};
-        plan.sides.forEach(function(side){
-          var canvas=document.createElement('canvas');
-          canvas.width=plan.width;canvas.height=plan.height;
-          graphs[side]=api.graphForCanvas(root.CurvatureModernAnimationGraphs[side],canvas);
-        });
-        // A new owned optical session keeps export caches independent from
-        // interactive animation. Never mutate root.CurvatureModernAnimationGraphs.
-        var painter=studioPreviewApi.create({Model:root.CurveAppClass,
-          renderer:root.CurvatureMainCanvasRenderer,optics:root.CurvaturePhysicalSceneOptics});
-        message('Rendering '+plan.timesMs.length+' timestamps × '+plan.sides.length+
-          ' view(s), Accurate RK4 · this can take longer than the video duration.');
-        var result=await api.run({project:sourceProject,fps:fps,width:plan.width,height:plan.height,
-          cancel:task,
-          yieldUi:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
-          render:function(sample,side,dimensions){
-            var graph=graphs[side];
-            // Reset the offscreen 2D context and clipping for each frame.
-            // Width/height never depend on the visible workspace or DPR.
-            graph.Canvas.width=dimensions.width;graph.Canvas.height=dimensions.height;
-            var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:sourceProject.mode});
-            return {quality:report.quality,canvas:graph.Canvas,metrics:report.result};
+        var plan=studioFrameExportApi.plan(project,{fps:fps,width:size[0],height:size[1]});
+        var startAt=profileNow();
+        message('Starting background worker · 0 / '+plan.timesMs.length+
+          ' timestamps, '+plan.sides.length+' view(s) · Accurate RK4. Cancel is available.');
+        var result=await controller.start({project:plan.project,fps:plan.fps,
+          width:plan.width,height:plan.height,
+          onReady:function(info){
+            message('Worker ready · calculating Accurate RK4, frame 1 / '+info.total+'…');
           },
           onProgress:function(info){
             if(progress)progress.value=100*info.completed/info.total;
+            var elapsed=info.elapsedMs/1000;
+            var remaining=info.completed?Math.max(0,(elapsed/info.completed)*(info.total-info.completed)):0;
             message('Rendered '+info.completed+' / '+info.total+' timestamps · t='+
-              (info.timeMs/1000).toFixed(2)+' s · Accurate RK4');
+              (info.timeMs/1000).toFixed(2)+' s · elapsed '+elapsed.toFixed(1)+
+              ' s · estimated remaining '+Math.ceil(remaining)+' s · Accurate RK4');
           }
         });
-        if(result.cancelled){message('PNG export cancelled; no partial archive was saved.');return;}
-        if(task.cancelled){message('PNG export cancelled; no archive was saved.');return;}
+        if(result.cancelled)return;
         var url=root.URL.createObjectURL(result.blob);
         try{
           var link=document.createElement('a');
@@ -1745,9 +1747,11 @@
           document.body.appendChild(link);link.click();link.remove();
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
         message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+
-          result.manifest.sides.length+' view(s), including exact final frame.');
+          result.manifest.sides.length+' view(s), including exact final frame · '+
+          ((profileNow()-startAt)/1000).toFixed(1)+' s.');
       }catch(error){message('PNG export failed: '+error.message+' · No partial archive saved.');}
-      finally{studioFrameExportTask=null;syncStudioFrameExportControls();}
+      finally{if(studioFrameExportTask===task)studioFrameExportTask=null;
+        syncStudioFrameExportControls();}
     });
     syncStudioFrameExportControls();
   }
