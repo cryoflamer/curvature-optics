@@ -56,6 +56,7 @@ importScripts(
   'ModernAnimationProject.js',
   'ModernAnimationPreview.js',
   'ModernAnimationFrameExport.js',
+  'ModernAnimationCompareComposition.js',
   'ModernAnimationVideoPipeline.js'
 );
 

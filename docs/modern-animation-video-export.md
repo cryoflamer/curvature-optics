@@ -243,3 +243,56 @@ checkbox on in WebM and MP4, inspect the first/middle/final frames and A/B
 geometries, then repeat with it off and verify the pristine frame. Repeat a
 short PNG export using 1/2/4 workers to check HUD image pixel parity. Such
 browser-level acceptance is separate from Node test mocks.
+
+
+## Compare A/B single-video composition foundation
+
+`ModernAnimationCompareComposition.js` is a **standalone Canvas compositor**
+for a future single-file Compare export. This stage does **not** change the
+current exported result: Compare A/B still produces a ZIP with two separate
+MP4/WebM files. Switching the render/encoder worker protocol, encoder output
+size, capability probe, bitrate, frame-credit budget and export UI belongs to
+the subsequent single-video integration stage.
+
+The compositor receives two **already painted, opaque Accurate RK4** view
+images, each with the corresponding `cameraModel` (including `showModel`).
+If camera telemetry is enabled, it must already have been painted on each
+source Canvas by the existing shared HUD renderer. The compositor never
+mutates either source Canvas and performs no physics or additional ray tracing.
+
+```js
+const layout = CurvatureModernAnimationCompareComposition.layout(960, 540);
+// layout.width === 1920; layout.height === 1080
+const destination = new OffscreenCanvas(layout.width, layout.height);
+CurvatureModernAnimationCompareComposition.paint(destination, {
+  A: {quality: 'accurate', canvas: opaqueCanvasA, cameraModel: modelA},
+  B: {quality: 'accurate', canvas: opaqueCanvasB, cameraModel: modelB}
+}, {timeMs: 7200, durationMs: 10000, animationMode: 'camera'});
+```
+
+The composite has **twice the view width and twice the view height**, hence
+the same aspect ratio as each view. For standard 16:9 views, 960 × 540 becomes
+1920 × 1080. Each optical viewport stays at its original 960 × 540 resolution,
+placed side by side and vertically centered; the extra top/bottom letterbox
+space contains the title, physical-geometry-specific A/B labels and a
+presentation-time caption. There is **no stretching, cropping, resampling or
+HUD relocation**. Because composition occurs after the full optical render,
+there is no need to reinterpret the Globe/Flat reference frames.
+
+Output dimensions and source frames are validated before painting. Invalid
+sizes, incomplete A/B pairs, mismatched dimensions, unexpected Fast frames,
+missing geometry or invalid presentation times are rejected. The Canvas 2D
+state is restored even after a paint error. Timestamp captions are derived
+from the deterministic video timeline, never wall-clock time.
+
+A combined RGBA frame at 1920 × 1080 occupies about 7.9 MiB in addition to
+the two original 960 × 540 canvases (~4.0 MiB total). A 1280 × 720 pair would
+produce a 2560 × 1440 combined frame (~14.1 MiB); these new allocations must
+be counted explicitly when the live pipeline's bounded memory credit system
+is adapted. Codec support for the **combined dimensions** must be probed in
+the browser rather than inferred from support for the smaller source views.
+
+Tests: `node --test tests/ModernAnimationCompareComposition.test.js` exercises
+layout, 1:1 copies, exact A/B geometry labels, deterministic metadata, invalid
+inputs, context cleanup and browser/worker loading. Full regression and Legacy
+isolation remain required before integration.
