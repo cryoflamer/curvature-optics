@@ -12,14 +12,21 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(projects){
   'use strict';
   var MAX_FRAMES=751,MAX_ARCHIVE_BYTES=192*1024*1024;
-  function plan(project,options){
+  // Shared sizing/FPS policy for PNG and future video frames. Video has an
+  // independent timeline and resource budget, but must accept the same presets.
+  function exportSettings(options){
     options=options||{};
-    var owned=projects.validate(project),fps=options.fps===undefined?25:options.fps;
+    var fps=options.fps===undefined?25:options.fps;
     var width=options.width===undefined?960:options.width;
     var height=options.height===undefined?540:options.height;
     if(![5,10,25,30].includes(fps)||!Number.isInteger(width)||!Number.isInteger(height)||
       width<320||height<180||width>1920||height>1080||width*height>2073600)
       throw RangeError('Unsupported export FPS or resolution');
+    return Object.freeze({fps:fps,width:width,height:height});
+  }
+  function plan(project,options){
+    var owned=projects.validate(project),settings=exportSettings(options);
+    var fps=settings.fps,width=settings.width,height=settings.height;
     var durationMs=projects.totalMs(owned);
     var intervals=Math.ceil(durationMs*fps/1000);
     if(intervals+1>MAX_FRAMES)
@@ -115,6 +122,15 @@
     });
   }
   function pad(index){return String(index).padStart(5,'0');}
+  // Common optical quality + opaque Canvas contract, before either PNG
+  // serialization or creation of a VideoFrame. Never use a Fast frame here.
+  function prepareCanvas(image,width,height){
+    if(!image||image.quality!=='accurate'||(image.metrics&&
+      image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
+      image.canvas.width!==width||image.canvas.height!==height)
+      throw Error('Export frame is not Accurate RK4 at fixed resolution');
+    return compositeOpaqueWhite(image.canvas);
+  }
   // A timestamp is independent of its neighbors. Both the single-worker
   // runner and parallel workers use the same painting, compositing, PNG
   // encoding and optical-quality checks; a different scheduling order must
@@ -130,11 +146,7 @@
       if(cancel&&cancel.cancelled)return null;
       var side=p.sides[j],image=await render(sample,side,{width:p.width,height:p.height,
         index:index,timeMs:time});
-      if(!image||image.quality!=='accurate'||(image.metrics&&
-        image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
-        image.canvas.width!==p.width||image.canvas.height!==p.height)
-        throw Error('Export frame is not Accurate RK4 at fixed resolution');
-      compositeOpaqueWhite(image.canvas);
+      prepareCanvas(image,p.width,p.height);
       var bytes=await toPng(image.canvas);
       if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
         throw Error('Invalid PNG data from export Canvas');
@@ -238,7 +250,8 @@
     graph.UpdateCanvasSize=function(){};graph.ResizeTimer=null;
     return graph;
   }
-  return Object.freeze({plan:plan,run:run,renderTimestamp:renderTimestamp,assemble:assemble,
+  return Object.freeze({plan:plan,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
+    run:run,renderTimestamp:renderTimestamp,assemble:assemble,
     zip:zip,graphForCanvas:graphForCanvas,
     compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});
 }));
