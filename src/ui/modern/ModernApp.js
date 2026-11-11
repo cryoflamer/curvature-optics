@@ -1715,8 +1715,15 @@
     var cancel=newUiEl('ModernAnimationVideoExportCancel');
     if(!start||!cancel)return;
     var progress=newUiEl('ModernAnimationVideoExportProgress');
+    var profilePanel=newUiEl('ModernAnimationVideoProfileSummary');
+    var profileDownload=newUiEl('ModernAnimationVideoProfileDownload');
+    var lastProfile=null;
     function message(text){var node=newUiEl('ModernAnimationVideoExportStatus');
       if(node)node.textContent=text;}
+    if(profileDownload)profileDownload.addEventListener('click',function(){
+      if(lastProfile)downloadHistoryJson(JSON.stringify(lastProfile,null,2),
+        'curvature-animation-video-profile.json');
+    });
     cancel.addEventListener('click',function(){
       if(!studioVideoExportTask)return;
       studioVideoExportTask.controller.cancel();
@@ -1734,6 +1741,9 @@
       var task={controller:controller};studioVideoExportTask=task;
       syncStudioFrameExportControls();
       if(progress){progress.max=100;progress.value=0;}
+      lastProfile=null;
+      if(profileDownload)profileDownload.disabled=true;
+      if(profilePanel){profilePanel.hidden=true;profilePanel.textContent='';}
       try{
         var project=studioPrepared||studioApi.build(studioDraft,'studio_video_export');
         var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
@@ -1802,6 +1812,31 @@
           ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+
           ' s total · peak RGBA in-flight '+result.peakInflightFrames+
           ' frames ('+result.manifest.frameWindow+' maximum).');
+        var breakdown=result.manifest.profiling;
+        if(breakdown){
+          lastProfile={manifest:result.manifest,controller:result.controllerProfile};
+          if(profileDownload)profileDownload.disabled=false;
+          if(profilePanel){
+            var f=function(n){return Number(n||0).toFixed(1)+' ms';};
+            profilePanel.textContent='Video pipeline profile (overlapping wall times, not additive):\n'+
+              '  Render + VideoFrame Σ: '+f(breakdown.render.totalMs)+
+              ' · mean '+f(breakdown.render.meanMs)+
+              ' · max '+f(breakdown.render.maxMs)+' ('+breakdown.render.samples+' view samples)\n'+
+              '  Optics reported Σ: '+f(breakdown.reportedOptics.totalMs)+
+              ' ('+breakdown.reportedOptics.samples+' samples; included in render)\n'+
+              '  Encoder handoff wait: mean '+f(breakdown.encoderHandoffWait.meanMs)+
+              ' · max '+f(breakdown.encoderHandoffWait.maxMs)+
+              ' · out of order '+breakdown.outOfOrderArrivals+' frames\n'+
+              '  WebCodecs submit → output: mean '+f(breakdown.codecOutputLatency.meanMs)+
+              ' · max '+f(breakdown.codecOutputLatency.maxMs)+
+              ' ('+breakdown.codecOutputLatency.samples+' chunks)\n'+
+              '  Final flush: '+f(breakdown.finalize.flushMs)+
+              ' · mux: '+f(breakdown.finalize.muxMs)+
+              ' · Compare ZIP: '+f(breakdown.finalize.zipMs)+
+              ' · total: '+f(result.controllerProfile&&result.controllerProfile.elapsedMs);
+            profilePanel.hidden=false;
+          }
+        }
       }catch(error){message('Video export failed: '+error.message+' · No partial video saved.');}
       finally{if(studioVideoExportTask===task)studioVideoExportTask=null;
         syncStudioFrameExportControls();}

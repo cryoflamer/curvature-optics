@@ -47,6 +47,7 @@
       // already represent ~28 MiB of RGBA before codec internals.
       var window=frameWindow(plan,count);
       return new Promise(function(resolve,reject){
+        var controllerStarted=performance.now(),deliverySum=0,deliveryMax=0,deliveryCount=0;
         var workers=[],renderers=[],encoder=null,done=false,ready=0,
           encoderReady=false,running=false,next=0,submitted=0,rendered=0,peakInflight=0;
         function finish(error,result){
@@ -74,7 +75,8 @@
             var slot=renderers[i];
             if(slot.index!==null||next>=plan.frameCount||next-submitted>=window)continue;
             var index=next++;
-            slot.index=index;peakInflight=Math.max(peakInflight,next-submitted);
+            slot.index=index;slot.dispatchedAt=performance.now();
+            peakInflight=Math.max(peakInflight,next-submitted);
             try{slot.worker.postMessage({type:'video-render',index:index});}
             catch(error){finish(error);return;}
           }
@@ -141,8 +143,10 @@
                 fail('Encoder returned an incomplete video export');return;
               }
               finish(null,{cancelled:false,blob:value.blob,filename:value.filename,
-                manifest:value.manifest,peakInflightFrames:peakInflight,
-                workers:count});
+                manifest:value.manifest,peakInflightFrames:peakInflight,workers:count,
+                controllerProfile:{elapsedMs:Math.max(0,performance.now()-controllerStarted),
+                  dispatchToDelivery:{samples:deliveryCount,totalMs:deliverySum,
+                    meanMs:deliveryCount?deliverySum/deliveryCount:0,maxMs:deliveryMax}}});
             }else if(value.type==='error')fail('Video encoder failed: '+String(value.message||'unknown error'));
           };
           for(var i=0;i<count;i++){
@@ -168,6 +172,9 @@
                     video.closeFrames(frame);
                     fail('Video renderer returned unexpected frame bundle');return;
                   }
+                  var dispatchToDelivery=Math.max(0,performance.now()-current.dispatchedAt);
+                  deliveryCount++;deliverySum+=dispatchToDelivery;
+                  deliveryMax=Math.max(deliveryMax,dispatchToDelivery);
                   try{
                     encoder.postMessage({type:'frame',frame:frame},
                       plan.sides.map(function(side){return frame.frames[side];}));

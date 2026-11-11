@@ -20,6 +20,27 @@ importScripts(
 );
 var session=null,initializing=false,failed=false;
 var MAX_ENCODER_QUEUE=3;
+// Wall-clock telemetry only. Worker timers, overlapped renderers and codec
+// callbacks are NOT additive CPU-use measurements.
+function mark(){return performance.now();}
+function addTiming(target,ms){
+  if(!Number.isFinite(ms)||ms<0)return;
+  target.samples++;target.totalMs+=ms;target.maxMs=Math.max(target.maxMs,ms);
+}
+function metric(){return {samples:0,totalMs:0,maxMs:0};}
+function summary(x){return {samples:x.samples,totalMs:x.totalMs,
+  meanMs:x.samples?x.totalMs/x.samples:0,maxMs:x.maxMs};}
+function reportProfile(s,flushMs,muxMs,zipMs){
+  return {schema:'curvature-video-profile-v1',units:'ms',
+    render:summary(s.profile.render),reportedOptics:summary(s.profile.optics),
+    encoderHandoffWait:summary(s.profile.handoff),
+    outOfOrderArrivals:s.profile.outOfOrderArrivals,
+    codecOutputLatency:summary(s.profile.codecLatency),
+    codecActiveWallMs:s.profile.firstEncodeAt===null?0:
+      Math.max(0,s.profile.lastOutputAt-s.profile.firstEncodeAt),
+    finalize:{flushMs:flushMs,muxMs:muxMs,zipMs:zipMs},
+    encoderWorkerElapsedMs:Math.max(0,mark()-s.start)};
+}
 function textError(error){return String(error&&error.message||error);}
 function shutdown(){
   if(!session)return;
@@ -43,12 +64,16 @@ async function maybeFinish(){
   try{
     self.postMessage({type:'muxing',total:current.plan.frameCount,
       encodedBytes:current.encodedBytes});
+    var flushStarted=mark();
     await Promise.all(current.encoders.map(function(encoder){return encoder.flush();}));
+    var flushMs=mark()-flushStarted;
     if(failed||session!==current)return;
+    var muxStarted=mark();
     var files=current.plan.sides.map(function(side){
       return {side:side,blob:current.muxers[side].finish(),
         bytes:current.muxers[side].bytes()};
     });
+    var muxMs=mark()-muxStarted,zipMs=0;
     var p=current.plan,manifest={schema:'curvature-animation-'+current.format,version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       physicalTarget:p.project.target,codec:current.codec,format:current.format,quality:'accurate',
@@ -61,6 +86,7 @@ async function maybeFinish(){
       peakEncoderQueue:current.peakEncoderQueue,
       encodedBytes:current.encodedBytes,
       elapsedMs:performance.now()-current.start};
+    manifest.profiling=reportProfile(current,flushMs,muxMs,null);
     var blob,filename;
     if(files.length===1){blob=files[0].blob;filename='curvature-animation.'+current.format;}
     else{
@@ -72,13 +98,18 @@ async function maybeFinish(){
           data:files[i].blob});
       }
       entries.push({name:'manifest.json',data:new Blob([JSON.stringify(manifest,null,2)+'\n'])});
+      var zipStarted=mark();
       blob=await self.CurvatureModernAnimationVideoArchive.pack(entries,{
         onEntry:function(info){self.postMessage({type:'packing',completed:info.completed,
           total:info.total});}
       });
+      zipMs=mark()-zipStarted;
       filename='curvature-animation-'+current.format+'-compare.zip';
     }
     if(failed||session!==current)return;
+    // Compare's in-ZIP manifest is a snapshot BEFORE packaging, so its ZIP
+    // duration is null; the returned controller profile includes measured zipMs.
+    manifest.profiling=reportProfile(current,flushMs,muxMs,zipMs);
     self.postMessage({type:'complete',blob:blob,filename:filename,manifest:manifest});
     shutdown();
   }catch(error){fail(error);}
@@ -108,13 +139,24 @@ async function init(data){
     var supported=await VideoEncoder.isConfigSupported(config);
     if(!supported||!supported.supported)throw Error(codec+' WebCodecs configuration unavailable');
     var muxers={},encoders=[],durations=new Map(),encodedBytes=0;
+    var profiling={render:metric(),optics:metric(),handoff:metric(),
+      codecLatency:metric(),outOfOrderArrivals:0,firstEncodeAt:null,
+      lastOutputAt:0};
+    var encodedAtBySide={};
     plan.frames.forEach(function(t){durations.set(t.timestampUs,t.durationUs);});
     plan.sides.forEach(function(side){
+      encodedAtBySide[side]=new Map();
       muxers[side]=(format==='mp4'?self.CurvatureModernAnimationMP4Muxer:
         self.CurvatureModernAnimationWebMMuxer).create(plan);
       var encoder=new VideoEncoder({
         output:function(chunk,metadata){
           try{
+            var finishedAt=mark(),queuedAt=encodedAtBySide[side].get(chunk.timestamp);
+            if(queuedAt!==undefined){
+              addTiming(profiling.codecLatency,finishedAt-queuedAt);
+              encodedAtBySide[side].delete(chunk.timestamp);
+            }
+            profiling.lastOutputAt=Math.max(profiling.lastOutputAt,finishedAt);
             var duration=durations.get(chunk.timestamp);
             if(duration===undefined)throw Error('Unexpected encoded video timestamp');
             // Check combined Compare size before copying more encoded output.
@@ -138,9 +180,18 @@ async function init(data){
         return encoders.every(function(encoder){return encoder.encodeQueueSize<MAX_ENCODER_QUEUE;});
       },
       consume:function(bundle){
+        var enqueuedAt=mark();
+        addTiming(profiling.handoff,enqueuedAt-bundle.profileReceivedAt);
         plan.sides.forEach(function(side,i){
+          encodedAtBySide[side].set(bundle.timestampUs,enqueuedAt);
+          if(profiling.firstEncodeAt===null)profiling.firstEncodeAt=enqueuedAt;
           encoders[i].encode(bundle.frames[side],{
             keyFrame:bundle.index%(plan.fps*2)===0});
+          var metrics=bundle.stats&&bundle.stats[side];
+          if(metrics){
+            addTiming(profiling.render,metrics.renderMs);
+            addTiming(profiling.optics,metrics.opticsMs);
+          }
         });
         var queued=Math.max.apply(null,encoders.map(function(e){return e.encodeQueueSize;}));
         session.peakEncoderQueue=Math.max(session.peakEncoderQueue,queued);
@@ -154,8 +205,8 @@ async function init(data){
     session={plan:plan,workers:data.workers,gate:gate,encoders:encoders,
       muxers:muxers,bitrate:bitrate,format:format,codec:codec,
       frameWindow:data.frameWindow,received:0,peakBuffered:0,
-      peakEncoderQueue:0,encodedBytes:0,
-      finishing:false,start:performance.now()};
+      peakEncoderQueue:0,encodedBytes:0,profile:profiling,
+      finishing:false,start:mark()};
     self.postMessage({type:'ready',total:plan.frameCount,sides:plan.sides.length,
       workers:data.workers,codec:config.codec,format:format,bitrate:bitrate});
   }finally{initializing=false;}
@@ -175,6 +226,9 @@ self.onmessage=function(event){
       // Count arrivals before drain invokes consume(), which synchronously
       // reports encoded-submission progress to the controller.
       session.received++;
+      if(data.frame&&data.frame.index!==session.gate.nextIndex())
+        session.profile.outOfOrderArrivals++;
+      if(data.frame)data.frame.profileReceivedAt=mark();
       var state=session.gate.offer(data.frame);
       session.peakBuffered=Math.max(session.peakBuffered,state.buffered);
       maybeFinish();

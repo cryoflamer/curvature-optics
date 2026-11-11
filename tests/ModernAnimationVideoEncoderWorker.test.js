@@ -104,6 +104,16 @@ test('encoder worker VP9 uses ordered VideoFrames, closes RGBA inputs and emits 
   assert.equal(completed[0].manifest.frameWindow,4);
   assert.ok(completed[0].manifest.peakEncoderQueue<=3);
   assert.ok(completed[0].manifest.encodedBytes>0);
+  const profiling=completed[0].manifest.profiling;
+  assert.equal(profiling.schema,'curvature-video-profile-v1');
+  assert.equal(profiling.units,'ms');
+  assert.equal(profiling.codecOutputLatency.samples,5);
+  assert.equal(profiling.encoderHandoffWait.samples,5);
+  assert.equal(profiling.outOfOrderArrivals,3);
+  assert.ok(profiling.codecOutputLatency.meanMs>=0);
+  assert.ok(profiling.finalize.flushMs>=0&&profiling.finalize.muxMs>=0);
+  assert.equal(profiling.finalize.zipMs,0);
+  assert.ok(profiling.encoderWorkerElapsedMs>=0);
 });
 test('encoder worker Compare A/B creates one ZIP with two videos and manifest',async()=>{
   const p=project('compare'),plan=video.plan(p,{fps:5,width:640,height:360});
@@ -126,6 +136,10 @@ test('encoder worker Compare A/B creates one ZIP with two videos and manifest',a
   assert.deepEqual(messages.filter(x=>x.type==='packing').map(x=>x.completed),[1,2,3]);
   assert.equal(workers.length,2);
   assert.ok(workers.every(w=>w.closed));
+  assert.ok(complete.manifest.profiling.finalize.zipMs>=0);
+  // The embedded JSON is created before ZIP assembly; unlike the completion
+  // message it cannot include its own packing duration.
+  assert.equal(complete.manifest.profiling.schema,'curvature-video-profile-v1');
 });
 test('encoder worker rejects unexpected frames without completing a partial file',async()=>{
   const p=project(),plan=video.plan(p,{fps:5,width:640,height:360});
@@ -211,4 +225,30 @@ test('oversized encoded output fails early without allocating a 193 MiB sample',
   await tick();
   assert.match(messages.find(x=>x.type==='error').message,/192 MiB/);
   assert.equal(messages.some(x=>x.type==='complete'),false);
+});
+
+// Worker render metrics are untrusted scalar telemetry; absent samples remain
+// zero rather than being misreported as a measured 0 ms RK4 run.
+test('encoder profile aggregates per-view render and nested optics timings',async()=>{
+  const p=project('compare'),plan=video.plan(p,{fps:5,width:640,height:360});
+  const {root,messages}=sandbox();
+  root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
+    quality:'standard',workers:2,frameWindow:4,format:'mp4'}});
+  await tick();
+  for(const t of plan.frames){
+    const bundle=frame(plan,t.index);
+    bundle.stats={A:{renderMs:7,opticsMs:5},B:{renderMs:11,opticsMs:8}};
+    root.onmessage({data:{type:'frame',frame:bundle}});
+  }
+  await tick();await tick();
+  const result=messages.find(m=>m.type==='complete');
+  assert.ok(result);
+  const prof=result.manifest.profiling;
+  assert.equal(prof.render.samples,10);
+  assert.equal(prof.render.totalMs,90);
+  assert.equal(prof.reportedOptics.samples,10);
+  assert.equal(prof.reportedOptics.totalMs,65);
+  assert.equal(prof.codecOutputLatency.samples,10);
+  assert.ok(prof.codecActiveWallMs>=0);
+  assert.ok(prof.finalize.zipMs>=0);
 });

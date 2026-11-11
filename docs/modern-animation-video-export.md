@@ -167,3 +167,53 @@ against PNG. Neither is claimed by this patch.
 
 Reference: [W3C AVC WebCodecs registration](https://www.w3.org/TR/webcodecs-avc-codec-registration/),
 [WebCodecs usage](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API).
+
+## Pipeline profiling and interpretation
+
+After a completed WebM or MP4 export, Animation Studio displays a **Video
+pipeline profile** beneath the export status. **Download profiling JSON**
+exports the entire video manifest (including `profiling`) plus a
+main-thread controller report for reproducible comparisons. The button is
+disabled until a successful export; a new export clears the previous profile.
+Both Scene and Compare A/B use the same counters; PNG export is unchanged.
+
+`manifest.profiling` (schema `curvature-video-profile-v1`, units **ms**) records:
+
+| Field | What it measures |
+| --- | --- |
+| `render` | Sum/mean/max of per-view *wall* time spent in the renderer worker's paint, white compositing, and VideoFrame creation. Samples = rendered frames × views. |
+| `reportedOptics` | The **existing** optics engine's `timings.opticsMs` diagnostic when reported. This is a subset of rendering, not an additional phase. Missing timings are excluded from the sample count, not converted to zero. |
+| `encoderHandoffWait` | Delay inside the encoder worker from receiving a transferred frame bundle to submitting it to WebCodecs in presentation order. Includes out-of-order buffering and encoder backpressure. |
+| `outOfOrderArrivals` | Bundles that arrived before the next required presentation index was available. |
+| `codecOutputLatency` | Wall latency from `VideoEncoder.encode()` submission to its encoded-chunk output callback (includes its asynchronous queue); this is **not** isolated codec CPU time. A/B records samples for both encoders. |
+| `codecActiveWallMs` | Elapsed from the first encoding submission to the last encoded-chunk callback. Overlaps worker rendering. |
+| `finalize.flushMs` | Elapsed waiting for asynchronous `VideoEncoder.flush()` after all frames were submitted. |
+| `finalize.muxMs` | Container finalization (`WebM` or `MP4`), excluding the encoder flush. |
+| `finalize.zipMs` | Compare ZIP packing including streaming CRC; zero for a Scene video. |
+| `encoderWorkerElapsedMs` | Encoder worker lifetime after session setup, including overlapped frame processing and finalization. |
+| `controller.dispatchToDelivery` | In the downloaded JSON's controller section: mean/max from render request dispatch to receipt of the frame bundle on the main thread. **Includes** painting and transfer, not just postMessage latency. |
+| `controller.elapsedMs` | Total controller wall time including Worker initialization and final artifact delivery. |
+
+**Do not add these times together.** Rendering overlaps between Workers and
+with encoding. In particular the summed render and optics metrics are not
+process CPU times; the optics metric is nested inside render, and chunk
+latencies overlap. This profile can locate bottlenecks (slow render, queue
+contention, expensive codec output, flush or ZIP) but does not establish actual
+CPU utilization or browser memory RSS. Memory high-water counters remain
+nominal outstanding RGBA frames, not measured heap usage.
+
+For Compare A/B, `manifest.json` inside the ZIP is constructed **before** ZIP
+creation, so `profiling.finalize.zipMs` is `null` there. The complete measured
+ZIP duration is available in the UI and downloadable profiling JSON returned
+after packaging. Standalone WebM/MP4 files have no embedded JSON manifest;
+use **Download profiling JSON** to preserve those results.
+
+Suggested acceptance comparison: export one unchanged Globe → Flat project
+at 960×540, 25 FPS and Standard bitrate for **WebM and MP4**, each with
+**1, 2, and 4 Workers**. Keep Opera foreground state, hardware load and
+resolution as consistent as possible; ideally repeat each run to gauge JIT
+warmup and noise. Compare `controller.elapsedMs`, `render.totalMs`,
+`reportedOptics.totalMs`, `codecOutputLatency`, `encoderHandoffWait`,
+`flushMs`, `muxMs` and (for Compare) `zipMs`. Do not infer phase shares by
+subtracting overlapping durations. The 22.5/22.3-second runs before this patch
+show only total times; **they cannot be retroactively phase-profiled**.

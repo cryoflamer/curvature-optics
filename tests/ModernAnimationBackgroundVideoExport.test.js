@@ -80,6 +80,9 @@ test('bounded parallel WebM controller delivers every frame once with reordered 
   assert.equal(result.cancelled,false);
   assert.equal(result.manifest.frameCount,25);
   assert.equal(result.workers,4);
+  assert.equal(result.controllerProfile.dispatchToDelivery.samples,25);
+  assert.ok(result.controllerProfile.dispatchToDelivery.meanMs>=0);
+  assert.ok(result.controllerProfile.elapsedMs>=0);
   assert.equal(progress.at(-1).submitted,25);
   const encoder=FakeWorker.instances[0];
   assert.equal(encoder.encoder,true);
@@ -157,4 +160,14 @@ test('UI render-progress callback failures terminate every transferred-frame wor
     workerCount:2,onRendered(){throw Error('UI callback failed');}}),/UI callback failed/);
   assert.equal(api.isBusy(),false);
   assert.ok(FakeWorker.instances.every(w=>w.closed));
+});
+
+test('video profile panel and explicit JSON export stay outside PNG export',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');
+  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(html,/id="ModernAnimationVideoProfileSummary"/);
+  assert.match(html,/id="ModernAnimationVideoProfileDownload" disabled/);
+  assert.match(app,/curvature-animation-video-profile\.json/);
+  assert.match(app,/overlapping wall times, not additive/);
 });

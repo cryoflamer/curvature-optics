@@ -110,6 +110,9 @@ test('accurate Canvas becomes opaque VideoFrame with direct pixel source, no PNG
   assert.equal(final.frames.A.duration,40000);
   assert.deepEqual(seen,[{timestamp:4960000,duration:40000}]);
   assert.equal(encodedPng,0);
+  assert.equal(final.stats.A.opticsMs,null);
+  assert.ok(Number.isFinite(final.stats.A.renderMs));
+  assert.ok(final.stats.A.renderMs>=0);
   video.closeFrames(final);
   assert.equal(final.frames.A.closed,true);
 });
@@ -123,6 +126,7 @@ test('Compare frames are synchronized and constructed independently per side',as
     return {canvas:{width:640,height:360,getContext:()=>ctx()},quality:'accurate'};
   },Frame);
   assert.deepEqual(got,[['A',400000,400],['B',400000,400]]);
+  assert.ok(r.stats.A.renderMs>=0&&r.stats.B.renderMs>=0);
   assert.equal(r.frames.A.timestamp,r.frames.B.timestamp);
   assert.notEqual(r.frames.A.canvas,r.frames.B.canvas);
   video.closeFrames(r);

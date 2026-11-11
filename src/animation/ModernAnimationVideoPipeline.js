@@ -61,7 +61,7 @@
       var sample=projects.sampleAt(p.project,timing.sampleTimeMs);
       for(var j=0;j<p.sides.length;j++){
         if(cancel&&cancel.cancelled){closeFrames(result);return null;}
-        var side=p.sides[j];
+        var side=p.sides[j],renderStarted=performance.now();
         var image=await render(sample,side,{width:p.width,height:p.height,index:index,
           timeMs:timing.sampleTimeMs,timestampUs:timing.timestampUs,durationUs:timing.durationUs});
         png.prepareCanvas(image,p.width,p.height);
@@ -69,15 +69,15 @@
         // renders may safely reuse it after VideoFrame construction.
         result.frames[side]=new FrameCtor(image.canvas,{timestamp:timing.timestampUs,
           duration:timing.durationUs});
-        if(image.metrics){
-          // Raw optical diagnostics may contain large caches or uncloneable
-          // references. Transfer only scalar telemetry with the VideoFrame.
-          var m=image.metrics,t=m.timings||{};
-          result.stats[side]={opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
-            unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,
-            fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
-            budgetExceeded:!!m.budgetExceeded,cacheReused:!!m.cacheReused};
-        }
+        // Per-side wall time includes painter, opaque compositing and VideoFrame
+        // construction. The optics timer is an independent, nested diagnostic;
+        // they must not be added to one another.
+        var m=image.metrics||{},t=m.timings||{};
+        result.stats[side]={renderMs:Math.max(0,performance.now()-renderStarted),
+          opticsMs:Number.isFinite(t.opticsMs)&&t.opticsMs>=0?t.opticsMs:null,
+          unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,
+          fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
+          budgetExceeded:!!m.budgetExceeded,cacheReused:!!m.cacheReused};
       }
       if(cancel&&cancel.cancelled){closeFrames(result);return null;}
       return result;
