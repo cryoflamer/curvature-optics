@@ -2049,3 +2049,16 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   optical visibility or object occlusion. The UI compass is a follow-up.
 - Included only in the Modern HTML entrypoint; documented the contract in
   `docs/modern-target-direction.md` and added focused regression tests.
+
+### Modern geometric target direction overlay
+
+A standalone, optics-independent UI/Canvas overlay was connected to the
+ModernTargetDirection geometry module. Scene and Compare show a bottom-centred
+arrow only for an off-frustum target center; Animation Studio playback and
+opt-in PNG/MP4/WebM burn-in use the same geometric decision. Controls and
+visibility are independent of Camera HUD, and the active target may be the
+scene center or either object group center. UI preferences are local to the
+browser; exports capture the chosen selection and inclusion flags at launch.
+Compare frames are marked separately before they are composed or encoded.
+Worker import order and cache keys were extended without changing Legacy,
+physics or the saved animation project schema.

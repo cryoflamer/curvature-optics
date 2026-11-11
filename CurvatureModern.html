@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -53,9 +53,10 @@
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
 <script src="src/ui/modern/ModernCameraNavigation.js"></script>
-<script src="src/ui/modern/ModernApplicationPreferences.js?hud-appearance=1"></script>
+<script src="src/ui/modern/ModernApplicationPreferences.js?hud-appearance=1&amp;target-indicator=1"></script>
 <script src="src/camera/ModernCameraTelemetry.js"></script>
 <script src="src/camera/ModernTargetDirection.js"></script>
+<script src="src/ui/modern/ModernTargetIndicator.js?target-indicator=1"></script>
 <script src="src/ui/modern/ModernCameraHud.js?hud-appearance=1&contrast=1"></script>
 <script src="src/camera/ModernCameraInterpolator.js"></script>
 <script src="src/camera/ModernCameraSequence.js"></script>
@@ -84,12 +85,12 @@
 <script src="src/animation/ModernAnimationPreview.js"></script>
 <script src="src/animation/ModernAnimationQualityAudit.js"></script>
 <script src="src/animation/ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1"></script>
-<script src="src/animation/ModernAnimationFrameExport.js?studio-hud-fix=1"></script>
-<script src="src/animation/ModernAnimationBackgroundExport.js?studio-hud-fix=1"></script>
+<script src="src/animation/ModernAnimationFrameExport.js?studio-hud-fix=1&amp;target-indicator=1"></script>
+<script src="src/animation/ModernAnimationBackgroundExport.js?studio-hud-fix=1&amp;target-indicator=1"></script>
 <script src="src/animation/ModernAnimationCompareComposition.js"></script>
-<script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1"></script>
+<script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&amp;target-indicator=1"></script>
 <script src="src/animation/ModernAnimationVideoCapabilities.js"></script>
-<script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1"></script>
+<script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1&amp;target-indicator=1"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
@@ -201,6 +202,8 @@
           <option value="fast">Fast if supported · approximate</option>
         </select>
         <label class="modern-camera-hud-toggle" for="ModernAnimationPlaybackCameraHud"><input type="checkbox" id="ModernAnimationPlaybackCameraHud" checked> Camera HUD</label>
+        <label class="modern-camera-hud-toggle" for="ModernAnimationTargetToggle"><input type="checkbox" id="ModernAnimationTargetToggle" checked> Target direction</label>
+        <label for="ModernAnimationTargetSelection">Target <select id="ModernAnimationTargetSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select></label>
         <details class="modern-camera-hud-settings" id="ModernAnimationHudSettings">
           <summary>HUD appearance</summary>
           <div class="modern-camera-hud-settings-body">
@@ -253,6 +256,7 @@
             <select id="ModernAnimationFrameExportWorkers"><option value="auto" selected>Auto (up to 4)</option><option value="1">1 · baseline</option><option value="2">2</option><option value="4">4</option></select>
           </label>
           <label class="modern-camera-hud-toggle" for="ModernAnimationFrameExportCameraHud"><input type="checkbox" id="ModernAnimationFrameExportCameraHud"> Include camera HUD in PNGs</label>
+          <label class="modern-camera-hud-toggle" for="ModernAnimationFrameExportTarget"><input type="checkbox" id="ModernAnimationFrameExportTarget"> Include target direction in PNGs</label>
           <button type="button" id="ModernAnimationFrameExportStart">Render PNG ZIP</button>
           <button type="button" id="ModernAnimationFrameExportCancel" disabled>Cancel export</button>
         </div>
@@ -261,7 +265,7 @@
       </details>
       <details id="ModernAnimationVideoExportSection" class="modern-animation-frame-export">
         <summary>Export video · WebM / MP4 · deterministic (offline)</summary>
-        <p>Offline VP9 WebM or H.264 MP4 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, choose one synchronized side-by-side video or separate A/B files in a ZIP. Frame size is per view; the exact output dimensions and bounded RGBA handoff budget are shown below. Camera telemetry burn-in is optional and disabled by default.</p>
+        <p>Offline VP9 WebM or H.264 MP4 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, choose one synchronized side-by-side video or separate A/B files in a ZIP. Frame size is per view; the exact output dimensions and bounded RGBA handoff budget are shown below. Camera telemetry and geometric target-direction burn-in are independently optional and disabled by default.</p>
         <div class="modern-animation-frame-export-controls">
           <label for="ModernAnimationVideoExportFormat">Format
             <select id="ModernAnimationVideoExportFormat"><option value="webm" selected>WebM · VP9</option><option value="mp4">MP4 · H.264</option></select>
@@ -282,6 +286,7 @@
             <select id="ModernAnimationVideoExportQuality"><option value="standard" selected>Standard</option><option value="high">High bitrate</option></select>
           </label>
           <label class="modern-camera-hud-toggle" for="ModernAnimationVideoExportCameraHud"><input type="checkbox" id="ModernAnimationVideoExportCameraHud"> Include camera HUD in video</label>
+          <label class="modern-camera-hud-toggle" for="ModernAnimationVideoExportTarget"><input type="checkbox" id="ModernAnimationVideoExportTarget"> Include target direction in video</label>
           <button type="button" id="ModernAnimationVideoExportStart">Render video</button>
           <button type="button" id="ModernAnimationVideoExportCancel" disabled>Cancel export</button>
         </div>
@@ -777,6 +782,8 @@
         <label class="modern-camera-hud-toggle" for="ModernCameraHudToggle">
           <input type="checkbox" id="ModernCameraHudToggle" checked> Camera HUD
         </label>
+        <label class="modern-camera-hud-toggle" for="ModernTargetIndicatorToggle"><input type="checkbox" id="ModernTargetIndicatorToggle" checked> Target direction</label>
+        <label class="modern-camera-hud-toggle" for="ModernTargetIndicatorSelection">Target <select id="ModernTargetIndicatorSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select></label>
         <details class="modern-camera-hud-settings" id="ModernCameraHudSettings">
           <summary aria-label="Camera HUD appearance settings">Appearance</summary>
           <div class="modern-camera-hud-settings-body">
@@ -803,7 +810,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>

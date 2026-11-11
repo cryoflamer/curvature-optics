@@ -481,6 +481,10 @@
   var cameraTelemetry=root.CurvatureModernCameraTelemetry;
   var cameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
     root.CurvatureModernCameraHud.create({telemetry:cameraTelemetry,document:document}):null;
+  var targetIndicatorApi=root.CurvatureModernTargetIndicator;
+  var targetIndicator=targetIndicatorApi?targetIndicatorApi.create({document:document}):null;
+  var studioTargetIndicator=targetIndicatorApi?targetIndicatorApi.create({document:document}):null;
+  var targetIndicatorVisible=true,studioTargetVisible=true,targetIndicatorSelection='scene';
   var cameraHudVisible=true;
   var cameraHudAppearance={opacity:90,position:'top-left',size:100};
   var studioCameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
@@ -548,6 +552,9 @@
     state.geometryBackend=remembered.geometryBackend;
     cameraHudVisible=remembered.cameraHudVisible;
     cameraHudAppearance=remembered.cameraHudAppearance;
+    targetIndicatorVisible=remembered.targetIndicatorVisible;
+    studioTargetVisible=remembered.studioTargetVisible;
+    targetIndicatorSelection=remembered.targetIndicatorSelection;
     historyGallerySize=remembered.historyGallerySize;
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     historyPanelOpen=remembered.historyPanelOpen;
@@ -575,6 +582,8 @@
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
         cameraHudAppearance:cameraHudAppearance,
+        targetIndicatorVisible:targetIndicatorVisible,studioTargetVisible:studioTargetVisible,
+        targetIndicatorSelection:targetIndicatorSelection,
         navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
@@ -718,6 +727,10 @@
       state.geometryBackend=defaults.geometryBackend;
       cameraHudVisible=defaults.cameraHudVisible;
       cameraHudAppearance=defaults.cameraHudAppearance;
+      targetIndicatorVisible=defaults.targetIndicatorVisible;
+      studioTargetVisible=defaults.studioTargetVisible;
+      targetIndicatorSelection=defaults.targetIndicatorSelection;
+      syncTargetIndicatorControls();updateTargetIndicator();syncStudioTargetIndicator();
       syncCameraHudToggle();syncCameraHudAppearance();updateCameraHud();
       historyGallerySize=defaults.historyGallerySize;
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
@@ -1466,7 +1479,8 @@
     if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
       studioLastQualityFrame=null;studioLastParity=null;
       studioCameraHudLast={A:null,B:null,isCompare:false};
-      if(studioCameraHud)studioCameraHud.hideAll();}
+      if(studioCameraHud)studioCameraHud.hideAll();
+      if(studioTargetIndicator)studioTargetIndicator.hideAll();}
     syncStudioPlaybackControls();
   }
   function syncStudioPlaybackControls(){
@@ -1513,6 +1527,7 @@
     // Never leave the previous frame's coordinates visible over a loading notice.
     if(loading&&typeof studioCameraHud!=='undefined'&&studioCameraHud)
       studioCameraHud.hideAll();
+    if(loading&&typeof studioTargetIndicator!=='undefined'&&studioTargetIndicator)studioTargetIndicator.hideAll();
     ['A','B'].forEach(function(side){
       var notice=newUiEl('ModernAnimationFrameLoading'+side);
       if(notice){notice.hidden=!loading;if(loading)notice.textContent=message;}
@@ -1581,6 +1596,7 @@
   }
   function syncStudioCameraHud(sampleA,sampleB,graphs,isCompare){
     studioCameraHudLast={A:sampleA,B:sampleB,isCompare:isCompare};
+    syncStudioTargetIndicator();
     if(!studioCameraHud)return;
     var control=newUiEl('ModernAnimationPlaybackCameraHud');
     if(control&&!control.checked){studioCameraHud.hideAll();return;}
@@ -1861,6 +1877,34 @@
         status.textContent='Add at least two compatible keyframes to export video.';
     }
   }
+  function syncStudioTargetIndicator(){
+    var toggle=newUiEl('ModernAnimationTargetToggle');
+    var selected=newUiEl('ModernAnimationTargetSelection');
+    if(toggle)toggle.checked=studioTargetVisible;
+    if(selected)selected.value=targetIndicatorSelection;
+    if(!studioTargetIndicator)return;
+    var last=studioCameraHudLast,graphs=root.CurvatureModernAnimationGraphs;
+    if(!studioTargetVisible||!last.A||!graphs){studioTargetIndicator.hideAll();return;}
+    if(!studioTargetIndicator.update('A',graphs.A.Canvas,last.A.cameraModel,targetIndicatorSelection))
+      studioTargetIndicator.hide('A');
+    if(last.isCompare&&last.B){
+      if(!studioTargetIndicator.update('B',graphs.B.Canvas,last.B.cameraModel,targetIndicatorSelection))
+        studioTargetIndicator.hide('B');
+    }else studioTargetIndicator.hide('B');
+  }
+  function bindStudioTargetIndicator(){
+    var toggle=newUiEl('ModernAnimationTargetToggle');
+    if(toggle)toggle.addEventListener('change',function(){
+      studioTargetVisible=!!toggle.checked;saveApplicationPreferences();syncStudioTargetIndicator();
+    });
+    var selected=newUiEl('ModernAnimationTargetSelection');
+    if(selected)selected.addEventListener('change',function(){
+      targetIndicatorSelection=targetIndicatorApi.selection(selected.value);
+      saveApplicationPreferences();syncTargetIndicatorControls();updateTargetIndicator();
+      syncStudioTargetIndicator();
+    });
+    syncStudioTargetIndicator();
+  }
   function studioHudAppearance(){
     return studioDraft&&studioDraft.cameraHudAppearance||cameraHudAppearance;
   }
@@ -1967,6 +2011,8 @@
           compareLayout:plan.compareLayout,
           cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
           cameraHudAppearance:studioHudAppearance(),
+          targetIndicator:!!(newUiEl('ModernAnimationVideoExportTarget')||{}).checked,
+          targetSelection:targetIndicatorSelection,
           onReady:function(info){
             message(info.workers+' render worker(s) · '+codecLabel+' encoder ready · '+
               info.total+' frames · '+info.width+'×'+info.height+' output · reorder window '+info.frameWindow+
@@ -2096,6 +2142,8 @@
           width:plan.width,height:plan.height,workerCount:workerCount,
           cameraHud:!!(newUiEl('ModernAnimationFrameExportCameraHud')||{}).checked,
           cameraHudAppearance:studioHudAppearance(),
+          targetIndicator:!!(newUiEl('ModernAnimationFrameExportTarget')||{}).checked,
+          targetSelection:targetIndicatorSelection,
           onReady:function(info){
             message(info.workers+' render worker(s) ready · calculating Accurate RK4 · '+
               info.total+' timestamps. ZIP assembly is also in the background.');
@@ -2186,6 +2234,7 @@
     });
     bindStudioQualityAudit();
     bindStudioCameraHud();
+    bindStudioTargetIndicator();
     bindStudioFrameExport();
     bindStudioVideoExport();
     observeStudioPreviewSize();
@@ -4410,11 +4459,42 @@
       frame.camViewAngle=cameraInteraction.focalViewAngle(model.FocalLengthField)*Math.PI/180;
     return frame;
   }
+  function updateTargetIndicator(override){
+    if(!targetIndicator)return;
+    if(!targetIndicatorVisible){targetIndicator.hideAll();return;}
+    var views=state.mode==='compare'?['A','B']:['Scene'];
+    ['Scene','A','B'].forEach(function(view){
+      if(!views.includes(view)){targetIndicator.hide(view);return;}
+      var g=cameraViewport(view),frame=cameraHudModel(view,override);
+      if(!g||!frame||!targetIndicator.update(view,g.Canvas,frame,targetIndicatorSelection))
+        targetIndicator.hide(view);
+    });
+  }
+  function syncTargetIndicatorControls(){
+    var toggle=newUiEl('ModernTargetIndicatorToggle');
+    var selected=newUiEl('ModernTargetIndicatorSelection');
+    if(toggle)toggle.checked=targetIndicatorVisible;
+    if(selected)selected.value=targetIndicatorSelection;
+  }
+  function bindTargetIndicator(){
+    var toggle=newUiEl('ModernTargetIndicatorToggle');
+    if(toggle)toggle.addEventListener('change',function(){
+      targetIndicatorVisible=!!toggle.checked;saveApplicationPreferences();updateTargetIndicator();
+    });
+    var selected=newUiEl('ModernTargetIndicatorSelection');
+    if(selected)selected.addEventListener('change',function(){
+      targetIndicatorSelection=targetIndicatorApi.selection(selected.value);
+      saveApplicationPreferences();syncTargetIndicatorControls();updateTargetIndicator();
+      syncStudioTargetIndicator();
+    });
+    syncTargetIndicatorControls();updateTargetIndicator();
+  }
   function syncCameraHudToggle(){
     var toggle=newUiEl('ModernCameraHudToggle');
     if(toggle)toggle.checked=cameraHudVisible;
   }
   function updateCameraHud(override){
+    updateTargetIndicator(override);
     if(!cameraHud)return;
     if(!cameraHudVisible){cameraHud.hideAll();return;}
     var views=state.mode==='compare'?['A','B']:['Scene'];
@@ -5296,6 +5376,7 @@
     var reset=el('ModernResetPreset');if(reset)reset.addEventListener('click',function(){selectPreset(state.preset);});
     el('ModernRender').addEventListener('click',redraw);
     bindCameraHud();
+    bindTargetIndicator();
     el('ModernSceneTab').addEventListener('click',function(){setMode('scene');});
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
     var animationTab=newUiEl('ModernAnimationTab');

@@ -28,8 +28,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1';
-    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1';
+    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1&target-indicator=1';
+    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1';
     var active=null;
     function cancel(){
       if(!active)return false;
@@ -210,10 +210,12 @@
           encoder.postMessage({type:'init',project:plan.project,width:plan.width,
             height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format,
             frameWindow:window,cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,
             compareLayout:plan.compareLayout});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
             project:plan.project,width:plan.width,height:plan.height,fps:plan.fps,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,
             compareLayout:plan.compareLayout});});
         }catch(error){finish(error);}
       });

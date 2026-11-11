@@ -703,6 +703,7 @@ test('display and navigation preferences are immediately saved and restored inde
   assert.deepEqual(JSON.parse(saved),{
     version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',cameraHudVisible:true,
     cameraHudAppearance:{opacity:90,position:'top-left',size:100},
+    targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
     historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyStoryboardQueue:[],
     historyFilters:{query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'},displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:1,wheelStep:'auto'},

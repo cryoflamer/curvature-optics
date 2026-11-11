@@ -44,6 +44,8 @@ importScripts(
   '../app/CurvatureModel.js',
   '../app/CurvaturePhysicalCamera.js',
   '../camera/ModernCameraTelemetry.js',
+  '../camera/ModernTargetDirection.js',
+  '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   '../app/CurvaturePhysicalCurvature.js',
@@ -56,9 +58,9 @@ importScripts(
   'ModernAnimationCompatibility.js',
   'ModernAnimationProject.js?studio-hud-fix=1',
   'ModernAnimationPreview.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1',
   'ModernAnimationCompareComposition.js',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1'
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1'
 );
 
 function createGraph(canvas){
@@ -98,7 +100,8 @@ function setup(data,video){
   var plan=(video?self.CurvatureModernAnimationVideoPipeline:api).plan(
     data.project,Object.assign({fps:data.fps,width:data.width,height:data.height,
       cameraHud:data.cameraHud===true,
-      cameraHudAppearance:data.cameraHudAppearance},
+      cameraHudAppearance:data.cameraHudAppearance,
+      targetIndicator:data.targetIndicator===true,targetSelection:data.targetSelection},
       video?{compareLayout:data.compareLayout}:{}));
   var contexts={};
   plan.sides.forEach(function(side){
@@ -181,6 +184,7 @@ self.onmessage=async function(event){
       // The compatibility entrypoint re-plans the PNG sequence in run().
       // Forward the same captured HUD settings as the parallel protocol.
       cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+      targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,
       yieldUi:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
       render:session.render,
       onProgress:function(info){self.postMessage({type:'progress',completed:info.completed,

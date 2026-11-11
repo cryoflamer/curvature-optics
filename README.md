@@ -697,3 +697,21 @@ The output summary updates when the layout, frame size, format or worker count
 changes. The displayed RGBA estimate covers the bounded transferred VideoFrame
 credit window (up to 32 MiB), **not** total app, optics Canvas or codec memory.
 Both modes retain Accurate RK4, the selected HUD burn-in, profiling and Cancel.
+
+### Geometric target-direction indicator (Modern)
+
+Scene, Compare A/B and Animation Studio playback offer a separate **Target direction**
+control independent of Camera HUD. Select **All towers**, **Group 1** or **Group 2**.
+A small bottom-centered arrow/label appears **only when the chosen target centre
+is geometrically outside the camera frustum** (left/right/above/below/behind).
+The distance is the geometric camera-to-target distance; it is **not** a
+ray-traced distance and does **not** imply optical visibility or occlusion.
+The two Compare sides use their own physical geometry and camera orientation.
+
+Visibility and target selection survive page reload through Modern browser
+preferences. Animation Studio has a separate playback visibility toggle; PNG
+and WebM/MP4 each have an independent **Include target direction** option, OFF
+by default to preserve existing export pixels. Export options are snapshotted
+at start and passed to all background workers, including both sides of the
+single combined Compare video. The settings do not modify saved experiments,
+RK4 optics, the Legacy interface or the animation timeline.

@@ -9,10 +9,12 @@
     projects=require('./ModernAnimationProject');
     png=require('./ModernAnimationFrameExport');
   }
-  var api=factory(projects,png);
+  var target=root.CurvatureModernTargetIndicator;
+  if(typeof module==='object'&&module.exports)target=require('../ui/modern/ModernTargetIndicator');
+  var api=factory(projects,png,target);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationVideoPipeline=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,png){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,png,target){
   'use strict';
   var MAX_VIDEO_FRAMES=36000,MAX_PENDING=16;
   // Lightweight layout description shared by export planning and the Studio UI.
@@ -39,6 +41,10 @@
     var owned=projects.validate(project),settings=png.exportSettings(options);
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
       throw RangeError('Invalid camera HUD export setting');
+    if(options&&options.targetIndicator!==undefined&&typeof options.targetIndicator!=='boolean')
+      throw RangeError('Invalid target indicator export setting');
+    if(options&&options.targetIndicator===true&&(!target||typeof target.paint!=='function'))
+      throw Error('Target indicator painter unavailable');
     // Keep the optical views independent, but encode one presentation frame
     // per timestamp by default in Compare. 'separate' preserves the legacy
     // two-stream protocol when the user selects separate A/B output.
@@ -67,6 +73,8 @@
     return Object.freeze({project:owned,fps:settings.fps,width:settings.width,
       height:settings.height,cameraHud:!!(options&&options.cameraHud===true),
       cameraHudAppearance:png.resolveHudAppearance(owned,options),
+      targetIndicator:!!(options&&options.targetIndicator===true),
+      targetSelection:target?target.selection(options&&options.targetSelection):'scene',
       durationMs:totalMs,durationUs:durationUs,
       frameCount:count,sides:Object.freeze(isCompare?['A','B']:['A']),
       outputSides:layout.outputSides,
@@ -99,7 +107,8 @@
         var side=p.sides[j],renderStarted=performance.now();
         var image=await render(sample,side,{width:p.width,height:p.height,index:index,
           timeMs:timing.sampleTimeMs,timestampUs:timing.timestampUs,durationUs:timing.durationUs});
-        png.prepareCanvas(image,p.width,p.height,p.cameraHud,p.cameraHudAppearance);
+        png.prepareCanvas(image,p.width,p.height,p.cameraHud,p.cameraHudAppearance,
+          p.targetIndicator,p.targetSelection);
         // A standalone view gets its own VideoFrame. Compare instead retains
         // two independent source canvases until they are composed into one
         // presentation frame, then snapshots only that completed Canvas.

@@ -23,8 +23,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1';
-    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1&target-indicator=1';
+    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1&target-indicator=1';
     var active=null;
     function isBusy(){return !!active;}
     function cancel(){
@@ -150,10 +150,12 @@
           }
           archive.postMessage({type:'init',project:plan.project,fps:plan.fps,
             width:plan.width,height:plan.height,workers:count,
-            cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance});
+            cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'init',
             project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
-            cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance});});
+            cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection});});
         }catch(error){finish(error);}
       });
     }

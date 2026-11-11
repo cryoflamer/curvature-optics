@@ -7,12 +7,13 @@ importScripts(
   '../ui/modern/ModernExperimentState.js',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
+  '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
   '../ui/modern/ModernExperimentFingerprint.js',
   '../camera/ModernCameraInterpolator.js',
   'ModernAnimationCompatibility.js',
   'ModernAnimationProject.js?studio-hud-fix=1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1'
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1'
 );
 var archive=null;
 function reportError(error){

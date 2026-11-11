@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 88,
-      "uniqueScripts": 86,
+      "scriptTags": 89,
+      "uniqueScripts": 87,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -168,6 +168,7 @@
         "src/ui/modern/ModernApplicationPreferences.js",
         "src/camera/ModernCameraTelemetry.js",
         "src/camera/ModernTargetDirection.js",
+        "src/ui/modern/ModernTargetIndicator.js",
         "src/ui/modern/ModernCameraHud.js",
         "src/camera/ModernCameraInterpolator.js",
         "src/camera/ModernCameraSequence.js",
@@ -382,7 +383,8 @@
       "src/ui/modern/ModernPerformanceReport.js",
       "src/ui/modern/ModernRenderProfiler.js",
       "src/ui/modern/ModernSceneState.js",
-      "src/ui/modern/ModernSessionAutosave.js"
+      "src/ui/modern/ModernSessionAutosave.js",
+      "src/ui/modern/ModernTargetIndicator.js"
     ],
     "notDirectlyLoadedByTheseEntrypoints": [
       "src/ControlPanel.js",
@@ -407,7 +409,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 174,
+  "sourceJsCount": 175,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -559,7 +561,8 @@
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationParallelExport.test.js",
-        "tests/ModernAnimationVideoPipeline.test.js"
+        "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -633,7 +636,8 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
-        "tests/ModernAnimationVideoPipeline.test.js"
+        "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -698,7 +702,8 @@
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoLayoutOptions.test.js",
-        "tests/ModernAnimationVideoPipeline.test.js"
+        "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -902,9 +907,12 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernTargetIndicator.js"
+      ],
       "commonJsTestCallers": [
-        "tests/ModernTargetDirection.test.js"
+        "tests/ModernTargetDirection.test.js",
+        "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2258,7 +2266,8 @@
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernObjectPanelLayout.test.js",
-        "tests/ModernSurfaceAtmosphereLayout.test.js"
+        "tests/ModernSurfaceAtmosphereLayout.test.js",
+        "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2425,6 +2434,7 @@
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
         "tests/ModernSharedCompareControls.test.js",
+        "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
         "tests/OpticalRayHorizon.test.js"
       ],
@@ -2549,6 +2559,7 @@
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
         "tests/ModernSessionAutosave.test.js",
+        "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js"
       ],
       "commonJsToolCallers": [
@@ -2647,6 +2658,19 @@
       "commonJsTestCallers": [
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernSessionAutosave.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernTargetIndicator.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationFrameExport.js",
+        "src/animation/ModernAnimationVideoPipeline.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
     },

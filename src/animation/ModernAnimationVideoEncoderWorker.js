@@ -9,13 +9,14 @@ importScripts(
   '../ui/modern/ModernExperimentState.js',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
+  '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
   '../ui/modern/ModernExperimentFingerprint.js',
   '../camera/ModernCameraInterpolator.js',
   'ModernAnimationCompatibility.js',
   'ModernAnimationProject.js?studio-hud-fix=1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1',
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1',
   'ModernAnimationVideoCapabilities.js',
   'ModernAnimationWebMMuxer.js',
   'ModernAnimationMP4Muxer.js',
@@ -95,6 +96,8 @@ async function maybeFinish(){
       manifest.cameraHudIncluded=true;
       manifest.cameraHudAppearance=p.cameraHudAppearance;
     }
+    if(p.targetIndicator){manifest.targetIndicatorIncluded=true;
+      manifest.targetSelection=p.targetSelection;}
     manifest.profiling=reportProfile(current,flushMs,muxMs,null);
     var blob,filename;
     if(files.length===1){blob=files[0].blob;filename='curvature-animation'+
