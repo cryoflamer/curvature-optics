@@ -475,7 +475,8 @@
         "src/animation/ModernAnimationBackgroundVideoExport.js"
       ],
       "commonJsTestCallers": [
-        "tests/ModernAnimationBackgroundExport.test.js"
+        "tests/ModernAnimationBackgroundExport.test.js",
+        "tests/ModernAnimationVideoLayoutOptions.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -485,7 +486,8 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernAnimationBackgroundVideoExport.test.js"
+        "tests/ModernAnimationBackgroundVideoExport.test.js",
+        "tests/ModernAnimationVideoLayoutOptions.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -693,6 +695,7 @@
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
+        "tests/ModernAnimationVideoLayoutOptions.test.js",
         "tests/ModernAnimationVideoPipeline.test.js"
       ],
       "commonJsToolCallers": []

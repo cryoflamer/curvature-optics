@@ -914,6 +914,7 @@ button{cursor:pointer}
 .modern-animation-frame-export p{margin:8px 0;line-height:1.45}
 .modern-animation-frame-export-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
 .modern-animation-frame-export-controls label{display:flex;flex-direction:column;gap:4px}
+.modern-animation-frame-export-controls label[hidden]{display:none!important}
 .modern-animation-frame-export-controls select,.modern-animation-frame-export-controls button{font:inherit;border:1px solid #9cbddd;background:white;border-radius:5px;padding:6px 9px}
 .modern-animation-frame-export-controls button:disabled{opacity:.5;cursor:default}
 .modern-animation-frame-export progress{display:block;width:100%;height:12px;margin-top:10px}

@@ -673,3 +673,18 @@ an opaque dark background, light text with a dark outline is used. Text
 colors transition across intermediate opacity settings. Scene/Compare,
 Animation Studio playback, and optional PNG/video HUD burn-in share these
 rules. This does not change image pixels when Camera HUD is disabled.
+
+### Compare A/B video output layout
+
+Animation Studio's **Export video** provides a **Compare output** selector when
+the current animation is a Compare A/B project. The default **Side-by-side**
+produces one MP4/WebM at twice the selected per-view width and height (for
+example 960×540 per view becomes 1920×1080). **Separate A/B** produces two
+individually encoded, synchronized videos at the selected per-view resolution
+in a single ZIP with `manifest.json`, suitable for independent editing. Scene
+animations always export one video and do not display the Compare selector.
+
+The output summary updates when the layout, frame size, format or worker count
+changes. The displayed RGBA estimate covers the bounded transferred VideoFrame
+credit window (up to 32 MiB), **not** total app, optics Canvas or codec memory.
+Both modes retain Accurate RK4, the selected HUD burn-in, profiling and Cancel.

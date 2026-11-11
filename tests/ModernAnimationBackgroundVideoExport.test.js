@@ -194,3 +194,26 @@ test('H.264 and VP9 export init propagate optional camera HUD to renderers and e
     }));
   }
 });
+
+test('controller propagates explicit separate Compare choice to each Worker for both codecs',async()=>{
+  for(const format of ['mp4','webm']){
+    FakeWorker.reset();
+    const result=await background.create({WorkerCtor:FakeWorker,hardwareConcurrency:4}).start({
+      project:make('compare'),fps:5,width:640,height:360,workerCount:2,
+      compareLayout:'separate',format});
+    assert.equal(result.blob.type,'application/zip');
+    assert.equal(result.manifest.outputStreams,2);
+    assert.equal(result.manifest.width,640);
+    assert.equal(result.manifest.height,360);
+    assert.equal(result.manifest.compareLayout,'separate');
+    const encoder=FakeWorker.instances[0];
+    assert.ok(encoder.sent.filter(item=>item.data.type==='frame').every(item=>
+      item.transfer.length===2));
+    for(const worker of FakeWorker.instances){
+      const init=worker.sent.find(item=>item.data.type==='init'||item.data.type==='video-init');
+      assert.ok(init);
+      assert.equal(init.data.compareLayout,'separate');
+      assert.ok(worker.closed);
+    }
+  }
+});

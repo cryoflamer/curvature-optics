@@ -277,3 +277,34 @@ test('legacy separate Compare layout still produces two independent files when r
   assert.ok(bytes.includes(Buffer.from('curvature-animation-A.webm')));
   assert.ok(bytes.includes(Buffer.from('curvature-animation-B.webm')));
 });
+
+test('selected separate Compare layout produces two synchronized video files for MP4 and WebM',async()=>{
+  const p=project('compare');
+  for(const format of ['mp4','webm']){
+    const planned=video.plan(p,{fps:5,width:640,height:360,compareLayout:'separate'});
+    const {root,messages,workers}=sandbox();
+    root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
+      format,compareLayout:'separate',quality:'standard',workers:2,frameWindow:4}});
+    await tick();
+    assert.equal(messages.at(-1).type,'ready');
+    for(const t of planned.frames)
+      root.onmessage({data:{type:'frame',frame:frame(planned,t.index)}});
+    await tick();await tick();
+    const completed=messages.find(x=>x.type==='complete');
+    assert.ok(completed,format+' encoder must finish');
+    assert.equal(completed.blob.type,'application/zip');
+    assert.equal(completed.manifest.outputStreams,2);
+    assert.equal(completed.manifest.width,640);
+    assert.equal(completed.manifest.height,360);
+    assert.equal(completed.manifest.compareLayout,'separate');
+    assert.equal(completed.manifest.durationUs,planned.durationUs);
+    assert.equal(completed.manifest.frameCount,planned.frameCount);
+    assert.equal(completed.manifest.format,format);
+    assert.equal(completed.filename,'curvature-animation-'+format+'-compare.zip');
+    const zip=Buffer.from(await completed.blob.arrayBuffer());
+    assert.ok(zip.includes(Buffer.from('curvature-animation-A.'+format)));
+    assert.ok(zip.includes(Buffer.from('curvature-animation-B.'+format)));
+    assert.ok(zip.includes(Buffer.from('manifest.json')));
+    assert.ok(workers.every(encoder=>encoder.closed));
+  }
+});

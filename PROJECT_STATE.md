@@ -2024,3 +2024,17 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   HUD and Canvas export, including Compare A/B per-view overlays.
 - Updated browser/Worker script URL cache keys for both changed HUD modules.
   Old Animation project appearance records require no migration.
+
+### Animation Studio Compare video layout choice
+
+- Export video now exposes `side-by-side` (one encoded video, default) and
+  `separate` (two synchronized A/B MP4 or WebM streams in a ZIP) when the
+  current Studio draft is a Compare project. Scene projects have no layout
+  selector and still export a single stream. The pre-existing two-stream
+  Worker/encoder protocol is reused; there are no optical solver changes.
+- A shared lightweight output layout calculation powers both video plans and
+  the live UI description, including output resolution, output stream count
+  and RGBA payload per timestamp. The UI displays the actual credit-window
+  bound, explicitly excluding renderer Canvas and codec memory. The layout
+  is snapshotted at export start, carried to all Workers, and recorded in
+  manifests. The separate-output ZIP retains its two video entries and JSON.

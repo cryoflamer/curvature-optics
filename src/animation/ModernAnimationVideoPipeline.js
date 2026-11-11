@@ -15,21 +15,36 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(projects,png){
   'use strict';
   var MAX_VIDEO_FRAMES=36000,MAX_PENDING=16;
+  // Lightweight layout description shared by export planning and the Studio UI.
+  // Bytes cover transferred RGBA VideoFrames only, not optics Canvas or codec memory.
+  function outputLayout(mode,width,height,requestedLayout){
+    if(!['scene','compare'].includes(mode)||!Number.isInteger(width)||width<=0||
+      !Number.isInteger(height)||height<=0)
+      throw RangeError('Invalid video output layout dimensions');
+    var isCompare=mode==='compare';
+    var layout=isCompare?(requestedLayout==null?'side-by-side':requestedLayout):null;
+    if(layout!==null&&!['side-by-side','separate'].includes(layout))
+      throw RangeError('Unsupported Compare video layout');
+    if(!isCompare&&requestedLayout!=null)
+      throw RangeError('Compare layout requires a Compare project');
+    var combined=layout==='side-by-side';
+    var streams=layout==='separate'?2:1;
+    var outputWidth=width*(combined?2:1),outputHeight=height*(combined?2:1);
+    return Object.freeze({compareLayout:layout,outputWidth:outputWidth,
+      outputHeight:outputHeight,outputSides:Object.freeze(combined?['COMBINED']:
+        isCompare?['A','B']:['A']),
+      rawFrameBytes:outputWidth*outputHeight*4*streams});
+  }
   function plan(project,options){
     var owned=projects.validate(project),settings=png.exportSettings(options);
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
       throw RangeError('Invalid camera HUD export setting');
     // Keep the optical views independent, but encode one presentation frame
     // per timestamp by default in Compare. 'separate' preserves the legacy
-    // two-stream protocol for the layout choice added in the next stage.
+    // two-stream protocol when the user selects separate A/B output.
     var isCompare=owned.baseExperiment.display.mode==='compare';
-    var requestedLayout=options&&options.compareLayout;
-    var compareLayout=isCompare?(requestedLayout==null?'side-by-side':requestedLayout):null;
-    if(compareLayout!==null&&!['side-by-side','separate'].includes(compareLayout))
-      throw RangeError('Unsupported Compare video layout');
-    if(!isCompare&&options&&options.compareLayout!=null)
-      throw RangeError('Compare layout requires a Compare project');
-    var combined=compareLayout==='side-by-side';
+    var layout=outputLayout(owned.baseExperiment.display.mode,settings.width,
+      settings.height,options&&options.compareLayout);
     var totalMs=projects.totalMs(owned),durationUs=Math.round(totalMs*1000);
     if(!Number.isSafeInteger(durationUs)||durationUs<=0)
       throw RangeError('Video animation must have positive finite duration');
@@ -54,10 +69,9 @@
       cameraHudAppearance:png.resolveHudAppearance(owned,options),
       durationMs:totalMs,durationUs:durationUs,
       frameCount:count,sides:Object.freeze(isCompare?['A','B']:['A']),
-      outputSides:Object.freeze(combined?['COMBINED']:(isCompare?['A','B']:['A'])),
-      outputWidth:settings.width*(combined?2:1),
-      outputHeight:settings.height*(combined?2:1),
-      compareLayout:compareLayout,frames:Object.freeze(times)});
+      outputSides:layout.outputSides,
+      outputWidth:layout.outputWidth,outputHeight:layout.outputHeight,
+      compareLayout:layout.compareLayout,frames:Object.freeze(times)});
   }
   function closeFrames(result){
     if(!result||!result.frames)return;
@@ -170,6 +184,6 @@
     return Object.freeze({offer:offer,drain:drain,cancel:cancel,available:available,
       buffered:buffered,completed:completed,nextIndex:function(){return next;}});
   }
-  return Object.freeze({plan:plan,renderTimestamp:renderTimestamp,
+  return Object.freeze({plan:plan,outputLayout:outputLayout,renderTimestamp:renderTimestamp,
     closeFrames:closeFrames,orderedGate:orderedGate,MAX_VIDEO_FRAMES:MAX_VIDEO_FRAMES});
 }));

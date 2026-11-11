@@ -1813,6 +1813,38 @@
         status.textContent='Add at least two compatible keyframes to enable background export.';
     }
   }
+  function syncStudioVideoExportLayout(){
+    var selector=newUiEl('ModernAnimationVideoExportCompareLayout');
+    var label=newUiEl('ModernAnimationVideoExportCompareLayoutControl');
+    var info=newUiEl('ModernAnimationVideoExportLayoutInfo');
+    if(!selector||!label||!info||!studioVideoExportPlan)return;
+    var first=studioDraft&&studioDraft.frames&&studioDraft.frames[0];
+    var mode=first&&first.experiment&&first.experiment.display&&
+      first.experiment.display.mode;
+    var isCompare=mode==='compare';
+    label.hidden=!isCompare;
+    if(mode!=='scene'&&!isCompare){info.textContent='Add compatible keyframes to preview the video output.';return;}
+    try{
+      var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
+      var format=newUiEl('ModernAnimationVideoExportFormat').value.toUpperCase();
+      var layout=studioVideoExportPlan.outputLayout(mode,size[0],size[1],
+        isCompare?selector.value:undefined);
+      var workerValue=newUiEl('ModernAnimationVideoExportWorkers').value;
+      var workers=studioBackgroundExportApi.countFor(
+        workerValue==='auto'?'auto':Number(workerValue),
+        root.navigator&&root.navigator.hardwareConcurrency,
+        studioVideoExportPlan.MAX_VIDEO_FRAMES);
+      // Same RGBA credit-window formula as the actual background coordinator.
+      var window=studioVideoExportApi.frameWindow(layout,workers);
+      var frameMiB=layout.rawFrameBytes/1048576;
+      var summary=isCompare&&layout.compareLayout==='separate'?
+        '2 × '+size[0]+'×'+size[1]+' '+format+' videos in one ZIP':
+        '1 × '+layout.outputWidth+'×'+layout.outputHeight+' '+format+' video';
+      info.textContent='Output: '+summary+' · RGBA handoff '+frameMiB.toFixed(1)+
+        ' MiB/timestamp; up to '+(frameMiB*window).toFixed(1)+' MiB in-flight ('+
+        window+' frames). This excludes renderer Canvas and codec memory.';
+    }catch(error){info.textContent='Output estimate unavailable: '+error.message;}
+  }
   function syncStudioVideoExportControls(){
     var start=newUiEl('ModernAnimationVideoExportStart');
     var cancel=newUiEl('ModernAnimationVideoExportCancel');
@@ -1820,6 +1852,7 @@
     if(start)start.disabled=!!studioVideoExportTask||!!studioFrameExportTask||
       !ready||!studioVideoExportApi||!studioVideoExportPlan;
     if(cancel)cancel.disabled=!studioVideoExportTask;
+    syncStudioVideoExportLayout();
     var status=newUiEl('ModernAnimationVideoExportStatus');
     if(status&&!studioVideoExportTask){
       if(ready&&status.textContent.indexOf('Add at least two compatible keyframes.')===0)
@@ -1886,6 +1919,11 @@
       if(lastProfile)downloadHistoryJson(JSON.stringify(lastProfile,null,2),
         'curvature-animation-video-profile.json');
     });
+    ['ModernAnimationVideoExportCompareLayout','ModernAnimationVideoExportSize',
+      'ModernAnimationVideoExportFormat','ModernAnimationVideoExportWorkers'].forEach(function(id){
+      var select=newUiEl(id);
+      if(select)select.addEventListener('change',syncStudioVideoExportLayout);
+    });
     cancel.addEventListener('click',function(){
       if(!studioVideoExportTask)return;
       studioVideoExportTask.controller.cancel();
@@ -1897,8 +1935,8 @@
         message('Video export modules unavailable. Check the browser console.');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
-        rendererUrl:'src/animation/ModernAnimationFrameWorker.js',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js',
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?compare-layout=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};studioVideoExportTask=task;
       syncStudioFrameExportControls();
@@ -1910,7 +1948,11 @@
         var project=studioPrepared||studioApi.build(studioDraft,'studio_video_export');
         var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
         var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
-        var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],height:size[1]});
+        var compareMode=project.baseExperiment.display.mode==='compare';
+        var compareLayout=compareMode?
+          newUiEl('ModernAnimationVideoExportCompareLayout').value:undefined;
+        var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],
+          height:size[1],compareLayout:compareLayout});
         var selected=newUiEl('ModernAnimationVideoExportWorkers').value;
         var workers=selected==='auto'?'auto':Number(selected);
         var quality=newUiEl('ModernAnimationVideoExportQuality').value;
@@ -1918,9 +1960,11 @@
         var codecLabel=format==='mp4'?'H.264 MP4':'VP9 WebM';
         var started=profileNow(),lastUiTick=-Infinity,lastRenderTick=-Infinity;
         message('Starting '+codecLabel+' render and encoder workers · '+plan.frameCount+
-          ' video intervals · '+plan.sides.length+' view(s) · Accurate RK4.');
+          ' video intervals · '+plan.outputSides.length+' output stream(s) from '+
+          plan.sides.length+' view(s) · Accurate RK4.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
+          compareLayout:plan.compareLayout,
           cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
           cameraHudAppearance:studioHudAppearance(),
           onReady:function(info){

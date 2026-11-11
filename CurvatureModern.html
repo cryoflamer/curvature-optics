@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -86,7 +86,7 @@
 <script src="src/animation/ModernAnimationFrameExport.js?studio-hud-fix=1"></script>
 <script src="src/animation/ModernAnimationBackgroundExport.js?studio-hud-fix=1"></script>
 <script src="src/animation/ModernAnimationCompareComposition.js"></script>
-<script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1"></script>
+<script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1"></script>
 <script src="src/animation/ModernAnimationVideoCapabilities.js"></script>
 <script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
@@ -260,7 +260,7 @@
       </details>
       <details id="ModernAnimationVideoExportSection" class="modern-animation-frame-export">
         <summary>Export video · WebM / MP4 · deterministic (offline)</summary>
-        <p>Offline VP9 WebM or H.264 MP4 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, one side-by-side video shows both synchronized views (output is twice the selected width and height). Camera telemetry burn-in is optional and disabled by default.</p>
+        <p>Offline VP9 WebM or H.264 MP4 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, choose one synchronized side-by-side video or separate A/B files in a ZIP. Frame size is per view; the exact output dimensions and bounded RGBA handoff budget are shown below. Camera telemetry burn-in is optional and disabled by default.</p>
         <div class="modern-animation-frame-export-controls">
           <label for="ModernAnimationVideoExportFormat">Format
             <select id="ModernAnimationVideoExportFormat"><option value="webm" selected>WebM · VP9</option><option value="mp4">MP4 · H.264</option></select>
@@ -270,6 +270,9 @@
           </label>
           <label for="ModernAnimationVideoExportSize">Frame size
             <select id="ModernAnimationVideoExportSize"><option value="640x360">640 × 360</option><option value="960x540" selected>960 × 540</option><option value="1280x720">1280 × 720</option></select>
+          </label>
+          <label id="ModernAnimationVideoExportCompareLayoutControl" for="ModernAnimationVideoExportCompareLayout" hidden>Compare output
+            <select id="ModernAnimationVideoExportCompareLayout"><option value="side-by-side" selected>Side-by-side · one video</option><option value="separate">Separate A/B · ZIP</option></select>
           </label>
           <label for="ModernAnimationVideoExportWorkers">Render workers
             <select id="ModernAnimationVideoExportWorkers"><option value="auto" selected>Auto (up to 4)</option><option value="1">1 · baseline</option><option value="2">2</option><option value="4">4</option></select>
@@ -281,6 +284,7 @@
           <button type="button" id="ModernAnimationVideoExportStart">Render video</button>
           <button type="button" id="ModernAnimationVideoExportCancel" disabled>Cancel export</button>
         </div>
+        <p id="ModernAnimationVideoExportLayoutInfo" class="modern-studio-hint" role="status" aria-live="polite">Video output details appear when a project is ready.</p>
         <progress id="ModernAnimationVideoExportProgress" max="100" value="0" aria-label="Video export progress"></progress>
         <p id="ModernAnimationVideoExportStatus" role="status" aria-live="polite">Add at least two compatible keyframes. Video export uses the current draft or prepared project.</p>
         <pre id="ModernAnimationVideoProfileSummary" class="modern-studio-hint" style="white-space:pre-wrap" hidden></pre>
@@ -798,7 +802,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
