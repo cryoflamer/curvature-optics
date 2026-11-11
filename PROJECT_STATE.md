@@ -2062,3 +2062,15 @@ browser; exports capture the chosen selection and inclusion flags at launch.
 Compare frames are marked separately before they are composed or encoded.
 Worker import order and cache keys were extended without changing Legacy,
 physics or the saved animation project schema.
+
+### Display viewport-overlay controls
+
+The Scene/Compare Camera HUD toggle, appearance fields and target-direction
+visibility/selection were reorganized into an always-visible **Viewport overlays**
+section in the Modern **Display** tab. All DOM control IDs and existing event
+handlers/preferences were retained; a scoped in-panel CSS override replaces
+the former scene-header popup positioning without affecting the separate
+Animation Studio HUD popup. The Scene/Compare overlay remains DOM-only;
+independent animation PNG/MP4/WebM settings, project schemas and RK4 optics
+remain unchanged. Test coverage verifies control uniqueness, placement,
+preferences, and removal of the now-duplicated target CSS block.

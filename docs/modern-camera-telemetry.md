@@ -69,21 +69,18 @@ Consumers should derive samples from the viewport's own rendered model:
   **effective interim camera state**, not the previous finished RK4 frame.
 
 The persistent on-screen HUD is available in Scene and Compare A/B. Its
-`Camera HUD` checkbox sits beside the scene header, **outside the Camera
-sidebar**, and is enabled for new/old browser preferences. Visibility is stored
-in local `ModernApplicationPreferences` (`cameraHudVisible`), not in experiment
-snapshots or shared URLs. Resetting preferences re-enables it. No RK4 recalculation
-is triggered by toggling the overlay.
-
-The **Appearance** disclosure beside the checkbox adjusts *background* opacity
-(0–100%, text stays opaque), corner (top-left/right or bottom-left/right) and
-text scale (75%, 100%, 125%). Both Compare sides use the same settings,
-positioned relative to their own clipped viewports. Defaults preserve the
-previous top-left placement and near-opaque background. These presentation
-options persist as `cameraHudAppearance` in local browser preferences; they
-never change experiment physics, saved snapshots or shared URLs. Settings take
-effect immediately without an optics redraw, and **Reset preferences** restores
-defaults. Playback/export customization is a separate follow-up stage.
+**Camera HUD** checkbox is in **Display → Viewport overlays** alongside the
+independent **Target direction** indicator and target selector. The HUD's
+**Camera HUD appearance** disclosure adjusts *background* opacity (0–100%,
+text remains opaque with adaptive contrast), corner (top-left/right or
+bottom-left/right), and text scale (75%, 100%, 125%). Both Compare sides share
+the appearance preference, but their clipped viewports and camera telemetry
+remain independent. The settings are stored in local
+`ModernApplicationPreferences` (`cameraHudVisible`, `cameraHudAppearance`),
+not in experiment snapshots or URLs. Resetting application preferences restores
+the defaults. No RK4 recalculation is triggered by toggling or restyling the
+DOM overlay. The Animation Studio keeps separate playback/export controls;
+named Studio projects can store their own HUD appearance.
 
 `ModernCameraHud.js` creates an accessible, non-interactive text-only overlay
 in each Graph Canvas clipping container. It never changes exported pixels.
@@ -91,9 +88,10 @@ Scene uses the current model; Compare measures both independently rendered
 models with their shared live observer pose and Compare eye-level aiming. Mouse
 drag shows interim position/angles even before the committed RK4 redraw; wheel
 FOV and keyboard motion update the HUD immediately. When hidden, the old
-transient drag text remains available. Animation Studio playback and optional PNG/video HUDs already exist, but do not
-yet inherit these new appearance options. A control help strip and optional
-orientation indicator are planned separate stages. No Legacy source changes.
+transient drag text remains available. Animation Studio playback and optional
+PNG/MP4/WebM burn-in share the appearance model, including adaptive text contrast.
+The exported Canvas HUD is not pixel-identical to the DOM's CSS text rendering.
+No Legacy source changes.
 
 Tests: `node --test tests/ModernCameraHud.test.js tests/ModernCameraTelemetry.test.js tests/ModernApplicationPreferences.test.js`.
 

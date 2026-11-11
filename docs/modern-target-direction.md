@@ -1,10 +1,10 @@
 # Modern target direction geometry
 
 `src/camera/ModernTargetDirection.js` is a **read-only geometric** target
-locator for the planned camera direction indicator. The first integration is
-pure geometry only: **there is no compass overlay, preference, or new exported
-pixel in this stage**. The module is loaded by `CurvatureModern.html`, never by
-the Legacy entrypoint.
+locator for the Camera target-direction indicator. The geometry is kept
+separate from `src/ui/modern/ModernTargetIndicator.js`, which provides the
+DOM indicator and optional PNG/MP4/WebM Canvas overlay. Both modules load
+only in `CurvatureModern.html`, never in the Legacy entrypoint.
 
 ## Sources of truth
 
@@ -57,10 +57,17 @@ coincident anchor gives `here`. Missing target selections return `null`.
 
 **No optical visibility inference:** geometric direction may point below the
 horizon or through other objects; it does not account for RK4 refraction,
-atmospheric obscuration or occlusion. A future indicator must clearly label
-this distinction, avoid implying the target is visible, and add its own UI
-preferences independently of Camera HUD. An anchored offscreen indicator will
-be wired into Scene/Compare/Animation Studio in the following stage.
+atmospheric obscuration or occlusion. The indicator only appears when the
+selected centre lies outside the geometric camera frustum; otherwise it stays
+hidden even if refraction hides the target. This must not be interpreted as
+optical visibility. Its browser preferences are independent of Camera HUD.
+
+**Controls:** In Scene and Compare A/B choose **Display → Viewport overlays**:
+**Target direction** toggles the live marker, and **Target** selects All towers,
+Group 1, or Group 2. A bottom-centred arrow, target label and geometric distance
+appear within each physical viewport. Animation Studio has its own playback
+visibility control and separate opt-in PNG and MP4/WebM export flags (OFF by
+default). The underlying physical Canvas, snapshots and RK4 remain unchanged.
 
 ## Verification
 

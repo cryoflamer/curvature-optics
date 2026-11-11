@@ -151,7 +151,7 @@ A read-only target-direction kernel now locates the actual authored object
 anchors, per-group and scene centres in the movable observer frame for Globe
 and Flat. Bearings, screen-relative direction, Pan/Nick/Roll and camera aiming
 come from the same physical geometry as the Modern renderer; no refracted
-visibility is inferred. **The visible compass is still pending.** Details and
+visibility is inferred. **The off-screen indicator is now available in Display → Viewport overlays.** Details and
 API: [`docs/modern-target-direction.md`](docs/modern-target-direction.md).
 
 ### Modern camera animation
@@ -700,8 +700,12 @@ Both modes retain Accurate RK4, the selected HUD burn-in, profiling and Cancel.
 
 ### Geometric target-direction indicator (Modern)
 
-Scene, Compare A/B and Animation Studio playback offer a separate **Target direction**
-control independent of Camera HUD. Select **All towers**, **Group 1** or **Group 2**.
+In Scene and Compare A/B, open **Display → Viewport overlays** to control
+**Camera HUD**, **Camera HUD appearance**, and the independent **Target direction**
+indicator. Choose **All towers**, **Group 1** or **Group 2** for the geometric
+target. The scene-header row now contains only scene-specific information and
+preset actions; overlay controls no longer crowd it. Animation Studio playback
+retains its own overlay controls and HUD appearance settings.
 A small bottom-centered arrow/label appears **only when the chosen target centre
 is geometrically outside the camera frustum** (left/right/above/below/behind).
 The distance is the geometric camera-to-target distance; it is **not** a

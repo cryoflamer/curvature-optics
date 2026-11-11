@@ -646,6 +646,43 @@
         </details>
       </section>      <section class="modern-section modern-settings-panel" id="ModernPanelDisplay" role="tabpanel" aria-labelledby="ModernSettingsDisplay" hidden>
         <h2>Display</h2>
+        <section class="modern-display-overlays" aria-labelledby="ModernDisplayOverlaysTitle">
+          <h3 id="ModernDisplayOverlaysTitle">Viewport overlays</h3>
+          <div class="modern-display-check">
+            <label class="modern-check" for="ModernCameraHudToggle"><input type="checkbox" id="ModernCameraHudToggle" checked> Camera HUD</label>
+            <button type="button" class="modern-help" aria-label="Help: Camera HUD" data-tip="Observer height, position and orientation over the physical viewport. Scene and Compare share the appearance settings, but each view shows its own camera telemetry.">?</button>
+          </div>
+          <details class="modern-camera-hud-settings modern-display-hud-settings" id="ModernCameraHudSettings">
+            <summary>Camera HUD appearance</summary>
+            <div class="modern-camera-hud-settings-body">
+              <label for="ModernCameraHudOpacity">Background opacity <output id="ModernCameraHudOpacityValue" for="ModernCameraHudOpacity">90%</output></label>
+              <input id="ModernCameraHudOpacity" type="range" min="0" max="100" step="5" value="90">
+              <label for="ModernCameraHudPosition">Position</label>
+              <select id="ModernCameraHudPosition">
+                <option value="top-left">Top left</option>
+                <option value="top-right">Top right</option>
+                <option value="bottom-left">Bottom left</option>
+                <option value="bottom-right">Bottom right</option>
+              </select>
+              <label for="ModernCameraHudSize">Size</label>
+              <select id="ModernCameraHudSize">
+                <option value="75">75%</option>
+                <option value="100" selected>100%</option>
+                <option value="125">125%</option>
+              </select>
+              <small>Applies to Scene and both Compare views. Saved in this browser.</small>
+            </div>
+          </details>
+          <div class="modern-display-check">
+            <label class="modern-check" for="ModernTargetIndicatorToggle"><input type="checkbox" id="ModernTargetIndicatorToggle" checked> Target direction</label>
+            <button type="button" class="modern-help" aria-label="Help: target direction" data-tip="Geometric direction to an off-screen target centre. Independent of Camera HUD; does not establish optical visibility, refraction or occlusion.">?</button>
+          </div>
+          <div class="modern-field modern-display-target-selection">
+            <label for="ModernTargetIndicatorSelection">Target</label>
+            <select id="ModernTargetIndicatorSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select>
+          </div>
+          <p class="modern-display-hint">Overlays are shown separately in Scene and both Compare views. They do not alter the optical image. Animation Studio has its own playback and export controls.</p>
+        </section>
         <div class="modern-display-check">
           <label class="modern-check" for="ModernGrid"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
           <button type="button" class="modern-help" aria-label="Help: metric ground grid" data-tip="Metric guide lines follow the physical surface and do not determine the optical horizon.">?</button>
@@ -779,32 +816,6 @@
           </select>
           <button type="button" class="modern-ghost-button" id="ModernResetPreset" title="Restore the chosen preset's initial scene parameters">Reset</button>
         </div>
-        <label class="modern-camera-hud-toggle" for="ModernCameraHudToggle">
-          <input type="checkbox" id="ModernCameraHudToggle" checked> Camera HUD
-        </label>
-        <label class="modern-camera-hud-toggle" for="ModernTargetIndicatorToggle"><input type="checkbox" id="ModernTargetIndicatorToggle" checked> Target direction</label>
-        <label class="modern-camera-hud-toggle" for="ModernTargetIndicatorSelection">Target <select id="ModernTargetIndicatorSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select></label>
-        <details class="modern-camera-hud-settings" id="ModernCameraHudSettings">
-          <summary aria-label="Camera HUD appearance settings">Appearance</summary>
-          <div class="modern-camera-hud-settings-body">
-            <label for="ModernCameraHudOpacity">Background opacity <output id="ModernCameraHudOpacityValue" for="ModernCameraHudOpacity">90%</output></label>
-            <input id="ModernCameraHudOpacity" type="range" min="0" max="100" step="5" value="90">
-            <label for="ModernCameraHudPosition">Position</label>
-            <select id="ModernCameraHudPosition">
-              <option value="top-left">Top left</option>
-              <option value="top-right">Top right</option>
-              <option value="bottom-left">Bottom left</option>
-              <option value="bottom-right">Bottom right</option>
-            </select>
-            <label for="ModernCameraHudSize">Size</label>
-            <select id="ModernCameraHudSize">
-              <option value="75">75%</option>
-              <option value="100" selected>100%</option>
-              <option value="125">125%</option>
-            </select>
-            <small>Applies to Scene and both Compare views. Saved in this browser.</small>
-          </div>
-        </details>
         <span class="modern-mode-pill" id="ModernModePill">SCENE</span></div>
       <section class="modern-viewport-panel" aria-label="Physical scene preview">
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>

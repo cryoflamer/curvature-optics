@@ -226,18 +226,6 @@ button{cursor:pointer}
 .modern-target-direction strong{font-size:20px;line-height:1}
 .modern-target-direction span{overflow:hidden;text-overflow:ellipsis}
 .modern-target-direction[hidden]{display:none!important}
-/* Independent off-screen target direction, anchored away from HUD corners.
-   This is a geometric direction, never an optical-visibility verdict. */
-.modern-target-direction{position:absolute;z-index:8;bottom:9px;left:50%;
-  transform:translateX(-50%);max-width:calc(100% - 20px);box-sizing:border-box;
-  display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;
-  border:1px solid #809bb4;background:rgba(17,41,59,.85);color:#fff;
-  box-shadow:0 2px 8px #0b1e2f50;pointer-events:none;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;font:600 11px/1.3 system-ui,Arial,sans-serif;
-  font-variant-numeric:tabular-nums}
-.modern-target-direction strong{font-size:20px;line-height:1}
-.modern-target-direction span{overflow:hidden;text-overflow:ellipsis}
-.modern-target-direction[hidden]{display:none!important}
 /* 138.1: reference labels must remain transparent above the scene image.
    The general viewport Canvas background is opaque white by default. */
 .modern-graph-host canvas.modern-atmospheric-guides{background:transparent}
@@ -367,6 +355,24 @@ button{cursor:pointer}
 .modern-camera-optional summary{cursor:pointer;color:#24619d;font-size:12px;font-weight:600;margin-bottom:9px}
 #ModernSequenceEmpty{margin:5px 0 0}
 #ModernSequenceKeyframes{min-height:120px}
+
+/* The Scene/Compare overlays live in Display, never in the viewport toolbar.
+   Studio keeps the existing anchored popup. Scope the in-panel override so
+   the same appearance control IDs and UI events continue to work unmodified. */
+.modern-display-overlays{padding:10px 11px 8px;margin:2px 0 17px;
+  border:1px solid #d9e5f1;border-radius:9px;background:#f7faff}
+.modern-display-overlays h3{margin:0 0 11px;color:#244b78;font-size:12px;font-weight:750}
+.modern-display-overlays .modern-display-check{margin:8px 0}
+.modern-display-overlays .modern-camera-hud-settings{margin:2px 0 13px}
+.modern-display-overlays .modern-camera-hud-settings>summary{
+  padding:7px 9px;white-space:normal;background:#fff;list-style-position:inside}
+.modern-display-overlays .modern-camera-hud-settings-body{
+  position:static;width:auto;max-width:none;margin-top:5px;box-shadow:none;
+  border-color:#dbe7f4;background:#fff}
+.modern-display-overlays .modern-camera-hud-settings-body select{width:100%;min-width:0}
+.modern-display-overlays .modern-display-target-selection{margin:5px 0 9px}
+.modern-display-overlays .modern-display-target-selection select{width:100%}
+.modern-display-overlays>.modern-display-hint{display:block;margin:12px 0 3px}
 
 /* Compact Modern Display: information stays at the point of use, diagnostics on demand. */
 .modern-display-check{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}

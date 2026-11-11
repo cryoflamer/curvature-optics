@@ -60,3 +60,37 @@ test('Display fold toggles and Reset use the existing preferences, never experim
   assert.match(app,/node\.hidden=!error&&!\/reset\/i\.test\(message\)/);
   assert.doesNotMatch(read('src/ui/modern/ModernApplicationPreferences.js'),/experimentStorage|ModernExperimentState/);
 });
+
+test('Camera HUD and target direction controls live only in Display viewport overlays',()=>{
+  const section=display.match(/<section class="modern-display-overlays"[\s\S]*?<\/section>/);
+  assert.ok(section,'dedicated Viewport overlays section in Display');
+  assert.match(section[0],/id="ModernDisplayOverlaysTitle">Viewport overlays/);
+  for(const id of ['ModernCameraHudToggle','ModernCameraHudSettings','ModernCameraHudOpacity',
+    'ModernCameraHudOpacityValue','ModernCameraHudPosition','ModernCameraHudSize',
+    'ModernTargetIndicatorToggle','ModernTargetIndicatorSelection']){
+    assert.ok(section[0].includes('id="'+id+'"'),id+' must be inside Display overlays');
+    assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,
+      id+' must not be duplicated across the header and Display');
+  }
+  const header=html.slice(html.indexOf('<div class="modern-scene-bar">'),
+    html.indexOf('<section class="modern-viewport-panel"'));
+  assert.doesNotMatch(header,/ModernCameraHudToggle|ModernTargetIndicatorToggle|ModernCameraHudSettings/);
+  assert.ok(section[0].indexOf('ModernTargetIndicatorToggle')<
+    section[0].indexOf('ModernTargetIndicatorSelection'));
+  assert.match(section[0],/independent|does not alter the optical image/i);
+  // Studio remains a distinct playback UI, not accidentally moved to Display.
+  assert.equal((html.match(/id="ModernAnimationHudSettings"/g)||[]).length,1);
+  assert.equal((html.match(/id="ModernAnimationTargetToggle"/g)||[]).length,1);
+});
+
+test('the in-panel HUD appearance is not rendered as the Animation Studio popup',()=>{
+  assert.match(css,/\.modern-display-overlays \.modern-camera-hud-settings-body\s*\{[^}]*position:static/s);
+  assert.match(css,/\.modern-display-overlays \.modern-camera-hud-settings-body select\{width:100%/);
+  assert.match(css,/\.modern-camera-hud-settings-body\{position:absolute/);
+  assert.equal((css.match(/\.modern-target-direction\{position:absolute/g)||[]).length,1,
+    'one authoritative target-direction style rule');
+  assert.match(app,/function bindCameraHud\(\)/);
+  assert.match(app,/function bindTargetIndicator\(\)/);
+  assert.match(app,/cameraHudAppearance=applicationPreferences\?/);
+  assert.match(app,/targetIndicatorSelection=targetIndicatorApi\.selection/);
+});
