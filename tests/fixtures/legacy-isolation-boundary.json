@@ -383,6 +383,7 @@
       "src/animation/ModernAnimationArchiveWorker.js",
       "src/animation/ModernAnimationFrameWorker.js",
       "src/animation/ModernAnimationMP4Muxer.js",
+      "src/animation/ModernAnimationVideoArchive.js",
       "src/animation/ModernAnimationVideoEncoderWorker.js",
       "src/animation/ModernAnimationVideoProbeWorker.js",
       "src/animation/ModernAnimationWebMMuxer.js",
@@ -396,7 +397,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 168,
+  "sourceJsCount": 169,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -612,6 +613,14 @@
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStudio.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationVideoArchive.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationVideoArchive.test.js"
       ],
       "commonJsToolCallers": []
     },

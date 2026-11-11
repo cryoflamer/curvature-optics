@@ -1,7 +1,8 @@
 /* Dedicated offline VP9/WebM or H.264/MP4 encoder and muxer. VideoFrames arrive transferred
  * from isolated Accurate RK4 render workers via a bounded controller window.
  * decode-order output is kept compressed; RGBA frames are closed immediately
- * after WebCodecs accepts them. Cancel terminates this entire worker.
+ * after WebCodecs accepts them. Compare archives use Blob-streamed CRC32,
+ * avoiding copies of whole video files. Cancel terminates this worker.
  */
 'use strict';
 importScripts(
@@ -14,7 +15,8 @@ importScripts(
   'ModernAnimationVideoPipeline.js',
   'ModernAnimationVideoCapabilities.js',
   'ModernAnimationWebMMuxer.js',
-  'ModernAnimationMP4Muxer.js'
+  'ModernAnimationMP4Muxer.js',
+  'ModernAnimationVideoArchive.js'
 );
 var session=null,initializing=false,failed=false;
 var MAX_ENCODER_QUEUE=3;
@@ -39,7 +41,8 @@ async function maybeFinish(){
   var current=session;
   current.finishing=true;
   try{
-    self.postMessage({type:'muxing',total:current.plan.frameCount});
+    self.postMessage({type:'muxing',total:current.plan.frameCount,
+      encodedBytes:current.encodedBytes});
     await Promise.all(current.encoders.map(function(encoder){return encoder.flush();}));
     if(failed||session!==current)return;
     var files=current.plan.sides.map(function(side){
@@ -53,20 +56,26 @@ async function maybeFinish(){
       durationUs:p.durationUs,sides:p.sides.slice(),
       endSampleTimeMs:p.frames[p.frameCount-1].sampleTimeMs,
       bitrate:current.bitrate,renderWorkers:current.workers,
+      frameWindow:current.frameWindow,
+      peakBufferedFrames:current.peakBuffered,
+      peakEncoderQueue:current.peakEncoderQueue,
+      encodedBytes:current.encodedBytes,
       elapsedMs:performance.now()-current.start};
     var blob,filename;
     if(files.length===1){blob=files[0].blob;filename='curvature-animation.'+current.format;}
     else{
-      // One user gesture and one download for Compare A/B, not two potentially
-      // blocked simultaneous browser downloads. ZIP is assembled in this Worker.
+      // Blobs remain immutable file parts. ZIP CRC is read in small stream
+      // chunks; no full file.arrayBuffer() copies are made for Compare A/B.
       var entries=[];
       for(var i=0;i<files.length;i++){
         entries.push({name:'curvature-animation-'+files[i].side+'.'+current.format,
-          data:new Uint8Array(await files[i].blob.arrayBuffer())});
+          data:files[i].blob});
       }
-      entries.push({name:'manifest.json',data:new TextEncoder().encode(
-        JSON.stringify(manifest,null,2)+'\n')});
-      blob=self.CurvatureModernAnimationFrameExport.zip(entries);
+      entries.push({name:'manifest.json',data:new Blob([JSON.stringify(manifest,null,2)+'\n'])});
+      blob=await self.CurvatureModernAnimationVideoArchive.pack(entries,{
+        onEntry:function(info){self.postMessage({type:'packing',completed:info.completed,
+          total:info.total});}
+      });
       filename='curvature-animation-'+current.format+'-compare.zip';
     }
     if(failed||session!==current)return;
@@ -84,6 +93,8 @@ async function init(data){
     var plan=pipeline.plan(data.project,data);
     if(!Number.isInteger(data.workers)||data.workers<1||data.workers>4)
       throw RangeError('Invalid video render worker count');
+    if(!Number.isInteger(data.frameWindow)||data.frameWindow<1||data.frameWindow>8)
+      throw RangeError('Invalid bounded video frame window');
     var format=data.format===undefined?'webm':data.format;
     if(format!=='webm'&&format!=='mp4')throw RangeError('Unsupported video format');
     var codec=format==='mp4'?'avc1.42E01F':'vp09.00.10.08';
@@ -96,7 +107,7 @@ async function init(data){
     if(format==='mp4')config.avc={format:'avc'};
     var supported=await VideoEncoder.isConfigSupported(config);
     if(!supported||!supported.supported)throw Error(codec+' WebCodecs configuration unavailable');
-    var muxers={},encoders=[],durations=new Map();
+    var muxers={},encoders=[],durations=new Map(),encodedBytes=0;
     plan.frames.forEach(function(t){durations.set(t.timestampUs,t.durationUs);});
     plan.sides.forEach(function(side){
       muxers[side]=(format==='mp4'?self.CurvatureModernAnimationMP4Muxer:
@@ -106,7 +117,13 @@ async function init(data){
           try{
             var duration=durations.get(chunk.timestamp);
             if(duration===undefined)throw Error('Unexpected encoded video timestamp');
+            // Check combined Compare size before copying more encoded output.
+            if(encodedBytes+chunk.byteLength>
+              self.CurvatureModernAnimationVideoArchive.MAX_ARCHIVE_BYTES)
+              throw RangeError('Video output exceeds 192 MiB total; reduce bitrate or duration');
             muxers[side].add(chunk,duration,metadata);
+            encodedBytes+=chunk.byteLength;
+            if(session)session.encodedBytes=encodedBytes;
           }catch(error){fail(error);}
         },
         error:function(error){fail(error);}
@@ -116,7 +133,7 @@ async function init(data){
       encoders.push(encoder);
     });
     var gate=pipeline.orderedGate(plan,{
-      capacity:8,
+      capacity:data.frameWindow,
       canConsume:function(){
         return encoders.every(function(encoder){return encoder.encodeQueueSize<MAX_ENCODER_QUEUE;});
       },
@@ -125,13 +142,19 @@ async function init(data){
           encoders[i].encode(bundle.frames[side],{
             keyFrame:bundle.index%(plan.fps*2)===0});
         });
+        var queued=Math.max.apply(null,encoders.map(function(e){return e.encodeQueueSize;}));
+        session.peakEncoderQueue=Math.max(session.peakEncoderQueue,queued);
         self.postMessage({type:'progress',submitted:bundle.index+1,
+          rendered:session.received,buffered:session.gate.buffered(),
+          encodedBytes:session.encodedBytes,encodeQueue:queued,
           total:plan.frameCount,timeMs:bundle.sampleTimeMs,
           elapsedMs:performance.now()-session.start});
       }
     });
     session={plan:plan,workers:data.workers,gate:gate,encoders:encoders,
       muxers:muxers,bitrate:bitrate,format:format,codec:codec,
+      frameWindow:data.frameWindow,received:0,peakBuffered:0,
+      peakEncoderQueue:0,encodedBytes:0,
       finishing:false,start:performance.now()};
     self.postMessage({type:'ready',total:plan.frameCount,sides:plan.sides.length,
       workers:data.workers,codec:config.codec,format:format,bitrate:bitrate});
@@ -149,7 +172,11 @@ self.onmessage=function(event){
       fail(Error('Video encoder received frames before initialization'));return;
     }
     try{
-      session.gate.offer(data.frame);
+      // Count arrivals before drain invokes consume(), which synchronously
+      // reports encoded-submission progress to the controller.
+      session.received++;
+      var state=session.gate.offer(data.frame);
+      session.peakBuffered=Math.max(session.peakBuffered,state.buffered);
       maybeFinish();
     }catch(error){
       // offer() rejects ownership on validation/capacity failure.

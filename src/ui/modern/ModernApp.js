@@ -1744,24 +1744,50 @@
         var quality=newUiEl('ModernAnimationVideoExportQuality').value;
         var format=newUiEl('ModernAnimationVideoExportFormat').value;
         var codecLabel=format==='mp4'?'H.264 MP4':'VP9 WebM';
-        var started=profileNow();
+        var started=profileNow(),lastUiTick=-Infinity,lastRenderTick=-Infinity;
         message('Starting '+codecLabel+' render and encoder workers · '+plan.frameCount+
           ' video intervals · '+plan.sides.length+' view(s) · Accurate RK4.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
           onReady:function(info){
-            message(info.workers+' render worker(s) ready · '+codecLabel+' encoding in a separate worker · '+
-              info.total+' video frames. Cancel is available.');
+            message(info.workers+' render worker(s) · '+codecLabel+' encoder ready · '+
+              info.total+' frames · reorder window '+info.frameWindow+
+              ' (about '+info.rawFrameMiB+' MiB/frame). Cancel is available.');
+          },
+          onRendered:function(info){
+            // Visible even when the first chronological frame is slow and
+            // all the other render Workers are waiting behind it.
+            var now=profileNow();
+            if(progress&&progress.value===0&&now-lastRenderTick>=250){
+              lastRenderTick=now;
+              message(codecLabel+' Accurate RK4: rendered '+info.rendered+' / '+
+                info.total+' frames · waiting for ordered encoder handoff.');
+            }
           },
           onProgress:function(info){
-            if(progress)progress.value=100*info.submitted/info.total;
+            // Reserve the last 10% for encoder flush and container/ZIP work.
+            var now=profileNow();
+            if(info.submitted!==info.total&&now-lastUiTick<150)return;
+            lastUiTick=now;
+            if(progress)progress.value=90*info.submitted/info.total;
             var elapsed=info.elapsedMs/1000;
             var left=info.submitted?elapsed*(info.total-info.submitted)/info.submitted:0;
-            message(codecLabel+' submitted '+info.submitted+' / '+info.total+' frames · elapsed '+
-              elapsed.toFixed(1)+' s · estimated remaining '+Math.ceil(left)+
-              ' s · '+info.workers+' Accurate RK4 workers');
+            message(codecLabel+' '+info.submitted+' / '+info.total+' frames submitted · '+
+              info.rendered+' rendered · buffer '+info.buffered+'/'+info.frameWindow+
+              ' · codec queue '+info.encodeQueue+' · '+
+              (info.encodedBytes/1048576).toFixed(1)+' MiB encoded · '+
+              elapsed.toFixed(1)+' s elapsed · approx '+Math.ceil(left)+' s remaining');
           },
-          onMuxing:function(){message('Rendering complete · finalizing '+codecLabel+' container…');}
+          onMuxing:function(info){
+            if(progress)progress.value=95;
+            message('Video frames submitted · flushing '+codecLabel+
+              ' encoder and finalizing container ('+(info.encodedBytes/1048576).toFixed(1)+' MiB)…');
+          },
+          onPacking:function(info){
+            if(progress)progress.value=95+4*info.completed/info.total;
+            message(codecLabel+' Compare ZIP: checking '+info.completed+' / '+
+              info.total+' entries without copying full videos…');
+          }
         });
         if(result.cancelled)return;
         var url=root.URL.createObjectURL(result.blob);
@@ -1773,7 +1799,9 @@
         if(progress)progress.value=100;
         message(codecLabel+' export ready: '+result.manifest.frameCount+' frames × '+
           result.manifest.sides.length+' view(s), '+(result.manifest.durationUs/1e6).toFixed(3)+
-          ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+' s total.');
+          ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+
+          ' s total · peak RGBA in-flight '+result.peakInflightFrames+
+          ' frames ('+result.manifest.frameWindow+' maximum).');
       }catch(error){message('Video export failed: '+error.message+' · No partial video saved.');}
       finally{if(studioVideoExportTask===task)studioVideoExportTask=null;
         syncStudioFrameExportControls();}

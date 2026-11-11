@@ -1,7 +1,7 @@
-/* Main-thread coordinator only; offline Accurate RK4 rendering happens in
- * independent workers, encoding/muxing in one additional worker. Dispatch is
- * credit-bounded by contiguous frames submitted to WebCodecs. A blocked first
- * timestamp therefore cannot accumulate unlimited later RGBA VideoFrames.
+/* Main-thread coordinator for offline Accurate RK4 video. Scheduling is
+ * credit-bounded by actual RGBA frame size (including Compare A/B), not just
+ * a fixed number of frames. The encoder owns the same bounded reorder window
+ * and runs asynchronously in its own Worker.
  */
 (function(root,factory){
   var video=root.CurvatureModernAnimationVideoPipeline;
@@ -15,6 +15,12 @@
   root.CurvatureModernAnimationBackgroundVideoExport=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(video,pngBackground){
   'use strict';
+  var MAX_INFLIGHT_RGBA_BYTES=32*1024*1024;
+  function frameWindow(plan,count){
+    var frameBytes=plan.width*plan.height*4*plan.sides.length;
+    return Math.min(8,count*2,Math.max(1,
+      Math.floor(MAX_INFLIGHT_RGBA_BYTES/frameBytes)));
+  }
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
@@ -36,13 +42,13 @@
       var quality=options.quality===undefined?'standard':options.quality;
       var format=options.format===undefined?'webm':options.format;
       if(!['webm','mp4'].includes(format))throw RangeError('Invalid video export format');
-      if(!['standard','high'].includes(quality))throw RangeError('Invalid WebM quality preset');
-      // At most 2 frames per renderer may be outstanding, up to eight total.
-      // Each Compare slot contains A and B; the entire bundle gets one credit.
-      var window=Math.min(8,count*2);
+      if(!['standard','high'].includes(quality))throw RangeError('Invalid video bitrate preset');
+      // A Compare bundle counts both views. At 1280x720, four A/B frames
+      // already represent ~28 MiB of RGBA before codec internals.
+      var window=frameWindow(plan,count);
       return new Promise(function(resolve,reject){
         var workers=[],renderers=[],encoder=null,done=false,ready=0,
-          encoderReady=false,running=false,next=0,submitted=0;
+          encoderReady=false,running=false,next=0,submitted=0,rendered=0,peakInflight=0;
         function finish(error,result){
           if(done)return;
           done=true;
@@ -68,7 +74,7 @@
             var slot=renderers[i];
             if(slot.index!==null||next>=plan.frameCount||next-submitted>=window)continue;
             var index=next++;
-            slot.index=index;
+            slot.index=index;peakInflight=Math.max(peakInflight,next-submitted);
             try{slot.worker.postMessage({type:'video-render',index:index});}
             catch(error){finish(error);return;}
           }
@@ -78,7 +84,8 @@
           running=true;
           try{
             if(typeof options.onReady==='function')options.onReady({
-              total:plan.frameCount,workers:count,sides:plan.sides.length});
+              total:plan.frameCount,workers:count,sides:plan.sides.length,
+              frameWindow:window,rawFrameMiB:Math.round(plan.width*plan.height*4*plan.sides.length/1048576*10)/10});
             pump();
           }catch(error){finish(error);}
         }
@@ -100,12 +107,23 @@
                 fail('Video encoder returned invalid sequential progress');return;
               }
               submitted=value.submitted;
+              if(!Number.isInteger(value.rendered)||value.rendered<submitted||
+                value.rendered>plan.frameCount||!Number.isInteger(value.buffered)||
+                value.buffered<0||value.buffered>window||
+                !Number.isFinite(value.encodedBytes)||value.encodedBytes<0||
+                !Number.isInteger(value.encodeQueue)||value.encodeQueue<0){
+                fail('Video encoder returned invalid throughput telemetry');return;
+              }
               try{if(typeof options.onProgress==='function')options.onProgress(
-                Object.assign({},value,{workers:count}));}
+                Object.assign({},value,{workers:count,frameWindow:window,
+                  peakInflightFrames:peakInflight}));}
               catch(error){finish(error);return;}
               pump();
             }else if(value.type==='muxing'){
               try{if(typeof options.onMuxing==='function')options.onMuxing(value);}
+              catch(error){finish(error);}
+            }else if(value.type==='packing'){
+              try{if(typeof options.onPacking==='function')options.onPacking(value);}
               catch(error){finish(error);}
             }else if(value.type==='complete'){
               if(!value.blob||!value.manifest||
@@ -114,11 +132,17 @@
                 !Array.isArray(value.manifest.sides)||
                 value.manifest.sides.join(',')!==plan.sides.join(',')||
                 value.blob.type!==(plan.sides.length===1?'video/'+format:'application/zip')||
-                value.manifest.format!==format){
+                value.manifest.format!==format||
+                !Number.isInteger(value.manifest.frameWindow)||
+                value.manifest.frameWindow!==window||
+                !Number.isInteger(value.manifest.peakBufferedFrames)||
+                value.manifest.peakBufferedFrames<0||
+                value.manifest.peakBufferedFrames>window){
                 fail('Encoder returned an incomplete video export');return;
               }
               finish(null,{cancelled:false,blob:value.blob,filename:value.filename,
-                manifest:value.manifest,workers:count});
+                manifest:value.manifest,peakInflightFrames:peakInflight,
+                workers:count});
             }else if(value.type==='error')fail('Video encoder failed: '+String(value.message||'unknown error'));
           };
           for(var i=0;i<count;i++){
@@ -147,8 +171,17 @@
                   try{
                     encoder.postMessage({type:'frame',frame:frame},
                       plan.sides.map(function(side){return frame.frames[side];}));
-                    current.index=null;pump();
-                  }catch(error){video.closeFrames(frame);finish(error);}
+                    current.index=null;rendered++;
+                  }catch(error){
+                    try{video.closeFrames(frame);}catch(_closeError){}
+                    finish(error);return;
+                  }
+                  try{
+                    if(typeof options.onRendered==='function')options.onRendered({
+                      rendered:rendered,total:plan.frameCount,workers:count,
+                      frameWindow:window});
+                    pump();
+                  }catch(error){finish(error);}
                 }else if(value.type==='error'){
                   fail('Accurate RK4 video render failed: '+String(value.message||'unknown error'));
                 }
@@ -156,7 +189,8 @@
             })(slot);
           }
           encoder.postMessage({type:'init',project:plan.project,width:plan.width,
-            height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format});
+            height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format,
+            frameWindow:window});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
             project:plan.project,width:plan.width,height:plan.height,fps:plan.fps});});
         }catch(error){finish(error);}
@@ -164,5 +198,6 @@
     }
     return Object.freeze({start:start,cancel:cancel,isBusy:isBusy});
   }
-  return Object.freeze({create:create});
+  return Object.freeze({create:create,frameWindow:frameWindow,
+    MAX_INFLIGHT_RGBA_BYTES:MAX_INFLIGHT_RGBA_BYTES});
 }));

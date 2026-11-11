@@ -1,7 +1,6 @@
-/* Foundation for deterministic offline video: a video-specific timeline,
- * accurate opaque Canvas -> transferable VideoFrame, and a bounded ordered
- * handoff. No encoder, muxer or UI export is installed in this stage.
- * PNG's inclusive endpoint timeline remains untouched.
+/* Deterministic offline video timeline, opaque Accurate RK4 Canvas ->
+ * transferable VideoFrame, and bounded ordered encoding handoff. PNG's
+ * inclusive endpoint timeline remains independent and untouched.
  */
 (function(root,factory){
   var projects=root.CurvatureModernAnimationProject;
@@ -102,6 +101,7 @@
       closed=true;pending.forEach(release);pending.clear();
     }
     function available(){return closed?0:capacity-pending.size;}
+    function buffered(){return pending.size;}
     function completed(){return !closed&&next===p.frameCount&&pending.size===0;}
     function drain(){
       if(closed)return {completed:next,total:p.frameCount,buffered:0,available:0};
@@ -134,7 +134,7 @@
       return drain();
     }
     return Object.freeze({offer:offer,drain:drain,cancel:cancel,available:available,
-      completed:completed,nextIndex:function(){return next;}});
+      buffered:buffered,completed:completed,nextIndex:function(){return next;}});
   }
   return Object.freeze({plan:plan,renderTimestamp:renderTimestamp,
     closeFrames:closeFrames,orderedGate:orderedGate,MAX_VIDEO_FRAMES:MAX_VIDEO_FRAMES});

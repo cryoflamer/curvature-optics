@@ -1,7 +1,9 @@
 # Deterministic video export — VP9 WebM / H.264 MP4
 
-Status: **WebM and MP4 implemented**. The initial VP9 WebM flow was verified
-with a real Opera export. MP4/H.264 must still be acceptance-tested in Opera.
+Status: **WebM and MP4 implemented and confirmed working in Opera by the user**.
+The streaming/optimization stage was implemented after both formats were
+accepted. Its memory/throughput instrumentation still requires an Opera
+acceptance run; Node tests are not browser performance measurements.
 The PNG ZIP export, Scene, Compare, and interactive Animation Playback remain
 independent; the Legacy application is not modified.
 
@@ -17,8 +19,12 @@ at least two compatible keyframes (a valid current draft also works). Expand
 - Accurate RK4 render Worker count: Auto, 1, 2, or 4
 - Encoder bitrate: Standard or High
 
-Click **Render video**. The progress bar counts intervals handed to WebCodecs;
-finalization and container muxing have a separate status. **Cancel export**
+Click **Render video**. The progress bar assigns 0–90% to ordered frame
+submission, 95% to encoder flush/muxing, and 95–99% to Compare ZIP packaging;
+100% means the complete artifact was returned. Status shows elapsed and
+estimated render/encode time, rendered/submitted counts, reorder buffer usage,
+codec queue depth, and compressed MiB. These are separate phases, not a
+real-time screen recording. **Cancel export**
 terminates all render and encoder Workers immediately, preventing partial
 video downloads.
 
@@ -69,11 +75,18 @@ are requested at least every two seconds for seeking.
 - `ModernAnimationVideoPipeline.js`: deterministic interval plan, opaque
   VideoFrame creation and bounded ordered gate, closing frames after enqueue.
 - `ModernAnimationBackgroundVideoExport.js`: format-aware main-thread
-  coordinator; at most two outstanding slots per renderer and eight total.
+  coordinator; one outstanding frame per renderer, plus a shared credit budget
+  of **up to 32 MiB nominal uncompressed RGBA** (at most 8 bundles).
+  Each Compare A/B bundle counts both views. Large-resolution exports are
+  automatically throttled rather than consuming the same number of massive
+  RGBA frames as a small Scene. The bound covers transferred/in-flight frames,
+  not independently owned renderer canvases or WebCodecs internal surfaces.
   All Workers are terminated together on error or cancellation.
 - `ModernAnimationVideoEncoderWorker.js`: separate Worker with format-specific
   WebCodecs configuration, up to three queued frames per encoder, A/B encoders,
-  flush, format-specific muxer and one download payload.
+  ordered frame gate with the same bounded credit window, flush, per-stage
+  telemetry, and an early 192 MiB **combined** compressed-output check.
+  A slow encoder cannot create an unbounded backlog of transferred RGBA frames.
 - `ModernAnimationWebMMuxer.js`: VP9 WebM with finite segment duration,
   clusters and seek Cues.
 - `ModernAnimationMP4Muxer.js`: H.264 MP4 without third-party dependencies.
@@ -82,13 +95,35 @@ are requested at least every two seconds for seeking.
   tables (`stts`, `stsz`, `stsc`, `stco`, `stss`). Uses a 1 MHz media timescale
   and 64-bit movie/media durations. Constrained Baseline output is expected:
   reordered B-frame timestamps are rejected rather than inventing DTS.
+- `ModernAnimationVideoArchive.js`: streaming CRC32 for Compare A/B; the final
+  ZIP is formed from immutable media `Blob` parts without reading complete
+  video files into second full-size `ArrayBuffer` copies. It uses stored ZIP32
+  and enforces 192 MiB including headers. The existing PNG ZIP path is not changed.
 - `ModernAnimationVideoProbeWorker.js`: worker-local checks for VP9 and H.264
   plus both muxer implementations.
 
 No full-sequence uncompressed RGBA buffer is retained. Encoded chunks are
-accumulated until final muxing, capped at **192 MiB per stream**; Compare ZIP
-also has a **192 MiB total** cap. This is bounded in-memory muxing, **not** disk
-streaming. Large exports exceeding either limit fail explicitly.
+accumulated until final muxing, capped at **192 MiB per stream**; Compare has
+an early **192 MiB combined** budget as well as a strict final ZIP size cap.
+ZIP CRC is calculated a block at a time, but the finished ZIP remains a Blob
+in memory. This is bounded in-memory pipeline streaming, **not disk streaming**
+or fragmented/streamable MP4/WebM. Video export can still fail on the memory
+limits and requires sufficient additional browser memory for encoder internals.
+
+The persisted result manifest includes `frameWindow`, `peakBufferedFrames`
+(encoder reorder gate), `peakEncoderQueue`, and `encodedBytes`, plus the prior
+`elapsedMs`, `renderWorkers`, bitrate and format. The controller separately
+reports its observed `peakInflightFrames` to the UI after completion; this
+controller-only statistic is not present inside a Compare ZIP's manifest.
+These are measured counters/high-water marks, not a claim of total process RSS.
+A/B may have two concurrent codec queues of up to three VideoFrames each.
+
+At 1280×720, a single Scene RGBA frame is ~3.5 MiB; a Compare A/B pair is
+~7.0 MiB. With four render workers, the nominal 32 MiB dispatch budget
+permits eight Scene frames but only four Compare bundles (before independent
+renderer/codec allocations). The credit count also respects available workers.
+Timing and memory are workload-dependent; production speedups must be verified
+in Opera, not inferred from test doubles.
 
 ## Validation and Opera acceptance
 
@@ -98,30 +133,37 @@ Run targeted and full regression tests, and the isolation audit:
 node --test tests/ModernAnimationMP4Muxer.test.js \
   tests/ModernAnimationVideoEncoderWorker.test.js \
   tests/ModernAnimationBackgroundVideoExport.test.js \
+  tests/ModernAnimationVideoArchive.test.js \
   tests/ModernAnimationVideoCapabilities.test.js \
   tests/ModernAnimationWebMMuxer.test.js
 node --test tests/*.test.js
 node tools/audit-legacy-isolation.js --check
 ```
 
-The MP4 unit tests check box layout, keyframes, H.264 configuration, corrupted
+The streaming/optimization tests additionally check adaptive frame credits,
+slow encoder drains, stream-based CRC without `.arrayBuffer()` of media files,
+ZIP headers and CRC, immediate Cancel, and telemetry. An integration check
+should validate Compare ZIP integrity with `unzip -t` or Python `zipfile` and
+play back both extracted videos. The MP4 unit tests check box layout,
+keyframes, H.264 configuration, corrupted
 NAL data, timing, Compare ZIP, cancellation and worker contracts. An optional
 integration test uses FFmpeg to generate real Constrained Baseline H.264,
 remuxes its AVC samples with our muxer, and verifies FFprobe identification,
 full decoding and seek playback. WebM tests and prior real Opera acceptance
 remain intact. The build environment has not executed a full WebCodecs MP4
-encode in Opera.
+encode in Opera; the user confirmed the previous release works in Opera.
 
-**First MP4 acceptance:** use Scene Globe → Flat at 640×360, 5 FPS, 2 workers.
-Expect `curvature-animation.mp4`: 25 frames, 5.000 seconds, a final Flat image,
-and playable seek. Repeat at 960×540, 25/30 FPS, then Compare A/B and Cancel.
-Also verify an unchanged WebM export from the same project. If MP4 encoding
-fails, capture the visible status and Opera F12 console; codec support may
-vary by machine or encoder implementation.
+**Streaming-stage Opera acceptance:** repeat Globe → Flat at 960×540,
+25/30 FPS in both WebM and MP4; use 1/2/4 render workers and compare elapsed
+time and the manifest's peak counters. Test 1280×720 Compare A/B (fewer frame
+credits, one ZIP with two playable videos and valid CRC) and Cancel during
+both rendering and ZIP packaging. Check `unresolved` and the final Flat image
+against your PNG baseline. If a codec is unsupported or errors, capture the
+visible status and Opera F12 console.
 
-Next stage: profile encoder throughput/latency and bounded frame backpressure,
-measure visual errors against deterministic PNG, and evaluate disk streaming
-if the 192 MiB limit becomes restrictive.
+Future directions: optional true disk streaming/fragmented containers for
+exports exceeding the 192 MiB cap, and measured visual-error comparisons
+against PNG. Neither is claimed by this patch.
 
 Reference: [W3C AVC WebCodecs registration](https://www.w3.org/TR/webcodecs-avc-codec-registration/),
 [WebCodecs usage](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API).
