@@ -638,3 +638,12 @@ selection; undo is one step, lasts until the next draft edit, and is not stored
 across a reload. The staged-snapshot shortlist is shown as compact cards in
 the editor with an `×` to **unstage** a saved snapshot without deleting it.
 History's actual snapshot deletion remains a separate, confirmed operation.
+
+### Animation Studio HUD integration compatibility
+
+If HUD appearance editing reports `Invalid editor property` or video export
+reports missing `normalizeAppearance`, use the updated Modern entrypoint. It
+loads the Canvas HUD module before animation export planners and refreshes the
+Studio and Worker script cache keys. This does not change animation projects
+or saved History snapshots. Reload CurvatureModern.html after applying the
+patch; the exported MP4/WebM should then use the selected HUD appearance.

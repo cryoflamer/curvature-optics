@@ -63,7 +63,7 @@ function sandbox(options={}){
     postMessage:v=>messages.push(v)});
   root.self=root;
   root.importScripts=(...scripts)=>scripts.forEach(script=>{
-    const filename=path.resolve(dir,script);
+    const filename=path.resolve(dir,script.split('?')[0]);
     vm.runInContext(fs.readFileSync(filename,'utf8'),root,{filename});
   });
   vm.runInContext(fs.readFileSync(path.join(dir,'ModernAnimationVideoEncoderWorker.js'),'utf8'),root);

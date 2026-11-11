@@ -44,8 +44,8 @@ importScripts(
   '../app/CurvatureModel.js',
   '../app/CurvaturePhysicalCamera.js',
   '../camera/ModernCameraTelemetry.js',
-  '../ui/modern/ModernCameraHud.js',
-  'ModernAnimationCanvasHud.js',
+  '../ui/modern/ModernCameraHud.js?studio-hud-fix=1',
+  'ModernAnimationCanvasHud.js?studio-hud-fix=1',
   '../app/CurvaturePhysicalCurvature.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
   '../app/CurvatureMainCanvasRenderer.js',
@@ -54,11 +54,11 @@ importScripts(
   '../ui/modern/ModernExperimentState.js',
   '../camera/ModernCameraInterpolator.js',
   'ModernAnimationCompatibility.js',
-  'ModernAnimationProject.js',
+  'ModernAnimationProject.js?studio-hud-fix=1',
   'ModernAnimationPreview.js',
-  'ModernAnimationFrameExport.js',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1',
   'ModernAnimationCompareComposition.js',
-  'ModernAnimationVideoPipeline.js'
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1'
 );
 
 function createGraph(canvas){

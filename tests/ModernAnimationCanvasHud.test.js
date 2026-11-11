@@ -144,7 +144,7 @@ test('worker import order, UI toggles, and source are isolated from Legacy',()=>
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   assert.ok(worker.indexOf("'../camera/ModernCameraTelemetry.js'")<
-    worker.indexOf("'ModernAnimationCanvasHud.js'"));
+    worker.indexOf("'ModernAnimationCanvasHud.js?"));
   for(const id of ['ModernAnimationPlaybackCameraHud','ModernAnimationFrameExportCameraHud',
     'ModernAnimationVideoExportCameraHud'])assert.ok(html.includes('id="'+id+'"'));
   assert.match(app,/syncStudioCameraHud\(a,b,graphs,isCompare\)/);

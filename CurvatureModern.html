@@ -75,19 +75,20 @@
 <script src="src/ui/modern/ModernExperimentHistoryUI.js"></script>
 <script src="src/ui/modern/ModernExperimentHistoryFilters.js"></script>
 <script src="src/animation/ModernAnimationCompatibility.js"></script>
-<script src="src/animation/ModernAnimationProject.js"></script>
-<script src="src/animation/ModernAnimationStudio.js"></script>
+<script src="src/animation/ModernAnimationProject.js?studio-hud-fix=1"></script>
+<script src="src/animation/ModernAnimationStudio.js?studio-hud-fix=1"></script>
 <script src="src/animation/ModernAnimationPlayback.js"></script>
-<script src="src/animation/ModernAnimationDraftAutosave.js"></script>
+<script src="src/animation/ModernAnimationDraftAutosave.js?studio-hud-fix=1"></script>
 <script src="src/animation/ModernAnimationLibrary.js"></script>
 <script src="src/animation/ModernAnimationPreview.js"></script>
 <script src="src/animation/ModernAnimationQualityAudit.js"></script>
-<script src="src/animation/ModernAnimationFrameExport.js"></script>
-<script src="src/animation/ModernAnimationBackgroundExport.js"></script>
+<script src="src/animation/ModernAnimationCanvasHud.js?studio-hud-fix=1"></script>
+<script src="src/animation/ModernAnimationFrameExport.js?studio-hud-fix=1"></script>
+<script src="src/animation/ModernAnimationBackgroundExport.js?studio-hud-fix=1"></script>
 <script src="src/animation/ModernAnimationCompareComposition.js"></script>
-<script src="src/animation/ModernAnimationVideoPipeline.js"></script>
+<script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1"></script>
 <script src="src/animation/ModernAnimationVideoCapabilities.js"></script>
-<script src="src/animation/ModernAnimationBackgroundVideoExport.js"></script>
+<script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
@@ -797,7 +798,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>

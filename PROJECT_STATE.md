@@ -1986,3 +1986,15 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   Render and encoder Worker initialization carries the effective, fixed value;
   manifests record it only when overlay burn-in was requested. Disabled HUD
   never changes exported pixels or the underlying project physics.
+
+### Animation Studio HUD integration hotfix
+
+- The Modern HTML entrypoint must load `ModernAnimationCanvasHud.js` after
+  telemetry/`ModernCameraHud.js` and **before** `ModernAnimationFrameExport.js`.
+  Otherwise browser PNG/MP4/WebM planning can fail on missing
+  `normalizeAppearance`, even though CommonJS unit tests pass.
+- The upgraded Studio editor and render/encoder/archive Worker dependencies
+  use refreshed script URLs to avoid mixing cached pre-HUD code with the
+  current UI (`Invalid editor property` when editing `cameraHudAppearance`).
+- Browser-script integration tests assert the real HTML dependency order,
+  HUD draft editing, and video-plan creation; Legacy entrypoint is unchanged.

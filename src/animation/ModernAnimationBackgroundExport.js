@@ -23,8 +23,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js';
-    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1';
+    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1';
     var active=null;
     function isBusy(){return !!active;}
     function cancel(){

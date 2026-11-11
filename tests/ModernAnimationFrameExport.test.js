@@ -206,8 +206,8 @@ test('OffscreenCanvas PNG encoding works without callback toBlob',async()=>{
 test('Modern export uses a Web Worker and never does optical painting on the UI thread',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
   const js=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(html,/src="src\/animation\/ModernAnimationFrameExport\.js"/);
-  assert.match(html,/src="src\/animation\/ModernAnimationBackgroundExport\.js"/);
+  assert.match(html,/src="src\/animation\/ModernAnimationFrameExport\.js(?:\?[^"]*)?"/);
+  assert.match(html,/src="src\/animation\/ModernAnimationBackgroundExport\.js(?:\?[^"]*)?"/);
   assert.ok(html.indexOf('ModernAnimationFrameExport.js')<html.indexOf('ModernAnimationBackgroundExport.js'));
   assert.ok(html.indexOf('ModernAnimationBackgroundExport.js')<html.indexOf('src/ui/modern/ModernApp.js'));
   assert.match(html,/id="ModernAnimationFrameExportStart"/);

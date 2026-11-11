@@ -42,7 +42,7 @@ class FakeWorker {
   static errorAt=-1;
   static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;}
   constructor(url){this.url=url;this.terminated=false;this.commands=[];
-    this.isArchive=url.endsWith('ModernAnimationArchiveWorker.js');
+    this.isArchive=url.split('?')[0].endsWith('ModernAnimationArchiveWorker.js');
     FakeWorker.instances.push(this);}
   postMessage(value){
     if(this.terminated)throw Error('Message sent to terminated worker');
@@ -168,7 +168,7 @@ test('worker entrypoint imports actual production optics without DOM or Node req
     TextEncoder,Blob,Uint8Array});
   root.self=root;
   root.importScripts=(...scripts)=>scripts.forEach(rel=>{
-    const full=path.resolve(dir,rel);
+    const full=path.resolve(dir,rel.split('?')[0]);
     // No fake document! Importing the legacy DOM constructor must not run it.
     vm.runInContext(fs.readFileSync(full,'utf8'),root,{filename:full});
   });

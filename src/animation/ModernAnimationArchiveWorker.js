@@ -5,14 +5,14 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
-  '../ui/modern/ModernCameraHud.js',
+  '../ui/modern/ModernCameraHud.js?studio-hud-fix=1',
   '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernExperimentFingerprint.js',
   '../camera/ModernCameraInterpolator.js',
   'ModernAnimationCompatibility.js',
-  'ModernAnimationProject.js',
-  'ModernAnimationCanvasHud.js',
-  'ModernAnimationFrameExport.js'
+  'ModernAnimationProject.js?studio-hud-fix=1',
+  'ModernAnimationCanvasHud.js?studio-hud-fix=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1'
 );
 var archive=null;
 function reportError(error){

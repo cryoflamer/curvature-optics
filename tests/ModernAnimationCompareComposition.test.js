@@ -142,7 +142,7 @@ test('browser and frame-worker versions load without touching Legacy or current 
     modern.indexOf('ModernAnimationVideoPipeline.js'));
   assert.ok(frameWorker.indexOf("'ModernAnimationCompareComposition.js'")>0);
   assert.ok(frameWorker.indexOf("'ModernAnimationCompareComposition.js'")<
-    frameWorker.indexOf("'ModernAnimationVideoPipeline.js'"));
+    frameWorker.indexOf("'ModernAnimationVideoPipeline.js?"));
   assert.doesNotMatch(legacy,/ModernAnimationCompareComposition/);
   assert.doesNotMatch(encoderWorker,/ModernAnimationCompareComposition/);
   assert.doesNotMatch(frameExport,/ModernAnimationCompareComposition/);

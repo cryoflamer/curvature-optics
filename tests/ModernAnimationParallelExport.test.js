@@ -40,7 +40,7 @@ function archiveSandbox(){
   root.self=root;
   root.postMessage=v=>messages.push(v);
   root.importScripts=(...scripts)=>scripts.forEach(name=>{
-    const filename=path.resolve(dir,name);
+    const filename=path.resolve(dir,name.split('?')[0]);
     vm.runInContext(fs.readFileSync(filename,'utf8'),root,{filename});
   });
   vm.runInContext(fs.readFileSync(path.join(dir,'ModernAnimationArchiveWorker.js'),'utf8'),root);
