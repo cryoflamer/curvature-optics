@@ -849,3 +849,18 @@ button{cursor:pointer}
 .modern-animation-frame-export-controls select,.modern-animation-frame-export-controls button{font:inherit;border:1px solid #9cbddd;background:white;border-radius:5px;padding:6px 9px}
 .modern-animation-frame-export-controls button:disabled{opacity:.5;cursor:default}
 .modern-animation-frame-export progress{display:block;width:100%;height:12px;margin-top:10px}
+
+/* Scene/Compare camera navigation reference; no input handlers or physical renderer changes. */
+.modern-camera-controls{margin:8px 0 13px;border:1px solid #d7e3f0;border-radius:8px;background:#f8fbff;color:#304966;font-size:11px;line-height:1.55}
+.modern-camera-controls>summary{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;cursor:pointer;padding:9px 12px;list-style:none}
+.modern-camera-controls>summary::-webkit-details-marker{display:none}
+.modern-camera-controls>summary:focus-visible{outline:2px solid #2576c9;outline-offset:2px;border-radius:7px}
+.modern-camera-controls-quick{flex:1;min-width:240px;color:#496480}
+.modern-camera-controls-expand{color:#1b65a8;font-weight:650;white-space:nowrap}
+.modern-camera-controls-expand::after{content:' ▾'}
+.modern-camera-controls[open] .modern-camera-controls-expand::after{content:' ▴'}
+.modern-camera-controls-detail{padding:0 12px 12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;border-top:1px solid #e0eaf4}
+.modern-camera-controls-detail>div{padding-top:9px}
+.modern-camera-controls-detail p{margin:3px 0 0}
+.modern-camera-controls-detail .modern-camera-controls-note{grid-column:1/-1;color:#647a90}
+@media(max-width:650px){.modern-camera-controls-detail{grid-template-columns:1fr}.modern-camera-controls-quick{min-width:0;flex-basis:100%}}

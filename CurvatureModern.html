@@ -759,6 +759,14 @@
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
+        <details class="modern-camera-controls" aria-label="Scene camera controls">
+          <summary><strong>Camera controls</strong><span class="modern-camera-controls-quick">Drag: look around · Shift + drag: move sideways / vertically · Alt + wheel: forward / back · Shift + wheel: FOV · W A S D: move · Q E: height · Arrows: turn</span><span class="modern-camera-controls-expand">Full guide</span></summary>
+          <div class="modern-camera-controls-detail">
+            <div><strong>Mouse</strong><p>Left drag: look around (Pan / Nick). Shift + left drag: move sideways and change camera height. Alt + wheel: move along the surface in the viewing direction. Shift + wheel: change field of view (FOV). Unmodified wheel: scroll the page.</p></div>
+            <div><strong>Keyboard</strong><p>W / S: forward / back · A / D: left / right · Q / E: lower / raise · Left / Right arrows: Pan · Up / Down arrows: Nick. Hold Shift for ×5 speed or Ctrl for ×0.2 precision. Movement speeds and wheel step are adjustable in Camera → Navigation.</p></div>
+            <p class="modern-camera-controls-note">Click the scene to focus camera navigation. Keyboard shortcuts are disabled while editing a field. Compare A/B shares one camera; both views move together.</p>
+          </div>
+        </details>
       <section class="modern-compare-viewports" id="ModernCompareViews" aria-label="Side-by-side physical comparison" aria-hidden="true">
         <div class="modern-compare-grid">
           <section class="modern-viewport-panel" aria-label="Physical model A">
@@ -778,6 +786,14 @@
             <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>
         </div>
+        <details class="modern-camera-controls" aria-label="Compare camera controls">
+          <summary><strong>Camera controls</strong><span class="modern-camera-controls-quick">Drag: look around · Shift + drag: move sideways / vertically · Alt + wheel: forward / back · Shift + wheel: FOV · W A S D: move · Q E: height · Arrows: turn</span><span class="modern-camera-controls-expand">Full guide</span></summary>
+          <div class="modern-camera-controls-detail">
+            <div><strong>Mouse</strong><p>Left drag: look around (Pan / Nick). Shift + left drag: move sideways and change camera height. Alt + wheel: move along the surface in the viewing direction. Shift + wheel: change field of view (FOV). Unmodified wheel: scroll the page.</p></div>
+            <div><strong>Keyboard</strong><p>W / S: forward / back · A / D: left / right · Q / E: lower / raise · Left / Right arrows: Pan · Up / Down arrows: Nick. Hold Shift for ×5 speed or Ctrl for ×0.2 precision. Movement speeds and wheel step are adjustable in Camera → Navigation.</p></div>
+            <p class="modern-camera-controls-note">Click the scene to focus camera navigation. Keyboard shortcuts are disabled while editing a field. Compare A/B shares one camera; both views move together.</p>
+          </div>
+        </details>
         <p class="modern-compute-timing" id="ModernComputeTiming" role="status" aria-live="polite">Optics timing appears after recalculation.</p>
         <p class="modern-compare-note">Two independently rendered Physical scenes · same observer, towers, fixed Eye-level camera and field of view in each viewport. Surface geometry, atmosphere and engineered profile parameters are set independently for A and B. Compare deliberately ignores curvature-dependent Scene horizon aiming. Resizing from Scene to two narrower viewports changes pixels per degree, not the angular field of view. The orange horizon marker, when resolved, is derived from forward-traced first-ground-contact rays and is not a guarantee of unique global visibility.</p>
       </section>
