@@ -604,3 +604,17 @@ The 751-timestamp / 192-MiB bounded ZIP32 limit, opaque white PNG background,
 and isolation from live Scene/Compare, Playback, History and drafts are retained.
 This is still a PNG sequence; MP4/WebM encoding is not yet supported.
 See [frame export design and limits](docs/modern-animation-frame-export.md).
+
+
+### Direct removal controls in Animation Studio
+
+The Animation Studio keyframe timeline has an `×` action in the upper-right
+corner of **each** frame card. It removes that frame from the current editable
+draft without changing its source snapshot in History, and without selecting
+or dragging the card. The selection panel retains frame timing and move
+controls, but no longer duplicates frame deletion. Immediately after removal,
+**Undo** restores the previous draft, including its frame settings and
+selection; undo is one step, lasts until the next draft edit, and is not stored
+across a reload. The staged-snapshot shortlist is shown as compact cards in
+the editor with an `×` to **unstage** a saved snapshot without deleting it.
+History's actual snapshot deletion remains a separate, confirmed operation.

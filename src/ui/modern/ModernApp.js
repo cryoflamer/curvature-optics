@@ -496,6 +496,7 @@
   var historyStoryboardQueue=[];
   var studioDraft=studioApi?studioApi.blank():null;
   var studioSelectedKey=null;
+  var studioRemovedFrameUndo=null; // One-step, in-memory undo scoped to the exact draft.
   var studioFilmstripScroll=0;
   var studioPrepared=null;
   var studioPlayback=null;
@@ -2146,8 +2147,9 @@
     if(oldPickerList)studioPickerScroll=oldPickerList.scrollTop;
     var oldStrip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(oldStrip&&!resetFilmstrip)studioFilmstripScroll=oldStrip.scrollLeft;
-    function update(next){
-      studioDraft=next;stopStudioPlayback(true);studioPrepared=null;
+    function update(next,removedFrameUndo){
+      studioDraft=next;studioRemovedFrameUndo=removedFrameUndo||null;
+      stopStudioPlayback(true);studioPrepared=null;
       if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
         studioSelectedKey=next.frames.length?next.frames[0].key:null;
       saveStudioDraft(false);
@@ -2193,11 +2195,27 @@
       move:function(key,step){safe(function(){update(studioApi.move(studioDraft,key,step));});},
       remove:function(key){safe(function(){
         var index=studioDraft.frames.findIndex(function(f){return f.key===key;});
+        if(index<0)return;
+        var before=studioDraft,selectedBefore=studioSelectedKey;
         var next=studioApi.remove(studioDraft,key);
         if(studioSelectedKey===key)
           studioSelectedKey=next.frames.length?next.frames[Math.min(index,next.frames.length-1)].key:null;
-        update(next);
+        update(next,{before:before,after:next,selectedKey:selectedBefore,
+          frameName:before.frames[index].name,
+          activeId:studioLibraryActive&&studioLibraryActive.id});
       });},
+      undoRemove:function(){safe(function(){
+        var undo=studioRemovedFrameUndo;
+        if(!undo||undo.after!==studioDraft||
+          undo.activeId!==(studioLibraryActive&&studioLibraryActive.id))return;
+        studioSelectedKey=undo.selectedKey;
+        update(undo.before);
+      });},
+      unstage:function(id){
+        historyStoryboardQueue=historyStoryboardQueue.filter(function(value){return value!==id;});
+        saveApplicationPreferences();renderHistoryStoryboard(entries);
+        renderAnimationStudio(entries);
+      },
       prepare:function(){safe(function(){
         stopStudioPlayback(true);
         studioPrepared=studioApi.build(studioDraft,'studio_draft');
@@ -2265,7 +2283,10 @@
         update(next);
       });}
     },!!studioPrepared,{selectedKey:studioSelectedKey,entries:entries,
-      stagedCount:historyStoryboardQueue.length,
+      stagedCount:historyStoryboardQueue.length,stagedIds:historyStoryboardQueue,
+      undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
+        studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?
+        studioRemovedFrameUndo.frameName:null,
       pickerSelectedCount:Object.keys(studioPickerChecked).filter(function(id){return studioPickerChecked[id];}).length});
     var picker=newUiEl('ModernAnimationSnapshotPicker');
     if(picker&&studioUI.renderPicker){

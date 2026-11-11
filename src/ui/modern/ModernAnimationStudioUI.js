@@ -19,6 +19,26 @@
     node.type='button';node.setAttribute('aria-label',description);node.addEventListener('click',action);
     return node;
   }
+  // A destructive-looking card action must never also select or drag its card.
+  // It only removes an item from the current draft/staging, never from History.
+  function cardRemove(doc,description,action){
+    var remove=button(doc,'×',description,function(event){
+      if(event&&event.stopPropagation)event.stopPropagation();
+      action();
+    });
+    remove.className='modern-studio-card-remove';
+    remove.title=description;remove.draggable=false;
+    ['pointerdown','mousedown','dblclick','dragstart'].forEach(function(type){
+      remove.addEventListener(type,function(event){
+        if(event&&event.stopPropagation)event.stopPropagation();
+        // Cancel the default mouse drag from the draggable parent <li> too.
+        // Avoid preventDefault on pointerdown: touch needs a normal tap/click.
+        if((type==='mousedown'||type==='dragstart')&&event&&event.preventDefault)
+          event.preventDefault();
+      });
+    });
+    return remove;
+  }
   function field(doc,label,value,kind,action,options,liveAction){
     var wrapper=el(doc,'label','modern-studio-field');
     wrapper.appendChild(el(doc,'span','',label));
@@ -411,6 +431,28 @@
     load.disabled=!options.stagedCount;toolbar.appendChild(load);
     toolbar.appendChild(button(doc,'Import Camera Animation','Import existing camera keyframes into draft',actions.importCamera));
     host.appendChild(toolbar);
+    // The staging queue is a shortlist of History IDs, not an editable History
+    // gallery. Its card crosses only remove IDs from that shortlist.
+    if(options.stagedIds&&options.stagedIds.length){
+      var staged=el(doc,'section','modern-studio-staged');
+      staged.appendChild(el(doc,'strong','','Staged snapshots · '+options.stagedIds.length));
+      staged.appendChild(el(doc,'p','modern-studio-hint',
+        'Remove from staging without deleting the saved History snapshot.'));
+      var stagedList=el(doc,'ol','modern-studio-staged-list');
+      options.stagedIds.forEach(function(id){
+        var entry=entries.find(function(e){return e.id===id;});
+        if(!entry)return;
+        var card=el(doc,'li','modern-studio-staged-card');
+        card.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-staged-visual'));
+        var name=el(doc,'span','modern-studio-staged-name',historyUI.displayName(entry));
+        name.title=name.textContent;card.appendChild(name);
+        card.appendChild(cardRemove(doc,'Remove '+historyUI.displayName(entry)+' from staging',function(){
+          if(actions.unstage)actions.unstage(id);
+        }));
+        stagedList.appendChild(card);
+      });
+      staged.appendChild(stagedList);host.appendChild(staged);
+    }
     var basics=el(doc,'div','modern-studio-basics');
     basics.appendChild(field(doc,'Project name',draft.name,'text',function(value){actions.edit('name',value);},null,
       function(value){if(actions.liveEdit)actions.liveEdit('name',value);}));
@@ -479,6 +521,9 @@
       var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
+      item.appendChild(cardRemove(doc,'Remove animation frame '+(i+1)+': '+frame.name,function(){
+        if(actions.remove)actions.remove(frame.key);
+      }));
       makeDropTarget(item,i,actions,true);
       var handle=el(doc,'span','modern-studio-drag-handle','⠿');
       handle.title='Drag keyframe to reorder';
@@ -489,6 +534,15 @@
     });
     filmstrip.appendChild(dropSlot(doc,draft.frames.length,actions,options.pickerSelectedCount||0));
     host.appendChild(filmstrip);
+    if(options.undoRemoval){
+      var undoBar=el(doc,'div','modern-studio-undo-removal');
+      undoBar.setAttribute('role','status');
+      undoBar.appendChild(el(doc,'span','',
+        'Removed keyframe “'+options.undoRemoval+'” from this animation.'));
+      undoBar.appendChild(button(doc,'Undo','Restore the last removed animation keyframe',
+        function(){if(actions.undoRemove)actions.undoRemove();}));
+      host.appendChild(undoBar);
+    }
     if(selected){
       var index=draft.frames.indexOf(selected);
       var panel=el(doc,'section','modern-studio-selected-frame');
@@ -500,7 +554,6 @@
       earlier.disabled=index===0;controls.appendChild(earlier);
       var later=button(doc,'↓','Move animation frame '+(index+1)+' later',function(){actions.move(selected.key,1);});
       later.disabled=index===draft.frames.length-1;controls.appendChild(later);
-      controls.appendChild(button(doc,'×','Remove animation frame '+(index+1),function(){actions.remove(selected.key);}));
       header.appendChild(controls);panel.appendChild(header);
       panel.appendChild(el(doc,'small','modern-studio-frame-source',
         selected.sourceSnapshotId===null?'Self-contained animation keyframe':

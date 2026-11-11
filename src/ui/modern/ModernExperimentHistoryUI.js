@@ -407,6 +407,9 @@
       var entry=records.get(id);
       if(!entry)return;
       var item=el(doc,'li','modern-history-storyboard-item');
+      var remove=button(doc,'×','Remove frame '+(index+1)+' from shortlist',function(){actions.remove(id);});
+      remove.className='modern-history-storyboard-remove';
+      item.appendChild(remove);
       item.appendChild(frameVisual(doc,entry,'modern-history-storyboard-visual'));
       var title=el(doc,'strong','modern-history-storyboard-name',(index+1)+'. '+displayName(entry));
       title.title=displayName(entry);item.appendChild(title);
@@ -420,7 +423,6 @@
       }
       action('↑','Move frame '+(index+1)+' earlier',index===0,function(){actions.move(id,-1);});
       action('↓','Move frame '+(index+1)+' later',index===ids.length-1,function(){actions.move(id,1);});
-      action('×','Remove frame '+(index+1)+' from shortlist',false,function(){actions.remove(id);});
       item.appendChild(line);host.appendChild(item);
     });
   }

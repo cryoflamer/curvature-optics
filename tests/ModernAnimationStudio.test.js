@@ -242,6 +242,80 @@ test('Studio thumbnail filmstrip uses saved History images, selected-only contro
   assert.equal(placeholders.length,3,'imported camera views, including selected preview, do not borrow unrelated History screenshots');
 });
 
+test('Keyframe card × removes its own frame without selecting, dragging or touching History',()=>{
+  const a=experiment(),b=clone(a),c=clone(a);
+  b.scene.camera.Height=40;c.scene.camera.Height=70;
+  const entries=[entry(1,a,'One'),entry(2,b,'Two'),entry(3,c,'Three')];
+  const draft=studio.history([1,2,3],entries),original=structuredClone(entries);
+  const {doc,host}=mockDom(),calls=[];
+  const actions={select:key=>calls.push(['select',key]),remove:key=>calls.push(['remove',key]),
+    dragStart:()=>calls.push('drag'),dragEnd:()=>calls.push('end')};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{entries,selectedKey:'history-2'});
+  const items=collect(host,n=>n.className==='modern-studio-filmstrip-item');
+  assert.equal(items.length,3);
+  const removes=items.map(item=>collect(item,n=>n.className==='modern-studio-card-remove'));
+  assert.deepEqual(removes.map(items=>items.length),[1,1,1]);
+  assert.match(removes[0][0]['aria-label'],/Remove animation frame 1: One/);
+  assert.equal(removes[0][0].draggable,false);
+  assert.equal(removes[0][0].tagName,'button');
+  assert.equal(items[0].children[0].tagName,'button','selection button remains separate');
+  assert.equal(removes[0][0].children.length,0,'no nested buttons');
+  let stopped=0,prevented=0;
+  removes[0][0].listeners.pointerdown({stopPropagation(){stopped++;}});
+  removes[0][0].listeners.mousedown({stopPropagation(){stopped++;},preventDefault(){prevented++;}});
+  removes[0][0].listeners.dragstart({stopPropagation(){stopped++;},preventDefault(){prevented++;}});
+  removes[0][0].listeners.dblclick({stopPropagation(){stopped++;}});
+  removes[0][0].listeners.click({stopPropagation(){stopped++;}});
+  assert.equal(stopped,5);assert.equal(prevented,2);
+  assert.deepEqual(calls,[['remove','history-1']]);
+  assert.deepEqual(entries,original,'card actions never mutate History records');
+  const removed=studio.remove(draft,'history-1');
+  assert.deepEqual(removed.frames.map(f=>f.key),['history-2','history-3']);
+  assert.deepEqual(draft.frames.map(f=>f.key),['history-1','history-2','history-3']);
+  assert.equal(collect(host,n=>n['aria-label']==='Remove animation frame 2').length,0,
+    'old removal button in selected-frame toolbar was retired');
+});
+
+test('One-step removal undo is visible only when requested and restores through its action',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=45;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),calls=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{
+    undoRemove:()=>calls.push('undo')},false,{undoRemoval:'First & last',selectedKey:'history-1'});
+  const banner=collect(host,n=>n.className==='modern-studio-undo-removal');
+  assert.equal(banner.length,1);
+  assert.match(banner[0].children[0].textContent,/First & last/);
+  banner[0].children[1].listeners.click();
+  assert.deepEqual(calls,['undo']);
+  host.children=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{},false,{});
+  assert.equal(collect(host,n=>n.className==='modern-studio-undo-removal').length,0);
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(app,/undo\.after!==studioDraft/);
+  assert.match(app,/studioSelectedKey=undo\.selectedKey/);
+  assert.match(app,/studioApi\.remove\(studioDraft,key\)/);
+});
+
+test('Staged snapshot cards remove shortlist IDs, not saved History entries',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=65;
+  const entries=[entry(11,a,'Globe'),entry(12,b,'Flat')];
+  const draft=studio.history([11,12],entries),before=structuredClone([entries,draft]);
+  const {doc,host}=mockDom(),calls=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{
+    unstage:id=>calls.push(['unstage',id])},false,
+  {entries,stagedCount:2,stagedIds:[12,11]});
+  const staged=collect(host,n=>n.className==='modern-studio-staged-card');
+  assert.equal(staged.length,2);
+  assert.match(staged[0].children[1].textContent,/Flat/);
+  const remove=collect(staged[0],n=>n.className==='modern-studio-card-remove')[0];
+  assert.match(remove['aria-label'],/from staging/);
+  remove.listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls,[['unstage',12]]);
+  assert.deepEqual([entries,draft],before,'History and draft stay untouched');
+  assert.match(fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8'),
+    /historyStoryboardQueue=historyStoryboardQueue\.filter\(function\(value\)\{return value!==id;\}\)/);
+});
+
 test('Responsive storyboard layout bounds editor width and scrolls thumbnail timelines horizontally',()=>{
   const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
   assert.match(css,/\.modern-animation-studio\{max-width:1160px;margin:12px auto/);
