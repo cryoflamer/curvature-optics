@@ -2012,3 +2012,15 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
 - The Scene/Compare DOM HUD and Animation Studio preview share telemetry and
   placement model, but raster text rendering is not byte-for-byte equivalent
   to CSS. A browser-side visual comparison remains a manual acceptance check.
+
+### Adaptive HUD text contrast
+
+- Scene/Compare and Animation Studio preview use the same opacity-derived
+  text/outline palette as PNG and MP4/WebM Canvas HUD burn-in. At 0% panel
+  opacity the lettering is dark with a light halo; at 100% it is light with
+  a dark halo; intermediate values interpolate text colors deterministically.
+- The panel opacity still applies only to the panel background; the letters
+  and their outlines remain opaque. The same palette is shared by the DOM
+  HUD and Canvas export, including Compare A/B per-view overlays.
+- Updated browser/Worker script URL cache keys for both changed HUD modules.
+  Old Animation project appearance records require no migration.

@@ -664,3 +664,12 @@ compatibility protocol now forward the same resolved HUD settings. Run
 compatibility protocol, disabled-HUD frame parity, and old-project fallback.
 The test mocks the painter/Canvas: a real browser export still needs a visual
 check on the installed browser (particularly opacity and corner placement).
+
+### Adaptive Camera HUD contrast
+
+Camera HUD lettering now responds to background opacity. For a fully
+transparent HUD background, dark text with a light outline is used; for
+an opaque dark background, light text with a dark outline is used. Text
+colors transition across intermediate opacity settings. Scene/Compare,
+Animation Studio playback, and optional PNG/video HUD burn-in share these
+rules. This does not change image pixels when Camera HUD is disabled.

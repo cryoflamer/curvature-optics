@@ -34,6 +34,7 @@ function fakeCanvas(width,height){
     save(){operations.push(['save']);},restore(){operations.push(['restore']);},
     setTransform(){operations.push(['transform']);},
     fillRect(...a){operations.push(['rectangle',this.globalCompositeOperation,this.fillStyle,...a]);},
+    strokeText(...a){operations.push(['stroke',this.strokeStyle,...a]);},
     fillText(...a){operations.push(['text',this.fillStyle,...a]);},
     measureText(s){return {width:s.length*7}}};
   return {width,height,operations,getContext(){return ctx;},toBlob(cb){

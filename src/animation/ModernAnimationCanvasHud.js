@@ -32,10 +32,11 @@
     // must abort the export rather than silently produce unlabelled frames.
     var a=appearance===undefined?appearanceApi.normalizeAppearance():
       appearanceApi.validateAppearance(appearance);
-    var text=rows(model),ctx=canvas.getContext('2d');
+    var text=rows(model),ctx=canvas.getContext('2d'),contrast=appearanceApi.textAppearance(a);
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.restore!=='function'||
       typeof ctx.fillRect!=='function'||typeof ctx.fillText!=='function'||
-      typeof ctx.setTransform!=='function'||typeof ctx.measureText!=='function')
+      typeof ctx.setTransform!=='function'||typeof ctx.measureText!=='function'||
+      typeof ctx.strokeText!=='function')
       throw TypeError('Canvas 2D text rendering required for camera telemetry');
     var scale=Math.max(0.72,Math.min(1.5,canvas.width/960))*a.size/100;
     var pad=10*scale,line=18*scale,margin=9*scale;
@@ -53,10 +54,15 @@
       var y=a.position.startsWith('bottom')?canvas.height-margin-height:margin;
       ctx.fillStyle='rgba(17,41,59,'+(a.opacity/100)+')';
       ctx.fillRect(x,y,width,height);
+      ctx.lineJoin='round';ctx.lineWidth=Math.max(2,2.5*scale);
+      ctx.strokeStyle=contrast.outline;
       text.forEach(function(row,index){
-        ctx.fillStyle=index===0?'#b9d8ef':'#d6e8f6';
-        if(y+pad+index*line<y+height)
-          ctx.fillText(row,x+pad,y+pad+index*line,Math.max(1,width-2*pad));
+        ctx.fillStyle=index===0?contrast.heading:contrast.body;
+        if(y+pad+index*line<y+height){
+          var tx=x+pad,ty=y+pad+index*line,maxWidth=Math.max(1,width-2*pad);
+          ctx.strokeText(row,tx,ty,maxWidth);
+          ctx.fillText(row,tx,ty,maxWidth);
+        }
       });
     }finally{ctx.restore();}
     return canvas;

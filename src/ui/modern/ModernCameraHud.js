@@ -19,6 +19,21 @@
       size:[75,100,125].includes(data.size)?data.size:100
     });
   }
+  // One deterministic contrast palette is shared by DOM overlays and burned-in
+  // Canvas video/PNG telemetry. The outline remains visible over arbitrary scene
+  // pixels even when the panel background is completely transparent.
+  function textAppearance(input){
+    var a=normalizeAppearance(input);
+    var t=Math.max(0,Math.min(1,(a.opacity-30)/40));
+    function blend(low,high){return '#'+low.map(function(channel,i){
+      return Math.round(channel+(high[i]-channel)*t).toString(16).padStart(2,'0');
+    }).join('');}
+    return Object.freeze({
+      body:blend([24,42,57],[244,249,255]),
+      heading:blend([31,57,76],[185,216,239]),
+      outline:t<0.5?'rgba(255,255,255,0.95)':'rgba(0,0,0,0.85)'
+    });
+  }
   // Library projects and worker export options are persisted data: reject invalid
   // appearance records instead of silently substituting different pixels.
   function validateAppearance(value){
@@ -64,6 +79,14 @@
       entry.node.setAttribute('data-size',String(a.size));
       // Only the panel background fades; telemetry text remains fully opaque.
       entry.node.style.backgroundColor='rgba(17, 41, 59, '+a.opacity/100+')';
+      var contrast=textAppearance(a);
+      entry.node.style.color=contrast.body;
+      entry.heading.style.color=contrast.heading;
+      // Four-direction text halo works in Opera/Chromium and retains contrast
+      // even over a dark tower on an otherwise white sky.
+      entry.node.style.textShadow=['-1px 0','1px 0','0 -1px','0 1px'].map(function(offset){
+        return offset+' '+contrast.outline;
+      }).join(', ');
       return true;
     }
     function update(view,canvas,model,appearance){
@@ -87,5 +110,6 @@
     return Object.freeze({update:update,hide:hide,hideAll:hideAll,setAppearance:setAppearance});
   }
   return Object.freeze({create:create,normalizeAppearance:normalizeAppearance,
+    textAppearance:textAppearance,
     validateAppearance:validateAppearance});
 }));

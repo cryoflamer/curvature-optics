@@ -22,6 +22,7 @@ function mockCanvas(width=960,height=540){
     restore(){actions.push(['restore']);},
     setTransform(...args){actions.push(['transform',...args]);},
     fillRect(...args){actions.push(['rect',this.globalCompositeOperation,this.fillStyle,...args]);},
+    strokeText(...args){actions.push(['stroke',this.strokeStyle,...args]);},
     fillText(...args){actions.push(['text',this.globalCompositeOperation,this.fillStyle,...args]);},
     measureText(text){return {width:text.length*7};}};
   return {width,height,actions,ctx,getContext(type){assert.equal(type,'2d');return ctx;},
@@ -251,4 +252,24 @@ test('long video planning is independent of PNG export frame cap',()=>{
   assert.equal(p.frameCount,1500);
   assert.deepEqual(p.cameraHudAppearance,{opacity:65,position:'bottom-right',size:125});
   assert.throws(()=>png.plan(longProject,{fps:25}),/Too many frames/);
+});
+
+test('PNG and video Canvas HUD use the same dark/light outlined text as the DOM',()=>{
+  const appearance=require('../src/ui/modern/ModernCameraHud');
+  for(const opacity of [0,25,50,75,100]){
+    const canvas=mockCanvas();
+    const config={opacity,position:'bottom-right',size:125};
+    hud.paint(canvas,camera(),config);
+    const palette=appearance.textAppearance(config);
+    const text=canvas.actions.filter(a=>a[0]==='text');
+    const outlines=canvas.actions.filter(a=>a[0]==='stroke');
+    assert.equal(text.length,5);
+    assert.equal(outlines.length,5);
+    assert.equal(text[0][2],palette.heading);
+    assert.equal(text[1][2],palette.body);
+    assert.equal(outlines[0][1],palette.outline);
+    assert.deepEqual(outlines.map(a=>a[2]),text.map(a=>a[3]));
+    assert.equal(canvas.actions.find(a=>a[0]==='rect'&&a[1]==='source-over')[2],
+      `rgba(17,41,59,${opacity/100})`);
+  }
 });

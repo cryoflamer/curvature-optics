@@ -159,3 +159,20 @@ test('Modern browser controls expose preview-only HUD appearance and refresh wit
   assert.doesNotMatch(fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8'),
     /ModernCameraHudOpacity|ModernCameraHudPosition|ModernCameraHudSize/);
 });
+
+test('adaptive contrast makes transparent camera text dark with a light outline',()=>{
+  const {hud,canvas}=setup(),v=canvas();
+  const input=model(),original=structuredClone(input);
+  for(const opacity of [0,20,50,80,100]){
+    assert.equal(hud.update('Scene',v.c,input,{opacity,position:'top-left',size:100}),true);
+    const node=v.parent.children[1];
+    const expected=hudFactory.textAppearance({opacity});
+    assert.equal(node.style.color,expected.body);
+    assert.equal(node.children[0].style.color,expected.heading);
+    assert.ok(node.style.textShadow.includes(expected.outline));
+    assert.equal(node.style.backgroundColor,`rgba(17, 41, 59, ${opacity/100})`);
+  }
+  assert.equal(hudFactory.textAppearance({opacity:0}).body,'#182a39');
+  assert.equal(hudFactory.textAppearance({opacity:100}).body,'#f4f9ff');
+  assert.deepEqual(input,original);
+});
