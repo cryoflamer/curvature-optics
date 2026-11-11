@@ -19,6 +19,17 @@
       size:[75,100,125].includes(data.size)?data.size:100
     });
   }
+  // Library projects and worker export options are persisted data: reject invalid
+  // appearance records instead of silently substituting different pixels.
+  function validateAppearance(value){
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).sort().join(',')!=='opacity,position,size'||
+      !Number.isInteger(value.opacity)||value.opacity<0||value.opacity>100||
+      !['top-left','top-right','bottom-left','bottom-right'].includes(value.position)||
+      ![75,100,125].includes(value.size))
+      throw RangeError('Invalid camera HUD appearance');
+    return normalizeAppearance(value);
+  }
   function create(options){
     var telemetry=options&&options.telemetry,doc=options&&options.document;
     if(!telemetry||!doc||typeof doc.createElement!=='function')
@@ -75,5 +86,6 @@
     function hideAll(){VIEWS.forEach(hide);}
     return Object.freeze({update:update,hide:hide,hideAll:hideAll,setAppearance:setAppearance});
   }
-  return Object.freeze({create:create,normalizeAppearance:normalizeAppearance});
+  return Object.freeze({create:create,normalizeAppearance:normalizeAppearance,
+    validateAppearance:validateAppearance});
 }));

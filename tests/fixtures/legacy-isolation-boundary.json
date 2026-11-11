@@ -494,7 +494,8 @@
         "src/animation/ModernAnimationFrameExport.js"
       ],
       "commonJsTestCallers": [
-        "tests/ModernAnimationCanvasHud.test.js"
+        "tests/ModernAnimationCanvasHud.test.js",
+        "tests/ModernAnimationFrameExport.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -530,6 +531,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationLibrary.test.js"
       ],
@@ -640,6 +642,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStudio.test.js"
@@ -2269,8 +2272,13 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationCanvasHud.js",
+        "src/animation/ModernAnimationDraftAutosave.js",
+        "src/animation/ModernAnimationProject.js"
+      ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernCameraHud.test.js"
       ],
       "commonJsToolCallers": []

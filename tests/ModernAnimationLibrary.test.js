@@ -546,7 +546,8 @@ function projectLifecycleHarness(){
     project:{id:'other',name:'Other work',frames:[{key:'a'},{key:'b'}]}});
   let rejectSave=false,sequence=0;
   const studioApi={blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
-    source:'none',frames:[]};},build(draft,id){
+    source:'none',frames:[],cameraHudAppearance:null};},
+    edit(draft,key,value){return {...draft,[key]:value};},build(draft,id){
     if(draft.frames.length<2)throw Error('not enough frames');
     return {id,name:draft.name,frames:draft.frames};
   },fromProject(p){return {name:p.name,description:'',mode:'auto',target:'auto',source:'mixed',
@@ -556,6 +557,7 @@ function projectLifecycleHarness(){
     studioLibrarySelected:'old',studioLibraryEntries:[...stored.values()],
     studioLibraryBusy:false,studioLibraryDuplicate:null,studioLifecyclePending:null,
     studioPlaybackQuality:'auto',studioLibraryError:false,studioLibraryMessage:'',
+    cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     studioDraftGeneration:0,studioSelectedKey:'a',studioFilmstripScroll:0,
     studioLibraryRenamingId:'',studioPickerOpen:false,studioPickerSearch:'',
     studioPickerScroll:0,studioPickerChecked:{},studioDragSession:null,

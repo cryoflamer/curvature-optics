@@ -209,10 +209,12 @@
           }
           encoder.postMessage({type:'init',project:plan.project,width:plan.width,
             height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format,
-            frameWindow:window,cameraHud:plan.cameraHud,compareLayout:plan.compareLayout});
+            frameWindow:window,cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+            compareLayout:plan.compareLayout});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
             project:plan.project,width:plan.width,height:plan.height,fps:plan.fps,
-            cameraHud:plan.cameraHud,compareLayout:plan.compareLayout});});
+            cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
+            compareLayout:plan.compareLayout});});
         }catch(error){finish(error);}
       });
     }

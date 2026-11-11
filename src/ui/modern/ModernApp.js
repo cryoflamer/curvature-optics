@@ -1055,7 +1055,9 @@
     var blank=studioApi.blank();
     return studioDraft.frames.length>0||studioDraft.name!==blank.name||
       studioDraft.description!==blank.description||studioDraft.mode!==blank.mode||
-      studioDraft.target!==blank.target||studioDraft.source!==blank.source;
+      studioDraft.target!==blank.target||studioDraft.source!==blank.source||
+      (studioDraft.cameraHudAppearance!=null&&
+        JSON.stringify(studioDraft.cameraHudAppearance)!==JSON.stringify(cameraHudAppearance));
   }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
@@ -1228,6 +1230,10 @@
     try{
       if(replace&&!active)throw Error('Open a saved animation before using Save Changes');
       var id=replace?active.id:studioLibrary.makeId(root.crypto);
+      // New library records own a stable appearance snapshot. Older projects
+      // remain untouched unless the user explicitly edits their HUD settings.
+      if(!replace&&studioDraft.cameraHudAppearance==null)
+        studioDraft=studioApi.edit(studioDraft,'cameraHudAppearance',cameraHudAppearance);
       project=studioApi.build(studioDraft,id);
     }catch(error){studioLibraryNotice('Cannot save animation: '+error.message,true);return Promise.resolve(false);}
     var key=studioLibrary.fingerprint(project);
@@ -1292,7 +1298,9 @@
   function performStudioSwitch(kind,id){
     if(kind==='open'){openNamedAnimation(id);return;}
     stopStudioPlayback(true);
-    studioPrepared=null;studioDraft=studioApi.blank();studioSelectedKey=null;
+    studioPrepared=null;
+    studioDraft=studioApi.edit(studioApi.blank(),'cameraHudAppearance',cameraHudAppearance);
+    studioSelectedKey=null;
     studioFilmstripScroll=0;studioPlaybackQuality='auto';
     studioLibraryActive=null;studioLibraryPending=null;studioLibrarySelected='';
     studioLibraryDuplicate=null;studioLibraryRenamingId='';
@@ -1466,6 +1474,7 @@
     if(!stage)return;
     var ready=!!(studioPrepared&&studioPlayback);
     stage.hidden=!ready;
+    syncStudioHudAppearance();
     syncStudioFrameExportControls();
     if(!ready)return;
     var info=studioPlayback.status();
@@ -1575,10 +1584,12 @@
     if(!studioCameraHud)return;
     var control=newUiEl('ModernAnimationPlaybackCameraHud');
     if(control&&!control.checked){studioCameraHud.hideAll();return;}
-    if(!sampleA||!studioCameraHud.update('A',graphs.A.Canvas,sampleA.cameraModel))
+    if(!sampleA||!studioCameraHud.update('A',graphs.A.Canvas,sampleA.cameraModel,
+      studioHudAppearance()))
       studioCameraHud.hide('A');
     if(isCompare&&sampleB){
-      if(!studioCameraHud.update('B',graphs.B.Canvas,sampleB.cameraModel))
+      if(!studioCameraHud.update('B',graphs.B.Canvas,sampleB.cameraModel,
+        studioHudAppearance()))
         studioCameraHud.hide('B');
     }else studioCameraHud.hide('B');
   }
@@ -1817,7 +1828,39 @@
         status.textContent='Add at least two compatible keyframes to export video.';
     }
   }
+  function studioHudAppearance(){
+    return studioDraft&&studioDraft.cameraHudAppearance||cameraHudAppearance;
+  }
+  function syncStudioHudAppearance(){
+    var appearance=studioHudAppearance();
+    var opacity=newUiEl('ModernAnimationHudOpacity');
+    var value=newUiEl('ModernAnimationHudOpacityValue');
+    var position=newUiEl('ModernAnimationHudPosition');
+    var size=newUiEl('ModernAnimationHudSize');
+    if(opacity)opacity.value=String(appearance.opacity);
+    if(value)value.textContent=appearance.opacity+'%';
+    if(position)position.value=appearance.position;
+    if(size)size.value=String(appearance.size);
+  }
   function bindStudioCameraHud(){
+    syncStudioHudAppearance();
+    ['ModernAnimationHudOpacity','ModernAnimationHudPosition','ModernAnimationHudSize'].
+      forEach(function(id){
+        var input=newUiEl(id);if(!input)return;
+        input.addEventListener(id==='ModernAnimationHudOpacity'?'input':'change',function(){
+          var appearance=Object.assign({},studioHudAppearance());
+          if(id==='ModernAnimationHudOpacity')appearance.opacity=Number(input.value);
+          if(id==='ModernAnimationHudPosition')appearance.position=input.value;
+          if(id==='ModernAnimationHudSize')appearance.size=Number(input.value);
+          // No optics or playback resampling: update the last *painted* frame.
+          studioDraft=studioApi.edit(studioDraft,'cameraHudAppearance',appearance);
+          syncStudioHudAppearance();
+          if(studioCameraHudLast.A&&previewGraphsReady())
+            syncStudioCameraHud(studioCameraHudLast.A,studioCameraHudLast.B,
+              root.CurvatureModernAnimationGraphs,studioCameraHudLast.isCompare);
+          saveStudioDraft(false);renderStudioLibrary();
+        });
+      });
     var toggle=newUiEl('ModernAnimationPlaybackCameraHud');
     if(toggle)toggle.addEventListener('change',function(){
       if(!studioCameraHud)return;
@@ -1879,6 +1922,7 @@
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
           cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
+          cameraHudAppearance:studioHudAppearance(),
           onReady:function(info){
             message(info.workers+' render worker(s) · '+codecLabel+' encoder ready · '+
               info.total+' frames · '+info.width+'×'+info.height+' output · reorder window '+info.frameWindow+
@@ -2007,6 +2051,7 @@
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workerCount,
           cameraHud:!!(newUiEl('ModernAnimationFrameExportCameraHud')||{}).checked,
+          cameraHudAppearance:studioHudAppearance(),
           onReady:function(info){
             message(info.workers+' render worker(s) ready · calculating Accurate RK4 · '+
               info.total+' timestamps. ZIP assembly is also in the background.');
@@ -4359,7 +4404,16 @@
           cameraHudAppearance=applicationPreferences?
             applicationPreferences.normalize({cameraHudAppearance:options}).cameraHudAppearance:
             root.CurvatureModernCameraHud.normalizeAppearance(options);
-          syncCameraHudAppearance();updateCameraHud();saveApplicationPreferences();
+          syncCameraHudAppearance();updateCameraHud();
+          // Older Animation projects inherit the application preference until
+          // the user gives them an explicit project-specific appearance.
+          if(!studioDraft||studioDraft.cameraHudAppearance==null){
+            syncStudioHudAppearance();
+            if(studioCameraHudLast.A&&previewGraphsReady())
+              syncStudioCameraHud(studioCameraHudLast.A,studioCameraHudLast.B,
+                root.CurvatureModernAnimationGraphs,studioCameraHudLast.isCompare);
+          }
+          saveApplicationPreferences();
         });
       });
     var toggle=newUiEl('ModernCameraHudToggle');

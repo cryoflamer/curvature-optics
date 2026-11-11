@@ -51,6 +51,7 @@
     }
     return Object.freeze({project:owned,fps:settings.fps,width:settings.width,
       height:settings.height,cameraHud:!!(options&&options.cameraHud===true),
+      cameraHudAppearance:png.resolveHudAppearance(owned,options),
       durationMs:totalMs,durationUs:durationUs,
       frameCount:count,sides:Object.freeze(isCompare?['A','B']:['A']),
       outputSides:Object.freeze(combined?['COMBINED']:(isCompare?['A','B']:['A'])),
@@ -84,7 +85,7 @@
         var side=p.sides[j],renderStarted=performance.now();
         var image=await render(sample,side,{width:p.width,height:p.height,index:index,
           timeMs:timing.sampleTimeMs,timestampUs:timing.timestampUs,durationUs:timing.durationUs});
-        png.prepareCanvas(image,p.width,p.height,p.cameraHud);
+        png.prepareCanvas(image,p.width,p.height,p.cameraHud,p.cameraHudAppearance);
         // A standalone view gets its own VideoFrame. Compare instead retains
         // two independent source canvases until they are composed into one
         // presentation frame, then snapshots only that completed Canvas.

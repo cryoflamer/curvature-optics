@@ -5,12 +5,15 @@
  */
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
-  if(typeof module==='object'&&module.exports)
+  var hud=root.CurvatureModernCameraHud;
+  if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
-  var api=factory(experiment);
+    hud=require('../ui/modern/ModernCameraHud');
+  }
+  var api=factory(experiment,hud);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationDraftAutosave=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud){
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
@@ -59,7 +62,9 @@
       throw RangeError('Invalid saved animation revision');
     return {version:VERSION,savedAt:input.savedAt,
       draft:{name:string(draft.name,120),description:string(draft.description,1000),
-        mode:draft.mode,target:draft.target,source:draft.source,frames:frames},
+        mode:draft.mode,target:draft.target,source:draft.source,frames:frames,
+        cameraHudAppearance:draft.cameraHudAppearance==null?null:
+          hud.validateAppearance(draft.cameraHudAppearance)},
       selectedKey:selected,quality:quality,prepared:input.prepared,
       libraryId:libraryId,libraryRevision:libraryRevision,
       positionMs:number(input.positionMs,0,48000000)};

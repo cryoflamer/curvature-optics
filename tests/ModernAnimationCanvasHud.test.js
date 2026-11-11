@@ -153,7 +153,102 @@ test('worker import order, UI toggles, and source are isolated from Legacy',()=>
   assert.doesNotMatch(fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8'),
     /ModernAnimationCanvasHud|ModernAnimationPlaybackCameraHud/);
   const source=fs.readFileSync(path.join(root,'src/animation/ModernAnimationCanvasHud.js'),'utf8');
-  const browser={CurvatureModernCameraTelemetry:telemetry};
+  const browser={CurvatureModernCameraTelemetry:telemetry,
+    CurvatureModernCameraHud:require('../src/ui/modern/ModernCameraHud')};
   vm.runInNewContext(source,{globalThis:browser});
   assert.equal(typeof browser.CurvatureModernAnimationCanvasHud.paint,'function');
+});
+
+test('project-owned HUD appearance survives Studio and draft autosave without changing older projects',()=>{
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const autosave=require('../src/animation/ModernAnimationDraftAutosave');
+  const legacy=makeProject('compare');
+  assert.equal(Object.hasOwn(legacy,'cameraHudAppearance'),false);
+  assert.equal(studio.fromProject(legacy).cameraHudAppearance,null);
+  const appearance={opacity:0,position:'bottom-right',size:125};
+  const next=studio.edit(studio.fromProject(legacy),'cameraHudAppearance',appearance);
+  const saved=studio.build(next,'hud_animation');
+  assert.deepEqual(saved.cameraHudAppearance,appearance);
+  assert.ok(Object.isFrozen(saved.cameraHudAppearance));
+  assert.deepEqual(studio.fromProject(saved).cameraHudAppearance,appearance);
+  const record=autosave.checkpoint({draft:next,selectedKey:next.frames[0].key,
+    quality:'auto',prepared:false,positionMs:0},123456);
+  assert.deepEqual(autosave.normalize(record).draft.cameraHudAppearance,appearance);
+  const oldRecord=structuredClone(record);
+  delete oldRecord.draft.cameraHudAppearance;
+  assert.equal(autosave.normalize(oldRecord).draft.cameraHudAppearance,null);
+  const malformed=structuredClone(saved);
+  malformed.cameraHudAppearance={opacity:200,position:'top-left',size:100};
+  assert.throws(()=>projects.validate(malformed),/Invalid camera HUD appearance/);
+  assert.throws(()=>studio.edit(next,'cameraHudAppearance',{
+    opacity:90,position:'center',size:100}),/Invalid camera HUD appearance/);
+});
+
+test('Canvas HUD uses four anchored corners, scales dimensions, and fades only the background',()=>{
+  const variants=['top-left','top-right','bottom-left','bottom-right'];
+  const readings={};
+  for(const position of variants){
+    const canvas=mockCanvas(960,540);
+    hud.paint(canvas,camera(1),{opacity:0,position,size:100});
+    const background=canvas.actions.find(x=>x[0]==='rect'&&x[1]==='source-over');
+    assert.equal(background[2],'rgba(17,41,59,0)');
+    assert.equal(canvas.actions.filter(x=>x[0]==='text').length,5);
+    readings[position]=background.slice(3);
+  }
+  const [lx,ly,w,h]=readings['top-left'];
+  assert.equal(readings['top-right'][0]+readings['top-right'][2],960-lx);
+  assert.equal(readings['bottom-left'][1]+readings['bottom-left'][3],540-ly);
+  assert.deepEqual(readings['bottom-right'].slice(0,2),readings['top-right'].slice(0,1)
+    .concat(readings['bottom-left'][1]));
+  for(const size of [75,125]){
+    const canvas=mockCanvas();hud.paint(canvas,camera(),{opacity:100,position:'top-left',size});
+    const rect=canvas.actions.find(x=>x[0]==='rect'&&x[1]==='source-over');
+    assert.equal(rect[2],'rgba(17,41,59,1)');
+    assert.ok(size===75?rect[6]<h:rect[6]>h);
+  }
+  assert.throws(()=>hud.paint(mockCanvas(),camera(),{
+    opacity:-1,position:'top-left',size:100}),/Invalid camera HUD appearance/);
+});
+
+test('PNG and video export use the same captured appearance and preserve no-HUD pixels',async()=>{
+  const project=makeProject('compare');
+  const a={opacity:45,position:'bottom-left',size:75};
+  const b={opacity:80,position:'top-right',size:125};
+  const withAppearance=projects.validate({...project,cameraHudAppearance:a});
+  const pp=png.plan(withAppearance,{fps:5,width:640,height:360,cameraHud:true});
+  assert.deepEqual(pp.cameraHudAppearance,a);
+  const frame=await png.renderTimestamp(pp,0,renderFor(pp.sides,{}));
+  assert.deepEqual(png.assemble(pp,[frame,...await Promise.all(pp.timesMs.slice(1).map((_,i)=>
+    png.renderTimestamp(pp,i+1,renderFor(pp.sides,{}))))]).manifest.cameraHudAppearance,a);
+  const vp=video.plan(withAppearance,{fps:5,width:640,height:360,cameraHud:true,
+    cameraHudAppearance:b});
+  assert.deepEqual(vp.cameraHudAppearance,b);
+  assert.equal(vp.outputSides.length,1);
+  // The video encoder's source canvases get the supplied appearance before A/B composition.
+  const rendered={},composition=()=>({width:vp.outputWidth,height:vp.outputHeight});
+  class Frame{constructor(canvas){this.canvas=canvas;}close(){}}
+  const result=await video.renderTimestamp(vp,0,renderFor(vp.sides,rendered),Frame,null,composition);
+  assert.equal(Object.keys(result.frames).length,1);
+  for(const side of ['A','B']){
+    const rect=rendered[side].actions.find(x=>x[0]==='rect'&&x[1]==='source-over');
+    assert.equal(rect[2],'rgba(17,41,59,0.8)');
+    assert.ok(rect[3]>320,'top-right HUD must be on the right of its own 640px view');
+  }
+  video.closeFrames(result);
+  const disabled=png.plan(withAppearance,{fps:5,width:640,height:360,cameraHud:false,
+    cameraHudAppearance:b});
+  const canvases={};await png.renderTimestamp(disabled,0,renderFor(disabled.sides,canvases));
+  assert.equal(canvases.A.actions.filter(x=>x[0]==='text').length,0);
+  assert.equal(canvases.A.actions.filter(x=>x[0]==='rect'&&x[1]==='source-over').length,0);
+});
+
+test('long video planning is independent of PNG export frame cap',()=>{
+  const old=structuredClone(makeProject());
+  old.keyframes[1].travelMs=60000;
+  const longProject=projects.validate(old);
+  const p=video.plan(longProject,{fps:25,cameraHud:true,
+    cameraHudAppearance:{opacity:65,position:'bottom-right',size:125}});
+  assert.equal(p.frameCount,1500);
+  assert.deepEqual(p.cameraHudAppearance,{opacity:65,position:'bottom-right',size:125});
+  assert.throws(()=>png.plan(longProject,{fps:25}),/Too many frames/);
 });

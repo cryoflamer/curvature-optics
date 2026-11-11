@@ -5,10 +5,13 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
+  '../ui/modern/ModernCameraHud.js',
+  '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernExperimentFingerprint.js',
   '../camera/ModernCameraInterpolator.js',
   'ModernAnimationCompatibility.js',
   'ModernAnimationProject.js',
+  'ModernAnimationCanvasHud.js',
   'ModernAnimationFrameExport.js'
 );
 var archive=null;

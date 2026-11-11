@@ -44,6 +44,7 @@ importScripts(
   '../app/CurvatureModel.js',
   '../app/CurvaturePhysicalCamera.js',
   '../camera/ModernCameraTelemetry.js',
+  '../ui/modern/ModernCameraHud.js',
   'ModernAnimationCanvasHud.js',
   '../app/CurvaturePhysicalCurvature.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
@@ -96,7 +97,9 @@ function setup(data,video){
   var api=self.CurvatureModernAnimationFrameExport;
   var plan=(video?self.CurvatureModernAnimationVideoPipeline:api).plan(
     data.project,Object.assign({fps:data.fps,width:data.width,height:data.height,
-      cameraHud:data.cameraHud===true},video?{compareLayout:data.compareLayout}:{}));
+      cameraHud:data.cameraHud===true,
+      cameraHudAppearance:data.cameraHudAppearance},
+      video?{compareLayout:data.compareLayout}:{}));
   var contexts={};
   plan.sides.forEach(function(side){
     contexts[side]=createGraph(new OffscreenCanvas(plan.width,plan.height));

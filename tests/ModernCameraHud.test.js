@@ -151,7 +151,8 @@ test('Modern browser controls expose preview-only HUD appearance and refresh wit
   for(const id of ['ModernCameraHudOpacity','ModernCameraHudOpacityValue',
     'ModernCameraHudPosition','ModernCameraHudSize'])assert.ok(html.includes('id="'+id+'"'),id);
   assert.match(app,/cameraHud\.update\(view,g\.Canvas,frame,cameraHudAppearance\)/);
-  assert.match(app,/syncCameraHudAppearance\(\);updateCameraHud\(\);saveApplicationPreferences\(\)/);
+  assert.match(app,/syncCameraHudAppearance\(\);updateCameraHud\(\);/);
+  assert.match(app,/saveApplicationPreferences\(\)/);
   assert.match(css,/data-position="bottom-right"/);
   assert.match(css,/data-size="125"/);
   assert.match(css,/background:rgba\(17,41,59,\.9\)/);

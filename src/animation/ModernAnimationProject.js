@@ -6,15 +6,17 @@
   var state=root.CurvatureModernExperimentState;
   var compat=root.CurvatureModernAnimationCompatibility;
   var camera=root.CurvatureModernCameraInterpolator;
+  var hud=root.CurvatureModernCameraHud;
   if(typeof module==='object'&&module.exports){
     state=require('../ui/modern/ModernExperimentState');
     compat=require('./ModernAnimationCompatibility');
     camera=require('../camera/ModernCameraInterpolator');
+    hud=require('../ui/modern/ModernCameraHud');
   }
-  var api=factory(state,compat,camera);
+  var api=factory(state,compat,camera,hud);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationProject=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,compat,camera){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,compat,camera,hud){
   'use strict';
   var VERSION=1,MAX_FRAMES=200,MAX_TIME=120000;
   var POSE=['Height','FocalLengthField','Pan','Nick','Roll',
@@ -90,7 +92,10 @@
     return state.validate(result);
   }
   function validate(input){
-    shape(input,['version','id','name','description','mode','target','baseExperiment','keyframes']);
+    // Optional appearance keeps existing v1 projects byte-for-byte compatible.
+    var hasHud=Object.prototype.hasOwnProperty.call(input||{},'cameraHudAppearance');
+    shape(input,['version','id','name','description','mode','target','baseExperiment',
+      'keyframes'].concat(hasHud?['cameraHudAppearance']:[]));
     if(input.version!==VERSION)throw RangeError('Unsupported animation project version');
     var id=text(input.id,80,false),name=text(input.name,120,false);
     if(!/^[A-Za-z0-9_-]+$/.test(id))throw RangeError('Invalid animation project ID');
@@ -121,9 +126,11 @@
     if(mode==='camera'){
       for(var i=1;i<keyframes.length;i++)camera.interpolate(keyframes[i-1].value,keyframes[i].value,.5,keyframes[i].easing);
     }
-    return freeze({version:VERSION,id:id,name:name,description:description,mode:mode,
+    var result={version:VERSION,id:id,name:name,description:description,mode:mode,
       target:mode==='camera'?null:{scope:target.scope,parameter:target.parameter},
-      baseExperiment:baseExperiment,keyframes:keyframes});
+      baseExperiment:baseExperiment,keyframes:keyframes};
+    if(hasHud)result.cameraHudAppearance=hud.validateAppearance(input.cameraHudAppearance);
+    return freeze(result);
   }
   function create(snapshots,options){
     options=options||{};
@@ -150,9 +157,11 @@
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(mode==='camera'?'smoothstep':'linear'):source.easing};
     });
-    return validate({version:VERSION,id:options.id,name:options.name||'Animation',
+    var result={version:VERSION,id:options.id,name:options.name||'Animation',
       description:options.description||'',mode:mode,target:target,
-      baseExperiment:entries[0].experiment,keyframes:frames});
+      baseExperiment:entries[0].experiment,keyframes:frames};
+    if(options.cameraHudAppearance!==undefined)result.cameraHudAppearance=options.cameraHudAppearance;
+    return validate(result);
   }
   function totalMs(input){var p=validate(input);return p.keyframes.reduce(function(n,f){return n+f.travelMs+f.holdMs;},0);}
   function timeline(input){
@@ -186,5 +195,6 @@
     return at(frames[frames.length-1].value);
   }
   return Object.freeze({VERSION:VERSION,validate:validate,create:create,
+    validateHudAppearance:hud.validateAppearance,
     totalMs:totalMs,timeline:timeline,sampleAt:sampleAt});
 }));

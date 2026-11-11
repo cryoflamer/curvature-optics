@@ -1969,3 +1969,20 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   is removed/recreated on list refresh and hidden on History close.
   Semantic A/B filters and Storyboard remain deferred. See
   `docs/modern-experiment-history.md` for usage and future design constraints.
+
+### Animation Studio Camera HUD appearance (after Studio video composition)
+
+- Animation Studio exposes a compact appearance editor in its Playback panel
+  (background opacity 0–100%, four corners, size 75/100/125%). Scene/Compare
+  retain their separate global appearance panel. An old Animation project
+  inherits current browser preferences until appearance is explicitly set;
+  modified and newly created projects persist appearance as an optional
+  owned `cameraHudAppearance` field in the v1 Animation project schema.
+- The editable Studio draft and v1 draft checkpoint retain this optional
+  appearance without invalidating older saved projects or recovery data.
+  The editor updates its last painted HUD without re-running optical rays.
+- Optional PNG and MP4/WebM HUD overlays share a strict appearance validator,
+  with placement inside each source view before Compare side-by-side assembly.
+  Render and encoder Worker initialization carries the effective, fixed value;
+  manifests record it only when overlay burn-in was requested. Disabled HUD
+  never changes exported pixels or the underlying project physics.

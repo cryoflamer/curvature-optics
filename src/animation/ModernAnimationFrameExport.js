@@ -27,6 +27,11 @@
       throw RangeError('Unsupported export FPS or resolution');
     return Object.freeze({fps:fps,width:width,height:height});
   }
+  function resolveHudAppearance(project,options){
+    return options&&options.cameraHudAppearance!==undefined?
+      hud.validateAppearance(options.cameraHudAppearance):
+      (project.cameraHudAppearance||hud.normalizeAppearance());
+  }
   function plan(project,options){
     var owned=projects.validate(project),settings=exportSettings(options);
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
@@ -40,8 +45,10 @@
     for(var i=0;i<=intervals;i++)times.push(i===intervals?durationMs:Math.min(durationMs,1000*i/fps));
     // Endpoint is explicit. For 5 seconds at 25 fps this is 126 PNGs,
     // representing [0, 40, ..., 4960, 5000] milliseconds.
+    var appearance=resolveHudAppearance(owned,options);
     return Object.freeze({project:owned,fps:fps,width:width,height:height,
       durationMs:durationMs,cameraHud:!!(options&&options.cameraHud===true),
+      cameraHudAppearance:appearance,
       timesMs:Object.freeze(times),
       sides:Object.freeze(owned.baseExperiment.display.mode==='compare'?['A','B']:['A'])});
   }
@@ -130,7 +137,7 @@
   function pad(index){return String(index).padStart(5,'0');}
   // Common optical quality + opaque Canvas contract, before either PNG
   // serialization or creation of a VideoFrame. Never use a Fast frame here.
-  function prepareCanvas(image,width,height,showHud){
+  function prepareCanvas(image,width,height,showHud,appearance){
     if(!image||image.quality!=='accurate'||(image.metrics&&
       image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
       image.canvas.width!==width||image.canvas.height!==height)
@@ -138,7 +145,7 @@
     compositeOpaqueWhite(image.canvas);
     if(showHud){
       if(!hud||typeof hud.paint!=='function')throw Error('Camera HUD painter unavailable');
-      hud.paint(image.canvas,image.cameraModel);
+      hud.paint(image.canvas,image.cameraModel,appearance);
     }
     return image.canvas;
   }
@@ -157,7 +164,7 @@
       if(cancel&&cancel.cancelled)return null;
       var side=p.sides[j],image=await render(sample,side,{width:p.width,height:p.height,
         index:index,timeMs:time});
-      prepareCanvas(image,p.width,p.height,p.cameraHud);
+      prepareCanvas(image,p.width,p.height,p.cameraHud,p.cameraHudAppearance);
       var bytes=await toPng(image.canvas);
       if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
         throw Error('Invalid PNG data from export Canvas');
@@ -202,7 +209,10 @@
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
       endpointIncluded:true,sides:p.sides.slice(),backgroundColor:'#ffffff',
       frameCount:frames.length,frames:frames};
-    if(p.cameraHud)manifest.cameraHudIncluded=true;
+    if(p.cameraHud){
+      manifest.cameraHudIncluded=true;
+      manifest.cameraHudAppearance=p.cameraHudAppearance;
+    }
     if(exportInfo){
       if(!Number.isInteger(exportInfo.workers)||exportInfo.workers<1||exportInfo.workers>4||
         !Number.isFinite(exportInfo.renderElapsedMs)||exportInfo.renderElapsedMs<0)
@@ -263,6 +273,7 @@
     return graph;
   }
   return Object.freeze({plan:plan,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
+    resolveHudAppearance:resolveHudAppearance,
     run:run,renderTimestamp:renderTimestamp,assemble:assemble,
     zip:zip,graphForCanvas:graphForCanvas,
     compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});

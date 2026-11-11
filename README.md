@@ -606,6 +606,26 @@ This is still a PNG sequence; MP4/WebM encoding is not yet supported.
 See [frame export design and limits](docs/modern-animation-frame-export.md).
 
 
+### Animation Studio Camera HUD appearance
+
+The separate Animation Studio playback view has a **HUD appearance** panel next
+ to its **Camera HUD** checkbox. Background opacity (0–100%) changes only the
+ panel background, not its text; Position anchors the panel to one of four
+ corners **inside each Scene / Compare A/B viewport**, and Size selects
+ 75%, 100% or 125%. Appearance changes update the last painted playback
+ sample without another RK4 render. Preview visibility is independent of
+ the **Include camera HUD in PNGs** and **Include camera HUD in video** export
+ checkboxes; burn-in remains disabled by default.
+
+Explicit Animation Studio appearance choices are autosaved in the working
+ draft and stored with named Animation Library projects. Older projects
+ without this optional field keep working and inherit the browser's Scene
+ appearance until explicitly edited. Newly saved projects capture the
+ current appearance. PNG and MP4/WebM render Workers receive an immutable
+ copy at export startup, include the effective settings in their manifest
+ when HUD is enabled, and never modify the underlying optical scene. With
+ HUD burn-in off, export Canvas pixels are unchanged.
+
 ### Direct removal controls in Animation Studio
 
 The Animation Studio keyframe timeline has an `×` action in the upper-right

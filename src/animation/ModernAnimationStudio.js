@@ -23,9 +23,10 @@
     return text;
   }
   function blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
-    source:'none',frames:[]};}
+    source:'none',frames:[],cameraHudAppearance:null};}
   function copy(draft){return {name:draft.name,description:draft.description,mode:draft.mode,
-    target:draft.target,source:draft.source,frames:draft.frames.map(function(frame){
+    target:draft.target,source:draft.source,cameraHudAppearance:draft.cameraHudAppearance||null,
+    frames:draft.frames.map(function(frame){
       return Object.assign({},frame);
     })};}
   function history(ids,entries,previous){
@@ -69,6 +70,7 @@
     var project=projects.validate(input),arrivals=projects.timeline(project);
     var draft=blank();
     draft.name=project.name;draft.description=project.description;draft.mode=project.mode;
+    draft.cameraHudAppearance=project.cameraHudAppearance||null;
     draft.target=project.target?project.target.scope+'|'+project.target.parameter:'auto';
     draft.source='mixed';
     draft.frames=project.keyframes.map(function(frame,i){
@@ -95,7 +97,9 @@
       if(!['auto','camera','physical'].includes(value))throw RangeError('Invalid mode');
       next.mode=value;next.target='auto';
     }else if(property==='target'){target(value);next.target=value;}
-    else throw RangeError('Invalid editor property');
+    else if(property==='cameraHudAppearance'){
+      next.cameraHudAppearance=projects.validateHudAppearance(value);
+    }else throw RangeError('Invalid editor property');
     return next;
   }
   function editFrame(draft,key,property,value){
@@ -204,8 +208,9 @@
       return {id:f.sourceSnapshotId===null?undefined:f.sourceSnapshotId,
         name:f.name,experiment:f.experiment,travelMs:f.travelMs,
         holdMs:f.holdMs,easing:f.easing};
-    }),{id:id,name:draft.name,description:draft.description,
-      mode:result.mode,target:result.target});
+    }),Object.assign({id:id,name:draft.name,description:draft.description,
+      mode:result.mode,target:result.target},draft.cameraHudAppearance?
+      {cameraHudAppearance:draft.cameraHudAppearance}:{}));
   }
   return Object.freeze({blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
     edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build});

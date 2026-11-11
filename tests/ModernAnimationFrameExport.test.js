@@ -188,7 +188,9 @@ test('isolated GraphX3DX adapter has private window, camera and fixed canvas',()
 });
 test('browser script loads without CommonJS and exposes export API',()=>{
   const source=fs.readFileSync(path.join(__dirname,'../src/animation/ModernAnimationFrameExport.js'),'utf8');
-  const context={CurvatureModernAnimationProject:project,Blob,TextEncoder,Uint8Array};
+  const context={CurvatureModernAnimationProject:project,
+    CurvatureModernAnimationCanvasHud:require('../src/animation/ModernAnimationCanvasHud'),
+    Blob,TextEncoder,Uint8Array};
   vm.runInNewContext(source,context,{filename:'ModernAnimationFrameExport.js'});
   assert.equal(context.CurvatureModernAnimationFrameExport.plan(make()).timesMs.length,126);
 });
