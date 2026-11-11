@@ -482,6 +482,7 @@
   var cameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
     root.CurvatureModernCameraHud.create({telemetry:cameraTelemetry,document:document}):null;
   var cameraHudVisible=true;
+  var cameraHudAppearance={opacity:90,position:'top-left',size:100};
   var studioCameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
     root.CurvatureModernCameraHud.create({telemetry:cameraTelemetry,document:document}):null;
   var studioCameraHudLast={A:null,B:null,isCompare:false};
@@ -546,6 +547,7 @@
     state.previewDetail=remembered.previewDetail;
     state.geometryBackend=remembered.geometryBackend;
     cameraHudVisible=remembered.cameraHudVisible;
+    cameraHudAppearance=remembered.cameraHudAppearance;
     historyGallerySize=remembered.historyGallerySize;
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     historyPanelOpen=remembered.historyPanelOpen;
@@ -572,6 +574,7 @@
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
+        cameraHudAppearance:cameraHudAppearance,
         navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
@@ -713,7 +716,9 @@
       state.opticalQuality=defaults.opticalQuality;
       state.previewDetail=defaults.previewDetail;
       state.geometryBackend=defaults.geometryBackend;
-      cameraHudVisible=defaults.cameraHudVisible;syncCameraHudToggle();updateCameraHud();
+      cameraHudVisible=defaults.cameraHudVisible;
+      cameraHudAppearance=defaults.cameraHudAppearance;
+      syncCameraHudToggle();syncCameraHudAppearance();updateCameraHud();
       historyGallerySize=defaults.historyGallerySize;
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
       historyPanelOpen=defaults.historyPanelOpen;
@@ -4327,11 +4332,36 @@
     ['Scene','A','B'].forEach(function(view){
       if(!views.includes(view)){cameraHud.hide(view);return;}
       var g=cameraViewport(view),frame=cameraHudModel(view,override);
-      if(!g||!frame||!cameraHud.update(view,g.Canvas,frame))cameraHud.hide(view);
+      if(!g||!frame||!cameraHud.update(view,g.Canvas,frame,cameraHudAppearance))cameraHud.hide(view);
     });
   }
+  function syncCameraHudAppearance(){
+    var opacity=newUiEl('ModernCameraHudOpacity');
+    var output=newUiEl('ModernCameraHudOpacityValue');
+    var position=newUiEl('ModernCameraHudPosition');
+    var size=newUiEl('ModernCameraHudSize');
+    if(opacity)opacity.value=String(cameraHudAppearance.opacity);
+    if(output)output.textContent=cameraHudAppearance.opacity+'%';
+    if(position)position.value=cameraHudAppearance.position;
+    if(size)size.value=String(cameraHudAppearance.size);
+  }
   function bindCameraHud(){
-    syncCameraHudToggle();
+    syncCameraHudToggle();syncCameraHudAppearance();
+    ['ModernCameraHudOpacity','ModernCameraHudPosition','ModernCameraHudSize'].
+      forEach(function(id){
+        var input=newUiEl(id);
+        if(!input)return;
+        input.addEventListener(id==='ModernCameraHudOpacity'?'input':'change',function(){
+          var options=Object.assign({},cameraHudAppearance);
+          if(id==='ModernCameraHudOpacity')options.opacity=Number(input.value);
+          if(id==='ModernCameraHudPosition')options.position=input.value;
+          if(id==='ModernCameraHudSize')options.size=Number(input.value);
+          cameraHudAppearance=applicationPreferences?
+            applicationPreferences.normalize({cameraHudAppearance:options}).cameraHudAppearance:
+            root.CurvatureModernCameraHud.normalizeAppearance(options);
+          syncCameraHudAppearance();updateCameraHud();saveApplicationPreferences();
+        });
+      });
     var toggle=newUiEl('ModernCameraHudToggle');
     if(toggle)toggle.addEventListener('change',function(){
       cameraHudVisible=!!toggle.checked;

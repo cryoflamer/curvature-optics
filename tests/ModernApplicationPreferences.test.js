@@ -11,13 +11,13 @@ function storage(values={}){
 }
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
-  assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',cameraHudVisible:true,
+  assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
-  {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',cameraHudVisible:true,
+  {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
@@ -178,4 +178,27 @@ test('Camera HUD visibility is an optional local preference, not an experiment p
     opticalQuality:'fast'})})).cameraHudVisible,true);
   preferences.reset(db);
   assert.equal(preferences.read(db).cameraHudVisible,true);
+});
+
+test('Camera HUD appearance is local display state, validated and reset independently of experiments',()=>{
+  const db=storage(),defaults={opacity:90,position:'top-left',size:100};
+  assert.deepEqual(preferences.read(db).cameraHudAppearance,defaults);
+  const settings={opacity:0,position:'bottom-right',size:125};
+  assert.equal(preferences.write(db,{cameraHudVisible:true,cameraHudAppearance:settings}),true);
+  assert.deepEqual(preferences.read(db).cameraHudAppearance,settings);
+  assert.deepEqual(JSON.parse(db.data.get(preferences.STORAGE_KEY)).cameraHudAppearance,settings);
+  assert.equal(Object.isFrozen(preferences.read(db).cameraHudAppearance),true);
+  assert.deepEqual(preferences.normalize({cameraHudAppearance:{opacity:100,
+    position:'top-right',size:75}}).cameraHudAppearance,
+    {opacity:100,position:'top-right',size:75});
+  assert.deepEqual(preferences.normalize({cameraHudAppearance:{opacity:-1,
+    position:'center',size:200}}).cameraHudAppearance,defaults);
+  assert.deepEqual(preferences.normalize({cameraHudAppearance:{opacity:95.5,
+    position:[],size:'125'}}).cameraHudAppearance,defaults);
+  assert.deepEqual(preferences.normalize({cameraHudAppearance:[]}).cameraHudAppearance,defaults);
+  assert.deepEqual(preferences.read(storage({[preferences.STORAGE_KEY]:JSON.stringify({
+    version:1,cameraHudVisible:false})})).cameraHudAppearance,defaults,
+    'older local preference files migrate transparently');
+  preferences.reset(db);
+  assert.deepEqual(preferences.read(db).cameraHudAppearance,defaults);
 });

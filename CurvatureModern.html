@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -53,9 +53,9 @@
 <script src="src/ui/modern/ModernSceneState.js"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
 <script src="src/ui/modern/ModernCameraNavigation.js"></script>
-<script src="src/ui/modern/ModernApplicationPreferences.js"></script>
+<script src="src/ui/modern/ModernApplicationPreferences.js?hud-appearance=1"></script>
 <script src="src/camera/ModernCameraTelemetry.js"></script>
-<script src="src/ui/modern/ModernCameraHud.js"></script>
+<script src="src/ui/modern/ModernCameraHud.js?hud-appearance=1"></script>
 <script src="src/camera/ModernCameraInterpolator.js"></script>
 <script src="src/camera/ModernCameraSequence.js"></script>
 <script src="src/ui/modern/ModernCameraPerspectiveWarp.js"></script>
@@ -753,12 +753,33 @@
         <label class="modern-camera-hud-toggle" for="ModernCameraHudToggle">
           <input type="checkbox" id="ModernCameraHudToggle" checked> Camera HUD
         </label>
+        <details class="modern-camera-hud-settings" id="ModernCameraHudSettings">
+          <summary aria-label="Camera HUD appearance settings">Appearance</summary>
+          <div class="modern-camera-hud-settings-body">
+            <label for="ModernCameraHudOpacity">Background opacity <output id="ModernCameraHudOpacityValue" for="ModernCameraHudOpacity">90%</output></label>
+            <input id="ModernCameraHudOpacity" type="range" min="0" max="100" step="5" value="90">
+            <label for="ModernCameraHudPosition">Position</label>
+            <select id="ModernCameraHudPosition">
+              <option value="top-left">Top left</option>
+              <option value="top-right">Top right</option>
+              <option value="bottom-left">Bottom left</option>
+              <option value="bottom-right">Bottom right</option>
+            </select>
+            <label for="ModernCameraHudSize">Size</label>
+            <select id="ModernCameraHudSize">
+              <option value="75">75%</option>
+              <option value="100" selected>100%</option>
+              <option value="125">125%</option>
+            </select>
+            <small>Applies to Scene and both Compare views. Saved in this browser.</small>
+          </div>
+        </details>
         <span class="modern-mode-pill" id="ModernModePill">SCENE</span></div>
       <section class="modern-viewport-panel" aria-label="Physical scene preview">
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>

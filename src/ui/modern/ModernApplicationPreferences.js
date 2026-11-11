@@ -72,6 +72,17 @@
     });
     return Object.freeze(result);
   }
+  // Presentation only: bounds prevent corrupt storage from changing layout.
+  function hudAppearance(input){
+    var value=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
+    return Object.freeze({
+      opacity:Number.isInteger(value.opacity)&&value.opacity>=0&&value.opacity<=100?
+        value.opacity:90,
+      position:['top-left','top-right','bottom-left','bottom-right'].includes(value.position)?
+        value.position:'top-left',
+      size:[75,100,125].includes(value.size)?value.size:100
+    });
+  }
   function normalize(input){
     var data=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
     var nav=data.navigation&&typeof data.navigation==='object'&&!Array.isArray(data.navigation)?data.navigation:{};
@@ -80,6 +91,7 @@
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
       cameraHudVisible:data.cameraHudVisible!==false,
+      cameraHudAppearance:hudAppearance(data.cameraHudAppearance),
       historyGallerySize:from(HISTORY_SIZES,data.historyGallerySize,'small'),
       historyPinnedCollapsed:data.historyPinnedCollapsed===true,
       historyPanelOpen:data.historyPanelOpen===true,
@@ -111,7 +123,7 @@
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
       previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
-      cameraHudVisible:data.cameraHudVisible,
+      cameraHudVisible:data.cameraHudVisible,cameraHudAppearance:data.cameraHudAppearance,
       historyGallerySize:data.historyGallerySize,historyPinnedCollapsed:data.historyPinnedCollapsed,
       historyPanelOpen:data.historyPanelOpen,historyFilters:data.historyFilters,
       historyStoryboardQueue:data.historyStoryboardQueue,

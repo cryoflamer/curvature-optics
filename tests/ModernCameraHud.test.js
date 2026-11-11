@@ -12,7 +12,7 @@ function model(geometry=1){return {showModel:geometry,rEarth:6371000,rFEarth:100
   camViewAngle:Math.PI/3,viewcenterHorizon:3,deviceRatio:1.5};}
 function documentMock(){
   function createElement(tag){return {tagName:tag.toUpperCase(),attributes:{},children:[],
-    parentNode:null,hidden:false,textContent:'',className:'',
+    parentNode:null,hidden:false,textContent:'',className:'',style:{},
     setAttribute(k,v){this.attributes[k]=v;},
     appendChild(node){node.parentNode=this;this.children.push(node);return node;},
     removeChild(node){const i=this.children.indexOf(node);if(i<0)throw Error('not child');
@@ -106,4 +106,55 @@ test('Modern shell and app connect shared telemetry, independent HUD toggle and 
   assert.match(css,/pointer-events:none/);
   assert.doesNotMatch(fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8'),
     /ModernCameraHud\.js|ModernCameraHudToggle/);
+});
+
+test('appearance updates each HUD in place, keeping text opaque and geometry untouched',()=>{
+  const {hud,canvas}=setup(),a=canvas(),b=canvas(),m=model(),original=structuredClone(m);
+  assert.equal(hud.update('A',a.c,m,{opacity:0,position:'bottom-right',size:125}),true);
+  assert.equal(hud.update('B',b.c,{...m,showModel:2},
+    {opacity:35,position:'top-right',size:75}),true);
+  const first=a.parent.children[1],second=b.parent.children[1];
+  assert.equal(first.attributes['data-position'],'bottom-right');
+  assert.equal(first.attributes['data-size'],'125');
+  assert.equal(first.style.backgroundColor,'rgba(17, 41, 59, 0)');
+  assert.equal(second.style.backgroundColor,'rgba(17, 41, 59, 0.35)');
+  assert.equal(second.attributes['data-position'],'top-right');
+  assert.equal(second.attributes['data-size'],'75');
+  assert.equal(first.children[0].textContent,'CAMERA · GLOBE');
+  assert.equal(second.children[0].textContent,'CAMERA · FLAT');
+  assert.equal(hud.setAppearance('A',{opacity:100,position:'bottom-left',size:75}),true);
+  assert.equal(first.style.backgroundColor,'rgba(17, 41, 59, 1)');
+  assert.equal(first.attributes['data-position'],'bottom-left');
+  assert.equal(a.parent.children[1],first,'appearance cannot recreate the overlay or Canvas');
+  assert.equal(second.attributes['data-position'],'top-right','Compare B stays independent');
+  assert.deepEqual(m,original,'camera physics is never modified');
+});
+
+test('invalid appearance uses bounded defaults, including 0 and 100 percent endpoints',()=>{
+  const {hud,canvas}=setup(),v=canvas();
+  assert.equal(hud.update('Scene',v.c,model(),{opacity:-20,position:'middle',size:500}),true);
+  const node=v.parent.children[1];
+  assert.equal(node.attributes['data-position'],'top-left');
+  assert.equal(node.attributes['data-size'],'100');
+  assert.equal(node.style.backgroundColor,'rgba(17, 41, 59, 0.9)');
+  assert.deepEqual(hudFactory.normalizeAppearance({opacity:100,position:'top-right',size:125}),
+    {opacity:100,position:'top-right',size:125});
+  assert.equal(Object.isFrozen(hudFactory.normalizeAppearance()),true);
+  assert.equal(hud.setAppearance('not-a-view',{}),false);
+});
+
+test('Modern browser controls expose preview-only HUD appearance and refresh without optics',()=>{
+  const root=path.join(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  for(const id of ['ModernCameraHudOpacity','ModernCameraHudOpacityValue',
+    'ModernCameraHudPosition','ModernCameraHudSize'])assert.ok(html.includes('id="'+id+'"'),id);
+  assert.match(app,/cameraHud\.update\(view,g\.Canvas,frame,cameraHudAppearance\)/);
+  assert.match(app,/syncCameraHudAppearance\(\);updateCameraHud\(\);saveApplicationPreferences\(\)/);
+  assert.match(css,/data-position="bottom-right"/);
+  assert.match(css,/data-size="125"/);
+  assert.match(css,/background:rgba\(17,41,59,\.9\)/);
+  assert.doesNotMatch(fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8'),
+    /ModernCameraHudOpacity|ModernCameraHudPosition|ModernCameraHudSize/);
 });

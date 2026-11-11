@@ -177,18 +177,41 @@ button{cursor:pointer}
 .modern-camera-telemetry{position:absolute;z-index:7;top:9px;left:9px;
   display:flex;flex-direction:column;gap:2px;max-width:calc(100% - 18px);
   padding:7px 9px;border-radius:7px;border:1px solid #809bb4;
-  background:#11293be8;color:#f4f9ff;pointer-events:none;
+  background:rgba(17,41,59,.9);color:#f4f9ff;pointer-events:none;
   font:500 11px/1.4 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
   text-align:left;white-space:normal;overflow-wrap:anywhere;
   box-shadow:0 2px 8px #0b1e2f50;font-variant-numeric:tabular-nums}
 .modern-camera-telemetry strong{font-size:10px;letter-spacing:.045em;color:#b9d8ef}
 .modern-camera-telemetry span{display:block}
 .modern-camera-telemetry[hidden]{display:none!important}
+.modern-camera-telemetry[data-position="top-right"]{left:auto;right:9px}
+.modern-camera-telemetry[data-position="bottom-left"]{top:auto;bottom:9px}
+.modern-camera-telemetry[data-position="bottom-right"]{top:auto;left:auto;bottom:9px;right:9px}
+.modern-camera-telemetry[data-size="75"]{font-size:9px;padding:5px 7px;gap:1px}
+.modern-camera-telemetry[data-size="75"] strong{font-size:9px}
+.modern-camera-telemetry[data-size="125"]{font-size:14px;padding:9px 11px;gap:3px}
+.modern-camera-telemetry[data-size="125"] strong{font-size:12px}
 .modern-camera-hud-toggle{display:inline-flex;align-items:center;gap:6px;
   padding:5px 9px;border-radius:7px;color:#294b6c;font-size:12px;
   background:#eef5fc;border:1px solid #c2d6e8;white-space:nowrap;cursor:pointer}
 .modern-camera-hud-toggle input{margin:0;accent-color:#236ab4}
 .modern-camera-hud-toggle:focus-within{outline:2px solid #65acf2;outline-offset:2px}
+/* A compact disclosure in the scene header, never an overlay on the ray field. */
+.modern-camera-hud-settings{position:relative;color:#294b6c;font-size:12px}
+.modern-camera-hud-settings>summary{padding:6px 10px;cursor:pointer;border:1px solid #c2d6e8;
+  border-radius:7px;background:#eef5fc;list-style-position:inside;white-space:nowrap}
+.modern-camera-hud-settings>summary:focus-visible{outline:2px solid #65acf2;outline-offset:2px}
+.modern-camera-hud-settings-body{position:absolute;right:0;top:calc(100% + 5px);z-index:50;
+  box-sizing:border-box;width:min(270px,calc(100vw - 32px));padding:12px;
+  border:1px solid #b8cee3;background:#fff;box-shadow:0 7px 20px #18324a35;
+  border-radius:9px;display:flex;flex-direction:column;gap:7px}
+.modern-camera-hud-settings-body label{font-weight:600;color:#264561}
+.modern-camera-hud-settings-body output{float:right;font-variant-numeric:tabular-nums}
+.modern-camera-hud-settings-body select{padding:6px;border-radius:6px;border:1px solid #b8cee3;
+  background:#fff;color:#243f5f}
+.modern-camera-hud-settings-body input[type=range]{width:100%;accent-color:#236ab4}
+.modern-camera-hud-settings-body small{font-size:11px;color:#60768f;line-height:1.4}
+.modern-camera-hud-settings:not([open]) .modern-camera-hud-settings-body{display:none}
 @media(max-width:550px){.modern-camera-telemetry{font-size:10px;padding:5px 7px}}
 
 /* 138.1: reference labels must remain transparent above the scene image.

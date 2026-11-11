@@ -75,14 +75,24 @@ in local `ModernApplicationPreferences` (`cameraHudVisible`), not in experiment
 snapshots or shared URLs. Resetting preferences re-enables it. No RK4 recalculation
 is triggered by toggling the overlay.
 
+The **Appearance** disclosure beside the checkbox adjusts *background* opacity
+(0–100%, text stays opaque), corner (top-left/right or bottom-left/right) and
+text scale (75%, 100%, 125%). Both Compare sides use the same settings,
+positioned relative to their own clipped viewports. Defaults preserve the
+previous top-left placement and near-opaque background. These presentation
+options persist as `cameraHudAppearance` in local browser preferences; they
+never change experiment physics, saved snapshots or shared URLs. Settings take
+effect immediately without an optics redraw, and **Reset preferences** restores
+defaults. Playback/export customization is a separate follow-up stage.
+
 `ModernCameraHud.js` creates an accessible, non-interactive text-only overlay
 in each Graph Canvas clipping container. It never changes exported pixels.
 Scene uses the current model; Compare measures both independently rendered
 models with their shared live observer pose and Compare eye-level aiming. Mouse
 drag shows interim position/angles even before the committed RK4 redraw; wheel
 FOV and keyboard motion update the HUD immediately. When hidden, the old
-transient drag text remains available. The Camera HUD does not currently appear
-in Animation Studio, PNG or video exports. A control help strip and optional
+transient drag text remains available. Animation Studio playback and optional PNG/video HUDs already exist, but do not
+yet inherit these new appearance options. A control help strip and optional
 orientation indicator are planned separate stages. No Legacy source changes.
 
 Tests: `node --test tests/ModernCameraHud.test.js tests/ModernCameraTelemetry.test.js tests/ModernApplicationPreferences.test.js`.

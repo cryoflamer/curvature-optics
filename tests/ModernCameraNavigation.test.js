@@ -702,6 +702,7 @@ test('display and navigation preferences are immediately saved and restored inde
   const saved=h.storage.get(preferences.STORAGE_KEY);
   assert.deepEqual(JSON.parse(saved),{
     version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',cameraHudVisible:true,
+    cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyStoryboardQueue:[],
     historyFilters:{query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'},displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:1,wheelStep:'auto'},
@@ -1099,4 +1100,28 @@ test('Animation picker keeps modal History separate; full History closes without
   assert.equal(n.get('ModernHistoryPanel').hidden,true);
   assert.deepEqual({mode:h.app.getMode(),height:h.app.getModel().Height,renders:h.renders.length},before);
   assert.equal(h.app.getWorkspaceMode(),'animation');
+});
+
+test('Camera HUD appearance controls persist across browser reload and do not render physics',()=>{
+  const h=boot(),n=h.nodes;
+  const renders=h.renders.length;
+  assert.equal(n.get('ModernCameraHudOpacity').value,'90');
+  assert.equal(n.get('ModernCameraHudPosition').value,'top-left');
+  assert.equal(n.get('ModernCameraHudSize').value,'100');
+  n.get('ModernCameraHudOpacity').value='35';n.get('ModernCameraHudOpacity').dispatch('input');
+  assert.equal(n.get('ModernCameraHudOpacityValue').textContent,'35%');
+  n.get('ModernCameraHudPosition').value='bottom-right';
+  n.get('ModernCameraHudPosition').dispatch('change');
+  n.get('ModernCameraHudSize').value='125';n.get('ModernCameraHudSize').dispatch('change');
+  assert.equal(h.renders.length,renders,'the optical renderer is not invoked');
+  const persisted=JSON.parse(h.storage.get(preferences.STORAGE_KEY));
+  assert.deepEqual(persisted.cameraHudAppearance,{opacity:35,position:'bottom-right',size:125});
+  const next=boot(null,{[preferences.STORAGE_KEY]:h.storage.get(preferences.STORAGE_KEY)});
+  assert.equal(next.nodes.get('ModernCameraHudOpacity').value,'35');
+  assert.equal(next.nodes.get('ModernCameraHudPosition').value,'bottom-right');
+  assert.equal(next.nodes.get('ModernCameraHudSize').value,'125');
+  next.nodes.get('ModernResetPreferences').dispatch('click');
+  assert.equal(next.nodes.get('ModernCameraHudOpacity').value,'90');
+  assert.equal(next.nodes.get('ModernCameraHudPosition').value,'top-left');
+  assert.equal(next.nodes.get('ModernCameraHudSize').value,'100');
 });
