@@ -117,7 +117,7 @@ test('accurate Canvas becomes opaque VideoFrame with direct pixel source, no PNG
   assert.equal(final.frames.A.closed,true);
 });
 test('Compare frames are synchronized and constructed independently per side',async()=>{
-  const p=video.plan(make('compare'),{fps:5,width:640,height:360});
+  const p=video.plan(make('compare'),{fps:5,width:640,height:360,compareLayout:'separate'});
   const got=[];
   class Frame{constructor(canvas,opts){this.canvas=canvas;this.timestamp=opts.timestamp;
     this.duration=opts.duration;}close(){this.closed=true;}}
@@ -133,7 +133,7 @@ test('Compare frames are synchronized and constructed independently per side',as
   assert.equal(r.frames.A.closed,true);assert.equal(r.frames.B.closed,true);
 });
 test('Fast mode is rejected and a failing B render closes the completed A frame',async()=>{
-  const p=video.plan(make('compare'),{fps:5,width:640,height:360});
+  const p=video.plan(make('compare'),{fps:5,width:640,height:360,compareLayout:'separate'});
   const allocated=[];
   class Frame{constructor(){this.closed=false;allocated.push(this);}close(){this.closed=true;}}
   await assert.rejects(()=>video.renderTimestamp(p,0,async(_s,side)=>({
@@ -149,7 +149,7 @@ test('Fast mode is rejected and a failing B render closes the completed A frame'
   assert.ok(allocated.every(f=>f.closed));
 });
 test('bounded reordering preserves timestamp order despite out-of-order completions',()=>{
-  const p=video.plan(make('compare'),{fps:5,width:640,height:360});
+  const p=video.plan(make('compare'),{fps:5,width:640,height:360,compareLayout:'separate'});
   let accepted=[];
   const sink=video.orderedGate(p,{capacity:4,consume:frame=>{
     assert.equal(frame.frames.A.closed,false);
@@ -169,7 +169,7 @@ test('bounded reordering preserves timestamp order despite out-of-order completi
   assert.equal(accepted.length,p.frameCount);
 });
 test('duplicate, invalid timestamp, incomplete Compare and cancellation do not leak buffered frames',()=>{
-  const p=video.plan(make('compare'),{fps:5,width:640,height:360});
+  const p=video.plan(make('compare'),{fps:5,width:640,height:360,compareLayout:'separate'});
   const sink=video.orderedGate(p,{capacity:2,consume:()=>{}});
   const x=mockFrame(2,p),y=mockFrame(3,p);
   sink.offer(x);sink.offer(y);
@@ -222,4 +222,132 @@ test('encoder queue backpressure pauses ordered gate until dequeue without leaki
   assert.equal(first.frames.A.closed,true);
   assert.equal(second.frames.A.closed,true);
   assert.equal(gate.available(),2);
+});
+
+test('Compare side-by-side default creates one deterministic VideoFrame from painted A/B',async()=>{
+  const p=video.plan(make('compare'),{fps:5,width:640,height:360});
+  assert.equal(p.compareLayout,'side-by-side');
+  assert.deepEqual(Array.from(p.sides),['A','B']);
+  assert.deepEqual(Array.from(p.outputSides),['COMBINED']);
+  assert.equal(p.outputWidth,1280);assert.equal(p.outputHeight,720);
+  const calls=[],outCanvas={width:1280,height:720};
+  class Frame{constructor(canvas,options){this.canvas=canvas;this.timestamp=options.timestamp;
+    this.duration=options.duration;this.closed=false;}close(){this.closed=true;}}
+  const result=await video.renderTimestamp(p,4,async(_sample,side,dimensions)=>{
+    calls.push([side,dimensions.timestampUs]);
+    return {quality:'accurate',canvas:{width:640,height:360,getContext:ctx},
+      cameraModel:{showModel:side==='A'?1:2},metrics:{opticalQuality:'accurate'}};
+  },Frame,null,(images,timing)=>{
+    assert.deepEqual(Object.keys(images),['A','B']);
+    assert.equal(images.A.cameraModel.showModel,1);
+    assert.equal(images.B.cameraModel.showModel,2);
+    assert.equal(timing.timeMs,800);
+    assert.equal(timing.durationMs,5000);
+    return outCanvas;
+  });
+  assert.deepEqual(calls,[['A',800000],['B',800000]]);
+  assert.deepEqual(Object.keys(result.frames),['COMBINED']);
+  assert.equal(result.frames.COMBINED.canvas,outCanvas);
+  assert.equal(result.frames.COMBINED.timestamp,800000);
+  assert.equal(result.frames.COMBINED.duration,200000);
+  assert.equal(result.stats.compositionMs>=0,true);
+  video.closeFrames(result);assert.equal(result.frames.COMBINED.closed,true);
+  const gate=video.orderedGate(p,{capacity:1,consume:bundle=>{
+    assert.equal(bundle.frames.COMBINED.closed,false);
+  }});
+  gate.offer(result);assert.equal(gate.completed(),false);
+  await assert.rejects(video.renderTimestamp(p,0,()=>{},Frame),/composition callback/);
+  assert.throws(()=>video.plan(make(),{compareLayout:'side-by-side'}),/Compare layout/);
+});
+
+test('real Compare compositor consumes both opaque view canvases once and preserves their pixels',async()=>{
+  const compose=require('../src/animation/ModernAnimationCompareComposition');
+  const p=video.plan(make('compare'),{fps:25,width:960,height:540});
+  const ops=[];
+  const canvasCtx={save(){},restore(){},setTransform(){},fillRect(){},
+    drawImage(...a){ops.push(['image',...a]);},
+    fillText(...a){ops.push(['text',...a]);}};
+  const destination={width:1920,height:1080,getContext(){return canvasCtx;}};
+  let constructed=0;
+  class Frame{constructor(canvas,timing){constructed++;this.canvas=canvas;
+    this.timestamp=timing.timestamp;this.closed=false;}close(){this.closed=true;}}
+  const images={};
+  const bundle=await video.renderTimestamp(p,0,async(_sample,side)=>{
+    const source={width:960,height:540,getContext:ctx};images[side]=source;
+    return {quality:'accurate',canvas:source,cameraModel:{showModel:side==='A'?1:2},
+      metrics:{opticalQuality:'accurate'}};
+  },Frame,null,(pair,t)=>compose.paint(destination,pair,t));
+  assert.equal(constructed,1);
+  assert.equal(bundle.frames.COMBINED.canvas,destination);
+  assert.deepEqual(ops.filter(x=>x[0]==='image'),[
+    ['image',images.A,0,270],['image',images.B,960,270]]);
+  assert.deepEqual(ops.filter(x=>x[0]==='text').map(x=>x[1]),[
+    'COMPARE A / B','A · GLOBE','B · FLAT','PHYSICAL ANIMATION','00:00.00 / 00:05.00']);
+  assert.equal(bundle.stats.compositionMs>=0,true);
+  video.closeFrames(bundle);assert.equal(bundle.frames.COMBINED.closed,true);
+});
+
+test('combined output frame contract rejects two-stream bundles and invalid layout inputs',()=>{
+  const p=video.plan(make('compare'),{fps:5,width:640,height:360});
+  const bundle=mockFrame(0,p,['A','B']);
+  const gate=video.orderedGate(p,{capacity:1,consume:()=>{throw Error('Should not encode');}});
+  assert.throws(()=>gate.offer(bundle),/incomplete video frame/);
+  assert.equal(gate.completed(),false);
+  assert.throws(()=>video.plan(make('compare'),{compareLayout:false}),/Unsupported Compare/);
+  assert.throws(()=>video.plan(make('compare'),{compareLayout:'stacked'}),/Unsupported Compare/);
+});
+
+test('frame Worker actually composes and transfers one synchronized Compare VideoFrame',async()=>{
+  const compose=require('../src/animation/ModernAnimationCompareComposition');
+  const root={};
+  const posts=[],canvases=[];
+  class Canvas{
+    constructor(width,height){this.width=width;this.height=height;this.calls=[];canvases.push(this);}
+    getContext(){const canvas=this;return {save(){},restore(){},setTransform(){},
+      fillRect(){},drawImage(...args){canvas.calls.push(['image',...args]);},
+      fillText(...args){canvas.calls.push(['text',...args]);}};}
+  }
+  class Frame{
+    constructor(canvas,opts){this.source=canvas;this.timestamp=opts.timestamp;this.closed=false;}
+    close(){this.closed=true;}
+  }
+  class Graph{
+    InitInternals(){}
+    SaveAttrs(){}
+    SaveDefaultAttrs(){}
+  }
+  root.self=root;root.JsGraphX3D=Graph;root.JsgCamera=class{};
+  root.OffscreenCanvas=Canvas;root.VideoFrame=Frame;
+  root.CurveAppClass=class{};
+  root.CurvatureMainCanvasRenderer={};root.CurvaturePhysicalSceneOptics={};
+  root.CurvatureModernAnimationFrameExport=png;
+  root.CurvatureModernAnimationVideoPipeline=video;
+  root.CurvatureModernAnimationCompareComposition=compose;
+  root.CurvatureModernAnimationPreview={create:()=>({render(_sample,side,graph){
+    return {quality:'accurate',result:{opticalQuality:'accurate'},
+      cameraModel:{showModel:side==='A'?1:2}};
+  }})};
+  root.importScripts=()=>{};
+  root.postMessage=(value,transfer)=>posts.push({value,transfer});
+  const scope=vm.createContext({performance,OffscreenCanvas:Canvas,VideoFrame:Frame,
+    Object,Promise,JsGraphX3D:Graph,JsgCamera:root.JsgCamera,...root});
+  scope.self=scope;
+  vm.runInContext(fs.readFileSync(path.join(__dirname,
+    '../src/animation/ModernAnimationFrameWorker.js'),'utf8'),scope);
+  const project=make('compare');
+  await scope.onmessage({data:{type:'video-init',project,width:640,height:360,
+    fps:5,cameraHud:false,compareLayout:'side-by-side'}});
+  assert.equal(posts[0].value.type,'ready');
+  assert.equal(posts[0].value.sides,2);
+  await scope.onmessage({data:{type:'video-render',index:0}});
+  assert.equal(posts[1].value.type,'video-frame');
+  assert.equal(posts[1].transfer.length,1);
+  assert.deepEqual(Object.keys(posts[1].value.frame.frames),['COMBINED']);
+  const composite=posts[1].transfer[0];
+  assert.equal(composite.source.width,1280);assert.equal(composite.source.height,720);
+  assert.deepEqual(composite.source.calls.filter(x=>x[0]==='image').map(x=>x.slice(2)),
+    [[0,180],[640,180]]);
+  assert.equal(posts[1].value.frame.stats.compositionMs>=0,true);
+  assert.equal(posts[1].value.frame.timestampUs,0);
+  assert.equal(canvases.length,3);
 });

@@ -106,7 +106,7 @@ test('legacy opt-out PNG path remains unchanged; opt-in draws after white compos
 });
 test('VideoFrame sees the same HUD as PNG without PNG encoding or timeline changes',async()=>{
   const project=makeProject('compare');
-  const p=video.plan(project,{fps:5,width:640,height:360,cameraHud:true});
+  const p=video.plan(project,{fps:5,width:640,height:360,cameraHud:true,compareLayout:'separate'});
   assert.deepEqual(Array.from(p.sides),['A','B']);
   let constructed=0;
   class Frame{

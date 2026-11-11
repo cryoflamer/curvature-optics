@@ -1802,7 +1802,7 @@
           cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
           onReady:function(info){
             message(info.workers+' render worker(s) · '+codecLabel+' encoder ready · '+
-              info.total+' frames · reorder window '+info.frameWindow+
+              info.total+' frames · '+info.width+'×'+info.height+' output · reorder window '+info.frameWindow+
               ' (about '+info.rawFrameMiB+' MiB/frame). Cancel is available.');
           },
           onRendered:function(info){
@@ -1849,7 +1849,8 @@
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
         if(progress)progress.value=100;
         message(codecLabel+' export ready: '+result.manifest.frameCount+' frames × '+
-          result.manifest.sides.length+' view(s), '+(result.manifest.durationUs/1e6).toFixed(3)+
+          result.manifest.sides.length+' view(s) in '+result.manifest.outputStreams+
+          ' video file(s), '+result.manifest.width+'×'+result.manifest.height+', '+(result.manifest.durationUs/1e6).toFixed(3)+
           ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+
           ' s total · peak RGBA in-flight '+result.peakInflightFrames+
           ' frames ('+result.manifest.frameWindow+' maximum).');
@@ -1871,6 +1872,8 @@
               '  WebCodecs submit → output: mean '+f(breakdown.codecOutputLatency.meanMs)+
               ' · max '+f(breakdown.codecOutputLatency.maxMs)+
               ' ('+breakdown.codecOutputLatency.samples+' chunks)\n'+
+              '  Compare composition Σ: '+f(breakdown.compareComposition&&breakdown.compareComposition.totalMs)+
+              ' ('+(breakdown.compareComposition&&breakdown.compareComposition.samples||0)+' frames)\n'+
               '  Final flush: '+f(breakdown.finalize.flushMs)+
               ' · mux: '+f(breakdown.finalize.muxMs)+
               ' · Compare ZIP: '+f(breakdown.finalize.zipMs)+

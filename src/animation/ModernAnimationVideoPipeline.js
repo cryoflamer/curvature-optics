@@ -19,6 +19,17 @@
     var owned=projects.validate(project),settings=png.exportSettings(options);
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
       throw RangeError('Invalid camera HUD export setting');
+    // Keep the optical views independent, but encode one presentation frame
+    // per timestamp by default in Compare. 'separate' preserves the legacy
+    // two-stream protocol for the layout choice added in the next stage.
+    var isCompare=owned.baseExperiment.display.mode==='compare';
+    var requestedLayout=options&&options.compareLayout;
+    var compareLayout=isCompare?(requestedLayout==null?'side-by-side':requestedLayout):null;
+    if(compareLayout!==null&&!['side-by-side','separate'].includes(compareLayout))
+      throw RangeError('Unsupported Compare video layout');
+    if(!isCompare&&options&&options.compareLayout!=null)
+      throw RangeError('Compare layout requires a Compare project');
+    var combined=compareLayout==='side-by-side';
     var totalMs=projects.totalMs(owned),durationUs=Math.round(totalMs*1000);
     if(!Number.isSafeInteger(durationUs)||durationUs<=0)
       throw RangeError('Video animation must have positive finite duration');
@@ -41,8 +52,11 @@
     return Object.freeze({project:owned,fps:settings.fps,width:settings.width,
       height:settings.height,cameraHud:!!(options&&options.cameraHud===true),
       durationMs:totalMs,durationUs:durationUs,
-      frameCount:count,sides:Object.freeze(owned.baseExperiment.display.mode==='compare'?['A','B']:['A']),
-      frames:Object.freeze(times)});
+      frameCount:count,sides:Object.freeze(isCompare?['A','B']:['A']),
+      outputSides:Object.freeze(combined?['COMBINED']:(isCompare?['A','B']:['A'])),
+      outputWidth:settings.width*(combined?2:1),
+      outputHeight:settings.height*(combined?2:1),
+      compareLayout:compareLayout,frames:Object.freeze(times)});
   }
   function closeFrames(result){
     if(!result||!result.frames)return;
@@ -53,12 +67,15 @@
   }
   // FrameCtor is injectable for tests; normally a dedicated renderer worker
   // passes its own VideoFrame. PNG encoding is intentionally never invoked.
-  async function renderTimestamp(p,index,render,FrameCtor,cancel){
+  async function renderTimestamp(p,index,render,FrameCtor,cancel,compose){
     if(!p||!Array.isArray(p.frames)||!Number.isInteger(index)||
       index<0||index>=p.frameCount||typeof render!=='function'||
       typeof FrameCtor!=='function')throw RangeError('Invalid video frame request');
     var timing=p.frames[index],result={index:index,timestampUs:timing.timestampUs,
       durationUs:timing.durationUs,sampleTimeMs:timing.sampleTimeMs,frames:{},stats:{}};
+    var sources=p.compareLayout==='side-by-side'?{}:null;
+    if(sources&&typeof compose!=='function')
+      throw TypeError('Compare video composition callback required');
     try{
       if(cancel&&cancel.cancelled)return null;
       var sample=projects.sampleAt(p.project,timing.sampleTimeMs);
@@ -68,12 +85,15 @@
         var image=await render(sample,side,{width:p.width,height:p.height,index:index,
           timeMs:timing.sampleTimeMs,timestampUs:timing.timestampUs,durationUs:timing.durationUs});
         png.prepareCanvas(image,p.width,p.height,p.cameraHud);
-        // A completed frame snapshots this worker's canvas; subsequent RK4
-        // renders may safely reuse it after VideoFrame construction.
-        result.frames[side]=new FrameCtor(image.canvas,{timestamp:timing.timestampUs,
+        // A standalone view gets its own VideoFrame. Compare instead retains
+        // two independent source canvases until they are composed into one
+        // presentation frame, then snapshots only that completed Canvas.
+        if(sources)sources[side]=image;
+        else result.frames[side]=new FrameCtor(image.canvas,{timestamp:timing.timestampUs,
           duration:timing.durationUs});
-        // Per-side wall time includes painter, opaque compositing and VideoFrame
-        // construction. The optics timer is an independent, nested diagnostic;
+        // Per-side wall time includes painting and opaque compositing, plus
+        // VideoFrame construction for the non-combined path. The optics timer
+        // is an independent, nested diagnostic;
         // they must not be added to one another.
         var m=image.metrics||{},t=m.timings||{};
         result.stats[side]={renderMs:Math.max(0,performance.now()-renderStarted),
@@ -83,6 +103,16 @@
           budgetExceeded:!!m.budgetExceeded,cacheReused:!!m.cacheReused};
       }
       if(cancel&&cancel.cancelled){closeFrames(result);return null;}
+      if(sources){
+        var startComposition=performance.now();
+        var canvas=compose(sources,{timeMs:timing.sampleTimeMs,
+          durationMs:p.durationMs,animationMode:p.project.mode});
+        if(!canvas||canvas.width!==p.outputWidth||canvas.height!==p.outputHeight)
+          throw Error('Incorrect Compare video composition dimensions');
+        result.frames.COMBINED=new FrameCtor(canvas,{timestamp:timing.timestampUs,
+          duration:timing.durationUs});
+        result.stats.compositionMs=Math.max(0,performance.now()-startComposition);
+      }
       return result;
     }catch(error){closeFrames(result);throw error;}
   }
@@ -126,8 +156,8 @@
         value.index>=p.frameCount||pending.has(value.index)||
         value.timestampUs!==p.frames[value.index].timestampUs||
         value.durationUs!==p.frames[value.index].durationUs||
-        !value.frames||Object.keys(value.frames).sort().join(',')!==p.sides.slice().sort().join(',')||
-        p.sides.some(function(side){return !value.frames[side]||
+        !value.frames||Object.keys(value.frames).sort().join(',')!==p.outputSides.slice().sort().join(',')||
+        p.outputSides.some(function(side){return !value.frames[side]||
           typeof value.frames[side].close!=='function';}))
         throw Error('Unexpected, duplicate or incomplete video frame');
       // Never block the missing head frame: it can release the entire queue.

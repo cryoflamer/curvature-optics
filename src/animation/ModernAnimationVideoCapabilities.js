@@ -8,18 +8,36 @@
   root.CurvatureModernAnimationVideoCapabilities=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  // H.264 level bounds (macroblocks per picture / per second). A fixed
+  // 3.1 codec string cannot represent a 1920x1080 Compare presentation.
+  // Require the smallest sufficient level; the browser still decides support.
+  function h264Codec(width,height,fps){
+    if(!Number.isInteger(width)||!Number.isInteger(height)||
+      !Number.isFinite(fps)||width<=0||height<=0||fps<=0)
+      throw RangeError('Invalid H.264 video dimensions');
+    var blocks=Math.ceil(width/16)*Math.ceil(height/16),rate=blocks*fps;
+    for(var levels of [
+      {id:'1F',frame:3600,rate:108000},
+      {id:'28',frame:8192,rate:245760},
+      {id:'32',frame:22080,rate:589824},
+      {id:'33',frame:36864,rate:983040}
+    ]){
+      if(blocks<=levels.frame&&rate<=levels.rate)return 'avc1.42E0'+levels.id;
+    }
+    throw RangeError('H.264 output resolution exceeds supported profile levels');
+  }
   function configs(settings){
     settings=settings||{};
     var width=settings.width===undefined?960:settings.width;
     var height=settings.height===undefined?540:settings.height;
     var fps=settings.fps===undefined?25:settings.fps;
     if(!Number.isInteger(width)||!Number.isInteger(height)||width<320||
-      height<180||width>1920||height>1080||![5,10,25,30].includes(fps))
+      height<180||width>3840||height>2160||![5,10,25,30].includes(fps))
       throw RangeError('Unsupported video capability probe dimensions or FPS');
     var base={width:width,height:height,bitrate:2500000,framerate:fps};
     return [
       {format:'webm',name:'VP9',config:Object.assign({codec:'vp09.00.10.08'},base)},
-      {format:'mp4',name:'H.264',config:Object.assign({codec:'avc1.42E01F',
+      {format:'mp4',name:'H.264',config:Object.assign({codec:h264Codec(width,height,fps),
         avc:{format:'avc'}},base)}
     ];
   }
@@ -90,5 +108,5 @@
       }catch(error){finish(error);}
     });
   }
-  return Object.freeze({configs:configs,inspectWorker:inspectWorker,probe:probe});
+  return Object.freeze({configs:configs,h264Codec:h264Codec,inspectWorker:inspectWorker,probe:probe});
 }));

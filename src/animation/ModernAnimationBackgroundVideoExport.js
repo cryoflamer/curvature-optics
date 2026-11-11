@@ -17,7 +17,11 @@
   'use strict';
   var MAX_INFLIGHT_RGBA_BYTES=32*1024*1024;
   function frameWindow(plan,count){
-    var frameBytes=plan.width*plan.height*4*plan.sides.length;
+    // Credit accounts for RGBA VideoFrames transferred to the encoder.
+    // Composed Compare frames have four times the area of a single view.
+    var frameBytes=plan.outputWidth*plan.outputHeight*4*plan.outputSides.length;
+    if(frameBytes>MAX_INFLIGHT_RGBA_BYTES)
+      throw RangeError('Video output frame exceeds 32 MiB RGBA budget');
     return Math.min(8,count*2,Math.max(1,
       Math.floor(MAX_INFLIGHT_RGBA_BYTES/frameBytes)));
   }
@@ -43,8 +47,8 @@
       var format=options.format===undefined?'webm':options.format;
       if(!['webm','mp4'].includes(format))throw RangeError('Invalid video export format');
       if(!['standard','high'].includes(quality))throw RangeError('Invalid video bitrate preset');
-      // A Compare bundle counts both views. At 1280x720, four A/B frames
-      // already represent ~28 MiB of RGBA before codec internals.
+      // A combined Compare VideoFrame is 2w × 2h. The credit window is
+      // bounded by that transferred RGBA payload, not only the view size.
       var window=frameWindow(plan,count);
       return new Promise(function(resolve,reject){
         var controllerStarted=performance.now(),deliverySum=0,deliveryMax=0,deliveryCount=0;
@@ -87,7 +91,8 @@
           try{
             if(typeof options.onReady==='function')options.onReady({
               total:plan.frameCount,workers:count,sides:plan.sides.length,
-              frameWindow:window,rawFrameMiB:Math.round(plan.width*plan.height*4*plan.sides.length/1048576*10)/10});
+              frameWindow:window,rawFrameMiB:Math.round(plan.outputWidth*plan.outputHeight*4*plan.outputSides.length/1048576*10)/10,
+              width:plan.outputWidth,height:plan.outputHeight,compareLayout:plan.compareLayout});
             pump();
           }catch(error){finish(error);}
         }
@@ -99,7 +104,10 @@
             var value=event&&event.data||{};
             if(value.type==='ready'){
               if(encoderReady||value.total!==plan.frameCount||
-                value.sides!==plan.sides.length||value.workers!==count){
+                value.sides!==plan.sides.length||value.workers!==count||
+                value.outputStreams!==plan.outputSides.length||
+                value.outputWidth!==plan.outputWidth||
+                value.outputHeight!==plan.outputHeight){
                 fail('Video encoder returned invalid initialization');return;
               }
               encoderReady=true;launch();
@@ -133,13 +141,17 @@
                 value.manifest.durationUs!==plan.durationUs||
                 !Array.isArray(value.manifest.sides)||
                 value.manifest.sides.join(',')!==plan.sides.join(',')||
-                value.blob.type!==(plan.sides.length===1?'video/'+format:'application/zip')||
+                value.blob.type!==(plan.outputSides.length===1?'video/'+format:'application/zip')||
+                value.manifest.width!==plan.outputWidth||
+                value.manifest.height!==plan.outputHeight||
+                value.manifest.compareLayout!==plan.compareLayout||
                 value.manifest.format!==format||
                 !Number.isInteger(value.manifest.frameWindow)||
                 value.manifest.frameWindow!==window||
                 !Number.isInteger(value.manifest.peakBufferedFrames)||
                 value.manifest.peakBufferedFrames<0||
-                value.manifest.peakBufferedFrames>window){
+                value.manifest.peakBufferedFrames>window||
+                value.manifest.outputStreams!==plan.outputSides.length){
                 fail('Encoder returned an incomplete video export');return;
               }
               finish(null,{cancelled:false,blob:value.blob,filename:value.filename,
@@ -168,7 +180,7 @@
                   var frame=value.frame;
                   if(!running||current.index===null||value.index!==current.index||
                     !frame||frame.index!==current.index||!frame.frames||
-                    plan.sides.some(function(side){return !frame.frames[side];})){
+                    plan.outputSides.some(function(side){return !frame.frames[side];})){
                     video.closeFrames(frame);
                     fail('Video renderer returned unexpected frame bundle');return;
                   }
@@ -177,7 +189,7 @@
                   deliveryMax=Math.max(deliveryMax,dispatchToDelivery);
                   try{
                     encoder.postMessage({type:'frame',frame:frame},
-                      plan.sides.map(function(side){return frame.frames[side];}));
+                      plan.outputSides.map(function(side){return frame.frames[side];}));
                     current.index=null;rendered++;
                   }catch(error){
                     try{video.closeFrames(frame);}catch(_closeError){}
@@ -197,10 +209,10 @@
           }
           encoder.postMessage({type:'init',project:plan.project,width:plan.width,
             height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format,
-            frameWindow:window,cameraHud:plan.cameraHud});
+            frameWindow:window,cameraHud:plan.cameraHud,compareLayout:plan.compareLayout});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
             project:plan.project,width:plan.width,height:plan.height,fps:plan.fps,
-            cameraHud:plan.cameraHud});});
+            cameraHud:plan.cameraHud,compareLayout:plan.compareLayout});});
         }catch(error){finish(error);}
       });
     }

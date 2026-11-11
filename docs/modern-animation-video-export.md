@@ -1,9 +1,8 @@
 # Deterministic video export — VP9 WebM / H.264 MP4
 
-Status: **WebM and MP4 implemented and confirmed working in Opera by the user**.
-The streaming/optimization stage was implemented after both formats were
-accepted. Its memory/throughput instrumentation still requires an Opera
-acceptance run; Node tests are not browser performance measurements.
+Status: **Scene WebM/MP4 and the earlier separate Compare exports were confirmed working in Opera**. The new single-file side-by-side Compare output requires a new browser acceptance test.
+Prior pipeline profiling is available; Node tests are not browser performance
+measurements and do not validate the new combined export in Opera.
 The PNG ZIP export, Scene, Compare, and interactive Animation Playback remain
 independent; the Legacy application is not modified.
 
@@ -20,8 +19,9 @@ at least two compatible keyframes (a valid current draft also works). Expand
 - Encoder bitrate: Standard or High
 
 Click **Render video**. The progress bar assigns 0–90% to ordered frame
-submission, 95% to encoder flush/muxing, and 95–99% to Compare ZIP packaging;
-100% means the complete artifact was returned. Status shows elapsed and
+submission and 95% to encoder flush/muxing. The optional separate-layout
+ZIP branch uses 95–99% for packaging; 100% means the complete artifact was
+returned. Status shows elapsed and
 estimated render/encode time, rendered/submitted counts, reorder buffer usage,
 codec queue depth, and compressed MiB. These are separate phases, not a
 real-time screen recording. **Cancel export**
@@ -29,10 +29,15 @@ terminates all render and encoder Workers immediately, preventing partial
 video downloads.
 
 For Scene, one silent `curvature-animation.webm` or
-`curvature-animation.mp4` is downloaded. Compare A/B uses synchronized
-sampling and creates one ZIP with `curvature-animation-A.<format>`,
-`curvature-animation-B.<format>`, and `manifest.json`. This avoids browsers
-blocking the second simultaneous download.
+`curvature-animation.mp4` is downloaded. By default, Compare A/B synchronously
+composes both opaque view canvases into one presentation frame and downloads
+`curvature-animation-compare.webm` or `curvature-animation-compare.mp4`.
+The selected size is **per view**: 640×360 becomes 1280×720, 960×540 becomes
+1920×1080, and 1280×720 becomes 2560×1440. Both views are copied at 1:1
+resolution into separate letterboxed panels, with labels and timeline outside
+the optical image. No extra optical calculations are performed. The internal
+`compareLayout: 'separate'` protocol still produces a ZIP with two synchronized
+files, for the user-facing layout selector planned in the following stage.
 
 The browser must support `VideoEncoder`, `VideoFrame`, `OffscreenCanvas` and the
 selected codec within dedicated Workers. WebCodecs does **not** produce a
@@ -45,6 +50,8 @@ console.table((await CurvatureModernAnimationVideoCapabilities.probe({
 })).codecs)
 ```
 
+For a Compare A/B export with 960×540 **per view**, probe 1920×1080, not
+960×540; the encoding worker independently checks the selected output size.
 The probe also reports `containerMuxerInstalled` (WebM) and
 `mp4MuxerInstalled`; a successful capability probe is not a substitute for an
 actual export and playback test.
@@ -77,13 +84,15 @@ are requested at least every two seconds for seeking.
 - `ModernAnimationBackgroundVideoExport.js`: format-aware main-thread
   coordinator; one outstanding frame per renderer, plus a shared credit budget
   of **up to 32 MiB nominal uncompressed RGBA** (at most 8 bundles).
-  Each Compare A/B bundle counts both views. Large-resolution exports are
+  A single combined Compare VideoFrame occupies four times the RGBA area
+  of one view. Large-resolution exports are
   automatically throttled rather than consuming the same number of massive
   RGBA frames as a small Scene. The bound covers transferred/in-flight frames,
   not independently owned renderer canvases or WebCodecs internal surfaces.
   All Workers are terminated together on error or cancellation.
 - `ModernAnimationVideoEncoderWorker.js`: separate Worker with format-specific
-  WebCodecs configuration, up to three queued frames per encoder, A/B encoders,
+  WebCodecs configuration, up to three queued frames per encoder, one
+  encoder for side-by-side Compare (two for optional separate layout),
   ordered frame gate with the same bounded credit window, flush, per-stage
   telemetry, and an early 192 MiB **combined** compressed-output check.
   A slow encoder cannot create an unbounded backlog of transferred RGBA frames.
@@ -95,16 +104,16 @@ are requested at least every two seconds for seeking.
   tables (`stts`, `stsz`, `stsc`, `stco`, `stss`). Uses a 1 MHz media timescale
   and 64-bit movie/media durations. Constrained Baseline output is expected:
   reordered B-frame timestamps are rejected rather than inventing DTS.
-- `ModernAnimationVideoArchive.js`: streaming CRC32 for Compare A/B; the final
-  ZIP is formed from immutable media `Blob` parts without reading complete
-  video files into second full-size `ArrayBuffer` copies. It uses stored ZIP32
+- `ModernAnimationVideoArchive.js`: streaming CRC32 for the optional separate
+  Compare layout; the ZIP is formed from immutable media `Blob` parts without
+  reading complete video files into second full-size `ArrayBuffer` copies. It uses stored ZIP32
   and enforces 192 MiB including headers. The existing PNG ZIP path is not changed.
 - `ModernAnimationVideoProbeWorker.js`: worker-local checks for VP9 and H.264
   plus both muxer implementations.
 
 No full-sequence uncompressed RGBA buffer is retained. Encoded chunks are
-accumulated until final muxing, capped at **192 MiB per stream**; Compare has
-an early **192 MiB combined** budget as well as a strict final ZIP size cap.
+accumulated until final muxing, capped at **192 MiB total compressed output**.
+The optional separate Compare ZIP also has a strict final archive size cap.
 ZIP CRC is calculated a block at a time, but the finished ZIP remains a Blob
 in memory. This is bounded in-memory pipeline streaming, **not disk streaming**
 or fragmented/streamable MP4/WebM. Video export can still fail on the memory
@@ -114,14 +123,16 @@ The persisted result manifest includes `frameWindow`, `peakBufferedFrames`
 (encoder reorder gate), `peakEncoderQueue`, and `encodedBytes`, plus the prior
 `elapsedMs`, `renderWorkers`, bitrate and format. The controller separately
 reports its observed `peakInflightFrames` to the UI after completion; this
-controller-only statistic is not present inside a Compare ZIP's manifest.
+controller-only statistic is not embedded in standalone media files.
 These are measured counters/high-water marks, not a claim of total process RSS.
-A/B may have two concurrent codec queues of up to three VideoFrames each.
+Single-file Compare uses one codec queue of at most three frames; the internal
+separate-layout branch retains one per view.
 
-At 1280×720, a single Scene RGBA frame is ~3.5 MiB; a Compare A/B pair is
-~7.0 MiB. With four render workers, the nominal 32 MiB dispatch budget
-permits eight Scene frames but only four Compare bundles (before independent
-renderer/codec allocations). The credit count also respects available workers.
+At 1280×720 per view, a Scene RGBA frame is ~3.5 MiB, while a
+side-by-side 2560×1440 Compare output frame is ~14.1 MiB. With four render
+workers, the nominal 32 MiB dispatch budget permits eight Scene frames
+but only **two** combined Compare frames (before independent renderer/codec
+allocations). The credit count also respects available workers.
 Timing and memory are workload-dependent; production speedups must be verified
 in Opera, not inferred from test doubles.
 
@@ -142,11 +153,12 @@ node tools/audit-legacy-isolation.js --check
 
 The streaming/optimization tests additionally check adaptive frame credits,
 slow encoder drains, stream-based CRC without `.arrayBuffer()` of media files,
-ZIP headers and CRC, immediate Cancel, and telemetry. An integration check
-should validate Compare ZIP integrity with `unzip -t` or Python `zipfile` and
-play back both extracted videos. The MP4 unit tests check box layout,
+ZIP headers and CRC (for the separate-layout branch), immediate Cancel,
+and telemetry. Browser acceptance should decode and play a **single**
+Compare WebM/MP4 and check both synchronized halves and their labels. The MP4 unit tests check box layout,
 keyframes, H.264 configuration, corrupted
-NAL data, timing, Compare ZIP, cancellation and worker contracts. An optional
+NAL data, timing, single-file Compare, optional separate ZIP, cancellation
+and worker contracts. An optional
 integration test uses FFmpeg to generate real Constrained Baseline H.264,
 remuxes its AVC samples with our muxer, and verifies FFprobe identification,
 full decoding and seek playback. WebM tests and prior real Opera acceptance
@@ -156,8 +168,8 @@ encode in Opera; the user confirmed the previous release works in Opera.
 **Streaming-stage Opera acceptance:** repeat Globe → Flat at 960×540,
 25/30 FPS in both WebM and MP4; use 1/2/4 render workers and compare elapsed
 time and the manifest's peak counters. Test 1280×720 Compare A/B (fewer frame
-credits, one ZIP with two playable videos and valid CRC) and Cancel during
-both rendering and ZIP packaging. Check `unresolved` and the final Flat image
+credits, one playable 2560×1440 video with synchronized A/B) and Cancel
+during both rendering and encoding. Check `unresolved` and the final Flat image
 against your PNG baseline. If a codec is unsupported or errors, capture the
 visible status and Opera F12 console.
 
@@ -181,15 +193,16 @@ Both Scene and Compare A/B use the same counters; PNG export is unchanged.
 
 | Field | What it measures |
 | --- | --- |
-| `render` | Sum/mean/max of per-view *wall* time spent in the renderer worker's paint, white compositing, and VideoFrame creation. Samples = rendered frames × views. |
+| `render` | Sum/mean/max of per-view *wall* time spent in RK4 painting and opaque compositing, plus VideoFrame construction for Scene/separate mode. Combined Compare VideoFrame construction is measured under `compareComposition`. Samples = rendered frames × views. |
 | `reportedOptics` | The **existing** optics engine's `timings.opticsMs` diagnostic when reported. This is a subset of rendering, not an additional phase. Missing timings are excluded from the sample count, not converted to zero. |
 | `encoderHandoffWait` | Delay inside the encoder worker from receiving a transferred frame bundle to submitting it to WebCodecs in presentation order. Includes out-of-order buffering and encoder backpressure. |
 | `outOfOrderArrivals` | Bundles that arrived before the next required presentation index was available. |
-| `codecOutputLatency` | Wall latency from `VideoEncoder.encode()` submission to its encoded-chunk output callback (includes its asynchronous queue); this is **not** isolated codec CPU time. A/B records samples for both encoders. |
+| `codecOutputLatency` | Wall latency from `VideoEncoder.encode()` submission to its encoded-chunk output callback (includes its asynchronous queue); this is **not** isolated codec CPU time. Combined Compare records one sample per video interval. |
+| `compareComposition` | Sum/mean/max of per-frame wall time for A/B Canvas composition and combined VideoFrame construction in renderer Workers. Samples = number of composed frames; overlaps summed worker time, but is separate from RK4. |
 | `codecActiveWallMs` | Elapsed from the first encoding submission to the last encoded-chunk callback. Overlaps worker rendering. |
 | `finalize.flushMs` | Elapsed waiting for asynchronous `VideoEncoder.flush()` after all frames were submitted. |
 | `finalize.muxMs` | Container finalization (`WebM` or `MP4`), excluding the encoder flush. |
-| `finalize.zipMs` | Compare ZIP packing including streaming CRC; zero for a Scene video. |
+| `finalize.zipMs` | Optional separate-layout Compare ZIP packing including streaming CRC; zero for single-file Scene and Compare videos. |
 | `encoderWorkerElapsedMs` | Encoder worker lifetime after session setup, including overlapped frame processing and finalization. |
 | `controller.dispatchToDelivery` | In the downloaded JSON's controller section: mean/max from render request dispatch to receipt of the frame bundle on the main thread. **Includes** painting and transfer, not just postMessage latency. |
 | `controller.elapsedMs` | Total controller wall time including Worker initialization and final artifact delivery. |
@@ -202,8 +215,8 @@ contention, expensive codec output, flush or ZIP) but does not establish actual
 CPU utilization or browser memory RSS. Memory high-water counters remain
 nominal outstanding RGBA frames, not measured heap usage.
 
-For Compare A/B, `manifest.json` inside the ZIP is constructed **before** ZIP
-creation, so `profiling.finalize.zipMs` is `null` there. The complete measured
+For the optional separate-layout Compare mode, `manifest.json` inside the ZIP is
+constructed **before** ZIP creation, so `profiling.finalize.zipMs` is `null` there. The complete measured
 ZIP duration is available in the UI and downloadable profiling JSON returned
 after packaging. Standalone WebM/MP4 files have no embedded JSON manifest;
 use **Download profiling JSON** to preserve those results.
@@ -230,10 +243,11 @@ independent.
 default**. Once enabled, the isolated render worker burns the shared camera
 telemetry into each RGBA Canvas **after** opaque white compositing and
 **before** constructing `VideoFrame`. This applies identically to VP9/WebM
-and H.264/MP4, including both synchronized sides of Compare A/B. The option
+and H.264/MP4; in combined Compare these are drawn on each view **before**
+the views are composed. The option
 travels with the exported project when workers initialize; the encoder does
-not draw or resample camera state. The video manifest (available in Compare
-ZIPs and the export result) records `cameraHudIncluded: true` when enabled.
+not draw or resample camera state. The downloadable video profiling JSON
+records `cameraHudIncluded: true` when enabled.
 With HUD off, the established VideoFrame source, codec timing and encoded
 pixels are untouched by the HUD painter. Video compression remains lossy.
 
@@ -245,14 +259,15 @@ short PNG export using 1/2/4 workers to check HUD image pixel parity. Such
 browser-level acceptance is separate from Node test mocks.
 
 
-## Compare A/B single-video composition foundation
+## Compare A/B single-video export
 
-`ModernAnimationCompareComposition.js` is a **standalone Canvas compositor**
-for a future single-file Compare export. This stage does **not** change the
-current exported result: Compare A/B still produces a ZIP with two separate
-MP4/WebM files. Switching the render/encoder worker protocol, encoder output
-size, capability probe, bitrate, frame-credit budget and export UI belongs to
-the subsequent single-video integration stage.
+`ModernAnimationCompareComposition.js` is the deterministic **Canvas compositor**
+used by the active single-file Compare video pipeline. Each Worker first
+renders A/B independently using Accurate RK4 and opaque backgrounds. It then
+composes the painted views and constructs **one** transferable VideoFrame per
+timestamp. The encoder receives a single ordered stream and muxes one WebM/MP4
+with the combined width and height. Output bitrate, buffer credits, H.264 level
+selection and export validation use these output dimensions.
 
 The compositor receives two **already painted, opaque Accurate RK4** view
 images, each with the corresponding `cameraModel` (including `showModel`).
@@ -285,14 +300,20 @@ missing geometry or invalid presentation times are rejected. The Canvas 2D
 state is restored even after a paint error. Timestamp captions are derived
 from the deterministic video timeline, never wall-clock time.
 
-A combined RGBA frame at 1920 × 1080 occupies about 7.9 MiB in addition to
-the two original 960 × 540 canvases (~4.0 MiB total). A 1280 × 720 pair would
-produce a 2560 × 1440 combined frame (~14.1 MiB); these new allocations must
-be counted explicitly when the live pipeline's bounded memory credit system
-is adapted. Codec support for the **combined dimensions** must be probed in
-the browser rather than inferred from support for the smaller source views.
+A combined RGBA frame at 1920 × 1080 occupies about 7.9 MiB, in addition
+to the two original 960 × 540 canvases (~4.0 MiB total). A 1280 × 720 pair
+produces a 2560 × 1440 combined frame (~14.1 MiB). The 32 MiB frame-credit
+limit applies to transferable combined VideoFrames; the two input canvases and
+the compositor's retained Canvas are separate allocations. If a combined frame
+alone would exceed that limit, export fails before allocating workers. The
+encoder checks `VideoEncoder.isConfigSupported()` for the **combined dimensions**,
+with an appropriate H.264 level; browser support for the smaller views alone
+is not sufficient.
 
-Tests: `node --test tests/ModernAnimationCompareComposition.test.js` exercises
-layout, 1:1 copies, exact A/B geometry labels, deterministic metadata, invalid
-inputs, context cleanup and browser/worker loading. Full regression and Legacy
-isolation remain required before integration.
+Tests: `node --test tests/ModernAnimationCompareComposition.test.js \
+ tests/ModernAnimationVideoPipeline.test.js \
+ tests/ModernAnimationVideoEncoderWorker.test.js` exercises 1:1 composition,
+per-frame synchronization, worker transfer count, final output dimensions,
+codec configuration, ordered backpressure, optional legacy separate ZIP and
+clean error handling. Opera playback and decode tests remain necessary to
+confirm production WebCodecs support for 1920×1080 and 2560×1440.

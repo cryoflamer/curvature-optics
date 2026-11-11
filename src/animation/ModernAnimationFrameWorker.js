@@ -81,7 +81,7 @@ function createGraph(canvas){
   graph.CanvasWidth=canvas.width;
   graph.CanvasHeight=canvas.height;
   graph.AutoScalePix=true; // Same as the Animation preview graph.
-  graph.UpdateCanvasSize=function(){}; // Fixed backing dimensions for the ZIP.
+  graph.UpdateCanvasSize=function(){}; // Fixed backing dimensions for the export.
   // The independent painter clips its own world-frame primitives. Legacy
   // GraphX3DX SetClipping draws via a DOM text handler and is not used here.
   graph.SetClipping=function(){};
@@ -95,11 +95,14 @@ function setup(data,video){
     throw Error('OffscreenCanvas is not available in this browser worker');
   var api=self.CurvatureModernAnimationFrameExport;
   var plan=(video?self.CurvatureModernAnimationVideoPipeline:api).plan(
-    data.project,{fps:data.fps,width:data.width,height:data.height});
+    data.project,Object.assign({fps:data.fps,width:data.width,height:data.height,
+      cameraHud:data.cameraHud===true},video?{compareLayout:data.compareLayout}:{}));
   var contexts={};
   plan.sides.forEach(function(side){
     contexts[side]=createGraph(new OffscreenCanvas(plan.width,plan.height));
   });
+  var compositeCanvas=video&&plan.compareLayout==='side-by-side'?
+    new OffscreenCanvas(plan.outputWidth,plan.outputHeight):null;
   var painter=self.CurvatureModernAnimationPreview.create({
     Model:self.CurveAppClass,
     renderer:self.CurvatureMainCanvasRenderer,
@@ -114,7 +117,12 @@ function setup(data,video){
     return {quality:report.quality,canvas:graph.Canvas,metrics:report.result,
       cameraModel:report.cameraModel};
   }
-  return {plan:plan,render:render,video:!!video};
+  function compose(images,timing){
+    if(!compositeCanvas)throw Error('Compare composition was not initialized');
+    return self.CurvatureModernAnimationCompareComposition.paint(compositeCanvas,
+      images,timing);
+  }
+  return {plan:plan,render:render,compose:compositeCanvas?compose:null,video:!!video};
 }
 var active=false,parallel=null;
 self.onmessage=async function(event){
@@ -140,10 +148,10 @@ self.onmessage=async function(event){
       if(parallel.video){
         if(typeof VideoFrame!=='function')throw Error('Worker VideoFrame unavailable');
         videoFrame=await self.CurvatureModernAnimationVideoPipeline.renderTimestamp(
-          parallel.plan,data.index,parallel.render,VideoFrame);
+          parallel.plan,data.index,parallel.render,VideoFrame,null,parallel.compose);
         if(!videoFrame)throw Error('Video frame calculation cancelled unexpectedly');
         self.postMessage({type:'video-frame',index:data.index,frame:videoFrame},
-          parallel.plan.sides.map(function(side){return videoFrame.frames[side];}));
+          parallel.plan.outputSides.map(function(side){return videoFrame.frames[side];}));
         videoFrame=null; // Ownership transferred to controller.
       }else{
         var frame=await self.CurvatureModernAnimationFrameExport.renderTimestamp(

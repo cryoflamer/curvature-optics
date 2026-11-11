@@ -36,19 +36,20 @@ class FakeWorker{
       if(this.encoder){this.pending=new Map();this.submitted=0;this.received=0;this.maxBuffered=0;
         this.window=data.frameWindow;}
       queueMicrotask(()=>this.emit({type:'ready',total:this.plan.frameCount,
-        sides:this.plan.sides.length,workers:data.workers}));
+        sides:this.plan.sides.length,outputStreams:this.plan.outputSides.length,
+        outputWidth:this.plan.outputWidth,outputHeight:this.plan.outputHeight,workers:data.workers}));
     }else if(data.type==='video-render'){
       if(FakeWorker.paused)return;
       setTimeout(()=>{
         if(data.index===FakeWorker.errorAt){this.emit({type:'error',message:'RK4 failed'});return;}
         const time=this.plan.frames[data.index],frames={};
-        for(const side of this.plan.sides)frames[side]={closed:false,close(){this.closed=true;}};
+        for(const side of this.plan.outputSides)frames[side]={closed:false,close(){this.closed=true;}};
         this.emit({type:'video-frame',index:data.index,
           frame:{index:data.index,timestampUs:time.timestampUs,
             durationUs:time.durationUs,sampleTimeMs:time.sampleTimeMs,frames}});
       },data.index===0?15:0);
     }else if(data.type==='frame'){
-      assert.equal(transfer.length,this.plan.sides.length);
+      assert.equal(transfer.length,this.plan.outputSides.length);
       this.pending.set(data.frame.index,data.frame);this.received++;
       this.maxBuffered=Math.max(this.maxBuffered,this.pending.size);
       queueMicrotask(()=>{
@@ -61,9 +62,11 @@ class FakeWorker{
         }
         if(this.submitted===this.plan.frameCount){
           this.emit({type:'muxing',total:this.submitted});
-          this.emit({type:'complete',blob:new Blob(['test'],{type:this.plan.sides.length===1?'video/'+this.format:'application/zip'}),
+          this.emit({type:'complete',blob:new Blob(['test'],{type:this.plan.outputSides.length===1?'video/'+this.format:'application/zip'}),
             filename:'test.'+this.format,manifest:{format:data.fakeFormat||this.format||'webm',frameCount:this.plan.frameCount,
               durationUs:this.plan.durationUs,sides:Array.from(this.plan.sides),
+              width:this.plan.outputWidth,height:this.plan.outputHeight,
+              compareLayout:this.plan.compareLayout,outputStreams:this.plan.outputSides.length,
               frameWindow:this.window,peakBufferedFrames:this.maxBuffered}});
         }
       });
@@ -91,14 +94,18 @@ test('bounded parallel WebM controller delivers every frame once with reordered 
   assert.deepEqual(requests.sort((a,b)=>a-b),Array.from({length:25},(_,i)=>i));
   assert.ok(FakeWorker.instances.every(w=>w.closed));
 });
-test('Compare A/B exports synchronized frames and uses a single ZIP download',async()=>{
+test('Compare A/B exports synchronized views in one side-by-side video',async()=>{
   FakeWorker.reset();
   const result=await background.create({WorkerCtor:FakeWorker,hardwareConcurrency:4}).start({
     project:make('compare'),fps:5,width:640,height:360,workerCount:2});
-  assert.equal(result.blob.type,'application/zip');
+  assert.equal(result.blob.type,'video/webm');
   assert.deepEqual(result.manifest.sides,['A','B']);
+  assert.equal(result.manifest.outputStreams,1);
+  assert.equal(result.manifest.width,1280);
+  assert.equal(result.manifest.height,720);
+  assert.equal(result.manifest.compareLayout,'side-by-side');
   const encoder=FakeWorker.instances[0];
-  assert.ok(encoder.sent.filter(x=>x.data.type==='frame').every(x=>x.transfer.length===2));
+  assert.ok(encoder.sent.filter(x=>x.data.type==='frame').every(x=>x.transfer.length===1));
 });
 test('Cancel terminates render and encoder workers immediately and never saves partial WebM',async()=>{
   FakeWorker.reset();FakeWorker.paused=true;
@@ -120,11 +127,11 @@ test('renderer errors reject WebM without a partial file',async()=>{
   FakeWorker.errorAt=-1;
 });
 
-test('MP4 controller preserves bounded scheduling, format, and Compare ZIP',async()=>{
+test('MP4 controller preserves bounded scheduling and uses one Compare movie',async()=>{
   FakeWorker.reset();
   const result=await background.create({WorkerCtor:FakeWorker,hardwareConcurrency:4}).start({
     project:make('compare'),fps:5,width:640,height:360,workerCount:2,format:'mp4'});
-  assert.equal(result.blob.type,'application/zip');
+  assert.equal(result.blob.type,'video/mp4');
   assert.equal(result.manifest.format,'mp4');
   assert.equal(FakeWorker.instances[0].sent[0].data.format,'mp4');
   assert.ok(FakeWorker.instances[0].maxBuffered<=FakeWorker.instances[0].window);
@@ -136,7 +143,7 @@ test('MP4 controller preserves bounded scheduling, format, and Compare ZIP',asyn
 test('adaptive window constrains RGBA memory for high-resolution Compare',async()=>{
   const high=video.plan(make('compare'),{fps:25,width:1280,height:720});
   const low=video.plan(make(),{fps:25,width:640,height:360});
-  assert.equal(background.frameWindow(high,4),4);
+  assert.equal(background.frameWindow(high,4),2);
   assert.equal(background.frameWindow(low,4),8);
   assert.ok(background.MAX_INFLIGHT_RGBA_BYTES>=32*1024*1024);
   FakeWorker.reset();FakeWorker.paused=true;
@@ -145,11 +152,13 @@ test('adaptive window constrains RGBA memory for high-resolution Compare',async(
   const pending=api.start({project:make('compare'),fps:25,width:1280,
     height:720,workerCount:4,onReady:v=>{ready=v;}});
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(ready.frameWindow,4);
-  assert.equal(FakeWorker.instances[0].sent[0].data.frameWindow,4);
+  assert.equal(ready.frameWindow,2);
+  assert.equal(ready.width,2560);
+  assert.equal(ready.height,1440);
+  assert.equal(FakeWorker.instances[0].sent[0].data.frameWindow,2);
   const issued=FakeWorker.instances.slice(1).flatMap(w=>w.sent.filter(x=>
     x.data.type==='video-render'));
-  assert.equal(issued.length,4,'no more than the budget fits are issued');
+  assert.equal(issued.length,2,'no more than the output RGBA budget fits are issued');
   api.cancel();assert.deepEqual(await pending,{cancelled:true});
   FakeWorker.paused=false;
 });

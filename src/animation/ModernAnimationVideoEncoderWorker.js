@@ -1,7 +1,7 @@
 /* Dedicated offline VP9/WebM or H.264/MP4 encoder and muxer. VideoFrames arrive transferred
  * from isolated Accurate RK4 render workers via a bounded controller window.
  * decode-order output is kept compressed; RGBA frames are closed immediately
- * after WebCodecs accepts them. Compare archives use Blob-streamed CRC32,
+ * after WebCodecs accepts them. Optional separate Compare archives use Blob-streamed CRC32,
  * avoiding copies of whole video files. Cancel terminates this worker.
  */
 'use strict';
@@ -36,6 +36,7 @@ function reportProfile(s,flushMs,muxMs,zipMs){
     encoderHandoffWait:summary(s.profile.handoff),
     outOfOrderArrivals:s.profile.outOfOrderArrivals,
     codecOutputLatency:summary(s.profile.codecLatency),
+    compareComposition:summary(s.profile.composition),
     codecActiveWallMs:s.profile.firstEncodeAt===null?0:
       Math.max(0,s.profile.lastOutputAt-s.profile.firstEncodeAt),
     finalize:{flushMs:flushMs,muxMs:muxMs,zipMs:zipMs},
@@ -69,7 +70,7 @@ async function maybeFinish(){
     var flushMs=mark()-flushStarted;
     if(failed||session!==current)return;
     var muxStarted=mark();
-    var files=current.plan.sides.map(function(side){
+    var files=current.plan.outputSides.map(function(side){
       return {side:side,blob:current.muxers[side].finish(),
         bytes:current.muxers[side].bytes()};
     });
@@ -77,8 +78,9 @@ async function maybeFinish(){
     var p=current.plan,manifest={schema:'curvature-animation-'+current.format,version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       physicalTarget:p.project.target,codec:current.codec,format:current.format,quality:'accurate',
-      width:p.width,height:p.height,fps:p.fps,frameCount:p.frameCount,
-      durationUs:p.durationUs,sides:p.sides.slice(),
+      width:p.outputWidth,height:p.outputHeight,viewWidth:p.width,viewHeight:p.height,
+      compareLayout:p.compareLayout,fps:p.fps,frameCount:p.frameCount,
+      durationUs:p.durationUs,sides:p.sides.slice(),outputStreams:p.outputSides.length,
       endSampleTimeMs:p.frames[p.frameCount-1].sampleTimeMs,
       bitrate:current.bitrate,renderWorkers:current.workers,
       frameWindow:current.frameWindow,
@@ -89,7 +91,8 @@ async function maybeFinish(){
     if(p.cameraHud)manifest.cameraHudIncluded=true;
     manifest.profiling=reportProfile(current,flushMs,muxMs,null);
     var blob,filename;
-    if(files.length===1){blob=files[0].blob;filename='curvature-animation.'+current.format;}
+    if(files.length===1){blob=files[0].blob;filename='curvature-animation'+
+      (p.compareLayout==='side-by-side'?'-compare':'')+'.'+current.format;}
     else{
       // Blobs remain immutable file parts. ZIP CRC is read in small stream
       // chunks; no full file.arrayBuffer() copies are made for Compare A/B.
@@ -129,26 +132,30 @@ async function init(data){
       throw RangeError('Invalid bounded video frame window');
     var format=data.format===undefined?'webm':data.format;
     if(format!=='webm'&&format!=='mp4')throw RangeError('Unsupported video format');
-    var codec=format==='mp4'?'avc1.42E01F':'vp09.00.10.08';
+    var codec=format==='mp4'?self.CurvatureModernAnimationVideoCapabilities.h264Codec(
+      plan.outputWidth,plan.outputHeight,plan.fps):'vp09.00.10.08';
     var multiplier=data.quality==='high'?2:data.quality==='standard'?1:null;
     if(multiplier===null)throw RangeError('Unsupported video quality preset');
-    var bitrate=Math.round(Math.max(400000,Math.min(8000000,
-      2500000*(plan.width*plan.height)/(960*540)*plan.fps/25*multiplier)));
-    var config={codec:codec,width:plan.width,height:plan.height,
+    var bitrate=Math.round(Math.max(400000,Math.min(
+      plan.compareLayout==='side-by-side'?16000000:8000000,
+      2500000*(plan.outputWidth*plan.outputHeight)/(960*540)*plan.fps/25*multiplier)));
+    var config={codec:codec,width:plan.outputWidth,height:plan.outputHeight,
       framerate:plan.fps,bitrate:bitrate};
     if(format==='mp4')config.avc={format:'avc'};
     var supported=await VideoEncoder.isConfigSupported(config);
-    if(!supported||!supported.supported)throw Error(codec+' WebCodecs configuration unavailable');
+    if(!supported||!supported.supported)throw Error(codec+' WebCodecs configuration unavailable at '+
+      plan.outputWidth+'×'+plan.outputHeight);
     var muxers={},encoders=[],durations=new Map(),encodedBytes=0;
-    var profiling={render:metric(),optics:metric(),handoff:metric(),
+    var profiling={render:metric(),optics:metric(),composition:metric(),handoff:metric(),
       codecLatency:metric(),outOfOrderArrivals:0,firstEncodeAt:null,
       lastOutputAt:0};
     var encodedAtBySide={};
     plan.frames.forEach(function(t){durations.set(t.timestampUs,t.durationUs);});
-    plan.sides.forEach(function(side){
+    var muxPlan=Object.assign({},plan,{width:plan.outputWidth,height:plan.outputHeight});
+    plan.outputSides.forEach(function(side){
       encodedAtBySide[side]=new Map();
       muxers[side]=(format==='mp4'?self.CurvatureModernAnimationMP4Muxer:
-        self.CurvatureModernAnimationWebMMuxer).create(plan);
+        self.CurvatureModernAnimationWebMMuxer).create(muxPlan);
       var encoder=new VideoEncoder({
         output:function(chunk,metadata){
           try{
@@ -183,17 +190,20 @@ async function init(data){
       consume:function(bundle){
         var enqueuedAt=mark();
         addTiming(profiling.handoff,enqueuedAt-bundle.profileReceivedAt);
-        plan.sides.forEach(function(side,i){
+        plan.outputSides.forEach(function(side,i){
           encodedAtBySide[side].set(bundle.timestampUs,enqueuedAt);
           if(profiling.firstEncodeAt===null)profiling.firstEncodeAt=enqueuedAt;
           encoders[i].encode(bundle.frames[side],{
             keyFrame:bundle.index%(plan.fps*2)===0});
+        });
+        plan.sides.forEach(function(side){
           var metrics=bundle.stats&&bundle.stats[side];
           if(metrics){
             addTiming(profiling.render,metrics.renderMs);
             addTiming(profiling.optics,metrics.opticsMs);
           }
         });
+        if(bundle.stats)addTiming(profiling.composition,bundle.stats.compositionMs);
         var queued=Math.max.apply(null,encoders.map(function(e){return e.encodeQueueSize;}));
         session.peakEncoderQueue=Math.max(session.peakEncoderQueue,queued);
         self.postMessage({type:'progress',submitted:bundle.index+1,
@@ -209,7 +219,9 @@ async function init(data){
       peakEncoderQueue:0,encodedBytes:0,profile:profiling,
       finishing:false,start:mark()};
     self.postMessage({type:'ready',total:plan.frameCount,sides:plan.sides.length,
-      workers:data.workers,codec:config.codec,format:format,bitrate:bitrate});
+      outputStreams:plan.outputSides.length,outputWidth:plan.outputWidth,
+      outputHeight:plan.outputHeight,workers:data.workers,
+      codec:config.codec,format:format,bitrate:bitrate});
   }finally{initializing=false;}
 }
 self.onmessage=function(event){

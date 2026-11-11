@@ -28,7 +28,7 @@ function sandbox(options={}){
   const dir=path.resolve(__dirname,'../src/animation'),messages=[];
   const workers=[];
   class FakeEncoder{
-    static async isConfigSupported(config){return {supported:['vp09.00.10.08','avc1.42E01F'].includes(config.codec)};}
+    static async isConfigSupported(config){return {supported:config.codec==='vp09.00.10.08'||config.codec.startsWith('avc1.42E0')};}
     constructor(callbacks){this.callbacks=callbacks;this.queue=0;this.outputs=[];
       this.handlers=[];this.closed=false;this.maxQueued=0;workers.push(this);}
     configure(config){this.config=config;}
@@ -40,7 +40,7 @@ function sandbox(options={}){
       this.queue++;this.maxQueued=Math.max(this.maxQueued,this.queue);
       const output=new Promise(resolve=>{
         const complete=()=>{
-        const mp4=this.config.codec==='avc1.42E01F';
+        const mp4=this.config.codec.startsWith('avc1.42E0');
         const bytes=mp4?Uint8Array.from([0,0,0,2,0x65,0x88]):Uint8Array.from([0x82,5,4,3,2]);
         this.callbacks.output({timestamp:frame.timestamp,
           type:params.keyFrame?'key':'delta',
@@ -74,7 +74,7 @@ function sandbox(options={}){
 }
 function frame(plan,index){
   const timing=plan.frames[index],frames={};
-  for(const side of plan.sides)
+  for(const side of plan.outputSides)
     frames[side]={timestamp:timing.timestampUs,closed:false,close(){this.closed=true;}};
   return {index,timestampUs:timing.timestampUs,durationUs:timing.durationUs,
     sampleTimeMs:timing.sampleTimeMs,frames};
@@ -115,7 +115,7 @@ test('encoder worker VP9 uses ordered VideoFrames, closes RGBA inputs and emits 
   assert.equal(profiling.finalize.zipMs,0);
   assert.ok(profiling.encoderWorkerElapsedMs>=0);
 });
-test('encoder worker Compare A/B creates one ZIP with two videos and manifest',async()=>{
+test('encoder worker Compare A/B encodes a single 1280×720 WebM',async()=>{
   const p=project('compare'),plan=video.plan(p,{fps:5,width:640,height:360});
   const {root,messages,workers}=sandbox();
   root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
@@ -126,15 +126,19 @@ test('encoder worker Compare A/B creates one ZIP with two videos and manifest',a
   await tick();await tick();
   const complete=messages.find(x=>x.type==='complete');
   assert.ok(complete,'Compare must finish');
-  assert.equal(complete.blob.type,'application/zip');
-  const buf=Buffer.from(await complete.blob.arrayBuffer());
-  assert.ok(buf.includes(Buffer.from('curvature-animation-A.webm')));
-  assert.ok(buf.includes(Buffer.from('curvature-animation-B.webm')));
-  assert.ok(buf.includes(Buffer.from('manifest.json')));
+  assert.equal(complete.blob.type,'video/webm');
+  assert.equal(complete.filename,'curvature-animation-compare.webm');
+  assert.equal(complete.manifest.width,1280);
+  assert.equal(complete.manifest.height,720);
+  assert.equal(complete.manifest.viewWidth,640);
+  assert.equal(complete.manifest.compareLayout,'side-by-side');
   assert.equal(complete.manifest.sides.length,2);
+  assert.equal(complete.manifest.outputStreams,1);
   assert.equal(complete.manifest.frameWindow,4);
-  assert.deepEqual(messages.filter(x=>x.type==='packing').map(x=>x.completed),[1,2,3]);
-  assert.equal(workers.length,2);
+  assert.deepEqual(messages.filter(x=>x.type==='packing'),[]);
+  assert.equal(workers.length,1);
+  assert.equal(workers[0].config.width,1280);
+  assert.equal(workers[0].config.height,720);
   assert.ok(workers.every(w=>w.closed));
   assert.ok(complete.manifest.profiling.finalize.zipMs>=0);
   // The embedded JSON is created before ZIP assembly; unlike the completion
@@ -178,7 +182,7 @@ test('encoder worker H.264 outputs valid MP4 media boxes and selected format',as
   assert.ok(all.every(x=>Object.values(x.frames).every(f=>f.closed)));
   assert.ok(workers.every(w=>w.closed));
 });
-test('encoder worker MP4 Compare creates synchronized MP4 files inside ZIP',async()=>{
+test('encoder worker MP4 Compare encodes a single 1280×720 MP4',async()=>{
   const p=project('compare'),plan=video.plan(p,{fps:5,width:640,height:360});
   const {root,messages}=sandbox();
   root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
@@ -188,12 +192,14 @@ test('encoder worker MP4 Compare creates synchronized MP4 files inside ZIP',asyn
   await tick();await tick();
   const result=messages.find(x=>x.type==='complete');
   assert.ok(result);
-  assert.equal(result.blob.type,'application/zip');
+  assert.equal(result.blob.type,'video/mp4');
   const bytes=Buffer.from(await result.blob.arrayBuffer());
-  assert.ok(bytes.includes(Buffer.from('curvature-animation-A.mp4')));
-  assert.ok(bytes.includes(Buffer.from('curvature-animation-B.mp4')));
+  assert.ok(bytes.includes(Buffer.from('avc1')));
+  assert.equal(result.filename,'curvature-animation-compare.mp4');
   assert.equal(result.manifest.sides.length,2);
-  assert.deepEqual(messages.filter(x=>x.type==='packing').map(x=>x.completed),[1,2,3]);
+  assert.equal(result.manifest.outputStreams,1);
+  assert.equal(result.manifest.width,1280);
+  assert.deepEqual(messages.filter(x=>x.type==='packing'),[]);
 });
 
 test('encoder backpressure resumes after slow WebCodecs dequeue events',async()=>{
@@ -248,7 +254,26 @@ test('encoder profile aggregates per-view render and nested optics timings',asyn
   assert.equal(prof.render.totalMs,90);
   assert.equal(prof.reportedOptics.samples,10);
   assert.equal(prof.reportedOptics.totalMs,65);
-  assert.equal(prof.codecOutputLatency.samples,10);
+  assert.equal(prof.codecOutputLatency.samples,5);
   assert.ok(prof.codecActiveWallMs>=0);
   assert.ok(prof.finalize.zipMs>=0);
+});
+
+test('legacy separate Compare layout still produces two independent files when requested',async()=>{
+  const p=project('compare');
+  const plan=video.plan(p,{fps:5,width:640,height:360,compareLayout:'separate'});
+  const {root,messages,workers}=sandbox();
+  root.onmessage({data:{type:'init',project:p,fps:5,width:640,height:360,
+    compareLayout:'separate',quality:'standard',workers:2,frameWindow:4}});
+  await tick();
+  for(const t of plan.frames)root.onmessage({data:{type:'frame',frame:frame(plan,t.index)}});
+  await tick();await tick();
+  const result=messages.find(x=>x.type==='complete');
+  assert.ok(result);assert.equal(result.blob.type,'application/zip');
+  assert.equal(result.manifest.outputStreams,2);
+  assert.equal(result.manifest.compareLayout,'separate');
+  assert.equal(workers.length,2);
+  const bytes=Buffer.from(await result.blob.arrayBuffer());
+  assert.ok(bytes.includes(Buffer.from('curvature-animation-A.webm')));
+  assert.ok(bytes.includes(Buffer.from('curvature-animation-B.webm')));
 });

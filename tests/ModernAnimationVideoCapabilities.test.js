@@ -90,3 +90,14 @@ test('probe rejects malformed worker replies and terminates worker',async()=>{
   await assert.rejects(()=>caps.probe({WorkerCtor:Worker}),/Invalid video capability response/);
   assert.equal(terminated,1);
 });
+
+test('H.264 selects an adequate level for combined Compare frame dimensions',()=>{
+  assert.equal(caps.h264Codec(1280,720,30),'avc1.42E01F');
+  assert.equal(caps.h264Codec(1920,1080,25),'avc1.42E028');
+  assert.equal(caps.h264Codec(1920,1080,30),'avc1.42E028');
+  assert.equal(caps.h264Codec(2560,1440,30),'avc1.42E032');
+  assert.equal(caps.h264Codec(3840,2160,25),'avc1.42E033');
+  assert.throws(()=>caps.h264Codec(8000,4500,30),/exceeds/);
+  assert.equal(caps.configs({width:1920,height:1080,fps:30})[1].config.codec,'avc1.42E028');
+  assert.equal(caps.configs({width:2560,height:1440,fps:25})[1].config.codec,'avc1.42E032');
+});

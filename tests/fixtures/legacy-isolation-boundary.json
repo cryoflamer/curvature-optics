@@ -504,7 +504,8 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernAnimationCompareComposition.test.js"
+        "tests/ModernAnimationCompareComposition.test.js",
+        "tests/ModernAnimationVideoPipeline.test.js"
       ],
       "commonJsToolCallers": []
     },
