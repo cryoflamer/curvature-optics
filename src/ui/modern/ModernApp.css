@@ -172,6 +172,24 @@ button{cursor:pointer}
   z-index:5;pointer-events:none;background:#132d45e8;color:#f5fbff;border:1px solid #7895b1;
   padding:5px 9px;border-radius:6px;font:600 11px Arial,sans-serif;white-space:nowrap}
 .modern-camera-drag-hud[hidden]{display:none}
+/* Camera telemetry is a DOM-only overlay inside the raster clipping box.
+   It never alters physical Canvas pixels or intercepts camera gestures. */
+.modern-camera-telemetry{position:absolute;z-index:7;top:9px;left:9px;
+  display:flex;flex-direction:column;gap:2px;max-width:calc(100% - 18px);
+  padding:7px 9px;border-radius:7px;border:1px solid #809bb4;
+  background:#11293be8;color:#f4f9ff;pointer-events:none;
+  font:500 11px/1.4 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  text-align:left;white-space:normal;overflow-wrap:anywhere;
+  box-shadow:0 2px 8px #0b1e2f50;font-variant-numeric:tabular-nums}
+.modern-camera-telemetry strong{font-size:10px;letter-spacing:.045em;color:#b9d8ef}
+.modern-camera-telemetry span{display:block}
+.modern-camera-telemetry[hidden]{display:none!important}
+.modern-camera-hud-toggle{display:inline-flex;align-items:center;gap:6px;
+  padding:5px 9px;border-radius:7px;color:#294b6c;font-size:12px;
+  background:#eef5fc;border:1px solid #c2d6e8;white-space:nowrap;cursor:pointer}
+.modern-camera-hud-toggle input{margin:0;accent-color:#236ab4}
+.modern-camera-hud-toggle:focus-within{outline:2px solid #65acf2;outline-offset:2px}
+@media(max-width:550px){.modern-camera-telemetry{font-size:10px;padding:5px 7px}}
 
 /* 138.1: reference labels must remain transparent above the scene image.
    The general viewport Canvas background is opaque white by default. */

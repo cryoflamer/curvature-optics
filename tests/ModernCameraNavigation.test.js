@@ -701,7 +701,7 @@ test('display and navigation preferences are immediately saved and restored inde
   nodes.get('ModernCameraMoveSpeed').value='100';nodes.get('ModernCameraMoveSpeed').dispatch('change');
   const saved=h.storage.get(preferences.STORAGE_KEY);
   assert.deepEqual(JSON.parse(saved),{
-    version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',
+    version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',cameraHudVisible:true,
     historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyStoryboardQueue:[],
     historyFilters:{query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'},displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:1,wheelStep:'auto'},

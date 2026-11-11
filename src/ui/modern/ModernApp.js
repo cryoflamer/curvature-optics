@@ -478,6 +478,10 @@
   var cameraSequence=[];
   var initialCamera=null;
   var navigation=root.CurvatureModernCameraNavigation;
+  var cameraTelemetry=root.CurvatureModernCameraTelemetry;
+  var cameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
+    root.CurvatureModernCameraHud.create({telemetry:cameraTelemetry,document:document}):null;
+  var cameraHudVisible=true;
   var navigationPrefs=navigation?navigation.settings():{speed:10,turnRate:1,wheelStep:'auto'};
   var navigationKeys=Object.create(null),navigationFrame=null,navigationStamp=null;
   var navigationMoved=false,navigationModifiers={fast:false,precise:false};
@@ -536,6 +540,7 @@
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
     state.geometryBackend=remembered.geometryBackend;
+    cameraHudVisible=remembered.cameraHudVisible;
     historyGallerySize=remembered.historyGallerySize;
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     historyPanelOpen=remembered.historyPanelOpen;
@@ -561,7 +566,8 @@
     try{
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
-        geometryBackend:state.geometryBackend,navigation:navigationPrefs,displayPanels:displayPanels,
+        geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
+        navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
         historyStoryboardQueue:historyStoryboardQueue,
@@ -702,6 +708,7 @@
       state.opticalQuality=defaults.opticalQuality;
       state.previewDetail=defaults.previewDetail;
       state.geometryBackend=defaults.geometryBackend;
+      cameraHudVisible=defaults.cameraHudVisible;syncCameraHudToggle();updateCameraHud();
       historyGallerySize=defaults.historyGallerySize;
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
       historyPanelOpen=defaults.historyPanelOpen;
@@ -4057,6 +4064,7 @@
     var note=newUiEl('ModernCameraPositionInfo');if(note)note.textContent=cameraPositionText();
     var poseSummary=newUiEl('ModernCameraPoseSummary');
     if(poseSummary)poseSummary.textContent='Height '+Number(model.Height).toFixed(1)+' m';
+    updateCameraHud();
   }
   function navigationKeyActive(){return Object.keys(navigationKeys).length>0;}
   function stopCameraKeyboard(deferRender){
@@ -4155,6 +4163,48 @@
     if(view==='Scene')return graph;
     return state.compareGraphs[view];
   }
+  // The Scene and both Compare viewports share a live observer pose, but
+  // Compare owns its own geometry and forces eye-level aim. Build a read-only
+  // frame with those exact semantics. During compositor-only drag the override
+  // is provisional and must not mutate the authoritative camera model.
+  function cameraHudModel(view,override){
+    var source=view==='Scene'?model:state.comparePair&&state.comparePair[view];
+    if(!source)return null;
+    var frame=Object.assign({},source);
+    if(view!=='Scene'){
+      ['Height','CameraEast','CameraNorth','Pan','Nick','Roll'].forEach(function(key){
+        frame[key]=model[key];
+      });
+    }
+    if(override)Object.keys(override).forEach(function(key){frame[key]=override[key];});
+    // Focal wheel can update FocalLengthField before the debounced Update().
+    // Reflect the real optical FOV immediately, without retracing any rays.
+    if(cameraInteraction&&typeof cameraInteraction.focalViewAngle==='function')
+      frame.camViewAngle=cameraInteraction.focalViewAngle(model.FocalLengthField)*Math.PI/180;
+    return frame;
+  }
+  function syncCameraHudToggle(){
+    var toggle=newUiEl('ModernCameraHudToggle');
+    if(toggle)toggle.checked=cameraHudVisible;
+  }
+  function updateCameraHud(override){
+    if(!cameraHud)return;
+    if(!cameraHudVisible){cameraHud.hideAll();return;}
+    var views=state.mode==='compare'?['A','B']:['Scene'];
+    ['Scene','A','B'].forEach(function(view){
+      if(!views.includes(view)){cameraHud.hide(view);return;}
+      var g=cameraViewport(view),frame=cameraHudModel(view,override);
+      if(!g||!frame||!cameraHud.update(view,g.Canvas,frame))cameraHud.hide(view);
+    });
+  }
+  function bindCameraHud(){
+    syncCameraHudToggle();
+    var toggle=newUiEl('ModernCameraHudToggle');
+    if(toggle)toggle.addEventListener('change',function(){
+      cameraHudVisible=!!toggle.checked;
+      updateCameraHud();saveApplicationPreferences();
+    });
+  }
   function cameraDragHud(canvas){
     if(!canvas||!canvas.parentNode||typeof document.createElement!=='function')return null;
     var host=canvas.parentNode;
@@ -4183,6 +4233,7 @@
     }
     if(!active)return;
     if(active.hud)active.hud.hidden=true;
+    updateCameraHud();
     if(active.canvas&&typeof active.canvas.releasePointerCapture==='function'){
       try{if(!active.canvas.hasPointerCapture||active.canvas.hasPointerCapture(active.id))
         active.canvas.releasePointerCapture(active.id);}catch(ignore){}
@@ -4277,8 +4328,13 @@
           var target=root.CurvatureModernCameraInteraction.angles(sample);
           hud.textContent='Pan '+target.Pan.toFixed(4)+'°  ·  Nick '+target.Nick.toFixed(4)+'°';
         }
-        hud.hidden=false;
+        hud.hidden=!cameraHudVisible;
       }
+      // The compositor preview has a provisional camera pose; show it in
+      // both visible viewports without mutating their physical models.
+      if(!active.autoLive)updateCameraHud(sample.mode==='translate'?
+        root.CurvatureModernCameraInteraction.translate(sample):
+        root.CurvatureModernCameraInteraction.angles(sample));
       if(event.preventDefault)event.preventDefault();
     });
     canvas.addEventListener('pointerup',function(event){
@@ -4366,7 +4422,7 @@
       if(event.altKey){
         if(next.CameraEast===model.CameraEast&&next.CameraNorth===model.CameraNorth)return;
         cancelEdits();model.CameraEast=next.CameraEast;model.CameraNorth=next.CameraNorth;
-        markCustom();syncNumericInputs();scheduleCameraWheelRedraw();return;
+        markCustom();syncNumericInputs();updateCameraHud();scheduleCameraWheelRedraw();return;
       }
       if(next===model.FocalLengthField)return;
       cancelEdits();
@@ -4379,7 +4435,7 @@
       var fov=el('ModernViewAngle');
       if(fov&&interaction.focalViewAngle)
         fov.value=String(Number(interaction.focalViewAngle(next).toFixed(4)));
-      scheduleCameraWheelRedraw();
+      updateCameraHud();scheduleCameraWheelRedraw();
     },{passive:false});
   }
   function scheduleCameraWheelRedraw(){
@@ -4452,6 +4508,7 @@
     if(!liveMotion)scheduleExperimentSave();
     if(state.mode==='compare'){
       if(!prepareCompare()){state.opticalSample=null;if(cameraPreview)cameraPreview.clear();return;}
+      updateCameraHud();
       ['A','B'].forEach(function(side){
         var status=el('ModernCompareStatus'+side);
         if(status&&(!selected||side===selected))status.textContent='Rendering current model '+side+'…';
@@ -4495,6 +4552,7 @@
         }
       });
     }else{
+      updateCameraHud();
       var sceneScheduledAt=profileNow();
       state.frame=requestAnimationFrame(function(){
         state.frame=null;
@@ -4976,6 +5034,7 @@
     });
     var reset=el('ModernResetPreset');if(reset)reset.addEventListener('click',function(){selectPreset(state.preset);});
     el('ModernRender').addEventListener('click',redraw);
+    bindCameraHud();
     el('ModernSceneTab').addEventListener('click',function(){setMode('scene');});
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
     var animationTab=newUiEl('ModernAnimationTab');
@@ -5041,6 +5100,7 @@
     getCameraAnimation:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getCameraTransition:function(){return cameraTransition?{playing:true,durationMs:cameraTransition.durationMs}: {playing:false};},
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
+    getCameraHudVisible:function(){return cameraHudVisible;},
     getHistoryStore:function(){return experimentHistory;},
     getStudioPlayback:function(){return studioPlayback?studioPlayback.status():null;},
     getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?

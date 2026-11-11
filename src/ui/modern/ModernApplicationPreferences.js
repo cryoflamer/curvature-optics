@@ -79,6 +79,7 @@
       opticalQuality:from(QUALITIES,data.opticalQuality,'accurate'),
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
+      cameraHudVisible:data.cameraHudVisible!==false,
       historyGallerySize:from(HISTORY_SIZES,data.historyGallerySize,'small'),
       historyPinnedCollapsed:data.historyPinnedCollapsed===true,
       historyPanelOpen:data.historyPanelOpen===true,
@@ -110,6 +111,7 @@
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
       previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
+      cameraHudVisible:data.cameraHudVisible,
       historyGallerySize:data.historyGallerySize,historyPinnedCollapsed:data.historyPinnedCollapsed,
       historyPanelOpen:data.historyPanelOpen,historyFilters:data.historyFilters,
       historyStoryboardQueue:data.historyStoryboardQueue,

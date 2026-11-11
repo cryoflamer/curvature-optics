@@ -3,8 +3,9 @@
 Modern Scene, Compare A/B and Animation Studio need the same camera readout,
 including when the Camera sidebar is collapsed or towers are outside the image.
 The read-only `src/camera/ModernCameraTelemetry.js` module is the single source
-for numeric measurements and displayed units; it does not draw a HUD or change
-camera controls in this stage. It depends only on the existing physical camera
+for numeric measurements and displayed units; it never changes
+camera controls or the physical renderer. The Scene/Compare HUD is a separate
+DOM consumer of this model. It depends only on the existing physical camera
 (`CurvaturePhysicalCamera`) for the camera's actual aim angle.
 
 ## Numerical contract
@@ -67,9 +68,24 @@ Consumers should derive samples from the viewport's own rendered model:
 - During uncommitted drag/keyboard CSS previews, the UI must supply the
   **effective interim camera state**, not the previous finished RK4 frame.
 
-Persistent on-screen HUD, per-viewport UI state, a controls help strip, and
-PNG/WebM/MP4 compositing are later stages. No experiment schema, preferences,
-Legacy code or optical rendering changes are made here. Disabling a future
-HUD must preserve existing exported pixels.
+The persistent on-screen HUD is available in Scene and Compare A/B. Its
+`Camera HUD` checkbox sits beside the scene header, **outside the Camera
+sidebar**, and is enabled for new/old browser preferences. Visibility is stored
+in local `ModernApplicationPreferences` (`cameraHudVisible`), not in experiment
+snapshots or shared URLs. Resetting preferences re-enables it. No RK4 recalculation
+is triggered by toggling the overlay.
+
+`ModernCameraHud.js` creates an accessible, non-interactive text-only overlay
+in each Graph Canvas clipping container. It never changes exported pixels.
+Scene uses the current model; Compare measures both independently rendered
+models with their shared live observer pose and Compare eye-level aiming. Mouse
+drag shows interim position/angles even before the committed RK4 redraw; wheel
+FOV and keyboard motion update the HUD immediately. When hidden, the old
+transient drag text remains available. The Camera HUD does not currently appear
+in Animation Studio, PNG or video exports. A control help strip and optional
+orientation indicator are planned separate stages. No Legacy source changes.
+
+Tests: `node --test tests/ModernCameraHud.test.js tests/ModernCameraTelemetry.test.js tests/ModernApplicationPreferences.test.js`.
+
 
 Tests: `node --test tests/ModernCameraTelemetry.test.js`.

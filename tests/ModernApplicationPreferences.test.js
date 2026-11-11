@@ -11,13 +11,13 @@ function storage(values={}){
 }
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
-  assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',
+  assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',cameraHudVisible:true,
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
-  {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
+  {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',cameraHudVisible:true,
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
@@ -160,4 +160,22 @@ test('Storyboard shortlist preferences are ordered, bounded, unique and never co
   assert.equal(preferences.read(db).historyFilters.mode,'scene');
   preferences.reset(db);
   assert.deepEqual(preferences.read(db).historyStoryboardQueue,[]);
+});
+
+test('Camera HUD visibility is an optional local preference, not an experiment property',()=>{
+  const db=storage();
+  assert.equal(preferences.read(db).cameraHudVisible,true);
+  const hidden=preferences.normalize({cameraHudVisible:false});
+  assert.equal(hidden.cameraHudVisible,false);
+  assert.equal(preferences.normalize({cameraHudVisible:'false'}).cameraHudVisible,true);
+  assert.equal(preferences.normalize({cameraHudVisible:null}).cameraHudVisible,true);
+  preferences.write(db,{cameraHudVisible:false,workspace:{mode:'compare'}});
+  assert.equal(preferences.read(db).cameraHudVisible,false);
+  assert.equal(preferences.read(db).workspace.mode,'compare');
+  assert.equal(JSON.parse(db.data.get(preferences.STORAGE_KEY)).cameraHudVisible,false);
+  // Old saved preferences continue with a visible HUD by default.
+  assert.equal(preferences.read(storage({[preferences.STORAGE_KEY]:JSON.stringify({version:1,
+    opticalQuality:'fast'})})).cameraHudVisible,true);
+  preferences.reset(db);
+  assert.equal(preferences.read(db).cameraHudVisible,true);
 });
