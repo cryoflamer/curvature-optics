@@ -2038,3 +2038,14 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   bound, explicitly excluding renderer Canvas and codec memory. The layout
   is snapshotted at export start, carried to all Workers, and recorded in
   manifests. The separate-output ZIP retains its two video entries and JSON.
+
+### Modern target-direction geometry (compass groundwork)
+
+- Added `ModernTargetDirection.js`: read-only, physical-only object and group
+  anchor selection, observer-local Globe/Flat camera translation, true
+  Pan/Nick/Roll/FOV-based geometric direction and offscreen classification.
+- Anchors are taken from physical scene object sequences, not nominal flat
+  offsets or apparent refracted rays; target selection is independent of
+  optical visibility or object occlusion. The UI compass is a follow-up.
+- Included only in the Modern HTML entrypoint; documented the contract in
+  `docs/modern-target-direction.md` and added focused regression tests.

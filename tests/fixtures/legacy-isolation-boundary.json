@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 87,
-      "uniqueScripts": 85,
+      "scriptTags": 88,
+      "uniqueScripts": 86,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -167,6 +167,7 @@
         "src/ui/modern/ModernCameraNavigation.js",
         "src/ui/modern/ModernApplicationPreferences.js",
         "src/camera/ModernCameraTelemetry.js",
+        "src/camera/ModernTargetDirection.js",
         "src/ui/modern/ModernCameraHud.js",
         "src/camera/ModernCameraInterpolator.js",
         "src/camera/ModernCameraSequence.js",
@@ -347,6 +348,7 @@
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
       "src/camera/ModernCameraTelemetry.js",
+      "src/camera/ModernTargetDirection.js",
       "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
       "src/optics/OpticalFastRayField.js",
@@ -405,7 +407,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 173,
+  "sourceJsCount": 174,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -785,13 +787,15 @@
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationPreview.js",
         "src/app/CurvatureMainCanvasRenderer.js",
-        "src/camera/ModernCameraTelemetry.js"
+        "src/camera/ModernCameraTelemetry.js",
+        "src/camera/ModernTargetDirection.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAngularGuide.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
         "tests/ModernCameraTelemetry.test.js",
         "tests/ModernPhysicalCompare.test.js",
+        "tests/ModernTargetDirection.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalCurvatureCamera127.test.js"
       ],
@@ -891,6 +895,16 @@
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernCameraHud.test.js",
         "tests/ModernCameraTelemetry.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/camera/ModernTargetDirection.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernTargetDirection.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1130,12 +1144,14 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/app/CurvatureMainCanvasRenderer.js"
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/camera/ModernTargetDirection.js"
       ],
       "commonJsTestCallers": [
         "tests/CurvatureCameraTranslation.test.js",
         "tests/ModernCameraDrag1371.test.js",
-        "tests/ModernCameraNavigation.test.js"
+        "tests/ModernCameraNavigation.test.js",
+        "tests/ModernTargetDirection.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1165,6 +1181,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/camera/ModernTargetDirection.js",
         "src/optics/OpticalTowerSilhouette.js",
         "src/renderers/CurvaturePhysicalTowerCanvas.js",
         "src/scene/CurvatureIndependentComposition.js"
@@ -1188,6 +1205,7 @@
         "tests/CurvatureTowerPlacement.test.js",
         "tests/CurvatureTowerSequence.test.js",
         "tests/CurvatureTowerType1.test.js",
+        "tests/ModernTargetDirection.test.js",
         "tests/OpticalTowerSilhouette106.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",

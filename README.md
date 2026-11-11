@@ -145,6 +145,15 @@ Saved views library holds up to 20 reusable poses; none are required for camera
 animation. Poses round-trip with Modern experiments and leave physical A/B
 settings unchanged. See [`docs/modern-camera-navigation.md`](docs/modern-camera-navigation.md).
 
+### Modern target direction geometry (compass foundation)
+
+A read-only target-direction kernel now locates the actual authored object
+anchors, per-group and scene centres in the movable observer frame for Globe
+and Flat. Bearings, screen-relative direction, Pan/Nick/Roll and camera aiming
+come from the same physical geometry as the Modern renderer; no refracted
+visibility is inferred. **The visible compass is still pending.** Details and
+API: [`docs/modern-target-direction.md`](docs/modern-target-direction.md).
+
 ### Modern camera animation
 
 Scene / Compare → Camera → **Camera Animation**: move the camera, click
