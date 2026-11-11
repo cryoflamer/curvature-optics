@@ -85,6 +85,7 @@ test('worker entrypoint imports actual production optics without DOM or Node req
   assert.equal(typeof root.CurveAppClass,'function');
   assert.equal(typeof root.CurvatureMainCanvasRenderer.renderPhysical,'function');
   assert.equal(typeof root.CurvatureModernAnimationFrameExport.run,'function');
+  assert.equal(typeof root.CurvatureModernAnimationFrameExport.compositeOpaqueWhite,'function');
   const ctx={save(){},restore(){},setTransform(){},beginPath(){},rect(){},clip(){}};
   root.canvas={width:640,height:360,getContext(){return ctx;}};
   const graph=vm.runInContext('createGraph(canvas)',root);

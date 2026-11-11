@@ -22,6 +22,19 @@ that validated project is used. The input is snapshotted at Start.
   prototype and lets the independent physical painter own the Canvas pixels.
   The legacy `SetClipping` operation is not used: the independent physical
   frame renderer clips its projected primitives itself.
+- **Opaque white PNG background:** the shared physical painter deliberately
+  paints on a transparent Canvas. Live Scene/Animation appears white because
+  the browser displays that Canvas over a white CSS background; PNG has no CSS.
+  After each completed Accurate frame, **before PNG encoding**, the common
+  export runner draws `#fff` with Canvas `destination-over` at identity
+  transform and full alpha. This puts white *behind* all pixels, retaining
+  antialiasing and painter output while making every exported pixel opaque.
+  Never fill white before the painter (it clears the Canvas), or paint
+  source-over afterwards (it would obscure the geometry). All export workers
+  inherit this single post-processing step, including future worker pools.
+  `manifest.json` records `backgroundColor: "#ffffff"`. This is parity
+  with the **displayed** live image over CSS white, not with the raw
+  transparent backing-store RGBA channels.
 - For Compare, `frame_N_A.png` and `frame_N_B.png` use identical timestamps;
   `manifest.json` records each file and available optical statistics. It
   includes the self-contained physical project and exact microsecond times.
@@ -53,6 +66,14 @@ memory use and pixel parity.
   checks exact frame counts/format, OffscreenCanvas encoding, background message
   protocol, immediate terminate, failure handling, import of actual production
   dependencies without `document`, and a headless GraphX3DX camera bootstrap.
+- The opaque-compositing regression checks transparent, fully opaque and
+  partially transparent edge pixels, destination-over semantics, Canvas state
+  restoration, and that the compositor runs before PNG encoding. An additional
+  local raster test loaded a **960×540 PNG from an actual Opera export** and
+  compared rendering it over a white CSS-equivalent layer versus baking white
+  behind it with destination-over: **0 differing RGBA channel values**.
+  This validates background compositing on that recorded raster; it does not
+  establish full Scene/Animation parity for different camera/viewport states.
 - Local supplemental smoke: production Accurate RK4 plus Canvas PNG encoding
   were run in a Worker-like VM with a Canvas 2D implementation. A scene
   completed all six timestamps at 5 FPS and its first frame had zero RGBA

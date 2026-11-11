@@ -596,4 +596,4 @@ last keyframe; Compare A/B produces a synchronized PNG for each side. A
 **Cancel export** terminates the Worker immediately, even during a synchronous RK4 frame. This uses bounded in-memory
 ZIP32 with PNGs: ≤751 timestamps and ≤192 MiB of PNG data, with no MP4/WebM
 encoding yet. It does not alter Scene/Compare, History, the active player clock
-or autosaved drafts. Export now uses one background Web Worker and an independent OffscreenCanvas, keeping the UI responsive; **Cancel** terminates even an in-flight Accurate frame. It displays completed frames, elapsed time and an estimated remaining time. See [frame export design and limits](docs/modern-animation-frame-export.md).
+or autosaved drafts. Export now uses one background Web Worker and an independent OffscreenCanvas, keeping the UI responsive; **Cancel** terminates even an in-flight Accurate frame. It displays completed frames, elapsed time and an estimated remaining time. Exported PNGs embed the same **opaque white background** seen behind the live transparent Canvas, without changing Accurate physics or edge antialiasing. See [frame export design and limits](docs/modern-animation-frame-export.md).

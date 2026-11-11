@@ -72,6 +72,29 @@
     u16(end,files.length);u16(end,files.length);u32(end,centralSize);u32(end,offset);u16(end,0);
     return new Blob(parts.concat(central,[Uint8Array.from(end)]),{type:'application/zip'});
   }
+  // Live Scene/Animation displays the transparent painter canvas above a
+  // white CSS background. PNG has no CSS: bake that same background behind
+  // the finished RGBA painting, after the painter has cleared its canvas.
+  // destination-over preserves the optical geometry and blends anti-aliased
+  // edges just as the live browser canvas does over white. Never clear or
+  // paint source-over: that would erase the finished frame.
+  function compositeOpaqueWhite(canvas){
+    if(!canvas||!(canvas.width>0&&canvas.height>0)||typeof canvas.getContext!=='function')
+      throw TypeError('Fixed-size export Canvas required for opaque PNG');
+    var ctx=canvas.getContext('2d');
+    if(!ctx||typeof ctx.save!=='function'||typeof ctx.restore!=='function'||
+      typeof ctx.setTransform!=='function'||typeof ctx.fillRect!=='function')
+      throw TypeError('Canvas 2D compositing required for opaque PNG');
+    ctx.save();
+    try{
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.globalCompositeOperation='destination-over';
+      ctx.globalAlpha=1;
+      ctx.fillStyle='#fff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }finally{ctx.restore();}
+    return canvas;
+  }
   function toPng(canvas){
     // OffscreenCanvas in a dedicated Worker uses convertToBlob(), whereas
     // HTMLCanvasElement in the legacy test adapter uses callback-based toBlob().
@@ -113,6 +136,9 @@
           image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
           image.canvas.width!==p.width||image.canvas.height!==p.height)
           throw Error('Export frame is not Accurate RK4 at fixed resolution');
+        // A live Canvas is displayed over white CSS; a PNG has no CSS.
+        // Composite only after the final Accurate paint, on every export path.
+        compositeOpaqueWhite(image.canvas);
         var bytes=await toPng(image.canvas);
         if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
           throw Error('Invalid PNG data from export Canvas');
@@ -135,7 +161,8 @@
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       physicalTarget:p.project.target,project:p.project,quality:'accurate',
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
-      endpointIncluded:true,sides:p.sides.slice(),frameCount:frames.length,frames:frames};
+      endpointIncluded:true,sides:p.sides.slice(),backgroundColor:'#ffffff',
+      frameCount:frames.length,frames:frames};
     entries.unshift({name:'manifest.json',data:ascii(JSON.stringify(manifest,null,2))});
     return {cancelled:false,blob:zip(entries),manifest:manifest};
   }
@@ -170,5 +197,6 @@
     graph.UpdateCanvasSize=function(){};graph.ResizeTimer=null;
     return graph;
   }
-  return Object.freeze({plan:plan,run:run,zip:zip,graphForCanvas:graphForCanvas,MAX_FRAMES:MAX_FRAMES});
+  return Object.freeze({plan:plan,run:run,zip:zip,graphForCanvas:graphForCanvas,
+    compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});
 }));

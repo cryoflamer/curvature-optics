@@ -26,9 +26,15 @@ function make(mode='scene'){
     {id:'export_demo',name:'Earth curvature'});
 }
 const png=Uint8Array.from([137,80,78,71,13,10,26,10,1,2,3]);
-function canvas(w,h){return {width:w,height:h,toBlob(cb,type){
-  assert.equal(type,'image/png');cb(new Blob([png],{type}));
-}};}
+function compositingContext(){return {save(){},restore(){},setTransform(){},fillRect(){}};}
+function canvas(w,h){
+  let composited=false;
+  return {width:w,height:h,getContext(){return {...compositingContext(),
+    fillRect(){composited=true;}};},toBlob(cb,type){
+    assert.equal(composited,true,'background must be composited before PNG encoding');
+    assert.equal(type,'image/png');cb(new Blob([png],{type}));
+  }};
+}
 function entriesFromZip(array){
   const b=Buffer.from(array),entries=[];
   let pos=0;
@@ -72,6 +78,7 @@ test('PNG sequence has every deterministic timestamp, a manifest and actual ZIP 
   assert.equal(out.manifest.frameCount,126);
   assert.equal(out.manifest.endpointIncluded,true);
   assert.equal(out.manifest.quality,'accurate');
+  assert.equal(out.manifest.backgroundColor,'#ffffff');
   assert.equal(out.manifest.frames[0].renderStats.A.opticsMs,22);
   assert.equal(out.manifest.frames.at(-1).timestampUs,5000000);
   assert.equal(out.manifest.frames.at(-1).images.A,'frames/frame_00125_A.png');
@@ -84,6 +91,44 @@ test('PNG sequence has every deterministic timestamp, a manifest and actual ZIP 
   const manifest=JSON.parse(entries[0].data.toString('utf8'));
   assert.deepEqual(manifest.frames,out.manifest.frames);
   assert.deepEqual(entries[1].data,Buffer.from(png));
+});
+test('opaque PNG background matches transparent live Canvas displayed over white',()=>{
+  // The real browser uses a white CSS layer under a transparent optical
+  // Canvas. Model opaque, transparent and antialiased pixels here, including
+  // canvas-state restoration so following renders are unaffected.
+  const pixels=[[0,0,0,0],[22,51,74,255],[0,120,240,128]];
+  const original=pixels.map(p=>p.slice());
+  const state={globalCompositeOperation:'source-over',globalAlpha:0.65,
+    fillStyle:'orange',transform:[2,0,0,2,17,12]};
+  let saved,rect;
+  const ctx={...state,save(){saved={globalCompositeOperation:this.globalCompositeOperation,
+    globalAlpha:this.globalAlpha,fillStyle:this.fillStyle,transform:this.transform.slice()};},
+    restore(){Object.assign(this,saved);},setTransform(...args){this.transform=args;},
+    fillRect(x,y,w,h){
+      rect=[x,y,w,h];
+      assert.equal(this.globalCompositeOperation,'destination-over');
+      assert.equal(this.globalAlpha,1);assert.equal(this.fillStyle,'#fff');
+      assert.deepEqual(this.transform,[1,0,0,1,0,0]);
+      for(const pixel of pixels){
+        const alpha=pixel[3]/255;
+        for(let c=0;c<3;c++)pixel[c]=Math.round(pixel[c]*alpha+255*(1-alpha));
+        pixel[3]=255;
+      }
+    }};
+  const canvas={width:3,height:1,getContext(type){assert.equal(type,'2d');return ctx;}};
+  assert.equal(frames.compositeOpaqueWhite(canvas),canvas);
+  assert.deepEqual(rect,[0,0,3,1]);
+  assert.deepEqual(pixels,[[255,255,255,255],[22,51,74,255],
+    [Math.round(255*127/255),Math.round(120*128/255+255*127/255),
+      Math.round(240*128/255+255*127/255),255]]);
+  assert.deepEqual({globalCompositeOperation:ctx.globalCompositeOperation,
+    globalAlpha:ctx.globalAlpha,fillStyle:ctx.fillStyle,transform:ctx.transform},state);
+  assert.deepEqual(original[0],[0,0,0,0]);
+});
+test('opaque PNG composition requires a usable fixed-size 2D context',()=>{
+  assert.throws(()=>frames.compositeOpaqueWhite(null),/Canvas/);
+  assert.throws(()=>frames.compositeOpaqueWhite({width:0,height:2,getContext(){return {};}}),/Canvas/);
+  assert.throws(()=>frames.compositeOpaqueWhite({width:2,height:2,getContext(){return null;}}),/compositing/);
 });
 test('Compare exports synchronized A and B PNGs for every timestamp',async()=>{
   const p=make('compare'),record=[];
@@ -114,7 +159,12 @@ test('approximated or wrong-size renders and PNG errors fail without an archive'
   await assert.rejects(()=>frames.run({...setup,render:async()=>({
     canvas:canvas(800,360),quality:'accurate'})}),/fixed resolution/);
   await assert.rejects(()=>frames.run({...setup,render:async()=>({
-    canvas:{width:640,height:360,toBlob(cb){cb(null);}},quality:'accurate'})}),/encoding failed/);
+    canvas:{width:640,height:360,getContext(){return compositingContext();},
+      toBlob(cb){cb(null);}},quality:'accurate'})}),/encoding failed/);
+  await assert.rejects(()=>frames.run({...setup,render:async()=>({
+    canvas:{width:640,height:360,getContext(){return null;},
+      toBlob(cb){cb(new Blob([png],{type:'image/png'}));}},quality:'accurate'})}),
+    /compositing/);
 });
 test('isolated GraphX3DX adapter has private window, camera and fixed canvas',()=>{
   class Viewport{SetViewport(){this.WinTrans.OffsetX=22;this.VpTrans.ScaleX=4;}
@@ -144,7 +194,7 @@ test('browser script loads without CommonJS and exposes export API',()=>{
 });
 test('OffscreenCanvas PNG encoding works without callback toBlob',async()=>{
   const out=await frames.run({project:make(),fps:5,width:640,height:360,
-    render:async()=>({canvas:{width:640,height:360,
+    render:async()=>({canvas:{width:640,height:360,getContext(){return compositingContext();},
       convertToBlob:async opts=>{
         assert.equal(opts.type,'image/png');return new Blob([png],{type:'image/png'});
       }},quality:'accurate'})});
