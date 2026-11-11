@@ -647,3 +647,20 @@ loads the Canvas HUD module before animation export planners and refreshes the
 Studio and Worker script cache keys. This does not change animation projects
 or saved History snapshots. Reload CurvatureModern.html after applying the
 patch; the exported MP4/WebM should then use the selected HUD appearance.
+
+### Camera HUD integration validation
+
+The Scene/Compare HUD and the Animation Studio playback overlay use the shared
+camera telemetry formatter and appearance model. PNG and MP4/WebM exports paint
+the optional telemetry onto each source view after opaque compositing; the
+Compare video compositor joins the two completed views afterward. Appearance
+and visibility are snapshotted when an export starts. With HUD burn-in disabled,
+changing opacity, placement or size must not change PNG bytes or video frame
+input; older Animation projects without `cameraHudAppearance` remain valid.
+
+The parallel PNG/video renderers and the retained single-worker PNG
+compatibility protocol now forward the same resolved HUD settings. Run
+`node --test tests/ModernAnimationHudConsistency.test.js` to exercise the
+compatibility protocol, disabled-HUD frame parity, and old-project fallback.
+The test mocks the painter/Canvas: a real browser export still needs a visual
+check on the installed browser (particularly opacity and corner placement).

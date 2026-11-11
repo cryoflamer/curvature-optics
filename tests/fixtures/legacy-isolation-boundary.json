@@ -553,6 +553,7 @@
         "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationFrameExport.test.js",
+        "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationParallelExport.test.js",
         "tests/ModernAnimationVideoPipeline.test.js"
       ],
@@ -620,6 +621,7 @@
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
+        "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationParallelExport.test.js",
@@ -649,6 +651,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
+        "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStudio.test.js"
       ],
@@ -688,6 +691,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
+        "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js"
       ],
@@ -2373,6 +2377,7 @@
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
+        "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationParallelExport.test.js",
@@ -2500,6 +2505,7 @@
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
+        "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationParallelExport.test.js",

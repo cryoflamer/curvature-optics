@@ -1998,3 +1998,17 @@ Malformed or inaccessible localStorage reverts to the reference defaults.
   current UI (`Invalid editor property` when editing `cameraHudAppearance`).
 - Browser-script integration tests assert the real HTML dependency order,
   HUD draft editing, and video-plan creation; Legacy entrypoint is unchanged.
+
+### Camera HUD export validation
+
+- Verified that the optional appearance field on saved Animation projects is
+  backward compatible and is consistently captured for PNG and MP4/WebM plans.
+- The retained single-worker PNG `start` protocol now carries `cameraHud` and
+  `cameraHudAppearance` into its second export plan, matching the parallel
+  render protocol. Previously it silently omitted HUD burn-in.
+- Regression tests compare disabled-HUD PNG bytes and Compare A/B video source
+  Canvas operations across appearance settings, and execute the compatibility
+  Worker `onmessage` path with a mocked optical painter.
+- The Scene/Compare DOM HUD and Animation Studio preview share telemetry and
+  placement model, but raster text rendering is not byte-for-byte equivalent
+  to CSS. A browser-side visual comparison remains a manual acceptance check.

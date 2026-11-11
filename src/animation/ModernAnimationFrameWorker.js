@@ -178,6 +178,9 @@ self.onmessage=async function(event){
     var start=performance.now();
     var result=await self.CurvatureModernAnimationFrameExport.run({
       project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
+      // The compatibility entrypoint re-plans the PNG sequence in run().
+      // Forward the same captured HUD settings as the parallel protocol.
+      cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
       yieldUi:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
       render:session.render,
       onProgress:function(info){self.postMessage({type:'progress',completed:info.completed,
