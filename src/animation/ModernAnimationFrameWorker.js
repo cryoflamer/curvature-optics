@@ -43,6 +43,8 @@ importScripts(
   '../optics/CurvaturePhysicalSceneOptics.js',
   '../app/CurvatureModel.js',
   '../app/CurvaturePhysicalCamera.js',
+  '../camera/ModernCameraTelemetry.js',
+  'ModernAnimationCanvasHud.js',
   '../app/CurvaturePhysicalCurvature.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
   '../app/CurvatureMainCanvasRenderer.js',
@@ -108,7 +110,8 @@ function setup(data,video){
     graph.Canvas.width=dimensions.width;
     graph.Canvas.height=dimensions.height;
     var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:plan.project.mode});
-    return {quality:report.quality,canvas:graph.Canvas,metrics:report.result};
+    return {quality:report.quality,canvas:graph.Canvas,metrics:report.result,
+      cameraModel:report.cameraModel};
   }
   return {plan:plan,render:render,video:!!video};
 }

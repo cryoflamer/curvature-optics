@@ -115,3 +115,27 @@ naturally differ); record `renderElapsedMs` and total elapsed seconds to measure
 speedup. Try Cancel during a long Accurate frame and during ZIP packing: the
 page must remain responsive and neither case may download a partial ZIP.
 Verify Scene, History, the draft and Playback remain intact.
+
+## Optional camera telemetry burn-in
+
+The Animation Studio preview now has a **Camera HUD** toggle, independent of
+Scene/Compare's camera HUD. The live overlay uses the same updated physical
+camera model as the rendered viewport, and stays attached to each Animation
+Canvas. It reflects the **last physically painted sample**, not a potentially
+newer playback-clock position; toggling it requires no additional RK4 pass.
+Compare A and B have independent telemetry for their own geometry.
+
+The PNG export has a separate **Include camera HUD in PNGs** checkbox,
+**off by default**. When enabled, the render Worker uses the common
+`ModernCameraTelemetry.measure/format` implementation and
+`ModernAnimationCanvasHud.paint` to burn Height, surface distance from origin,
+East/North, Heading/Pitch, Roll and FOV into every finished frame **after**
+white `destination-over` compositing and **before** PNG encoding. The visible
+numbers are taken directly from that frame's updated physical model, not from
+live Scene settings. All workers use the same font/layout and timestamp rules.
+Compare sides are independently labelled GLOBE/FLAT. The PNG manifest contains
+`cameraHudIncluded: true` only when this option is enabled. No new HUD pixels,
+fields or trace operations are added to exports with the option off.
+
+The overlay does not depict target visibility or perform ray tracing. A target
+bearing indicator is a separate planned enhancement.

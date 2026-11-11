@@ -752,6 +752,8 @@ button{cursor:pointer}
   color:#365a77;font-size:13px;text-align:center;padding:12px}
 .modern-animation-frame-loading[hidden]{display:none!important}
 .modern-animation-playback-canvas>.JsGraph{max-width:100%}
+/* Playback has its own graph clipping boxes, separate from Scene/Compare. */
+.modern-animation-playback-canvas .JsGraph-ClippingBox{position:relative}
 .modern-animation-playback-controls{display:flex;flex-wrap:wrap;align-items:center;
   gap:9px;margin-top:12px;color:#3d5b74;font-size:12px}
 .modern-animation-playback-controls button{border:1px solid #9cbddd;border-radius:6px;

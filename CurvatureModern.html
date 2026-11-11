@@ -197,6 +197,7 @@
           <option value="accurate">Accurate RK4 · all frames</option>
           <option value="fast">Fast if supported · approximate</option>
         </select>
+        <label class="modern-camera-hud-toggle" for="ModernAnimationPlaybackCameraHud"><input type="checkbox" id="ModernAnimationPlaybackCameraHud" checked> Camera HUD</label>
         <button type="button" id="ModernAnimationPlaybackPlay">Play</button>
         <button type="button" id="ModernAnimationPlaybackPause" disabled>Pause</button>
         <button type="button" id="ModernAnimationPlaybackStop">Stop</button>
@@ -219,7 +220,7 @@
       </details>
       <details id="ModernAnimationFrameExportSection" class="modern-animation-frame-export">
         <summary>Export PNG frames · deterministic (offline)</summary>
-        <p>A pool of background Web Workers calculates independent timestamps in Accurate RK4. A separate worker assembles the ZIP in timestamp order without blocking the page; the exact final frame is included.</p>
+        <p>A pool of background Web Workers calculates independent timestamps in Accurate RK4. A separate worker assembles the ZIP in timestamp order without blocking the page; the exact final frame is included. Optionally burn camera telemetry into the exported pixels (disabled by default).</p>
         <div class="modern-animation-frame-export-controls">
           <label for="ModernAnimationFrameExportFps">FPS
             <select id="ModernAnimationFrameExportFps"><option value="10">10</option><option value="25" selected>25</option><option value="30">30</option><option value="5">5</option></select>
@@ -230,6 +231,7 @@
           <label for="ModernAnimationFrameExportWorkers">Render workers
             <select id="ModernAnimationFrameExportWorkers"><option value="auto" selected>Auto (up to 4)</option><option value="1">1 · baseline</option><option value="2">2</option><option value="4">4</option></select>
           </label>
+          <label class="modern-camera-hud-toggle" for="ModernAnimationFrameExportCameraHud"><input type="checkbox" id="ModernAnimationFrameExportCameraHud"> Include camera HUD in PNGs</label>
           <button type="button" id="ModernAnimationFrameExportStart">Render PNG ZIP</button>
           <button type="button" id="ModernAnimationFrameExportCancel" disabled>Cancel export</button>
         </div>
@@ -238,7 +240,7 @@
       </details>
       <details id="ModernAnimationVideoExportSection" class="modern-animation-frame-export">
         <summary>Export video · WebM / MP4 · deterministic (offline)</summary>
-        <p>Offline VP9 WebM or H.264 MP4 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, a single ZIP contains two synchronized videos.</p>
+        <p>Offline VP9 WebM or H.264 MP4 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, a single ZIP contains two synchronized videos. Camera telemetry burn-in is optional and disabled by default.</p>
         <div class="modern-animation-frame-export-controls">
           <label for="ModernAnimationVideoExportFormat">Format
             <select id="ModernAnimationVideoExportFormat"><option value="webm" selected>WebM · VP9</option><option value="mp4">MP4 · H.264</option></select>
@@ -255,6 +257,7 @@
           <label for="ModernAnimationVideoExportQuality">Video bitrate
             <select id="ModernAnimationVideoExportQuality"><option value="standard" selected>Standard</option><option value="high">High bitrate</option></select>
           </label>
+          <label class="modern-camera-hud-toggle" for="ModernAnimationVideoExportCameraHud"><input type="checkbox" id="ModernAnimationVideoExportCameraHud"> Include camera HUD in video</label>
           <button type="button" id="ModernAnimationVideoExportStart">Render video</button>
           <button type="button" id="ModernAnimationVideoExportCancel" disabled>Cancel export</button>
         </div>

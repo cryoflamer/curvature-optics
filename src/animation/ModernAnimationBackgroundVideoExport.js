@@ -197,9 +197,10 @@
           }
           encoder.postMessage({type:'init',project:plan.project,width:plan.width,
             height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format,
-            frameWindow:window});
+            frameWindow:window,cameraHud:plan.cameraHud});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
-            project:plan.project,width:plan.width,height:plan.height,fps:plan.fps});});
+            project:plan.project,width:plan.width,height:plan.height,fps:plan.fps,
+            cameraHud:plan.cameraHud});});
         }catch(error){finish(error);}
       });
     }

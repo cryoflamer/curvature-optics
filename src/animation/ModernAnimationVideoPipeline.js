@@ -17,6 +17,8 @@
   var MAX_VIDEO_FRAMES=36000,MAX_PENDING=16;
   function plan(project,options){
     var owned=projects.validate(project),settings=png.exportSettings(options);
+    if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
+      throw RangeError('Invalid camera HUD export setting');
     var totalMs=projects.totalMs(owned),durationUs=Math.round(totalMs*1000);
     if(!Number.isSafeInteger(durationUs)||durationUs<=0)
       throw RangeError('Video animation must have positive finite duration');
@@ -37,7 +39,8 @@
         durationUs:nextUs-timestampUs,sampleTimeMs:sampleTimeMs}));
     }
     return Object.freeze({project:owned,fps:settings.fps,width:settings.width,
-      height:settings.height,durationMs:totalMs,durationUs:durationUs,
+      height:settings.height,cameraHud:!!(options&&options.cameraHud===true),
+      durationMs:totalMs,durationUs:durationUs,
       frameCount:count,sides:Object.freeze(owned.baseExperiment.display.mode==='compare'?['A','B']:['A']),
       frames:Object.freeze(times)});
   }
@@ -64,7 +67,7 @@
         var side=p.sides[j],renderStarted=performance.now();
         var image=await render(sample,side,{width:p.width,height:p.height,index:index,
           timeMs:timing.sampleTimeMs,timestampUs:timing.timestampUs,durationUs:timing.durationUs});
-        png.prepareCanvas(image,p.width,p.height);
+        png.prepareCanvas(image,p.width,p.height,p.cameraHud);
         // A completed frame snapshots this worker's canvas; subsequent RK4
         // renders may safely reuse it after VideoFrame construction.
         result.frames[side]=new FrameCtor(image.canvas,{timestamp:timing.timestampUs,

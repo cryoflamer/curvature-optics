@@ -482,6 +482,9 @@
   var cameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
     root.CurvatureModernCameraHud.create({telemetry:cameraTelemetry,document:document}):null;
   var cameraHudVisible=true;
+  var studioCameraHud=root.CurvatureModernCameraHud&&cameraTelemetry?
+    root.CurvatureModernCameraHud.create({telemetry:cameraTelemetry,document:document}):null;
+  var studioCameraHudLast={A:null,B:null,isCompare:false};
   var navigationPrefs=navigation?navigation.settings():{speed:10,turnRate:1,wheelStep:'auto'};
   var navigationKeys=Object.create(null),navigationFrame=null,navigationStamp=null;
   var navigationMoved=false,navigationModifiers={fast:false,precise:false};
@@ -1374,7 +1377,9 @@
     if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
     if(studioPlayback)studioPlayback.pause(profileNow());
     if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
-      studioLastQualityFrame=null;studioLastParity=null;}
+      studioLastQualityFrame=null;studioLastParity=null;
+      studioCameraHudLast={A:null,B:null,isCompare:false};
+      if(studioCameraHud)studioCameraHud.hideAll();}
     syncStudioPlaybackControls();
   }
   function syncStudioPlaybackControls(){
@@ -1417,6 +1422,9 @@
       studioInitialPaintFrame=null;}
   }
   function studioFrameLoading(loading,message){
+    // Never leave the previous frame's coordinates visible over a loading notice.
+    if(loading&&typeof studioCameraHud!=='undefined'&&studioCameraHud)
+      studioCameraHud.hideAll();
     ['A','B'].forEach(function(side){
       var notice=newUiEl('ModernAnimationFrameLoading'+side);
       if(notice){notice.hidden=!loading;if(loading)notice.textContent=message;}
@@ -1483,6 +1491,18 @@
         if(host)observer.observe(host);});
     }else if(root.addEventListener)root.addEventListener('resize',resized);
   }
+  function syncStudioCameraHud(sampleA,sampleB,graphs,isCompare){
+    studioCameraHudLast={A:sampleA,B:sampleB,isCompare:isCompare};
+    if(!studioCameraHud)return;
+    var control=newUiEl('ModernAnimationPlaybackCameraHud');
+    if(control&&!control.checked){studioCameraHud.hideAll();return;}
+    if(!sampleA||!studioCameraHud.update('A',graphs.A.Canvas,sampleA.cameraModel))
+      studioCameraHud.hide('A');
+    if(isCompare&&sampleB){
+      if(!studioCameraHud.update('B',graphs.B.Canvas,sampleB.cameraModel))
+        studioCameraHud.hide('B');
+    }else studioCameraHud.hide('B');
+  }
   function renderStudioPlaybackSample(force){
     if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen)return;
     var now=profileNow();
@@ -1514,6 +1534,7 @@
     // in Accurate too: a Compare frame must not silently mix approximations.
     if(b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
       {quality:'accurate',animationMode:studioPrepared.mode});
+    syncStudioCameraHud(a,b,graphs,isCompare);
     var spent=profileNow()-begun; // includes any Accurate redraw after a B fallback
     var fast=a.quality==='fast'&&(!b||b.quality==='fast');
     var auditQuality=b&&b.quality!==a.quality?'mixed':a.quality;
@@ -1717,6 +1738,18 @@
         status.textContent='Add at least two compatible keyframes to export video.';
     }
   }
+  function bindStudioCameraHud(){
+    var toggle=newUiEl('ModernAnimationPlaybackCameraHud');
+    if(toggle)toggle.addEventListener('change',function(){
+      if(!studioCameraHud)return;
+      if(!toggle.checked){studioCameraHud.hideAll();return;}
+      if(!previewGraphsReady()||!studioCameraHudLast.A)return;
+      // Use the LAST PAINTED models, not a newly sampled playback timestamp.
+      // This must never start RK4 or report coordinates ahead of the pixels.
+      syncStudioCameraHud(studioCameraHudLast.A,studioCameraHudLast.B,
+        root.CurvatureModernAnimationGraphs,studioCameraHudLast.isCompare);
+    });
+  }
   function bindStudioVideoExport(){
     var start=newUiEl('ModernAnimationVideoExportStart');
     var cancel=newUiEl('ModernAnimationVideoExportCancel');
@@ -1766,6 +1799,7 @@
           ' video intervals · '+plan.sides.length+' view(s) · Accurate RK4.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
+          cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
           onReady:function(info){
             message(info.workers+' render worker(s) · '+codecLabel+' encoder ready · '+
               info.total+' frames · reorder window '+info.frameWindow+
@@ -1890,6 +1924,7 @@
           ' timestamps, '+plan.sides.length+' view(s) · Accurate RK4. Cancel is available.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workerCount,
+          cameraHud:!!(newUiEl('ModernAnimationFrameExportCameraHud')||{}).checked,
           onReady:function(info){
             message(info.workers+' render worker(s) ready · calculating Accurate RK4 · '+
               info.total+' timestamps. ZIP assembly is also in the background.');
@@ -1979,6 +2014,7 @@
       if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
     });
     bindStudioQualityAudit();
+    bindStudioCameraHud();
     bindStudioFrameExport();
     bindStudioVideoExport();
     observeStudioPreviewSize();

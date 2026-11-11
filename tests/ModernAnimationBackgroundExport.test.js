@@ -192,3 +192,15 @@ test('background controller loads as browser script without require/module',()=>
   vm.runInNewContext(source,ctx);
   assert.equal(typeof ctx.CurvatureModernAnimationBackgroundExport.create,'function');
 });
+
+test('opt-in HUD flag is sent to every PNG render worker and the archive manifest',async()=>{
+  FakeWorker.reset();
+  const api=background.create({WorkerCtor:FakeWorker,hardwareConcurrency:8});
+  const result=await api.start({project:make(),fps:5,width:640,height:360,
+    workerCount:2,cameraHud:true});
+  assert.equal(result.manifest.cameraHudIncluded,true);
+  assert.ok(FakeWorker.instances.every(worker=>{
+    const init=worker.commands.find(command=>command.type==='init');
+    return !!init&&init.cameraHud===true;
+  }));
+});

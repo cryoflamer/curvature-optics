@@ -217,3 +217,29 @@ warmup and noise. Compare `controller.elapsedMs`, `render.totalMs`,
 `flushMs`, `muxMs` and (for Compare) `zipMs`. Do not infer phase shares by
 subtracting overlapping durations. The 22.5/22.3-second runs before this patch
 show only total times; **they cannot be retroactively phase-profiled**.
+
+## Optional camera HUD in Playback and exported video
+
+Playback displays per-view camera telemetry over its own Canvas; its **Camera
+HUD** checkbox hides/shows it immediately without repainting Accurate RK4.
+This is a DOM overlay, so it does not contaminate the underlying physical
+pixels or pixel-parity diagnostics. The existing Scene/Compare toggle is
+independent.
+
+**Include camera HUD in video** is a distinct video export checkbox, **off by
+default**. Once enabled, the isolated render worker burns the shared camera
+telemetry into each RGBA Canvas **after** opaque white compositing and
+**before** constructing `VideoFrame`. This applies identically to VP9/WebM
+and H.264/MP4, including both synchronized sides of Compare A/B. The option
+travels with the exported project when workers initialize; the encoder does
+not draw or resample camera state. The video manifest (available in Compare
+ZIPs and the export result) records `cameraHudIncluded: true` when enabled.
+With HUD off, the established VideoFrame source, codec timing and encoded
+pixels are untouched by the HUD painter. Video compression remains lossy.
+
+The labels use physical camera geometry and do not imply optical visibility
+of towers. Opera acceptance: export the same camera-motion project with the
+checkbox on in WebM and MP4, inspect the first/middle/final frames and A/B
+geometries, then repeat with it off and verify the pristine frame. Repeat a
+short PNG export using 1/2/4 workers to check HUD image pixel parity. Such
+browser-level acceptance is separate from Node test mocks.

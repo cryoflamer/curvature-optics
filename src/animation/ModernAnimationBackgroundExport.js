@@ -149,9 +149,11 @@
             })(slot);
           }
           archive.postMessage({type:'init',project:plan.project,fps:plan.fps,
-            width:plan.width,height:plan.height,workers:count});
+            width:plan.width,height:plan.height,workers:count,
+            cameraHud:plan.cameraHud});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'init',
-            project:plan.project,fps:plan.fps,width:plan.width,height:plan.height});});
+            project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
+            cameraHud:plan.cameraHud});});
         }catch(error){finish(error);}
       });
     }

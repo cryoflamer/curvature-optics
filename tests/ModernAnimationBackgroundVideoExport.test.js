@@ -171,3 +171,17 @@ test('video profile panel and explicit JSON export stay outside PNG export',()=>
   assert.match(app,/curvature-animation-video-profile\.json/);
   assert.match(app,/overlapping wall times, not additive/);
 });
+
+test('H.264 and VP9 export init propagate optional camera HUD to renderers and encoder',async()=>{
+  for(const format of ['mp4','webm']){
+    FakeWorker.reset();
+    const api=background.create({WorkerCtor:FakeWorker,hardwareConcurrency:4});
+    await api.start({project:make(),fps:5,width:640,height:360,
+      workerCount:2,cameraHud:true,format});
+    assert.ok(FakeWorker.instances.every(worker=>{
+      const init=worker.sent.find(entry=>
+        entry.data.type==='video-init'||entry.data.type==='init');
+      return !!init&&init.data.cameraHud===true;
+    }));
+  }
+});

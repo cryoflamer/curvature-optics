@@ -86,6 +86,7 @@ async function maybeFinish(){
       peakEncoderQueue:current.peakEncoderQueue,
       encodedBytes:current.encodedBytes,
       elapsedMs:performance.now()-current.start};
+    if(p.cameraHud)manifest.cameraHudIncluded=true;
     manifest.profiling=reportProfile(current,flushMs,muxMs,null);
     var blob,filename;
     if(files.length===1){blob=files[0].blob;filename='curvature-animation.'+current.format;}

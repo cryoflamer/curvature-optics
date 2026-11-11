@@ -204,7 +204,7 @@
       var overlays=guides(config,side,graph);
       return {quality:config.quality,requestedQuality:config.requestedQuality,
         fallback:reason,fallbackCount:fallbackCount,
-        overlays:overlays,result:result};
+        overlays:overlays,result:result,cameraModel:config.model};
     }
     return Object.freeze({build:build,render:render,resetFastFailures:resetFastFailures});
   }

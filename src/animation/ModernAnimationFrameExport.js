@@ -6,10 +6,13 @@
 (function(root,factory){
   var projects=root.CurvatureModernAnimationProject;
   if(typeof module==='object'&&module.exports)projects=require('./ModernAnimationProject');
-  var api=factory(projects);
+  var hud=root.CurvatureModernAnimationCanvasHud;
+  if(typeof module==='object'&&module.exports)
+    hud=require('./ModernAnimationCanvasHud');
+  var api=factory(projects,hud);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationFrameExport=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,hud){
   'use strict';
   var MAX_FRAMES=751,MAX_ARCHIVE_BYTES=192*1024*1024;
   // Shared sizing/FPS policy for PNG and future video frames. Video has an
@@ -26,6 +29,8 @@
   }
   function plan(project,options){
     var owned=projects.validate(project),settings=exportSettings(options);
+    if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
+      throw RangeError('Invalid camera HUD export setting');
     var fps=settings.fps,width=settings.width,height=settings.height;
     var durationMs=projects.totalMs(owned);
     var intervals=Math.ceil(durationMs*fps/1000);
@@ -36,7 +41,8 @@
     // Endpoint is explicit. For 5 seconds at 25 fps this is 126 PNGs,
     // representing [0, 40, ..., 4960, 5000] milliseconds.
     return Object.freeze({project:owned,fps:fps,width:width,height:height,
-      durationMs:durationMs,timesMs:Object.freeze(times),
+      durationMs:durationMs,cameraHud:!!(options&&options.cameraHud===true),
+      timesMs:Object.freeze(times),
       sides:Object.freeze(owned.baseExperiment.display.mode==='compare'?['A','B']:['A'])});
   }
   function ascii(value){return new TextEncoder().encode(value);}
@@ -124,12 +130,17 @@
   function pad(index){return String(index).padStart(5,'0');}
   // Common optical quality + opaque Canvas contract, before either PNG
   // serialization or creation of a VideoFrame. Never use a Fast frame here.
-  function prepareCanvas(image,width,height){
+  function prepareCanvas(image,width,height,showHud){
     if(!image||image.quality!=='accurate'||(image.metrics&&
       image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
       image.canvas.width!==width||image.canvas.height!==height)
       throw Error('Export frame is not Accurate RK4 at fixed resolution');
-    return compositeOpaqueWhite(image.canvas);
+    compositeOpaqueWhite(image.canvas);
+    if(showHud){
+      if(!hud||typeof hud.paint!=='function')throw Error('Camera HUD painter unavailable');
+      hud.paint(image.canvas,image.cameraModel);
+    }
+    return image.canvas;
   }
   // A timestamp is independent of its neighbors. Both the single-worker
   // runner and parallel workers use the same painting, compositing, PNG
@@ -146,7 +157,7 @@
       if(cancel&&cancel.cancelled)return null;
       var side=p.sides[j],image=await render(sample,side,{width:p.width,height:p.height,
         index:index,timeMs:time});
-      prepareCanvas(image,p.width,p.height);
+      prepareCanvas(image,p.width,p.height,p.cameraHud);
       var bytes=await toPng(image.canvas);
       if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
         throw Error('Invalid PNG data from export Canvas');
@@ -191,6 +202,7 @@
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
       endpointIncluded:true,sides:p.sides.slice(),backgroundColor:'#ffffff',
       frameCount:frames.length,frames:frames};
+    if(p.cameraHud)manifest.cameraHudIncluded=true;
     if(exportInfo){
       if(!Number.isInteger(exportInfo.workers)||exportInfo.workers<1||exportInfo.workers>4||
         !Number.isFinite(exportInfo.renderElapsedMs)||exportInfo.renderElapsedMs<0)
