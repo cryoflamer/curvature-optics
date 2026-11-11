@@ -572,3 +572,15 @@ using isolated fixed-size canvases and packaged into a ZIP with a timestamped
 manifest. This is a **PNG sequence**, not a video file; see
 [`modern-animation-frame-export.md`](modern-animation-frame-export.md) for the
 explicit endpoint, archive, cancellation, memory limits and browser acceptance.
+
+### Library gallery interaction
+
+Each saved animation card is directly interactive: a single click selects the
+record for **Export selected** without changing the animation being edited;
+a double-click opens it through the same guarded New/Open lifecycle. Focus a
+card and press **Space** to select or **Enter** to open. **Rename** and
+**Delete** stay explicit buttons and do not trigger card interactions when
+clicked or used with the keyboard. A short gallery hint describes these
+shortcuts. Selecting a card updates its highlight and export availability
+without rebuilding the gallery DOM, preserving browser double-click detection,
+keyboard focus, and horizontal scroll position.

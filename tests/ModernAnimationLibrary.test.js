@@ -358,8 +358,24 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
     nodes().find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
     assert.equal(calls.at(-1),value);
   }
-  nodes().find(n=>n.tagName==='button'&&n.textContent==='Open').listeners.click();
+  const card=nodes().find(n=>n.tagName==='article'&&n.className.includes('modern-animation-library-card'));
+  assert.equal(card.tabindex,'0');
+  assert.equal(card.role,'group');
+  assert.equal(nodes().some(n=>n.tagName==='button'&&n.textContent==='Select'),false);
+  assert.equal(nodes().some(n=>n.tagName==='button'&&n.textContent==='Open'),false);
+  card.listeners.click({target:card});
+  assert.deepEqual(calls.at(-1),['select','animation_a']);
+  card.listeners.dblclick({target:card});
   assert.deepEqual(calls.at(-1),['open','animation_a']);
+  card.listeners.keydown({target:card,key:' ',preventDefault(){}});
+  assert.deepEqual(calls.at(-1),['select','animation_a']);
+  card.listeners.keydown({target:card,key:'Enter',preventDefault(){}});
+  assert.deepEqual(calls.at(-1),['open','animation_a']);
+  const nestedButton=nodes().find(n=>n.tagName==='button'&&n.textContent==='Rename');
+  const countBefore=calls.length;
+  card.listeners.dblclick({target:{tagName:'BUTTON',parentNode:card}});
+  card.listeners.keydown({target:{tagName:'BUTTON',parentNode:card},key:'Enter'});
+  assert.equal(calls.length,countBefore);
   nodes().find(n=>n.tagName==='button'&&n.textContent==='Delete').listeners.click();
   assert.deepEqual(calls.at(-1),['delete','animation_a']);
   nodes().find(n=>n.tagName==='button'&&n.textContent==='Rename').listeners.click();

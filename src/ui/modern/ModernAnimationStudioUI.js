@@ -172,7 +172,7 @@
     var row=el(doc,'div','modern-animation-library-controls');
     function action(label,description,callback,disabled){
       var control=button(doc,label,description,callback);control.disabled=!!disabled;
-      row.appendChild(control);
+      row.appendChild(control);return control;
     }
     action('New project','Start a separate empty animation without modifying saved projects',
       actions.newProject,options.busy);
@@ -180,8 +180,9 @@
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
     action('Save As','Save an independent copy with a new project ID',actions.saveAs,
       options.busy||!options.canSave);
-    action('Export selected','Export the selected named animation as portable JSON',actions.exportSelected,
+    var exportSelected=action('Export selected','Export the selected named animation as portable JSON',actions.exportSelected,
       options.busy||!entries.some(function(e){return e.id===options.selectedId;}));
+    exportSelected.className+=' modern-animation-library-export-selected';
     action('Export all','Export all saved animations as portable JSON',actions.exportAll,
       options.busy||!entries.length);
     var importInput=el(doc,'input');importInput.type='file';importInput.accept='.json,application/json';
@@ -261,6 +262,8 @@
     if(!entries.length){host.appendChild(el(doc,'p','modern-animation-library-empty',
       'No saved animations yet. Prepare an animation and use Save animation to keep it here.'));return;}
     if(options.expanded===false)return;
+    host.appendChild(el(doc,'p','modern-animation-library-hint',
+      'Click a card to select · Double-click to open · Enter to open · Space to select'));
     var list=el(doc,'div','modern-animation-library-gallery');
     list.setAttribute('aria-label','Saved animation projects');
     entries.forEach(function(entry){
@@ -268,6 +271,32 @@
       var card=el(doc,'article','modern-animation-library-card'+(selected?' is-selected':'')+
         (entry.id===options.activeId?' is-editing':''));
       card.setAttribute('data-animation-id',entry.id);
+      card.setAttribute('tabindex','0');
+      card.setAttribute('role','group');
+      card.setAttribute('aria-label',(selected?'Selected animation: ':'Animation: ')+p.name+
+        '. Click to select, double-click or press Enter to open.');
+      function insideControl(event){
+        var target=event&&event.target;
+        while(target&&target!==card){
+          if(/^(BUTTON|INPUT|TEXTAREA|SELECT)$/.test(String(target.tagName||'').toUpperCase()))return true;
+          target=target.parentNode;
+        }
+        return false;
+      }
+      card.addEventListener('click',function(event){
+        if(!insideControl(event))actions.select(entry.id);
+      });
+      card.addEventListener('dblclick',function(event){
+        if(!insideControl(event)&&!options.busy)actions.open(entry.id);
+      });
+      card.addEventListener('keydown',function(event){
+        if(insideControl(event))return;
+        if(event.key==='Enter'&&!options.busy){
+          if(event.preventDefault)event.preventDefault();actions.open(entry.id);
+        }else if(event.key===' '||event.key==='Spacebar'){
+          if(event.preventDefault)event.preventDefault();actions.select(entry.id);
+        }
+      });
       var visual=historyUI.frameVisual(doc,{name:p.name,experiment:p.baseExperiment,
         thumbnail:entry.thumbnail},'modern-animation-library-visual');
       if(!entry.thumbnail)visual.appendChild(el(doc,'small','modern-animation-library-no-preview',
@@ -304,10 +333,6 @@
         card.appendChild(editor);
       }else{
         var controls=el(doc,'div','modern-animation-library-card-actions');
-        var select=button(doc,'Select','Select saved animation '+p.name,function(){actions.select(entry.id);});
-        select.setAttribute('aria-pressed',String(selected));controls.appendChild(select);
-        var open=button(doc,'Open','Open saved animation '+p.name,function(){actions.open(entry.id);});
-        open.disabled=!!options.busy;controls.appendChild(open);
         var rename=button(doc,'Rename','Rename saved animation '+p.name,function(){actions.renameStart(entry.id);});
         rename.disabled=!!options.busy;controls.appendChild(rename);
         var remove=button(doc,'Delete','Delete saved animation '+p.name,function(){actions.remove(entry.id);});

@@ -1069,7 +1069,22 @@
         studioLibrary.findDuplicates(studioLibraryEntries):[],
       message:studioLibraryMessage,error:studioLibraryError
     },{
-      select:function(id){studioLibrarySelected=id;renderStudioLibrary();},
+      select:function(id){
+        studioLibrarySelected=id;
+        // Keep the card DOM stable between clicks so the browser can dispatch dblclick.
+        // Rebuilding the gallery after the first click would swallow double-clicks.
+        if(host&&host.querySelectorAll){
+          Array.prototype.forEach.call(host.querySelectorAll('.modern-animation-library-card'),function(card){
+            var chosen=card.getAttribute('data-animation-id')===id;
+            card.classList.toggle('is-selected',chosen);
+            var title=card.querySelector('.modern-animation-library-card-title');
+            card.setAttribute('aria-label',(chosen?'Selected animation: ':'Animation: ')+
+              (title?title.textContent:'')+'. Click to select, double-click or press Enter to open.');
+          });
+          var exportButton=host.querySelector('.modern-animation-library-export-selected');
+          if(exportButton)exportButton.disabled=!!studioLibraryBusy||!studioLibraryEntries.some(function(e){return e.id===id;});
+        }
+      },
       toggleExpanded:function(){studioLibraryExpanded=!studioLibraryExpanded;renderStudioLibrary();},
       toggleDuplicates:function(){studioLibraryShowDuplicates=!studioLibraryShowDuplicates;renderStudioLibrary();},
       openDuplicate:function(){if(studioLibraryDuplicate)requestStudioSwitch('open',studioLibraryDuplicate.id);},

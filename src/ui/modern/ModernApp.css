@@ -802,7 +802,10 @@ button{cursor:pointer}
 .modern-animation-library-gallery{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
   margin:10px 0 0;padding:2px 2px 10px;scrollbar-width:thin}
 .modern-animation-library-card{box-sizing:border-box;flex:0 0 226px;min-width:0;
-  border:1px solid #d0deec;border-radius:8px;overflow:hidden;background:white}
+  border:1px solid #d0deec;border-radius:8px;overflow:hidden;background:white;cursor:pointer}
+.modern-animation-library-card:focus-visible{outline:2px solid #2371bc;outline-offset:2px}
+.modern-animation-library-hint{margin:8px 0 0;color:#627b96;font-size:11px}
+.modern-animation-library-card button,.modern-animation-library-card input{cursor:auto}
 .modern-animation-library-card.is-selected{border-color:#3182ce;box-shadow:0 0 0 2px #b4d8f5}
 .modern-animation-library-card.is-editing{border-color:#5a9fca}
 .modern-animation-library-visual{position:relative;height:115px;display:flex;
