@@ -17,6 +17,11 @@ The drag mode is fixed on pointer-down. Both viewports in Compare receive
 exactly the same height, East and North position, Pan/Nick/Roll and focal length;
 only the A/B surface and atmospheric profiles differ.
 
+The shared read-only camera readout contract, including effective Pitch versus
+Nick and surface-arc distance, is defined in
+[`modern-camera-telemetry.md`](modern-camera-telemetry.md). A persistent
+on-image HUD and a controls reminder are separate follow-up UI work.
+
 ## Physical meaning
 
 `CameraEast` and `CameraNorth` are the observer's signed surface-arc displacement

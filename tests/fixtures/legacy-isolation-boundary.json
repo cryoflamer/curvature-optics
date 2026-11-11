@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 83,
-      "uniqueScripts": 81,
+      "scriptTags": 84,
+      "uniqueScripts": 82,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -166,6 +166,7 @@
         "src/ui/modern/ModernCameraInteraction.js",
         "src/ui/modern/ModernCameraNavigation.js",
         "src/ui/modern/ModernApplicationPreferences.js",
+        "src/camera/ModernCameraTelemetry.js",
         "src/camera/ModernCameraInterpolator.js",
         "src/camera/ModernCameraSequence.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
@@ -340,6 +341,7 @@
       "src/animation/ModernAnimationVideoPipeline.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
+      "src/camera/ModernCameraTelemetry.js",
       "src/geometry/CurvatureCameraTranslation.js",
       "src/optics/OpticalConformalPredictor.js",
       "src/optics/OpticalFastRayField.js",
@@ -397,7 +399,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 169,
+  "sourceJsCount": 170,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -738,11 +740,13 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationPreview.js",
-        "src/app/CurvatureMainCanvasRenderer.js"
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/camera/ModernCameraTelemetry.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAngularGuide.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
+        "tests/ModernCameraTelemetry.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalCurvatureCamera127.test.js"
@@ -810,7 +814,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernCameraInterpolator.test.js",
-        "tests/ModernCameraNavigation.test.js"
+        "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCameraTelemetry.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -826,6 +831,16 @@
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/camera/ModernCameraTelemetry.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraTelemetry.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2271,6 +2286,7 @@
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCameraTelemetry.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentState.test.js",

@@ -1,0 +1,75 @@
+# Modern camera telemetry (shared model)
+
+Modern Scene, Compare A/B and Animation Studio need the same camera readout,
+including when the Camera sidebar is collapsed or towers are outside the image.
+The read-only `src/camera/ModernCameraTelemetry.js` module is the single source
+for numeric measurements and displayed units; it does not draw a HUD or change
+camera controls in this stage. It depends only on the existing physical camera
+(`CurvaturePhysicalCamera`) for the camera's actual aim angle.
+
+## Numerical contract
+
+`CurvatureModernCameraTelemetry.measure(updatedPhysicalModel)` returns a frozen
+object with raw, unrounded measurements. **Pass the exact model used to paint
+that viewport or animation frame, after `model.Update()`**; for an animation
+sample, build/update its dedicated model before measuring. A draft keyframe's
+`FocalLengthField` alone is not the rendered diagonal FOV.
+
+| Property | Meaning |
+| --- | --- |
+| `geometry` | `'globe'` for Modern physical model 1, `'flat'` for model 2 |
+| `heightMeters` | Observer height above the local physical surface (not world Z) |
+| `eastMeters`, `northMeters` | Signed observer offsets from the *authored scene origin* in local surface-arc metres |
+| `distanceFromOriginMeters` | `hypot(eastMeters, northMeters)`; shortest origin-to-observer surface arc in the supported Globe camera frame, or planar distance on Flat |
+| `headingDegrees` | **Signed `Pan`**, relative to the transported local North axis, 0° = forward/North and +90° = East; preserves the Camera sidebar value (not wrapped to compass 0–360°) |
+| `nickDegrees` | Raw Camera `Nick`; not necessarily the physical optical-axis pitch |
+| `aimDipDegrees` | The selected aim-mode offset from `CurvaturePhysicalCamera.create(model).aimDip`, expressed in degrees |
+| `pitchDegrees` | Actual camera optical-axis elevation from the **local tangent horizontal**: `Nick − aimDipDegrees`; positive is up |
+| `rollDegrees` | Camera `Roll` relative to the viewing axis |
+| `fovDegrees` | **Diagonal** field of view from the updated model's `camViewAngle` in radians; not horizontal/vertical FOV |
+
+### Globe versus Flat
+
+`CameraEast` and `CameraNorth` denote surface-arc displacements, as in
+`CurvatureCameraTranslation.frame`, not world-space straight-line coordinates.
+On a globe their hypotenuse is an arc distance, **not** a surface chord or a
+slant range. Height means local surface altitude on both geometries. This
+readout does not compute distance to the towers, optical horizon, or geometric
+centre of the authored objects. The scene origin is fixed when the observer
+moves; geometry and objects are not recentered in the source experiment.
+
+Physical camera modes: 0 = globe geometric horizon dip; 1 = flat reference
+angle; 2 = their average; 3 = local eye-level. For Flat geometry, mode 0 dip
+is zero. Compare A/B forces mode 3; with a shared camera pose, both sides show
+identical position/orientation telemetry even though their physical surfaces
+may differ. For other aim modes, moving Height can also change the **effective
+pitch**, because the aim offset depends on observer height and geometry.
+The dip is *geometric framing*, not a traced RK4 horizon or an atmospheric
+refraction estimate. The readout never promises that a horizon or object is
+visible.
+
+## Formatting, integration and scope
+
+`CurvatureModernCameraTelemetry.format(measurement)` returns a frozen object
+with strings for Height, Distance, East, North, Heading, Pitch, Nick, Roll and
+FOV. `formatLength()` displays metres (two decimals below 10 m, one decimal
+at or above 10 m) and kilometres (two decimals at/above 1000 m).
+`formatAngle()` preserves small degrees down to four decimal places; the
+values are intentionally deterministic and locale-independent for future
+DOM, Canvas and export parity. **Keep raw measurements for computations.**
+
+Consumers should derive samples from the viewport's own rendered model:
+
+- Scene uses its current updated model, including navigation state.
+- Compare uses its two updated physical models (eye-level aim for both).
+- Animation Studio uses its isolated, per-timestamp render model, not the
+  current Scene sidebar or a cached draft keyframe.
+- During uncommitted drag/keyboard CSS previews, the UI must supply the
+  **effective interim camera state**, not the previous finished RK4 frame.
+
+Persistent on-screen HUD, per-viewport UI state, a controls help strip, and
+PNG/WebM/MP4 compositing are later stages. No experiment schema, preferences,
+Legacy code or optical rendering changes are made here. Disabling a future
+HUD must preserve existing exported pixels.
+
+Tests: `node --test tests/ModernCameraTelemetry.test.js`.
