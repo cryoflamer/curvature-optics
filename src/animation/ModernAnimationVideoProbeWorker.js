@@ -2,7 +2,7 @@
  * A dedicated Worker is essential because main-thread support is insufficient.
  */
 'use strict';
-importScripts('ModernAnimationVideoCapabilities.js');
+importScripts('ModernAnimationWebMMuxer.js','ModernAnimationVideoCapabilities.js');
 self.onmessage=async function(event){
   var data=event&&event.data;
   if(!data||data.type!=='probe')return;

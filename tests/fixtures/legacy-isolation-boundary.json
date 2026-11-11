@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 82,
-      "uniqueScripts": 80,
+      "scriptTags": 83,
+      "uniqueScripts": 81,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -196,6 +196,7 @@
         "src/animation/ModernAnimationBackgroundExport.js",
         "src/animation/ModernAnimationVideoPipeline.js",
         "src/animation/ModernAnimationVideoCapabilities.js",
+        "src/animation/ModernAnimationBackgroundVideoExport.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
@@ -325,6 +326,7 @@
     ],
     "loadedByModernNotLegacy": [
       "src/animation/ModernAnimationBackgroundExport.js",
+      "src/animation/ModernAnimationBackgroundVideoExport.js",
       "src/animation/ModernAnimationCompatibility.js",
       "src/animation/ModernAnimationDraftAutosave.js",
       "src/animation/ModernAnimationFrameExport.js",
@@ -380,7 +382,9 @@
       "src/Slider.js",
       "src/animation/ModernAnimationArchiveWorker.js",
       "src/animation/ModernAnimationFrameWorker.js",
+      "src/animation/ModernAnimationVideoEncoderWorker.js",
       "src/animation/ModernAnimationVideoProbeWorker.js",
+      "src/animation/ModernAnimationWebMMuxer.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/jsg.js",
@@ -391,7 +395,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 164,
+  "sourceJsCount": 167,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -457,9 +461,21 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationBackgroundVideoExport.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundExport.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationBackgroundVideoExport.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationBackgroundVideoExport.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -555,6 +571,7 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundExport.test.js",
+        "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationLibrary.test.js",
@@ -562,6 +579,7 @@
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js"
       ],
       "commonJsToolCallers": []
@@ -598,12 +616,22 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/animation/ModernAnimationVideoEncoderWorker.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
     "src/animation/ModernAnimationVideoPipeline.js": {
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationBackgroundVideoExport.js"
+      ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationBackgroundVideoExport.test.js",
+        "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js"
       ],
       "commonJsToolCallers": []
@@ -612,6 +640,14 @@
       "directHtmlLoads": [],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationWebMMuxer.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationWebMMuxer.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/app/CurvatureAppRuntime.js": {
@@ -2238,6 +2274,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/ModernAngularGuide.test.js",
         "tests/ModernAnimationBackgroundExport.test.js",
+        "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationLibrary.test.js",
@@ -2246,6 +2283,7 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
@@ -2361,6 +2399,7 @@
         "tests/CurvatureCameraTranslation.test.js",
         "tests/LegacyModernBoundary.test.js",
         "tests/ModernAnimationBackgroundExport.test.js",
+        "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationLibrary.test.js",
@@ -2369,6 +2408,7 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",

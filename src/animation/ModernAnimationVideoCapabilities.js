@@ -45,7 +45,9 @@
         supported:supported,reason:reason});
     }
     return {offscreenCanvas2d:canvas2d,videoFrame:frame,videoEncoder:encoder,
-      codecs:results,containerMuxerInstalled:false};
+      codecs:results,containerMuxerInstalled:!!(runtime&&
+        runtime.CurvatureModernAnimationWebMMuxer&&
+        typeof runtime.CurvatureModernAnimationWebMMuxer.create==='function')};
   }
   function probe(settings){
     settings=settings||{};

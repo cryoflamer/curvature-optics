@@ -56,6 +56,7 @@ test('actual video probe Worker entry point imports capability source and report
   assert.equal(result.type,'video-capabilities');
   assert.equal(result.report.codecs[0].supported,true);
   assert.equal(result.report.codecs[1].supported,false);
+  assert.equal(result.report.containerMuxerInstalled,true);
   assert.equal(root.document,undefined);
 });
 test('capability probe controller creates, uses and terminates worker',async()=>{

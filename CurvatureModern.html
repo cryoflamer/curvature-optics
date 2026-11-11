@@ -84,6 +84,7 @@
 <script src="src/animation/ModernAnimationBackgroundExport.js"></script>
 <script src="src/animation/ModernAnimationVideoPipeline.js"></script>
 <script src="src/animation/ModernAnimationVideoCapabilities.js"></script>
+<script src="src/animation/ModernAnimationBackgroundVideoExport.js"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
@@ -232,6 +233,28 @@
         </div>
         <progress id="ModernAnimationFrameExportProgress" max="100" value="0" aria-label="PNG export progress"></progress>
         <p id="ModernAnimationFrameExportStatus" role="status" aria-live="polite">Add at least two compatible keyframes. Export uses the current draft or prepared project.</p>
+      </details>
+      <details id="ModernAnimationVideoExportSection" class="modern-animation-frame-export">
+        <summary>Export WebM video · deterministic (offline)</summary>
+        <p>Offline VP9 video from Accurate RK4 frames, rendered in background workers and encoded in a separate Worker. No screen recording. For Compare A/B, a single ZIP contains two synchronized WebM files.</p>
+        <div class="modern-animation-frame-export-controls">
+          <label for="ModernAnimationVideoExportFps">FPS
+            <select id="ModernAnimationVideoExportFps"><option value="10">10</option><option value="25" selected>25</option><option value="30">30</option><option value="5">5</option></select>
+          </label>
+          <label for="ModernAnimationVideoExportSize">Frame size
+            <select id="ModernAnimationVideoExportSize"><option value="640x360">640 × 360</option><option value="960x540" selected>960 × 540</option><option value="1280x720">1280 × 720</option></select>
+          </label>
+          <label for="ModernAnimationVideoExportWorkers">Render workers
+            <select id="ModernAnimationVideoExportWorkers"><option value="auto" selected>Auto (up to 4)</option><option value="1">1 · baseline</option><option value="2">2</option><option value="4">4</option></select>
+          </label>
+          <label for="ModernAnimationVideoExportQuality">VP9 quality
+            <select id="ModernAnimationVideoExportQuality"><option value="standard" selected>Standard</option><option value="high">High bitrate</option></select>
+          </label>
+          <button type="button" id="ModernAnimationVideoExportStart">Render WebM</button>
+          <button type="button" id="ModernAnimationVideoExportCancel" disabled>Cancel export</button>
+        </div>
+        <progress id="ModernAnimationVideoExportProgress" max="100" value="0" aria-label="WebM export progress"></progress>
+        <p id="ModernAnimationVideoExportStatus" role="status" aria-live="polite">Add at least two compatible keyframes. Video export uses the current draft or prepared project.</p>
       </details>
       <p id="ModernAnimationPlaybackStatus" class="modern-studio-hint" role="status" aria-live="polite">Prepared project ready for preview.</p>
     </section>

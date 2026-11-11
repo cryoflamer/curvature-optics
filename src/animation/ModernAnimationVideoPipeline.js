@@ -70,7 +70,15 @@
         // renders may safely reuse it after VideoFrame construction.
         result.frames[side]=new FrameCtor(image.canvas,{timestamp:timing.timestampUs,
           duration:timing.durationUs});
-        if(image.metrics)result.stats[side]=image.metrics;
+        if(image.metrics){
+          // Raw optical diagnostics may contain large caches or uncloneable
+          // references. Transfer only scalar telemetry with the VideoFrame.
+          var m=image.metrics,t=m.timings||{};
+          result.stats[side]={opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
+            unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,
+            fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
+            budgetExceeded:!!m.budgetExceeded,cacheReused:!!m.cacheReused};
+        }
       }
       if(cancel&&cancel.cancelled){closeFrames(result);return null;}
       return result;
@@ -95,6 +103,20 @@
     }
     function available(){return closed?0:capacity-pending.size;}
     function completed(){return !closed&&next===p.frameCount&&pending.size===0;}
+    function drain(){
+      if(closed)return {completed:next,total:p.frameCount,buffered:0,available:0};
+      try{
+        while(pending.has(next)){
+          var current=pending.get(next);
+          if(typeof options.canConsume==='function'&&!options.canConsume(current))break;
+          pending.delete(next);
+          try{options.consume(current);}finally{release(current);}
+          next++;
+        }
+      }catch(error){cancel();throw error;}
+      return {completed:next,total:p.frameCount,buffered:pending.size,
+        available:available()};
+    }
     function offer(value){
       if(closed)throw Error('Video frame buffer is closed');
       if(!value||!Number.isInteger(value.index)||value.index<next||
@@ -109,17 +131,9 @@
       if(!available()&&value.index!==next)
         throw Error('Video reorder buffer full: apply backpressure');
       pending.set(value.index,value);
-      try{
-        while(pending.has(next)){
-          var current=pending.get(next);pending.delete(next);
-          try{options.consume(current);}finally{release(current);}
-          next++;
-        }
-      }catch(error){cancel();throw error;}
-      return {completed:next,total:p.frameCount,buffered:pending.size,
-        available:available()};
+      return drain();
     }
-    return Object.freeze({offer:offer,cancel:cancel,available:available,
+    return Object.freeze({offer:offer,drain:drain,cancel:cancel,available:available,
       completed:completed,nextIndex:function(){return next;}});
   }
   return Object.freeze({plan:plan,renderTimestamp:renderTimestamp,

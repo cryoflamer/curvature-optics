@@ -1,83 +1,31 @@
-# Deterministic video export — pipeline foundation
+# Deterministic video export — VP9 WebM
 
-Status: **foundation only**. This change does **not** add a Render Video button,
-`VideoEncoder` run, WebM/MP4 muxer, or downloadable video. The proven PNG export
-remains the only user-facing offline export.
+Status: **VP9 WebM implemented**, subject to a real Opera acceptance test.
+The PNG ZIP export, Scene, Compare, and interactive Animation Playback remain
+independent. MP4/H.264 is not implemented yet.
 
-## Why a separate timeline?
+## User workflow
 
-The PNG sequence is a set of stills and includes both endpoints. A 5-second
-animation at 25 FPS produces 126 PNG images at 0, 40, ..., 5000 ms. Playing
-126 images with 40-ms display intervals would instead produce a 5.04-second
-video. The video timeline has **125 presentation intervals** of 40 ms: 0–40,
-40–80, ..., 4960–5000 ms. To ensure the endpoint is visibly represented, the
-last interval is painted from the exact **5000-ms physical state**, but retains
-its 4960-ms presentation timestamp. This is an explicit video presentation
-policy: the physical sample for the final interval is up to one nominal frame
-later than its display timestamp. It avoids either adding time or omitting the
-final Flat state. For a very short, one-frame video, only one physical sample
-can be displayed (the initial sample); a video cannot display two distinct
-states in a single frame. The PNG timeline, frame names and manifests do not
-change. For 30 FPS, microsecond presentation boundaries are rounded from
-`index * 1_000_000 / fps` separately, preventing accumulated drift. The last
-frame's duration is truncated to match the exact requested animation length.
+In `CurvatureModern.html`, open Animation Studio and prepare an animation with at
+least two compatible keyframes. In the independent playback stage expand
+**Export WebM video · deterministic (offline)**. Select FPS (5/10/25/30), fixed
+resolution (640×360, 960×540, 1280×720), render Worker count (Auto, 1, 2, 4),
+and VP9 bitrate (Standard, High). Click **Render WebM**. The progress bar counts
+video frames submitted to the encoder; after the last frame, the status changes
+to VP9 flush and WebM muxing. **Cancel export** terminates render and encoder
+workers immediately and prevents a partial download. A valid current draft can
+be exported without first preparing live Playback.
 
-## New modules
+Scene exports one `curvature-animation.webm` without audio. Compare A/B renders
+both models on identical timestamps and downloads one
+`curvature-animation-webm-compare.zip` containing `curvature-animation-A.webm`,
+`curvature-animation-B.webm`, and `manifest.json`. This avoids browsers blocking
+a second simultaneous download. ZIP is assembled in the encoder Worker.
 
-- `ModernAnimationVideoPipeline.js`: validates the same fixed-resolution/FPS
-  presets as PNG, but maintains an **independent** timestamped video plan and
-  frame-count guard; samples `ModernAnimationProject` at each scheduled
-  timestamp, renders an Accurate RK4 optical frame using the existing painter,
-  invokes the same `ModernAnimationFrameExport.prepareCanvas()` validator and
-  white `destination-over` compositor as PNG, and constructs an uncompressed
-  transferable `VideoFrame` directly from that Canvas. It never invokes
-  `convertToBlob`, `toBlob`, PNG decoding or a screen-recording clock.
-- `ModernAnimationVideoCapabilities.js`: prepares VP9 and H.264 candidate
-  configurations and asks `VideoEncoder.isConfigSupported()` **inside a
-  dedicated Worker**, separately for each. It also checks `OffscreenCanvas`
-  2D and `VideoFrame` there. A codec advertised by a browser is not guaranteed
-  to work for a given resolution, profile or machine. Codec support alone does
-  not mean a WebM/MP4 muxer is present. The diagnostic explicitly reports
-  `containerMuxerInstalled: false`.
-- `ModernAnimationVideoProbeWorker.js`: worker-only entry point for the
-  diagnostic; does not render or encode. Loaded on demand, not at page start.
-- `ModernAnimationFrameExport.js`: exposes its existing sizing policy and
-  reusable Accurate-RK4/opaque-Canvas guard for **both** export paths. PNG
-  rendering and encoding still follow the previous implementation.
-
-The browser page loads both foundation APIs but **does not wire any new user
-controls**. The existing parallel PNG frame workers and ZIP worker are
-unchanged. The next stage will attach the video protocol to the actual
-render worker and add a dedicated encoder/muxer worker.
-
-## Ordered handoff, lifetime and memory
-
-VideoFrame objects are large and **transferable**, not serializable PNG
-strings. Multiple renderer workers can finish timestamps in any order. The
-`orderedGate(plan, {capacity, consume})` accepts completed per-timestamp
-bundles, including synchronized Compare A/B sides, holds at most `capacity`
-out-of-order bundles (default 8, maximum 16), validates frame identities and
-microsecond timestamps, and synchronously calls `consume()` in timestamp
-order. It calls `VideoFrame.close()` on every consumed, cancelled or abandoned
-buffered frame. `consume` must enqueue the frame **synchronously** and must
-never retain it; a future encoder owns its **own internal queue** and must use
-`encodeQueueSize`/`dequeue` to exert backpressure. The scheduling coordinator
-must leave room for the earliest still-in-flight timestamp, which is always
-accepted by the gate even if later frames fill it. `available() === 0` means
-stop dispatching additional out-of-order work; it does not prohibit delivering
-the missing head. An offered frame rejected due to capacity/validation remains
-owned by its caller, which must close or retry it. A gate is a planning
-primitive, not yet a streaming encoder implementation.
-
-To avoid uncontrolled buffering in the next stage, schedule bounded outstanding
-frames, send transferable VideoFrame instances directly between workers, close
-all frames on errors/Cancel, and limit both the reorder queue **and** WebCodecs
-`encodeQueueSize`. Avoid allocating a full animation of RGBA images in memory.
-A 1280×720 RGBA frame uses about 3.5 MiB before overhead.
-
-## Opera diagnostic before implementing the encoder
-
-With `CurvatureModern.html` open in Opera and developer tools Console visible:
+The browser must support WebCodecs `VideoEncoder` with VP9, `VideoFrame` and
+`OffscreenCanvas` inside dedicated Workers. A codec advertised by
+`VideoEncoder.isConfigSupported()` still needs an actual encode test. In Opera,
+probe with:
 
 ```js
 await CurvatureModernAnimationVideoCapabilities.probe({
@@ -85,42 +33,83 @@ await CurvatureModernAnimationVideoCapabilities.probe({
 })
 ```
 
-The promise returns a report with per-codec `supported` flags and reasons,
-`videoEncoder`, `videoFrame`, and `offscreenCanvas2d`. A VP9-supported result
-is **only a prerequisite** for WebM export; it does not yet make the app
-capable of creating a video. If both codecs are unsupported, an explicit
-message and/or alternative encoder policy will be needed before UI activation.
-The capability probe is not an actual encode test. `file://` Worker restrictions
-or other browser security settings can prevent the probe from loading; serve
-the project through the normal local HTTP server.
+`containerMuxerInstalled` reports whether the WebM muxer is available in the
+probe worker. It does not mean MP4 is implemented, even if H.264 is supported.
 
-## Validation and remaining work
+## Clock and physics policy
 
-`node --test tests/ModernAnimationVideoPipeline.test.js tests/ModernAnimationVideoCapabilities.test.js`
-checks endpoint policy, exact 25/30-FPS time intervals, Compare A/B side
-identity, shared RK4 validation and opaque compositing, direct VideoFrame
-construction without PNG, failure/cancellation frame disposal, bounded
-out-of-order delivery, and a real VM-loaded dedicated probe script. The
-production PNG test suite and legacy boundary audit must still pass.
+Every frame is calculated from a self-contained project using **Accurate RK4**
+in independent workers. No Fast fallback or real-time screen recording is used.
+The same opaque white compositing and exact-size Canvas validation as the PNG
+pipeline run before making `VideoFrame` objects. Raw optical diagnostic cache
+objects are never posted across Worker boundaries.
 
-**Not yet implemented or verified:** a browser-executed `VideoFrame` made from
-a physical Accurate RK4 `OffscreenCanvas`; codec/bitrate negotiation on the
-actual Opera machine; `VideoEncoder` event and queue backpressure; WebM/MP4
-container writing; timestamps inside the muxed file; actual downloaded video;
-background encoding, end-to-end Cancel, and visual quality comparisons.
-Pixel-identical input canvases should be preserved, but compressed VP9/H.264
-frames are generally **not** pixel-identical to the lossless PNGs.
+The PNG sequence keeps both endpoints: 5 seconds at 25 FPS means 126 PNGs.
+For video, there are 125 **presentation intervals**, each with a timestamp and
+duration. The last interval is painted from the exact final physical state
+(5000 ms) but has presentation timestamp 4960 ms and duration 40 ms. This
+explicit policy yields a 5.000-second video, with a visible final Flat state,
+without adding an extra frame. For 30 FPS, boundaries are independently rounded
+to integer microseconds. This intentionally prioritizes displaying the final
+state over sampling the last interval at its presentation time.
 
-## Next patches
+VP9 uses lossy compression: decoded video pixels are not expected to match
+lossless PNG pixel-for-pixel, but changing Worker count must not change the
+source Canvas or physical sampling. The encoder inserts a keyframe at least
+every two seconds, allowing normal seeking.
 
-1. Add a bounded video render/encoder protocol and an actual background WebM
-   VP9 encoder with container muxing, worker lifecycle, progress and Cancel.
-   Keep PNG path unchanged and preserve Scene and Compare A/B semantics.
-2. Test actual encoding and muxing in Opera, external playback and timestamps,
-   bitrate/quality tradeoffs and decoded-frame fidelity to PNG.
-3. Add MP4/H.264 only when its worker-side codec capability and muxer have
-   been validated, with explicit graceful handling of unsupported platforms.
+## Module design and memory bounds
 
-References: [MDN WebCodecs](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API),
-[MDN VideoFrame](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame),
-[Chrome WebCodecs guidance](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs).
+- `ModernAnimationFrameWorker.js`: supports existing PNG `init/render` and new
+  `video-init/video-render` without mixing the protocols. Reuses one Accurate
+  RK4 painter per isolated Worker. Posts transferable VideoFrame bundles.
+- `ModernAnimationVideoPipeline.js`: validates the video-specific frame plan,
+  creates opaque VideoFrames and exposes a bounded ordered gate. The gate can
+  pause when WebCodecs queue is full, and resume on `dequeue`. It closes all
+  VideoFrames after enqueue or cancellation.
+- `ModernAnimationBackgroundVideoExport.js`: UI-thread scheduling only, with a
+  maximum of two outstanding timestamp slots per renderer and eight in total.
+  The scheduling window advances only after contiguous frames are accepted by
+  the encoder. All workers are terminated together on failure or Cancel.
+- `ModernAnimationVideoEncoderWorker.js`: checks requested worker-local VP9
+  configuration, owns separate VideoEncoders for A/B, bounds each encode queue
+  to three VideoFrames, flushes on completion, and muxes the compressed data.
+- `ModernAnimationWebMMuxer.js`: writes seekable WebM EBML metadata (finite
+  Segment length, duration, VP9 track, clusters, SimpleBlocks, seek Cues) with
+  no third-party dependencies. Timestamp scale is 1 ms; source timestamps are
+  in microseconds and rounded only for WebM block timecodes.
+
+No uncompressed full-sequence frame buffer is created. The compressed VP9
+chunks accumulate in the encoder Worker until final muxing, with a hard
+**192 MiB per-stream** limit. Compare ZIP uses the existing in-memory ZIP32
+writer and its **192 MiB total** limit. These are intentional safety limits,
+not disk streaming. If a long video exceeds the limit, export fails explicitly.
+
+## Validation / known limitations
+
+Run `node --test tests/ModernAnimationVideo*.test.js
+ tests/ModernAnimationBackgroundVideoExport.test.js` plus full
+`node --test tests/*.test.js` regression. The isolated encoder Worker is run
+in a Node VM with fake asynchronous WebCodecs; its protocol verifies frame
+ordering, A/B synchronization, frame close, flush, failure, and ZIP assembly.
+The WebM muxer was also tested with real VP9 elementary data; `ffprobe`
+identified the video, exact duration and dimensions, and `ffmpeg` decoded
+and sought successfully. **An actual Opera/WebCodecs encode and playback of
+Curvature physical frames is still an acceptance test**. The available
+Chromium environment blocked navigation by administrator policy; browser
+capture was not claimed as a successful integration test.
+
+First Opera acceptance test: Scene Globe → Flat, 640×360, 5 FPS, two Workers.
+The expected five-second video has **25** frames and a visible final Flat.
+Then compare to 25-FPS, 960×540 PNG export (video has 125 intervals; PNG
+has 126 sampled endpoints), inspect quality and seekability. Test Cancel while
+RK4 is running, while encoding is draining, and during final muxing. Test
+Compare A/B and verify both downloaded WebM files can be opened.
+
+Next stage: profile and improve long-run backpressure, measure encode/mux
+latency and output sizes at both bitrate levels, compare decoded frame quality
+against PNGs, and implement a bounded disk-streaming strategy if required.
+MP4/H.264 remains a separate feature after the VP9 path is validated.
+
+Reference: [WebCodecs usage](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API),
+[Chrome Worker guidance](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs).

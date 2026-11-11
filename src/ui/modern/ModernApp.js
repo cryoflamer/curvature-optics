@@ -32,6 +32,9 @@
   var studioFrameExportApi=root.CurvatureModernAnimationFrameExport;
   var studioBackgroundExportApi=root.CurvatureModernAnimationBackgroundExport;
   var studioFrameExportTask=null;
+  var studioVideoExportApi=root.CurvatureModernAnimationBackgroundVideoExport;
+  var studioVideoExportPlan=root.CurvatureModernAnimationVideoPipeline;
+  var studioVideoExportTask=null;
   var studioQualityApi=root.CurvatureModernAnimationQualityAudit;
   var studioQualityAudit=studioQualityApi?studioQualityApi.create():null;
   var studioLastQualityFrame=null;
@@ -1681,8 +1684,9 @@
     var start=newUiEl('ModernAnimationFrameExportStart');
     var cancel=newUiEl('ModernAnimationFrameExportCancel');
     var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
-    if(start)start.disabled=!!studioFrameExportTask||!ready||!studioBackgroundExportApi;
+    if(start)start.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi;
     if(cancel)cancel.disabled=!studioFrameExportTask;
+    syncStudioVideoExportControls();
     var status=newUiEl('ModernAnimationFrameExportStatus');
     if(status&&!studioFrameExportTask){
       if(ready&&status.textContent.indexOf('Add at least two compatible keyframes.')===0)
@@ -1690,6 +1694,89 @@
       else if(!ready&&status.textContent.indexOf('Ready to export.')===0)
         status.textContent='Add at least two compatible keyframes to enable background export.';
     }
+  }
+  function syncStudioVideoExportControls(){
+    var start=newUiEl('ModernAnimationVideoExportStart');
+    var cancel=newUiEl('ModernAnimationVideoExportCancel');
+    var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
+    if(start)start.disabled=!!studioVideoExportTask||!!studioFrameExportTask||
+      !ready||!studioVideoExportApi||!studioVideoExportPlan;
+    if(cancel)cancel.disabled=!studioVideoExportTask;
+    var status=newUiEl('ModernAnimationVideoExportStatus');
+    if(status&&!studioVideoExportTask){
+      if(ready&&status.textContent.indexOf('Add at least two compatible keyframes.')===0)
+        status.textContent='Ready for WebM export · VP9 support is checked in the encoding Worker.';
+      else if(!ready&&status.textContent.indexOf('Ready for WebM export')===0)
+        status.textContent='Add at least two compatible keyframes to export video.';
+    }
+  }
+  function bindStudioVideoExport(){
+    var start=newUiEl('ModernAnimationVideoExportStart');
+    var cancel=newUiEl('ModernAnimationVideoExportCancel');
+    if(!start||!cancel)return;
+    var progress=newUiEl('ModernAnimationVideoExportProgress');
+    function message(text){var node=newUiEl('ModernAnimationVideoExportStatus');
+      if(node)node.textContent=text;}
+    cancel.addEventListener('click',function(){
+      if(!studioVideoExportTask)return;
+      studioVideoExportTask.controller.cancel();
+      message('WebM export cancelled. All render and encoder workers terminated; no video saved.');
+    });
+    start.addEventListener('click',async function(){
+      if(studioVideoExportTask||studioFrameExportTask)return;
+      if(!studioVideoExportApi||!studioVideoExportPlan){
+        message('Video export modules unavailable. Check the browser console.');return;
+      }
+      var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js',
+        hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
+      var task={controller:controller};studioVideoExportTask=task;
+      syncStudioFrameExportControls();
+      if(progress){progress.max=100;progress.value=0;}
+      try{
+        var project=studioPrepared||studioApi.build(studioDraft,'studio_video_export');
+        var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
+        var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
+        var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],height:size[1]});
+        var selected=newUiEl('ModernAnimationVideoExportWorkers').value;
+        var workers=selected==='auto'?'auto':Number(selected);
+        var quality=newUiEl('ModernAnimationVideoExportQuality').value;
+        var started=profileNow();
+        message('Starting VP9 render and encoder workers · '+plan.frameCount+
+          ' video intervals · '+plan.sides.length+' view(s) · Accurate RK4.');
+        var result=await controller.start({project:plan.project,fps:plan.fps,
+          width:plan.width,height:plan.height,workerCount:workers,quality:quality,
+          onReady:function(info){
+            message(info.workers+' render worker(s) ready · VP9 WebM encoding in a separate worker · '+
+              info.total+' video frames. Cancel is available.');
+          },
+          onProgress:function(info){
+            if(progress)progress.value=100*info.submitted/info.total;
+            var elapsed=info.elapsedMs/1000;
+            var left=info.submitted?elapsed*(info.total-info.submitted)/info.submitted:0;
+            message('VP9 submitted '+info.submitted+' / '+info.total+' frames · elapsed '+
+              elapsed.toFixed(1)+' s · estimated remaining '+Math.ceil(left)+
+              ' s · '+info.workers+' Accurate RK4 workers');
+          },
+          onMuxing:function(){message('Rendering complete · finalizing VP9 and building WebM container…');}
+        });
+        if(result.cancelled)return;
+        var url=root.URL.createObjectURL(result.blob);
+        try{
+          var link=document.createElement('a');
+          link.href=url;link.download=result.filename;
+          document.body.appendChild(link);link.click();link.remove();
+        }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
+        if(progress)progress.value=100;
+        message('WebM export ready: '+result.manifest.frameCount+' frames × '+
+          result.manifest.sides.length+' view(s), '+(result.manifest.durationUs/1e6).toFixed(3)+
+          ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+' s total.');
+      }catch(error){message('WebM export failed: '+error.message+' · No partial video saved.');}
+      finally{if(studioVideoExportTask===task)studioVideoExportTask=null;
+        syncStudioFrameExportControls();}
+    });
+    syncStudioVideoExportControls();
   }
   function bindStudioFrameExport(){
     var start=newUiEl('ModernAnimationFrameExportStart');
@@ -1821,6 +1908,7 @@
     });
     bindStudioQualityAudit();
     bindStudioFrameExport();
+    bindStudioVideoExport();
     observeStudioPreviewSize();
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
       if(document.hidden&&studioPlayback){stopStudioPlayback(false);saveStudioDraft(false);

@@ -53,7 +53,8 @@ importScripts(
   'ModernAnimationCompatibility.js',
   'ModernAnimationProject.js',
   'ModernAnimationPreview.js',
-  'ModernAnimationFrameExport.js'
+  'ModernAnimationFrameExport.js',
+  'ModernAnimationVideoPipeline.js'
 );
 
 function createGraph(canvas){
@@ -86,11 +87,12 @@ function createGraph(canvas){
 }
 
 function errorMessage(error){return String(error&&error.message||error);}
-function setup(data){
+function setup(data,video){
   if(typeof OffscreenCanvas!=='function')
     throw Error('OffscreenCanvas is not available in this browser worker');
   var api=self.CurvatureModernAnimationFrameExport;
-  var plan=api.plan(data.project,{fps:data.fps,width:data.width,height:data.height});
+  var plan=(video?self.CurvatureModernAnimationVideoPipeline:api).plan(
+    data.project,{fps:data.fps,width:data.width,height:data.height});
   var contexts={};
   plan.sides.forEach(function(side){
     contexts[side]=createGraph(new OffscreenCanvas(plan.width,plan.height));
@@ -108,32 +110,48 @@ function setup(data){
     var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:plan.project.mode});
     return {quality:report.quality,canvas:graph.Canvas,metrics:report.result};
   }
-  return {plan:plan,render:render};
+  return {plan:plan,render:render,video:!!video};
 }
 var active=false,parallel=null;
 self.onmessage=async function(event){
   var data=event&&event.data;
   if(!data)return;
-  if(data.type==='init'){
+  if(data.type==='init'||data.type==='video-init'){
     if(active||parallel){self.postMessage({type:'error',message:'Worker already initialized'});return;}
     try{
-      parallel=setup(data);
-      self.postMessage({type:'ready',total:parallel.plan.timesMs.length,
+      parallel=setup(data,data.type==='video-init');
+      self.postMessage({type:'ready',total:parallel.video?parallel.plan.frameCount:parallel.plan.timesMs.length,
         sides:parallel.plan.sides.length});
     }catch(error){self.postMessage({type:'error',message:errorMessage(error)});}
     return;
   }
-  if(data.type==='render'){
+  if(data.type==='render'||data.type==='video-render'){
     if(!parallel||active){self.postMessage({type:'error',message:'Worker is not ready for a timestamp'});return;}
+    if((data.type==='video-render')!==parallel.video){
+      self.postMessage({type:'error',message:'Mixed PNG/video renderer protocol'});return;
+    }
     active=true;
+    var videoFrame=null;
     try{
-      var frame=await self.CurvatureModernAnimationFrameExport.renderTimestamp(
-        parallel.plan,data.index,parallel.render);
-      // Transfer PNG buffers instead of copying potentially hundreds of MiB.
-      self.postMessage({type:'frame',index:data.index,frame:frame},
-        frame.entries.map(function(entry){return entry.data.buffer;}));
-    }catch(error){self.postMessage({type:'error',message:errorMessage(error)});}
-    finally{active=false;}
+      if(parallel.video){
+        if(typeof VideoFrame!=='function')throw Error('Worker VideoFrame unavailable');
+        videoFrame=await self.CurvatureModernAnimationVideoPipeline.renderTimestamp(
+          parallel.plan,data.index,parallel.render,VideoFrame);
+        if(!videoFrame)throw Error('Video frame calculation cancelled unexpectedly');
+        self.postMessage({type:'video-frame',index:data.index,frame:videoFrame},
+          parallel.plan.sides.map(function(side){return videoFrame.frames[side];}));
+        videoFrame=null; // Ownership transferred to controller.
+      }else{
+        var frame=await self.CurvatureModernAnimationFrameExport.renderTimestamp(
+          parallel.plan,data.index,parallel.render);
+        // Transfer PNG buffers instead of copying potentially hundreds of MiB.
+        self.postMessage({type:'frame',index:data.index,frame:frame},
+          frame.entries.map(function(entry){return entry.data.buffer;}));
+      }
+    }catch(error){
+      if(videoFrame)self.CurvatureModernAnimationVideoPipeline.closeFrames(videoFrame);
+      self.postMessage({type:'error',message:errorMessage(error)});
+    }finally{active=false;}
     return;
   }
   // Legacy one-worker protocol retained for parity tests and older callers.

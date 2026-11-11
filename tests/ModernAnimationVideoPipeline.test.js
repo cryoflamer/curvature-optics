@@ -201,3 +201,21 @@ test('browser script exposes video pipeline with the same production PNG validat
   vm.runInNewContext(script,scope,{filename:'ModernAnimationVideoPipeline.js'});
   assert.equal(scope.CurvatureModernAnimationVideoPipeline.plan(make()).frameCount,125);
 });
+
+test('encoder queue backpressure pauses ordered gate until dequeue without leaking VideoFrames',()=>{
+  const p=video.plan(make(),{fps:5,width:640,height:360});
+  let room=false,seen=[];
+  const gate=video.orderedGate(p,{capacity:2,canConsume:()=>room,
+    consume:bundle=>seen.push(bundle.index)});
+  const first=mockFrame(0,p),second=mockFrame(1,p);
+  gate.offer(first);gate.offer(second);
+  assert.equal(gate.available(),0);
+  assert.deepEqual(seen,[]);
+  assert.equal(first.frames.A.closed,false);
+  room=true;
+  gate.drain();
+  assert.deepEqual(seen,[0,1]);
+  assert.equal(first.frames.A.closed,true);
+  assert.equal(second.frames.A.closed,true);
+  assert.equal(gate.available(),2);
+});
