@@ -685,6 +685,24 @@ button{cursor:pointer}
 .modern-studio-status.is-ready{background:#effaf4;border-color:#b5dfc7;color:#256349}
 .modern-studio-status.is-invalid{background:#fff8f2;border-color:#f0d7b8;color:#79512a}
 .modern-studio-status ul{margin:6px 0 0;padding-left:20px;max-height:150px;overflow:auto}
+/* Discovered subsequences are selectable without removing source keyframes. */
+.modern-studio-sequences{margin:10px 0;padding:12px;border:1px solid #b7d5ed;
+  border-radius:8px;background:#f4f9ff;color:#254e70;font-size:12px}
+.modern-studio-sequences>.modern-studio-hint{margin:6px 0 10px}
+.modern-studio-sequence-group{border-top:1px solid #d3e2ef;padding:9px 0}
+.modern-studio-sequence-group>strong{display:block;margin-bottom:6px}
+.modern-studio-sequence-option{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;padding:9px;background:#fff;border:1px solid #d9e5ef;
+  border-radius:6px;margin:5px 0}
+.modern-studio-sequence-option.is-chosen{border-color:#2885c7;background:#e7f4ff}
+.modern-studio-sequence-description{display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px}
+.modern-studio-sequence-description span{overflow-wrap:anywhere}
+.modern-studio-sequence-description small{color:#638096}
+.modern-studio-sequences button{border:1px solid #9bc4e6;color:#155783;background:#fff;
+  border-radius:5px;padding:7px 10px;cursor:pointer;font:inherit}
+.modern-studio-sequences button:disabled{color:#658699;background:#edf6fc;cursor:default}
+.modern-studio-keyframe.is-outside-sequence{opacity:.48;border-style:dashed}
+.modern-studio-sequence-excluded{font-size:10px;color:#6c7d89}
 .modern-studio-compatibility{border:1px solid #d9c6a8;background:#fffaf4;border-radius:8px;
   padding:12px;margin:8px 0;color:#704521;font-size:12px}
 .modern-studio-compatibility>.modern-studio-hint{margin:5px 0 10px}

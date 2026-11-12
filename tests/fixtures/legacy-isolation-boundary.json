@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 89,
-      "uniqueScripts": 87,
+      "scriptTags": 90,
+      "uniqueScripts": 88,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -190,6 +190,7 @@
         "src/ui/modern/ModernExperimentHistoryFilters.js",
         "src/animation/ModernAnimationCompatibility.js",
         "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationSequences.js",
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationDraftAutosave.js",
@@ -343,6 +344,7 @@
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationProject.js",
       "src/animation/ModernAnimationQualityAudit.js",
+      "src/animation/ModernAnimationSequences.js",
       "src/animation/ModernAnimationStudio.js",
       "src/animation/ModernAnimationVideoCapabilities.js",
       "src/animation/ModernAnimationVideoPipeline.js",
@@ -409,7 +411,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 175,
+  "sourceJsCount": 176,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -526,6 +528,7 @@
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationSequences.js",
         "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
@@ -544,7 +547,8 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
-        "tests/ModernAnimationLibrary.test.js"
+        "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationSequences.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -635,6 +639,7 @@
         "tests/ModernAnimationParallelExport.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
+        "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
@@ -652,6 +657,18 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/animation/ModernAnimationSequences.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationStudio.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationSequences.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/animation/ModernAnimationStudio.js": {
       "directHtmlLoads": [
         "modern"
@@ -663,6 +680,7 @@
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js"
       ],
       "commonJsToolCallers": []
@@ -2247,6 +2265,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js"
       ],
       "commonJsToolCallers": []
@@ -2418,6 +2437,7 @@
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
+        "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
@@ -2548,6 +2568,7 @@
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
+        "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",

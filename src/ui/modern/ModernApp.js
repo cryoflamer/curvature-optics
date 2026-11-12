@@ -1202,7 +1202,7 @@
     // The library owns its preview. Never use a History screenshot if the
     // first frame's actual physical state no longer matches that snapshot.
     if(!studioDraft||!studioDraft.frames.length||!thumbnailApi)return null;
-    var first=studioDraft.frames[0];
+    var first=studioApi.activeFrames(studioDraft)[0];
     var found=studioHistoryEntries.find(function(e){return e.id===first.sourceSnapshotId;});
     if(found&&found.thumbnail&&JSON.stringify(found.experiment)===
        JSON.stringify(project.baseExperiment))
@@ -2513,6 +2513,12 @@
         update(studioApi.importCamera(experimentSnapshot(),cameraSequence,studioDraft));
       });},
       edit:function(field,value){safe(function(){update(studioApi.edit(studioDraft,field,value));});},
+      selectSequence:function(id){safe(function(){
+        var next=studioApi.selectSequence(studioDraft,id);
+        studioSelectedKey=studioApi.activeFrames(next)[0].key;
+        update(next);
+      });},
+      clearSequence:function(){safe(function(){update(studioApi.clearSequence(studioDraft));});},
       frame:function(key,field,value){safe(function(){
         update(studioApi.editFrame(studioDraft,key,field,value));
       });},
@@ -2632,6 +2638,7 @@
       });}
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
+      sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       stagedCount:historyStoryboardQueue.length,stagedIds:historyStoryboardQueue,
       undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
         studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?

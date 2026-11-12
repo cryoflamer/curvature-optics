@@ -2121,3 +2121,21 @@ preferences, and removal of the now-duplicated target CSS block.
   export format, physical solver or Legacy code was modified.
 - Regression tests cover pairwise deltas, mixed camera/physics across separate
   transitions, Scene/Compare, legal curvature, table values and timeline focus.
+
+### Animation Studio compatible sequence grouping (#140.12.120.9.12)
+
+- `ModernAnimationSequences` finds maximal globally compatible ordered groups
+  using exact canonical fixed-state signatures for camera or each physical
+  channel, then verifies candidates using the unmodified compatibility inspector.
+  It can include nonadjacent frames; there is no combinatorial search.
+- Animation mode selects which categories to display; `Use sequence` records
+  selected frame keys and physical target in the working draft independently of
+  the full source frame list. Preview, library save, PNG and MP4/WebM generation
+  use `ModernAnimationStudio.build()` and therefore the selected subset.
+- The v1 project playback schema is unchanged. Nonselected frames persist only
+  in the independent v2 working-draft local/IndexedDB workspace, not in named
+  exported project JSON. The UI explicitly distinguishes these guarantees.
+- Selection survives autosave/reload and nonstructural edits, and resets on
+  replacing/inserting/removing frames or changing animation mode/target.
+- No modifications to RK4, physical sampling, optical rendering, Legacy or
+  the supported compatibility rules.

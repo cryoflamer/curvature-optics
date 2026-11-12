@@ -530,6 +530,64 @@
     }
     return panel;
   }
+  function sequenceTitle(item){
+    if(item.mode==='camera')return 'Camera motion';
+    return (item.target.scope==='scene'?'Scene':'Compare '+item.target.scope)+' · '+
+      (item.target.parameter==='surface.curvature'?'Earth curvature':'Temperature gradient');
+  }
+  function sequenceChooser(doc,draft,options,actions){
+    var variants=options.sequences||[];
+    var area=el(doc,'section','modern-studio-sequences');
+    area.setAttribute('aria-label','Compatible animation sequences');
+    area.appendChild(el(doc,'strong','','Compatible sequences'));
+    area.appendChild(el(doc,'p','modern-studio-hint',
+      'Choose a ready-to-preview sequence for the selected Animation mode. All original keyframes stay in the timeline and working draft; only chosen frames are used for Preview and project/video export. Other frames remain in this local draft, not in exported project JSON.'));
+    if(!variants.length){
+      area.appendChild(el(doc,'p','modern-studio-hint',draft.frames.length<2?
+        'Add at least two keyframes to find sequences.':
+        'No compatible sequence with changing values was found for this mode. Change Animation mode or choose other snapshots.'));
+    }
+    var groups=new Map();
+    variants.forEach(function(item){
+      var title=sequenceTitle(item);
+      if(!groups.has(title))groups.set(title,[]);
+      groups.get(title).push(item);
+    });
+    groups.forEach(function(items,title){
+      var group=el(doc,'div','modern-studio-sequence-group');
+      group.appendChild(el(doc,'strong','',title+' · '+items.length+' option'+(items.length===1?'':'s')));
+      items.forEach(function(item){
+        var active=!!draft.activeFrameKeys&&draft.activeFrameKeys.length===item.keys.length&&
+          draft.activeFrameKeys.every(function(key){return item.keys.includes(key);})&&
+          draft.mode===item.mode&&(item.mode==='camera'||
+            draft.target===item.target.scope+'|'+item.target.parameter);
+        var card=el(doc,'div','modern-studio-sequence-option'+(active?' is-chosen':''));
+        var detail=el(doc,'div','modern-studio-sequence-description');
+        detail.appendChild(el(doc,'strong','',item.keys.length+' of '+draft.frames.length+' frames'+
+          (active?' · Selected':'')));
+        detail.appendChild(el(doc,'span','',item.indices.map(function(i){
+          return (i+1)+'. '+draft.frames[i].name;
+        }).join(' → ')));
+        detail.appendChild(el(doc,'small','',
+          (draft.frames.length-item.keys.length)+' other frames retained in draft'));
+        card.appendChild(detail);
+        var choose=button(doc,active?'Selected':'Use sequence',
+          'Use '+sequenceTitle(item)+' from frames '+item.indices.map(function(i){return i+1;}).join(', '),
+          function(){if(actions.selectSequence)actions.selectSequence(item.id);});
+        choose.disabled=active;card.appendChild(choose);
+        group.appendChild(card);
+      });
+      area.appendChild(group);
+    });
+    if(draft.activeFrameKeys){
+      var clear=button(doc,'Use all keyframes',
+        'Clear selected sequence and inspect the entire timeline',function(){
+          if(actions.clearSequence)actions.clearSequence();
+        });
+      area.appendChild(clear);
+    }
+    return area;
+  }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
     options=options||{};
@@ -586,8 +644,14 @@
     basics.appendChild(field(doc,'Animation mode',draft.mode,'select',function(value){actions.edit('mode',value);},
       [['auto','Auto-detect'],['camera','Camera motion'],['physical','One physical parameter']]));
     if(draft.mode==='physical'){
-      var mode=draft.frames.length&&draft.frames[0].experiment.display.mode||'scene';
-      var scopes=mode==='compare'?['A','B']:['scene'];
+      var scopes=[];
+      draft.frames.forEach(function(frame){
+        var mode=frame.experiment.display.mode;
+        (mode==='compare'?['A','B']:['scene']).forEach(function(scope){
+          if(!scopes.includes(scope))scopes.push(scope);
+        });
+      });
+      if(!scopes.length)scopes=['scene'];
       var choices=[['auto','Choose physical parameter…']];
       scopes.forEach(function(scope){
         choices.push([scope+'|surface.curvature',scope+' · Earth curvature']);
@@ -596,6 +660,7 @@
       basics.appendChild(field(doc,'Variable to animate',draft.target,'select',function(value){actions.edit('target',value);},choices));
     }
     host.appendChild(basics);
+    host.appendChild(sequenceChooser(doc,draft,options,actions));
     var status=el(doc,'div','modern-studio-status');
     status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     if(draft.frames.length<2){
@@ -604,7 +669,9 @@
       status.className+=' is-ready';
       status.textContent='Compatible · '+(result.mode==='camera'?'Camera motion':
         'Physical: '+result.target.scope+' · '+result.target.parameter)+
-        ' · '+(draft.frames.reduce(function(total,f){return total+f.travelMs+f.holdMs;},0)/1000).toFixed(1)+' s';
+        ' · '+(options.activeFrames||draft.frames).length+' of '+draft.frames.length+' frames'+
+        ' · '+((options.activeFrames||draft.frames).reduce(function(total,f){return total+f.travelMs+f.holdMs;},0)/1000).toFixed(1)+' s'+
+        (draft.activeFrameKeys?' · Other frames retained in working draft':'');
     }else{
       status.className+=' is-invalid';
       status.appendChild(el(doc,'strong','','Cannot preview this sequence'));
@@ -639,6 +706,7 @@
         if(actions.select)actions.select(frame.key);
       });
       pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'')+
+        (draft.activeFrameKeys&&!draft.activeFrameKeys.includes(frame.key)?' is-outside-sequence':'')+
         (options.diagnosticTransition===i?' is-transition-from':'')+
         (options.diagnosticTransition===i-1?' is-transition-to':'');
       pick.setAttribute('aria-pressed',String(frame===selected));
@@ -648,6 +716,8 @@
       var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
+      if(draft.activeFrameKeys&&!draft.activeFrameKeys.includes(frame.key))
+        item.appendChild(el(doc,'small','modern-studio-sequence-excluded','Not in selected preview'));
       item.appendChild(cardRemove(doc,'Remove animation frame '+(i+1)+': '+frame.name,function(){
         if(actions.remove)actions.remove(frame.key);
       }));

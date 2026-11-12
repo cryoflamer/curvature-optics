@@ -49,6 +49,10 @@
         travelMs:number(frame.travelMs,i===0?0:200,i===0?0:120000),
         holdMs:number(frame.holdMs,0,120000),easing:frame.easing};
     });
+    var active=draft.activeFrameKeys==null?null:draft.activeFrameKeys;
+    if(active!==null&&(!Array.isArray(active)||active.length<2||active.length>frames.length||
+      new Set(active).size!==active.length||active.some(function(key){return !keys.has(key);})))
+      throw RangeError('Invalid selected animation sequence');
     var selected=input.selectedKey;
     if(selected!==null&&(!keys.has(selected)||typeof selected!=='string'))selected=null;
     var quality=input.quality;
@@ -65,6 +69,7 @@
     return {version:VERSION,savedAt:input.savedAt,
       draft:{name:string(draft.name,120),description:string(draft.description,1000),
         mode:draft.mode,target:draft.target,source:draft.source,frames:frames,
+        activeFrameKeys:active?active.slice():null,
         cameraHudAppearance:draft.cameraHudAppearance==null?null:
           hud.validateAppearance(draft.cameraHudAppearance)},
       selectedKey:selected,quality:quality,prepared:input.prepared,

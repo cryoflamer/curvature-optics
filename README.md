@@ -780,3 +780,31 @@ curvature** channel. Explanations distinguish these cases instead of exposing
 internal codes such as `mixed-or-unsupported-change`. The diagnostics use the
 same effective optics comparison as preparation and are read-only: they do not
 alter keyframes, source History, projects, renderers, or the Legacy UI.
+
+### Animation Studio compatible sequences (#140.12.120.9.12)
+
+The **Animation mode** selector now filters an actionable **Compatible sequences**
+list: **Auto-detect** searches camera and physical channels; **Camera motion**
+searches camera-only groups; **One physical parameter** lists the supported
+Earth-curvature and temperature-gradient channels separately for active Scene
+or Compare A/B states. **Use sequence** selects a globally valid ordered subset,
+including nonadjacent History keyframes. Every proposal is checked using the
+same authoritative `ModernAnimationCompatibility.inspect` as Preview.
+
+The list groups snapshots by their **unchanging effective scene/optics values**;
+it offers the longest compatible group for each shared fixed-state signature and
+channel rather than searching exponential subsets. Identical-value-only groups
+are omitted as non-animated. It never invents transitions across Scene/Compare,
+changes of atmospheric model, unsupported camera controls or other fixed state.
+
+**Source keyframes are never removed by choosing a sequence.** Unselected cards
+remain visible, dimmed, in the same timeline and working-draft checkpoint.
+`Preview animation`, PNG/video exports and **Save project** use the selected
+sequence; **Use all keyframes** restores the full-timeline validation without
+removing the original cards. The choice is autosaved per workspace and survives
+reload. Adding/removing source frames or loading a new shortlist resets the
+choice; edits to names/timings retain it. When saving a named library project,
+its v1 playback payload contains the **selected compatible sequence only**;
+the remaining source cards live in the independent local working-draft backup,
+not in exported project JSON. Export JSON for portable playback, not as a backup
+of the larger unselected source timeline.

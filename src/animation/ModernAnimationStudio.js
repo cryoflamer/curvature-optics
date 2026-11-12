@@ -6,16 +6,18 @@
   var sequence=root.CurvatureModernCameraSequence;
   var compatibility=root.CurvatureModernAnimationCompatibility;
   var projects=root.CurvatureModernAnimationProject;
+  var sequences=root.CurvatureModernAnimationSequences;
   if(typeof module==='object'&&module.exports){
     state=require('../ui/modern/ModernExperimentState');
     sequence=require('../camera/ModernCameraSequence');
     compatibility=require('./ModernAnimationCompatibility');
     projects=require('./ModernAnimationProject');
+    sequences=require('./ModernAnimationSequences');
   }
-  var api=factory(state,sequence,compatibility,projects);
+  var api=factory(state,sequence,compatibility,projects,sequences);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudio=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,sequence,compatibility,projects){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,sequence,compatibility,projects,sequences){
   'use strict';
   var MAX_FRAMES=200;
   function cleanText(text,max){
@@ -23,9 +25,11 @@
     return text;
   }
   function blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
-    source:'none',frames:[],cameraHudAppearance:null};}
+    source:'none',frames:[],activeFrameKeys:null,cameraHudAppearance:null};}
   function copy(draft){return {name:draft.name,description:draft.description,mode:draft.mode,
-    target:draft.target,source:draft.source,cameraHudAppearance:draft.cameraHudAppearance||null,
+    target:draft.target,source:draft.source,
+    activeFrameKeys:draft.activeFrameKeys?draft.activeFrameKeys.slice():null,
+    cameraHudAppearance:draft.cameraHudAppearance||null,
     frames:draft.frames.map(function(frame){
       return Object.assign({},frame);
     })};}
@@ -47,13 +51,13 @@
         holdMs:before?before.holdMs:0,
         easing:before?before.easing:'linear'};
     });
-    draft.source='history';return draft;
+    draft.source='history';draft.activeFrameKeys=null;return draft;
   }
   function importCamera(experiment,frames,previous){
     var validated=sequence.validate(frames);
     if(validated.length<2)throw RangeError('Camera Animation needs at least two keyframes');
     var base=state.validate(experiment),draft=previous?copy(previous):blank();
-    draft.mode='camera';draft.target='auto';draft.source='camera-sequence';
+    draft.mode='camera';draft.target='auto';draft.source='camera-sequence';draft.activeFrameKeys=null;
     draft.frames=validated.map(function(frame,i){
       var snapshot=state.validate(base);
       snapshot.scene.camera=Object.assign({},frame.camera);
@@ -95,8 +99,8 @@
     else if(property==='description')next.description=cleanText(value,1000);
     else if(property==='mode'){
       if(!['auto','camera','physical'].includes(value))throw RangeError('Invalid mode');
-      next.mode=value;next.target='auto';
-    }else if(property==='target'){target(value);next.target=value;}
+      next.mode=value;next.target='auto';next.activeFrameKeys=null;
+    }else if(property==='target'){target(value);next.target=value;next.activeFrameKeys=null;}
     else if(property==='cameraHudAppearance'){
       next.cameraHudAppearance=projects.validateHudAppearance(value);
     }else throw RangeError('Invalid editor property');
@@ -171,6 +175,7 @@
       throw RangeError('Animation has a maximum of '+MAX_FRAMES+' keyframes');
     if(!incoming.length)return next;
     next.frames.splice.apply(next.frames,[gap,0].concat(incoming));
+    next.activeFrameKeys=null;
     next.source=next.source==='none'||next.source==='history'?'history':'mixed';
     normalizeTravel(next);
     return next;
@@ -178,19 +183,43 @@
   function remove(draft,key){
     var next=copy(draft);next.frames=next.frames.filter(function(f){return f.key!==key;});
     if(next.frames.length)next.frames[0].travelMs=0;
+    next.activeFrameKeys=null;
     return next;
   }
+  function activeFrames(draft){
+    if(!draft.activeFrameKeys)return draft.frames;
+    var keys=new Set(draft.activeFrameKeys);
+    if(keys.size<2||keys.size!==draft.activeFrameKeys.length||
+      draft.frames.filter(function(frame){return keys.has(frame.key);}).length!==keys.size)
+      throw RangeError('Selected animation frames no longer exist');
+    return draft.frames.filter(function(frame){return keys.has(frame.key);});
+  }
+  function findSequences(draft){return sequences.discover(draft.frames,draft.mode);}
+  function selectSequence(draft,id){
+    var found=findSequences(draft).find(function(item){return item.id===id;});
+    if(!found)throw RangeError('Selected animation sequence is no longer available');
+    var next=copy(draft);
+    next.mode=found.mode;
+    next.target=found.target?found.target.scope+'|'+found.target.parameter:'auto';
+    next.activeFrameKeys=found.keys.slice();
+    // Channel validity was checked by discover(); unrelated editor text is
+    // validated by inspect() when Preview or Save is requested.
+    return next;
+  }
+  function clearSequence(draft){var next=copy(draft);next.activeFrameKeys=null;return next;}
   function inspect(draft){
-    if(draft.frames.length<2)return {compatible:false,mode:null,target:null,changedPaths:[],
+    var frames;try{frames=activeFrames(draft);}catch(error){return {compatible:false,mode:null,target:null,changedPaths:[],
+      issues:[{code:'invalid-selection',path:error.message}]};}
+    if(frames.length<2)return {compatible:false,mode:null,target:null,changedPaths:[],
       issues:[{code:'insufficient-frames',path:'keyframes'}]};
     try{
       var options={};
       if(draft.mode!=='auto')options.mode=draft.mode;
       if(draft.target!=='auto')options.target=target(draft.target);
-      var result=compatibility.inspect(draft.frames.map(function(frame){return frame.experiment;}),options);
+      var result=compatibility.inspect(frames.map(function(frame){return frame.experiment;}),options);
       var issues=result.issues.slice();
       if(!draft.name.trim())issues.push({code:'missing-name',path:'name'});
-      draft.frames.forEach(function(f,i){
+      frames.forEach(function(f,i){
         if(!f.name.trim())issues.push({code:'missing-frame-name',path:'keyframes.'+i+'.name'});
         if(i&&f.travelMs<200)issues.push({code:'invalid-duration',path:'keyframes.'+i+'.travelMs'});
       });
@@ -204,7 +233,7 @@
       var error=new RangeError('Animation draft is incompatible');error.issues=result.issues;
       throw error;
     }
-    return projects.create(draft.frames.map(function(f){
+    return projects.create(activeFrames(draft).map(function(f){
       return {id:f.sourceSnapshotId===null?undefined:f.sourceSnapshotId,
         name:f.name,experiment:f.experiment,travelMs:f.travelMs,
         holdMs:f.holdMs,easing:f.easing};
@@ -213,5 +242,7 @@
       {cameraHudAppearance:draft.cameraHudAppearance}:{}));
   }
   return Object.freeze({blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
-    edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build});
+    edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,
+    activeFrames:activeFrames,
+    findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});
 }));
