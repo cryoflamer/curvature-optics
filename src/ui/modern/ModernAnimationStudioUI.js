@@ -697,27 +697,48 @@
       preview.appendChild(previewCaption);host.appendChild(preview);
     }
 
+    // Inclusion in the playback sequence and selection for editing are separate states.
+    // State labels deliberately do not depend on thumbnail opacity or color alone.
+    if(draft.activeFrameKeys){
+      var includedCount=draft.frames.filter(function(frame){
+        return draft.activeFrameKeys.includes(frame.key);
+      }).length;
+      var legend=el(doc,'div','modern-studio-filmstrip-legend');
+      legend.setAttribute('aria-label','Keyframe timeline legend');
+      legend.appendChild(el(doc,'span','modern-studio-legend-included',
+        '✓ '+includedCount+' in preview'));
+      legend.appendChild(el(doc,'span','modern-studio-legend-excluded',
+        '− '+(draft.frames.length-includedCount)+' excluded'));
+      if(selected)legend.appendChild(el(doc,'span','modern-studio-legend-editing',
+        'Editing: '+selected.name));
+      host.appendChild(legend);
+    }
     var filmstrip=el(doc,'ol','modern-studio-filmstrip');
     filmstrip.setAttribute('aria-label','Animation keyframe timeline');
     draft.frames.forEach(function(frame,i){
       filmstrip.appendChild(dropSlot(doc,i,actions,options.pickerSelectedCount||0));
       var entry=frameEntry(frame,entries),item=el(doc,'li','modern-studio-filmstrip-item');
-      var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name,function(){
+      var hasSelection=Array.isArray(draft.activeFrameKeys);
+      var inPreview=!hasSelection||draft.activeFrameKeys.includes(frame.key);
+      var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name+
+        (hasSelection?(inPreview?' (in preview)':' (excluded from preview)'):'')+
+        (frame===selected?' (currently editing)':''),function(){
         if(actions.select)actions.select(frame.key);
       });
       pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'')+
-        (draft.activeFrameKeys&&!draft.activeFrameKeys.includes(frame.key)?' is-outside-sequence':'')+
+        (hasSelection?(inPreview?' is-in-sequence':' is-outside-sequence'):'')+
         (options.diagnosticTransition===i?' is-transition-from':'')+
         (options.diagnosticTransition===i-1?' is-transition-to':'');
       pick.setAttribute('aria-pressed',String(frame===selected));
+      if(hasSelection)pick.appendChild(el(doc,'span','modern-studio-sequence-status'+
+        (inPreview?' is-included':' is-excluded'),inPreview?'✓ IN PREVIEW':'− EXCLUDED'));
+      if(frame===selected&&hasSelection)pick.appendChild(el(doc,'span','modern-studio-editing-status','EDITING'));
       pick.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-keyframe-visual'));
       var name=el(doc,'strong','modern-studio-keyframe-name',(i+1)+'. '+frame.name);
       name.title=frame.name;pick.appendChild(name);
       var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
-      if(draft.activeFrameKeys&&!draft.activeFrameKeys.includes(frame.key))
-        item.appendChild(el(doc,'small','modern-studio-sequence-excluded','Not in selected preview'));
       item.appendChild(cardRemove(doc,'Remove animation frame '+(i+1)+': '+frame.name,function(){
         if(actions.remove)actions.remove(frame.key);
       }));

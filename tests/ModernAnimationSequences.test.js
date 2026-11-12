@@ -145,3 +145,34 @@ test('Static entrypoint routes the selected subsequence to Preview and library e
   assert.match(app,/studioPrepared=studioApi\.build\(studioDraft,'studio_draft'\)/);
   assert.match(app,/project=studioApi\.build\(studioDraft,id\)/);
 });
+
+test('Timeline visually distinguishes preview membership from edit selection without opacity',()=>{
+  const draft=draftOf(fiveFrames());
+  const camera=studio.findSequences(draft).find(v=>v.mode==='camera');
+  const chosen=studio.selectSequence(draft,camera.id);
+  const {doc,host}=mockDom();
+  ui.render(doc,host,chosen,studio.inspect(chosen),{prepare(){},select(){}},false,
+    {sequences:studio.findSequences(chosen),activeFrames:studio.activeFrames(chosen),
+      selectedKey:chosen.frames[4].key});
+  const cards=collect(host,n=>n.tagName==='button'&&n.className.includes('modern-studio-keyframe'));
+  assert.equal(cards.length,5);
+  assert.equal(cards.filter(c=>c.className.includes('is-in-sequence')).length,3);
+  assert.equal(cards.filter(c=>c.className.includes('is-outside-sequence')).length,2);
+  assert.equal(collect(host,n=>n.className==='modern-studio-sequence-status is-included').length,3);
+  assert.equal(collect(host,n=>n.className==='modern-studio-sequence-status is-excluded').length,2);
+  assert.equal(collect(host,n=>n.className==='modern-studio-editing-status').length,1);
+  assert.ok(cards[4].className.includes('is-active'),'excluded frame can be the editing target');
+  assert.equal(cards[4]['aria-pressed'],'true');
+  assert.match(cards[4]['aria-label'],/excluded from preview.*currently editing/);
+  assert.equal(collect(host,n=>n.className==='modern-studio-filmstrip-legend').length,1);
+  assert.equal(collect(host,n=>n.className==='modern-studio-legend-included')[0].textContent,'✓ 3 in preview');
+  assert.equal(collect(host,n=>n.className==='modern-studio-legend-excluded')[0].textContent,'− 2 excluded');
+  const css=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','src/ui/modern/ModernApp.css'),'utf8');
+  assert.doesNotMatch(css,/\.modern-studio-keyframe\.is-outside-sequence\{opacity:\.48/);
+  assert.match(css,/\.modern-studio-keyframe\.is-outside-sequence\{opacity:1/);
+  assert.match(css,/\.modern-studio-editing-status\{/);
+  const clear=studio.clearSequence(chosen),noSelection=mockDom();
+  ui.render(noSelection.doc,noSelection.host,clear,studio.inspect(clear),{prepare(){}},false);
+  assert.equal(collect(noSelection.host,n=>n.className==='modern-studio-sequence-status is-excluded').length,0);
+  assert.equal(collect(noSelection.host,n=>n.className==='modern-studio-filmstrip-legend').length,0);
+});

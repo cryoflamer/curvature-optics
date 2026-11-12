@@ -808,3 +808,16 @@ its v1 playback payload contains the **selected compatible sequence only**;
 the remaining source cards live in the independent local working-draft backup,
 not in exported project JSON. Export JSON for portable playback, not as a backup
 of the larger unselected source timeline.
+
+
+### Animation Studio: preview inclusion and edit selection (#140.12.120.9.12.1)
+
+When a compatible subsequence is selected, the keyframe timeline shows **IN PREVIEW**
+(blue banner/solid blue border) or **EXCLUDED** (gray banner/dashed gray border)
+for every card. Unlike the former low-opacity treatment, thumbnails stay fully
+legible. The *currently edited* frame has a separate purple **EDITING** badge
+and outline, whether or not that frame belongs to the active preview. A compact
+legend above the timeline counts included/excluded frames and names the edited
+frame. Excluded frames remain editable, removable and draggable; changing the
+active sequence still never removes source cards. This is strictly a presentation
+change: sequence selection, autosave, Preview, exports and optics are unaffected.

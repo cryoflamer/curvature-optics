@@ -701,8 +701,28 @@ button{cursor:pointer}
 .modern-studio-sequences button{border:1px solid #9bc4e6;color:#155783;background:#fff;
   border-radius:5px;padding:7px 10px;cursor:pointer;font:inherit}
 .modern-studio-sequences button:disabled{color:#658699;background:#edf6fc;cursor:default}
-.modern-studio-keyframe.is-outside-sequence{opacity:.48;border-style:dashed}
-.modern-studio-sequence-excluded{font-size:10px;color:#6c7d89}
+/* Preview inclusion is distinct from the frame currently selected for editing. */
+.modern-studio-filmstrip-legend{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;
+  font-size:11px;color:#47647d;margin:11px 0 4px}
+.modern-studio-filmstrip-legend span{display:inline-flex;align-items:center;gap:5px}
+.modern-studio-legend-included{color:#14588c;font-weight:650}
+.modern-studio-legend-excluded{color:#5a6470;font-weight:650}
+.modern-studio-legend-editing{color:#68439c}
+.modern-studio-keyframe.is-in-sequence{background:#f1f8ff;border:2px solid #3287c8;padding:4px}
+.modern-studio-keyframe.is-outside-sequence{opacity:1;background:#f2f3f5;
+  border:2px dashed #8995a3;padding:4px;color:#4d5660}
+.modern-studio-keyframe.is-outside-sequence:hover{background:#e8edf2;border-color:#657b91}
+.modern-studio-keyframe.is-outside-sequence .modern-studio-keyframe-summary{color:#596575}
+.modern-studio-keyframe.is-active{outline:3px solid #8956b6;outline-offset:1px;
+  background:#e9f4ff}
+.modern-studio-keyframe.is-active:focus-visible{outline:3px solid #8956b6;outline-offset:2px}
+.modern-studio-sequence-status{display:block;align-self:stretch;text-align:center;
+  font-size:10px;font-weight:750;letter-spacing:.025em;border-radius:4px;
+  padding:4px 2px;line-height:1.2}
+.modern-studio-sequence-status.is-included{background:#d8edff;color:#135a91}
+.modern-studio-sequence-status.is-excluded{background:#dfe3e8;color:#394957}
+.modern-studio-editing-status{display:block;align-self:flex-start;padding:2px 5px;
+  border-radius:4px;background:#8956b6;color:#fff;font-size:9px;font-weight:750}
 .modern-studio-compatibility{border:1px solid #d9c6a8;background:#fffaf4;border-radius:8px;
   padding:12px;margin:8px 0;color:#704521;font-size:12px}
 .modern-studio-compatibility>.modern-studio-hint{margin:5px 0 10px}

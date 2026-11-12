@@ -2139,3 +2139,11 @@ preferences, and removal of the now-duplicated target CSS block.
   replacing/inserting/removing frames or changing animation mode/target.
 - No modifications to RK4, physical sampling, optical rendering, Legacy or
   the supported compatibility rules.
+
+
+> **Animation Studio visual states (#140.12.120.9.12.1):** A selected compatible
+> sequence now renders fully opaque thumbnails and explicit IN PREVIEW / EXCLUDED
+> labels with distinct solid blue / dashed gray borders. The frame open for
+> editing receives its own purple EDITING marker, independent of inclusion.
+> A timeline legend reports counts and the editing target. The underlying
+> subsequence model, physics, playback/export and Legacy remain unchanged.
