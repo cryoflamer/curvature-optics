@@ -537,7 +537,7 @@ button{cursor:pointer}
 .modern-history-card:hover .modern-history-delete:disabled,.modern-history-card:focus-within .modern-history-delete:disabled{opacity:.35}
 .modern-history-pin:focus-visible,.modern-history-delete:focus-visible,.modern-history-section-toggle:focus-visible{opacity:1;outline:2px solid #287ac5;outline-offset:1px}
 @media(hover:none){.modern-history-pin,.modern-history-delete:not(:disabled){opacity:1}.modern-history-delete:disabled{opacity:.35}}
-.modern-history-inspector{position:fixed;z-index:1300;width:min(600px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;box-sizing:border-box;border:1px solid #b6cfe6;border-radius:11px;background:#fff;color:#1a3955;box-shadow:0 14px 42px #09284950;padding:13px 14px;font-size:12px;line-height:1.45}
+.modern-history-inspector{position:fixed;z-index:1300;width:min(700px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;box-sizing:border-box;border:1px solid #b6cfe6;border-radius:11px;background:#fff;color:#1a3955;box-shadow:0 14px 42px #09284950;padding:13px 14px;font-size:12px;line-height:1.45}
 .modern-history-inspector[hidden]{display:none}
 .modern-history-inspector-inner{display:flex;flex-direction:column;gap:7px;padding-bottom:10px}
 .modern-history-inspector-title{font-size:13px;padding-right:34px}
@@ -555,7 +555,7 @@ button{cursor:pointer}
 .modern-history-inspector-close:hover,.modern-history-inspector-close:focus-visible{background:#e1effb}
 @media(max-width:480px){.modern-history-inspector-columns{grid-template-columns:1fr}.modern-history-inspector{padding:10px}}
 .modern-history-inspector-keep{position:sticky;bottom:0;float:right;z-index:2;margin:0 28px 0 auto;border:1px solid #b6cfe6;border-radius:6px;background:#e9f4ff;color:#205b90;padding:4px 9px;cursor:pointer;font-size:11px}
-.modern-history-preview-image{display:block;width:100%;max-height:min(36vh,320px);object-fit:contain;background:#fff;border:1px solid #e1ebf5;border-radius:5px}
+.modern-history-preview-image{display:block;width:100%;max-height:min(46vh,420px);object-fit:contain;background:#fff;border:1px solid #e1ebf5;border-radius:5px}
 @media(max-width:550px){.modern-history-gallery{max-height:60vh}.modern-history-gallery[data-size="medium"] .modern-history-card-select{height:110px}.modern-history-gallery[data-size="large"] .modern-history-card-select{height:175px}.modern-history{padding:12px}}
 
 .modern-history-sort{font-size:11px;color:#526c87;display:flex;align-items:center;gap:7px}

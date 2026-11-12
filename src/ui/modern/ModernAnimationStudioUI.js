@@ -3,12 +3,15 @@
  */
 (function(root,factory){
   var historyUI=root.CurvatureModernExperimentHistoryUI;
-  if(typeof module==='object'&&module.exports)
+  var thumbnailPreview=root.CurvatureModernThumbnailPreview;
+  if(typeof module==='object'&&module.exports){
     historyUI=require('./ModernExperimentHistoryUI');
-  var api=factory(historyUI);
+    thumbnailPreview=require('./ModernThumbnailPreview');
+  }
+  var api=factory(historyUI,thumbnailPreview);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(historyUI){
+}(typeof globalThis!=='undefined'?globalThis:this,function(historyUI,thumbnailPreview){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
@@ -58,6 +61,21 @@
     if(liveAction&&kind!=='select')control.addEventListener('input',function(){liveAction(control.value);});
     control.addEventListener('change',function(){action(control.value);});
     wrapper.appendChild(control);return wrapper;
+  }
+  // Exactly one reusable preview controller per rendered gallery, not one DOM
+  // overlay per card. Re-rendering destroys the previous controller and timer.
+  function galleryPreview(doc,host,enabled){
+    if(host.__thumbnailPreview){host.__thumbnailPreview.destroy();host.__thumbnailPreview=null;}
+    if(enabled===false||!thumbnailPreview)return null;
+    var controller=thumbnailPreview.create(doc,host,historyUI.inspectorMarkup);
+    host.__thumbnailPreview=controller;
+    return controller;
+  }
+  function libraryPreviewEntry(entry){
+    var project=entry.project;
+    return {name:project.name,description:project.description||'',
+      experiment:project.baseExperiment,thumbnail:entry.thumbnail,
+      createdAt:entry.updatedAt,source:'Animation Library'};
   }
   function frameEntry(frame,entries){
     var match=frame.sourceSnapshotId!==null&&entries.find(function(item){
@@ -117,6 +135,7 @@
     });
   }
   function makeDragSource(doc,node,handle,payload,actions){
+    if(handle&&handle!==node)handle.setAttribute('data-no-thumbnail-preview','true');
     if(!actions.dragStart)return;
     node.draggable=true;
     node.addEventListener('dragstart',function(event){actions.dragStart(payload,event);});
@@ -177,7 +196,9 @@
   // calculated from a saved physical project.
   function renderLibrary(doc,host,entries,options,actions){
     if(!host||!doc)return;
-    options=options||{};entries=entries||[];host.textContent='';
+    options=options||{};entries=entries||[];
+    var inspector=galleryPreview(doc,host,entries.length>0&&options.expanded!==false);
+    host.textContent='';
     var head=el(doc,'div','modern-animation-library-heading');
     head.appendChild(el(doc,'strong','','Animation Library'));
     head.appendChild(el(doc,'small','',entries.length+' saved '+(entries.length===1?'project':'projects')));
@@ -361,6 +382,9 @@
         remove.disabled=!!options.busy;controls.appendChild(remove);
         card.appendChild(controls);
       }
+      if(inspector)inspector.bind(card,libraryPreviewEntry(entry),card,
+        {keyboardPin:false,focusPreview:false});
+      card.setAttribute('aria-keyshortcuts','P');
       list.appendChild(card);
     });
     host.appendChild(list);
@@ -368,6 +392,7 @@
   function renderPicker(doc,host,entries,actions,options){
     if(!host||!doc)return;
     options=options||{};
+    var inspector=galleryPreview(doc,host,options.open);
     host.hidden=!options.open;
     if(!options.open){host.textContent='';return;}
     host.textContent='';
@@ -396,6 +421,7 @@
     entries.forEach(function(entry){
       var item=el(doc,'li','modern-studio-picker-card');
       item.setAttribute('data-picker-id',String(entry.id));
+      item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+historyUI.displayName(entry));
       var check=el(doc,'input','modern-studio-picker-checkbox');check.type='checkbox';
       check.checked=!!selected[entry.id];check.setAttribute('aria-label','Select snapshot '+entry.id);
       check.addEventListener('change',function(){actions.pickerToggle(entry.id,check.checked);});
@@ -410,6 +436,7 @@
       handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
       item.appendChild(handle);
       makeDragSource(doc,item,handle,{kind:'snapshots',id:entry.id},actions);
+      if(inspector)inspector.bind(item,entry,item);
       list.appendChild(item);
     });
     host.appendChild(list);
@@ -590,6 +617,7 @@
   }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
+    var inspector=galleryPreview(doc,host);
     options=options||{};
     var entries=options.entries||[];
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
@@ -626,12 +654,14 @@
         var entry=entries.find(function(e){return e.id===id;});
         if(!entry)return;
         var card=el(doc,'li','modern-studio-staged-card');
+        card.tabIndex=0;card.setAttribute('aria-label','Preview staged snapshot '+historyUI.displayName(entry));
         card.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-staged-visual'));
         var name=el(doc,'span','modern-studio-staged-name',historyUI.displayName(entry));
         name.title=name.textContent;card.appendChild(name);
         card.appendChild(cardRemove(doc,'Remove '+historyUI.displayName(entry)+' from staging',function(){
           if(actions.unstage)actions.unstage(id);
         }));
+        if(inspector)inspector.bind(card,entry,card);
         stagedList.appendChild(card);
       });
       staged.appendChild(stagedList);host.appendChild(staged);
@@ -739,6 +769,11 @@
       var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
+      if(inspector)inspector.bind(pick,{name:frame.name,description:'Animation keyframe '+(i+1),
+        experiment:frame.experiment,thumbnail:entry.thumbnail,
+        source:'Animation Studio',createdAt:entry.createdAt},pick,
+        {keyboardPin:false,focusPreview:false});
+      pick.setAttribute('aria-keyshortcuts','P');
       item.appendChild(cardRemove(doc,'Remove animation frame '+(i+1)+': '+frame.name,function(){
         if(actions.remove)actions.remove(frame.key);
       }));

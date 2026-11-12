@@ -2147,3 +2147,25 @@ preferences, and removal of the now-duplicated target CSS block.
 > editing receives its own purple EDITING marker, independent of inclusion.
 > A timeline legend reports counts and the editing target. The underlying
 > subsequence model, physics, playback/export and Legacy remain unchanged.
+
+
+### Unified Modern thumbnail previews (#140.12.120.9.12.2)
+
+- A shared `src/ui/modern/ModernThumbnailPreview.js` controller now owns History's
+  large saved-image preview behavior (dwell, focus, pinned touch/pen, Escape,
+  dynamic viewport positioning, scroll dismissal and rerender cleanup).
+- Five mounted Modern galleries with real screenshot cards are covered:
+  History, Studio Snapshot Picker, staged snapshots, Studio keyframes and
+  Animation Library. The existing History-to-Animation storyboard rendering
+  helper also supports the shared inspector, though the current History
+  handoff toolbar only displays counts/buttons. The same physical-settings inspector
+  is rendered, with no new optical calls and no mutation to source snapshots.
+- Independent galleries register their card surfaces with this controller;
+  at most one preview is visible across galleries. Action controls and drag
+  handles are excluded from hover triggers; the underlying click/drag workflows
+  are unchanged. Imported frames without saved images receive honest placeholders.
+- The existing fullscreen-independent Studio selected-keyframe preview stays
+  unchanged. Working drafts have no persisted thumbnail cards, so no fake image
+  is invented. Original thumbnail storage/project/History formats and Legacy
+  entrypoint remain unchanged. A Modern-only script and CSS cache refresh are
+  included with updated isolation audit fixture and targeted regression tests.

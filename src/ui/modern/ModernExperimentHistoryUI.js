@@ -2,10 +2,12 @@
  * Rendering a card MUST NOT restore, recalculate or alter experiment physics.
  */
 (function(root,factory){
-  var api=factory();
+  var preview=root.CurvatureModernThumbnailPreview;
+  if(typeof module==='object'&&module.exports)preview=require('./ModernThumbnailPreview');
+  var api=factory(preview);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentHistoryUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(){
+}(typeof globalThis!=='undefined'?globalThis:this,function(preview){
   'use strict';
   function label(entry){
     var f=entry.features||{},mode=f.mode||entry.experiment.display.mode;
@@ -125,8 +127,10 @@
       card.appendChild(el(doc,'span','modern-history-inspector-kind',data.classification));
     if(data.description)
       card.appendChild(el(doc,'p','modern-history-inspector-description',data.description));
-    card.appendChild(el(doc,'span','modern-history-inspector-time',
-      new Date(entry.createdAt).toLocaleString()+' · '+entry.source));
+    var stamp=Number(entry.createdAt),when=Number.isFinite(stamp)&&stamp>0?
+      new Date(stamp).toLocaleString():null;
+    if(when||entry.source)card.appendChild(el(doc,'span','modern-history-inspector-time',
+      [when,entry.source].filter(Boolean).join(' · ')));
     var columns=el(doc,'div','modern-history-inspector-columns');
     function column(name,rows){
       var container=el(doc,'section','modern-history-inspector-column');
@@ -156,87 +160,7 @@
     return card;
   }
   function createInspector(doc,host){
-    // A shared floating overlay avoids clipping by the scrolling gallery and
-    // prevents 200 separate tooltip nodes from being created for 200 cards.
-    if(!doc.body||typeof doc.addEventListener!=='function')return null;
-    var node=el(doc,'div','modern-history-inspector');
-    node.hidden=true;node.setAttribute('role','tooltip');
-    doc.body.appendChild(node);
-    var timer=null,pinned=false,anchor=null,infoTrigger=null,suppressFocus=false;
-    function cancel(){if(timer!==null){clearTimeout(timer);timer=null;}}
-    function restoreFocus(trigger){
-      if(trigger&&typeof trigger.focus==='function'){
-        suppressFocus=true;try{trigger.focus();}finally{suppressFocus=false;}
-      }
-    }
-    function hide(){cancel();if(pinned)return;node.hidden=true;anchor=null;}
-    function position(){
-      if(!anchor||typeof anchor.getBoundingClientRect!=='function')return;
-      var viewport=doc.defaultView||{},w=viewport.innerWidth||1024,h=viewport.innerHeight||768;
-      var r=anchor.getBoundingClientRect(),rect=node.getBoundingClientRect();
-      var width=rect.width||480,height=rect.height||260,pad=12;
-      var x=r.right+10;
-      if(x+width>w-pad)x=r.left-width-10;
-      if(x<pad)x=Math.max(pad,Math.min(r.left,w-width-pad));
-      node.style.left=Math.round(x)+'px';
-      node.style.top=Math.round(Math.max(pad,Math.min(r.top,h-height-pad)))+'px';
-    }
-    function show(entry,card,lock,trigger){
-      cancel();pinned=!!lock;anchor=card;infoTrigger=trigger||null;
-      node.textContent='';node.appendChild(inspectorMarkup(doc,entry));
-      var keep=button(doc,pinned?'Kept open':'Keep open','Keep preview open',function(){
-        pinned=true;node.setAttribute('role','dialog');keep.textContent='Kept open';
-        keep.setAttribute('aria-pressed','true');
-        infoTrigger=trigger||anchor;
-      });
-      keep.className='modern-history-inspector-keep';
-      keep.setAttribute('aria-pressed',String(pinned));node.appendChild(keep);
-      var close=button(doc,'×','Close experiment preview',function(){
-        var returnFocus=infoTrigger;pinned=false;hide();restoreFocus(returnFocus);
-      });
-      close.className='modern-history-inspector-close';node.appendChild(close);
-      node.setAttribute('role',pinned?'dialog':'tooltip');
-      node.setAttribute('aria-label','Experiment preview and physical settings');
-      node.hidden=false;position();
-      if(pinned&&typeof close.focus==='function')close.focus({preventScroll:true});
-    }
-    function hover(entry,card,trigger){
-      if(pinned)return;
-      cancel();timer=setTimeout(function(){timer=null;show(entry,card,false,trigger);},400);
-    }
-    function leave(){
-      if(pinned)return;
-      cancel();timer=setTimeout(function(){timer=null;hide();},140);
-    }
-    node.addEventListener('mouseenter',cancel);
-    node.addEventListener('mouseleave',leave);
-    function scrolled(){if(pinned)position();else hide();}
-    function resized(){if(!node.hidden)position();}
-    host.addEventListener('scroll',scrolled);
-    var viewport=doc.defaultView;
-    if(viewport&&typeof viewport.addEventListener==='function')viewport.addEventListener('resize',resized);
-    function keydown(event){if(event.key==='Escape'&&!node.hidden){
-      var returnFocus=infoTrigger;pinned=false;hide();
-      restoreFocus(returnFocus);
-    }}
-    function click(event){
-      if(!pinned||!anchor)return;
-      if(event.target===anchor||
-        (typeof anchor.contains==='function'&&anchor.contains(event.target))||
-        event.target===node||(typeof node.contains==='function'&&node.contains(event.target)))return;
-      pinned=false;hide();
-    }
-    doc.addEventListener('keydown',keydown);
-    doc.addEventListener('click',click);
-    return {hover:hover,leave:leave,show:show,
-      focus:function(entry,card,trigger){if(!suppressFocus)show(entry,card,false,trigger);},
-      hide:function(){pinned=false;hide();},
-      destroy:function(){
-        cancel();doc.removeEventListener('keydown',keydown);doc.removeEventListener('click',click);
-        host.removeEventListener('scroll',scrolled);
-        if(viewport&&typeof viewport.removeEventListener==='function')viewport.removeEventListener('resize',resized);
-        if(node.parentNode)node.parentNode.removeChild(node);
-      }};
+    return preview.create(doc,host,inspectorMarkup);
   }
   function el(doc,name,className,text){
     var node=doc.createElement(name);
@@ -401,12 +325,16 @@
   // from the current records, so renaming cannot stale the display.
   function renderStoryboardQueue(doc,host,ids,entries,actions){
     if(!host||!doc)return;
+    if(host.__thumbnailPreview){host.__thumbnailPreview.destroy();host.__thumbnailPreview=null;}
     host.textContent='';
+    var inspector=ids.length?createInspector(doc,host):null;
+    host.__thumbnailPreview=inspector;
     var records=new Map(entries.map(function(entry){return [entry.id,entry];}));
     ids.forEach(function(id,index){
       var entry=records.get(id);
       if(!entry)return;
       var item=el(doc,'li','modern-history-storyboard-item');
+      item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+displayName(entry));
       var remove=button(doc,'×','Remove frame '+(index+1)+' from shortlist',function(){actions.remove(id);});
       remove.className='modern-history-storyboard-remove';
       item.appendChild(remove);
@@ -423,7 +351,9 @@
       }
       action('↑','Move frame '+(index+1)+' earlier',index===0,function(){actions.move(id,-1);});
       action('↓','Move frame '+(index+1)+' later',index===ids.length-1,function(){actions.move(id,1);});
-      item.appendChild(line);host.appendChild(item);
+      item.appendChild(line);
+      if(inspector)inspector.bind(item,entry,item);
+      host.appendChild(item);
     });
   }
   function hideInspector(host){if(host&&host.__historyInspector)host.__historyInspector.hide();}
@@ -439,5 +369,6 @@
     });
   }
   return Object.freeze({render:render,select:select,label:label,displayName:displayName,inspect:inspect,
-    hideInspector:hideInspector,setSize:setSize,renderStoryboardQueue:renderStoryboardQueue,frameSummary:frameSummary,frameVisual:frameVisual});
+    inspectorMarkup:inspectorMarkup,hideInspector:hideInspector,setSize:setSize,
+    renderStoryboardQueue:renderStoryboardQueue,frameSummary:frameSummary,frameVisual:frameVisual});
 }));

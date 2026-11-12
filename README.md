@@ -798,7 +798,7 @@ are omitted as non-animated. It never invents transitions across Scene/Compare,
 changes of atmospheric model, unsupported camera controls or other fixed state.
 
 **Source keyframes are never removed by choosing a sequence.** Unselected cards
-remain visible, dimmed, in the same timeline and working-draft checkpoint.
+remain visible, clearly marked EXCLUDED (not faded), in the same timeline and working-draft checkpoint.
 `Preview animation`, PNG/video exports and **Save project** use the selected
 sequence; **Use all keyframes** restores the full-timeline validation without
 removing the original cards. The choice is autosaved per workspace and survives
@@ -821,3 +821,29 @@ legend above the timeline counts included/excluded frames and names the edited
 frame. Excluded frames remain editable, removable and draggable; changing the
 active sequence still never removes source cards. This is strictly a presentation
 change: sequence selection, autosave, Preview, exports and optics are unaffected.
+
+### Unified large thumbnail previews (#140.12.120.9.12.2)
+
+The five currently mounted Modern image-card surfaces share the same **saved
+snapshot inspector**: History gallery, Studio **Choose from History** Snapshot
+Picker, **Staged snapshots**, keyframe timeline (both IN PREVIEW and EXCLUDED),
+and named **Animation Library** cards. The reusable History-to-Animation
+storyboard renderer also supports the inspector if mounted; the current
+History handoff toolbar itself displays only counts/buttons, not extra cards. Hover for a short dwell or focus a card to
+see its stored screenshot enlarged, alongside the saved Scene/Compare physical
+settings. Saved Compare screenshots retain both A and B sides. Cards without a
+stored screenshot explicitly say so; they are **never reconstructed by a physics
+render** merely to display a tooltip. Working drafts are currently text rows,
+not thumbnail cards; no artificial screenshots are attached to them.
+
+The presentation lives in `ModernThumbnailPreview.js`, extracted from History's
+existing preview behavior and shared by the other card renderers. One floating
+popup per rendered gallery prevents clipped overlays and excessive DOM nodes;
+only one popup is visible across galleries. It fits inside the viewport,
+repositions on resize, closes on scroll/Esc, supports keyboard focus and
+pinned touch/pen previews, and is cleaned up on gallery rerender. Hovering
+card controls (Delete, Open, checkbox, drag handle) does not trigger previews.
+History's pin/delete/restore shortcuts and Studio select/reorder/drag actions
+remain unchanged. The popup uses the **original persisted WebP thumbnail**, not
+a new upscale/optical capture. Legacy and animation/project persistence formats
+are unchanged.

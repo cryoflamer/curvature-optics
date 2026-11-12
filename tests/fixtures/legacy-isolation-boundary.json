@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 90,
-      "uniqueScripts": 88,
+      "scriptTags": 91,
+      "uniqueScripts": 89,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -186,6 +186,7 @@
         "src/ui/modern/ModernExperimentFingerprint.js",
         "src/ui/modern/ModernExperimentThumbnail.js",
         "src/ui/modern/ModernExperimentHistory.js",
+        "src/ui/modern/ModernThumbnailPreview.js",
         "src/ui/modern/ModernExperimentHistoryUI.js",
         "src/ui/modern/ModernExperimentHistoryFilters.js",
         "src/animation/ModernAnimationCompatibility.js",
@@ -386,7 +387,8 @@
       "src/ui/modern/ModernRenderProfiler.js",
       "src/ui/modern/ModernSceneState.js",
       "src/ui/modern/ModernSessionAutosave.js",
-      "src/ui/modern/ModernTargetIndicator.js"
+      "src/ui/modern/ModernTargetIndicator.js",
+      "src/ui/modern/ModernThumbnailPreview.js"
     ],
     "notDirectlyLoadedByTheseEntrypoints": [
       "src/ControlPanel.js",
@@ -411,7 +413,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 176,
+  "sourceJsCount": 177,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2266,7 +2268,8 @@
         "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationSequences.test.js",
-        "tests/ModernAnimationStudio.test.js"
+        "tests/ModernAnimationStudio.test.js",
+        "tests/ModernThumbnailPreview.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2521,7 +2524,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernExperimentHistory.test.js",
-        "tests/ModernExperimentVisualHistory.test.js"
+        "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernThumbnailPreview.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2697,6 +2701,19 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernTargetIndicator.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernThumbnailPreview.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernAnimationStudioUI.js",
+        "src/ui/modern/ModernExperimentHistoryUI.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernThumbnailPreview.test.js"
       ],
       "commonJsToolCallers": []
     },
