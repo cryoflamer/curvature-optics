@@ -47,7 +47,7 @@ See [production promotion](fused-gradient-production-promotion.md), [qualificati
 
 A drawn **metric grid horizon** and a **traced optical horizon** are different quantities. The latter is displayed only when the first-ground-contact tracing and associated bracketing have sufficient evidence. A failed or indeterminate shooting calculation must **not** be converted into “blocked” or into a fabricated finite horizon. Neither a solved single branch nor a displayed horizon certifies globally unique visibility in atmospheres admitting multiple paths.
 
-Compare deliberately uses a common, fixed eye-level camera for A and B. Changing curvature or atmosphere between them can change physical visibility; changing viewport width can change pixel scale without changing angular field of view. Atmospheric **turbulence/shimmer** in Modern is an animated *visual approximation*, not a calibrated turbulence (`Cₙ²`) prediction.
+Compare deliberately uses a common, fixed eye-level camera for A and B. Changing curvature or atmosphere between them can change physical visibility; changing viewport width can change pixel scale without changing angular field of view. Atmospheric **turbulence/shimmer** in Modern is an animated *visual approximation*, not a calibrated turbulence (`Cₙ²`) prediction. For conditional `C_n²`/imaging estimates and the proposed physical research sequence, see [optical turbulence research](atmospheric-turbulence-research.md).
 
 ## 5. What the tests actually establish
 

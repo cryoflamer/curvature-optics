@@ -105,6 +105,8 @@ For the Lake Pontchartrain comparison, define the height interval actually sampl
 - Scene/Compare display semantics should remain consistent; geometry radius and atmospheric refraction scale radius must remain independent.
 - Defer dynamical evolution/mixing animations until an explicit, tested dynamics model exists.
 
+For conditional numerical estimates of optical turbulence and a proposed simulation path, see [optical turbulence research](atmospheric-turbulence-research.md). Those estimates are **not** a calibrated prediction of image distortion.
+
 ## Work sequence / acceptance questions
 
 1. Validate the dry-air optical refractivity coefficient and units at a declared wavelength and reference state; document uncertainty.
