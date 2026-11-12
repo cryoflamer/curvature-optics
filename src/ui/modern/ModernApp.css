@@ -856,18 +856,6 @@ button{cursor:pointer}
   border:1px solid #e8d7a8;color:#765d2d;font-size:12px}
 .modern-studio-undo-removal button{border:1px solid #c7ad6c;background:#fff;border-radius:5px;
   color:#684a0e;cursor:pointer;padding:4px 11px;font:inherit}
-.modern-studio-staged{margin:10px 0;padding:9px 11px;border:1px solid #d4e3f0;
-  border-radius:8px;background:#f7fbff;color:#2c5779;font-size:12px}
-.modern-studio-staged .modern-studio-hint{margin:3px 0 7px}
-.modern-studio-staged-list{display:flex;gap:8px;list-style:none;overflow-x:auto;
-  padding:3px 2px 8px;margin:0;scrollbar-width:thin}
-.modern-studio-staged-card{position:relative;flex:0 0 126px;min-width:0;
-  padding:6px 6px 8px;background:#fff;border:1px solid #d0e0ef;border-radius:7px}
-.modern-studio-staged-visual{height:60px;display:flex;align-items:center;justify-content:center;
-  overflow:hidden;border-radius:5px;background:#edf4fa}
-.modern-studio-staged-name{display:block;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;margin-top:5px;padding-right:21px;font-size:11px}
-.modern-studio-staged-card .modern-studio-card-remove{top:6px;right:6px}
 .modern-studio-filmstrip-item .modern-studio-drag-handle{align-self:center;margin-top:2px;min-height:22px}
 .modern-studio-drop-slot{flex:0 0 19px;min-width:19px;display:flex;align-items:center;
   justify-content:center;border:2px dashed transparent;border-radius:6px;box-sizing:border-box;

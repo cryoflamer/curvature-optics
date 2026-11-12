@@ -2155,7 +2155,7 @@ preferences, and removal of the now-duplicated target CSS block.
   large saved-image preview behavior (dwell, focus, pinned touch/pen, Escape,
   dynamic viewport positioning, scroll dismissal and rerender cleanup).
 - Five mounted Modern galleries with real screenshot cards are covered:
-  History, Studio Snapshot Picker, staged snapshots, Studio keyframes and
+  History, Studio Snapshot Picker, Studio keyframes and
   Animation Library. The existing History-to-Animation storyboard rendering
   helper also supports the shared inspector, though the current History
   handoff toolbar only displays counts/buttons. The same physical-settings inspector
@@ -2182,3 +2182,17 @@ preferences, and removal of the now-duplicated target CSS block.
   `prefers-reduced-motion` requests instant rather than smooth navigation.
 - Preparation/paint errors route to the editor's status/diagnostics instead of
   scrolling to stale Playback. Legacy, RK4, export, and project persistence are unchanged.
+
+### History-to-Animation UX consolidation (#140.12.120.9.12.4)
+
+- Removed the redundant Staged snapshots gallery and the destructive Load staged
+  snapshots button from the Animation Studio editor. Choose from History / Add
+  checked remains the primary non-destructive insertion path.
+- Preserved History's ordered browser-local collection for compatibility; the
+  History handoff action now appends de-duplicated snapshots to the current draft
+  rather than replacing its frames or timing. The collection is not a second
+  Animation Studio timeline.
+- Renamed the camera import to Replace with Camera Animation… and added a native
+  confirmation for nonempty timelines. Invalid imports and cancelled replacements
+  leave the existing draft unchanged. No project schema, optical physics, Legacy
+  behavior or playback/export implementation changed.

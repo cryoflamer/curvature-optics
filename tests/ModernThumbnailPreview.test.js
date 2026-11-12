@@ -106,7 +106,7 @@ test('History → Animation shortlist uses the full preview without affecting re
   host.__thumbnailPreview.destroy();
 });
 
-test('Snapshot Picker and staged keyframes use one inspector per host and saved History images',()=>{
+test('Snapshot Picker and timeline keyframes use one inspector per host and saved History images',()=>{
   const {doc,host}=fakeDom(),s=snapshot(),actions={};
   studio.renderPicker(doc,host,[s],actions,{open:true});
   const picker=collect(host,n=>n.className==='modern-studio-picker-card')[0];
@@ -119,14 +119,14 @@ test('Snapshot Picker and staged keyframes use one inspector per host and saved 
     travelMs:0,holdMs:1000,easing:'linear'};
   const draft={frames:[frame],mode:'auto',target:'auto',name:'Test',description:'',activeFrameKeys:null};
   studio.render(doc,host,draft,{compatible:false,issues:[],transitions:[]},{},false,
-    {entries:[s],stagedIds:[s.id]});
-  const staged=collect(host,n=>n.className==='modern-studio-staged-card')[0];
+    {entries:[s]});
   const keyframe=collect(host,n=>n.className.includes('modern-studio-keyframe')&&n.tagName==='button')[0];
-  assert.ok(staged.listeners.mouseover?.length);
   assert.ok(keyframe.listeners.mouseover?.length);
+  assert.equal(collect(host,n=>n.className==='modern-studio-staged-card').length,0,
+    'staging no longer creates redundant thumbnail cards');
   const ctrl=host.__thumbnailPreview;
-  ctrl.show(s,staged,false);assert.equal(imageSrc(overlay(doc)),s.thumbnail.dataUrl);
-  ctrl.show(s,keyframe,false);assert.equal(doc.body.children.length,1,'same overlay used for staged and timeline');
+  ctrl.show(s,keyframe,false);assert.equal(imageSrc(overlay(doc)),s.thumbnail.dataUrl);
+  assert.equal(doc.body.children.length,1,'same overlay is reused after picker closes');
   ctrl.destroy();
 });
 
@@ -178,7 +178,7 @@ test('Thumbnail-less imported camera frames show metadata instead of a fabricate
   ctrl.destroy();
 });
 
-test('Audit inventories all six thumbnail galleries without changing Legacy',()=>{
+test('Audit inventories remaining thumbnail galleries without changing Legacy',()=>{
   const file=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const old=fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8');
   const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
@@ -186,7 +186,7 @@ test('Audit inventories all six thumbnail galleries without changing Legacy',()=
   assert.ok(file.indexOf('ModernThumbnailPreview.js')<file.indexOf('ModernExperimentHistoryUI.js'));
   assert.match(ui,/inspector\.bind\(card,libraryPreviewEntry\(entry\)/);
   assert.match(ui,/inspector\.bind\(item,entry,item\)/);
-  assert.match(ui,/inspector\.bind\(card,entry,card\)/);
+  assert.doesNotMatch(ui,/modern-studio-staged-card/);
   assert.match(ui,/inspector\.bind\(pick,/);
   assert.match(hist,/inspector\.bind\(item,entry,item\)/);
   assert.match(hist,/inspector\.hover\(entry,card,select\)/);

@@ -357,14 +357,14 @@ returning to their respective screens.
 
 **History** opens as an overlay instead of pushing the viewport down the page.
 Filter and select snapshot cards, then use **Add selected to Animation**: the
-selected IDs are staged in display order, de-duplicated and handed to the
-Animation Studio timeline. Choose more snapshots from the editor via **Choose
-snapshots from History**. The previous storyboard shortlist is retained as
-local staging preferences for compatibility but no longer renders a second
-thumbnail strip in History; the Studio owns ordering and timings. Loading a
-new selection replaces the draft's frame list while preserving per-ID timings
-where applicable. Previously imported Camera Animation frames can still be
-loaded through **Import Camera Animation**.
+selected IDs are added to the Animation Studio timeline in display order,
+without replacing existing frames or losing their timing. Add more snapshots
+from the editor using **Choose from History → Add checked**. The old History
+shortlist remains in browser preferences for compatibility; **Add collected to
+Animation** in History appends any missing IDs, never replaces the timeline.
+Studio no longer shows a duplicate Staged snapshots gallery or Load staged
+snapshots button. The explicitly destructive **Replace with Camera Animation…**
+asks for confirmation when the timeline is nonempty.
 
 Animation Studio displays a saved-keyframe preview and a selectable frame strip.
 The preview is an existing History thumbnail, **not** freshly computed optical
@@ -670,9 +670,9 @@ or dragging the card. The selection panel retains frame timing and move
 controls, but no longer duplicates frame deletion. Immediately after removal,
 **Undo** restores the previous draft, including its frame settings and
 selection; undo is one step, lasts until the next draft edit, and is not stored
-across a reload. The staged-snapshot shortlist is shown as compact cards in
-the editor with an `×` to **unstage** a saved snapshot without deleting it.
-History's actual snapshot deletion remains a separate, confirmed operation.
+across a reload. The old History shortlist remains accessible from History only, not as a
+second gallery inside the editor. Adding from the picker preserves existing
+frames; deleting a History record remains a separate, confirmed operation.
 
 ### Animation Studio HUD integration compatibility
 
@@ -808,7 +808,7 @@ remain visible, clearly marked EXCLUDED (not faded), in the same timeline and wo
 `Preview animation`, PNG/video exports and **Save project** use the selected
 sequence; **Use all keyframes** restores the full-timeline validation without
 removing the original cards. The choice is autosaved per workspace and survives
-reload. Adding/removing source frames or loading a new shortlist resets the
+reload. Adding/removing source frames or appending from History resets the
 choice; edits to names/timings retain it. When saving a named library project,
 its v1 playback payload contains the **selected compatible sequence only**;
 the remaining source cards live in the independent local working-draft backup,
@@ -830,10 +830,10 @@ change: sequence selection, autosave, Preview, exports and optics are unaffected
 
 ### Unified large thumbnail previews (#140.12.120.9.12.2)
 
-The five currently mounted Modern image-card surfaces share the same **saved
+The four currently mounted Modern image-card surfaces share the same **saved
 snapshot inspector**: History gallery, Studio **Choose from History** Snapshot
-Picker, **Staged snapshots**, keyframe timeline (both IN PREVIEW and EXCLUDED),
-and named **Animation Library** cards. The reusable History-to-Animation
+Picker, keyframe timeline (both IN PREVIEW and EXCLUDED), and named
+**Animation Library** cards. The reusable History-to-Animation
 storyboard renderer also supports the inspector if mounted; the current
 History handoff toolbar itself displays only counts/buttons, not extra cards. Hover for a short dwell or focus a card to
 see its stored screenshot enlarged, alongside the saved Scene/Compare physical

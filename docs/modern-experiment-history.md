@@ -188,8 +188,9 @@ than allowing hidden records to be deleted accidentally.
 ordered staging selection, then opens the separate Animation workspace and
 loads the selected states into its in-memory draft. Order follows the displayed
 gallery, including oldest/newest sorting and Pinned/Recent grouping; further
-picks append without duplication. **Open in Animation** loads the current
-staging selection, and **Clear selection** in the staging bar empties it. The
+picks append without duplication. **Add collected to Animation** appends
+missing snapshots from the old staging selection (without replacing existing
+Studio frames), and **Clear selection** empties that History-only collection. The
 selection is kept in Application Preferences (up to 200 unique History IDs),
 with deleted snapshots pruned automatically. It is not itself an animation,
 does not rerender optics and is independent of Pin. Pin important automatic
@@ -197,9 +198,10 @@ snapshots to protect them from pruning.
 
 Reordering and frame timing now belong to **Animation Studio**, rather than a
 second thumbnail strip in History. To gather more frames, use **Choose
-snapshots from History** inside Animation, check them and press **Add selected
-to Animation**. Reloading the staged selection replaces the draft's frame list
-but preserves timing for matching IDs; it does not alter the live experiment.
+snapshots from History** inside Animation, check them and press **Add checked**.
+The History collection is not displayed as a second gallery inside Studio.
+Adding collected snapshots retains all existing keyframes and timing; it does
+not alter the live experiment.
 
 Manual check: select saved experiments with filters and sorting, send them to
 Animation, return to History to add more, and confirm that the Studio timeline
@@ -370,7 +372,7 @@ project are provenance only, so pruning the source History cannot change
 already-created project data. No new UI or persistent animation-project store
 is added by this stage. See [Animation Architecture Research](modern-animation-research.md).
 
-## Animation Studio draft editor (original #140.12.120.2 behavior; superseded below)
+## Animation Studio draft editor (original #140.12.120.2 behavior; historical, superseded)
 
 Under the ordered **Storyboard shortlist**, History now contains an **Animation
 Studio · Draft editor**. Select at least two snapshots in History using the
@@ -450,8 +452,9 @@ viewport down. Selection is handed to Animation by **Add selected to
 Animation**. The redundant permanent Storyboard shortlist strip and its
 second rendering of thumbnails have been removed; its ordered, stable-ID
 staging data survives for existing users and remains independent of the owned
-Animation draft. The staging bar shows the number of selected snapshots and
-provides Open/Clear actions.
+Animation draft. The History collection bar shows the number of collected snapshots and
+provides Add collected/Clear actions; the Studio editor no longer duplicates
+this collection as staged cards.
 
 Animation Studio presents a larger **saved-thumbnail preview** of the selected
 keyframe above one horizontal timeline and the selected frame's fields.
@@ -483,9 +486,10 @@ The header History action remains available in every workspace.
   horizontally, including near-edge assistance during drag.
 - **De-duplication:** a History snapshot already in the draft is not inserted
   again. Imported Camera Animation frames remain intact when saved snapshots
-  are appended. The old **Load staged snapshots** action still explicitly
-  replaces the timeline when used, but the full History **Add selected to
-  Animation** action now appends rather than replacing an active draft.
+  are appended. The **Load staged snapshots** replacement action has been removed;
+  **Add selected to Animation** in History and **Add checked** in the picker
+  append rather than replace an active draft. **Replace with Camera Animation…**
+  is a separate, clearly named operation requiring confirmation.
 - **Validation:** reordering and inserting change only the in-memory frame
   list, not History, the live Scene/Compare experiment, or its optical render.
   `ModernAnimationCompatibility` still checks the entire resulting sequence;

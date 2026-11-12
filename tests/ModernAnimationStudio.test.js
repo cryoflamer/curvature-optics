@@ -145,17 +145,17 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   const a=experiment(),b=clone(a);b.scene.camera.Height=50;
   let draft=studio.history([1,2],[entry(1,a,'First'),entry(2,b,'Second')]);
   const {doc,host}=mockDom(),calls=[];
-  const actions={choose:()=>calls.push('choose'),load:()=>calls.push('load'),importCamera:()=>calls.push('import'),
+  const actions={choose:()=>calls.push('choose'),importCamera:()=>calls.push('import'),
     edit:(...args)=>calls.push(['edit',...args]),frame:(...args)=>calls.push(['frame',...args]),
     move:(...args)=>calls.push(['move',...args]),remove:(...args)=>calls.push(['remove',...args]),
     select:(...args)=>calls.push(['select',...args]),prepare:()=>calls.push('prepare')};
-  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{stagedCount:2});
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{});
   const buttons=collect(host,n=>n.tagName==='button');
   buttons.find(b=>b.textContent==='Choose from History').listeners.click();
-  buttons.find(b=>b.textContent==='Load staged snapshots (2)').listeners.click();
-  buttons.find(b=>b.textContent==='Import Camera Animation').listeners.click();
+  assert.equal(buttons.some(b=>b.textContent.startsWith('Load staged snapshots')),false);
+  buttons.find(b=>b.textContent==='Replace with Camera Animation…').listeners.click();
   buttons.find(b=>b.textContent==='Preview animation').listeners.click();
-  assert.deepEqual(calls,['choose','load','import','prepare']);
+  assert.deepEqual(calls,['choose','import','prepare']);
   assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project').length,0,
     'old ambiguous action must not appear');
   assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Preview does not save')).length);
@@ -305,24 +305,23 @@ test('One-step removal undo is visible only when requested and restores through 
   assert.match(app,/studioApi\.remove\(studioDraft,key\)/);
 });
 
-test('Staged snapshot cards remove shortlist IDs, not saved History entries',()=>{
+test('Studio uses one History picker and never exposes a second staged gallery or destructive load',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=65;
   const entries=[entry(11,a,'Globe'),entry(12,b,'Flat')];
-  const draft=studio.history([11,12],entries),before=structuredClone([entries,draft]);
-  const {doc,host}=mockDom(),calls=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{
-    unstage:id=>calls.push(['unstage',id])},false,
-  {entries,stagedCount:2,stagedIds:[12,11]});
-  const staged=collect(host,n=>n.className==='modern-studio-staged-card');
-  assert.equal(staged.length,2);
-  assert.match(staged[0].children[1].textContent,/Flat/);
-  const remove=collect(staged[0],n=>n.className==='modern-studio-card-remove')[0];
-  assert.match(remove['aria-label'],/from staging/);
-  remove.listeners.click({stopPropagation(){}});
-  assert.deepEqual(calls,[['unstage',12]]);
-  assert.deepEqual([entries,draft],before,'History and draft stay untouched');
-  assert.match(fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8'),
-    /historyStoryboardQueue=historyStoryboardQueue\.filter\(function\(value\)\{return value!==id;\}\)/);
+  const draft=studio.history([11,12],entries);
+  const {doc,host}=mockDom();
+  editor.render(doc,host,draft,studio.inspect(draft),{},false,
+    {entries,stagedCount:2,stagedIds:[12,11]});
+  assert.equal(collect(host,n=>n.className==='modern-studio-staged-card').length,0);
+  const labels=collect(host,n=>n.tagName==='button').map(n=>n.textContent);
+  assert.ok(labels.includes('Choose from History'));
+  assert.ok(labels.includes('Replace with Camera Animation…'));
+  assert.ok(!labels.some(label=>label.startsWith('Load staged snapshots')));
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.doesNotMatch(app,/loadStagedAnimation/);
+  assert.match(app,/studioApi\.insertSnapshots\(studioDraft,historyStoryboardQueue,entries,/);
+  assert.match(app,/Replace all .*keyframes with Camera Animation/);
+  assert.match(app,/root\.confirm\(/);
 });
 
 test('Responsive storyboard layout bounds editor width and scrolls thumbnail timelines horizontally',()=>{

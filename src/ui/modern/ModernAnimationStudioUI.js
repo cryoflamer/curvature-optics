@@ -23,7 +23,7 @@
     return node;
   }
   // A destructive-looking card action must never also select or drag its card.
-  // It only removes an item from the current draft/staging, never from History.
+  // It only removes a keyframe from the current draft, never from History.
   function cardRemove(doc,description,action){
     var remove=button(doc,'×',description,function(event){
       if(event&&event.stopPropagation)event.stopPropagation();
@@ -675,35 +675,9 @@
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
-    var load=button(doc,'Load staged snapshots'+(options.stagedCount?' ('+options.stagedCount+')':''),
-      'Replace draft with ordered saved snapshot selection',actions.load);
-    load.disabled=!options.stagedCount;toolbar.appendChild(load);
-    toolbar.appendChild(button(doc,'Import Camera Animation','Import existing camera keyframes into draft',actions.importCamera));
+    toolbar.appendChild(button(doc,'Replace with Camera Animation…',
+      'Replace ALL current keyframes with the Camera Animation after confirmation',actions.importCamera));
     host.appendChild(toolbar);
-    // The staging queue is a shortlist of History IDs, not an editable History
-    // gallery. Its card crosses only remove IDs from that shortlist.
-    if(options.stagedIds&&options.stagedIds.length){
-      var staged=el(doc,'section','modern-studio-staged');
-      staged.appendChild(el(doc,'strong','','Staged snapshots · '+options.stagedIds.length));
-      staged.appendChild(el(doc,'p','modern-studio-hint',
-        'Remove from staging without deleting the saved History snapshot.'));
-      var stagedList=el(doc,'ol','modern-studio-staged-list');
-      options.stagedIds.forEach(function(id){
-        var entry=entries.find(function(e){return e.id===id;});
-        if(!entry)return;
-        var card=el(doc,'li','modern-studio-staged-card');
-        card.tabIndex=0;card.setAttribute('aria-label','Preview staged snapshot '+historyUI.displayName(entry));
-        card.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-staged-visual'));
-        var name=el(doc,'span','modern-studio-staged-name',historyUI.displayName(entry));
-        name.title=name.textContent;card.appendChild(name);
-        card.appendChild(cardRemove(doc,'Remove '+historyUI.displayName(entry)+' from staging',function(){
-          if(actions.unstage)actions.unstage(id);
-        }));
-        if(inspector)inspector.bind(card,entry,card);
-        stagedList.appendChild(card);
-      });
-      staged.appendChild(stagedList);host.appendChild(staged);
-    }
     var basics=el(doc,'div','modern-studio-basics');
     basics.appendChild(field(doc,'Project name',draft.name,'text',function(value){actions.edit('name',value);},null,
       function(value){if(actions.liveEdit)actions.liveEdit('name',value);}));

@@ -2457,16 +2457,6 @@
       }
     });
   }
-  function loadStagedAnimation(entries){
-    studioDiagnosticTransition=null;
-    if(!studioApi)throw Error('Animation Studio is unavailable');
-    if(!historyStoryboardQueue.length)throw RangeError('Select snapshots for animation first');
-    studioSelectedKey=null;studioFilmstripScroll=0;
-    studioDraft=studioApi.history(historyStoryboardQueue,entries,studioDraft);
-    stopStudioPlayback(true);studioPrepared=null;
-    saveStudioDraft(false);
-    renderAnimationStudio(entries);
-  }
   function animationPickerEntries(entries){
     var query=studioPickerSearch.trim();
     var found=!query||!historyFiltersApi?entries:historyFiltersApi.filter(entries,{
@@ -2485,9 +2475,10 @@
       });
     }
   }
-  // Animation Studio is a temporary, self-contained draft, not a new History
-  // store or a live renderer. The shortlist and old camera sequence are read
-  // only when the user explicitly imports them into the editor.
+  // Animation Studio owns a working draft separate from History and the live
+  // renderer. Both the picker and the older History collection append saved
+  // snapshots; only an explicitly confirmed Camera Animation import replaces
+  // the timeline.
   function renderAnimationStudio(entries){
     var host=newUiEl('ModernAnimationStudio');
     if(!studioApi||!studioUI||!host)return;
@@ -2520,13 +2511,16 @@
     renderStudioLibrary();
     studioUI.render(document,host,studioDraft,assessment,{
       choose:function(){toggleAnimationPicker(!studioPickerOpen);},
-      load:function(){safe(function(){
-        studioSelectedKey=null;studioFilmstripScroll=0;
-        loadStagedAnimation(entries);
-      });},
       importCamera:function(){safe(function(){
+        // This is the only replacement import. Check that it can be built before
+        // asking the user, and never discard existing keyframes silently.
+        var replacement=studioApi.importCamera(experimentSnapshot(),cameraSequence,studioDraft);
+        if(studioDraft.frames.length&&(!root.confirm||!root.confirm(
+          'Replace all '+studioDraft.frames.length+' keyframes with Camera Animation? '+
+          'This replaces the current working timeline. Save it separately first if needed.')))
+          return;
         studioSelectedKey=null;studioFilmstripScroll=0;
-        update(studioApi.importCamera(experimentSnapshot(),cameraSequence,studioDraft));
+        update(replacement);
       });},
       edit:function(field,value){safe(function(){update(studioApi.edit(studioDraft,field,value));});},
       selectSequence:function(id){safe(function(){
@@ -2581,11 +2575,6 @@
         studioSelectedKey=undo.selectedKey;
         update(undo.before);
       });},
-      unstage:function(id){
-        historyStoryboardQueue=historyStoryboardQueue.filter(function(value){return value!==id;});
-        saveApplicationPreferences();renderHistoryStoryboard(entries);
-        renderAnimationStudio(entries);
-      },
       prepare:function(){
         try{
           stopStudioPlayback(true);
@@ -2671,7 +2660,6 @@
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
-      stagedCount:historyStoryboardQueue.length,stagedIds:historyStoryboardQueue,
       undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
         studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?
         studioRemovedFrameUndo.frameName:null,
@@ -3050,7 +3038,17 @@
     var openStaged=newUiEl('ModernHistoryQueueOpen');
     if(openStaged)openStaged.addEventListener('click',function(){handle(function(){
       return refreshHistoryList().then(function(entries){
-        setHistoryOpen(false);setMode('animation');loadStagedAnimation(entries);
+        // Older saved History shortlists are still usable, but loading them
+        // must never replace manually edited Studio keyframes. insertSnapshots
+        // keeps frame order/timing and skips IDs already in the timeline.
+        var next=studioApi.insertSnapshots(studioDraft,historyStoryboardQueue,entries,
+          studioDraft.frames.length);
+        setHistoryOpen(false);setMode('animation');
+        if(next.frames.length!==studioDraft.frames.length){
+          studioDraft=next;studioRemovedFrameUndo=null;
+          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
+        }
+        renderAnimationStudio(entries);
       });
     });});
     var clearQueue=newUiEl('ModernHistoryQueueClear');
