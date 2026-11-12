@@ -685,6 +685,32 @@ button{cursor:pointer}
 .modern-studio-status.is-ready{background:#effaf4;border-color:#b5dfc7;color:#256349}
 .modern-studio-status.is-invalid{background:#fff8f2;border-color:#f0d7b8;color:#79512a}
 .modern-studio-status ul{margin:6px 0 0;padding-left:20px;max-height:150px;overflow:auto}
+.modern-studio-compatibility{border:1px solid #d9c6a8;background:#fffaf4;border-radius:8px;
+  padding:12px;margin:8px 0;color:#704521;font-size:12px}
+.modern-studio-compatibility>.modern-studio-hint{margin:5px 0 10px}
+.modern-studio-transition{border:1px solid #e5d5bd;background:#fff;border-radius:7px;margin-top:8px;overflow:hidden}
+.modern-studio-transition.is-focused{border-color:#1d79bd;box-shadow:0 0 0 2px #cbe5fa}
+.modern-studio-transition-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px}
+.modern-studio-transition-header strong{flex:1;min-width:180px}
+.modern-studio-transition-count{font-size:11px;color:#826344}
+.modern-studio-transition-header button{border:1px solid #aacce8;border-radius:5px;background:#f1f8ff;
+  color:#155782;padding:5px 9px;cursor:pointer;font:inherit}
+.modern-studio-transition-details{border-top:1px solid #ece2d4}
+.modern-studio-transition-details summary{cursor:pointer;padding:7px 10px;color:#355b77}
+.modern-studio-transition-table{border-collapse:collapse;width:100%;font-size:11px;table-layout:fixed}
+.modern-studio-transition-table th,.modern-studio-transition-table td{border-top:1px solid #edf0f3;
+  padding:7px;vertical-align:top;text-align:left;overflow-wrap:anywhere}
+.modern-studio-transition-table th{background:#f1f6fa;color:#30556d}
+.modern-studio-transition-table tr.is-blocking{background:#fff9f1}
+.modern-studio-transition-table tr.is-interpolated{background:#f5fbf7}
+.modern-studio-transition-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.modern-studio-transition-reason{display:block;margin-top:3px;color:#6b6b6b}
+.modern-studio-general-issues{margin-top:10px}
+.modern-studio-general-issues ul{margin:4px 0;padding-left:18px}
+.modern-studio-keyframe.is-transition-from,.modern-studio-keyframe.is-transition-to{
+  outline:3px solid #d98630;outline-offset:1px}
+@media(max-width:650px){.modern-studio-transition-table{table-layout:auto;display:block;overflow-x:auto}
+  .modern-studio-transition-table th,.modern-studio-transition-table td{min-width:100px}}
 .modern-studio-filmstrip{display:flex;gap:9px;list-style:none;padding:3px 2px 10px;
   margin:10px 0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .modern-studio-filmstrip-item{flex:0 0 160px;min-width:0}

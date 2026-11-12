@@ -414,6 +414,122 @@
     });
     host.appendChild(list);
   }
+  var CAMERA_NAMES={CameraEast:'East position',CameraNorth:'North position',
+    Height:'Camera height (m)',Pan:'Pan',Nick:'Nick',Roll:'Roll',
+    FocalLengthField:'Focal length'};
+  function friendlyPath(path){
+    if(path==='mode')return 'Scene mode';
+    if(path.indexOf('camera.')===0)return 'Camera · '+(CAMERA_NAMES[path.slice(7)]||path.slice(7));
+    if(path.indexOf('scene.objects.')===0)return 'Objects · '+path.slice(14).replace(/\.(\d+)/g,function(_,n){return ' · item '+(Number(n)+1);});
+    if(path==='scene.surface.curvature'||/compare\.[AB]\.surface\.curvature/.test(path))
+      return path.replace('surface.curvature','Earth curvature');
+    return path.replace(/^display\./,'Display · ').replace(/^scene\./,'Scene · ')
+      .replace(/^compare\.([AB])\./,'Compare $1 · ').replace(/\./g,' · ');
+  }
+  function valueText(value,path){
+    if(value===undefined)return '(not active in this mode)';
+    if(value===null)return 'null';
+    if(path==='mode')return value==='scene'?'Scene':value==='compare'?'Compare':String(value);
+    if(/surface\.curvature$/.test(path)&&typeof value==='number')
+      return value===0?'Flat (zero curvature)':'Globe (radius '+Number((1/value/1000).toPrecision(12))+' km)';
+    if(typeof value==='boolean')return value?'On':'Off';
+    if(typeof value==='number')return Number.isFinite(value)?String(Number(value.toPrecision(12))):String(value);
+    if(typeof value==='string')return value;
+    var json=JSON.stringify(value);
+    return json.length>160?json.slice(0,157)+'…':json;
+  }
+  function issueDescription(issue){
+    var explanations={
+      'missing-target':'Choose the single physical parameter to animate.',
+      'inactive-target':'The selected physical parameter is not active in the initial frame.',
+      'ambiguous-unchanged':'All frames are identical; select Camera motion to hold a static view.',
+      'missing-name':'Give the project a name.',
+      'missing-frame-name':'Give this keyframe a name.',
+      'invalid-duration':'Use an incoming travel duration of at least 0.2 seconds.',
+      'insufficient-frames':'Add at least two keyframes.',
+      'invalid-draft':'The current draft contains invalid data.'};
+    return explanations[issue.code]||'This value cannot vary in the selected animation mode.';
+  }
+  function changeExplanation(change,result){
+    var path=change.path,issue=result.issues.find(function(item){return item.path===path;});
+    var camera=path.indexOf('camera.')===0&&
+      ['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField'].includes(path.slice(7));
+    var physical=/^(scene|compare\.[AB])\.(surface\.curvature|temperatureProfile\.gradientKPerKm)$/.test(path);
+    if(!issue)return {label:'Interpolated',reason:camera?'Camera motion interpolates this parameter.':
+      physical?'The selected physical channel interpolates this value.':'No blocker detected.',blocked:false};
+    if(path==='mode')return {label:'Unsupported switch',reason:
+      'Scene and Compare cannot be switched inside one continuous animation. Use separate projects.',blocked:true};
+    if(issue.code==='camera-change'||issue.code==='physical-change'||
+      issue.code==='multiple-physical-channels'||issue.code==='mixed-or-unsupported-change'&&(camera||physical)){
+      return {label:'Channel conflict',reason:camera?
+        'Camera values can interpolate in Camera motion, but this animation also changes optics or fixed scene settings.':
+        'A physical parameter needs one Physical animation channel, with camera and all other parameters fixed.',blocked:true};
+    }
+    return {label:'Not interpolated',reason:/^camera\./.test(path)?
+      'This camera setting is fixed during animation.':'This scene/display setting is fixed during animation; a discrete switch is not supported.',blocked:true};
+  }
+  function compatibilityDiagnostics(doc,result,draft,actions,options){
+    var panel=el(doc,'section','modern-studio-compatibility');
+    panel.setAttribute('aria-label','Keyframe transition diagnostics');
+    panel.appendChild(el(doc,'strong','','Changes between adjacent keyframes'));
+    panel.appendChild(el(doc,'p','modern-studio-hint',
+      'Each transition compares the actual keyframe values. One animation supports either camera motion or one physical parameter. Scene/Compare switches are not supported. Globe/Flat can vary as the single Earth-curvature channel.'));
+    var firstBlocking=(result.transitions||[]).findIndex(function(transition){
+      return transition.changes.some(function(change){return changeExplanation(change,result).blocked;});
+    });
+    (result.transitions||[]).forEach(function(transition){
+      var i=transition.fromIndex,from=draft.frames[i],to=draft.frames[transition.toIndex];
+      var blocked=transition.changes.filter(function(change){return changeExplanation(change,result).blocked;});
+      var wrapper=el(doc,'div','modern-studio-transition'+(options.diagnosticTransition===i?' is-focused':''));
+      var header=el(doc,'div','modern-studio-transition-header');
+      header.appendChild(el(doc,'strong','',(i+1)+' → '+(i+2)+' · '+from.name+' → '+to.name));
+      header.appendChild(el(doc,'span','modern-studio-transition-count',
+        transition.changes.length+' changed · '+blocked.length+' blocking'));
+      header.appendChild(button(doc,'Show on timeline',
+        'Highlight keyframes '+(i+1)+' and '+(i+2)+' in the timeline',function(){
+          if(actions.focusTransition)actions.focusTransition(i);
+        }));
+      wrapper.appendChild(header);
+      var details=el(doc,'details','modern-studio-transition-details');
+      if(options.diagnosticTransition===i||
+        (options.diagnosticTransition==null&&i===firstBlocking))details.open=true;
+      details.appendChild(el(doc,'summary','',
+        transition.changes.length?'Show changed parameters and values':'No effective scene or camera changes'));
+      if(transition.changes.length){
+        var table=el(doc,'table','modern-studio-transition-table');
+        var thead=el(doc,'thead'),head=el(doc,'tr');
+        ['Parameter','From frame '+(i+1),'To frame '+(i+2),'Handling / reason'].forEach(function(label){
+          head.appendChild(el(doc,'th','',label));
+        });
+        thead.appendChild(head);table.appendChild(thead);
+        var tbody=el(doc,'tbody');
+        transition.changes.forEach(function(change){
+          var info=changeExplanation(change,result),row=el(doc,'tr',info.blocked?'is-blocking':'is-interpolated');
+          var field=el(doc,'td','',friendlyPath(change.path));field.title=change.path;
+          row.appendChild(field);
+          row.appendChild(el(doc,'td','modern-studio-transition-value',valueText(change.from,change.path)));
+          row.appendChild(el(doc,'td','modern-studio-transition-value',valueText(change.to,change.path)));
+          var why=el(doc,'td');why.appendChild(el(doc,'strong','',info.label));
+          why.appendChild(el(doc,'span','modern-studio-transition-reason',info.reason));
+          row.appendChild(why);tbody.appendChild(row);
+        });
+        table.appendChild(tbody);details.appendChild(table);
+      }
+      wrapper.appendChild(details);panel.appendChild(wrapper);
+    });
+    var transitionPaths=new Set();(result.transitions||[]).forEach(function(pair){
+      pair.changes.forEach(function(item){transitionPaths.add(item.path);});
+    });
+    var other=result.issues.filter(function(issue){return !transitionPaths.has(issue.path);});
+    if(other.length){
+      var general=el(doc,'div','modern-studio-general-issues');
+      general.appendChild(el(doc,'strong','','Project-wide requirements'));
+      var list=el(doc,'ul');other.forEach(function(issue){
+        list.appendChild(el(doc,'li','',issueDescription(issue)));
+      });general.appendChild(list);panel.appendChild(general);
+    }
+    return panel;
+  }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
     options=options||{};
@@ -491,14 +607,14 @@
         ' · '+(draft.frames.reduce(function(total,f){return total+f.travelMs+f.holdMs;},0)/1000).toFixed(1)+' s';
     }else{
       status.className+=' is-invalid';
-      status.appendChild(el(doc,'strong','','Incompatible keyframes. Resolve:'));
-      var list=el(doc,'ul');
-      result.issues.forEach(function(issue){
-        list.appendChild(el(doc,'li','',issue.path+' ('+issue.code+')'));
-      });
-      status.appendChild(list);
+      status.appendChild(el(doc,'strong','','Cannot preview this sequence'));
+      status.appendChild(el(doc,'p','',
+        'One animation supports camera motion OR one physical parameter; all other scene settings must stay fixed. Inspect the exact transitions below.'));
     }
     host.appendChild(status);
+    if(draft.frames.length>=2&&(!result.compatible||options.diagnosticTransition!==null&&
+      options.diagnosticTransition!==undefined))
+      host.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
 
     if(selected){
       var previewEntry=frameEntry(selected,entries);
@@ -522,7 +638,9 @@
       var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name,function(){
         if(actions.select)actions.select(frame.key);
       });
-      pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'');
+      pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'')+
+        (options.diagnosticTransition===i?' is-transition-from':'')+
+        (options.diagnosticTransition===i-1?' is-transition-to':'');
       pick.setAttribute('aria-pressed',String(frame===selected));
       pick.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-keyframe-visual'));
       var name=el(doc,'strong','modern-studio-keyframe-name',(i+1)+'. '+frame.name);

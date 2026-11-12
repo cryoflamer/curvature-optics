@@ -55,6 +55,24 @@
       Array.from(keys).sort().forEach(function(k){changed(a[k],b[k],path?path+'.'+k:k,paths);});
     }else paths.add(path);
   }
+  // Adjacent-frame diagnostics supplement the global one-channel decision.
+  // We retain the original compatibility verdict: displaying a discontinuity
+  // must never imply that the renderer supports stepping or interpolation.
+  function atPath(frame,path){
+    return path.split('.').reduce(function(value,key){
+      return value===null||value===undefined?undefined:value[key];
+    },frame);
+  }
+  function transitions(frames){
+    var list=[];
+    for(var i=1;i<frames.length;i++){
+      var paths=new Set();changed(frames[i-1],frames[i],'',paths);
+      list.push({fromIndex:i-1,toIndex:i,changes:Array.from(paths).sort().map(function(path){
+        return {path:path,from:atPath(frames[i-1],path),to:atPath(frames[i],path)};
+      })});
+    }
+    return list;
+  }
   function targetPath(target){
     if(!object(target)||!['scene','A','B'].includes(target.scope)||
       !CHANNELS.includes(target.parameter)||Object.keys(target).sort().join(',')!=='parameter,scope')
@@ -110,7 +128,7 @@
       else differences.forEach(function(p){issues.push({code:'mixed-or-unsupported-change',path:p});});
     }
     return {compatible:issues.length===0,mode:mode,target:target,
-      changedPaths:differences,issues:issues};
+      changedPaths:differences,issues:issues,transitions:transitions(frames)};
   }
   return Object.freeze({inspect:inspect,effective:effective,targetPath:targetPath});
 }));

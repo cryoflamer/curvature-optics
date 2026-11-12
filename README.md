@@ -761,3 +761,22 @@ RK4 optics, the Legacy interface or the animation timeline.
   project detaches its working checkpoint instead of destroying unsaved edits.
   If an external tab modified a saved record, revision validation protects the
   Library and **Save As** remains available to preserve current work.
+
+### Animation Studio keyframe compatibility diagnostics (#140.12.120.9.11)
+
+When a sequence cannot be previewed, **Changes between adjacent keyframes**
+shows each consecutive transition (for example `3 → 4`, with both snapshot
+names). Expand a transition to compare **parameter, actual before/after values,
+and why the change is or is not supported**. The first blocking transition is
+expanded automatically. **Show on timeline** selects the destination frame,
+highlights both frames and scrolls the timeline to them. Routine compatibility
+and the global one-channel physics/camera rule are unchanged.
+
+Camera motion and one-parameter physical animation are mutually exclusive:
+changing a camera value in one transition and a physical value in another still
+blocks the *whole* project. Scene/Compare changes are not interpolated; a
+Globe/Flat change alone may be valid in the supported physical **Earth
+curvature** channel. Explanations distinguish these cases instead of exposing
+internal codes such as `mixed-or-unsupported-change`. The diagnostics use the
+same effective optics comparison as preparation and are read-only: they do not
+alter keyframes, source History, projects, renderers, or the Legacy UI.

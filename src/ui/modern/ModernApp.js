@@ -501,6 +501,7 @@
   var historyStoryboardQueue=[];
   var studioDraft=studioApi?studioApi.blank():null;
   var studioSelectedKey=null;
+  var studioDiagnosticTransition=null;
   var studioRemovedFrameUndo=null; // One-step, in-memory undo scoped to the exact draft.
   var studioFilmstripScroll=0;
   var studioPrepared=null;
@@ -1371,6 +1372,7 @@
     }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
   }
   function performStudioSwitch(kind,value){
+    studioDiagnosticTransition=null;
     stopStudioPlayback(true);studioPrepared=null;
     studioFilmstripScroll=0;studioPickerOpen=false;studioPickerSearch='';studioPickerScroll=0;
     studioPickerChecked=Object.create(null);studioDragSession=null;
@@ -2440,6 +2442,7 @@
     });
   }
   function loadStagedAnimation(entries){
+    studioDiagnosticTransition=null;
     if(!studioApi)throw Error('Animation Studio is unavailable');
     if(!historyStoryboardQueue.length)throw RangeError('Select snapshots for animation first');
     studioSelectedKey=null;studioFilmstripScroll=0;
@@ -2483,6 +2486,7 @@
     var oldStrip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(oldStrip&&!resetFilmstrip)studioFilmstripScroll=oldStrip.scrollLeft;
     function update(next,removedFrameUndo){
+      studioDiagnosticTransition=null;
       studioDraft=next;studioRemovedFrameUndo=removedFrameUndo||null;
       stopStudioPlayback(true);studioPrepared=null;
       if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
@@ -2523,9 +2527,18 @@
         }catch(error){/* Do not persist incomplete or invalid intermediate numbers. */}
       },
       select:function(key){
-        studioSelectedKey=key;saveStudioDraft(false);renderAnimationStudio(entries);
+        studioDiagnosticTransition=null;studioSelectedKey=key;saveStudioDraft(false);renderAnimationStudio(entries);
         var active=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-active');
         if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
+      },
+      focusTransition:function(index){
+        if(!Number.isInteger(index)||index<0||index+1>=studioDraft.frames.length)return;
+        studioDiagnosticTransition=index;
+        studioSelectedKey=studioDraft.frames[index+1].key;
+        renderAnimationStudio(entries);
+        var chosen=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-transition-to');
+        if(chosen&&typeof chosen.scrollIntoView==='function')
+          chosen.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
       },
       move:function(key,step){safe(function(){update(studioApi.move(studioDraft,key,step));});},
       remove:function(key){safe(function(){
@@ -2618,7 +2631,7 @@
         update(next);
       });}
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
-      selectedKey:studioSelectedKey,entries:entries,
+      selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       stagedCount:historyStoryboardQueue.length,stagedIds:historyStoryboardQueue,
       undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
         studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?

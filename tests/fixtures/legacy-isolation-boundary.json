@@ -529,6 +529,7 @@
         "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationProject.test.js"
@@ -658,6 +659,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationCanvasHud.test.js",
+        "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationLibrary.test.js",
@@ -2243,6 +2245,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStudio.test.js"
       ],
@@ -2405,6 +2408,7 @@
         "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
+        "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
@@ -2534,6 +2538,7 @@
         "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
+        "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationHudConsistency.test.js",

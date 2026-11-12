@@ -178,7 +178,13 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   host.children=[]; // The minimal DOM mock does not implement textContent's child clearing.
   editor.render(doc,host,draft,studio.inspect(draft),actions,false);
   const status=collect(host,n=>n.className.includes('modern-studio-status'))[0];
-  assert.ok(status.children.some(n=>n.tagName==='ul'));
+  assert.match(status.children.map(n=>n.textContent).join(' '),/Cannot preview this sequence/);
+  const pairDiagnostics=collect(host,n=>n.className==='modern-studio-transition');
+  assert.equal(pairDiagnostics.length,1);
+  const cells=collect(pairDiagnostics[0],n=>n.tagName==='td');
+  assert.ok(cells.some(n=>n.textContent==='Camera · Camera height (m)'));
+  assert.ok(cells.some(n=>n.textContent==='15'));
+  assert.ok(cells.some(n=>n.textContent==='50'));
   assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation')[0].disabled,true);
 });
 

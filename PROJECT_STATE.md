@@ -2107,3 +2107,17 @@ preferences, and removal of the now-duplicated target CSS block.
 - Save As and Save project permit intentionally identical content; the Library's
   duplicate review and deduplicating JSON imports remain opt-in/unchanged.
 - No Legacy or optical physics changes.
+
+### Animation Studio transition diagnostics (#140.12.120.9.11)
+
+- Cross-snapshot compatibility still enforces a single animation channel;
+  its pure inspector now also returns the **adjacent** transition changes with
+  before/after effective values, rather than only differences against frame 1.
+- Incompatible Studio drafts display named `N → N+1` transitions, handling
+  explanations and actual values. The first blocked pair starts expanded;
+  `Show on timeline` highlights both frames and selects the second.
+- Scene/Compare changes remain blocked; Globe/Flat curvature is still a legal
+  single physical channel, not a discrete mode switch. No runtime interpolator,
+  export format, physical solver or Legacy code was modified.
+- Regression tests cover pairwise deltas, mixed camera/physics across separate
+  transitions, Scene/Compare, legal curvature, table values and timeline focus.
