@@ -394,7 +394,7 @@ incoming travel duration, arrival hold, easing, reorder and removal. The first
 frame has no incoming travel. Validation evaluates **all** frames with
 `ModernAnimationCompatibility` and shows structured offending paths, such as
 `camera.Height` and `scene.temperatureProfile.gradientKPerKm`. Invalid or
-ambiguous combinations cannot be prepared. The **Prepare project** button
+ambiguous combinations cannot be prepared. At this original stage the **Prepare project** button
 uses `ModernAnimationProject.create` to produce an independent, validated
 project; for developer inspection it is accessible through
 `CurvatureModernApp.getAnimationStudioProject()` after preparation.
@@ -501,12 +501,13 @@ interactive Opera checks are still needed to confirm its look and feel.
 ## Isolated Camera Animation playback
 
 After arranging compatible camera keyframes in Animation Studio, click
-**Prepare project**. Camera projects open a dedicated optical preview with
+**Preview animation**. It does not save a named library project. Camera projects open a dedicated optical preview with
 Play, Pause, Stop and timeline seeking. Scene experiments render a single
 physical Canvas; Compare A/B experiments render both models independently
 using the same sampled camera. The original Scene/Compare live canvases and
-working session are never used to paint this preview. The Studio draft still
-lives only in memory; changing frames invalidates the prepared project.
+working session are never used to paint this preview. The Studio draft is independently autosaved in the browser; changing frames
+invalidates the preview. Use **Save project** in Animation Library to create
+a named project, which immediately appears as a selected card with an **Open** button.
 
 Optical render performance may be below real-time. Timeline position follows
 elapsed clock time, so slow frames are skipped rather than altering animation

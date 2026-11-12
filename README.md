@@ -385,14 +385,14 @@ multiple picker cards and drag a checked card, or use **Add checked** / the
 remain available. The full History manager is still accessible through the
 header or **Full History** inside the picker. Dragging does not alter original
 snapshots, active physics, or saved experiment URLs; incompatible sequences
-continue to be rejected on Prepare Project. See the
+continue to be rejected by Preview animation. See the
 [History and Animation guide](docs/modern-experiment-history.md) for details.
 
 
 ### Isolated Camera Animation playback
 
 In **Animation**, assemble two or more compatible camera keyframes and click
-**Prepare project**. A separate physical viewport appears **above** the editor
+**Preview animation** at the top of the draft editor. A separate physical viewport appears **above** the editor
 with **Play**, **Pause**, **Stop** and a seek slider. The preview renders real
 intermediate optical scenes using the production CPU Physical renderer—not
 History thumbnail crossfades. Compare projects render A and B side by side.
@@ -405,7 +405,7 @@ frames: slow optics may cause skipped intermediate display frames. Fast Preview
 is labeled **approximate**, while unsupported fast profiles (including
 Temperature lapse) use **Accurate** and may update slowly. Hiding the browser
 tab or leaving Animation pauses playback; editing keyframes invalidates the
-prepared project, which must be prepared again. The preview itself does not export a
+prepared preview, which must be prepared again. The preview itself does not export a
 video; named projects are saved separately through Animation Library. **Physical parameter playback is now available**.
 See [animation research](docs/modern-animation-research.md) for the clock,
 model-isolation and optical-rendering contract.
@@ -491,11 +491,28 @@ frame, which is reported separately. The atmospheric temperature column is
 not yet supported in the isolated Animation viewport. Details: [animation
 research](docs/modern-animation-research.md).
 
+### Animation Studio project workflow (#140.12.120.9.9)
+
+The current workflow is **New project → edit keyframes → Preview animation → Save project → Export PNG/video**.
+**New project** creates an editable, browser-autosaved working draft; it is not a
+named library project. **Preview animation** prepares isolated in-memory optics
+playback and never creates a library record. Playback appears above the editor;
+editing a keyframe invalidates the previous preview until Preview is clicked again.
+**Save project** creates the permanent named record in IndexedDB and immediately
+expands the library, selects the card, and returns the horizontal gallery to its
+start. When a saved record is open, the action becomes **Save changes**; **Save As**
+creates an independent record. An explicit **Open** button on each card opens
+that project for editing (and checks for unsaved changes). A single click selects
+it only for **Export selected** in the distinct **JSON backup** controls; JSON
+backup does not render a video. Videos and PNG frames are exported from the
+separate Playback export controls. Draft autosave remains independent, and failed
+saves never claim to have created a library project.
+
 ### Named Animation Library — durable project foundation (#140.12.120.5.1)
 
 Animation Studio now has a compact **Animation Library** toolbar, separate from
 History and from the single automatic draft checkpoint. For a compatible set
-of frames, **Save animation** creates a new named project in its own IndexedDB
+of frames, **Save project** creates a new named project in its own IndexedDB
 store; **Save As** creates another independent copy. Select a project and use
 **Open** to load its editable keyframes and optics settings, with playback
 prepared and paused at frame zero. **Save changes** explicitly updates the
@@ -518,10 +535,11 @@ IndexedDB database is reported rather than claiming that a project was saved.
 The toolbar is now followed by a **collapsible horizontal gallery of compact
 saved-project cards**. Each card shows the project name, Camera or Physical
 animation type, animated variable, keyframe count, total duration, updated
-date, a short description and a first-frame physics summary. Use **Open**,
-**Rename**, or **Delete** directly from a card; **Select** highlights a project
-without overwriting the draft. Save animation, Save changes, and Save As remain
-explicit actions above the gallery. A saved project with unsaved draft edits is
+date, a short description and a first-frame physics summary. Use **Open**, **Rename**, or **Delete** directly from a card; a single click
+selects a card for JSON backup without replacing the draft (double-click still opens).
+**Save project**, **Save changes**, and **Save As** remain explicit actions above
+the gallery. A successful save automatically expands the gallery, selects the new
+record and scrolls it into view. A saved project with unsaved draft edits is
 clearly identified.
 
 When the initial keyframe exactly matches a History snapshot with a genuine
@@ -540,7 +558,7 @@ new HTML entrypoint, or Legacy change.
 
 ### Animation Library duplicate protection
 
-**Save animation** and **Save As** compare the full semantic animation (active
+**Save project** and **Save As** compare the full semantic animation (active
 physical state, animation channel, ordered frame values, travel/hold durations
 and easing) with all saved projects. Titles, descriptions, History source IDs,
 screenshots, creation dates, saved optics preference and the current playback
@@ -554,7 +572,7 @@ same semantic comparison is also used by portable JSON import.
 
 ### Portable Animation Library JSON
 
-In **Animation → Animation Library**, use **Select** on a card followed by
+In **Animation → Animation Library → JSON backup**, select a card followed by
 **Export selected** to download one project, or choose **Export all** to back
 up the entire named library. **Import JSON** restores a file from either
 export action, or a standalone validated v1 Animation Project. Files contain

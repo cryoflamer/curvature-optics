@@ -349,12 +349,12 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   function nodes(){return (function collect(n){return [n,...n.children.flatMap(collect)];})(host);}
   ui.renderLibrary(doc,host,entries,
     {selectedId:'animation_a',activeId:'animation_a',canSave:true,dirty:true,expanded:true},actions);
-  assert.ok(nodes().some(n=>n.textContent==='Editing: Globe to Flat · Unsaved changes' ||
-    n.textContent==='Editing: saved project · Unsaved changes'));
+  assert.ok(nodes().some(n=>n.textContent==='Editing saved project: Globe to Flat · Changes not yet saved to library' ||
+    n.textContent==='Editing saved project: saved project · Changes not yet saved to library'));
   assert.equal(nodes().find(n=>n.tagName==='img').src,preview.dataUrl);
   assert.ok(nodes().find(n=>n.textContent==='Physical · Surface curvature' ||
     n.textContent.includes('Earth curvature · 2 frames')));
-  for(const [label,value] of [['New project','newProject'],['Save','save'],['Save As','saveAs']]){
+  for(const [label,value] of [['New project','newProject'],['Save changes','save'],['Save As','saveAs']]){
     nodes().find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
     assert.equal(calls.at(-1),value);
   }
@@ -362,7 +362,9 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   assert.equal(card.tabindex,'0');
   assert.equal(card.role,'group');
   assert.equal(nodes().some(n=>n.tagName==='button'&&n.textContent==='Select'),false);
-  assert.equal(nodes().some(n=>n.tagName==='button'&&n.textContent==='Open'),false);
+  assert.equal(nodes().filter(n=>n.tagName==='button'&&n.textContent==='Open').length,1);
+  nodes().find(n=>n.tagName==='button'&&n.textContent==='Open').listeners.click();
+  assert.deepEqual(calls.at(-1),['open','animation_a']);
   card.listeners.click({target:card});
   assert.deepEqual(calls.at(-1),['select','animation_a']);
   card.listeners.dblclick({target:card});
@@ -390,7 +392,7 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   nodes().find(n=>n.textContent==='Show projects').listeners.click();
   assert.equal(calls.at(-1),'toggle');
   host.children=[];ui.renderLibrary(doc,host,[],{selectedId:'',canSave:false},actions);
-  assert.equal(nodes().find(n=>n.textContent==='Save').disabled,true);
+  assert.equal(nodes().find(n=>n.textContent==='Save project').disabled,true);
 });
 
 
@@ -518,12 +520,12 @@ test('project lifecycle exposes New, Save, Save As and all three unsaved-change 
   const nodes=()=>{const walk=n=>[n,...n.children.flatMap(walk)];return walk(host);};
   ui.renderLibrary(doc,host,[],{canSave:true,unsaved:true,pendingChange:'new'},actions);
   const btn=label=>nodes().find(n=>n.tagName==='button'&&n.textContent===label);
-  for(const [label,event] of [['New project','new'],['Save','save'],['Save As','saveAs'],
+  for(const [label,event] of [['New project','new'],['Save project','save'],['Save As','saveAs'],
     ['Save and continue','saveBefore'],['Discard and continue','discard'],['Cancel','cancel']]){
     btn(label).listeners.click();assert.equal(calls.at(-1),event);
   }
   assert.ok(nodes().some(n=>n.textContent.includes('Save the current animation before creating')));
-  assert.ok(nodes().some(n=>n.textContent.includes('Not linked to any saved animation')));
+  assert.ok(nodes().some(n=>n.textContent.includes('Not in Animation Library until Save project')));
   host.children=[];
   ui.renderLibrary(doc,host,[],{canSave:false,pendingChange:'open'},actions);
   assert.equal(btn('Save and continue').disabled,true);
@@ -556,6 +558,7 @@ function projectLifecycleHarness(){
     studioLibraryActive:stored.get('old'),studioLibraryPending:null,
     studioLibrarySelected:'old',studioLibraryEntries:[...stored.values()],
     studioLibraryBusy:false,studioLibraryDuplicate:null,studioLifecyclePending:null,
+    studioLibraryExpanded:false,studioLibraryScroll:750,
     studioPlaybackQuality:'auto',studioLibraryError:false,studioLibraryMessage:'',
     cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     studioDraftGeneration:0,studioSelectedKey:'a',studioFilmstripScroll:0,
@@ -658,4 +661,40 @@ test('opening a saved animation is generation-guarded against concurrent edits',
   assert.equal(ctx.studioDraft.name,'Existing work');
   assert.equal(ctx.studioLibraryActive.id,'old');
   assert.match(ctx.studioLibraryMessage,/Draft changed while opening/);
+});
+
+
+test('Save project immediately reveals and selects its library card; failed save never does',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.studioLibraryActive=null;ctx.studioLibrarySelected='old';
+  ctx.studioDraft={...ctx.studioDraft,name:'New library animation'};
+  ctx.studioLibraryExpanded=false;ctx.studioLibraryScroll=750;
+  h.failSave(true);
+  assert.equal(await ctx.saveNamedAnimation(false),false);
+  assert.equal(ctx.studioLibraryExpanded,false);
+  assert.equal(ctx.studioLibrarySelected,'old');
+  assert.equal(stored.has('created-1'),false);
+  h.failSave(false);
+  assert.equal(await ctx.saveNamedAnimation(false),true);
+  assert.equal(ctx.studioLibraryExpanded,true,'a folded gallery opens after successful save');
+  assert.equal(ctx.studioLibraryScroll,0,'the saved card is visible at the start of the gallery');
+  assert.equal(ctx.studioLibrarySelected,ctx.studioLibraryActive.id);
+  assert.equal(stored.get(ctx.studioLibrarySelected).project.name,'New library animation');
+  assert.match(ctx.studioLibraryMessage,/Saved new animation/);
+});
+
+test('Save project and JSON backup controls are visually grouped, not a single export action',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',className:'',
+    disabled:false,appendChild(node){this.children.push(node);return node;},
+    addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section');
+  ui.renderLibrary(doc,host,[],{canSave:true},{});
+  const row=host.children.find(n=>n.className==='modern-animation-library-controls');
+  assert.equal(row.children.length,2);
+  assert.equal(row.children[0].children[0].textContent,'Projects');
+  assert.equal(row.children[1].children[0].textContent,'JSON backup');
+  assert.ok(row.children[0].children.some(n=>n.textContent==='Save project'));
+  assert.ok(row.children[1].children.some(n=>n.textContent==='Export selected'));
+  assert.ok(host.children.some(n=>n.textContent.includes('Preview animation does not save')));
 });

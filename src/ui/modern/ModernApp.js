@@ -1100,7 +1100,7 @@
             card.classList.toggle('is-selected',chosen);
             var title=card.querySelector('.modern-animation-library-card-title');
             card.setAttribute('aria-label',(chosen?'Selected animation: ':'Animation: ')+
-              (title?title.textContent:'')+'. Click to select, double-click or press Enter to open.');
+              (title?title.textContent:'')+'. Click to select for backup; choose Open to edit.');
           });
           var exportButton=host.querySelector('.modern-animation-library-export-selected');
           if(exportButton)exportButton.disabled=!!studioLibraryBusy||!studioLibraryEntries.some(function(e){return e.id===id;});
@@ -1264,6 +1264,9 @@
     return operation.then(function(saved){
       studioLibraryActive=saved;studioLibraryPending=null;studioLibraryDuplicate=null;
       studioLibrarySelected=saved.id;
+      // Save is the point at which a draft becomes a visible named project.
+      // The newest record sorts first; reveal it even if the gallery was folded.
+      studioLibraryExpanded=true;studioLibraryScroll=0;
       studioLibraryMessage=(replace?'Saved changes to ':'Saved new animation: ')+saved.project.name;
       studioLibraryError=false;
       saveStudioDraft(false);
@@ -2371,7 +2374,7 @@
         if(status){status.classList.remove('is-error');
           status.textContent=studioPlayback?
             (studioPrepared.mode==='camera'?'Camera':'Physical')+
-              ' project prepared. Play in the independent optical viewport above.':
+              ' preview ready above. No project was saved to Animation Library.':
             'Independent animation playback is unavailable.';}
       });},
       dragStart:function(payload,event){
@@ -2425,7 +2428,8 @@
         if(added)studioSelectedKey=added.key;
         update(next);
       });}
-    },!!studioPrepared,{selectedKey:studioSelectedKey,entries:entries,
+    },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
+      selectedKey:studioSelectedKey,entries:entries,
       stagedCount:historyStoryboardQueue.length,stagedIds:historyStoryboardQueue,
       undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
         studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?

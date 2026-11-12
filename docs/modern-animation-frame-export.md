@@ -4,7 +4,7 @@ The PNG exporter lives under **Animation → Animation playback → Export PNG
 frames**. It is a **background Web Worker pool** with a separate ZIP assembler,
 separate from live
 Playback, Scene/Compare and History. A compatible Studio draft can be exported
-without clicking **Prepare project**; if a project has already been prepared,
+without clicking **Preview animation**; if a preview has already been prepared,
 that validated project is used. The input is snapshotted at Start.
 
 ## Contract

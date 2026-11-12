@@ -75,9 +75,11 @@ The focused suite executes the actual thumbnail and Animation Library source
 in a VM without `module` or `require`, checks HTML dependency ordering and
 round-trips a named project through a test IndexedDB implementation. It also
 runs the existing Node persistence and revision tests. This **does not** replace
-an Opera acceptance check: serve `CurvatureModern.html` over HTTP, prepare an
-animation, select **Save animation**, reload, and use **Open** from the saved
-project gallery. Verify no `ReferenceError` appears in DevTools; do not delete
+an Opera acceptance check: serve `CurvatureModern.html` over HTTP, assemble a compatible animation,
+click **Preview animation** to confirm playback remains separate, then choose
+**Save project**. The saved gallery must expand and select the new card. Reload
+and use its explicit **Open** button (the browser-autosaved draft is not the
+named record). Verify no `ReferenceError` appears in DevTools; do not delete
 existing History or browser storage to troubleshoot a loader error.
 
 ## Portable animation files acceptance

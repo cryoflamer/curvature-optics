@@ -190,20 +190,25 @@
     }
     host.appendChild(head);
     var row=el(doc,'div','modern-animation-library-controls');
-    function action(label,description,callback,disabled){
+    var projectActions=el(doc,'div','modern-animation-library-action-group');
+    projectActions.appendChild(el(doc,'span','modern-animation-library-action-label','Projects'));
+    var fileActions=el(doc,'div','modern-animation-library-action-group');
+    fileActions.appendChild(el(doc,'span','modern-animation-library-action-label','JSON backup'));
+    function action(group,label,description,callback,disabled){
       var control=button(doc,label,description,callback);control.disabled=!!disabled;
-      row.appendChild(control);return control;
+      group.appendChild(control);return control;
     }
-    action('New project','Start a separate empty animation without modifying saved projects',
+    action(projectActions,'New project','Start an empty working draft; it is not saved in the library',
       actions.newProject,options.busy);
-    action('Save',options.activeId?'Save changes to the opened project':'Save draft as a named project',
+    action(projectActions,options.activeId?'Save changes':'Save project',
+      options.activeId?'Update the opened project in Animation Library':'Add this draft to Animation Library',
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
-    action('Save As','Save an independent copy with a new project ID',actions.saveAs,
+    action(projectActions,'Save As','Save an independent project with a new ID',actions.saveAs,
       options.busy||!options.canSave);
-    var exportSelected=action('Export selected','Export the selected named animation as portable JSON',actions.exportSelected,
-      options.busy||!entries.some(function(e){return e.id===options.selectedId;}));
+    var exportSelected=action(fileActions,'Export selected','Back up the selected saved project as JSON (not video)',
+      actions.exportSelected,options.busy||!entries.some(function(e){return e.id===options.selectedId;}));
     exportSelected.className+=' modern-animation-library-export-selected';
-    action('Export all','Export all saved animations as portable JSON',actions.exportAll,
+    action(fileActions,'Export all','Back up all saved projects as JSON (not video)',actions.exportAll,
       options.busy||!entries.length);
     var importInput=el(doc,'input');importInput.type='file';importInput.accept='.json,application/json';
     importInput.hidden=true;importInput.setAttribute('aria-label','Import animation JSON file');
@@ -211,18 +216,18 @@
       var file=importInput.files&&importInput.files[0];if(file)actions.importFile(file);
       importInput.value='';
     });
-    action('Import JSON','Import saved animations from a JSON file',function(){importInput.click();},options.busy);
-    row.appendChild(importInput);
+    action(fileActions,'Import JSON','Restore saved projects from a JSON backup',function(){importInput.click();},options.busy);
+    fileActions.appendChild(importInput);
+    row.appendChild(projectActions);row.appendChild(fileActions);
+    host.appendChild(row);
     if((options.duplicateGroups||[]).length){
-      action(options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
+      action(fileActions,options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
     }
-    host.appendChild(row);
     var message=el(doc,'p','modern-animation-library-note',options.activeId?
-      'Editing: '+(options.activeName||'saved project')+
-        (options.dirty?' · Unsaved changes':' · All changes saved'):
-      'New draft'+(options.unsaved?' · Unsaved changes':'')+
-        ' · Not linked to any saved animation');
+      'Editing saved project: '+(options.activeName||'saved project')+
+        (options.dirty?' · Changes not yet saved to library':' · Saved in library'):
+      'Working draft · Autosaved only in this browser · Not in Animation Library until Save project');
     host.appendChild(message);
     if(options.pendingChange){
       var pending=el(doc,'div','modern-animation-library-pending');
@@ -280,10 +285,10 @@
       host.appendChild(review);
     }
     if(!entries.length){host.appendChild(el(doc,'p','modern-animation-library-empty',
-      'No saved animations yet. Prepare an animation and use Save animation to keep it here.'));return;}
+      'No saved projects yet. Add keyframes, then click Save project. Preview animation does not save.'));return;}
     if(options.expanded===false)return;
     host.appendChild(el(doc,'p','modern-animation-library-hint',
-      'Click a card to select · Double-click to open · Enter to open · Space to select'));
+      'Click a card to select for JSON backup · Open loads it for editing · Double-click also opens'));
     var list=el(doc,'div','modern-animation-library-gallery');
     list.setAttribute('aria-label','Saved animation projects');
     entries.forEach(function(entry){
@@ -294,7 +299,7 @@
       card.setAttribute('tabindex','0');
       card.setAttribute('role','group');
       card.setAttribute('aria-label',(selected?'Selected animation: ':'Animation: ')+p.name+
-        '. Click to select, double-click or press Enter to open.');
+        '. Click to select for backup; choose Open to edit.');
       function insideControl(event){
         var target=event&&event.target;
         while(target&&target!==card){
@@ -353,6 +358,8 @@
         card.appendChild(editor);
       }else{
         var controls=el(doc,'div','modern-animation-library-card-actions');
+        var open=button(doc,'Open','Open saved animation '+p.name+' for editing',function(){actions.open(entry.id);});
+        open.disabled=!!options.busy;controls.appendChild(open);
         var rename=button(doc,'Rename','Rename saved animation '+p.name,function(){actions.renameStart(entry.id);});
         rename.disabled=!!options.busy;controls.appendChild(rename);
         var remove=button(doc,'Delete','Delete saved animation '+p.name,function(){actions.remove(entry.id);});
@@ -419,11 +426,18 @@
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
     host.textContent='';
     var heading=el(doc,'div','modern-studio-header');
-    heading.appendChild(el(doc,'strong','','Animation Studio · Draft editor'));
+    heading.appendChild(el(doc,'strong','','Edit animation · Working draft'));
     heading.appendChild(el(doc,'span','',draft.frames.length+' frames'));
     host.appendChild(heading);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Drag frames to reorder, or drag saved snapshots from the picker into the timeline. Changes never alter the live experiment.'));
+      'Edit keyframes below. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
+    var previewBar=el(doc,'div','modern-studio-preview-bar');
+    var preview=button(doc,'Preview animation','Prepare in-memory playback without adding a saved project',actions.prepare);
+    preview.disabled=!result.compatible;previewBar.appendChild(preview);
+    previewBar.appendChild(el(doc,'span','',prepared?
+      'Preview ready above · '+(options.activeId?'Saved project linked':'Working draft; not saved to library'):
+      'Prepare the preview to play above; Save project is a separate action.'));
+    host.appendChild(previewBar);
     var toolbar=el(doc,'div','modern-studio-toolbar');
     toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
     var load=button(doc,'Load staged snapshots'+(options.stagedCount?' ('+options.stagedCount+')':''),
@@ -572,15 +586,9 @@
       },[['linear','Linear'],['smoothstep','Ease in / out']]));
       panel.appendChild(fields);host.appendChild(panel);
     }
-    var footer=el(doc,'div','modern-studio-toolbar');
-    var prepare=button(doc,'Prepare project','Validate and prepare an in-memory animation project',actions.prepare);
-    prepare.disabled=!result.compatible;footer.appendChild(prepare);
-    if(prepared)footer.appendChild(el(doc,'span','modern-studio-prepared',
-      'Prepared · Draft autosaved; save a named copy in Animation Library above'));
-    host.appendChild(footer);
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Prepare a compatible Camera or Physical Animation to play in the independent optical viewport above. ' +
-      'Draft autosave restores your work after F5; use Animation Library above for named saves and portable JSON sharing.'));
+      'Playback appears above the editor after Preview animation. Edits require another Preview. ' +
+      'Export PNG/video from Playback; JSON backup and permanent project saves are in Animation Library.'));
   }
   return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary});
 }));

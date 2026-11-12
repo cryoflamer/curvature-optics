@@ -154,8 +154,11 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   buttons.find(b=>b.textContent==='Choose from History').listeners.click();
   buttons.find(b=>b.textContent==='Load staged snapshots (2)').listeners.click();
   buttons.find(b=>b.textContent==='Import Camera Animation').listeners.click();
-  buttons.find(b=>b.textContent==='Prepare project').listeners.click();
+  buttons.find(b=>b.textContent==='Preview animation').listeners.click();
   assert.deepEqual(calls,['choose','load','import','prepare']);
+  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project').length,0,
+    'old ambiguous action must not appear');
+  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Preview does not save')).length);
   const fieldInputs=collect(host,n=>n.tagName==='input');
   fieldInputs[0].value='Named study';fieldInputs[0].listeners.change();
   assert.deepEqual(calls.at(-1),['edit','name','Named study']);
@@ -176,7 +179,7 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   editor.render(doc,host,draft,studio.inspect(draft),actions,false);
   const status=collect(host,n=>n.className.includes('modern-studio-status'))[0];
   assert.ok(status.children.some(n=>n.tagName==='ul'));
-  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project')[0].disabled,true);
+  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation')[0].disabled,true);
 });
 
 test('Studio fields persist valid in-progress edits on input before focus leaves the field',()=>{
@@ -508,4 +511,19 @@ test('Touch pointer drag resolves drop position without relying on native HTML d
   docListeners.pointerup({pointerId:7,clientX:60,clientY:5,preventDefault(){},type:'pointerup'});
   assert.deepEqual(calls.slice(-2),[['drop',0],'end']);
   assert.equal(docListeners.pointermove,undefined,'pointer listeners removed on completion');
+});
+
+
+test('Preview action is separate from saving and shows whether the draft is library-linked',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=50;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),calls=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{});
+  const collectNodes=()=>collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation');
+  assert.equal(collectNodes().length,1,'single preview control near the editor heading');
+  collectNodes()[0].listeners.click();assert.deepEqual(calls,['preview']);
+  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length);
+  host.children=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{activeId:'saved-1'});
+  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length);
 });

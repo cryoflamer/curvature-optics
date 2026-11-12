@@ -2074,3 +2074,18 @@ Animation Studio HUD popup. The Scene/Compare overlay remains DOM-only;
 independent animation PNG/MP4/WebM settings, project schemas and RK4 optics
 remain unchanged. Test coverage verifies control uniqueness, placement,
 preferences, and removal of the now-duplicated target CSS block.
+
+
+### Animation Studio workflow UX (#140.12.120.9.9)
+
+- `New project` starts an autosaved working draft, **not** a named library record.
+- `Preview animation` replaces ambiguous `Prepare project` and prepares playback
+  only; the control is placed at the top of the keyframe editor near Playback.
+- Named library saves are explicitly `Save project` (new), `Save changes`
+  (opened record), or `Save As` (independent ID). After a successful save the
+  library expands, selects the saved card and resets horizontal scrolling;
+  rejected writes preserve previous library state.
+- Each saved card has an explicit `Open` action, retaining selection for JSON
+  backup and double-click/Enter shortcuts. Library toolbar separates project
+  lifecycle controls from JSON backup; MP4/WebM/PNG export stays in Playback.
+- No Legacy, physics, project-storage schema, or video encoder changes.
