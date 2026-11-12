@@ -149,3 +149,71 @@ test('Modern entrypoint wires draft recovery separately from physical session an
   assert.match(app,/saveStudioDraft\(!!next\.playing\)/);
   assert.match(app,/root\.addEventListener\('pagehide'/);
 });
+
+test('V2 working collection preserves multiple independent edited projects across reload',async()=>{
+  const db=memoryIndexedDB(),local=storage();
+  const first=autosave.checkpoint({draft:physicalDraft(),selectedKey:'history-41',
+    quality:'accurate',prepared:true,positionMs:1200,
+    libraryId:'project_a',libraryRevision:17},100);
+  const secondDraft=studio.edit(physicalDraft(),'name','Alternate edits');
+  const second=autosave.checkpoint({draft:secondDraft,selectedKey:'history-42',
+    quality:'fast',prepared:true,positionMs:4300,
+    libraryId:'project_b',libraryRevision:29},200);
+  const third=autosave.checkpoint({draft:studio.edit(physicalDraft(),'name','Unnamed draft'),
+    selectedKey:'history-41',quality:'auto',prepared:false,positionMs:0},300);
+  const a=autosave.projectWorkspaceId('project_a');
+  const b=autosave.projectWorkspaceId('project_b');
+  const draft='draft_temp';
+  let collection=autosave.collection(a,first,101);
+  collection=autosave.withWorkspace(collection,b,second,201);
+  collection=autosave.withWorkspace(collection,draft,third,301);
+  assert.equal(collection.activeId,draft);
+  assert.equal(collection.workspaces.length,3);
+  assert.deepEqual(autosave.getWorkspace(collection,a),first);
+  assert.deepEqual(autosave.getWorkspace(collection,b),second);
+  assert.deepEqual(autosave.getWorkspace(collection,draft),third);
+  autosave.writeCollectionLocal(local,collection);
+  await autosave.writeCollection(db,collection);
+  assert.deepEqual(autosave.readCollectionLocal(local),collection);
+  assert.deepEqual(await autosave.readCollection(db),collection);
+  let without=autosave.withoutWorkspace(collection,draft,b,450);
+  assert.equal(without.activeId,b);
+  assert.equal(autosave.getWorkspace(without,draft),null);
+  assert.deepEqual(autosave.getWorkspace(without,a),first);
+  assert.deepEqual(autosave.getWorkspace(without,b),second);
+  assert.equal(autosave.newerCollection(collection,without).activeId,b);
+  assert.equal(autosave.newerCollection(without,collection).activeId,b);
+});
+
+test('V1 single draft migrates without deleting saved content or changing library association',()=>{
+  const original=autosave.checkpoint({draft:physicalDraft(),selectedKey:'history-42',
+    quality:'fast',prepared:true,positionMs:4500,
+    libraryId:'saved_one',libraryRevision:27},900);
+  const moved=autosave.migrate(original);
+  assert.equal(moved.version,2);
+  assert.equal(moved.activeId,'project_saved_one');
+  assert.deepEqual(autosave.getWorkspace(moved,'project_saved_one'),original);
+  const untitled=autosave.checkpoint({draft:physicalDraft(),selectedKey:null,
+    quality:'auto',prepared:false,positionMs:0},901);
+  const migrated=autosave.migrate(untitled);
+  assert.match(migrated.activeId,/^draft_/);
+  assert.deepEqual(autosave.getWorkspace(migrated,migrated.activeId),untitled);
+});
+
+test('corrupted workspace collections are rejected and never erase valid backups',async()=>{
+  const db=memoryIndexedDB(),local=storage();
+  const record=autosave.checkpoint({draft:physicalDraft(),selectedKey:null,
+    quality:'auto',prepared:false,positionMs:0},500);
+  const correct=autosave.collection('draft_one',record,501);
+  await autosave.writeCollection(db,correct);
+  assert.throws(()=>autosave.withWorkspace(correct,'draft_one',{...record,version:3}),/checkpoint/);
+  assert.throws(()=>autosave.normalizeCollection({...correct,activeId:'draft_missing'}),/missing/);
+  assert.throws(()=>autosave.normalizeCollection({...correct,workspaces:[
+    ...correct.workspaces,...correct.workspaces]}),/Duplicate/);
+  assert.throws(()=>autosave.normalizeCollection({...correct,workspaces:[{
+    id:'project_wrong',checkpoint:record}]}),/disagree/);
+  local.setItem(autosave.COLLECTION_KEY,'{broken');
+  assert.equal(autosave.readCollectionLocal(local),null);
+  assert.deepEqual(await autosave.readCollection(db),correct);
+  assert.throws(()=>autosave.writeCollectionLocal({setItem(){throw Error('quota');}},correct),/quota/);
+});

@@ -157,7 +157,7 @@ test('duplicate create is blocked atomically, Save copy anyway is explicit, and 
   assert.equal((await library.list(db)).length,2);
 });
 
-test('library UI warns before duplicates and offers explicit copy plus manual review',()=>{
+test('library UI offers nonblocking duplicate review without save warnings',()=>{
   const ui=require('../src/ui/modern/ModernAnimationStudioUI');
   const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',
     className:'',value:'',disabled:false,appendChild(node){this.children.push(node);return node;},
@@ -167,18 +167,16 @@ test('library UI warns before duplicates and offers explicit copy plus manual re
   const a=library.record(original,'auto','one',10,11),b=library.record(copy,'fast','two',12,13);
   const calls=[],actions={save:()=>{},saveAs:()=>{},saveChanges:()=>{},
     toggleExpanded:()=>{},toggleDuplicates:()=>calls.push('review'),
-    openDuplicate:()=>calls.push('existing'),forceCopy:()=>calls.push('force'),
     open:id=>calls.push(['open',id]),remove:id=>calls.push(['delete',id]),
     select:()=>{},renameStart:()=>{},renameCancel:()=>{},rename:()=>{}};
-  ui.renderLibrary(doc,host,[a,b],{expanded:true,duplicate:{id:'one',name:original.name},
-    duplicateGroups:library.findDuplicates([a,b]),showDuplicates:true},actions);
+  ui.renderLibrary(doc,host,[a,b],{expanded:true,duplicateGroups:library.findDuplicates([a,b]),showDuplicates:true},actions);
   const nodes=(function walk(n){return [n,...n.children.flatMap(walk)];})(host);
-  for(const [label,value] of [['Open existing','existing'],['Save copy anyway','force'],
-    ['Hide duplicates','review']]){
+  for(const [label,value] of [['Hide duplicates','review']]){
     nodes.find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
     assert.equal(calls.at(-1),value);
   }
   assert.ok(nodes.some(n=>n.textContent.includes('none will be deleted automatically')));
+  assert.ok(!nodes.some(n=>n.textContent.includes('Identical animation already saved')));
   assert.equal(nodes.filter(n=>n.className==='modern-animation-library-duplicate-entry').length,2);
   nodes.find(n=>n.className==='modern-animation-library-duplicate-entry').children
     .find(n=>n.textContent==='Delete').listeners.click();
@@ -213,7 +211,8 @@ test('HTML load order and application expose named project save/open actions sep
   assert.match(app,/studioLibrary\.remove\(/);
   assert.match(app,/studioLibraryActive\.updatedAt/);
   assert.match(ui,/New project/);
-  assert.match(ui,/Save and continue/);
+  assert.doesNotMatch(ui,/Save and continue|Discard and continue|Identical animation already saved/);
+  assert.match(ui,/Open draft/);
   assert.match(ui,/Save As/);
   assert.match(app,/function requestStudioSwitch\(kind,id\)/);
   assert.match(app,/function studioHasUnsavedWork\(\)/);
@@ -349,8 +348,7 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   function nodes(){return (function collect(n){return [n,...n.children.flatMap(collect)];})(host);}
   ui.renderLibrary(doc,host,entries,
     {selectedId:'animation_a',activeId:'animation_a',canSave:true,dirty:true,expanded:true},actions);
-  assert.ok(nodes().some(n=>n.textContent==='Editing saved project: Globe to Flat · Changes not yet saved to library' ||
-    n.textContent==='Editing saved project: saved project · Changes not yet saved to library'));
+  assert.ok(nodes().some(n=>n.textContent.includes('Working edits autosaved separately')));
   assert.equal(nodes().find(n=>n.tagName==='img').src,preview.dataUrl);
   assert.ok(nodes().find(n=>n.textContent==='Physical · Surface curvature' ||
     n.textContent.includes('Earth curvature · 2 frames')));
@@ -508,29 +506,30 @@ test('Animation Library UI exposes portable export and file import without modif
   assert.equal(input.value,'');
 });
 
-test('project lifecycle exposes New, Save, Save As and all three unsaved-change choices',()=>{
+test('project lifecycle has independent draft controls and no conflicting confirmation panels',()=>{
   const ui=require('../src/ui/modern/ModernAnimationStudioUI');
   const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',className:'',
     value:'',disabled:false,appendChild(node){this.children.push(node);return node;},
     addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(name,value){this[name]=value;}};}};
   const host=doc.createElement('section'),calls=[];
   const actions={newProject:()=>calls.push('new'),save:()=>calls.push('save'),
-    saveAs:()=>calls.push('saveAs'),saveBeforeSwitch:()=>calls.push('saveBefore'),
-    discardSwitch:()=>calls.push('discard'),cancelSwitch:()=>calls.push('cancel')};
+    saveAs:()=>calls.push('saveAs'),openDraft:id=>calls.push(['openDraft',id]),
+    removeDraft:id=>calls.push(['removeDraft',id])};
   const nodes=()=>{const walk=n=>[n,...n.children.flatMap(walk)];return walk(host);};
-  ui.renderLibrary(doc,host,[],{canSave:true,unsaved:true,pendingChange:'new'},actions);
-  const btn=label=>nodes().find(n=>n.tagName==='button'&&n.textContent===label);
-  for(const [label,event] of [['New project','new'],['Save project','save'],['Save As','saveAs'],
-    ['Save and continue','saveBefore'],['Discard and continue','discard'],['Cancel','cancel']]){
-    btn(label).listeners.click();assert.equal(calls.at(-1),event);
+  ui.renderLibrary(doc,host,[],{canSave:true,draftWorkspaces:[
+    {id:'draft_one',name:'Tour of towers',frames:3,active:false},
+    {id:'draft_two',name:'Current work',frames:1,active:true}
+  ]},actions);
+  const button=label=>nodes().find(n=>n.tagName==='button'&&n.textContent===label);
+  for(const [label,event] of [['New project','new'],['Save project','save'],['Save As','saveAs']]){
+    button(label).listeners.click();assert.equal(calls.at(-1),event);
   }
-  assert.ok(nodes().some(n=>n.textContent.includes('Save the current animation before creating')));
-  assert.ok(nodes().some(n=>n.textContent.includes('Not in Animation Library until Save project')));
-  host.children=[];
-  ui.renderLibrary(doc,host,[],{canSave:false,pendingChange:'open'},actions);
-  assert.equal(btn('Save and continue').disabled,true);
-  assert.equal(btn('Discard and continue').disabled,false);
-  assert.ok(nodes().some(n=>n.textContent.includes('before opening another project')));
+  button('Open draft').listeners.click();assert.deepEqual(calls.at(-1),['openDraft','draft_one']);
+  button('Delete draft').listeners.click();assert.deepEqual(calls.at(-1),['removeDraft','draft_one']);
+  assert.equal(button('Current').disabled,true);
+  assert.ok(nodes().some(n=>n.textContent.includes('Each draft is kept independently')));
+  assert.ok(!nodes().some(n=>n.className==='modern-animation-library-pending'));
+  assert.ok(!nodes().some(n=>n.className==='modern-animation-library-duplicate-warning'));
 });
 
 function projectLifecycleHarness(){
@@ -546,7 +545,7 @@ function projectLifecycleHarness(){
     project:{id:'old',name:'Existing work',frames:[{key:'a'},{key:'b'}]}});
   stored.set('other',{id:'other',updatedAt:2,quality:'fast',
     project:{id:'other',name:'Other work',frames:[{key:'a'},{key:'b'}]}});
-  let rejectSave=false,sequence=0;
+  let rejectSave=false,rejectDraft=false,sequence=0;
   const studioApi={blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
     source:'none',frames:[],cameraHudAppearance:null};},
     edit(draft,key,value){return {...draft,[key]:value};},build(draft,id){
@@ -554,17 +553,26 @@ function projectLifecycleHarness(){
     return {id,name:draft.name,frames:draft.frames};
   },fromProject(p){return {name:p.name,description:'',mode:'auto',target:'auto',source:'mixed',
     frames:p.frames.map(f=>({...f}))};}};
+  const checkpoints=new Map([['project_old',{
+    draft:{...oldDraft},selectedKey:'a',quality:'auto',prepared:false,positionMs:0,
+    libraryId:'old',libraryRevision:1,savedAt:100
+  }]]);
+  const autosave={projectWorkspaceId:id=>'project_'+id,
+    makeWorkspaceId:()=> 'draft_'+(++sequence),
+    getWorkspace:(_,id)=>checkpoints.get(id)||null};
   const ctx={Promise,Date,Object,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
+    studioDraftAutosave:autosave,studioWorkspaceReady:true,studioWorkspaceId:'project_old',
+    studioWorkspaces:{workspaces:[{id:'project_old',checkpoint:checkpoints.get('project_old')}]},
     studioLibraryActive:stored.get('old'),studioLibraryPending:null,
     studioLibrarySelected:'old',studioLibraryEntries:[...stored.values()],
-    studioLibraryBusy:false,studioLibraryDuplicate:null,studioLifecyclePending:null,
-    studioLibraryExpanded:false,studioLibraryScroll:750,
+    studioLibraryBusy:false,studioLibraryExpanded:false,studioLibraryScroll:750,
     studioPlaybackQuality:'auto',studioLibraryError:false,studioLibraryMessage:'',
     cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     studioDraftGeneration:0,studioSelectedKey:'a',studioFilmstripScroll:0,
     studioLibraryRenamingId:'',studioPickerOpen:false,studioPickerSearch:'',
     studioPickerScroll:0,studioPickerChecked:{},studioDragSession:null,
-    studioRestorePreviewPending:false,studioPrepared:null,studioPlayback:null,
+    studioRemovedFrameUndo:null,studioRestorePreviewPending:false,
+    studioPrepared:null,studioPlayback:null,
     studioPlaybackApi:null,animationWorkspaceOpen:false,experimentHistory:null,
     studioHistoryEntries:[],studioLibraryDirty(){return ctx.studioDraft.name!==
       ctx.studioLibraryActive.project.name||ctx.studioDraft.frames.length!==2;},
@@ -572,115 +580,155 @@ function projectLifecycleHarness(){
     studioLibraryNotice(text){ctx.studioLibraryMessage=text;events.push(text);},
     renderStudioLibrary(){events.push('library UI');},
     renderAnimationStudio(){events.push('editor UI');},
-    saveStudioDraft(){ctx.studioDraftGeneration++;events.push('checkpoint');},
+    saveStudioDraft(){ctx.studioDraftGeneration++;events.push('checkpoint');
+      const cp={draft:structuredClone(ctx.studioDraft),selectedKey:ctx.studioSelectedKey,
+        quality:ctx.studioPlaybackQuality,prepared:!!ctx.studioPrepared,positionMs:0,
+        libraryId:ctx.studioLibraryActive?.id||ctx.studioLibraryPending?.id||null,
+        libraryRevision:ctx.studioLibraryActive?.updatedAt||ctx.studioLibraryPending?.revision||null,
+        savedAt:100+ctx.studioDraftGeneration};
+      checkpoints.set(ctx.studioWorkspaceId,cp);
+      ctx.studioWorkspaces.workspaces=[...checkpoints].map(([id,checkpoint])=>({id,checkpoint}));
+      return true;
+    },
+    persistStudioWorkspace(){return Promise.resolve(!rejectDraft);},
+    dropStudioWorkspace(id){checkpoints.delete(id);
+      ctx.studioWorkspaces.workspaces=[...checkpoints].map(([key,checkpoint])=>({id:key,checkpoint}));},
+    restoreStudioDraft(cp){ctx.studioDraft=structuredClone(cp.draft);
+      ctx.studioSelectedKey=cp.selectedKey;ctx.studioPlaybackQuality=cp.quality;
+      ctx.studioLibraryActive=null;ctx.studioLibraryPending=cp.libraryId?{
+        id:cp.libraryId,revision:cp.libraryRevision}:null;},
     stopStudioPlayback(){events.push('stopped');},
     syncStudioPlaybackControls(){},syncWorkspaceVisibility(){},
     newUiEl(){return null;},
     refreshStudioLibrary(){ctx.studioLibraryEntries=[...stored.values()];return Promise.resolve([]);},
-    studioLibrary:{fingerprint(){return 'content';},makeId(){return 'created-'+(++sequence);},
+    studioLibrary:{makeId(){return 'created-'+(++sequence);},
       create(db,p){if(rejectSave)return Promise.reject(Error('storage unavailable'));
         const saved={id:p.id,updatedAt:10,quality:'auto',project:p};stored.set(saved.id,saved);
         return Promise.resolve(saved);},
       update(db,p){if(rejectSave)return Promise.reject(Error('stale revision'));
         const saved={id:p.id,updatedAt:20,quality:'auto',project:p};stored.set(saved.id,saved);
         return Promise.resolve(saved);},
-      get(db,id){return Promise.resolve(stored.get(id));}}
+      get(db,id){return Promise.resolve(stored.get(id));},
+      rename(db,id,name){const old=stored.get(id);const saved={...old,updatedAt:old.updatedAt+1,
+        project:{...old.project,name}};stored.set(id,saved);return Promise.resolve(saved);}}
   };
   vm.runInNewContext(
     excerpt('function studioHasUnsavedWork(){','function renderStudioLibrary(){')+'\n'+
-    excerpt('function saveNamedAnimation(replace,forceDuplicate){','function deleteNamedAnimation(id){'),ctx);
+    excerpt('function renameNamedAnimation(id,name){','function studioWorkspaceEditedIds(){')+'\n'+
+    excerpt('function studioWorkspaceDraftCards(){','function deleteNamedAnimation(id){'),ctx);
   const tick=async()=>{await new Promise(resolve=>setImmediate(resolve));};
-  return {ctx,stored,events,tick,failSave(value){rejectSave=value;}};
+  return {ctx,stored,events,tick,checkpoints,
+    failSave(value){rejectSave=value;},failDraft(value){rejectDraft=value;}};
 }
 
-test('New project is a separate autosaved blank draft and does not mutate existing library record',()=>{
+test('New creates a separate workspace; returning to a saved project resumes unsaved edits',async()=>{
   const h=projectLifecycleHarness(),{ctx,stored}=h;
-  ctx.requestStudioSwitch('new');
-  assert.equal(ctx.studioLifecyclePending,null,'saved and unchanged project needs no prompt');
+  ctx.studioDraft={...ctx.studioDraft,name:'Working modification'};
+  ctx.requestStudioSwitch('new');await h.tick();
   assert.equal(ctx.studioLibraryActive,null);
   assert.equal(ctx.studioDraft.frames.length,0);
-  assert.equal(ctx.studioDraft.name,'Animation study');
-  assert.equal(ctx.studioLibrarySelected,'');
-  assert.equal(ctx.studioPlaybackQuality,'auto');
+  assert.equal(ctx.studioWorkspaceId,'draft_1');
+  assert.equal(h.checkpoints.get('project_old').draft.name,'Working modification');
   assert.equal(stored.get('old').project.name,'Existing work');
-  assert.ok(h.events.includes('checkpoint'));
-  assert.equal(ctx.studioHasUnsavedWork(),false);
-});
-
-test('New and Open preserve unsaved work until Save, Discard or Cancel is chosen',async()=>{
-  const h=projectLifecycleHarness(),{ctx,stored}=h;
-  ctx.studioDraft={...ctx.studioDraft,name:'Edited work'};
-  ctx.requestStudioSwitch('new');
-  assert.equal(ctx.studioLifecyclePending.kind,'new');
-  assert.equal(ctx.studioDraft.name,'Edited work');
-  ctx.studioLifecyclePending=null; // Cancel action just clears pending; no state mutation.
-  assert.equal(ctx.studioDraft.name,'Edited work');
-  ctx.requestStudioSwitch('open','other');
-  assert.equal(ctx.studioLifecyclePending.kind,'open');
-  ctx.continueStudioSwitch(false); // Discard and continue.
-  await h.tick();
-  assert.equal(ctx.studioLibraryActive.id,'other');
-  assert.equal(ctx.studioDraft.name,'Other work');
-  assert.equal(stored.get('old').project.name,'Existing work');
-});
-
-test('Save and continue waits for the save to succeed and keeps the draft on failure',async()=>{
-  const h=projectLifecycleHarness(),{ctx,stored}=h;
-  ctx.studioDraft={...ctx.studioDraft,name:'Updated before switching'};
-  ctx.requestStudioSwitch('new');
-  h.failSave(true);ctx.saveBeforeStudioSwitch();await h.tick();
-  assert.equal(ctx.studioDraft.name,'Updated before switching');
-  assert.equal(ctx.studioLifecyclePending.kind,'new');
+  ctx.requestStudioSwitch('open','old');await h.tick();
   assert.equal(ctx.studioLibraryActive.id,'old');
-  assert.match(ctx.studioLibraryMessage,/stale revision/);
-  h.failSave(false);ctx.saveBeforeStudioSwitch();await h.tick();
-  assert.equal(stored.get('old').project.name,'Updated before switching');
-  assert.equal(ctx.studioLibraryActive,null);
-  assert.equal(ctx.studioLifecyclePending,null);
+  assert.equal(ctx.studioDraft.name,'Working modification');
+  assert.equal(ctx.studioLibraryDirty(),true);
+  assert.equal(ctx.studioWorkspaceId,'project_old');
+});
+
+test('two independent new drafts can be resumed without Save, Discard or duplicate dialog',async()=>{
+  const h=projectLifecycleHarness(),{ctx}=h;
+  ctx.requestStudioSwitch('new');await h.tick();
+  ctx.studioDraft={...ctx.studioDraft,name:'Draft alpha',frames:[{key:'a'}]};
+  const alpha=ctx.studioWorkspaceId;
+  ctx.requestStudioSwitch('new');await h.tick();
+  const beta=ctx.studioWorkspaceId;
+  assert.notEqual(alpha,beta);
+  ctx.studioDraft={...ctx.studioDraft,name:'Draft beta',frames:[{key:'b'}]};
+  ctx.requestStudioSwitch('draft',alpha);await h.tick();
+  assert.equal(ctx.studioDraft.name,'Draft alpha');
+  ctx.requestStudioSwitch('draft',beta);await h.tick();
+  assert.equal(ctx.studioDraft.name,'Draft beta');
+  assert.equal(ctx.studioLibraryBusy,false);
+});
+
+test('switching cannot discard an editor when checkpoint validation fails',()=>{
+  const h=projectLifecycleHarness(),{ctx}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Invalid but valuable editor'};
+  ctx.saveStudioDraft=()=>false;
+  ctx.requestStudioSwitch('new');
+  assert.equal(ctx.studioDraft.name,'Invalid but valuable editor');
+  assert.equal(ctx.studioWorkspaceId,'project_old');
+  assert.match(ctx.studioLibraryMessage,/failed validation or storage/);
+});
+
+test('switching is blocked if both local and IndexedDB persistence fail',async()=>{
+  const h=projectLifecycleHarness(),{ctx}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Do not lose me'};
+  h.failDraft(true);ctx.requestStudioSwitch('new');await h.tick();
+  assert.equal(ctx.studioDraft.name,'Do not lose me');
+  assert.equal(ctx.studioWorkspaceId,'project_old');
+  assert.match(ctx.studioLibraryMessage,/could not be stored/);
+  h.failDraft(false);ctx.requestStudioSwitch('new');await h.tick();
   assert.equal(ctx.studioDraft.frames.length,0);
 });
 
-test('saving an unlinked draft before opening creates a new record, never overwrites the selected card',async()=>{
+test('failed library Save keeps the working copy and saved project unchanged',async()=>{
   const h=projectLifecycleHarness(),{ctx,stored}=h;
-  ctx.studioLibraryActive=null;ctx.studioLibrarySelected='old';
-  ctx.studioDraft={...ctx.studioDraft,name:'Independent draft'};
-  ctx.requestStudioSwitch('open','other');
-  ctx.saveBeforeStudioSwitch();await h.tick();
+  ctx.studioDraft={...ctx.studioDraft,name:'Uncommitted title'};
+  h.failSave(true);
+  assert.equal(await ctx.saveNamedAnimation(true),false);
+  assert.equal(ctx.studioDraft.name,'Uncommitted title');
   assert.equal(stored.get('old').project.name,'Existing work');
-  assert.equal(stored.get('created-1').project.name,'Independent draft');
-  assert.equal(ctx.studioLibraryActive.id,'other');
-  assert.equal(ctx.studioDraft.name,'Other work');
+  h.failSave(false);
+  assert.equal(await ctx.saveNamedAnimation(true),true);
+  assert.equal(stored.get('old').project.name,'Uncommitted title');
 });
 
-test('opening a saved animation is generation-guarded against concurrent edits',async()=>{
+test('renaming an active saved record updates its revision without overwriting editor changes',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Locally edited title'};
+  ctx.renameNamedAnimation('old','Renamed in library');await h.tick();
+  assert.equal(stored.get('old').project.name,'Renamed in library');
+  assert.equal(ctx.studioDraft.name,'Locally edited title');
+  assert.equal(ctx.studioLibraryActive.updatedAt,2);
+  assert.equal(h.checkpoints.get('project_old').libraryRevision,2);
+});
+
+test('Save As creates a deliberate copy, keeps the original working state',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Fork'};
+  assert.equal(await ctx.saveNamedAnimation(false),true);
+  assert.equal(ctx.studioWorkspaceId,'project_created-1');
+  assert.equal(stored.get('old').project.name,'Existing work');
+  assert.equal(h.checkpoints.get('project_old').draft.name,'Existing work');
+});
+
+test('opening a project is generation-guarded against concurrent edits',async()=>{
   const h=projectLifecycleHarness(),{ctx}=h;
   ctx.requestStudioSwitch('open','other');
-  // The code must refuse an older IndexedDB response if the user edits meanwhile.
-  ctx.studioDraftGeneration++;
-  await h.tick();
+  ctx.studioDraftGeneration+=2;await h.tick();
   assert.equal(ctx.studioDraft.name,'Existing work');
   assert.equal(ctx.studioLibraryActive.id,'old');
-  assert.match(ctx.studioLibraryMessage,/Draft changed while opening/);
+  assert.match(ctx.studioLibraryMessage,/draft changed while switching/);
 });
 
-
-test('Save project immediately reveals and selects its library card; failed save never does',async()=>{
+test('Save project reveals its card and failed save never does',async()=>{
   const h=projectLifecycleHarness(),{ctx,stored}=h;
   ctx.studioLibraryActive=null;ctx.studioLibrarySelected='old';
+  ctx.studioWorkspaceId='draft_7';
   ctx.studioDraft={...ctx.studioDraft,name:'New library animation'};
   ctx.studioLibraryExpanded=false;ctx.studioLibraryScroll=750;
   h.failSave(true);
   assert.equal(await ctx.saveNamedAnimation(false),false);
   assert.equal(ctx.studioLibraryExpanded,false);
-  assert.equal(ctx.studioLibrarySelected,'old');
-  assert.equal(stored.has('created-1'),false);
   h.failSave(false);
   assert.equal(await ctx.saveNamedAnimation(false),true);
-  assert.equal(ctx.studioLibraryExpanded,true,'a folded gallery opens after successful save');
-  assert.equal(ctx.studioLibraryScroll,0,'the saved card is visible at the start of the gallery');
+  assert.equal(ctx.studioLibraryExpanded,true);
+  assert.equal(ctx.studioLibraryScroll,0);
   assert.equal(ctx.studioLibrarySelected,ctx.studioLibraryActive.id);
   assert.equal(stored.get(ctx.studioLibrarySelected).project.name,'New library animation');
-  assert.match(ctx.studioLibraryMessage,/Saved new animation/);
 });
 
 test('Save project and JSON backup controls are visually grouped, not a single export action',()=>{
@@ -696,5 +744,5 @@ test('Save project and JSON backup controls are visually grouped, not a single e
   assert.equal(row.children[1].children[0].textContent,'JSON backup');
   assert.ok(row.children[0].children.some(n=>n.textContent==='Save project'));
   assert.ok(row.children[1].children.some(n=>n.textContent==='Export selected'));
-  assert.ok(host.children.some(n=>n.textContent.includes('Preview animation does not save')));
+  assert.ok(host.children.some(n=>n.textContent.includes('Preview animation never adds')));
 });

@@ -414,7 +414,7 @@ model-isolation and optical-rendering contract.
 
 ### Animation Studio draft autosave and reload recovery (#140.12.120.4.3)
 
-Animation Studio now keeps **one editable draft checkpoint** automatically, independently
+Animation Studio keeps **independent editable checkpoints for every project and untitled draft**, independently
 from Scene/Compare Session Autosave and History. Frame order, embedded snapshot
 experiments, names, per-frame timing, easing, selected frame, playback optics quality,
 and the last timeline position are preserved. Changes are saved synchronously to a
@@ -430,9 +430,15 @@ an edit made in the new tab. Extremely large drafts may exceed localStorage quot
 IndexedDB is the durable fallback, with a visible status if browser storage fails.
 
 This is **working-draft recovery**, separate from the named Animation Library:
-it stores only the current draft. Creating a new draft overwrites the prior
-autosave, but named saved projects remain independent. Portable JSON/video
-export is not yet implemented. The Scene/Compare experiment is not modified.
+new drafts and named projects have distinct working checkpoints in a versioned
+workspace collection. New/Open automatically checkpoint the outgoing editor and
+restore the target's edits without prompting to discard them. Untitled drafts
+are recoverable through **Working drafts → Open draft** and removable explicitly.
+Saved projects have their own working checkpoint; **Save changes** alone updates
+the named Library version. The old single-checkpoint V1 data migrates on first
+opening without deletion; localStorage and IndexedDB back up the new collection.
+If neither backup can store the outgoing editor, switching is refused rather than
+silently losing it. The Scene/Compare experiment is not modified.
 
 ### Animation preview initial frame and reload redraw
 
@@ -502,7 +508,7 @@ editing a keyframe invalidates the previous preview until Preview is clicked aga
 expands the library, selects the card, and returns the horizontal gallery to its
 start. When a saved record is open, the action becomes **Save changes**; **Save As**
 creates an independent record. An explicit **Open** button on each card opens
-that project for editing (and checks for unsaved changes). A single click selects
+that project for editing (restoring its own autosaved edits). A single click selects
 it only for **Export selected** in the distinct **JSON backup** controls; JSON
 backup does not render a video. Videos and PNG frames are exported from the
 separate Playback export controls. Draft autosave remains independent, and failed
@@ -511,7 +517,7 @@ saves never claim to have created a library project.
 ### Named Animation Library — durable project foundation (#140.12.120.5.1)
 
 Animation Studio now has a compact **Animation Library** toolbar, separate from
-History and from the single automatic draft checkpoint. For a compatible set
+History and from separate autosaved working checkpoints. For a compatible set
 of frames, **Save project** creates a new named project in its own IndexedDB
 store; **Save As** creates another independent copy. Select a project and use
 **Open** to load its editable keyframes and optics settings, with playback
@@ -523,9 +529,9 @@ the current draft. The toolbar reports storage and validation errors.
 Each library record embeds a fully validated `ModernAnimationProject` with its
 base physical experiment and keyframe values. History snapshot IDs are only
 provenance: removing, pruning, or renaming the source snapshots does not change
-saved animation playback. Opening a project reconstructs an owned editable
-Studio draft, not a live Scene/Compare state. The automatic draft continues to
-save independently, including the associated library ID and revision after F5.
+saved animation playback. Opening a project restores its own local editable workspace when present,
+or reconstructs it from the saved version on first open; neither changes the live
+Scene/Compare state. Every workspace retains its own library ID and revision across F5.
 If a different tab changes a named project before **Save changes**, a revision
 check rejects the stale write; use **Open** or **Save As** instead. An unavailable
 IndexedDB database is reported rather than claiming that a project was saved.
@@ -556,19 +562,15 @@ Animation Library toolbar.
 There is no video export, background rendering, change to optical physics,
 new HTML entrypoint, or Legacy change.
 
-### Animation Library duplicate protection
+### Animation Library duplicate review (nonblocking)
 
-**Save project** and **Save As** compare the full semantic animation (active
-physical state, animation channel, ordered frame values, travel/hold durations
-and easing) with all saved projects. Titles, descriptions, History source IDs,
-screenshots, creation dates, saved optics preference and the current playback
-position do **not** make a different animation. The duplicate check and insert
-run inside one IndexedDB read-write transaction, including competing tabs.
-An existing match offers **Open existing** or an explicit **Save copy anyway**;
-no automatic copy is made. **Find duplicates** groups old identical library
-records for manual review with Open/Delete, but never deletes anything itself.
-Save changes still updates the selected project's revision explicitly. The
-same semantic comparison is also used by portable JSON import.
+**Save project** and **Save As** deliberately create a named record even when its
+physics/timing exactly match another saved project. They no longer open a second
+warning or interrupt switching. **Save changes** still revision-checks the
+opened project. The optional **Find duplicates** command groups existing
+identical records for manual inspection; nothing is removed automatically.
+Portable JSON **import** still reuses semantic duplicates to prevent accidental
+repeated imports of the same backup.
 
 ### Portable Animation Library JSON
 
@@ -737,3 +739,25 @@ by default to preserve existing export pixels. Export options are snapshotted
 at start and passed to all background workers, including both sides of the
 single combined Compare video. The settings do not modify saved experiments,
 RK4 optics, the Legacy interface or the animation timeline.
+
+### Animation Studio independent workspaces (#140.12.120.9.10)
+
+- **New project** always starts a separate autosaved working draft; the previous
+  draft stays under **Working drafts** if it contains edits. Blank unused drafts
+  are not accumulated. **Open draft** resumes an untitled draft directly.
+- **Open** on a saved card resumes that project's locally autosaved edits and
+  paused Playback position. Library records remain untouched until **Save changes**.
+  When no workspace exists, the saved version is loaded as the starting point.
+- **Save project** promotes the active untitled workspace to a named project;
+  **Save As** forks a saved project to a new ID and preserves the original's
+  working checkpoint. Identical saved content is allowed on explicit Save As.
+- No `Save and continue`/`Discard and continue` decision is needed for routine
+  switching, and no simultaneous duplicate/conflict prompts are rendered.
+- The versioned workspace collection uses both synchronous localStorage
+  snapshots and serialized IndexedDB writes. A V1 single-draft checkpoint is
+  migrated without deleting the old recovery source. On storage failure,
+  switching is blocked if no durable backup is available.
+- **Delete draft** requires explicit confirmation; deleting a named Library
+  project detaches its working checkpoint instead of destroying unsaved edits.
+  If an external tab modified a saved record, revision validation protects the
+  Library and **Save As** remains available to preserve current work.

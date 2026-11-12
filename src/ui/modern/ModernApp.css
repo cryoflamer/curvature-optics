@@ -974,3 +974,14 @@ button{cursor:pointer}
 .modern-camera-controls-detail p{margin:3px 0 0}
 .modern-camera-controls-detail .modern-camera-controls-note{grid-column:1/-1;color:#647a90}
 @media(max-width:650px){.modern-camera-controls-detail{grid-template-columns:1fr}.modern-camera-controls-quick{min-width:0;flex-basis:100%}}
+
+/* Named-project workspaces and independent untitled drafts. */
+.modern-animation-workspace-list{padding:10px 12px;border:1px solid #cad8e6;border-radius:8px;margin:10px 0;background:#f5faff}
+.modern-animation-workspace-list>p{margin:5px 0 9px}
+.modern-animation-workspace-item{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid #d8e3ee}
+.modern-animation-workspace-item span{flex:1;min-width:180px}
+.modern-animation-workspace-item.is-active span{font-weight:600}
+.modern-animation-workspace-item button{padding:5px 9px;border-radius:5px;border:1px solid #9bbbe0;background:#edf5ff;color:#164877;cursor:pointer}
+.modern-animation-workspace-item button:disabled{opacity:.6;cursor:default}
+
+.modern-animation-library-local-edits{display:block;color:#8b4e0b;font-weight:600}

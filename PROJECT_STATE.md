@@ -2089,3 +2089,21 @@ preferences, and removal of the now-duplicated target CSS block.
   backup and double-click/Enter shortcuts. Library toolbar separates project
   lifecycle controls from JSON backup; MP4/WebM/PNG export stays in Playback.
 - No Legacy, physics, project-storage schema, or video encoder changes.
+
+### Animation Studio independent working drafts (#140.12.120.9.10)
+
+- Replaced the single active draft persistence model with a V2 workspace
+  collection storing one validated V1 checkpoint per named project or untitled
+  draft. Saved Library records remain authoritative and unchanged until Save.
+- The outgoing editor is flushed before switching. New/Open/Resume restore
+  independent drafts and paused playback. Storage failures stop switches rather
+  than invoking Save/Discard decisions or destroying a draft.
+- Legacy V1 browser backups migrate; the whole V2 collection is synchronously
+  backed up in localStorage and asynchronously mirrored through a serialized
+  IndexedDB queue. Late restores respect the edit-generation guard.
+- Independent unfinished drafts are listed under Working drafts with Open/Delete;
+  blank unused scratchpads can be discarded when leaving. Deleted named records
+  detach their active/nonactive workspace into a recoverable unsaved draft.
+- Save As and Save project permit intentionally identical content; the Library's
+  duplicate review and deduplicating JSON imports remain opt-in/unchanged.
+- No Legacy or optical physics changes.

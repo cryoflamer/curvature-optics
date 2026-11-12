@@ -1,7 +1,7 @@
-/* Crash/reload recovery for the editable Animation Studio draft. This is not
- * an Animation Library or History entry: a single versioned checkpoint owns
- * full experiment states and remembers a PAUSED playback position. A local
- * copy allows synchronous pagehide recovery; IndexedDB is the durable copy.
+/* Crash/reload recovery for Animation Studio workspaces, independent of the
+ * named Animation Library. V1 single-draft checkpoints remain readable for
+ * migration; a V2 collection owns one checkpoint per working project/draft.
+ * LocalStorage supports synchronous pagehide recovery; IndexedDB mirrors it.
  */
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
@@ -17,6 +17,8 @@
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
+  var COLLECTION_VERSION=2,COLLECTION_KEY='curvature-modern-animation-workspaces-v2';
+  var COLLECTION_DB_KEY='workspaces';
   function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
   function string(v,max){if(typeof v!=='string'||v.length>max)throw RangeError('Invalid animation draft text');return v;}
   function number(v,min,max){if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)
@@ -87,6 +89,89 @@
     if(!remote)return local;
     return remote.savedAt>local.savedAt?remote:local;
   }
+  function workspaceId(value){
+    if(typeof value!=='string'||value.length>110||
+      !/^(draft|project)_[A-Za-z0-9_-]{1,100}$/.test(value))
+      throw RangeError('Invalid animation workspace ID');
+    return value;
+  }
+  function makeWorkspaceId(crypto,now){
+    var token=crypto&&typeof crypto.randomUUID==='function'?crypto.randomUUID().replace(/-/g,''):
+      Math.floor(Math.random()*0x100000000).toString(36)+
+      Math.floor(Math.random()*0x100000000).toString(36);
+    return workspaceId('draft_'+(now||Date.now()).toString(36)+'_'+token);
+  }
+  function projectWorkspaceId(id){
+    if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(id))
+      throw RangeError('Invalid animation project ID');
+    return workspaceId('project_'+id);
+  }
+  function normalizeCollection(input){
+    if(!object(input)||input.version!==COLLECTION_VERSION||
+      !Number.isSafeInteger(input.savedAt)||input.savedAt<=0||
+      !Array.isArray(input.workspaces)||input.workspaces.length>256)
+      throw RangeError('Invalid animation workspace collection');
+    var ids=new Set();
+    var workspaces=input.workspaces.map(function(item){
+      if(!object(item))throw RangeError('Invalid animation workspace');
+      var id=workspaceId(item.id);
+      if(ids.has(id))throw RangeError('Duplicate animation workspace ID');
+      ids.add(id);
+      var saved=normalize(item.checkpoint);
+      if(id.indexOf('project_')===0&&saved.libraryId!==id.slice(8))
+        throw RangeError('Animation workspace and library ID disagree');
+      if(id.indexOf('draft_')===0&&saved.libraryId!==null)
+        throw RangeError('Unlinked draft must not reference a library project');
+      return {id:id,checkpoint:saved};
+    });
+    var activeId=workspaceId(input.activeId);
+    if(!ids.has(activeId))throw RangeError('Active animation workspace missing');
+    return {version:COLLECTION_VERSION,savedAt:input.savedAt,activeId:activeId,
+      workspaces:workspaces};
+  }
+  function collection(id,checkpoint,savedAt){
+    return normalizeCollection({version:COLLECTION_VERSION,activeId:id,
+      savedAt:savedAt||Date.now(),workspaces:[{id:id,checkpoint:checkpoint}]});
+  }
+  function withWorkspace(collectionValue,id,checkpoint,savedAt){
+    var original=normalizeCollection(collectionValue),next=original.workspaces.filter(function(item){
+      return item.id!==id;
+    });
+    next.push({id:workspaceId(id),checkpoint:normalize(checkpoint)});
+    return normalizeCollection({version:COLLECTION_VERSION,activeId:id,
+      savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),workspaces:next});
+  }
+  function withoutWorkspace(collectionValue,id,activeId,savedAt){
+    var original=normalizeCollection(collectionValue);
+    return normalizeCollection({version:COLLECTION_VERSION,
+      savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),activeId:activeId,
+      workspaces:original.workspaces.filter(function(item){return item.id!==id;})});
+  }
+  function getWorkspace(value,id){
+    var entry=normalizeCollection(value).workspaces.find(function(item){return item.id===id;});
+    return entry?entry.checkpoint:null;
+  }
+  function readCollectionLocal(storage){
+    if(!storage||typeof storage.getItem!=='function')return null;
+    try{var raw=storage.getItem(COLLECTION_KEY);return raw===null?null:
+      normalizeCollection(JSON.parse(raw));}catch(error){return null;}
+  }
+  function writeCollectionLocal(storage,record){
+    if(!storage||typeof storage.setItem!=='function')return false;
+    storage.setItem(COLLECTION_KEY,JSON.stringify(normalizeCollection(record)));
+    return true;
+  }
+  function migrate(checkpoint,crypto){
+    var saved=normalize(checkpoint),id=saved.libraryId?
+      projectWorkspaceId(saved.libraryId):makeWorkspaceId(crypto,saved.savedAt);
+    return collection(id,saved,saved.savedAt);
+  }
+  function newerCollection(local,remote){
+    if(!local)return remote?normalizeCollection(remote):null;
+    if(!remote)return normalizeCollection(local);
+    var a=normalizeCollection(local),b=normalizeCollection(remote);
+    return b.savedAt>a.savedAt?b:a;
+  }
   function withStore(indexedDB,mode,act){
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
@@ -113,7 +198,23 @@
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}
   function write(indexedDB,record){var valid=normalize(record);
     return withStore(indexedDB,'readwrite',function(store){store.put(valid,KEY);return null;});}
+  function readCollection(indexedDB){
+    return withStore(indexedDB,'readonly',function(store){return store.get(COLLECTION_DB_KEY);})
+      .then(function(value){return value==null?null:normalizeCollection(value);});
+  }
+  function writeCollection(indexedDB,value){var valid=normalizeCollection(value);
+    return withStore(indexedDB,'readwrite',function(store){
+      store.put(valid,COLLECTION_DB_KEY);return null;
+    });
+  }
   return Object.freeze({VERSION:VERSION,STORAGE_KEY:STORAGE_KEY,DATABASE:DATABASE,STORE:STORE,
+    COLLECTION_VERSION:COLLECTION_VERSION,COLLECTION_KEY:COLLECTION_KEY,
     checkpoint:checkpoint,normalize:normalize,readLocal:readLocal,writeLocal:writeLocal,
-    newer:newer,read:read,write:write});
+    newer:newer,read:read,write:write,workspaceId:workspaceId,
+    makeWorkspaceId:makeWorkspaceId,projectWorkspaceId:projectWorkspaceId,
+    normalizeCollection:normalizeCollection,collection:collection,
+    withWorkspace:withWorkspace,withoutWorkspace:withoutWorkspace,
+    getWorkspace:getWorkspace,readCollectionLocal:readCollectionLocal,
+    writeCollectionLocal:writeCollectionLocal,readCollection:readCollection,
+    writeCollection:writeCollection,migrate:migrate,newerCollection:newerCollection});
 }));

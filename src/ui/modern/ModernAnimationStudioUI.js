@@ -198,7 +198,7 @@
       var control=button(doc,label,description,callback);control.disabled=!!disabled;
       group.appendChild(control);return control;
     }
-    action(projectActions,'New project','Start an empty working draft; it is not saved in the library',
+    action(projectActions,'New project','Start a separate, autosaved working draft; previous drafts remain available',
       actions.newProject,options.busy);
     action(projectActions,options.activeId?'Save changes':'Save project',
       options.activeId?'Update the opened project in Animation Library':'Add this draft to Animation Library',
@@ -225,44 +225,36 @@
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
     }
     var message=el(doc,'p','modern-animation-library-note',options.activeId?
-      'Editing saved project: '+(options.activeName||'saved project')+
-        (options.dirty?' · Changes not yet saved to library':' · Saved in library'):
-      'Working draft · Autosaved only in this browser · Not in Animation Library until Save project');
+      'Editing: '+(options.activeName||'saved project')+
+        (options.dirty?' · Working edits autosaved separately · Save changes updates library':
+         ' · Library version saved · Local working copy retained'):
+      'Independent working draft · Autosaved in this browser · Save project adds it to Animation Library');
     host.appendChild(message);
-    if(options.pendingChange){
-      var pending=el(doc,'div','modern-animation-library-pending');
-      pending.setAttribute('role','group');
-      pending.setAttribute('aria-label','Unsaved animation changes');
-      pending.appendChild(el(doc,'strong','','Unsaved changes'));
-      pending.appendChild(el(doc,'p','',options.pendingChange==='new'?
-        'Save the current animation before creating a new project?':
-        'Save the current animation before opening another project?'));
-      var choices=el(doc,'div','modern-animation-library-pending-actions');
-      var save=button(doc,'Save and continue','Save current work before switching projects',
-        actions.saveBeforeSwitch);
-      save.disabled=!!options.busy||!options.canSave;
-      choices.appendChild(save);
-      var discard=button(doc,'Discard and continue','Discard current unsaved changes',
-        actions.discardSwitch);
-      discard.disabled=!!options.busy;choices.appendChild(discard);
-      var cancel=button(doc,'Cancel','Stay with the current animation',actions.cancelSwitch);
-      cancel.disabled=!!options.busy;choices.appendChild(cancel);
-      pending.appendChild(choices);
-      if(!options.canSave)pending.appendChild(el(doc,'small','',
-        'This draft cannot be saved as a project yet; complete its keyframes or cancel.'));
-      host.appendChild(pending);
-    }
     if(options.message){var note=el(doc,'p','modern-animation-library-message'+
       (options.error?' is-error':''),options.message);note.setAttribute('role','status');host.appendChild(note);}
-    if(options.duplicate){
-      var warning=el(doc,'div','modern-animation-library-duplicate-warning');
-      warning.appendChild(el(doc,'strong','','Identical animation already saved: '+options.duplicate.name));
-      var duplicateActions=el(doc,'div','modern-animation-library-duplicate-actions');
-      var openExisting=button(doc,'Open existing','Open identical saved animation',actions.openDuplicate);
-      openExisting.disabled=!!options.busy;duplicateActions.appendChild(openExisting);
-      var forceCopy=button(doc,'Save copy anyway','Explicitly save a duplicate animation',actions.forceCopy);
-      forceCopy.disabled=!!options.busy;duplicateActions.appendChild(forceCopy);
-      warning.appendChild(duplicateActions);host.appendChild(warning);
+    if((options.draftWorkspaces||[]).length){
+      var drafts=el(doc,'section','modern-animation-workspace-list');
+      drafts.appendChild(el(doc,'strong','','Working drafts (not saved projects)'));
+      drafts.appendChild(el(doc,'p','modern-animation-library-hint',
+        'Each draft is kept independently. Open any draft to resume; only Delete draft removes it.'));
+      (options.draftWorkspaces||[]).forEach(function(draft){
+        var item=el(doc,'div','modern-animation-workspace-item'+(draft.active?' is-active':''));
+        item.appendChild(el(doc,'span','',draft.name+' · '+draft.frames+' keyframes'+
+          ' · '+new Date(draft.savedAt).toLocaleString()+
+          (draft.active?' · Editing':'')));
+        var open=button(doc,draft.active?'Current':'Open draft','Resume this local draft',function(){
+          actions.openDraft(draft.id);
+        });
+        open.disabled=!!options.busy||draft.active;item.appendChild(open);
+        if(!draft.active){
+          var remove=button(doc,'Delete draft','Permanently remove this local draft',function(){
+            actions.removeDraft(draft.id);
+          });
+          remove.disabled=!!options.busy;item.appendChild(remove);
+        }
+        drafts.appendChild(item);
+      });
+      host.appendChild(drafts);
     }
     if(options.showDuplicates&&(options.duplicateGroups||[]).length){
       var review=el(doc,'div','modern-animation-library-duplicate-review');
@@ -285,7 +277,7 @@
       host.appendChild(review);
     }
     if(!entries.length){host.appendChild(el(doc,'p','modern-animation-library-empty',
-      'No saved projects yet. Add keyframes, then click Save project. Preview animation does not save.'));return;}
+      'No saved projects yet. Add keyframes and click Save project; Preview animation never adds a project.'));return;}
     if(options.expanded===false)return;
     host.appendChild(el(doc,'p','modern-animation-library-hint',
       'Click a card to select for JSON backup · Open loads it for editing · Double-click also opens'));
@@ -330,6 +322,9 @@
       var info=el(doc,'div','modern-animation-library-card-info');
       var title=el(doc,'strong','modern-animation-library-card-title',p.name);
       title.title=p.name;info.appendChild(title);
+      if((options.editedIds||[]).includes(entry.id))
+        info.appendChild(el(doc,'small','modern-animation-library-local-edits',
+          'Local draft edits · not yet saved to Library'));
       var duration=p.keyframes.reduce(function(sum,frame){return sum+frame.travelMs+frame.holdMs;},0)/1000;
       info.appendChild(el(doc,'small','modern-animation-library-card-meta',
         (p.mode==='camera'?'Camera motion':p.target.parameter==='surface.curvature'?

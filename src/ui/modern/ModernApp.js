@@ -512,8 +512,9 @@
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
-  var studioLibraryDuplicate=null,studioLibraryShowDuplicates=false;
-  var studioLifecyclePending=null;
+  var studioLibraryShowDuplicates=false;
+  var studioWorkspaces=null,studioWorkspaceId=null,studioWorkspaceReady=false;
+  var studioWorkspaceLocalSaved=false;
   var studioLibraryScroll=0;
   var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
   var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
@@ -1082,10 +1083,12 @@
       activeName:studioLibraryActive&&studioLibraryActive.project.name,
       canSave:!!(studioApi&&studioDraft&&studioApi.inspect(studioDraft).compatible),
       dirty:studioLibraryDirty(),unsaved:studioHasUnsavedWork(),
-      pendingChange:studioLifecyclePending&&studioLifecyclePending.kind,
       busy:studioLibraryBusy,
+      draftWorkspaces:studioWorkspaceDraftCards(),
+      editedIds:studioWorkspaceEditedIds(),
+      draftCount:studioWorkspaces?studioWorkspaces.workspaces.length:0,
       expanded:studioLibraryExpanded,renameId:studioLibraryRenamingId,
-      duplicate:studioLibraryDuplicate,showDuplicates:studioLibraryShowDuplicates,
+      showDuplicates:studioLibraryShowDuplicates,
       duplicateGroups:studioLibrary&&studioLibrary.findDuplicates?
         studioLibrary.findDuplicates(studioLibraryEntries):[],
       message:studioLibraryMessage,error:studioLibraryError
@@ -1108,17 +1111,14 @@
       },
       toggleExpanded:function(){studioLibraryExpanded=!studioLibraryExpanded;renderStudioLibrary();},
       toggleDuplicates:function(){studioLibraryShowDuplicates=!studioLibraryShowDuplicates;renderStudioLibrary();},
-      openDuplicate:function(){if(studioLibraryDuplicate)requestStudioSwitch('open',studioLibraryDuplicate.id);},
-      forceCopy:function(){saveNamedAnimation(false,true);},
       renameStart:function(id){studioLibraryRenamingId=id;studioLibraryExpanded=true;renderStudioLibrary();},
       renameCancel:function(){studioLibraryRenamingId='';renderStudioLibrary();},
       rename:function(id,name){renameNamedAnimation(id,name);},
       newProject:function(){requestStudioSwitch('new');},
       save:function(){saveNamedAnimation(!!studioLibraryActive);},
       saveAs:function(){saveNamedAnimation(false);},
-      saveBeforeSwitch:saveBeforeStudioSwitch,
-      discardSwitch:function(){continueStudioSwitch(false);},
-      cancelSwitch:function(){studioLifecyclePending=null;renderStudioLibrary();},
+      openDraft:function(id){requestStudioSwitch('draft',id);},
+      removeDraft:function(id){deleteStudioWorkspace(id);},
       exportSelected:function(){exportNamedAnimations(false);},
       exportAll:function(){exportNamedAnimations(true);},
       importFile:function(file){importNamedAnimations(file);},
@@ -1148,10 +1148,10 @@
           studioLibraryActive=match;
         }else{
           studioLibraryActive=null;
-          studioLibraryMessage='Previous saved project was changed or removed. Your draft is safe; use Save As.';
+          studioLibraryMessage='Saved project changed or was removed in another tab. This workspace is preserved; use Save As.';
           studioLibraryError=true;
         }
-        studioLibraryPending=null;
+        if(match&&match.updatedAt===studioLibraryPending.revision)studioLibraryPending=null;
       }
       if(studioLibrarySelected&&!entries.some(function(e){return e.id===studioLibrarySelected;}))
         studioLibrarySelected='';
@@ -1222,10 +1222,33 @@
       if(studioLibraryActive&&studioLibraryActive.id===id){
         var updateDraftName=studioDraft.name===studioLibraryActive.project.name;
         studioLibraryActive=saved;
-        if(updateDraftName){
-          studioDraft=studioApi.edit(studioDraft,'name',saved.project.name);
-          saveStudioDraft(false);
-          renderAnimationStudio(studioHistoryEntries);
+        if(updateDraftName)studioDraft=studioApi.edit(studioDraft,'name',saved.project.name);
+        // Renaming changes the Library revision even when the draft has a
+        // different unsaved title; checkpoint the new base revision in both cases.
+        saveStudioDraft(false);
+        if(updateDraftName)renderAnimationStudio(studioHistoryEntries);
+      }else if(studioWorkspaces){
+        // Metadata rename of an inactive named project must not make its own
+        // local draft look like a conflicting edit from another browser tab.
+        var workspace=studioDraftAutosave.projectWorkspaceId(id);
+        var checkpoint=studioDraftAutosave.getWorkspace(studioWorkspaces,workspace);
+        if(checkpoint&&checkpoint.libraryRevision===current.updatedAt){
+          var changedName=checkpoint.draft.name===current.project.name;
+          var updated=studioDraftAutosave.checkpoint(Object.assign({},checkpoint,{
+            draft:changedName?studioApi.edit(checkpoint.draft,'name',saved.project.name):checkpoint.draft,
+            libraryRevision:saved.updatedAt
+          }),Math.max(Date.now(),checkpoint.savedAt+1));
+          var activeWorkspace=studioWorkspaceId;
+          studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,workspace,updated);
+          studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
+            studioWorkspaces,{activeId:activeWorkspace}));
+          studioDraftGeneration++;
+          try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
+            preferencesStorage(),studioWorkspaces);}
+          catch(error){studioWorkspaceLocalSaved=false;
+            studioDraftStatus('Renamed workspace backup failed: '+error.message,true);}
+          if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+          studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
         }
       }
       studioLibraryRenamingId='';studioLibrarySelected=id;
@@ -1237,125 +1260,177 @@
       studioLibraryError=true;
     }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
   }
-  function saveNamedAnimation(replace,forceDuplicate){
+  function studioWorkspaceEditedIds(){
+    if(!studioWorkspaces||!studioApi)return [];
+    return studioLibraryEntries.filter(function(entry){
+      var checkpoint=studioDraftAutosave.getWorkspace(studioWorkspaces,
+        studioDraftAutosave.projectWorkspaceId(entry.id));
+      if(!checkpoint)return false;
+      if(checkpoint.libraryRevision!==entry.updatedAt)return true;
+      try{return checkpoint.quality!==entry.quality||
+        JSON.stringify(studioApi.build(checkpoint.draft,entry.id))!==
+        JSON.stringify(entry.project);}
+      catch(error){return true;}
+    }).map(function(entry){return entry.id;});
+  }
+  function studioWorkspaceDraftCards(){
+    if(!studioWorkspaces)return [];
+    return studioWorkspaces.workspaces.filter(function(entry){
+      return (entry.id.indexOf('draft_')===0||
+        (entry.id.indexOf('project_')===0&&!studioLibraryEntries.some(function(saved){
+          return studioDraftAutosave.projectWorkspaceId(saved.id)===entry.id;
+        })))&&
+        (entry.id===studioWorkspaceId||entry.checkpoint.draft.frames.length||
+         entry.checkpoint.draft.name!==studioApi.blank().name);
+    }).sort(function(a,b){return b.checkpoint.savedAt-a.checkpoint.savedAt;})
+      .map(function(entry){return {id:entry.id,name:entry.checkpoint.draft.name,
+        frames:entry.checkpoint.draft.frames.length,savedAt:entry.checkpoint.savedAt,
+        active:entry.id===studioWorkspaceId};});
+  }
+  function saveNamedAnimation(replace){
     if(!studioLibrary||studioLibraryBusy)return Promise.resolve(false);
     var project,quality=studioPlaybackQuality,active=studioLibraryActive;
     try{
       if(replace&&!active)throw Error('Open a saved animation before using Save Changes');
       var id=replace?active.id:studioLibrary.makeId(root.crypto);
-      // New library records own a stable appearance snapshot. Older projects
-      // remain untouched unless the user explicitly edits their HUD settings.
       if(!replace&&studioDraft.cameraHudAppearance==null)
         studioDraft=studioApi.edit(studioDraft,'cameraHudAppearance',cameraHudAppearance);
       project=studioApi.build(studioDraft,id);
     }catch(error){studioLibraryNotice('Cannot save animation: '+error.message,true);return Promise.resolve(false);}
-    var key=studioLibrary.fingerprint(project);
-    if(forceDuplicate&&(!studioLibraryDuplicate||studioLibraryDuplicate.fingerprint!==key)){
-      studioLibraryDuplicate=null;
-      studioLibraryNotice('Animation changed; try Save As again before creating a copy.',true);
-      return Promise.resolve(false);
-    }
-    if(!forceDuplicate)studioLibraryDuplicate=null;
+    var startGeneration=studioDraftGeneration;
+    var priorWorkspaceId=studioWorkspaceId;
     var image=studioLibraryThumbnail(project);
-    studioLibraryBusy=true;studioLibraryNotice('Saving named animation…',false);
+    studioLibraryBusy=true;studioLibraryNotice('Saving animation to library…',false);
+    // A named project is explicitly allowed to have the same animation as
+    // another named project. Save As is not a deduplication operation.
     var operation=replace?
       studioLibrary.update(root.indexedDB,project,quality,active.updatedAt,undefined,image):
-      studioLibrary.create(root.indexedDB,project,quality,undefined,image,!!forceDuplicate);
+      studioLibrary.create(root.indexedDB,project,quality,undefined,image,true);
     return operation.then(function(saved){
-      studioLibraryActive=saved;studioLibraryPending=null;studioLibraryDuplicate=null;
+      if(studioDraftGeneration!==startGeneration){
+        // A concurrent edit cannot be silently marked saved. The persistent
+        // library record exists, but the current editor remains a draft.
+        studioLibraryMessage='Project saved; newer editor changes remain in your draft.';
+      }
+      studioLibraryActive=saved;studioLibraryPending=null;
       studioLibrarySelected=saved.id;
-      // Save is the point at which a draft becomes a visible named project.
-      // The newest record sorts first; reveal it even if the gallery was folded.
+      studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(saved.id);
+      // A new untitled draft was promoted to a named workspace. When Save As
+      // forks a named project, keep the original project's local workspace.
+      saveStudioDraft(false);
+      if(priorWorkspaceId!==studioWorkspaceId&&priorWorkspaceId&&
+         priorWorkspaceId.indexOf('draft_')===0)
+        dropStudioWorkspace(priorWorkspaceId);
       studioLibraryExpanded=true;studioLibraryScroll=0;
       studioLibraryMessage=(replace?'Saved changes to ':'Saved new animation: ')+saved.project.name;
       studioLibraryError=false;
-      saveStudioDraft(false);
       return refreshStudioLibrary().then(function(){return true;});
     }).catch(function(error){
-      if(error.code==='ANIMATION_DUPLICATE'){
-        studioLibraryDuplicate={id:error.existingId,name:error.existingName,fingerprint:key};
-        studioLibrarySelected=error.existingId;
-        studioLibraryNotice('This animation is already saved as '+error.existingName+'.',false);
-      }else studioLibraryNotice('Animation was not saved: '+error.message,true);
+      studioLibraryNotice('Animation was not saved: '+error.message,true);
       return false;
     }).then(function(saved){studioLibraryBusy=false;renderStudioLibrary();return saved;});
   }
-  // New and Open share the same explicit unsaved-work decision. An autosaved
-  // working draft is NOT a named library project and must not be treated as saved.
+  // Switching workspaces saves the current local/IndexedDB checkpoint before
+  // changing the editor. It never requires a Save/Discard decision: every
+  // workspace retains its own draft until the user explicitly deletes it.
   function requestStudioSwitch(kind,id){
-    if(studioLibraryBusy||!studioApi)return;
-    if(kind==='open'&&(!id||!studioLibraryEntries.some(function(entry){return entry.id===id;})))return;
-    if(studioHasUnsavedWork()){
-      studioLifecyclePending={kind:kind,id:id||null};
-      studioLibraryMessage='';studioLibraryError=false;
-      renderStudioLibrary();return;
-    }
-    studioLifecyclePending=null;
-    performStudioSwitch(kind,id);
-  }
-  function continueStudioSwitch(saveFirst){
-    var pending=studioLifecyclePending;
-    if(!pending||studioLibraryBusy)return;
-    if(!saveFirst){
-      studioLifecyclePending=null;
-      performStudioSwitch(pending.kind,pending.id);
+    if(studioLibraryBusy||!studioApi||!studioWorkspaceReady)return;
+    if(kind==='open'&&(!id||!studioLibraryEntries.some(function(e){return e.id===id;})))return;
+    if(kind==='draft'&&(!id||!studioWorkspaces||
+       !studioWorkspaces.workspaces.some(function(e){return e.id===id;})))return;
+    if((kind==='open'&&studioWorkspaceId===studioDraftAutosave.projectWorkspaceId(id))||
+       (kind==='draft'&&studioWorkspaceId===id))return;
+    studioLibraryBusy=true;renderStudioLibrary();
+    var startGeneration=studioDraftGeneration;
+    var formerId=studioWorkspaceId,dropEmpty=formerId&&formerId.indexOf('draft_')===0&&
+      !studioHasUnsavedWork();
+    if(!saveStudioDraft(false)){
+      studioLibraryBusy=false;
+      studioLibraryNotice('Cannot switch: current working draft failed validation or storage.',true);
       return;
     }
-    // Never switch on failed save, duplicate warning, stale revision or
-    // IndexedDB failure. The current draft remains available to retry.
-    saveNamedAnimation(!!studioLibraryActive).then(function(saved){
-      if(saved&&studioLifecyclePending===pending){
-        studioLifecyclePending=null;
-        performStudioSwitch(pending.kind,pending.id);
+    persistStudioWorkspace().then(function(ok){
+      if(!ok)throw Error('Current draft could not be stored; switching was cancelled to protect your work');
+      if(studioDraftGeneration!==startGeneration+1)
+        throw Error('The draft changed while switching; please try again');
+      function finish(next,value){
+        performStudioSwitch(next,value);
+        // A pristine, unedited scratch draft has nothing to recover.
+        if(dropEmpty&&formerId!==studioWorkspaceId)dropStudioWorkspace(formerId);
       }
-    });
+      if(kind==='open')return studioLibrary.get(root.indexedDB,id).then(function(record){
+        if(studioDraftGeneration!==startGeneration+1)
+          throw Error('The draft changed while opening; please try again');
+        if(!record)throw Error('Saved animation no longer exists');
+        finish('open',record);
+      });
+      finish(kind,id);
+    }).catch(function(error){
+      studioLibraryMessage='Cannot switch project: '+error.message;
+      studioLibraryError=true;
+    }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
   }
-  function saveBeforeStudioSwitch(){continueStudioSwitch(true);}
-  function performStudioSwitch(kind,id){
-    if(kind==='open'){openNamedAnimation(id);return;}
-    stopStudioPlayback(true);
-    studioPrepared=null;
-    studioDraft=studioApi.edit(studioApi.blank(),'cameraHudAppearance',cameraHudAppearance);
-    studioSelectedKey=null;
-    studioFilmstripScroll=0;studioPlaybackQuality='auto';
-    studioLibraryActive=null;studioLibraryPending=null;studioLibrarySelected='';
-    studioLibraryDuplicate=null;studioLibraryRenamingId='';
-    studioPickerOpen=false;studioPickerSearch='';studioPickerScroll=0;
+  function performStudioSwitch(kind,value){
+    stopStudioPlayback(true);studioPrepared=null;
+    studioFilmstripScroll=0;studioPickerOpen=false;studioPickerSearch='';studioPickerScroll=0;
     studioPickerChecked=Object.create(null);studioDragSession=null;
-    studioRestorePreviewPending=false;
-    var optics=newUiEl('ModernAnimationPlaybackOptics');if(optics)optics.value='auto';
-    saveStudioDraft(false);
-    syncStudioPlaybackControls();syncWorkspaceVisibility();
-    renderAnimationStudio(studioHistoryEntries);
-    studioLibraryNotice('New blank animation draft created. Existing saved projects were not changed.',false);
+    studioRemovedFrameUndo=null;studioRestorePreviewPending=false;
+    if(kind==='new'){
+      studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
+      studioDraft=studioApi.edit(studioApi.blank(),'cameraHudAppearance',cameraHudAppearance);
+      studioSelectedKey=null;studioPlaybackQuality='auto';
+      studioLibraryActive=null;studioLibraryPending=null;studioLibrarySelected='';
+      studioLibraryMessage='New draft created; other projects and drafts are preserved.';
+    }else if(kind==='draft'){
+      studioWorkspaceId=value;
+      restoreStudioDraft(studioDraftAutosave.getWorkspace(studioWorkspaces,value));
+      studioLibrarySelected='';
+      studioLibraryMessage='Resumed draft. It is not saved to Animation Library.';
+    }else{
+      var record=value,id=record.id;
+      studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(id);
+      var previous=studioWorkspaces&&studioWorkspaces.workspaces.find(function(e){
+        return e.id===studioWorkspaceId;
+      });
+      if(previous){
+        restoreStudioDraft(previous.checkpoint);
+        if(previous.checkpoint.libraryRevision===record.updatedAt){
+          studioLibraryActive=record;studioLibraryPending=null;
+          studioLibraryMessage='Resumed '+record.project.name+' with its autosaved edits.';
+        }else{
+          studioLibraryActive=null;
+          studioLibraryPending={id:id,revision:previous.checkpoint.libraryRevision};
+          studioLibraryMessage='The saved project changed elsewhere; local edits are preserved. Use Save As.';
+          studioLibraryError=true;
+        }
+      }else{
+        studioDraft=studioApi.fromProject(record.project);
+        studioSelectedKey=studioDraft.frames[0].key;
+        studioPlaybackQuality=record.quality;
+        studioLibraryActive=record;studioLibraryPending=null;
+        studioPrepared=studioApi.build(studioDraft,'studio_draft');
+        studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
+        studioRestorePreviewPending=!!studioPlayback;
+        studioLibraryMessage='Opened '+record.project.name+' · playback paused at first frame.';
+      }
+      studioLibrarySelected=id;
+    }
+    studioLibraryError=kind==='open'&&studioLibraryPending!==null;
+    var optics=newUiEl('ModernAnimationPlaybackOptics');if(optics)optics.value=studioPlaybackQuality;
+    saveStudioDraft(false);syncStudioPlaybackControls();syncWorkspaceVisibility();
+    if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('library');
+    if(experimentHistory)refreshHistoryList().catch(function(){renderAnimationStudio([]);});
+    else renderAnimationStudio([]);
   }
-  function openNamedAnimation(id){
-    if(!id||studioLibraryBusy||!studioLibrary)return;
-    var startGeneration=studioDraftGeneration;
-    studioLibraryBusy=true;renderStudioLibrary();
-    studioLibrary.get(root.indexedDB,id).then(function(record){
-      if(!record)throw Error('Saved animation no longer exists');
-      var draft=studioApi.fromProject(record.project); // validate before touching live draft
-      if(studioDraftGeneration!==startGeneration)
-        throw Error('Draft changed while opening; current edits were kept');
-      stopStudioPlayback(true);
-      studioDraft=draft;studioSelectedKey=draft.frames[0].key;
-      studioFilmstripScroll=0;studioLibraryActive=record;studioLibraryPending=null;
-      studioLibrarySelected=id;studioLibraryDuplicate=null;
-      studioPlaybackQuality=record.quality;
-      studioPrepared=studioApi.build(draft,'studio_draft');
-      studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
-      studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
-      studioRestorePreviewPending=!!studioPlayback;
-      var optics=newUiEl('ModernAnimationPlaybackOptics');if(optics)optics.value=record.quality;
-      saveStudioDraft(false);syncStudioPlaybackControls();
-      if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('library');
-      if(experimentHistory)refreshHistoryList().catch(function(){renderAnimationStudio([]);});
-      else renderAnimationStudio([]);
-      studioLibraryMessage='Opened '+record.project.name+' · playback paused at first frame.';
-      studioLibraryError=false;
-    }).catch(function(error){studioLibraryMessage='Cannot open animation: '+error.message;
-      studioLibraryError=true;}).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
+  function deleteStudioWorkspace(id){
+    if(!studioWorkspaceReady||studioLibraryBusy||!studioWorkspaces||
+       id===studioWorkspaceId)return;
+    var draft=studioDraftAutosave.getWorkspace(studioWorkspaces,id);
+    if(!draft)return;
+    if(typeof root.confirm==='function'&&!root.confirm('Delete autosaved draft "'+
+      draft.draft.name+'"? This cannot be undone.'))return;
+    dropStudioWorkspace(id);
+    studioLibraryNotice('Autosaved draft deleted. Named projects were not changed.',false);
   }
   function deleteNamedAnimation(id){
     if(id)studioLibrarySelected=id;
@@ -1365,8 +1440,27 @@
       (found?found.project.name:id)+'"? The current draft will remain available.'))return;
     studioLibraryBusy=true;renderStudioLibrary();
     studioLibrary.remove(root.indexedDB,id).then(function(removed){
-      if(studioLibraryActive&&studioLibraryActive.id===id){
-        studioLibraryActive=null;studioLibraryPending=null;saveStudioDraft(false);
+      if(removed){
+        var source=studioDraftAutosave.projectWorkspaceId(id);
+        var local=studioDraftAutosave.getWorkspace(studioWorkspaces,source);
+        if(local){
+          var detachedId=studioDraftAutosave.makeWorkspaceId(root.crypto);
+          if(source===studioWorkspaceId){
+            studioWorkspaceId=detachedId;
+            studioLibraryActive=null;studioLibraryPending=null;
+            saveStudioDraft(false);
+            dropStudioWorkspace(source);
+          }else{
+            var independent=studioDraftAutosave.checkpoint(Object.assign({},local,{
+              libraryId:null,libraryRevision:null
+            }),Math.max(Date.now(),local.savedAt+1));
+            studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,
+              detachedId,independent);
+            studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
+              studioWorkspaces,{activeId:studioWorkspaceId}));
+            dropStudioWorkspace(source);
+          }
+        }
       }
       studioLibrarySelected='';
       studioLibraryMessage=removed?'Saved animation deleted. Current draft was not deleted.':
@@ -1389,37 +1483,68 @@
     studioDraftSavedAt=stamp;
     return record;
   }
-  function writeStudioDraftIndexedDB(){
+  function persistStudioWorkspace(){
     if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
-    if(!studioDraftCheckpoint||!root.indexedDB||!studioDraftAutosave)return;
-    var checkpoint=studioDraftCheckpoint;
-    studioDraftWriteQueue=studioDraftWriteQueue.catch(function(){return null;}).then(function(){
-      return studioDraftAutosave.write(root.indexedDB,checkpoint);
-    }).catch(function(error){
-      studioDraftStatus('Animation draft saved locally; IndexedDB unavailable: '+error.message,true);
+    if(!studioWorkspaces||!studioDraftAutosave)return Promise.resolve(false);
+    var current=studioWorkspaces;
+    if(!root.indexedDB)return Promise.resolve(!!studioWorkspaceLocalSaved);
+    // The queue serializes every snapshot, so older asynchronous transactions
+    // cannot overwrite a newer workspace collection. Failed transactions must
+    // still allow subsequent writes to be retried.
+    var attempt=studioDraftWriteQueue.catch(function(){return false;}).then(function(){
+      return studioDraftAutosave.writeCollection(root.indexedDB,current).then(function(){return true;});
+    });
+    studioDraftWriteQueue=attempt;
+    return attempt.then(function(){return true;}).catch(function(error){
+      studioDraftStatus('IndexedDB backup failed: '+error.message+
+        (studioWorkspaceLocalSaved?' · local backup retained.':' · project switching blocked.'),true);
+      return !!studioWorkspaceLocalSaved;
     });
   }
+  function writeStudioDraftIndexedDB(){return persistStudioWorkspace();}
+  function dropStudioWorkspace(id){
+    if(!studioWorkspaces||id===studioWorkspaceId)return;
+    studioWorkspaces=studioDraftAutosave.withoutWorkspace(studioWorkspaces,id,
+      studioWorkspaceId,Math.max(Date.now(),studioDraftSavedAt+1));
+    studioDraftSavedAt=studioWorkspaces.savedAt;
+    try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
+      preferencesStorage(),studioWorkspaces);}
+    catch(error){studioWorkspaceLocalSaved=false;
+      studioDraftStatus('Local draft backup failed: '+error.message,true);}
+    if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+    studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
+  }
   function saveStudioDraft(throttled){
-    if(!studioDraftAutosave||!studioDraft)return;
+    if(!studioDraftAutosave||!studioDraft||!studioWorkspaceReady)return false;
     var now=Date.now();
-    if(throttled&&now-studioDraftLastPositionSave<1200)return;
+    if(throttled&&now-studioDraftLastPositionSave<1200)return studioWorkspaceLocalSaved;
     studioDraftLastPositionSave=now;
     studioDraftGeneration++;
     try{
       studioDraftCheckpoint=studioDraftRecord();
-      var saved=false;
-      try{saved=studioDraftAutosave.writeLocal(preferencesStorage(),studioDraftCheckpoint);}
-      catch(error){studioDraftStatus('Local animation backup failed: '+error.message+'; trying IndexedDB.',true);}
-      if(!saved&&!root.indexedDB)studioDraftStatus('Animation draft cannot be saved: browser storage unavailable.',true);
-      else if(saved)studioDraftStatus('Animation draft autosaved · paused position and keyframes will restore after reload.',false);
+      if(!studioWorkspaceId)studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
+      studioWorkspaces=studioWorkspaces?
+        studioDraftAutosave.withWorkspace(studioWorkspaces,studioWorkspaceId,
+          studioDraftCheckpoint,Math.max(now,studioDraftSavedAt)):
+        studioDraftAutosave.collection(studioWorkspaceId,studioDraftCheckpoint,now);
+      // Synchronous, whole-collection LocalStorage snapshot. Never overwrite
+      // another workspace just because the active editor changed.
+      studioWorkspaceLocalSaved=false;
+      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
+        preferencesStorage(),studioWorkspaces);}
+      catch(error){studioDraftStatus('Local workspace backup failed: '+error.message+
+        '; trying IndexedDB.',true);}
+      if(!studioWorkspaceLocalSaved&&!root.indexedDB)
+        studioDraftStatus('Workspaces cannot be stored. Switching is disabled.',true);
+      else if(studioWorkspaceLocalSaved)
+        studioDraftStatus('Working draft autosaved · project drafts remain separate after switching.',false);
       if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
       studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
-    }catch(error){studioDraftStatus('Animation draft save failed: '+error.message,true);}
+      return studioWorkspaceLocalSaved||!!root.indexedDB;
+    }catch(error){studioDraftStatus('Animation workspace save failed: '+error.message,true);return false;}
   }
   function restoreStudioDraft(record){
     if(!record||!studioDraftAutosave||!studioApi)return;
-    // Records are strictly versioned and include full owned experiments. An
-    // incompatible animation is a valid draft, but must not auto-prepare.
     var saved=studioDraftAutosave.normalize(record);
     studioDraft=saved.draft;studioSelectedKey=saved.selectedKey;
     studioPlaybackQuality=saved.quality;studioDraftSavedAt=saved.savedAt;
@@ -1435,31 +1560,95 @@
         studioPlayback.seek(saved.positionMs,profileNow());
         studioRestorePreviewPending=true;
       }catch(error){studioPrepared=null;studioPlayback=null;
-        studioDraftStatus('Draft restored; re-prepare it to play: '+error.message,true);}
+        studioDraftStatus('Draft restored; re-preview it to play: '+error.message,true);}
     }
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics)optics.value=studioPlaybackQuality;
     syncStudioPlaybackControls();
     if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('restored');
   }
+  function restoreStudioCollection(value){
+    var collection=studioDraftAutosave.normalizeCollection(value);
+    var record=studioDraftAutosave.getWorkspace(collection,collection.activeId);
+    // Validate the active checkpoint before replacing any live state.
+    if(!record)throw Error('Active draft missing from workspace collection');
+    studioWorkspaces=collection;studioWorkspaceId=collection.activeId;
+    restoreStudioDraft(record);
+    studioWorkspaceReady=true;
+    studioWorkspaceLocalSaved=true;
+  }
+  function absorbLateStudioWorkspaces(remote){
+    if(!remote||!studioWorkspaces||!studioWorkspaceId)return;
+    // The editor was already changed while the initial IndexedDB read was
+    // pending. Never replace it. Recover distinct remote drafts (and newer
+    // inactive copies) without moving the active editor.
+    var incoming=studioDraftAutosave.normalizeCollection(remote),active=studioWorkspaceId;
+    var changed=false;
+    incoming.workspaces.forEach(function(item){
+      var existing=studioWorkspaces.workspaces.find(function(entry){return entry.id===item.id;});
+      if(item.id===active)return;
+      if(existing&&existing.checkpoint.savedAt>=item.checkpoint.savedAt)return;
+      studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,
+        item.id,item.checkpoint);
+      changed=true;
+    });
+    if(!changed)return;
+    studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
+      studioWorkspaces,{activeId:active}));
+    try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
+      preferencesStorage(),studioWorkspaces);}
+    catch(error){studioWorkspaceLocalSaved=false;
+      studioDraftStatus('Recovered drafts require IndexedDB: '+error.message,true);}
+    if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+    studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,0);
+    renderStudioLibrary();
+  }
   function bindStudioDraftPersistence(){
     if(!studioDraftAutosave)return;
-    var local=studioDraftAutosave.readLocal(preferencesStorage());
-    if(local){try{restoreStudioDraft(local);
-      studioDraftStatus('Animation draft restored from browser backup (playback paused).',false);
-    }catch(error){studioDraftStatus('Animation draft backup could not be restored: '+error.message,true);}}
-    var generation=studioDraftGeneration;
-    if(root.indexedDB)studioDraftAutosave.read(root.indexedDB).then(function(remote){
-      if(studioDraftGeneration!==generation)return; // never overwrite new user edits
-      var best=studioDraftAutosave.newer(local,remote);
-      if(best&&(!local||best.savedAt>local.savedAt)){
-        restoreStudioDraft(best);studioDraftCheckpoint=best;
-        studioDraftStatus('Animation draft restored from IndexedDB (playback paused).',false);
-        if(experimentHistory)refreshHistoryList().catch(function(){/* retain restored draft */});
-        if(studioLibraryPending)refreshStudioLibrary();
+    var local=studioDraftAutosave.readCollectionLocal(preferencesStorage());
+    var oldLocal=studioDraftAutosave.readLocal(preferencesStorage());
+    var freshPlaceholder=!local&&!oldLocal;
+    if(!local&&oldLocal){
+      try{local=studioDraftAutosave.migrate(oldLocal,root.crypto);}catch(error){
+        studioDraftStatus('Legacy draft migration failed: '+error.message,true);
       }
+    }
+    if(!local){
+      try{
+        var draft=studioDraftAutosave.checkpoint({draft:studioDraft,selectedKey:null,
+          quality:'auto',prepared:false,positionMs:0},Date.now());
+        local=studioDraftAutosave.collection(studioDraftAutosave.makeWorkspaceId(root.crypto),
+          draft,Date.now());
+      }catch(error){studioDraftStatus('Cannot create first workspace: '+error.message,true);}
+    }
+    if(local){
+      try{restoreStudioCollection(local);
+        studioDraftStatus('Animation workspaces restored; playback paused.',false);
+      }catch(error){studioDraftStatus('Animation workspace recovery failed: '+error.message,true);}
+    }
+    var generation=studioDraftGeneration;
+    if(root.indexedDB)Promise.all([
+      studioDraftAutosave.readCollection(root.indexedDB),
+      studioDraftAutosave.read(root.indexedDB)
+    ]).then(function(records){
+      var remote=records[0];
+      if(!remote&&records[1])remote=studioDraftAutosave.migrate(records[1],root.crypto);
+      if(studioDraftGeneration!==generation){
+        absorbLateStudioWorkspaces(remote);return; // never overwrite active edits
+      }
+      var best=freshPlaceholder&&remote?remote:
+        studioDraftAutosave.newerCollection(local,remote);
+      if(best&&(freshPlaceholder&&remote||!local||best.savedAt>local.savedAt)){
+        restoreStudioCollection(best);studioDraftCheckpoint=studioDraftAutosave.getWorkspace(best,best.activeId);
+        studioDraftStatus('Animation workspaces restored from IndexedDB.',false);
+        if(experimentHistory)refreshHistoryList().catch(function(){/* retain draft */});
+        if(studioLibraryPending)refreshStudioLibrary();
+        else renderStudioLibrary();
+      }
+      // A V1 record is migrated without overwriting a newer V1 IndexedDB
+      // checkpoint. The first edit persists the V2 collection automatically.
     }).catch(function(error){
-      if(!local)studioDraftStatus('Animation draft recovery unavailable: '+error.message,true);
+      if(!local)studioDraftStatus('Animation workspace recovery unavailable: '+error.message,true);
     });
     if(root.addEventListener){
       root.addEventListener('pagehide',function(){
