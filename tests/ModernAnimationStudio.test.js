@@ -520,16 +520,60 @@ test('Touch pointer drag resolves drop position without relying on native HTML d
 });
 
 
-test('Preview action is separate from saving and shows whether the draft is library-linked',()=>{
+test('Both Preview controls share the same action, disabled state, and saved-link description',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=50;
   const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
   const {doc,host}=mockDom(),calls=[];
   editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{});
-  const collectNodes=()=>collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation');
-  assert.equal(collectNodes().length,1,'single preview control near the editor heading');
-  collectNodes()[0].listeners.click();assert.deepEqual(calls,['preview']);
-  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length);
+  const controls=()=>collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation');
+  assert.equal(controls().length,2,'Preview is available above and below the keyframe editor');
+  assert.equal(controls()[0].disabled,false);assert.equal(controls()[1].disabled,false);
+  controls()[0].listeners.click();controls()[1].listeners.click();
+  assert.deepEqual(calls,['preview','preview'],'both buttons invoke the same preparation action');
+  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length>=2);
+  const bars=collect(host,n=>typeof n.className==='string'&&n.className.startsWith('modern-studio-preview-bar'));
+  assert.equal(bars.length,2);
+  assert.equal(host.children[host.children.length-2],bars[1],'bottom Preview follows the last frame editor');
   host.children=[];
   editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{activeId:'saved-1'});
-  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length);
+  assert.equal(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length,2);
+  const broken=studio.history([1,2],[entry(1,a),entry(2,a)]);
+  host.children=[];
+  editor.render(doc,host,broken,studio.inspect(broken),{prepare:()=>calls.push('preview')},false,{});
+  assert.deepEqual(controls().map(n=>n.disabled),[true,true],
+    'a blocked sequence disables both duplicate controls');
+});
+
+test('Preview navigation is one-shot, gesture-cancellable and respects reduced motion',()=>{
+  const listeners=new Map(),calls=[];
+  const view={
+    addEventListener(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},
+    removeEventListener(type,fn){listeners.get(type)?.delete(fn);},
+    matchMedia(){return {matches:false};}
+  };
+  const target={hidden:false,scrollIntoView(args){calls.push(args);}};
+  const navigation=editor.createPreviewNavigation(view,{hidden:false});
+  const dispatch=(type,event)=>{for(const fn of [...(listeners.get(type)||[])])fn(event||{});};
+  assert.equal(navigation.finish(target),false,'unrequested frame painting must never scroll');
+  navigation.start();
+  assert.equal(navigation.isPending(),true);
+  dispatch('keydown',{key:'a'});
+  assert.equal(navigation.isPending(),true,'ordinary typing does not cancel scroll');
+  dispatch('wheel');
+  assert.equal(navigation.finish(target),false,'wheel navigation cancels deferred scroll');
+  assert.equal(calls.length,0);
+  navigation.start();dispatch('touchstart');assert.equal(navigation.finish(target),false);
+  navigation.start();dispatch('pointerdown');assert.equal(navigation.finish(target),false);
+  navigation.start();dispatch('keydown',{key:'PageDown'});assert.equal(navigation.finish(target),false);
+  navigation.start();
+  assert.equal(navigation.finish(target),true);
+  assert.deepEqual(calls,[{behavior:'smooth',block:'start'}]);
+  assert.equal(navigation.finish(target),false,'a second paint cannot repeat navigation');
+  assert.equal([...listeners.values()].every(s=>s.size===0),true,'listeners cleaned after navigation');
+  view.matchMedia=()=>({matches:true});
+  navigation.start();assert.equal(navigation.finish(target),true);
+  assert.deepEqual(calls.at(-1),{behavior:'auto',block:'start'});
+  navigation.start();navigation.cancel();assert.equal(navigation.finish(target),false);
+  navigation.start();assert.equal(navigation.finish({hidden:true,scrollIntoView(){throw Error('hidden');}}),false);
+  navigation.start();assert.equal(editor.createPreviewNavigation(view,{hidden:true}).finish(target),false);
 });

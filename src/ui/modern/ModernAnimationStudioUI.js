@@ -615,6 +615,50 @@
     }
     return area;
   }
+  // Navigation is requested only by an explicit Preview click. A later user
+  // scroll/gesture cancels it, so an expensive first RK4 paint cannot yank the
+  // viewport away from wherever the user chose to go in the meantime.
+  function createPreviewNavigation(view,doc){
+    var pending=false;
+    var manualKeys=['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '];
+    var events=['wheel','touchstart','pointerdown','mousedown'];
+    function onKey(event){if(event&&manualKeys.includes(event.key))cancel();}
+    function cancel(){
+      if(pending&&view&&typeof view.removeEventListener==='function'){
+        events.forEach(function(name){view.removeEventListener(name,cancel,true);});
+        view.removeEventListener('keydown',onKey,true);
+      }
+      pending=false;
+    }
+    function start(){
+      cancel();pending=true;
+      if(view&&typeof view.addEventListener==='function'){
+        events.forEach(function(name){view.addEventListener(name,cancel,true);});
+        view.addEventListener('keydown',onKey,true);
+      }
+    }
+    function finish(target){
+      if(!pending)return false;
+      cancel();
+      if(!target||target.hidden||typeof target.scrollIntoView!=='function'||doc&&doc.hidden)return false;
+      var reduced=view&&typeof view.matchMedia==='function'&&
+        view.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
+      return true;
+    }
+    return Object.freeze({start:start,finish:finish,cancel:cancel,isPending:function(){return pending;}});
+  }
+  function previewBar(doc,result,actions,prepared,options,atEnd){
+    var bar=el(doc,'div','modern-studio-preview-bar'+(atEnd?' is-bottom':''));
+    var preview=button(doc,'Preview animation',
+      'Prepare in-memory playback without adding a saved project',actions.prepare);
+    preview.disabled=!result.compatible;
+    bar.appendChild(preview);
+    bar.appendChild(el(doc,'span','',prepared?
+      'Preview ready above · '+(options.activeId?'Saved project linked':'Working draft; not saved to library'):
+      'Prepare the preview to play above; Save project is a separate action.'));
+    return bar;
+  }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
     var inspector=galleryPreview(doc,host);
@@ -628,13 +672,7 @@
     host.appendChild(heading);
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Edit keyframes below. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
-    var previewBar=el(doc,'div','modern-studio-preview-bar');
-    var preview=button(doc,'Preview animation','Prepare in-memory playback without adding a saved project',actions.prepare);
-    preview.disabled=!result.compatible;previewBar.appendChild(preview);
-    previewBar.appendChild(el(doc,'span','',prepared?
-      'Preview ready above · '+(options.activeId?'Saved project linked':'Working draft; not saved to library'):
-      'Prepare the preview to play above; Save project is a separate action.'));
-    host.appendChild(previewBar);
+    host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
     var load=button(doc,'Load staged snapshots'+(options.stagedCount?' ('+options.stagedCount+')':''),
@@ -825,9 +863,11 @@
       },[['linear','Linear'],['smoothstep','Ease in / out']]));
       panel.appendChild(fields);host.appendChild(panel);
     }
+    host.appendChild(previewBar(doc,result,actions,prepared,options,true));
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Playback appears above the editor after Preview animation. Edits require another Preview. ' +
+      'After a successful Preview, the page moves to Playback above. Edits require another Preview. ' +
       'Export PNG/video from Playback; JSON backup and permanent project saves are in Animation Library.'));
   }
-  return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary});
+  return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary,
+    createPreviewNavigation:createPreviewNavigation});
 }));

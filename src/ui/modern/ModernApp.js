@@ -505,6 +505,10 @@
   var studioRemovedFrameUndo=null; // One-step, in-memory undo scoped to the exact draft.
   var studioFilmstripScroll=0;
   var studioPrepared=null;
+  // A one-shot navigation request belongs to the explicit Preview click, not
+  // to autosave, project restore, Playback seek or background frame painting.
+  var studioPreviewNavigation=studioUI&&studioUI.createPreviewNavigation?
+    studioUI.createPreviewNavigation(root,document):null;
   var studioPlayback=null;
   var studioPlaybackFrame=null;
   var studioPlaybackLastPaint=-Infinity;
@@ -1667,7 +1671,10 @@
   // Staging IDs survive History filtering; actual animation states are copied
   // into the draft only on explicit hand-off. Missing IDs are pruned by History.
   function stopStudioPlayback(clear){
-    if(clear)cancelStudioInitialPaint();
+    if(clear){
+      if(studioPreviewNavigation)studioPreviewNavigation.cancel();
+      cancelStudioInitialPaint();
+    }
     if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
     if(studioPlayback)studioPlayback.pause(profileNow());
     if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
@@ -1754,6 +1761,9 @@
         studioRestorePreviewPending=false;
         studioFrameLoading(false,'');
         syncStudioPlaybackControls();
+        // Scroll only when the requested first physical frame is actually ready.
+        if(studioPreviewNavigation)
+          studioPreviewNavigation.finish(newUiEl('ModernAnimationPlaybackStage'));
         var ready=newUiEl('ModernAnimationPlaybackStatus');
         if(ready)ready.textContent='Frame at '+(studioPlaybackRenderedAt/1000).toFixed(2)+
           ' s ready · playback paused.';
@@ -1761,6 +1771,12 @@
         studioFrameLoading(true,'Physical frame unavailable · use Retry frame');
         var failed=newUiEl('ModernAnimationPlaybackStatus');
         if(failed)failed.textContent='Unable to render frame: '+error.message+' · Retry frame is available.';
+        if(studioPreviewNavigation&&studioPreviewNavigation.isPending()){
+          var message=newUiEl('ModernAnimationStudioMessage');
+          if(message){message.textContent='Preview frame failed: '+error.message+
+            '. Use Retry frame in Playback.';message.classList.add('is-error');}
+          studioPreviewNavigation.finish(message);
+        }
       }
     }
     studioInitialPaintFrame=requestAnimationFrame(function(){
@@ -2570,21 +2586,37 @@
         saveApplicationPreferences();renderHistoryStoryboard(entries);
         renderAnimationStudio(entries);
       },
-      prepare:function(){safe(function(){
-        stopStudioPlayback(true);
-        studioPrepared=studioApi.build(studioDraft,'studio_draft');
-        studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
-        saveStudioDraft(false);
-        syncStudioPlaybackControls();
-        if(studioPlayback)scheduleStudioInitialPaint('prepared');
-        renderAnimationStudio(entries);
-        var status=newUiEl('ModernAnimationStudioMessage');
-        if(status){status.classList.remove('is-error');
-          status.textContent=studioPlayback?
-            (studioPrepared.mode==='camera'?'Camera':'Physical')+
-              ' preview ready above. No project was saved to Animation Library.':
-            'Independent animation playback is unavailable.';}
-      });},
+      prepare:function(){
+        try{
+          stopStudioPlayback(true);
+          studioPrepared=studioApi.build(studioDraft,'studio_draft');
+          studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
+          saveStudioDraft(false);
+          syncStudioPlaybackControls();
+          renderAnimationStudio(entries);
+          var status=newUiEl('ModernAnimationStudioMessage');
+          if(status){status.classList.remove('is-error');
+            status.textContent=studioPlayback?
+              (studioPrepared.mode==='camera'?'Camera':'Physical')+
+                ' preview ready above. No project was saved to Animation Library.':
+              'Independent animation playback is unavailable.';}
+          if(studioPlayback){
+            if(studioPreviewNavigation)studioPreviewNavigation.start();
+            scheduleStudioInitialPaint('prepared');
+          }else if(status){
+            status.classList.add('is-error');
+            if(studioPreviewNavigation){studioPreviewNavigation.start();
+              studioPreviewNavigation.finish(status);}
+          }
+        }catch(error){
+          report(error);
+          if(studioPreviewNavigation){
+            studioPreviewNavigation.start();
+            var invalid=host.querySelector&&host.querySelector('.modern-studio-status.is-invalid');
+            studioPreviewNavigation.finish(invalid||newUiEl('ModernAnimationStudioMessage'));
+          }
+        }
+      },
       dragStart:function(payload,event){
         var chosen=payload.kind==='snapshots'&&studioPickerChecked[payload.id]?
           animationPickerEntries(entries).filter(function(e){return studioPickerChecked[e.id];})

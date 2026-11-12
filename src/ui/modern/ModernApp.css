@@ -672,6 +672,9 @@ button{cursor:pointer}
 .modern-studio-preview-bar .modern-studio-action{background:#dceeff;border-color:#8ab6de;
   font-weight:600}
 .modern-studio-preview-bar span{color:#496c86;font-size:11px;line-height:1.4}
+.modern-studio-preview-bar.is-bottom{margin:12px 0 7px}
+#ModernAnimationPlaybackStage,.modern-studio-status.is-invalid,
+#ModernAnimationStudioMessage{scroll-margin-top:18px}
 
 .modern-studio-basics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));
   gap:9px;margin:12px 0}

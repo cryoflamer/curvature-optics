@@ -2169,3 +2169,16 @@ preferences, and removal of the now-duplicated target CSS block.
   is invented. Original thumbnail storage/project/History formats and Legacy
   entrypoint remain unchanged. A Modern-only script and CSS cache refresh are
   included with updated isolation audit fixture and targeted regression tests.
+
+
+### Animation Studio Preview navigation (#140.12.120.9.12.3)
+
+- The top and bottom `Preview animation` buttons in the draft editor invoke the same
+  build/paint action and share the same enabled state and prepared/saved-link text.
+- A **user-initiated** Preview requests a one-shot scroll to the existing Playback stage
+  after the first physical frame paints successfully, never at click-time or on autosave.
+- Pending navigation is cancelled by a user wheel/touch/pointer or scroll-key gesture;
+  further frames and non-Preview restores never automatically move the viewport.
+  `prefers-reduced-motion` requests instant rather than smooth navigation.
+- Preparation/paint errors route to the editor's status/diagnostics instead of
+  scrolling to stale Playback. Legacy, RK4, export, and project persistence are unchanged.

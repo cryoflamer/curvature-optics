@@ -392,7 +392,13 @@ continue to be rejected by Preview animation. See the
 ### Isolated Camera Animation playback
 
 In **Animation**, assemble two or more compatible camera keyframes and click
-**Preview animation** at the top of the draft editor. A separate physical viewport appears **above** the editor
+**Preview animation** at the top **or bottom** of the draft editor. Both controls share
+identical validation and action. The separate physical viewport appears **above** the editor;
+after a successful first frame, the page scrolls to Playback automatically (smoothly unless
+reduced motion is preferred). A wheel/touch/pointer/scroll-key gesture while rendering
+cancels that pending jump; reopening projects, autosave, editing, and background paints
+never initiate it. On failure, the editor shows the error instead of jumping to an old preview.
+The physical viewport provides
 with **Play**, **Pause**, **Stop** and a seek slider. The preview renders real
 intermediate optical scenes using the production CPU Physical renderer—not
 History thumbnail crossfades. Compare projects render A and B side by side.
