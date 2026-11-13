@@ -385,6 +385,8 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   const deleteCorner=nodes().find(n=>n.className.includes('modern-animation-library-delete')&&
     n['aria-label']==='Delete saved animation Globe to Flat');
   assert.ok(deleteCorner);
+  assert.ok(deleteCorner.className.includes('modern-card-delete'));
+  assert.equal(deleteCorner.textContent,'');
   assert.equal(nodes().some(n=>n.tagName==='button'&&n.textContent==='Delete'),false);
   deleteCorner.listeners.click({stopPropagation(){}});
   assert.deepEqual(calls.at(-1),['delete','animation_a']);
@@ -613,7 +615,8 @@ test('project lifecycle has independent draft controls and no conflicting confir
   }
   button('Open draft').listeners.click();assert.deepEqual(calls.at(-1),['openDraft','draft_one']);
   const draftDelete=nodes().find(n=>n.className.includes('modern-animation-workspace-delete'));
-  assert.equal(draftDelete.textContent,'×');
+  assert.equal(draftDelete.textContent,'','shared History-style × is rendered by CSS');
+  assert.ok(draftDelete.className.includes('modern-card-delete'));
   assert.equal(draftDelete['aria-label'],'Delete draft: Tour of towers');
   draftDelete.listeners.click({stopPropagation(){}});
   assert.deepEqual(calls.at(-1),['removeDraft','draft_one']);
@@ -1019,4 +1022,26 @@ test('Stash and discard actions are wired to safe durable restore before editor 
   assert.match(flow,/studioDraftGeneration!==generation/);
   assert.match(flow,/studioDraftAutosave\.restoreSavedProject/);
   assert.match(flow,/studioWorkspaces=previous/);
+});
+
+test('History and all animation card delete corners share one visual class',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  const history=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernExperimentHistoryUI.js'),'utf8');
+  const animation=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
+  for(const kind of ['modern-history-card','modern-animation-library-card',
+    'modern-animation-workspace-item','modern-history-storyboard-item','modern-studio-filmstrip-item']){
+    assert.ok(css.includes('.'+kind),'shared delete-corner selector must cover '+kind);
+  }
+  assert.match(css,/\.modern-card-delete::after\{content:"✕";font-weight:750;font-size:17px/);
+  assert.match(css,/\.modern-card-delete:not\(:disabled\):hover\{\s*color:#a12a38;background:#fff0f1;border-color:#df9ca3\}/);
+  assert.match(css,/\.modern-card-delete:focus-visible\{outline:2px solid #287ac5/);
+  assert.match(css,/@media\(hover:none\)\{[\s\S]*\.modern-card-delete:not\(:disabled\)\{opacity:1\}/);
+  assert.match(history,/modern-history-delete modern-card-delete/);
+  assert.match(history,/modern-history-storyboard-remove modern-card-delete/);
+  assert.match(animation,/modern-studio-card-remove modern-card-delete/);
+  assert.match(animation,/modern-animation-library-delete modern-card-delete/);
+  assert.match(animation,/modern-animation-workspace-delete/);
+  // The visual glyph is a CSS pseudo-element, not a second text glyph.
+  assert.match(animation,/var remove=button\(doc,'',description/);
+  assert.match(history,/var remove=button\(doc,'','Remove frame '/);
 });

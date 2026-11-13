@@ -521,22 +521,17 @@ button{cursor:pointer}
 .modern-history-gallery[data-size="small"] .modern-history-multi input{margin:0}
 .modern-history-gallery[data-size="small"] .modern-history-card-title{font-size:11px}
 .modern-history-gallery[data-size="small"] .modern-history-card-meta{font-size:10px}
-.modern-history-pin,.modern-history-delete{position:absolute;top:5px;width:25px;height:25px;z-index:1;
+/* History pin remains its own action; destructive card controls share
+ * .modern-card-delete below so all saved-item corners look identical. */
+.modern-history-pin{position:absolute;top:5px;right:35px;width:25px;height:25px;z-index:1;
   border:1px solid #b7cadd;border-radius:7px;background:#f7fbffed;color:#285b83;
   display:grid;place-items:center;cursor:pointer;padding:0;opacity:0;transition:opacity .12s}
-.modern-history-pin{right:35px}
-.modern-history-delete{right:5px}
 .modern-history-pin::after{content:"📌";font-size:16px;line-height:1;filter:grayscale(1);opacity:.65}
 .modern-history-pin.is-pinned{opacity:1;background:#fff2cb;border-color:#d6af47;color:#8d5f09}
 .modern-history-pin.is-pinned::after{filter:none;opacity:1}
-.modern-history-delete::after{content:"✕";font-weight:750;font-size:17px;line-height:1}
-.modern-history-delete:not(:disabled):hover{color:#a12a38;background:#fff0f1;border-color:#df9ca3}
-.modern-history-delete:disabled{cursor:not-allowed;opacity:0}
-.modern-history-card:hover .modern-history-pin,.modern-history-card:hover .modern-history-delete:not(:disabled),
-.modern-history-card:focus-within .modern-history-pin,.modern-history-card:focus-within .modern-history-delete:not(:disabled){opacity:1}
-.modern-history-card:hover .modern-history-delete:disabled,.modern-history-card:focus-within .modern-history-delete:disabled{opacity:.35}
-.modern-history-pin:focus-visible,.modern-history-delete:focus-visible,.modern-history-section-toggle:focus-visible{opacity:1;outline:2px solid #287ac5;outline-offset:1px}
-@media(hover:none){.modern-history-pin,.modern-history-delete:not(:disabled){opacity:1}.modern-history-delete:disabled{opacity:.35}}
+.modern-history-card:hover .modern-history-pin,.modern-history-card:focus-within .modern-history-pin{opacity:1}
+.modern-history-pin:focus-visible,.modern-history-section-toggle:focus-visible{opacity:1;outline:2px solid #287ac5;outline-offset:1px}
+@media(hover:none){.modern-history-pin{opacity:1}}
 /* Details are explicit click/focus actions, never hover popups. The button
  * does not initiate selection, restore or native/pointer drag on its card. */
 .modern-card-info-button{position:absolute;top:6px;left:6px;z-index:4;
@@ -548,18 +543,9 @@ button{cursor:pointer}
   background:#dceeff;border-color:#287ac5;outline-offset:2px}
 .modern-card-info-button:focus-visible{outline:2px solid #287ac5}
 .modern-animation-library-card .modern-card-info-button{cursor:pointer}
-/* The independent delete corner never overlaps the details button on the left. */
-.modern-animation-library-delete{position:absolute;right:6px;top:6px;z-index:5;
-  box-sizing:border-box;display:grid;place-items:center;width:27px;height:27px;
-  padding:0;border:1px solid #d9a7ad;border-radius:7px;background:#fff7f7f2;
-  color:#983846;font-size:21px;line-height:1;cursor:pointer!important;touch-action:manipulation}
-.modern-animation-library-delete:not(:disabled):hover{background:#ffe5e8;border-color:#bd626e}
-.modern-animation-library-delete:focus-visible{outline:2px solid #287ac5;outline-offset:2px}
-.modern-animation-library-delete:disabled{opacity:.4;cursor:default!important}
+/* Library, workspace, shortlist, keyframe and History delete buttons
+ * inherit the same History-style control declared below. */
 .modern-animation-workspace-item{position:relative;padding-right:36px}
-.modern-animation-workspace-item .modern-animation-workspace-delete{right:3px;top:5px;
-  width:26px;height:26px;padding:0;background:#fff7f7;color:#983846;border-color:#d9a7ad}
-
 .modern-studio-picker-card .modern-card-info-button{left:auto;right:29px;top:3px;
   width:23px;height:23px;font-size:16px}
 .modern-studio-filmstrip-item .modern-card-info-button{left:8px;top:8px}
@@ -609,13 +595,6 @@ button{cursor:pointer}
   margin:0;padding:2px 2px 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .modern-history-storyboard-item{flex:0 0 158px;min-width:0;display:flex;flex-direction:column;
   position:relative;gap:4px;padding:5px;border:1px solid #d7e5f2;border-radius:8px;background:#fff}
-.modern-history-storyboard .modern-history-storyboard-remove{position:absolute;z-index:2;
-  top:7px;right:7px;box-sizing:border-box;width:27px;height:27px;padding:0;
-  background:#fffffff0;border:1px solid #b9cfe1;border-radius:6px;
-  color:#355e7e;font-size:19px;line-height:1;cursor:pointer}
-.modern-history-storyboard .modern-history-storyboard-remove:hover,
-.modern-history-storyboard .modern-history-storyboard-remove:focus-visible{
-  background:#ffecec;border-color:#d08080;color:#a02727}
 .modern-history-storyboard-visual,.modern-studio-keyframe-visual{height:82px;background:#f1f6fb;
   display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:5px}
 .modern-storyboard-image{display:block;width:100%;height:100%;object-fit:contain;background:#fff}
@@ -869,15 +848,7 @@ button{cursor:pointer}
 .modern-studio-drag-handle:hover,.modern-studio-drag-handle.is-dragging{background:#dceeff;color:#245e94}
 .modern-studio-filmstrip{align-items:stretch;gap:3px}
 .modern-studio-filmstrip-item{position:relative;cursor:grab;display:flex;flex-direction:column}
-/* A local action is outside the large selection button, so keyboard focus,
- * selection and native/pointer drag cannot be triggered by its click. */
-.modern-studio-card-remove{position:absolute;z-index:2;top:8px;right:8px;
-  box-sizing:border-box;width:27px;height:27px;padding:0;border:1px solid #b9cfe1;
-  border-radius:6px;background:#fffffff0;color:#355e7e;cursor:pointer;
-  font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;
-  touch-action:manipulation}
-.modern-studio-card-remove:hover,.modern-studio-card-remove:focus-visible{
-  background:#ffecec;border-color:#d08080;color:#a02727;outline-offset:2px}
+/* Filmstrip removal uses the shared History-style card corner. */
 .modern-studio-undo-removal{display:flex;gap:12px;align-items:center;flex-wrap:wrap;
   padding:7px 10px;margin:-3px 0 12px;border-radius:7px;background:#fff9eb;
   border:1px solid #e8d7a8;color:#765d2d;font-size:12px}
@@ -1078,3 +1049,33 @@ button{cursor:pointer}
 .modern-animation-workspace-item button:disabled{opacity:.6;cursor:default}
 
 .modern-animation-library-local-edits{display:block;color:#8b4e0b;font-weight:600}
+
+/* One delete-corner design, based on History. Keep this after the general
+ * Animation Library / Storyboard button rules to avoid inherited styling. */
+:is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+    .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete{
+  position:absolute;right:5px;top:5px;z-index:5;box-sizing:border-box;
+  display:grid;place-items:center;width:25px;height:25px;padding:0;
+  border:1px solid #b7cadd;border-radius:7px;background:#f7fbffed;color:#285b83;
+  font:inherit;font-size:0;line-height:1;cursor:pointer;opacity:0;
+  transition:opacity .12s;touch-action:manipulation}
+.modern-card-delete::after{content:"✕";font-weight:750;font-size:17px;line-height:1}
+:is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+    .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:not(:disabled):hover{
+  color:#a12a38;background:#fff0f1;border-color:#df9ca3}
+:is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+    .modern-history-storyboard-item,.modern-studio-filmstrip-item):is(:hover,:focus-within) > .modern-card-delete:not(:disabled),
+:is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+    .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:focus-visible{opacity:1}
+:is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+    .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:disabled{cursor:not-allowed;opacity:0}
+:is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+    .modern-history-storyboard-item,.modern-studio-filmstrip-item):is(:hover,:focus-within) > .modern-card-delete:disabled{opacity:.35}
+.modern-card-delete:focus-visible{outline:2px solid #287ac5;outline-offset:1px}
+.modern-animation-workspace-item > .modern-card-delete{right:3px;top:5px}
+@media(hover:none){
+  :is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+      .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:not(:disabled){opacity:1}
+  :is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
+      .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:disabled{opacity:.35}
+}

@@ -2335,3 +2335,13 @@ confirmation. Other workspaces stay untouched. Switching to a stashed draft
 does not delete it. Revision/generation conflicts and persistence failures
 abort before replacing the editor; stale concurrent editor changes are backed
 up rather than dropped. No Library-record or physics-schema migration is needed.
+
+
+### Unified Modern card delete controls
+
+History snapshot cards, Animation Library cards, Working drafts, Storyboard
+shortlist items and keyframe cards share the same neutral History-style delete
+corner via `.modern-card-delete`. The CSS pseudo-element renders `✕`; hover,
+focus, disabled and touch states are centralized. Existing confirmation,
+selection, drag-and-drop and storage semantics are unchanged. Tests cover
+shared styling and card-specific click isolation.

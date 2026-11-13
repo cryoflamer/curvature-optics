@@ -249,7 +249,7 @@
         if(inspector)inspector.hide();
         actions.remove(entry.id);
       });
-      remove.className='modern-history-delete';
+      remove.className='modern-history-delete modern-card-delete';
       remove.disabled=!!entry.pinned;
       card.appendChild(remove);
       var body=el(doc,'div','modern-history-card-body');
@@ -321,8 +321,8 @@
       if(!entry)return;
       var item=el(doc,'li','modern-history-storyboard-item');
       item.tabIndex=0;item.setAttribute('aria-label','Snapshot '+displayName(entry));
-      var remove=button(doc,'×','Remove frame '+(index+1)+' from shortlist',function(){actions.remove(id);});
-      remove.className='modern-history-storyboard-remove';
+      var remove=button(doc,'','Remove frame '+(index+1)+' from shortlist',function(){actions.remove(id);});
+      remove.className='modern-history-storyboard-remove modern-card-delete';
       item.appendChild(remove);
       item.appendChild(frameVisual(doc,entry,'modern-history-storyboard-visual'));
       var title=el(doc,'strong','modern-history-storyboard-name',(index+1)+'. '+displayName(entry));

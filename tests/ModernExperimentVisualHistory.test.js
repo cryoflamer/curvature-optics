@@ -190,15 +190,16 @@ test('Compact section grids use bounded columns and menu-free minimal controls',
   assert.match(css,/grid-template-columns:repeat\(auto-fill,minmax\(0,min\(150px,100%\)\)\)/);
   assert.match(css,/data-size="medium"\] \.modern-history-section-grid/);
   assert.match(css,/data-size="large"\] \.modern-history-section-grid/);
-  assert.match(css,/\.modern-history-pin\{right:35px\}/);
-  assert.match(css,/@media\(hover:none\)\{\.modern-history-pin,\.modern-history-delete:not\(:disabled\)\{opacity:1\}/);
+  assert.match(css,/\.modern-history-pin\{position:absolute;top:5px;right:35px;/);
+  assert.match(css,/@media\(hover:none\)\{\.modern-history-pin\{opacity:1\}/);
+  assert.match(css,/\.modern-card-delete::after\{content:"✕"/);
   const {doc}=dom(),host=doc.createElement('div');
   ui.render(doc,host,[entry(3,'compare',true)],3,{
     select(){},restore(){},pin(){},remove(){},multi(){}
   },{});
   const card=host.children[1].children[1].children[0];
   assert.deepEqual(card.children.map(c=>c.className),[
-    'modern-history-card-select has-preview','modern-history-pin','modern-history-delete','modern-history-card-body']);
+    'modern-history-card-select has-preview','modern-history-pin','modern-history-delete modern-card-delete','modern-history-card-body']);
   assert.deepEqual(card.children[3].children.map(c=>c.className),[
     'modern-history-card-title','modern-history-card-meta','modern-history-card-footer']);
   assert.equal(card.children[3].children[2].children[0].className,'modern-history-multi');
@@ -390,7 +391,8 @@ test('Storyboard shortlist renders compact real screenshots and distinct physics
   assert.equal(host.children.length,2);
   const firstCard=host.children[0],secondCard=host.children[1];
   assert.match(firstCard.className,/modern-history-storyboard-item/);
-  assert.equal(firstCard.children[0].textContent,'×');
+  assert.equal(firstCard.children[0].textContent,'');
+  assert.match(firstCard.children[0].className,/modern-card-delete/);
   assert.match(firstCard.children[0].className,/modern-history-storyboard-remove/);
   assert.equal(firstCard.children[1].children[0].tagName,'img');
   assert.match(firstCard.children[1].children[0].src,/^data:image\/webp/);

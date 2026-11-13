@@ -262,7 +262,7 @@ test('Keyframe card × removes its own frame without selecting, dragging or touc
   editor.render(doc,host,draft,studio.inspect(draft),actions,false,{entries,selectedKey:'history-2'});
   const items=collect(host,n=>n.className==='modern-studio-filmstrip-item');
   assert.equal(items.length,3);
-  const removes=items.map(item=>collect(item,n=>n.className==='modern-studio-card-remove'));
+  const removes=items.map(item=>collect(item,n=>n.className==='modern-studio-card-remove modern-card-delete'));
   assert.deepEqual(removes.map(items=>items.length),[1,1,1]);
   assert.match(removes[0][0]['aria-label'],/Remove animation frame 1: One/);
   assert.equal(removes[0][0].draggable,false);

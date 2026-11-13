@@ -25,11 +25,11 @@
   // A destructive-looking card action must never also select or drag its card.
   // It only removes a keyframe from the current draft, never from History.
   function cardRemove(doc,description,action){
-    var remove=button(doc,'×',description,function(event){
+    var remove=button(doc,'',description,function(event){
       if(event&&event.stopPropagation)event.stopPropagation();
       action();
     });
-    remove.className='modern-studio-card-remove';
+    remove.className='modern-studio-card-remove modern-card-delete';
     remove.title=description;remove.draggable=false;
     ['pointerdown','mousedown','dblclick','dragstart'].forEach(function(type){
       remove.addEventListener(type,function(event){
@@ -45,7 +45,7 @@
   // Same isolated control for saved projects and independent working drafts.
   function libraryDelete(doc,description,action,extraClass){
     var remove=cardRemove(doc,description,action);
-    remove.className='modern-animation-library-delete'+(extraClass?' '+extraClass:'');
+    remove.className='modern-animation-library-delete modern-card-delete'+(extraClass?' '+extraClass:'');
     return remove;
   }
   function field(doc,label,value,kind,action,options,liveAction){

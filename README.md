@@ -926,6 +926,18 @@ operation rather than silently replacing the editor. The localStorage/IndexedDB
 collection is staged and persisted before updating the live editor, so a later
 autosave cannot overwrite a stash.
 
+
+### Shared delete corners
+
+History snapshots, Animation Library projects, Working drafts, Storyboard items
+and Animation Studio keyframes now use the **same History-style `✕` corner**.
+One `.modern-card-delete` CSS control supplies its size, icon, neutral background,
+red hover, keyboard focus and touch visibility; individual card types only supply
+their action and accessibility label. The corner is revealed on hover/focus
+(or always on touch devices). Deleting a saved project or working draft still
+requires confirmation; removing a storyboard item or keyframe retains its
+previous, non-destructive meaning. The `ⓘ` details action stays separate.
+
 ### Explicit details for saved cards
 
 History snapshots, Storyboard shortlist items, Snapshot Picker entries,
