@@ -301,17 +301,18 @@
       'No saved projects yet. Add keyframes and click Save project; Preview animation never adds a project.'));return;}
     if(options.expanded===false)return;
     host.appendChild(el(doc,'p','modern-animation-library-hint',
-      'Click a card to select for JSON backup · Open loads it for editing · Double-click also opens'));
+      'Single-click selects for JSON backup (blue outline) · Open or double-click loads for editing (Editing badge)'));
     var list=el(doc,'div','modern-animation-library-gallery');
     list.setAttribute('aria-label','Saved animation projects');
     entries.forEach(function(entry){
-      var p=entry.project,selected=entry.id===options.selectedId;
+      var p=entry.project,selected=entry.id===options.selectedId,editing=entry.id===options.activeId;
       var card=el(doc,'article','modern-animation-library-card'+(selected?' is-selected':'')+
-        (entry.id===options.activeId?' is-editing':''));
+        (editing?' is-editing':''));
       card.setAttribute('data-animation-id',entry.id);
       card.setAttribute('tabindex','0');
       card.setAttribute('role','group');
-      card.setAttribute('aria-label',(selected?'Selected animation: ':'Animation: ')+p.name+
+      card.setAttribute('aria-label',(editing?'Editing animation: ':selected?'Selected animation: ':'Animation: ')+p.name+
+        (selected?' · Selected for JSON backup.':'')+
         '. Click to select for backup; choose Open to edit.');
       function insideControl(event){
         var target=event&&event.target;
@@ -343,6 +344,14 @@
       var info=el(doc,'div','modern-animation-library-card-info');
       var title=el(doc,'strong','modern-animation-library-card-title',p.name);
       title.title=p.name;info.appendChild(title);
+      if(selected||editing){
+        var statuses=el(doc,'div','modern-animation-library-card-status');
+        if(selected)statuses.appendChild(el(doc,'span','modern-animation-library-status-selected',
+          'Selected for backup'));
+        if(editing)statuses.appendChild(el(doc,'span','modern-animation-library-status-editing',
+          'Editing'));
+        info.appendChild(statuses);
+      }
       if((options.editedIds||[]).includes(entry.id))
         info.appendChild(el(doc,'small','modern-animation-library-local-edits',
           'Local draft edits · not yet saved to Library'));

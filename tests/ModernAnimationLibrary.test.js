@@ -394,6 +394,59 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
 });
 
 
+test('Animation Library distinguishes selected backup card from opened editing card',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},
+    textContent:'',className:'',value:'',disabled:false,
+    appendChild(node){this.children.push(node);return node;},
+    addEventListener(name,fn){this.listeners[name]=fn;},
+    setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section');
+  const one=studio.build(source(),'animation_a');
+  const two=studio.build(studio.edit(source(),'name','Second animation'),'animation_b');
+  const entries=[library.record(one,'auto','animation_a',10,11),
+    library.record(two,'auto','animation_b',12,13)];
+  const calls=[];
+  const actions={select:id=>calls.push(['select',id]),open:id=>calls.push(['open',id])};
+  const nodes=()=>{function collect(n){return [n,...n.children.flatMap(collect)];}return collect(host);};
+  const cards=()=>nodes().filter(n=>n.tagName==='article'&&
+    n.className.includes('modern-animation-library-card'));
+  const badge=(card,text)=>{function collect(n){return [n,...n.children.flatMap(collect)];}
+    return collect(card).some(n=>n.tagName==='span'&&n.textContent===text);};
+
+  // Single-click selection and the opened project can be different records.
+  ui.renderLibrary(doc,host,entries,{selectedId:'animation_b',activeId:'animation_a',
+    activeName:one.name,expanded:true},actions);
+  assert.equal(cards().length,2);
+  assert.ok(cards()[0].className.includes('is-editing'));
+  assert.ok(!cards()[0].className.includes('is-selected'));
+  assert.ok(badge(cards()[0],'Editing'));
+  assert.ok(!badge(cards()[0],'Selected for backup'));
+  assert.ok(cards()[1].className.includes('is-selected'));
+  assert.ok(!cards()[1].className.includes('is-editing'));
+  assert.ok(badge(cards()[1],'Selected for backup'));
+  assert.ok(!badge(cards()[1],'Editing'));
+  assert.match(cards()[0]['aria-label'],/Editing animation/);
+  cards()[1].listeners.click({target:cards()[1]});
+  assert.deepEqual(calls.pop(),['select','animation_b']);
+  cards()[1].listeners.dblclick({target:cards()[1]});
+  assert.deepEqual(calls.pop(),['open','animation_b']);
+
+  // The same project may be both selected and opened, without losing either signal.
+  host.children=[];
+  ui.renderLibrary(doc,host,entries,{selectedId:'animation_a',activeId:'animation_a',expanded:true},actions);
+  assert.ok(badge(cards()[0],'Editing'));
+  assert.ok(badge(cards()[0],'Selected for backup'));
+  assert.ok(!badge(cards()[1],'Editing'));
+  assert.ok(!badge(cards()[1],'Selected for backup'));
+
+  // Independent working draft has no opened Library card.
+  host.children=[];
+  ui.renderLibrary(doc,host,entries,{selectedId:'animation_b',activeId:null,expanded:true},actions);
+  assert.ok(!cards().some(card=>badge(card,'Editing')));
+  assert.ok(badge(cards()[1],'Selected for backup'));
+});
+
 test('portable Animation Library JSON round-trips complete projects, annotations and genuine thumbnails',async()=>{
   const sourceDb=memoryIndexedDB(),targetDb=memoryIndexedDB();
   const original=studio.build(studio.edit(source(),'description','Surface study with saved notes'),'portable_one');
