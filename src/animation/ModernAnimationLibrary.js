@@ -58,7 +58,11 @@
   function fingerprint(project){
     var p=projects.validate(project),fixed=compatibility.effective(p.baseExperiment);
     if(p.mode==='camera')delete fixed.camera;
-    return JSON.stringify({mode:p.mode,target:p.target,fixed:fixed,
+    // Playback interpolation changes the rendered trajectory even when all
+    // keyframes, timing and physical endpoints are identical. Old projects
+    // without the optional v1 field are semantically equivalent to Linear.
+    return JSON.stringify({mode:p.mode,target:p.target,
+      interpolation:p.interpolation||'linear',fixed:fixed,
       keyframes:p.keyframes.map(function(frame){return {
         value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing
       };})});

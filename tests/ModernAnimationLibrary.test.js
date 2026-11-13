@@ -746,3 +746,131 @@ test('Save project and JSON backup controls are visually grouped, not a single e
   assert.ok(row.children[1].children.some(n=>n.textContent==='Export selected'));
   assert.ok(host.children.some(n=>n.textContent.includes('Preview animation never adds')));
 });
+
+test('Spline and Linear camera projects are distinct saved animations, but missing v1 mode equals Linear',async()=>{
+  const db=memoryIndexedDB(),a=experiment(),b=structuredClone(a),c=structuredClone(a);
+  b.scene.camera.Height=45;
+  c.scene.camera.Height=25;
+  let draft=studio.history([101,102,103],[a,b,c].map((value,i)=>({
+    id:101+i,name:'Camera '+i,experiment:value
+  })));
+  draft=studio.edit(draft,'name','Camera flight');
+  const linear=studio.build(draft,'linear_camera');
+  const old=structuredClone(linear);delete old.interpolation;
+  assert.equal(library.fingerprint(linear),library.fingerprint(old),
+    'pre-Spline version-1 projects have the same semantic identity as explicit Linear');
+  const spline=studio.build(studio.edit(draft,'interpolation','spline'),'spline_camera');
+  assert.notEqual(library.fingerprint(linear),library.fingerprint(spline),
+    'same camera endpoints and timing do not mean the same flight');
+  await library.create(db,old,'auto',100);
+  await library.create(db,spline,'auto',200);
+  assert.equal((await library.list(db)).length,2);
+  await assert.rejects(library.create(db,{...linear,id:'linear_duplicate'},'auto',300),
+    error=>error.code==='ANIMATION_DUPLICATE'&&error.existingId==='linear_camera');
+  const groups=library.findDuplicates(await library.list(db));
+  assert.equal(groups.length,0,'different interpolation modes must not be grouped as duplicates');
+});
+
+test('Spline named project survives Save Changes, reopen, portable JSON and full resave',async()=>{
+  const sourceDb=memoryIndexedDB(),targetDb=memoryIndexedDB();
+  const a=experiment(),b=structuredClone(a),c=structuredClone(a),d=structuredClone(a);
+  b.scene.camera.Height=45;c.scene.camera.Height=25;d.scene.camera.Height=60;
+  b.scene.camera.Pan=4;c.scene.camera.Pan=9;d.scene.camera.Pan=11;
+  const snapshots=[a,b,c,d].map((value,i)=>({id:i+101,name:'Waypoint '+i,experiment:value}));
+  let draft=studio.history([101,102,103,104],snapshots);
+  draft=studio.edit(draft,'name','Camera spline saved');
+  draft=studio.edit(draft,'interpolation','spline');
+  draft=studio.editFrame(draft,'history-102','travelMs','2.5');
+  draft=studio.editFrame(draft,'history-103','holdMs','1.25');
+  draft=studio.editFrame(draft,'history-104','travelMs','6.5');
+  const first=studio.build(draft,'camera_saved');
+  await library.create(sourceDb,first,'accurate',1100);
+  const reopened=studio.fromProject((await library.get(sourceDb,'camera_saved')).project);
+  assert.equal(reopened.interpolation,'spline');
+  assert.deepEqual(studio.build(reopened,'camera_saved'),first,
+    'opening a saved animation and rebuilding its editable keyframes must not alter the project');
+  const time=3100;
+  const expected=animation.sampleAt(first,time).scene.camera;
+  assert.deepEqual(animation.sampleAt(studio.build(reopened,'camera_saved'),time).scene.camera,expected);
+  const changed=studio.edit(reopened,'description','Saved spline draft after reopen');
+  const saved=await library.update(sourceDb,studio.build(changed,'camera_saved'),'accurate',1100,1200);
+  assert.equal(saved.project.interpolation,'spline');
+  const backup=library.exportPortable([saved]);
+  assert.equal(JSON.parse(backup).animations[0].project.interpolation,'spline');
+  const restored=await library.importEntries(targetDb,library.parsePortable(backup),1300,
+    {randomUUID:()=> '1111-2222'});
+  assert.deepEqual([restored.created,restored.reused],[1,0]);
+  const imported=(await library.list(targetDb))[0];
+  assert.equal(imported.project.interpolation,'spline');
+  assert.equal(imported.project.description,'Saved spline draft after reopen');
+  assert.equal(imported.project.keyframes[2].holdMs,1250);
+  assert.deepEqual(imported.project.keyframes.map(f=>f.travelMs),[0,2500,5000,6500]);
+  assert.ok(imported.project.keyframes.every(f=>f.sourceSnapshotId===null));
+  assert.deepEqual(animation.sampleAt(imported.project,time).scene.camera,expected);
+  const rebuilt=studio.build(studio.fromProject(imported.project),imported.id);
+  assert.deepEqual(rebuilt,imported.project,'JSON-imported project must reopen and resave without drift');
+  const repeat=await library.importEntries(targetDb,library.parsePortable(backup),1400,
+    {randomUUID:()=> '3333-4444'});
+  assert.deepEqual([repeat.created,repeat.reused],[0,1]);
+});
+
+test('Portable JSON retains both Linear and Spline alternatives and restores legacy linear projects',async()=>{
+  const db=memoryIndexedDB(),a=experiment(),b=structuredClone(a),c=structuredClone(a);
+  b.scene.camera.Height=45;c.scene.camera.Height=25;
+  let draft=studio.history([201,202,203],[a,b,c].map((value,i)=>({
+    id:201+i,name:'Flight '+i,experiment:value
+  })));
+  draft=studio.edit(draft,'name','Flight');
+  const linear=studio.build(draft,'linear_export');
+  const spline=studio.build(studio.edit(draft,'interpolation','spline'),'spline_export');
+  const legacy=structuredClone(linear);delete legacy.interpolation;
+  const payload=library.exportPortable([
+    library.record(legacy,'auto','linear_export',100,100),
+    library.record(spline,'fast','spline_export',101,101)
+  ]);
+  const batch=library.parsePortable(payload);
+  const result=await library.importEntries(db,batch,200,
+    {randomUUID:()=> '0000-1111'});
+  assert.deepEqual([result.created,result.reused],[2,0]);
+  const saved=await library.list(db);
+  assert.equal(saved.filter(x=>x.project.interpolation==='spline').length,1);
+  assert.equal(saved.filter(x=>!Object.hasOwn(x.project,'interpolation')).length,1);
+  const rebuilt=studio.build(studio.fromProject(saved.find(x=>!x.project.interpolation).project),'legacy_rebuilt');
+  assert.equal(rebuilt.interpolation,'linear');
+  assert.deepEqual(animation.sampleAt(rebuilt,2500).scene.camera,
+    animation.sampleAt(legacy,2500).scene.camera);
+  const again=await library.importEntries(db,batch,300);
+  assert.deepEqual([again.created,again.reused],[0,2]);
+  const solo=library.parsePortable(JSON.stringify(spline));
+  assert.equal(solo[0].project.interpolation,'spline');
+  assert.equal((await library.list(db)).length,2);
+});
+
+test('Studio Save changes compares restored Spline mode but keeps old v1 Linear projects clean',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const start=app.indexOf('  function studioLibraryDirty(){');
+  const end=app.indexOf('  function renderStudioLibrary(){',start);
+  assert.ok(start>0&&end>start);
+  const a=experiment(),b=structuredClone(a),c=structuredClone(a);
+  b.scene.camera.Height=45;c.scene.camera.Height=25;
+  let draft=studio.history([11,12,13],[a,b,c].map((value,i)=>({
+    id:11+i,name:'Camera '+i,experiment:value
+  })));
+  draft=studio.edit(draft,'name','Legacy flight');
+  const old=structuredClone(studio.build(draft,'saved_v1'));
+  delete old.interpolation;
+  const context=vm.createContext({studioApi:studio,studioPlaybackQuality:'auto',
+    studioLibraryActive:{id:'saved_v1',project:old,quality:'auto'},
+    studioDraft:studio.fromProject(old),cameraHudAppearance:null});
+  vm.runInContext(app.slice(start,end)+'\nthis.dirty=studioLibraryDirty;',context);
+  assert.equal(context.dirty(),false,'opening an old project must not create a false dirty badge');
+  context.studioDraft=studio.edit(context.studioDraft,'interpolation','spline');
+  assert.equal(context.dirty(),true,'switching Linear to Spline requires Save changes');
+  const committed=studio.build(context.studioDraft,'saved_v1');
+  context.studioLibraryActive={id:'saved_v1',project:committed,quality:'auto'};
+  assert.equal(context.dirty(),false,'after Save changes the selected Spline mode is clean');
+  context.studioDraft=studio.edit(context.studioDraft,'interpolation','linear');
+  assert.equal(context.dirty(),true,'switching back to Linear is also an unsaved edit');
+  context.studioLibraryActive={id:'saved_v1',project:old,quality:'auto'};
+  assert.equal(context.dirty(),false,'returning to a legacy v1 Linear project clears the dirty flag');
+});

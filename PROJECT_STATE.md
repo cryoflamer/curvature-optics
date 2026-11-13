@@ -4,7 +4,8 @@
 > the field retain Linear / per-frame easing semantics. The draft and
 > checkpoint models preserve the choice; physical-channel animation, Legacy,
 > live optics, and the separate Camera Animation panel are unchanged.
-> **No UI toggle in this stage**; see `docs/modern-camera-interpolation.md`.
+> Preview now offers the Linear / Smooth · Spline switch; see
+> `docs/modern-camera-interpolation.md` for export and persistence guarantees.
 
 > **History thumbnail correction (2026-11-08):** The physical painter
 > calls `clearRect`, leaving pixels transparent. The main Modern viewport
@@ -2277,3 +2278,25 @@ preferences, and removal of the now-duplicated target CSS block.
 - Regression tests cover successful Spline video/PNG exports and immediate
   failure when a stale renderer omits its spline proof. This avoids producing
   a plausible but incorrectly interpolated export.
+
+
+### Animation Studio Spline project persistence
+
+- Named Animation Library records already use the same validated v1 project
+  schema as Preview and Worker export. Save / Save Changes retains the selected
+  `interpolation` and complete keyframe timing; `fromProject` reconstructs the
+  editable draft and its Spline camera samples without local History entries.
+- Working draft checkpoints and multi-workspace collections preserve Spline mode,
+  selected keyframe, playhead, and saved-record revision through localStorage and
+  IndexedDB recovery. A resumed Preview remains paused at its restored time.
+- JSON backup/export and import retain the exact mode and resulting camera path.
+  The semantic fingerprint now **includes interpolation** so a Linear and a
+  Spline version of the same camera keyframes are not falsely deduplicated.
+  Older v1 projects without interpolation are semantically explicit Linear.
+- A legacy saved Linear project no longer shows false unsaved edits after opening
+  merely because its reconstructed Studio draft has a default Linear field.
+  Switching to Spline still correctly marks the project dirty until Save Changes.
+- Automated tests cover named save/update/open, cross-library JSON round-trips,
+  independent draft workspace restoration, legacy v1 compatibility and duplicate
+  import semantics. The Modern library and app cache keys were refreshed.
+  No optical solver, encoder, Legacy code or camera spline math changed.

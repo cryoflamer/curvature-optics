@@ -1064,9 +1064,18 @@
   }
   function studioLibraryDirty(){
     if(!studioLibraryActive)return false;
-    try{return studioPlaybackQuality!==studioLibraryActive.quality||
-      JSON.stringify(studioApi.build(studioDraft,studioLibraryActive.id))!==
-      JSON.stringify(studioLibraryActive.project);}
+    try{
+      var edited=studioApi.build(studioDraft,studioLibraryActive.id);
+      var saved=studioLibraryActive.project;
+      // An old v1 project may omit interpolation. Reopening it must not
+      // advertise unsaved changes simply because the editor defaults to Linear.
+      if(!Object.prototype.hasOwnProperty.call(saved,'interpolation')&&
+         edited.interpolation==='linear'){
+        edited=Object.assign({},edited);delete edited.interpolation;
+      }
+      return studioPlaybackQuality!==studioLibraryActive.quality||
+        JSON.stringify(edited)!==JSON.stringify(saved);
+    }
     catch(error){return true;}
   }
   function studioHasUnsavedWork(){
@@ -1075,6 +1084,7 @@
     var blank=studioApi.blank();
     return studioDraft.frames.length>0||studioDraft.name!==blank.name||
       studioDraft.description!==blank.description||studioDraft.mode!==blank.mode||
+      studioDraft.interpolation!==blank.interpolation||
       studioDraft.target!==blank.target||studioDraft.source!==blank.source||
       (studioDraft.cameraHudAppearance!=null&&
         JSON.stringify(studioDraft.cameraHudAppearance)!==JSON.stringify(cameraHudAppearance));

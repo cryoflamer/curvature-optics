@@ -154,16 +154,20 @@ come from the same physical geometry as the Modern renderer; no refracted
 visibility is inferred. **The off-screen indicator is now available in Display → Viewport overlays.** Details and
 API: [`docs/modern-target-direction.md`](docs/modern-target-direction.md).
 
-### Animation Studio spline core — first stage
+### Animation Studio spline interpolation
 
 A pure, tested **Spline** camera interpolation path is available in Animation
 Project v1 (`interpolation: "spline"`), alongside the existing default **Linear**.
 It uses shape-preserving cubic Hermite segments with timing-aware tangents,
 shortest-angle Pan/Roll, log focal length and smooth pauses. Existing saved
 projects without the field and the separate Camera Animation panel behave as
-before. The Studio draft model and autosave can carry the setting, but the
-**Linear / Spline control in Preview is not yet included** in this stage.
-See [camera interpolation](docs/modern-camera-interpolation.md#animation-studio-spline-core-headless-stage).
+before. **Animation Studio → Animation playback → Camera interpolation** now
+switches Linear / Smooth · Spline at the current Preview playhead; existing
+keyframes are unchanged. The choice is preserved in working-draft recovery,
+Animation Library saves, and portable JSON import/export. Linear and Spline
+are distinct animation identities when checking duplicates. Changing the mode
+of a named project requires **Save changes**; importing a JSON backup does not
+alter the active draft. See [camera interpolation](docs/modern-camera-interpolation.md).
 
 ### Modern camera animation
 

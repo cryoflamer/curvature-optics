@@ -68,6 +68,26 @@ mode to preview and export; this stage does not alter video codecs or frame
 renderers. The independent Scene/Compare Camera Animation panel still uses its
 original interpolation.
 
+### Saving and restoring Spline projects
+
+A working Spline draft is checkpointed together with its selected keyframe,
+playhead, playback quality and optional named-project revision. Browser reload
+restores the same `interpolation: "spline"` mode; a prepared preview is
+recreated **paused**, not automatically played. Workspace switching keeps
+independent draft copies for Linear and Spline. Explicit **Save changes** (or
+**Save As**) commits the chosen mode to the Animation Library; opening a named
+project does not change the current Scene/Compare experiment.
+
+**Animation Library → JSON backup** exports the `interpolation` field in the
+complete version-1 project. The import preserves it and restores the same
+camera samples and keyframe timings without requiring local History records.
+Linear and Spline share keyframe endpoints but are different semantic animations,
+so duplicate detection must not merge them. A pre-Spline v1 project that omits
+the field is **equivalent to explicit Linear** for duplicates, playback and
+unchanged-project indicators; it should not display unsaved changes just from
+being opened. Neither the format version nor old serialized files are rewritten
+implicitly. Invalid interpolation values are rejected before storage writes.
+
 ## Browser controls: direct camera animation
 
 In **Scene / Compare → Camera → Camera Animation**:

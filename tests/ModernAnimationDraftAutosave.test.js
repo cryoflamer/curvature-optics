@@ -217,3 +217,47 @@ test('corrupted workspace collections are rejected and never erase valid backups
   assert.deepEqual(await autosave.readCollection(db),correct);
   assert.throws(()=>autosave.writeCollectionLocal({setItem(){throw Error('quota');}},correct),/quota/);
 });
+
+test('Spline workspace restores mode, keyframe timings, playhead and named-project association',async()=>{
+  const sample=physicalDraft();
+  // Camera-only edits preserve the existing frame and source object geometry.
+  const a=structuredClone(sample.frames[0].experiment);
+  const b=structuredClone(a),c=structuredClone(a);
+  b.scene.camera.Height=40;c.scene.camera.Height=20;
+  let draft=studio.history([301,302,303],[a,b,c].map((experiment,i)=>({
+    id:301+i,name:'Camera '+i,experiment
+  })));
+  draft=studio.edit(draft,'name','Recovered spline');
+  draft=studio.edit(draft,'interpolation','spline');
+  draft=studio.editFrame(draft,'history-302','travelMs','2.5');
+  draft=studio.editFrame(draft,'history-303','holdMs','1.75');
+  const initial=studio.build(draft,'saved_flight');
+  const checkpoint=autosave.checkpoint({draft,selectedKey:'history-302',
+    quality:'accurate',prepared:true,positionMs:1320,
+    libraryId:'saved_flight',libraryRevision:300},1000);
+  const local=storage(),db=memoryIndexedDB();
+  const projectId=autosave.projectWorkspaceId('saved_flight');
+  let workspaces=autosave.collection(projectId,checkpoint,1001);
+  const oldDraft={...draft,interpolation:'linear'};
+  const other=autosave.checkpoint({draft:oldDraft,selectedKey:'history-303',
+    quality:'fast',prepared:false,positionMs:0},1002);
+  workspaces=autosave.withWorkspace(workspaces,'draft_linear',other,1003);
+  autosave.writeCollectionLocal(local,workspaces);
+  await autosave.writeCollection(db,workspaces);
+  for(const restored of [autosave.readCollectionLocal(local),await autosave.readCollection(db)]){
+    assert.equal(restored.activeId,'draft_linear');
+    const saved=autosave.getWorkspace(restored,projectId);
+    assert.equal(saved.draft.interpolation,'spline');
+    assert.equal(saved.selectedKey,'history-302');
+    assert.equal(saved.libraryId,'saved_flight');
+    assert.equal(saved.libraryRevision,300);
+    assert.equal(saved.positionMs,1320);
+    assert.deepEqual(studio.build(saved.draft,'saved_flight'),initial);
+    assert.equal(autosave.getWorkspace(restored,'draft_linear').draft.interpolation,'linear');
+  }
+  // Checkpoints made by releases before the interpolation field remain Linear.
+  const preSpline=structuredClone(checkpoint);delete preSpline.draft.interpolation;
+  assert.equal(autosave.normalize(preSpline).draft.interpolation,'linear');
+  const broken=structuredClone(checkpoint);broken.draft.interpolation='unknown';
+  assert.throws(()=>autosave.normalize(broken),/interpolation/);
+});
