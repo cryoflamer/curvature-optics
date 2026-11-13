@@ -215,6 +215,7 @@
     });
     var manifest={schema:'curvature-animation-png-sequence',version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
+      cameraInterpolation:p.project.mode==='camera'?(p.project.interpolation||'linear'):null,
       physicalTarget:p.project.target,project:p.project,quality:'accurate',
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
       endpointIncluded:true,sides:p.sides.slice(),backgroundColor:'#ffffff',

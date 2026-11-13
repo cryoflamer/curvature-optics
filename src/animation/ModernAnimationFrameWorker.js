@@ -56,9 +56,9 @@ importScripts(
   '../ui/modern/ModernExperimentState.js',
   '../camera/ModernCameraInterpolator.js?spline-core=1&spline-export=1',
   'ModernAnimationCompatibility.js',
-  'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-export=1',
+  'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-export=1&spline-parity=1',
   'ModernAnimationPreview.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1',
   'ModernAnimationCompareComposition.js',
   'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1'
 );

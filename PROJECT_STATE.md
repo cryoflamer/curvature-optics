@@ -2300,3 +2300,21 @@ preferences, and removal of the now-duplicated target CSS block.
   independent draft workspace restoration, legacy v1 compatibility and duplicate
   import semantics. The Modern library and app cache keys were refreshed.
   No optical solver, encoder, Legacy code or camera spline math changed.
+
+### Animation Studio Spline export parity (stage 4)
+
+- Scene and Compare A/B test cases with four camera keyframes, unequal inbound
+  travel, holds, angle wrapping and changing focal length exercise Preview,
+  PNG export and video frame sampling at matching timeline positions. Compare
+  side-by-side and separate A/B use the same synchronized camera sample; video
+  samples its terminal display interval at the exact endpoint while PNG emits
+  an additional endpoint image.
+- The Spline renderer compatibility handshake now checks the first/middle/last
+  representative transitions (at most eight transition midpoints), not merely
+  the first segment. Missing/mismatched proofs are rejected before dispatch.
+- PNG and VP9/WebM/H.264/MP4 completion manifests record `cameraInterpolation`;
+  coordinators reject a manifest inconsistent with the validated project.
+  Worker/import cache keys refreshed. Existing Legacy and physical optics remain
+  unchanged, and old v1 camera projects resolve to `linear` in manifests.
+- The parity guarantee is **sampled project/camera state**, not pixel identity
+  against Fast Preview. Native Opera rendering is still a separate check.

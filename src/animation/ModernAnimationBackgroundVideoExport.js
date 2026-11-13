@@ -30,8 +30,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1';
-    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
+    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1';
+    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1&spline-parity=1';
     var active=null;
     function cancel(){
       if(!active)return false;
@@ -159,6 +159,8 @@
                 value.manifest.height!==plan.outputHeight||
                 value.manifest.compareLayout!==plan.compareLayout||
                 value.manifest.format!==format||
+                value.manifest.cameraInterpolation!==(plan.project.mode==='camera'?
+                  (plan.project.interpolation||'linear'):null)||
                 !Number.isInteger(value.manifest.frameWindow)||
                 value.manifest.frameWindow!==window||
                 !Number.isInteger(value.manifest.peakBufferedFrames)||

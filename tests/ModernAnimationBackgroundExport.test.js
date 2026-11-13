@@ -41,7 +41,9 @@ class FakeWorker {
   static paused=false;
   static errorAt=-1;
   static staleSpline=false;
-  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;FakeWorker.staleSpline=false;}
+  static wrongManifest=false;
+  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;
+    FakeWorker.staleSpline=false;FakeWorker.wrongManifest=false;}
   constructor(url){this.url=url;this.terminated=false;this.commands=[];
     this.isArchive=url.split('?')[0].endsWith('ModernAnimationArchiveWorker.js');
     FakeWorker.instances.push(this);}
@@ -72,6 +74,7 @@ class FakeWorker {
           this.emit({type:'packing',total:this.total});
           const out=frameExport.assemble(this.plan,this.frames,
             {workers:this.workers,renderElapsedMs:1234});
+          if(FakeWorker.wrongManifest)out.manifest.cameraInterpolation='linear';
           this.emit({type:'complete',blob:out.blob,manifest:out.manifest});
         }
       });
@@ -225,4 +228,20 @@ test('Spline PNG export requires matching renderer sample before dispatching fra
   assert.equal(FakeWorker.instances.filter(w=>!w.isArchive)
     .flatMap(w=>w.commands.filter(command=>command.type==='render')).length,0);
   FakeWorker.reset();
+});
+
+
+test('PNG archive cannot silently report Linear after Spline rendering',async()=>{
+  FakeWorker.reset();FakeWorker.wrongManifest=true;
+  const first=make().baseExperiment,second=structuredClone(first);
+  second.scene.camera.Height=65;
+  const spline=project.create([{experiment:first,holdMs:0},
+    {experiment:second,travelMs:200}],
+    {id:'png_manifest_parity',name:'PNG manifest parity',mode:'camera',interpolation:'spline'});
+  try{
+    await assert.rejects(background.create({WorkerCtor:FakeWorker}).start({
+      project:spline,fps:5,width:640,height:360,workerCount:1}),
+    /incomplete PNG sequence/);
+    assert.ok(FakeWorker.instances.every(worker=>worker.terminated));
+  }finally{FakeWorker.reset();}
 });

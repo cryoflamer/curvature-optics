@@ -27,8 +27,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1';
-    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1';
+    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1&spline-parity=1';
     var active=null;
     function isBusy(){return !!active;}
     function cancel(){
@@ -103,6 +103,8 @@
             }else if(value.type==='complete'){
               if(!value.blob||value.blob.type!=='application/zip'||!value.manifest||
                 value.manifest.frameCount!==plan.timesMs.length||
+                value.manifest.cameraInterpolation!==(plan.project.mode==='camera'?
+                  (plan.project.interpolation||'linear'):null)||
                 !Array.isArray(value.manifest.sides)||
                 value.manifest.sides.join(',')!==plan.sides.join(','))
                 fail('Archive worker returned an incomplete PNG sequence');

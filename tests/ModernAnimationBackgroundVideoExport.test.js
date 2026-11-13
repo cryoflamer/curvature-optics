@@ -22,8 +22,9 @@ function make(mode='scene'){
     {id:'webm_test',name:'Video worker controller'});
 }
 class FakeWorker{
-  static instances=[];static paused=false;static errorAt=-1;static staleSpline=false;
-  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;FakeWorker.staleSpline=false;}
+  static instances=[];static paused=false;static errorAt=-1;static staleSpline=false;static wrongManifest=false;
+  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;
+    FakeWorker.staleSpline=false;FakeWorker.wrongManifest=false;}
   constructor(url){this.url=url;this.encoder=url.includes('VideoEncoderWorker');
     this.closed=false;this.sent=[];FakeWorker.instances.push(this);}
   emit(data){if(!this.closed&&this.onmessage)this.onmessage({data});}
@@ -66,6 +67,9 @@ class FakeWorker{
           this.emit({type:'complete',blob:new Blob(['test'],{type:this.plan.outputSides.length===1?'video/'+this.format:'application/zip'}),
             filename:'test.'+this.format,manifest:{format:data.fakeFormat||this.format||'webm',frameCount:this.plan.frameCount,
               durationUs:this.plan.durationUs,sides:Array.from(this.plan.sides),
+              cameraInterpolation:FakeWorker.wrongManifest?'linear':
+                (this.plan.project.mode==='camera'?
+                  (this.plan.project.interpolation||'linear'):null),
               width:this.plan.outputWidth,height:this.plan.outputHeight,
               compareLayout:this.plan.compareLayout,outputStreams:this.plan.outputSides.length,
               frameWindow:this.window,peakBufferedFrames:this.maxBuffered}});
@@ -228,8 +232,9 @@ test('Spline video export verifies the actual renderer camera sample before rend
     {experiment:moved,travelMs:1000}],
     {id:'spline_export_check',name:'Spline renderer check',mode:'camera',interpolation:'spline'});
   const expected=projects.splineProof(spline);
-  assert.equal(expected.length,9);
-  assert.equal(expected[0],52.5);
+  assert.equal(expected.length,1);
+  assert.equal(expected[0][0],500);
+  assert.equal(expected[0][1],52.5);
   const result=await background.create({WorkerCtor:FakeWorker}).start({
     project:spline,fps:5,width:640,height:360,workerCount:1});
   assert.equal(result.cancelled,false);
@@ -241,5 +246,22 @@ test('Spline video export verifies the actual renderer camera sample before rend
   assert.ok(FakeWorker.instances.every(w=>w.closed));
   assert.equal(FakeWorker.instances.filter(w=>!w.encoder)
     .flatMap(w=>w.sent.filter(item=>item.data.type==='video-render')).length,0);
+  FakeWorker.reset();
+});
+
+
+test('WebM/MP4 encoder cannot silently report Linear after Spline rendering',async()=>{
+  const base=make().baseExperiment,second=structuredClone(base);
+  second.scene.camera.Height=65;
+  const spline=projects.create([{experiment:base,holdMs:0},
+    {experiment:second,travelMs:200}],
+    {id:'video_manifest_parity',name:'Video manifest parity',mode:'camera',interpolation:'spline'});
+  for(const format of ['webm','mp4']){
+    FakeWorker.reset();FakeWorker.wrongManifest=true;
+    await assert.rejects(background.create({WorkerCtor:FakeWorker}).start({
+      project:spline,fps:5,width:640,height:360,format,workerCount:1}),
+    /incomplete video export/);
+    assert.ok(FakeWorker.instances.every(worker=>worker.closed));
+  }
   FakeWorker.reset();
 });

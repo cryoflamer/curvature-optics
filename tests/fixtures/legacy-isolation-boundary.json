@@ -574,6 +574,7 @@
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationParallelExport.test.js",
+        "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernTargetIndicator.test.js"
       ],
@@ -611,6 +612,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationPlayback.test.js",
+        "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationSplinePreview.test.js"
       ],
       "commonJsToolCallers": []
@@ -651,6 +653,7 @@
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
@@ -737,6 +740,7 @@
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
+        "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoLayoutOptions.test.js",
@@ -2458,6 +2462,7 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
@@ -2594,6 +2599,7 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",

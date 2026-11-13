@@ -167,7 +167,11 @@ keyframes are unchanged. The choice is preserved in working-draft recovery,
 Animation Library saves, and portable JSON import/export. Linear and Spline
 are distinct animation identities when checking duplicates. Changing the mode
 of a named project requires **Save changes**; importing a JSON backup does not
-alter the active draft. See [camera interpolation](docs/modern-camera-interpolation.md).
+alter the active draft. Stage 4 verifies equal-time Preview/PNG/WebM/MP4
+camera sampling for Scene and Compare A/B, strengthens the pre-render Worker
+sample handshake across multiple transitions, and records the chosen
+interpolation in export manifests. Pixel equivalence with Fast Preview is not
+claimed. See [camera interpolation](docs/modern-camera-interpolation.md).
 
 ### Modern camera animation
 

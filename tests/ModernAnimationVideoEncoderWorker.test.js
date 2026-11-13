@@ -310,3 +310,35 @@ test('selected separate Compare layout produces two synchronized video files for
     assert.ok(workers.every(encoder=>encoder.closed));
   }
 });
+
+
+test('Spline camera interpolation is retained in VP9 and H.264 Compare export manifests',async()=>{
+  const base=project('compare').baseExperiment;
+  const middle=structuredClone(base),last=structuredClone(base);
+  middle.scene.camera.Height=40;
+  last.scene.camera.Height=15;last.scene.camera.CameraEast=10;
+  const spline=projects.create([{experiment:base,holdMs:0},
+    {experiment:middle,travelMs:400,holdMs:0},
+    {experiment:last,travelMs:600,holdMs:0}],
+    {id:'spline_encoder_manifest',name:'Spline codec parity',mode:'camera',interpolation:'spline'});
+  for(const format of ['webm','mp4'])for(const layout of ['side-by-side','separate']){
+    const plan=video.plan(spline,{fps:5,width:640,height:360,compareLayout:layout});
+    const {root,messages}=sandbox();
+    root.onmessage({data:{type:'init',project:spline,format,compareLayout:layout,
+      fps:5,width:640,height:360,workers:2,frameWindow:4,quality:'standard'}});
+    await tick();
+    assert.equal(messages.at(-1).type,'ready');
+    for(const t of plan.frames)
+      root.onmessage({data:{type:'frame',frame:frame(plan,t.index)}});
+    await tick();await tick();
+    const complete=messages.find(message=>message.type==='complete');
+    assert.ok(complete,'Spline '+format+'/'+layout+' export must complete');
+    assert.equal(complete.manifest.cameraInterpolation,'spline');
+    assert.equal(complete.manifest.format,format);
+    assert.equal(complete.manifest.compareLayout,layout);
+    assert.deepEqual(Array.from(complete.manifest.sides),['A','B']);
+    assert.equal(complete.manifest.endSampleTimeMs,projects.totalMs(spline));
+    assert.equal(complete.manifest.frameCount,plan.frameCount);
+    assert.equal(messages.filter(message=>message.type==='error').length,0);
+  }
+});

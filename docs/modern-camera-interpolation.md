@@ -88,6 +88,33 @@ unchanged-project indicators; it should not display unsaved changes just from
 being opened. Neither the format version nor old serialized files are rewritten
 implicitly. Invalid interpolation values are rejected before storage writes.
 
+### Preview / Accurate export parity (Spline stage 4)
+
+`ModernAnimationPlayback.sample()`, PNG frame ZIP and the independent VP9/WebM
+and H.264/MP4 renderer workers all use the **same validated project** and
+`ModernAnimationProject.sampleAt(project, timeMs)`. Tests cover intermediate
+samples, non-uniform travel times, holds, angular wrap and final keyframes in
+Scene and synchronized Compare A/B (one composed video or separate streams).
+Video samples its **last display interval at the exact endpoint** without
+adding time; the PNG timeline instead includes a separate endpoint image.
+Sampling equivalence refers to camera/experiment state at equal times, **not
+pixel identity** between an interactive Fast/Auto Preview and a fixed-size
+Accurate RK4 export. Physical optics and codec quality are not altered.
+
+The pre-render `splineProof` handshake now checks representative midpoints
+across the *first, middle and last* transitions (up to eight) rather than
+only the first transition. A missing, stale or mismatched proof aborts before
+expensive RK4 frames. Completed PNG and video export manifests contain
+`cameraInterpolation: "spline"` or `"linear"` for camera projects (and `null`
+for physical projects); the respective controller checks this field before
+accepting a completed file. This is a bounded compatibility guard, not a
+formal proof of pixel or trajectory equivalence at every possible timestamp.
+
+The new contract is covered by
+`node --test tests/ModernAnimationSplineExportParity.test.js` together with
+Worker codec/controller tests. Real Opera rendering and pixel-level comparisons
+remain a separate manual validation.
+
 ## Browser controls: direct camera animation
 
 In **Scene / Compare → Camera → Camera Animation**:

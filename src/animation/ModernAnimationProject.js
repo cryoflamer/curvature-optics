@@ -172,14 +172,23 @@
     return validate(result);
   }
   // Renderer handshake: compare a genuine in-between camera pose before any
-  // expensive Accurate RK4 frames are dispatched. This also detects workers
-  // that silently fall back to linear sampling of spline projects.
+  // expensive Accurate RK4 frames are dispatched. Sample multiple distinct
+  // transitions, not just the first one: a stale renderer can agree at the
+  // first midpoint while disagreeing on later turns or unequal durations.
+  // Cap probes to keep very large (200-keyframe) projects cheap to initialize.
+  // A row contains [timeMs, ...cameraPose] in the stable POSE field order.
   function splineProof(input){
     var p=validate(input);
     if(p.mode!=='camera'||p.interpolation!=='spline')return null;
-    var timeMs=p.keyframes[0].holdMs+p.keyframes[1].travelMs/2;
-    var cameraPose=sampleAt(p,timeMs).scene.camera;
-    return POSE.map(function(key){return cameraPose[key];});
+    var points=timeline(p),segments=points.length-1;
+    var count=Math.min(segments,8),result=[];
+    for(var k=0;k<count;k++){
+      var index=count===1?1:1+Math.round(k*(segments-1)/(count-1));
+      var timeMs=(points[index-1].departureMs+points[index].arrivalMs)/2;
+      var cameraPose=sampleAt(p,timeMs).scene.camera;
+      result.push([timeMs].concat(POSE.map(function(key){return cameraPose[key];})));
+    }
+    return result;
   }
   function totalMs(input){var p=validate(input);return p.keyframes.reduce(function(n,f){return n+f.travelMs+f.holdMs;},0);}
   function timeline(input){
