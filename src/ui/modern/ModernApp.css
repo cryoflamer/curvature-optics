@@ -548,6 +548,18 @@ button{cursor:pointer}
   background:#dceeff;border-color:#287ac5;outline-offset:2px}
 .modern-card-info-button:focus-visible{outline:2px solid #287ac5}
 .modern-animation-library-card .modern-card-info-button{cursor:pointer}
+/* The independent delete corner never overlaps the details button on the left. */
+.modern-animation-library-delete{position:absolute;right:6px;top:6px;z-index:5;
+  box-sizing:border-box;display:grid;place-items:center;width:27px;height:27px;
+  padding:0;border:1px solid #d9a7ad;border-radius:7px;background:#fff7f7f2;
+  color:#983846;font-size:21px;line-height:1;cursor:pointer!important;touch-action:manipulation}
+.modern-animation-library-delete:not(:disabled):hover{background:#ffe5e8;border-color:#bd626e}
+.modern-animation-library-delete:focus-visible{outline:2px solid #287ac5;outline-offset:2px}
+.modern-animation-library-delete:disabled{opacity:.4;cursor:default!important}
+.modern-animation-workspace-item{position:relative;padding-right:36px}
+.modern-animation-workspace-item .modern-animation-workspace-delete{right:3px;top:5px;
+  width:26px;height:26px;padding:0;background:#fff7f7;color:#983846;border-color:#d9a7ad}
+
 .modern-studio-picker-card .modern-card-info-button{left:auto;right:29px;top:3px;
   width:23px;height:23px;font-size:16px}
 .modern-studio-filmstrip-item .modern-card-info-button{left:8px;top:8px}

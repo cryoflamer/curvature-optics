@@ -42,6 +42,12 @@
     });
     return remove;
   }
+  // Same isolated control for saved projects and independent working drafts.
+  function libraryDelete(doc,description,action,extraClass){
+    var remove=cardRemove(doc,description,action);
+    remove.className='modern-animation-library-delete'+(extraClass?' '+extraClass:'');
+    return remove;
+  }
   function field(doc,label,value,kind,action,options,liveAction){
     var wrapper=el(doc,'label','modern-studio-field');
     wrapper.appendChild(el(doc,'span','',label));
@@ -277,9 +283,9 @@
         });
         open.disabled=!!options.busy||draft.active;item.appendChild(open);
         if(!draft.active){
-          var remove=button(doc,'Delete draft','Permanently remove this local draft',function(){
+          var remove=libraryDelete(doc,'Delete draft: '+draft.name,function(){
             actions.removeDraft(draft.id);
-          });
+          },'modern-animation-workspace-delete');
           remove.disabled=!!options.busy;item.appendChild(remove);
         }
         drafts.appendChild(item);
@@ -396,10 +402,11 @@
         open.disabled=!!options.busy;controls.appendChild(open);
         var rename=button(doc,'Rename','Rename saved animation '+p.name,function(){actions.renameStart(entry.id);});
         rename.disabled=!!options.busy;controls.appendChild(rename);
-        var remove=button(doc,'Delete','Delete saved animation '+p.name,function(){actions.remove(entry.id);});
-        remove.disabled=!!options.busy;controls.appendChild(remove);
+
         card.appendChild(controls);
       }
+      var remove=libraryDelete(doc,'Delete saved animation '+p.name,function(){actions.remove(entry.id);});
+      remove.disabled=!!options.busy;card.appendChild(remove);
       if(inspector)inspector.infoButton(card,libraryPreviewEntry(entry),card,p.name);
       list.appendChild(card);
     });

@@ -382,7 +382,11 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   card.listeners.dblclick({target:{tagName:'BUTTON',parentNode:card}});
   card.listeners.keydown({target:{tagName:'BUTTON',parentNode:card},key:'Enter'});
   assert.equal(calls.length,countBefore);
-  nodes().find(n=>n.tagName==='button'&&n.textContent==='Delete').listeners.click();
+  const deleteCorner=nodes().find(n=>n.className.includes('modern-animation-library-delete')&&
+    n['aria-label']==='Delete saved animation Globe to Flat');
+  assert.ok(deleteCorner);
+  assert.equal(nodes().some(n=>n.tagName==='button'&&n.textContent==='Delete'),false);
+  deleteCorner.listeners.click({stopPropagation(){}});
   assert.deepEqual(calls.at(-1),['delete','animation_a']);
   nodes().find(n=>n.tagName==='button'&&n.textContent==='Rename').listeners.click();
   assert.deepEqual(calls.at(-1),['renameStart','animation_a']);
@@ -608,7 +612,11 @@ test('project lifecycle has independent draft controls and no conflicting confir
     button(label).listeners.click();assert.equal(calls.at(-1),event);
   }
   button('Open draft').listeners.click();assert.deepEqual(calls.at(-1),['openDraft','draft_one']);
-  button('Delete draft').listeners.click();assert.deepEqual(calls.at(-1),['removeDraft','draft_one']);
+  const draftDelete=nodes().find(n=>n.className.includes('modern-animation-workspace-delete'));
+  assert.equal(draftDelete.textContent,'×');
+  assert.equal(draftDelete['aria-label'],'Delete draft: Tour of towers');
+  draftDelete.listeners.click({stopPropagation(){}});
+  assert.deepEqual(calls.at(-1),['removeDraft','draft_one']);
   assert.equal(button('Current').disabled,true);
   assert.ok(nodes().some(n=>n.textContent.includes('Autosaved and stashed drafts are independent')));
   assert.ok(!nodes().some(n=>n.className==='modern-animation-library-pending'));
