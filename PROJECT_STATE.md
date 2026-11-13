@@ -2218,3 +2218,22 @@ preferences, and removal of the now-duplicated target CSS block.
   image/manifest schema or the frame encoder.
 - Scope: Modern UI + export metadata only. Legacy, Camera HUD, WGSL, RK4,
   project format and History/animation persistence remain unchanged.
+
+## #140.12.120.9.14 — visible video export filename and Worker handshake
+
+- Animation Studio displays the exact proposed WebM/MP4 filename (or Compare
+  ZIP filename and A/B entry names) before rendering, including for a new
+  unsaved working draft. Format, FPS, view size, Compare layout and draft
+  edits refresh the preview. The UI and export click share one validated
+  animation plan and semantic naming calculation; no second naming scheme.
+- The encoder Worker calculates its filename once on initialization and
+  includes it in its `ready` message. The main-thread video coordinator checks
+  this against the preview **before** optical frame rendering begins and
+  verifies the completed filename again. A stale or mismatched Worker now
+  fails visibly rather than downloading a video under an unexpected name.
+- Script query cache keys are refreshed for the Modern UI, encoder Worker and
+  imported naming module, without new version-numbered files. Tests cover
+  preview updates, browser anchor downloads, mismatch rejection and Worker
+  naming handshake; the Legacy/Modern isolation evidence is regenerated.
+- No changes to ray tracing, animation format, History persistence, Legacy or
+  WebCodecs encoding quality.

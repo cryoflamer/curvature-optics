@@ -122,6 +122,7 @@ test('encoder worker Compare A/B encodes a single 1280×720 WebM',async()=>{
     quality:'high',workers:2,frameWindow:4}});
   await tick();
   assert.equal(messages.at(-1).type,'ready');
+  assert.equal(messages.at(-1).filename,'vp9-worker-test_1280x720_5fps_compare.webm');
   for(const t of plan.frames)root.onmessage({data:{type:'frame',frame:frame(plan,t.index)}});
   await tick();await tick();
   const complete=messages.find(x=>x.type==='complete');
@@ -287,6 +288,7 @@ test('selected separate Compare layout produces two synchronized video files for
       format,compareLayout:'separate',quality:'standard',workers:2,frameWindow:4}});
     await tick();
     assert.equal(messages.at(-1).type,'ready');
+    assert.equal(messages.at(-1).filename,'vp9-worker-test_640x360_5fps_compare-separate.zip');
     for(const t of planned.frames)
       root.onmessage({data:{type:'frame',frame:frame(planned,t.index)}});
     await tick();await tick();

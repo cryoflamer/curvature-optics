@@ -2047,17 +2047,39 @@
         status.textContent='Add at least two compatible keyframes to enable background export.';
     }
   }
+  // One owned project, one output plan and one naming call for both the UI
+  // preview and the actual export. No saved Animation Library entry required.
+  function studioVideoExportSelection(){
+    var project=studioPrepared||studioApi.build(studioDraft,'studio_video_export');
+    var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
+    var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
+    var format=newUiEl('ModernAnimationVideoExportFormat').value;
+    var isCompare=project.baseExperiment.display.mode==='compare';
+    var compareLayout=isCompare?
+      newUiEl('ModernAnimationVideoExportCompareLayout').value:undefined;
+    var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],
+      height:size[1],compareLayout:compareLayout});
+    var names=semanticNaming.exportNames(plan.project,{
+      format:format,fps:plan.fps,width:plan.outputWidth,
+      height:plan.outputHeight,compareLayout:plan.compareLayout});
+    return {plan:plan,format:format,names:names};
+  }
   function syncStudioVideoExportLayout(){
     var selector=newUiEl('ModernAnimationVideoExportCompareLayout');
     var label=newUiEl('ModernAnimationVideoExportCompareLayoutControl');
     var info=newUiEl('ModernAnimationVideoExportLayoutInfo');
+    var filename=newUiEl('ModernAnimationVideoExportFilename');
     if(!selector||!label||!info||!studioVideoExportPlan)return;
     var first=studioDraft&&studioDraft.frames&&studioDraft.frames[0];
     var mode=first&&first.experiment&&first.experiment.display&&
       first.experiment.display.mode;
     var isCompare=mode==='compare';
     label.hidden=!isCompare;
-    if(mode!=='scene'&&!isCompare){info.textContent='Add compatible keyframes to preview the video output.';return;}
+    if(mode!=='scene'&&!isCompare){
+      info.textContent='Add compatible keyframes to preview the video output.';
+      if(filename)filename.textContent='Export filename: add compatible keyframes first.';
+      return;
+    }
     try{
       var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
       var format=newUiEl('ModernAnimationVideoExportFormat').value.toUpperCase();
@@ -2078,6 +2100,12 @@
         ' MiB/timestamp; up to '+(frameMiB*window).toFixed(1)+' MiB in-flight ('+
         window+' frames). This excludes renderer Canvas and codec memory.';
     }catch(error){info.textContent='Output estimate unavailable: '+error.message;}
+    if(!filename)return;
+    try{
+      var names=studioVideoExportSelection().names;
+      filename.textContent='Export filename: '+names.filename+
+        (names.entries?'\nZIP entries: A: '+names.entries.A+' · B: '+names.entries.B:'');
+    }catch(error){filename.textContent='Export filename unavailable: '+error.message;}
   }
   function syncStudioVideoExportControls(){
     var start=newUiEl('ModernAnimationVideoExportStart');
@@ -2182,7 +2210,8 @@
         'curvature-animation-video-profile.json');
     });
     ['ModernAnimationVideoExportCompareLayout','ModernAnimationVideoExportSize',
-      'ModernAnimationVideoExportFormat','ModernAnimationVideoExportWorkers'].forEach(function(id){
+      'ModernAnimationVideoExportFormat','ModernAnimationVideoExportFps',
+      'ModernAnimationVideoExportWorkers'].forEach(function(id){
       var select=newUiEl(id);
       if(select)select.addEventListener('change',syncStudioVideoExportLayout);
     });
@@ -2198,7 +2227,7 @@
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
         rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?compare-layout=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};studioVideoExportTask=task;
       syncStudioFrameExportControls();
@@ -2207,18 +2236,12 @@
       if(profileDownload)profileDownload.disabled=true;
       if(profilePanel){profilePanel.hidden=true;profilePanel.textContent='';}
       try{
-        var project=studioPrepared||studioApi.build(studioDraft,'studio_video_export');
-        var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
-        var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
-        var compareMode=project.baseExperiment.display.mode==='compare';
-        var compareLayout=compareMode?
-          newUiEl('ModernAnimationVideoExportCompareLayout').value:undefined;
-        var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],
-          height:size[1],compareLayout:compareLayout});
+        var selection=studioVideoExportSelection();
+        var plan=selection.plan;
         var selected=newUiEl('ModernAnimationVideoExportWorkers').value;
         var workers=selected==='auto'?'auto':Number(selected);
         var quality=newUiEl('ModernAnimationVideoExportQuality').value;
-        var format=newUiEl('ModernAnimationVideoExportFormat').value;
+        var format=selection.format;
         var codecLabel=format==='mp4'?'H.264 MP4':'VP9 WebM';
         var started=profileNow(),lastUiTick=-Infinity,lastRenderTick=-Infinity;
         message('Starting '+codecLabel+' render and encoder workers · '+plan.frameCount+
@@ -2226,7 +2249,7 @@
           plan.sides.length+' view(s) · Accurate RK4.');
         var result=await controller.start({project:plan.project,fps:plan.fps,
           width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
-          compareLayout:plan.compareLayout,
+          compareLayout:plan.compareLayout,expectedFilename:selection.names.filename,
           cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
           cameraHudAppearance:studioHudAppearance(),
           targetIndicator:!!(newUiEl('ModernAnimationVideoExportTarget')||{}).checked,
@@ -2272,6 +2295,9 @@
           }
         });
         if(result.cancelled)return;
+        if(result.filename!==selection.names.filename)
+          throw Error('Encoder filename differs from the preview: expected '+
+            selection.names.filename+', received '+String(result.filename));
         var url=root.URL.createObjectURL(result.blob);
         try{
           var link=document.createElement('a');
@@ -2284,7 +2310,7 @@
           ' video file(s), '+result.manifest.width+'×'+result.manifest.height+', '+(result.manifest.durationUs/1e6).toFixed(3)+
           ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+
           ' s total · peak RGBA in-flight '+result.peakInflightFrames+
-          ' frames ('+result.manifest.frameWindow+' maximum).');
+          ' frames ('+result.manifest.frameWindow+' maximum) · saved as '+result.filename+'.');
         var breakdown=result.manifest.profiling;
         if(breakdown){
           lastProfile={manifest:result.manifest,controller:result.controllerProfile};

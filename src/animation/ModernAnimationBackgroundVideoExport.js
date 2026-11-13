@@ -110,6 +110,12 @@
                 value.outputHeight!==plan.outputHeight){
                 fail('Video encoder returned invalid initialization');return;
               }
+              // Catch stale encoder scripts before expensive optical rendering.
+              if(options.expectedFilename!==undefined&&
+                 value.filename!==options.expectedFilename){
+                fail('Video encoder filename differs from the preview (stale Worker?): expected '+
+                  options.expectedFilename+', received '+String(value.filename));return;
+              }
               encoderReady=true;launch();
             }else if(value.type==='progress'){
               if(!Number.isInteger(value.submitted)||value.submitted<=submitted||
@@ -136,6 +142,11 @@
               try{if(typeof options.onPacking==='function')options.onPacking(value);}
               catch(error){finish(error);}
             }else if(value.type==='complete'){
+              if(options.expectedFilename!==undefined&&
+                 value.filename!==options.expectedFilename){
+                fail('Completed video filename differs from the preview: expected '+
+                  options.expectedFilename+', received '+String(value.filename));return;
+              }
               if(!value.blob||!value.manifest||
                 value.manifest.frameCount!==plan.frameCount||
                 value.manifest.durationUs!==plan.durationUs||

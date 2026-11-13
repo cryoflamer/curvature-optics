@@ -486,6 +486,7 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundExport.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoLayoutOptions.test.js"
       ],
       "commonJsToolCallers": []
@@ -497,6 +498,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundVideoExport.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoLayoutOptions.test.js"
       ],
       "commonJsToolCallers": []
@@ -510,7 +512,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationCanvasHud.test.js",
-        "tests/ModernAnimationFrameExport.test.js"
+        "tests/ModernAnimationFrameExport.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -646,6 +649,7 @@
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernTargetIndicator.test.js"
@@ -727,6 +731,7 @@
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoLayoutOptions.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernTargetIndicator.test.js"
@@ -2447,6 +2452,7 @@
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
@@ -2580,6 +2586,7 @@
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
@@ -2695,6 +2702,7 @@
         "src/ui/modern/ModernExperimentHistory.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernSemanticNaming.test.js"
       ],
       "commonJsToolCallers": []

@@ -7,7 +7,7 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
-  '../ui/modern/ModernSemanticNaming.js?semantic-names=1',
+  '../ui/modern/ModernSemanticNaming.js?semantic-names=2',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
@@ -100,9 +100,7 @@ async function maybeFinish(){
     if(p.targetIndicator){manifest.targetIndicatorIncluded=true;
       manifest.targetSelection=p.targetSelection;}
     manifest.profiling=reportProfile(current,flushMs,muxMs,null);
-    var naming=self.CurvatureModernSemanticNaming.exportNames(p.project,{
-      format:current.format,fps:p.fps,width:p.outputWidth,height:p.outputHeight,
-      compareLayout:p.compareLayout});
+    var naming=current.naming;
     var blob,filename;
     if(files.length===1){blob=files[0].blob;filename=naming.filename;}
     else{
@@ -144,6 +142,9 @@ async function init(data){
       throw RangeError('Invalid bounded video frame window');
     var format=data.format===undefined?'webm':data.format;
     if(format!=='webm'&&format!=='mp4')throw RangeError('Unsupported video format');
+    var naming=self.CurvatureModernSemanticNaming.exportNames(plan.project,{
+      format:format,fps:plan.fps,width:plan.outputWidth,height:plan.outputHeight,
+      compareLayout:plan.compareLayout});
     var codec=format==='mp4'?self.CurvatureModernAnimationVideoCapabilities.h264Codec(
       plan.outputWidth,plan.outputHeight,plan.fps):'vp09.00.10.08';
     var multiplier=data.quality==='high'?2:data.quality==='standard'?1:null;
@@ -226,14 +227,14 @@ async function init(data){
       }
     });
     session={plan:plan,workers:data.workers,gate:gate,encoders:encoders,
-      muxers:muxers,bitrate:bitrate,format:format,codec:codec,
+      muxers:muxers,bitrate:bitrate,format:format,codec:codec,naming:naming,
       frameWindow:data.frameWindow,received:0,peakBuffered:0,
       peakEncoderQueue:0,encodedBytes:0,profile:profiling,
       finishing:false,start:mark()};
     self.postMessage({type:'ready',total:plan.frameCount,sides:plan.sides.length,
       outputStreams:plan.outputSides.length,outputWidth:plan.outputWidth,
       outputHeight:plan.outputHeight,workers:data.workers,
-      codec:config.codec,format:format,bitrate:bitrate});
+      codec:config.codec,format:format,bitrate:bitrate,filename:naming.filename});
   }finally{initializing=false;}
 }
 self.onmessage=function(event){

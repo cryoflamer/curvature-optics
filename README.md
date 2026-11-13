@@ -722,6 +722,12 @@ animations always export one video and do not display the Compare selector.
 The output summary updates when the layout, frame size, format or worker count
 changes. The displayed RGBA estimate covers the bounded transferred VideoFrame
 credit window (up to 32 MiB), **not** total app, optics Canvas or codec memory.
+A separate **Export filename** preview shows the exact proposed WebM/MP4 name,
+or the ZIP name and both A/B entry names, before rendering. It updates when FPS,
+frame size, format, layout or the working Animation Studio draft changes, even
+if the project has never been saved. The encoder Worker announces its own chosen
+filename before rendering; a mismatch (e.g. an outdated cached Worker) aborts
+before frame generation rather than silently downloading the wrong name.
 Both modes retain Accurate RK4, the selected HUD burn-in, profiling and Cancel.
 
 ### Geometric target-direction indicator (Modern)
