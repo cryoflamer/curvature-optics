@@ -186,6 +186,13 @@ and terminal camera poses appear without extending the video. Pixel equivalence
 with Fast Preview is not claimed. See
 [camera interpolation](docs/modern-camera-interpolation.md).
 
+**Spline stage-5 closure (2026-11-13):** implementation, export endpoint
+fixes, Easing UX and automated regression audit are complete. The last checked
+baseline passed 1412/1412 Node tests; an Opera visual/codec/pixel acceptance
+run was deliberately not performed. The supported workflow, evidence limits,
+short-video exception and export caps are documented in
+[`docs/modern-camera-interpolation.md`](docs/modern-camera-interpolation.md#spline-animation-stage-5-closure-2026-11-13).
+
 ### Modern camera animation
 
 Scene / Compare → Camera → **Camera Animation**: move the camera, click

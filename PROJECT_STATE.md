@@ -1,3 +1,13 @@
+> **Spline Animation stage-5 closure (2026-11-13):** Camera-only Spline math,
+> Linear/Spline Preview selection, autosaved drafts/Library/JSON persistence,
+> shared Preview/PNG/WebM/MP4 camera sampling, short-video endpoint behavior
+> and inactive-in-Spline keyframe Easing are complete. Final automated gate:
+> 1412/1412 tests on the audited baseline. Opera visual/codec/pixel acceptance
+> was deliberately not run and is not claimed. See
+> `docs/modern-camera-interpolation.md#spline-animation-stage-5-closure-2026-11-13`
+> for supported workflow, evidence, caps and known limitations. Documentation
+> closure changes no runtime, optical model, renderer or storage format.
+
 > **Modern status presentation (2026-11-13, second integration):** Shared
 > `ModernStatusMessage` styling now covers History, Snapshot save, Animation
 > Library including JSON import/export errors, working-session persistence,

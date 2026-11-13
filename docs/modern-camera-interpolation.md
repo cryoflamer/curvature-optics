@@ -126,6 +126,84 @@ The new contract is covered by
 Worker codec/controller tests. Real Opera rendering and pixel-level comparisons
 remain a separate manual validation.
 
+## Spline Animation stage-5 closure (2026-11-13)
+
+**Status: implementation and automated audit complete; optional real-browser visual
+acceptance not performed.** This is the stable, documented baseline for the
+camera-only Spline mode, not a claim of pixel-perfect rendering in Opera or a
+release qualification for every codec/browser combination. No additional Spline
+features are required for this milestone.
+
+### Supported workflow
+
+1. In **Animation Studio**, prepare a compatible **camera** animation with at
+   least two keyframes. Physical-parameter animation continues to use Linear.
+2. Under **Animation playback → Camera interpolation**, select **Smooth ·
+   Spline** (or return to **Linear**) without rebuilding the draft. The Preview
+   playhead and Play/Pause state are retained across the selection.
+3. Edit keyframe travel and hold durations normally. The per-keyframe **Easing**
+   field is deliberately disabled in Spline; its stored value is not discarded
+   and becomes editable when returning to Linear.
+4. Save an existing named project with **Save changes**, or create a distinct
+   Library entry with **Save As**. Independent working drafts survive reload;
+   restored previews start paused. **Stash & restore** preserves an independent
+   draft before restoring the named Library revision; **Discard changes**
+   restores that revision only after confirmation.
+5. Back up selected/all Library projects to JSON and re-import as needed. Old
+   version-1 projects missing `interpolation` still mean Linear. Exports include
+   interpolation metadata in their manifests. PNG ZIP, WebM and MP4 sample the
+   shared camera state in Scene and Compare; codec output and browser pixels
+   remain separate concerns.
+
+### Automated evidence and boundaries
+
+| Area | What is checked | What is not thereby established |
+| --- | --- | --- |
+| Spline math | Timing-aware Hermite/PCHIP, holds, bounded scalar channels, angular wrap and focal length semantics | Constant spatial speed or a geodesic trajectory |
+| Preview vs export | Shared `sampleAt` camera state at tested times, Scene and Compare A/B, Worker `splineProof` checks | Byte-identical or pixel-identical Fast/Auto vs Accurate RK4 images |
+| Very short video | Two positive-duration samples preserve both endpoint poses within the original duration when a video occupies one nominal FPS interval | Visual smoothness at very low FPS |
+| Storage and Library | Mode preservation in drafts, project revision operations, JSON round trips and old Linear defaults | Browser-specific IndexedDB durability under every failure mode |
+| UI | Spline disables per-keyframe Easing, switching back restores the saved Linear setting | Manual inspection of every Opera layout and interaction |
+
+Run the focused suite from the repository root:
+
+```sh
+node --test tests/ModernCameraSpline.test.js tests/ModernAnimationSplinePreview.test.js tests/ModernAnimationSplineExportParity.test.js tests/ModernAnimationSplineExportCompatibility.test.js
+node --test tests/ModernAnimationVideoPipeline.test.js tests/ModernAnimationDraftAutosave.test.js tests/ModernAnimationLibrary.test.js
+```
+
+For the broader regression gate, use `node --test tests/*.test.js` and the
+Legacy/isolation checks listed in [`development.md`](development.md). The
+2026-11-13 final Spline-fix validation reported **1412/1412 automated tests**;
+this number describes that checked source state, not a perpetual guarantee for
+later commits. Real Opera playback, WebM/MP4 display and a same-state,
+same-size pixel comparison were **not manually accepted** for this closure.
+Do not represent automated camera-state parity as pixel parity.
+
+### Known limitations and intentional behavior
+
+- Spline interpolates camera channels independently, so it does not promise
+  constant path speed, constant ground clearance, or physical/geodesic flight.
+- A hold stops motion at its keyframe; a two-keyframe spline stops at both ends.
+  Per-keyframe easing has no effect in Spline but survives for Linear.
+- Video's final sampled frame shows the endpoint within the last display
+  interval, whereas PNG ZIP includes an explicit endpoint frame. For an
+  unusually short video, two variable-duration video frames share the same
+  original total duration. Low FPS may still look jerky.
+- PNG frame ZIP has a **751-frame** cap, video a **36,000-frame** cap; PNG
+  archives also have a 192 MiB size guard. Export can reject projects which
+  play in interactive Preview.
+- Preview may use Fast/Auto optical quality while offline output uses Accurate
+  RK4. Equal sample times and camera states do not imply equal pixels.
+- Renderer/encoder Workers can remain stale in a cached browser session.
+  If a Spline compatibility warning appears, reload the page and retry rather
+  than accepting unverified output. Browser/codec support still varies.
+
+**Release note:** This stage is considered closed on automated evidence and
+accepted limitations; manual Opera validation is intentionally deferred, not
+claimed as passed. If a future user-visible defect is found, open a focused
+regression and fix rather than reopening the mathematical design by default.
+
 ## Browser controls: direct camera animation
 
 In **Scene / Compare → Camera → Camera Animation**:
