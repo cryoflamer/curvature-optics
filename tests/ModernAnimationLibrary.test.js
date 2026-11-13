@@ -412,7 +412,10 @@ test('Animation Library distinguishes selected backup card from opened editing c
   const cards=()=>nodes().filter(n=>n.tagName==='article'&&
     n.className.includes('modern-animation-library-card'));
   const badge=(card,text)=>{function collect(n){return [n,...n.children.flatMap(collect)];}
-    return collect(card).some(n=>n.tagName==='span'&&n.textContent===text);};
+    const exists=collect(card).some(n=>n.tagName==='span'&&n.textContent===text);
+    // The Selected badge stays mounted for dblclick stability and is visible
+    // only while the card has the same is-selected class as its blue outline.
+    return text==='Selected for backup'?exists&&card.className.split(' ').includes('is-selected'):exists;};
 
   // Single-click selection and the opened project can be different records.
   ui.renderLibrary(doc,host,entries,{selectedId:'animation_b',activeId:'animation_a',
@@ -429,8 +432,17 @@ test('Animation Library distinguishes selected backup card from opened editing c
   assert.match(cards()[0]['aria-label'],/Editing animation/);
   cards()[1].listeners.click({target:cards()[1]});
   assert.deepEqual(calls.pop(),['select','animation_b']);
+  // Simulate the in-place class update used for single-click selection.
+  cards()[0].className+=' is-selected';
+  cards()[1].className=cards()[1].className.replace(' is-selected','');
+  assert.ok(badge(cards()[0],'Selected for backup'));
+  assert.ok(!badge(cards()[1],'Selected for backup'));
+  assert.ok(badge(cards()[0],'Editing'));
+  // Same DOM cards survive the click, so dblclick is still delivered.
+  const originalSecond=cards()[1];
   cards()[1].listeners.dblclick({target:cards()[1]});
   assert.deepEqual(calls.pop(),['open','animation_b']);
+  assert.equal(cards()[1],originalSecond);
 
   // The same project may be both selected and opened, without losing either signal.
   host.children=[];
@@ -445,6 +457,14 @@ test('Animation Library distinguishes selected backup card from opened editing c
   ui.renderLibrary(doc,host,entries,{selectedId:'animation_b',activeId:null,expanded:true},actions);
   assert.ok(!cards().some(card=>badge(card,'Editing')));
   assert.ok(badge(cards()[1],'Selected for backup'));
+});
+
+test('Animation Library backup badge follows the outline class without rebuilding cards',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(css,/\.modern-animation-library-card:not\(\.is-selected\) \.modern-animation-library-status-selected\{display:none\}/);
+  assert.match(css,/\.modern-animation-library-card:not\(\.is-selected\):not\(\.is-editing\) \.modern-animation-library-card-status\{display:none\}/);
+  assert.match(app,/card\.classList\.toggle\('is-selected',chosen\)/);
 });
 
 test('portable Animation Library JSON round-trips complete projects, annotations and genuine thumbnails',async()=>{

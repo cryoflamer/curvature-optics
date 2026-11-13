@@ -344,14 +344,14 @@
       var info=el(doc,'div','modern-animation-library-card-info');
       var title=el(doc,'strong','modern-animation-library-card-title',p.name);
       title.title=p.name;info.appendChild(title);
-      if(selected||editing){
-        var statuses=el(doc,'div','modern-animation-library-card-status');
-        if(selected)statuses.appendChild(el(doc,'span','modern-animation-library-status-selected',
-          'Selected for backup'));
-        if(editing)statuses.appendChild(el(doc,'span','modern-animation-library-status-editing',
-          'Editing'));
-        info.appendChild(statuses);
-      }
+      // Keep the selection badge in the stable card DOM. Its visibility follows
+      // is-selected, which the click handler updates without swallowing dblclick.
+      var statuses=el(doc,'div','modern-animation-library-card-status');
+      statuses.appendChild(el(doc,'span','modern-animation-library-status-selected',
+        'Selected for backup'));
+      if(editing)statuses.appendChild(el(doc,'span','modern-animation-library-status-editing',
+        'Editing'));
+      info.appendChild(statuses);
       if((options.editedIds||[]).includes(entry.id))
         info.appendChild(el(doc,'small','modern-animation-library-local-edits',
           'Local draft edits · not yet saved to Library'));
