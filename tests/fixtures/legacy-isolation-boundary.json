@@ -630,6 +630,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationBackgroundExport.js",
+        "src/animation/ModernAnimationBackgroundVideoExport.js",
         "src/animation/ModernAnimationFrameExport.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPlayback.js",

@@ -2234,7 +2234,7 @@
         message('Video export modules unavailable. Check the browser console.');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
-        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1',
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1',
         encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};studioVideoExportTask=task;
@@ -2371,7 +2371,7 @@
         message('PNG export modules did not load. Check the browser console.');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js',
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1',
         archiveUrl:'src/animation/ModernAnimationArchiveWorker.js',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};

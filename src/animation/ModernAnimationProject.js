@@ -171,6 +171,16 @@
     if(options.interpolation!==undefined)result.interpolation=options.interpolation;
     return validate(result);
   }
+  // Renderer handshake: compare a genuine in-between camera pose before any
+  // expensive Accurate RK4 frames are dispatched. This also detects workers
+  // that silently fall back to linear sampling of spline projects.
+  function splineProof(input){
+    var p=validate(input);
+    if(p.mode!=='camera'||p.interpolation!=='spline')return null;
+    var timeMs=p.keyframes[0].holdMs+p.keyframes[1].travelMs/2;
+    var cameraPose=sampleAt(p,timeMs).scene.camera;
+    return POSE.map(function(key){return cameraPose[key];});
+  }
   function totalMs(input){var p=validate(input);return p.keyframes.reduce(function(n,f){return n+f.travelMs+f.holdMs;},0);}
   function timeline(input){
     var p=validate(input),ms=0;
@@ -206,5 +216,5 @@
   }
   return Object.freeze({VERSION:VERSION,validate:validate,create:create,
     validateHudAppearance:hud.validateAppearance,
-    totalMs:totalMs,timeline:timeline,sampleAt:sampleAt});
+    totalMs:totalMs,timeline:timeline,sampleAt:sampleAt,splineProof:splineProof});
 }));

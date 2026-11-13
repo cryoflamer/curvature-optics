@@ -6,14 +6,16 @@
 (function(root,factory){
   var video=root.CurvatureModernAnimationVideoPipeline;
   var pngBackground=root.CurvatureModernAnimationBackgroundExport;
+  var projects=root.CurvatureModernAnimationProject;
   if(typeof module==='object'&&module.exports){
     video=require('./ModernAnimationVideoPipeline');
     pngBackground=require('./ModernAnimationBackgroundExport');
+    projects=require('./ModernAnimationProject');
   }
-  var api=factory(video,pngBackground);
+  var api=factory(video,pngBackground,projects);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationBackgroundVideoExport=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(video,pngBackground){
+}(typeof globalThis!=='undefined'?globalThis:this,function(video,pngBackground,projects){
   'use strict';
   var MAX_INFLIGHT_RGBA_BYTES=32*1024*1024;
   function frameWindow(plan,count){
@@ -28,7 +30,7 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
+    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1';
     var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
     var active=null;
     function cancel(){
@@ -185,6 +187,11 @@
                   if(current.ready||value.total!==plan.frameCount||
                     value.sides!==plan.sides.length){
                     fail('Video renderer returned invalid initialization');return;
+                  }
+                  if(plan.project.interpolation==='spline' &&
+                    JSON.stringify(value.splineProof)!==JSON.stringify(projects.splineProof(plan.project))){
+                    fail('Video renderer Spline interpolation mismatch (stale Worker?). Reload the page and retry.');
+                    return;
                   }
                   current.ready=true;ready++;launch();
                 }else if(value.type==='video-frame'){

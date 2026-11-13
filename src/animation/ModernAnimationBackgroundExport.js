@@ -5,11 +5,15 @@
  */
 (function(root,factory){
   var frameExport=root.CurvatureModernAnimationFrameExport;
-  if(typeof module==='object'&&module.exports)frameExport=require('./ModernAnimationFrameExport');
-  var api=factory(frameExport);
+  var projects=root.CurvatureModernAnimationProject;
+  if(typeof module==='object'&&module.exports){
+    frameExport=require('./ModernAnimationFrameExport');
+    projects=require('./ModernAnimationProject');
+  }
+  var api=factory(frameExport,projects);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationBackgroundExport=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(frameExport){
+}(typeof globalThis!=='undefined'?globalThis:this,function(frameExport,projects){
   'use strict';
   function countFor(value,hardware,total){
     if(value===undefined||value==='auto'){
@@ -23,7 +27,7 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1';
     var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
     var active=null;
     function isBusy(){return !!active;}
@@ -120,6 +124,11 @@
                   if(current.ready||value.total!==plan.timesMs.length||
                     value.sides!==plan.sides.length){
                     fail('Renderer returned an invalid ready message');return;
+                  }
+                  if(plan.project.interpolation==='spline' &&
+                    JSON.stringify(value.splineProof)!==JSON.stringify(projects.splineProof(plan.project))){
+                    fail('PNG renderer Spline interpolation mismatch (stale Worker?). Reload the page and retry.');
+                    return;
                   }
                   current.ready=true;ready++;launch();
                 }else if(value.type==='frame'){

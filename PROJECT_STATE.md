@@ -2261,3 +2261,19 @@ preferences, and removal of the now-duplicated target CSS block.
 - Regression tests cover the real Preview change handler with paused and running
   timelines, a physical-animation guard and invalid mode rejection. Full browser
   animation performance remains to be validated interactively.
+
+
+### Animation Studio Spline background export compatibility
+
+- Accurate RK4 background video and PNG export renderer URLs use a refreshed
+  `spline-export` cache key, as do the renderer's imported camera interpolator
+  and animation project module. The UI script key is refreshed too.
+- For a spline camera project, the renderer's `ready` message includes a
+  deterministic in-between camera sample. The coordinator compares that sample
+  with the preview's `ModernAnimationProject.splineProof()` before dispatching
+  any optical frame. Missing or mismatched samples abort export and terminate
+  workers with a stale-renderer explanation. Linear and physical exports retain
+  their prior protocol and behavior.
+- Regression tests cover successful Spline video/PNG exports and immediate
+  failure when a stale renderer omits its spline proof. This avoids producing
+  a plausible but incorrectly interpolated export.

@@ -54,9 +54,9 @@ importScripts(
   '../ui/modern/ModernSceneState.js',
   '../ui/modern/ModernCompareState.js',
   '../ui/modern/ModernExperimentState.js',
-  '../camera/ModernCameraInterpolator.js?spline-core=1',
+  '../camera/ModernCameraInterpolator.js?spline-core=1&spline-export=1',
   'ModernAnimationCompatibility.js',
-  'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1',
+  'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-export=1',
   'ModernAnimationPreview.js',
   'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1',
   'ModernAnimationCompareComposition.js',
@@ -139,7 +139,9 @@ self.onmessage=async function(event){
     try{
       parallel=setup(data,data.type==='video-init');
       self.postMessage({type:'ready',total:parallel.video?parallel.plan.frameCount:parallel.plan.timesMs.length,
-        sides:parallel.plan.sides.length});
+        sides:parallel.plan.sides.length,
+        splineProof:parallel.plan.project.interpolation==='spline'?
+          self.CurvatureModernAnimationProject.splineProof(parallel.plan.project):null});
     }catch(error){self.postMessage({type:'error',message:errorMessage(error)});}
     return;
   }

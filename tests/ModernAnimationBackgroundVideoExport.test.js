@@ -22,8 +22,8 @@ function make(mode='scene'){
     {id:'webm_test',name:'Video worker controller'});
 }
 class FakeWorker{
-  static instances=[];static paused=false;static errorAt=-1;
-  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;}
+  static instances=[];static paused=false;static errorAt=-1;static staleSpline=false;
+  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;FakeWorker.staleSpline=false;}
   constructor(url){this.url=url;this.encoder=url.includes('VideoEncoderWorker');
     this.closed=false;this.sent=[];FakeWorker.instances.push(this);}
   emit(data){if(!this.closed&&this.onmessage)this.onmessage({data});}
@@ -37,7 +37,8 @@ class FakeWorker{
         this.window=data.frameWindow;}
       queueMicrotask(()=>this.emit({type:'ready',total:this.plan.frameCount,
         sides:this.plan.sides.length,outputStreams:this.plan.outputSides.length,
-        outputWidth:this.plan.outputWidth,outputHeight:this.plan.outputHeight,workers:data.workers}));
+        outputWidth:this.plan.outputWidth,outputHeight:this.plan.outputHeight,workers:data.workers,
+        splineProof:FakeWorker.staleSpline?undefined:projects.splineProof(this.plan.project)}));
     }else if(data.type==='video-render'){
       if(FakeWorker.paused)return;
       setTimeout(()=>{
@@ -216,4 +217,29 @@ test('controller propagates explicit separate Compare choice to each Worker for 
       assert.ok(worker.closed);
     }
   }
+});
+
+test('Spline video export verifies the actual renderer camera sample before rendering',async()=>{
+  FakeWorker.reset();
+  const base=make().baseExperiment;
+  const moved=structuredClone(base);
+  moved.scene.camera.Height=90;
+  const spline=projects.create([{experiment:base,holdMs:0},
+    {experiment:moved,travelMs:1000}],
+    {id:'spline_export_check',name:'Spline renderer check',mode:'camera',interpolation:'spline'});
+  const expected=projects.splineProof(spline);
+  assert.equal(expected.length,9);
+  assert.equal(expected[0],52.5);
+  const result=await background.create({WorkerCtor:FakeWorker}).start({
+    project:spline,fps:5,width:640,height:360,workerCount:1});
+  assert.equal(result.cancelled,false);
+  const renderer=FakeWorker.instances.find(w=>!w.encoder);
+  assert.equal(renderer.sent[0].data.project.interpolation,'spline');
+  FakeWorker.reset();FakeWorker.staleSpline=true;
+  await assert.rejects(background.create({WorkerCtor:FakeWorker}).start({
+    project:spline,fps:5,width:640,height:360,workerCount:1}),/Spline interpolation mismatch/);
+  assert.ok(FakeWorker.instances.every(w=>w.closed));
+  assert.equal(FakeWorker.instances.filter(w=>!w.encoder)
+    .flatMap(w=>w.sent.filter(item=>item.data.type==='video-render')).length,0);
+  FakeWorker.reset();
 });

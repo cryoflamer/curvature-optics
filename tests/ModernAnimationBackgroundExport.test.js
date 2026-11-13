@@ -40,7 +40,8 @@ class FakeWorker {
   static instances=[];
   static paused=false;
   static errorAt=-1;
-  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;}
+  static staleSpline=false;
+  static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;FakeWorker.staleSpline=false;}
   constructor(url){this.url=url;this.terminated=false;this.commands=[];
     this.isArchive=url.split('?')[0].endsWith('ModernAnimationArchiveWorker.js');
     FakeWorker.instances.push(this);}
@@ -52,7 +53,8 @@ class FakeWorker {
       if(this.isArchive){this.frames=new Array(this.plan.timesMs.length);this.total=0;
         this.workers=value.workers;}
       queueMicrotask(()=>this.emit({type:'ready',total:this.plan.timesMs.length,
-        sides:this.plan.sides.length}));
+        sides:this.plan.sides.length,
+        splineProof:FakeWorker.staleSpline?undefined:project.splineProof(this.plan.project)}));
     }else if(value.type==='render'){
       if(FakeWorker.paused)return;
       setTimeout(()=>{
@@ -203,4 +205,24 @@ test('opt-in HUD flag is sent to every PNG render worker and the archive manifes
     const init=worker.commands.find(command=>command.type==='init');
     return !!init&&init.cameraHud===true;
   }));
+});
+
+test('Spline PNG export requires matching renderer sample before dispatching frames',async()=>{
+  FakeWorker.reset();
+  const base=make().baseExperiment;
+  const moved=structuredClone(base);
+  moved.scene.camera.Height=90;
+  const spline=project.create([{experiment:base,holdMs:0},
+    {experiment:moved,travelMs:1000}],
+    {id:'spline_export_check',name:'Spline renderer check',mode:'camera',interpolation:'spline'});
+  const result=await background.create({WorkerCtor:FakeWorker}).start({
+    project:spline,fps:5,width:640,height:360,workerCount:1});
+  assert.equal(result.cancelled,false);
+  FakeWorker.reset();FakeWorker.staleSpline=true;
+  await assert.rejects(background.create({WorkerCtor:FakeWorker}).start({
+    project:spline,fps:5,width:640,height:360,workerCount:1}),/Spline interpolation mismatch/);
+  assert.ok(FakeWorker.instances.every(w=>w.terminated));
+  assert.equal(FakeWorker.instances.filter(w=>!w.isArchive)
+    .flatMap(w=>w.commands.filter(command=>command.type==='render')).length,0);
+  FakeWorker.reset();
 });
