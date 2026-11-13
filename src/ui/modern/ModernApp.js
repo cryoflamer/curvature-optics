@@ -1134,6 +1134,8 @@
       rename:function(id,name){renameNamedAnimation(id,name);},
       newProject:function(){requestStudioSwitch('new');},
       save:function(){saveNamedAnimation(!!studioLibraryActive);},
+      stashRestore:function(){return restoreSavedAnimation(true);},
+      discardChanges:function(){return restoreSavedAnimation(false);},
       saveAs:function(){saveNamedAnimation(false);},
       openDraft:function(id){requestStudioSwitch('draft',id);},
       removeDraft:function(id){deleteStudioWorkspace(id);},
@@ -1353,6 +1355,73 @@
       return false;
     }).then(function(saved){studioLibraryBusy=false;renderStudioLibrary();return saved;});
   }
+  // Restore the saved Library revision without overwriting a retained stash.
+  // Stage the entire collection in durable storage *before* changing the editor.
+  function restoreSavedAnimation(stash){
+    if(studioLibraryBusy||!studioLibraryActive||!studioLibraryDirty()||
+       !studioWorkspaceReady||!studioDraftAutosave)return Promise.resolve(false);
+    if(!stash&&typeof root.confirm==='function'&&!root.confirm(
+      'Discard working changes and restore the saved Library version? This cannot be undone. '+
+      'Other independent drafts will not be deleted.'))return Promise.resolve(false);
+    var original=studioLibraryActive,workspaceId=studioWorkspaceId;
+    if(workspaceId!==studioDraftAutosave.projectWorkspaceId(original.id))return Promise.resolve(false);
+    studioLibraryBusy=true;renderStudioLibrary();
+    if(!saveStudioDraft(false)){
+      studioLibraryBusy=false;
+      studioLibraryNotice('Cannot restore: working draft could not be backed up.',true);
+      return Promise.resolve(false);
+    }
+    var generation=studioDraftGeneration;
+    return persistStudioWorkspace().then(function(ok){
+      if(!ok)throw Error('Current working draft could not be backed up');
+      return studioLibrary.get(root.indexedDB,original.id);
+    }).then(function(record){
+      if(!record||record.updatedAt!==original.updatedAt)
+        throw Error('Saved project changed in another tab; local edits were retained');
+      if(studioDraftGeneration!==generation||studioWorkspaceId!==workspaceId)
+        throw Error('Working draft changed during restore; no changes were discarded');
+      var cleanDraft=studioApi.fromProject(record.project),when=Math.max(Date.now(),studioDraftSavedAt+2);
+      var clean=studioDraftAutosave.checkpoint({draft:cleanDraft,
+        selectedKey:cleanDraft.frames.length?cleanDraft.frames[0].key:null,
+        quality:record.quality,prepared:!!studioPlaybackApi,
+        libraryId:record.id,libraryRevision:record.updatedAt,positionMs:0},when);
+      var stashId=stash?studioDraftAutosave.makeWorkspaceId(root.crypto):null;
+      var previous=studioWorkspaces,previousLocalSaved=studioWorkspaceLocalSaved;
+      var staged=studioDraftAutosave.restoreSavedProject(previous,workspaceId,clean,stashId,when);
+      studioWorkspaces=staged;
+      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
+        preferencesStorage(),staged);}
+      catch(error){studioWorkspaceLocalSaved=false;}
+      return persistStudioWorkspace().then(function(ok){
+        if(!ok){
+          studioWorkspaces=previous;studioWorkspaceLocalSaved=previousLocalSaved;
+          try{studioDraftAutosave.writeCollectionLocal(preferencesStorage(),previous);}
+          catch(error){}
+          throw Error('Restored workspace could not be persisted; editor was not changed');
+        }
+        if(studioDraftGeneration!==generation||studioWorkspaceId!==workspaceId){
+          // A late user edit wins over the staged restore. Preserve it on the
+          // named workspace, including any already persisted independent stash.
+          if(!saveStudioDraft(false))
+            throw Error('Draft changed during restore and could not be backed up');
+          return persistStudioWorkspace().then(function(preserved){
+            if(!preserved)throw Error('Draft changed during restore; latest edits need a backup');
+            throw Error('Draft changed during restore; newest edits were preserved. Retry if needed');
+          });
+        }
+        performStudioSwitch('restore',record);
+        studioLibraryMessage=stash?
+          'Working changes stashed as an independent draft; saved Library version restored.':
+          'Working changes discarded; saved Library version restored. Other drafts retained.';
+        studioLibraryError=false;
+        return true;
+      });
+    }).catch(function(error){
+      studioLibraryMessage='Cannot restore saved animation: '+error.message;
+      studioLibraryError=true;
+      return false;
+    }).then(function(ok){studioLibraryBusy=false;renderStudioLibrary();return ok;});
+  }
   // Switching workspaces saves the current local/IndexedDB checkpoint before
   // changing the editor. It never requires a Save/Discard decision: every
   // workspace retains its own draft until the user explicitly deletes it.
@@ -1405,6 +1474,12 @@
       studioSelectedKey=null;studioPlaybackQuality='auto';
       studioLibraryActive=null;studioLibraryPending=null;studioLibrarySelected='';
       studioLibraryMessage='New draft created; other projects and drafts are preserved.';
+    }else if(kind==='restore'){
+      var restored=value;
+      studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(restored.id);
+      restoreStudioDraft(studioDraftAutosave.getWorkspace(studioWorkspaces,studioWorkspaceId));
+      studioLibraryActive=restored;studioLibraryPending=null;
+      studioLibrarySelected=restored.id;
     }else if(kind==='draft'){
       studioWorkspaceId=value;
       restoreStudioDraft(studioDraftAutosave.getWorkspace(studioWorkspaces,value));

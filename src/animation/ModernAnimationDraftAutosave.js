@@ -155,6 +155,30 @@
       savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),activeId:activeId,
       workspaces:original.workspaces.filter(function(item){return item.id!==id;})});
   }
+  // Prepare the next durable workspace collection before changing the live
+  // editor. A stash is an independent draft, never the named project's slot.
+  function restoreSavedProject(value,projectId,savedCheckpoint,stashId,savedAt){
+    var current=normalizeCollection(value);
+    if(projectId!==current.activeId||projectId.indexOf('project_')!==0)
+      throw RangeError('Only the active saved project can be restored');
+    var prior=getWorkspace(current,projectId),clean=normalize(savedCheckpoint);
+    if(!prior||clean.libraryId!==projectId.slice(8)||
+      !Number.isSafeInteger(clean.libraryRevision)||clean.libraryRevision<=0)
+      throw RangeError('Saved project checkpoint does not match the active workspace');
+    var next=current;
+    if(stashId!==null){
+      if(typeof stashId!=='string'||stashId.indexOf('draft_')!==0||
+        current.workspaces.some(function(item){return item.id===stashId;}))
+        throw RangeError('Stash must have a fresh independent draft ID');
+      var stashed=checkpoint(Object.assign({},prior,{
+        libraryId:null,libraryRevision:null
+      }),Math.max(savedAt||Date.now(),prior.savedAt+1));
+      next=withWorkspace(next,stashId,stashed);
+    }
+    // withWorkspace sets activeId to the updated ID, which must be the saved
+    // project. Later autosaves therefore cannot overwrite the independent stash.
+    return withWorkspace(next,projectId,clean,savedAt);
+  }
   function getWorkspace(value,id){
     var entry=normalizeCollection(value).workspaces.find(function(item){return item.id===id;});
     return entry?entry.checkpoint:null;
@@ -222,6 +246,7 @@
     makeWorkspaceId:makeWorkspaceId,projectWorkspaceId:projectWorkspaceId,
     normalizeCollection:normalizeCollection,collection:collection,
     withWorkspace:withWorkspace,withoutWorkspace:withoutWorkspace,
+    restoreSavedProject:restoreSavedProject,
     getWorkspace:getWorkspace,readCollectionLocal:readCollectionLocal,
     writeCollectionLocal:writeCollectionLocal,readCollection:readCollection,
     writeCollection:writeCollection,migrate:migrate,newerCollection:newerCollection});

@@ -338,6 +338,7 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   const entries=[library.record(project,'auto','animation_a',10,11,preview)];
   const actions={select:id=>calls.push(['select',id]),save:()=>calls.push('save'),
     saveAs:()=>calls.push('saveAs'),newProject:()=>calls.push('newProject'),
+    stashRestore:()=>calls.push('stash'),discardChanges:()=>calls.push('discard'),
     saveBeforeSwitch:()=>calls.push('saveBeforeSwitch'),
     discardSwitch:()=>calls.push('discardSwitch'),cancelSwitch:()=>calls.push('cancelSwitch'),
     open:id=>calls.push(['open',id]),remove:id=>calls.push(['delete',id]),
@@ -355,6 +356,11 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   for(const [label,value] of [['New project','newProject'],['Save changes','save'],['Save As','saveAs']]){
     nodes().find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
     assert.equal(calls.at(-1),value);
+  }
+  for(const [label,value] of [['Stash & restore','stash'],['Discard changes','discard']]){
+    const control=nodes().find(n=>n.tagName==='button'&&n.textContent===label);
+    assert.equal(control.disabled,false);
+    control.listeners.click();assert.equal(calls.at(-1),value);
   }
   const card=nodes().find(n=>n.tagName==='article'&&n.className.includes('modern-animation-library-card'));
   assert.equal(card.tabindex,'0');
@@ -385,6 +391,10 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   const input=nodes().find(n=>n.tagName==='input'&&n.type==='text');input.value='New title';
   nodes().find(n=>n.tagName==='button'&&n.textContent==='Save name').listeners.click();
   assert.deepEqual(calls.at(-1),['rename','animation_a','New title']);
+  host.children=[];ui.renderLibrary(doc,host,entries,{selectedId:'animation_a',
+    activeId:'animation_a',dirty:false,expanded:true},actions);
+  assert.equal(nodes().find(n=>n.textContent==='Stash & restore').disabled,true);
+  assert.equal(nodes().find(n=>n.textContent==='Discard changes').disabled,true);
   host.children=[];ui.renderLibrary(doc,host,entries,{selectedId:'',expanded:false},actions);
   assert.equal(nodes().filter(n=>n.className.includes('modern-animation-library-card')).length,0);
   nodes().find(n=>n.textContent==='Show projects').listeners.click();
@@ -600,7 +610,7 @@ test('project lifecycle has independent draft controls and no conflicting confir
   button('Open draft').listeners.click();assert.deepEqual(calls.at(-1),['openDraft','draft_one']);
   button('Delete draft').listeners.click();assert.deepEqual(calls.at(-1),['removeDraft','draft_one']);
   assert.equal(button('Current').disabled,true);
-  assert.ok(nodes().some(n=>n.textContent.includes('Each draft is kept independently')));
+  assert.ok(nodes().some(n=>n.textContent.includes('Autosaved and stashed drafts are independent')));
   assert.ok(!nodes().some(n=>n.className==='modern-animation-library-pending'));
   assert.ok(!nodes().some(n=>n.className==='modern-animation-library-duplicate-warning'));
 });
@@ -984,4 +994,21 @@ test('Library card edit badge and Save changes agree for legacy Linear and actua
   checkpoint.quality='fast';ctx.studioPlaybackQuality='fast';
   assert.equal(ctx.dirty(),true);
   assert.deepEqual(Array.from(ctx.edited()),['saved_v1']);
+});
+
+
+test('Stash and discard actions are wired to safe durable restore before editor replacement',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(app,/stashRestore:function\(\)\{return restoreSavedAnimation\(true\);\}/);
+  assert.match(app,/discardChanges:function\(\)\{return restoreSavedAnimation\(false\);\}/);
+  const start=app.indexOf('  function restoreSavedAnimation(stash){');
+  const end=app.indexOf('  // Switching workspaces',start);
+  assert.ok(start>=0&&end>start);
+  const flow=app.slice(start,end);
+  assert.ok(flow.indexOf('persistStudioWorkspace().then')<flow.indexOf("performStudioSwitch('restore',record)"),
+    'workspace checkpoint is persisted before the saved project replaces the live editor');
+  assert.match(flow,/record\.updatedAt!==original\.updatedAt/);
+  assert.match(flow,/studioDraftGeneration!==generation/);
+  assert.match(flow,/studioDraftAutosave\.restoreSavedProject/);
+  assert.match(flow,/studioWorkspaces=previous/);
 });

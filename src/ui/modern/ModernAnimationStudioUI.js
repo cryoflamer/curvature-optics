@@ -226,6 +226,14 @@
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
     action(projectActions,'Save As','Save an independent project with a new ID',actions.saveAs,
       options.busy||!options.canSave);
+    if(options.activeId){
+      action(projectActions,'Stash & restore',
+        'Keep the current working changes as a separate draft and reload the saved Library version',
+        actions.stashRestore,options.busy||!options.dirty);
+      action(projectActions,'Discard changes',
+        'Restore the saved Library version without keeping current changes (requires confirmation)',
+        actions.discardChanges,options.busy||!options.dirty);
+    }
     var exportSelected=action(fileActions,'Export selected','Back up the selected saved project as JSON (not video)',
       actions.exportSelected,options.busy||!entries.some(function(e){return e.id===options.selectedId;}));
     exportSelected.className+=' modern-animation-library-export-selected';
@@ -257,7 +265,8 @@
       var drafts=el(doc,'section','modern-animation-workspace-list');
       drafts.appendChild(el(doc,'strong','','Working drafts (not saved projects)'));
       drafts.appendChild(el(doc,'p','modern-animation-library-hint',
-        'Each draft is kept independently. Open any draft to resume; only Delete draft removes it.'));
+        'Autosaved and stashed drafts are independent. Open draft applies a copy to the editor; '+
+        'only Delete draft removes it.'));
       (options.draftWorkspaces||[]).forEach(function(draft){
         var item=el(doc,'div','modern-animation-workspace-item'+(draft.active?' is-active':''));
         item.appendChild(el(doc,'span','',draft.name+' · '+draft.frames+' keyframes'+

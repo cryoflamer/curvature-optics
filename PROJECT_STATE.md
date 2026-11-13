@@ -2318,3 +2318,15 @@ preferences, and removal of the now-duplicated target CSS block.
   unchanged, and old v1 camera projects resolve to `linear` in manifests.
 - The parity guarantee is **sampled project/camera state**, not pixel identity
   against Fast Preview. Native Opera rendering is still a separate check.
+
+### Modern Animation Library: return to saved version with optional stash
+
+A dirty named project now exposes **Stash & restore** and **Discard changes**.
+Stash copies the entire existing checkpoint into a fresh unlinked draft ID,
+restores the project's saved Library checkpoint in one staged workspace
+collection, and persists that collection before switching the editor. Discard
+uses the same restore transaction without creating a stash and requires explicit
+confirmation. Other workspaces stay untouched. Switching to a stashed draft
+does not delete it. Revision/generation conflicts and persistence failures
+abort before replacing the editor; stale concurrent editor changes are backed
+up rather than dropped. No Library-record or physics-schema migration is needed.

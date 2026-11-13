@@ -905,3 +905,23 @@ sanitizer. The on-disk experiment/project JSON schema, History identities,
 manifest content, optical renderers and Legacy are unchanged. Naming is a
 presentation/export concern; it does **not** infer physical visibility or
 silently change the user's saved experiments.
+
+### Animation Library: Stash & restore and Discard changes
+
+When a named project is open and differs from its saved Library revision,
+**Stash & restore** preserves the complete working checkpoint (including
+keyframes, interpolation, preview position and render quality) as a *new*,
+independent draft under Working drafts, then reloads the last saved Library
+version. The stash remains available through **Open draft**, even after later
+edits or browser reload; opening it never deletes it. Saved Library data is not
+modified by this operation. Existing independent drafts are left intact.
+
+**Discard changes** reloads the saved Library version without making another
+stash. It requires confirmation and does not delete unrelated drafts. Both
+operations are disabled when the opened project is already clean, and neither
+is available for an independent draft (which has no saved Library revision to
+restore). The current working checkpoint is backed up before processing; a
+concurrent Library revision change or unavailable durable storage aborts the
+operation rather than silently replacing the editor. The localStorage/IndexedDB
+collection is staged and persisted before updating the live editor, so a later
+autosave cannot overwrite a stash.

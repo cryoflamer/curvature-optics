@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 const autosave=require('../src/animation/ModernAnimationDraftAutosave');
 const studio=require('../src/animation/ModernAnimationStudio');
 const projects=require('../src/animation/ModernAnimationProject');
@@ -260,4 +261,154 @@ test('Spline workspace restores mode, keyframe timings, playhead and named-proje
   assert.equal(autosave.normalize(preSpline).draft.interpolation,'linear');
   const broken=structuredClone(checkpoint);broken.draft.interpolation='unknown';
   assert.throws(()=>autosave.normalize(broken),/interpolation/);
+});
+
+
+test('Stash restores a saved project while preserving an independent editable draft across autosaves',async()=>{
+  const original=physicalDraft();
+  const edited=studio.edit(original,'name','Unsaved spline changes');
+  const current=autosave.checkpoint({draft:edited,selectedKey:'history-42',
+    quality:'accurate',prepared:true,positionMs:3400,
+    libraryId:'saved_flight',libraryRevision:31},1000);
+  const pristine=autosave.checkpoint({draft:original,selectedKey:'history-41',
+    quality:'auto',prepared:true,positionMs:0,
+    libraryId:'saved_flight',libraryRevision:31},1010);
+  const other=autosave.checkpoint({draft:studio.edit(original,'name','Another draft'),
+    selectedKey:'history-41',quality:'auto',prepared:false,positionMs:100},1002);
+  let workspaces=autosave.collection('project_saved_flight',current,1001);
+  workspaces=autosave.withWorkspace(workspaces,'draft_other',other,1003);
+  workspaces=autosave.withWorkspace(workspaces,'project_saved_flight',current,1004);
+  const before=structuredClone(workspaces),local=storage(),db=memoryIndexedDB();
+  const staged=autosave.restoreSavedProject(workspaces,'project_saved_flight',pristine,
+    'draft_stash_1',1011);
+  assert.deepEqual(workspaces,before,'staging never mutates original workspaces');
+  assert.equal(staged.activeId,'project_saved_flight');
+  assert.deepEqual(autosave.getWorkspace(staged,'project_saved_flight'),pristine);
+  const stash=autosave.getWorkspace(staged,'draft_stash_1');
+  assert.equal(stash.libraryId,null);
+  assert.equal(stash.libraryRevision,null);
+  assert.equal(stash.draft.name,'Unsaved spline changes');
+  assert.equal(stash.quality,'accurate');
+  assert.equal(stash.positionMs,3400);
+  assert.deepEqual(autosave.getWorkspace(staged,'draft_other'),other);
+  await autosave.writeCollection(db,staged);
+  autosave.writeCollectionLocal(local,staged);
+  const recovered=autosave.newerCollection(autosave.readCollectionLocal(local),
+    await autosave.readCollection(db));
+  assert.equal(autosave.getWorkspace(recovered,'draft_stash_1').draft.name,'Unsaved spline changes');
+  const nextAutosave=autosave.checkpoint({...pristine,positionMs:2100},1100);
+  const newer=autosave.withWorkspace(recovered,'project_saved_flight',nextAutosave,1101);
+  assert.deepEqual(autosave.getWorkspace(newer,'draft_stash_1'),stash,
+    'autosave of restored project does not overwrite stash');
+  assert.equal(autosave.getWorkspace(newer,'draft_other').draft.name,'Another draft');
+  // Opening the stash does not pop it or modify the saved Library version.
+  assert.equal(autosave.getWorkspace(newer,'draft_stash_1').draft.name,'Unsaved spline changes');
+  assert.deepEqual(autosave.getWorkspace(newer,'project_saved_flight'),nextAutosave);
+});
+
+test('Discard restores saved project without deleting unrelated drafts or creating stash',()=>{
+  const draft=physicalDraft();
+  const dirty=autosave.checkpoint({draft:studio.edit(draft,'name','Uncommitted'),
+    selectedKey:'history-41',quality:'fast',prepared:true,positionMs:3500,
+    libraryId:'existing',libraryRevision:12},1000);
+  const clean=autosave.checkpoint({draft,selectedKey:'history-41',quality:'auto',
+    prepared:true,positionMs:0,libraryId:'existing',libraryRevision:12},1001);
+  const independent=autosave.checkpoint({draft:studio.edit(draft,'name','Keep me'),
+    selectedKey:null,quality:'auto',prepared:false,positionMs:0},1003);
+  let state=autosave.collection('project_existing',dirty,1001);
+  state=autosave.withWorkspace(state,'draft_independent',independent,1004);
+  state=autosave.withWorkspace(state,'project_existing',dirty,1005);
+  const restored=autosave.restoreSavedProject(state,'project_existing',clean,null,1010);
+  assert.equal(restored.workspaces.length,2);
+  assert.deepEqual(autosave.getWorkspace(restored,'draft_independent'),independent);
+  assert.deepEqual(autosave.getWorkspace(restored,'project_existing'),clean);
+  assert.throws(()=>autosave.restoreSavedProject(state,'draft_independent',clean,null,1010),/active saved project/);
+  assert.throws(()=>autosave.restoreSavedProject(state,'project_existing',clean,'draft_independent',1010),/fresh independent/);
+  assert.throws(()=>autosave.restoreSavedProject(state,'project_existing',
+    {...clean,libraryId:'wrong'},null,1010),/match the active/);
+});
+
+
+test('Stash/Discard app flow commits backups before switching, rejects failed writes and stale revisions',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const start=source.indexOf('  function restoreSavedAnimation(stash){');
+  const end=source.indexOf('  // Switching workspaces',start);
+  assert.ok(start>=0&&end>start);
+  const code=source.slice(start,end);
+  const initial=physicalDraft();
+  const saved=studio.build(initial,'saved_project');
+  function setup(){
+    const dirty=studio.edit(initial,'name','Unsaved camera project');
+    const original=autosave.checkpoint({draft:dirty,selectedKey:dirty.frames[1].key,
+      quality:'fast',prepared:true,positionMs:1750,
+      libraryId:'saved_project',libraryRevision:51},1000);
+    const record={id:'saved_project',updatedAt:51,project:saved,quality:'auto'};
+    const workspaces=autosave.collection('project_saved_project',original,1001);
+    const local=storage(),events=[];
+    let persistCount=0,failSecond=false,stale=false,permission=true,modifyLate=false;
+    const ctx={Promise,Date,Error,Math,Object,studioDraftAutosave:autosave,
+      studioLibraryActive:record,studioLibraryBusy:false,studioWorkspaceReady:true,
+      studioWorkspaceId:'project_saved_project',studioWorkspaces:workspaces,
+      studioWorkspaceLocalSaved:true,studioDraftSavedAt:1001,
+      studioDraftGeneration:0,studioDraft:dirty,studioPlaybackApi:{},
+      studioApi:studio,studioLibraryMessage:'',studioLibraryError:false,
+      root:{indexedDB:{},crypto:{randomUUID:()=> '11112222333344445555666677778888'},
+        confirm(){events.push('confirm');return permission;}},
+      preferencesStorage:()=>local,renderStudioLibrary(){events.push('render');},
+      studioLibraryDirty:()=>true,
+      saveStudioDraft(){ctx.studioDraftGeneration++;
+        const checkpoint=autosave.checkpoint({draft:ctx.studioDraft,
+          selectedKey:ctx.studioDraft.frames[0].key,quality:'fast',prepared:true,
+          positionMs:1750,libraryId:'saved_project',libraryRevision:51},
+          1100+ctx.studioDraftGeneration);
+        ctx.studioWorkspaces=autosave.withWorkspace(ctx.studioWorkspaces,
+          'project_saved_project',checkpoint,1100+ctx.studioDraftGeneration);
+        return true;},
+      persistStudioWorkspace(){persistCount++;events.push('persist '+persistCount);
+        if(persistCount===2&&modifyLate){
+          ctx.studioDraft=studio.edit(ctx.studioDraft,'name','Very late changes');
+          ctx.studioDraftGeneration++;
+        }
+        return Promise.resolve(!(persistCount===2&&failSecond));},
+      studioLibrary:{get(){events.push('get');return Promise.resolve(stale?{...record,updatedAt:52}:record);}},
+      performStudioSwitch(kind,updated){events.push('switch '+kind);
+        assert.equal(kind,'restore');assert.equal(updated.updatedAt,51);
+        ctx.studioDraft=autosave.getWorkspace(ctx.studioWorkspaces,'project_saved_project').draft;
+      }};
+    vm.runInNewContext(code,ctx);
+    return {ctx,events,record,configure(o){
+      failSecond=!!o.failSecond;stale=!!o.stale;
+      permission=o.permission!==false;modifyLate=!!o.modifyLate;
+    }};
+  }
+  const kept=setup();
+  assert.equal(await kept.ctx.restoreSavedAnimation(true),true);
+  assert.ok(kept.events.indexOf('persist 2')<kept.events.indexOf('switch restore'));
+  assert.equal(kept.ctx.studioDraft.name,initial.name);
+  assert.equal(kept.ctx.studioWorkspaces.activeId,'project_saved_project');
+  assert.equal(kept.ctx.studioWorkspaces.workspaces.length,2);
+  const stashId=kept.ctx.studioWorkspaces.workspaces.find(entry=>entry.id.startsWith('draft_')).id;
+  assert.equal(autosave.getWorkspace(kept.ctx.studioWorkspaces,stashId).draft.name,
+    'Unsaved camera project');
+  const rejected=setup();rejected.configure({failSecond:true});
+  assert.equal(await rejected.ctx.restoreSavedAnimation(true),false);
+  assert.equal(rejected.ctx.studioDraft.name,'Unsaved camera project');
+  assert.equal(rejected.ctx.studioWorkspaces.workspaces.length,1);
+  assert.ok(!rejected.events.includes('switch restore'));
+  const obsolete=setup();obsolete.configure({stale:true});
+  assert.equal(await obsolete.ctx.restoreSavedAnimation(true),false);
+  assert.equal(obsolete.ctx.studioDraft.name,'Unsaved camera project');
+  const ignored=setup();ignored.configure({permission:false});
+  assert.equal(await ignored.ctx.restoreSavedAnimation(false),false);
+  assert.deepEqual(ignored.events,['confirm']);
+  const discarded=setup();
+  assert.equal(await discarded.ctx.restoreSavedAnimation(false),true);
+  assert.equal(discarded.ctx.studioWorkspaces.workspaces.length,1);
+  assert.ok(discarded.events.includes('confirm'));
+  const racing=setup();racing.configure({modifyLate:true});
+  assert.equal(await racing.ctx.restoreSavedAnimation(true),false);
+  assert.equal(racing.ctx.studioDraft.name,'Very late changes');
+  assert.ok(!racing.events.includes('switch restore'));
+  assert.equal(autosave.getWorkspace(racing.ctx.studioWorkspaces,
+    'project_saved_project').draft.name,'Very late changes');
 });
