@@ -1697,6 +1697,14 @@
     if(!stage)return;
     var ready=!!(studioPrepared&&studioPlayback);
     stage.hidden=!ready;
+    var camera=ready&&studioPrepared.mode==='camera';
+    var interpolationLabel=newUiEl('ModernAnimationPlaybackInterpolationLabel');
+    var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
+    if(interpolationLabel)interpolationLabel.hidden=!camera;
+    if(interpolation){
+      interpolation.hidden=!camera;interpolation.disabled=!camera;
+      interpolation.value=studioDraft&&studioDraft.interpolation==='spline'?'spline':'linear';
+    }
     syncStudioHudAppearance();
     syncStudioFrameExportControls();
     if(!ready)return;
@@ -2420,7 +2428,45 @@
     });
     syncStudioFrameExportControls();
   }
+  // Preview interpolation is a property of the working project, not a new
+  // timeline or a separate optical renderer. Rebuild atomically and sample at
+  // the same elapsed time; preserve running playback when switching mid-flight.
+  function setStudioPreviewInterpolation(value){
+    if(!studioDraft||!studioPrepared||!studioPlayback||studioPrepared.mode!=='camera')
+      throw Error('Prepare a camera animation before changing interpolation');
+    if(!['linear','spline'].includes(value))throw RangeError('Invalid camera interpolation');
+    if((studioDraft.interpolation||'linear')===value)return;
+    var updatedDraft=studioApi.edit(studioDraft,'interpolation',value);
+    var updatedProject=studioApi.build(updatedDraft,studioPrepared.id);
+    var updatedPlayback=studioPlaybackApi.create(updatedProject);
+    var now=profileNow(),previous=studioPlayback.status(),wasPlaying=previous.playing;
+    if(wasPlaying)previous=studioPlayback.pause(now);
+    updatedPlayback.seek(previous.positionMs,now);
+    if(wasPlaying&&previous.positionMs<previous.durationMs)updatedPlayback.start(now);
+    cancelStudioInitialPaint();
+    if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
+    studioDraft=updatedDraft;studioPrepared=updatedProject;studioPlayback=updatedPlayback;
+    studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
+    saveStudioDraft(false);renderStudioLibrary();
+    syncStudioPlaybackControls();
+    if(animationWorkspaceOpen&&!document.hidden)renderStudioPlaybackSample(true);
+    else studioRestorePreviewPending=true;
+    if(updatedPlayback.status().playing)
+      studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
+    var status=newUiEl('ModernAnimationPlaybackStatus');
+    if(status)status.textContent='Camera interpolation: '+(value==='spline'?'Smooth · Spline':'Linear')+
+      ' · keyframes and timeline preserved.';
+  }
   function bindStudioPlayback(){
+    var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
+    if(interpolation)interpolation.addEventListener('change',function(){
+      try{setStudioPreviewInterpolation(interpolation.value);}
+      catch(error){
+        syncStudioPlaybackControls();
+        var status=newUiEl('ModernAnimationPlaybackStatus');
+        if(status)status.textContent='Camera interpolation: '+error.message;
+      }
+    });
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
       studioPlaybackQuality=['auto','fast','accurate'].includes(optics.value)?optics.value:'auto';

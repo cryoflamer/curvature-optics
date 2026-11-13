@@ -2245,3 +2245,19 @@ preferences, and removal of the now-duplicated target CSS block.
   naming handshake; the Legacy/Modern isolation evidence is regenerated.
 - No changes to ray tracing, animation format, History persistence, Legacy or
   WebCodecs encoding quality.
+
+### Animation Studio Spline Preview mode
+
+- Camera Animation Preview now exposes **Camera interpolation: Linear / Smooth · Spline**.
+  The switch changes the working project's `interpolation` field while retaining
+  the same keyframes, playhead time and playback running/paused state. The current
+  optical frame is resampled immediately in the independent Preview, and no new
+  Animation Library project is created implicitly.
+- This control is hidden for physical parameter animations. Existing projects
+  without an interpolation field still use Linear. Working drafts autosave;
+  updating a named Animation Library record still requires Save changes.
+- The core sampler remains shared with frame/video exports. No Legacy, RK4,
+  codec, saved-experiment or Scene/Compare camera navigation logic was changed.
+- Regression tests cover the real Preview change handler with paused and running
+  timelines, a physical-animation guard and invalid mode rejection. Full browser
+  animation performance remains to be validated interactively.

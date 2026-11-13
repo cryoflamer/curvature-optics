@@ -28,7 +28,7 @@ keyframes and intermediate aim/aspect constraints are validated before playback.
 Sampling is stateless; seeking to a time never requires calculating previous
 frames. Frames outside the timeline clamp to the respective endpoints.
 
-## Animation Studio spline core (headless stage)
+## Animation Studio Spline interpolation
 
 Animation Studio projects (`src/animation/ModernAnimationProject.js`) optionally
 store `interpolation: "linear" | "spline"`. Existing version-1 projects without
@@ -55,11 +55,18 @@ This is not constant-speed or geodesic motion, and the local tangent constraint
 does not constrain the total three-dimensional path to a fixed ground altitude.
 
 Studio's pure draft API carries the new property through `blank`, `edit`,
-`build`, `fromProject` and crash-recovery checkpoints. This **first stage has
-no new UI control**; Preview/Video may sample a programmatically created Spline
-project through the existing shared `sampleAt` path. A user-facing Linear/Spline
-switch in Animation Studio is a separate follow-up stage. The independent
-Scene/Compare Camera Animation panel still uses its original interpolation.
+`build`, `fromProject` and crash-recovery checkpoints. With a compatible camera
+animation prepared, **Animation Studio → Animation playback → Camera
+interpolation** offers **Linear** and **Smooth · Spline**. Switching uses the
+same working draft and keyframes, preserves the current elapsed playback time,
+repaints the independent optical preview, and does not require re-preparing
+or saving a second project. It also preserves the Play/Pause state. The mode
+is autosaved to the working draft; **Save changes** is still required to
+update a previously saved Animation Library project. For physical animations
+the control is hidden. The project's shared `sampleAt` path applies the chosen
+mode to preview and export; this stage does not alter video codecs or frame
+renderers. The independent Scene/Compare Camera Animation panel still uses its
+original interpolation.
 
 ## Browser controls: direct camera animation
 

@@ -610,7 +610,8 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationDraftAutosave.test.js",
-        "tests/ModernAnimationPlayback.test.js"
+        "tests/ModernAnimationPlayback.test.js",
+        "tests/ModernAnimationSplinePreview.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -692,6 +693,7 @@
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernCameraSpline.test.js",
         "tests/ModernSemanticNaming.test.js"
@@ -2454,6 +2456,7 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
@@ -2589,6 +2592,7 @@
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
