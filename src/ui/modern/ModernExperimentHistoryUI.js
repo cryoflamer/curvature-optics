@@ -204,19 +204,19 @@
       card.setAttribute('data-snapshot-id',String(entry.id));
       card.addEventListener('click',function(event){
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename'))return;
+          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename, .modern-card-info-button'))return;
         actions.select(entry.id);
       });
       card.addEventListener('dblclick',function(event){
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename'))return;
+          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename, .modern-card-info-button'))return;
         if(inspector)inspector.hide();
         if(actions.restore)actions.restore(entry.id);
       });
       var select=button(doc,'','Select snapshot '+entry.id,function(){actions.select(entry.id);});
       select.className='modern-history-card-select';
       select.title=''; // Native tooltips should not obscure the rich preview.
-      select.setAttribute('aria-label','Select snapshot '+entry.id+'; double-click or Enter to restore; Space to open preview');
+      select.setAttribute('aria-label','Select snapshot '+entry.id+'; double-click or Enter to restore');
       select.setAttribute('aria-pressed',String(String(entry.id)===String(selectedId)));
       select.addEventListener('dblclick',function(event){
         if(event&&event.stopPropagation)event.stopPropagation();
@@ -228,29 +228,15 @@
         if(event.key==='Enter'&&actions.restore){
           if(event.preventDefault)event.preventDefault();
           if(inspector)inspector.hide();actions.restore(entry.id);
-        }else if((event.key===' '||event.key==='Spacebar')&&inspector){
-          if(event.preventDefault)event.preventDefault();
-          inspector.show(entry,card,true,select);
         }
       });
-      if(inspector){
-        select.addEventListener('mouseenter',function(){inspector.hover(entry,card,select);});
-        select.addEventListener('mouseleave',function(){inspector.leave();});
-        select.addEventListener('focus',function(){inspector.focus(entry,card,select);});
-        select.addEventListener('blur',function(){inspector.leave();});
-        // On touch, a single tap selects and opens a persistent preview. Desktop
-        // keeps single-click selection / double-click restore unchanged.
-        select.addEventListener('click',function(event){
-          if(event&&(event.pointerType==='touch'||event.pointerType==='pen'))
-            inspector.show(entry,card,true,select);
-        });
-      }
       if(entry.thumbnail&&entry.thumbnail.dataUrl){
         var image=el(doc,'img','modern-history-image');
         image.src=entry.thumbnail.dataUrl;image.alt=displayName(entry)+' thumbnail';image.loading='lazy';
         select.className+=' has-preview';select.appendChild(image);
       }else select.appendChild(el(doc,'span','modern-history-no-image','No preview available'));
       card.appendChild(select);
+      if(inspector)inspector.infoButton(card,entry,card,displayName(entry));
       var pin=button(doc,'',(entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){
         if(inspector)inspector.hide();
         actions.pin(entry.id,!entry.pinned);
@@ -334,7 +320,7 @@
       var entry=records.get(id);
       if(!entry)return;
       var item=el(doc,'li','modern-history-storyboard-item');
-      item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+displayName(entry));
+      item.tabIndex=0;item.setAttribute('aria-label','Snapshot '+displayName(entry));
       var remove=button(doc,'×','Remove frame '+(index+1)+' from shortlist',function(){actions.remove(id);});
       remove.className='modern-history-storyboard-remove';
       item.appendChild(remove);
@@ -352,7 +338,7 @@
       action('↑','Move frame '+(index+1)+' earlier',index===0,function(){actions.move(id,-1);});
       action('↓','Move frame '+(index+1)+' later',index===ids.length-1,function(){actions.move(id,1);});
       item.appendChild(line);
-      if(inspector)inspector.bind(item,entry,item);
+      if(inspector)inspector.infoButton(item,entry,item,displayName(entry));
       host.appendChild(item);
     });
   }

@@ -925,3 +925,13 @@ concurrent Library revision change or unavailable durable storage aborts the
 operation rather than silently replacing the editor. The localStorage/IndexedDB
 collection is staged and persisted before updating the live editor, so a later
 autosave cannot overwrite a stash.
+
+### Explicit details for saved cards
+
+History snapshots, Storyboard shortlist items, Snapshot Picker entries,
+Animation Studio keyframes and saved Animation Library projects use a shared
+`ⓘ` button. Click or keyboard-activate it to view the saved screenshot and
+physical settings. The details panel closes by `×`, Escape, clicking outside,
+scrolling or starting a drag. Hovering a card no longer opens a large overlay;
+select, double-click/Open, reorder and drag-and-drop keep their existing actions.
+This changes only the UI and does not re-render optics or alter saved records.

@@ -400,9 +400,7 @@
         remove.disabled=!!options.busy;controls.appendChild(remove);
         card.appendChild(controls);
       }
-      if(inspector)inspector.bind(card,libraryPreviewEntry(entry),card,
-        {keyboardPin:false,focusPreview:false});
-      card.setAttribute('aria-keyshortcuts','P');
+      if(inspector)inspector.infoButton(card,libraryPreviewEntry(entry),card,p.name);
       list.appendChild(card);
     });
     host.appendChild(list);
@@ -454,7 +452,7 @@
       handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
       item.appendChild(handle);
       makeDragSource(doc,item,handle,{kind:'snapshots',id:entry.id},actions);
-      if(inspector)inspector.bind(item,entry,item);
+      if(inspector)inspector.infoButton(item,entry,item,historyUI.displayName(entry));
       list.appendChild(item);
     });
     host.appendChild(list);
@@ -799,11 +797,9 @@
       var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
-      if(inspector)inspector.bind(pick,{name:frame.name,description:'Animation keyframe '+(i+1),
+      if(inspector)inspector.infoButton(item,{name:frame.name,description:'Animation keyframe '+(i+1),
         experiment:frame.experiment,thumbnail:entry.thumbnail,
-        source:'Animation Studio',createdAt:entry.createdAt},pick,
-        {keyboardPin:false,focusPreview:false});
-      pick.setAttribute('aria-keyshortcuts','P');
+        source:'Animation Studio',createdAt:entry.createdAt},item,frame.name);
       item.appendChild(cardRemove(doc,'Remove animation frame '+(i+1)+': '+frame.name,function(){
         if(actions.remove)actions.remove(frame.key);
       }));

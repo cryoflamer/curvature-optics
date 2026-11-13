@@ -300,7 +300,7 @@ function inspectorDom(){
   }
   doc.createElement=element;doc.body=element('body');return doc;
 }
-test('Unified preview contains image and physical settings, hover dwell and sticky modes without Restore',async()=>{
+test('Unified info panel opens only from ⓘ, stays readable and never restores snapshot',()=>{
   const doc=inspectorDom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
     pin:()=>{},remove:()=>{},multi:()=>{}};
@@ -312,37 +312,25 @@ test('Unified preview contains image and physical settings, hover dwell and stic
   cardEntry.features.relations={geometrySame:false,atmosphereSame:false,refractionSame:false,physicsSame:false};
   ui.render(doc,host,[cardEntry],1,actions,{});
   const overlay=doc.body.children[0],card=host.children[1].children[1].children[0],image=card.children[0];
+  const button=card.children[1];
   assert.equal(overlay.hidden,true);
-  image.listeners.mouseenter();
-  assert.equal(overlay.hidden,true,'hover is deferred');
-  await new Promise(resolve=>setTimeout(resolve,450));
+  assert.equal(image.listeners.mouseenter,undefined,'hover never opens a large popup');
+  button.listeners.click({stopPropagation(){}});
   assert.equal(overlay.hidden,false);
-  assert.equal(overlay.role,'tooltip');
-  assert.equal(overlay.children[0].children[0].tagName,'img','enlarged screenshot precedes the physics');
+  assert.equal(overlay.role,'dialog');
+  assert.equal(overlay.children[0].children[0].tagName,'img');
   assert.equal(overlay.children[0].children[0].src,cardEntry.thumbnail.dataUrl);
-  assert.ok(parseInt(overlay.style.left,10)<620,'preview flips at right viewport edge');
-  assert.ok(parseInt(overlay.style.top,10)<460,'preview clamps above bottom edge');
-  image.listeners.mouseleave();overlay.listeners.mouseenter();
-  await new Promise(resolve=>setTimeout(resolve,180));
-  assert.equal(overlay.hidden,false,'pointer over popup keeps it open');
-  overlay.children[1].listeners.click({stopPropagation(){}});
-  assert.equal(overlay.role,'dialog','Keep open makes the popup persistent');
-  overlay.listeners.mouseleave();
-  await new Promise(resolve=>setTimeout(resolve,180));
-  assert.equal(overlay.hidden,false,'locked preview survives pointer leaving');
+  assert.ok(parseInt(overlay.style.left,10)<620,'dialog flips at right viewport edge');
+  assert.ok(parseInt(overlay.style.top,10)<460,'dialog clamps above bottom edge');
   doc.listeners.keydown({key:'Escape'});assert.equal(overlay.hidden,true);
-  image.listeners.click({pointerType:'touch'});
-  assert.equal(overlay.role,'dialog','touch opens persistent preview');
-  assert.equal(overlay.hidden,false);
-  image.listeners.keydown({key:' ',preventDefault(){}});
-  assert.equal(overlay.role,'dialog','Space also pins the keyboard preview');
-  for(const ctrl of [card.children[1],card.children[2]]){
+  button.listeners.click({stopPropagation(){}});assert.equal(overlay.hidden,false);
+  doc.listeners.dragstart({target:card});assert.equal(overlay.hidden,true);
+  for(const ctrl of [card.children[2],card.children[3]]){
     card.listeners.dblclick({target:{closest(){return ctrl;}}});
   }
-  assert.equal(calls.length,0,'pin and delete do not restore experiments');
-  ui.hideInspector(host);assert.equal(overlay.hidden,true);
+  assert.equal(calls.length,0,'card controls do not restore experiments');
   ui.render(doc,host,[cardEntry],1,actions,{});
-  assert.equal(doc.body.children.length,1,'rerender destroys previous overlay');
+  assert.equal(doc.body.children.length,1,'rerender destroys previous panel');
 });
 
 test('Named history cards keep physical classification and edit without Restore',()=>{
@@ -377,8 +365,8 @@ test('Named snapshots expose description and automatic physical label in Preview
   saved.experiment.scene={camera:{Height:15,Pan:0,Nick:0},objects:{NObjects:[1,0],ObjType:[3,0]},
     surface:{showModel:1,rEarth:6371000},atmosphere:'standard'};
   ui.render(doc,host,[saved],40,{select(){},restore(){},edit(){},pin(){},remove(){},multi(){}},{});
-  const image=host.children[1].children[1].children[0].children[0];
-  image.listeners.keydown({key:' ',preventDefault(){}});
+  const button=host.children[1].children[1].children[0].children[1];
+  button.listeners.click({stopPropagation(){}});
   const overlay=doc.body.children[0],inner=overlay.children[0];
   assert.equal(inner.children[1].textContent,'My horizon');
   assert.match(inner.children[2].textContent,/Scene/);

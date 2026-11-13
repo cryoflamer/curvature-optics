@@ -1,3 +1,8 @@
+> **Saved card details (2026-11-13):** History snapshots, shortlist, picker,
+> timeline keyframes and Animation Library projects share a click-only `ⓘ`
+> inspector. Hover cannot obstruct drag/drop; click outside, Escape and
+> dragstart close the panel. No storage or physics changes.
+
 > **Animation Studio spline foundation (2026-11-13):** Camera-only Animation
 > Projects now accept an optional `interpolation: "spline"`, implemented as a
 > bounded, timing-aware cubic Hermite camera sampler. Existing projects lacking

@@ -537,6 +537,21 @@ button{cursor:pointer}
 .modern-history-card:hover .modern-history-delete:disabled,.modern-history-card:focus-within .modern-history-delete:disabled{opacity:.35}
 .modern-history-pin:focus-visible,.modern-history-delete:focus-visible,.modern-history-section-toggle:focus-visible{opacity:1;outline:2px solid #287ac5;outline-offset:1px}
 @media(hover:none){.modern-history-pin,.modern-history-delete:not(:disabled){opacity:1}.modern-history-delete:disabled{opacity:.35}}
+/* Details are explicit click/focus actions, never hover popups. The button
+ * does not initiate selection, restore or native/pointer drag on its card. */
+.modern-card-info-button{position:absolute;top:6px;left:6px;z-index:4;
+  box-sizing:border-box;display:grid;place-items:center;width:27px;height:27px;
+  border:1px solid #a9c7df;border-radius:7px;background:#f7fbfff2;
+  color:#225e90;font-size:19px;line-height:1;padding:0;cursor:pointer;
+  touch-action:manipulation}
+.modern-card-info-button:hover,.modern-card-info-button:focus-visible{
+  background:#dceeff;border-color:#287ac5;outline-offset:2px}
+.modern-card-info-button:focus-visible{outline:2px solid #287ac5}
+.modern-animation-library-card .modern-card-info-button{cursor:pointer}
+.modern-studio-picker-card .modern-card-info-button{left:auto;right:29px;top:3px;
+  width:23px;height:23px;font-size:16px}
+.modern-studio-filmstrip-item .modern-card-info-button{left:8px;top:8px}
+.modern-history-storyboard-item .modern-card-info-button{left:7px;top:7px}
 .modern-history-inspector{position:fixed;z-index:1300;width:min(700px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;box-sizing:border-box;border:1px solid #b6cfe6;border-radius:11px;background:#fff;color:#1a3955;box-shadow:0 14px 42px #09284950;padding:13px 14px;font-size:12px;line-height:1.45}
 .modern-history-inspector[hidden]{display:none}
 .modern-history-inspector-inner{display:flex;flex-direction:column;gap:7px;padding-bottom:10px}
@@ -824,7 +839,7 @@ button{cursor:pointer}
   border-radius:6px;padding:8px;font:inherit;background:white;color:#254d6d}
 .modern-studio-picker-list{min-height:0;overflow:auto;flex:1;list-style:none;margin:0;padding:0;
   display:flex;flex-direction:column;gap:7px;scrollbar-width:thin}
-.modern-studio-picker-card{display:grid;grid-template-columns:auto 85px minmax(0,1fr) auto;
+.modern-studio-picker-card{position:relative;display:grid;grid-template-columns:auto 85px minmax(0,1fr) auto;
   align-items:center;gap:7px;padding:6px;background:white;border:1px solid #d2e2f0;
   border-radius:8px;min-width:0;cursor:grab}
 .modern-studio-picker-card:hover{border-color:#74a8d4;background:#f0f8ff}
@@ -952,7 +967,7 @@ button{cursor:pointer}
   background:#fff;border-radius:6px;color:#604a2d;cursor:pointer}
 .modern-animation-library-gallery{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
   margin:10px 0 0;padding:2px 2px 10px;scrollbar-width:thin}
-.modern-animation-library-card{box-sizing:border-box;flex:0 0 226px;min-width:0;
+.modern-animation-library-card{position:relative;box-sizing:border-box;flex:0 0 226px;min-width:0;
   border:1px solid #d0deec;border-radius:8px;overflow:hidden;background:white;cursor:pointer}
 .modern-animation-library-card:focus-visible{outline:2px solid #2371bc;outline-offset:2px}
 .modern-animation-library-hint{margin:8px 0 0;color:#627b96;font-size:11px}
