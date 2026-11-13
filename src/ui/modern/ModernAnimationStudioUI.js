@@ -4,14 +4,16 @@
 (function(root,factory){
   var historyUI=root.CurvatureModernExperimentHistoryUI;
   var thumbnailPreview=root.CurvatureModernThumbnailPreview;
+  var statusMessages=root.CurvatureModernStatusMessage;
   if(typeof module==='object'&&module.exports){
     historyUI=require('./ModernExperimentHistoryUI');
     thumbnailPreview=require('./ModernThumbnailPreview');
+    statusMessages=require('./ModernStatusMessage');
   }
-  var api=factory(historyUI,thumbnailPreview);
+  var api=factory(historyUI,thumbnailPreview,statusMessages);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(historyUI,thumbnailPreview){
+}(typeof globalThis!=='undefined'?globalThis:this,function(historyUI,thumbnailPreview,statusMessages){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
@@ -265,8 +267,15 @@
          ' · Library version saved · Local working copy retained'):
       'Independent working draft · Autosaved in this browser · Save project adds it to Animation Library');
     host.appendChild(message);
-    if(options.message){var note=el(doc,'p','modern-animation-library-message'+
-      (options.error?' is-error':''),options.message);note.setAttribute('role','status');host.appendChild(note);}
+    if(options.message){
+      var note=el(doc,'p','modern-animation-library-message',options.message);
+      // Reuse the same presentation as History and the export tools. Library
+      // messages are rebuilt with the panel, not replaced by background writes.
+      if(statusMessages&&statusMessages.decorate)
+        statusMessages.decorate(note,options.error?'error':'info');
+      else if(options.error&&note.classList)note.classList.add('is-error');
+      note.setAttribute('role',options.error?'alert':'status');host.appendChild(note);
+    }
     if((options.draftWorkspaces||[]).length){
       var drafts=el(doc,'section','modern-animation-workspace-list');
       drafts.appendChild(el(doc,'strong','','Working drafts (not saved projects)'));

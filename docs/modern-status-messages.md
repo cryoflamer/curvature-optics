@@ -28,17 +28,33 @@ project storage, or error-handling paths.
 ## Migration boundaries
 
 The first integration covers the Animation Studio draft/preview message and
-both offline export controls (PNG ZIP and WebM/MP4). Their underlying progress,
-cancellation, worker validation and download handlers are unchanged. Statuses
-remain visible until the next operation updates them; they do not auto-hide.
-Other Modern status surfaces (History, Snapshot Picker, preferences, optics and
-render diagnostics) retain their existing logic and are candidates for the
-following dedicated UI integration, not an implicit global style rewrite.
+both offline export controls (PNG ZIP and WebM/MP4). The second integration
+reuses the same helper for these existing status surfaces:
+
+- History actions, snapshot save readiness and failures, and portable JSON
+  import/export (including oversized or invalid files).
+- Animation Library operation and JSON backup errors, rendered within its
+  independently rebuilt card gallery; Snapshot Picker errors continue to use
+  Animation Studio's existing message panel.
+- Working-session persistence, Display preferences, camera sequence/positions,
+  GPU capability probe and Demos host errors.
+- Scene/Compare viewport summaries, optical quality and geometry backend
+  diagnostics. Renderer exceptions are `error`; unresolved optical pieces and
+  geometry fallback are `warning`, not silent rendering failures. Ordinary
+  viewport progress remains legible on dark footer backgrounds.
+
+These paths keep their existing messages and error handling: only presentation
+semantics and explicit severity classification have changed. Local success or
+progress updates can replace an earlier error on the *same status node*; the
+helper never starts an auto-dismiss timer and does not globally lock all
+status updates. In particular, this is not a new logging or error-recovery
+system. Rich optical diagnostics and physical caveat boxes keep their separate
+presentation rather than being flattened into a single-line status.
 
 ## Verification
 
-Run `node --test tests/ModernStatusMessage.test.js
- tests/ModernStatusMessageExportUI.test.js
- tests/ModernAnimationVideoFilenamePreview.test.js` to cover severity changes,
+Run `node --test tests/ModernStatusMessage*.test.js
+ tests/ModernExperimentHistory.test.js
+ tests/ModernAnimationLibrary.test.js` to cover severity changes,
 copy semantics and real export click handlers. Run the full Node test suite
 and the Legacy isolation/boundary audits before packaging.

@@ -64,7 +64,7 @@
       if(gpuProbePending)return;
       gpuProbePending=true;button.disabled=true;
       var note=document.getElementById('ModernGpuNote');
-      if(note)note.textContent='Checking browser GPU capabilities…';
+      modernStatus(note,'Checking browser GPU capabilities…','info');
       Promise.resolve().then(function(){return gpuCapabilities.probe({document:document,navigator:root.navigator});})
         .then(function(report){
           gpuSnapshot=report;
@@ -76,8 +76,8 @@
           show('ModernGpuRenderer',gl.renderer||'Not disclosed');
           show('ModernGpuFloat',gl.floatTexture||'Not checked');
           show('ModernGpuHardware',report.hardwareAcceleration);
-          if(note)note.textContent=report.guidance;
-        }).catch(function(err){if(note)note.textContent='GPU probe failed: '+String(err&&err.message||err);})
+          modernStatus(note,report.guidance,'info');
+        }).catch(function(err){modernStatus(note,'GPU probe failed: '+String(err&&err.message||err),'error');})
         .then(function(){gpuProbePending=false;button.disabled=false;});
     });
   }
@@ -91,8 +91,9 @@
     var status=geometryUi('ModernGeometryBackendStatus');
     var active=geometryUi('ModernGpuActiveBackend');
     var backend=result&&result.geometryBackend||'Canvas 2D';
-    if(status)status.textContent='Active: '+backend+
-      (result&&result.geometryFallback?' · fallback: '+result.geometryFallback:'');
+    modernStatus(status,'Active: '+backend+
+      (result&&result.geometryFallback?' · fallback: '+result.geometryFallback:''),
+      result&&result.geometryFallback?'warning':'info');
     if(active)active.textContent=backend;
   }
   // Preview LOD is an ephemeral display preference, NOT experiment physics.
@@ -208,12 +209,13 @@
     });
     updateOpticalQualityStatus();
   }
-  function updateOpticalQualityStatus(message){
+  function updateOpticalQualityStatus(message,kind){
     var target=geometryUi('ModernOpticalQualityStatus');
-    if(target)target.textContent=message||('Active: '+
+    modernStatus(target,message||('Active: '+
       (effectiveOpticalQuality()==='fast'?'Fast Preview (approximate; no RK4 fallback)':
         state.opticalQuality==='auto'?'Auto · Accurate (RK4) at rest'+
-          (!autoPreviewSupported()?' · Fast unsupported for this profile':''):'Accurate (RK4)'));
+          (!autoPreviewSupported()?' · Fast unsupported for this profile':''):'Accurate (RK4)')),
+      kind||'info');
   }
   // An unsupported Fast Preview must not leave a previously calculated frame
   // masquerading as the new camera/atmosphere state.
@@ -577,7 +579,7 @@
   function preferencesStatus(message,error){
     var node=geometryUi('ModernPreferencesStatus');
     if(node){
-      node.textContent=message;node.classList.toggle('is-error',!!error);
+      modernStatus(node,message,error?'error':/reset/i.test(message)?'success':'info');
       // Success messages need not permanently occupy the Display pane.
       node.hidden=!error&&!/reset/i.test(message);
     }
@@ -796,13 +798,22 @@
   // Older isolated Node harnesses have no document.querySelector. These are
   // optional new presentation nodes, not new physical-model requirements.
   function newUiEl(id){return typeof document.querySelector==='function'?el(id):null;}
+  // One presentation path for Modern status text. Node-only harnesses and
+  // embedded hosts without the optional component retain their plain text.
+  function modernStatus(node,message,kind){
+    if(!node)return null;
+    var type=kind||'info';
+    if(root.CurvatureModernStatusMessage&&root.CurvatureModernStatusMessage.set)
+      return root.CurvatureModernStatusMessage.set(node,message,type);
+    node.textContent=message===undefined||message===null?'':String(message);
+    if(node.classList)node.classList.toggle('is-error',type==='error');
+    return node;
+  }
   function updateStatus(text,isError){
-    var node=el('ModernStatus');
-    if(node){node.textContent=text;node.classList.toggle('is-error',!!isError);}
+    modernStatus(el('ModernStatus'),text,isError==='warning'?'warning':isError?'error':'info');
   }
   function persistenceStatus(message,isError){
-    var node=el('ModernPersistenceStatus');
-    if(node){node.textContent=message||'';node.classList.toggle('is-error',!!isError);}
+    modernStatus(el('ModernPersistenceStatus'),message||'',isError?'error':'info');
   }
   function experimentSnapshot(){
     if(!experiments||!compareState)return null;
@@ -929,23 +940,24 @@
     if(!button||!status)return;
     if(bar)bar.hidden=!!state.demosActive;
     button.hidden=true;button.disabled=snapshotSaveBusy;
-    if(state.demosActive){status.textContent='';return;}
-    if(!persistence.ready){status.textContent='Preparing current experiment…';return;}
-    if(historyLoadError){status.textContent='History unavailable: '+historyLoadError;return;}
-    if(!savedHistorySignatures){status.textContent='Checking History…';return;}
+    if(state.demosActive){modernStatus(status,'','info');return;}
+    if(!persistence.ready){modernStatus(status,'Preparing current experiment…','info');return;}
+    if(historyLoadError){modernStatus(status,'History unavailable: '+historyLoadError,'error');return;}
+    if(!savedHistorySignatures){modernStatus(status,'Checking History…','info');return;}
     try{
       var signature=historyFingerprint.exactSignature(experimentSnapshot());
       var existing=savedHistorySignatures.get(signature);
       if(existing){
-        status.textContent=existing.pinned?'Already in History · protected':
+        modernStatus(status,existing.pinned?'Already in History · protected':
           existing.source==='auto'?'Already in History · automatic (pin it in History to keep it)':
-          'Already in History · saved';
+          'Already in History · saved','info');
       }else{
-        status.textContent=snapshotSaveBusy?'Saving snapshot…':
-          snapshotSaveError?'Save failed: '+snapshotSaveError:'Not yet saved in History';
+        modernStatus(status,snapshotSaveBusy?'Saving snapshot…':
+          snapshotSaveError?'Save failed: '+snapshotSaveError:'Not yet saved in History',
+          !snapshotSaveBusy&&snapshotSaveError?'error':'info');
         button.hidden=false;
       }
-    }catch(error){status.textContent='Snapshot unavailable: '+error.message;}
+    }catch(error){modernStatus(status,'Snapshot unavailable: '+error.message,'error');}
   }
   var historyMultiSelection=Object.create(null);
   var historyShownIds=[];
@@ -991,8 +1003,7 @@
     return thumbnailApi.capture(document,mode,sources);
   }
   function historyStatus(message,error){
-    var node=newUiEl('ModernHistoryStatus');
-    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
+    modernStatus(newUiEl('ModernHistoryStatus'),message,error?'error':'info');
   }
   function cancelHistoryAuto(){
     historyEpoch++;
@@ -3639,12 +3650,13 @@
         (result.geometryFallback?' (GPU fallback: '+result.geometryFallback+')':'')+
         (result.timings?' · '+Math.round(result.timings.totalMs)+' ms':'');
       var statusNode=el('ModernStatus');if(statusNode)statusNode.title=fullStatus;
-      updateStatus(fullStatus,result.unresolved>0);
+      updateStatus(fullStatus,result.unresolved>0?'warning':false);
       updateOpticalQualityStatus();
     }catch(error){
       historyRenderedKeys.Scene=null;state.last=null;
       if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
-      updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined);
+      updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined,
+        effectiveOpticalQuality()==='fast'?'error':'info');
       updateStatus('Physical renderer: '+error.message,true);
       if(root.console&&root.console.error)root.console.error('Modern Scene render:',error);
     }
@@ -3704,19 +3716,19 @@
         opticalWork:result.opticalWork,fieldStats:result.fieldStats});
       var node=el('ModernCompareStatus'+side);
       if(node){
-        node.textContent=(effectiveOpticalQuality()==='fast'?'Fast Preview · approximate':'Computed optics')+
+        modernStatus(node,(effectiveOpticalQuality()==='fast'?'Fast Preview · approximate':'Computed optics')+
           (result.cacheReused?' (cached)':'')+
           ' · '+result.drawn+' contours · '+result.fillTriangles+' fills · '+
           result.unresolved+' unresolved'+
-          (result.previewLod?' · '+result.previewLod.selected+'/'+result.previewLod.original+' objects':'');
-        node.classList.toggle('is-error',!!result.unresolved);
+          (result.previewLod?' · '+result.previewLod.selected+'/'+result.previewLod.original+' objects':''),
+          result.unresolved?'warning':'info');
       }
     }catch(error){
       historyRenderedKeys[side]=null;state.compareLast[side]=null;
       if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
-      updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined);
-      var status=el('ModernCompareStatus'+side);
-      if(status){status.textContent='Physical model '+side+': '+error.message;status.classList.toggle('is-error',true);}
+      updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined,
+        effectiveOpticalQuality()==='fast'?'error':'info');
+      modernStatus(el('ModernCompareStatus'+side),'Physical model '+side+': '+error.message,'error');
       if(root.console&&root.console.error)root.console.error('Modern Compare '+side+':',error);
     }
   }
@@ -4448,8 +4460,7 @@
   // source when adding/replacing a pose; no saved-position IDs are serialized.
   var cameraSequenceApi=root.CurvatureModernCameraSequence;
   function sequenceStatus(text,problem){
-    var node=newUiEl('ModernSequenceStatus');
-    if(node){node.textContent=text||'';node.classList.toggle('is-error',!!problem);}
+    modernStatus(newUiEl('ModernSequenceStatus'),text||'',problem?'error':'info');
   }
   function selectedSequenceIndex(){
     var list=newUiEl('ModernSequenceKeyframes');
@@ -4674,8 +4685,7 @@
     renderCameraSequencePositions();renderCameraSequenceKeyframes(-1);
   }
   function cameraPositionStatus(message,problem){
-    var element=newUiEl('ModernCameraPositionsStatus');
-    if(element){element.textContent=message||'';element.classList.toggle('is-error',!!problem);}
+    modernStatus(newUiEl('ModernCameraPositionsStatus'),message||'',problem?'error':'info');
   }
   function renderCameraPositions(preferred){
     var list=newUiEl('ModernCameraPositions');

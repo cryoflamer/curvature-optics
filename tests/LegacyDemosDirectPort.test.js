@@ -163,7 +163,7 @@ test('Modern and dedicated-host markup both select stable named JavaScript bound
   const html=read('CurvatureDemosHost.html'),modernHtml=read('CurvatureModern.html');
   assert.match(html,/<html[^>]+data-direct-demos-host/);
   assert.match(html,/src="src\/ui\/legacy\/LegacyDemoEmbed\.js\?v=direct-host"/);
-  assert.match(modernHtml,/src="src\/ui\/modern\/ModernDemos\.js\?v=direct-host"/);
+  assert.match(modernHtml,/src="src\/ui\/modern\/ModernDemos\.js\?v=direct-host&amp;status-messages=2"/);
   assert.doesNotMatch(html,/<(?:iframe|script)[^>]+CurvatureApp\.html/);
   assert.match(read('src/ui/modern/ModernDemos.js'),/CurvatureLegacyDemosRuntime/);
 });

@@ -1080,8 +1080,8 @@ button{cursor:pointer}
       .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:disabled{opacity:.35}
 }
 
-/* Shared Modern status semantics: progress is quiet; failures are unmissable.
-   Opt-in here (Animation Studio + export); other Modern panels migrate later. */
+/* Shared Modern status semantics across History, Library, renderer diagnostics,
+   preferences, camera tools, animation and export. Busy progress stays quiet. */
 .modern-status-message:not(:empty){
   display:block;position:relative;max-width:100%;margin:9px 0;
   padding:4px 9px;border:0;border-left:2px solid #a8bdcf;
@@ -1115,3 +1115,19 @@ button{cursor:pointer}
 .modern-status-copy:hover,.modern-status-copy:focus-visible{background:#ffe1e0;outline-offset:2px}
 
 .modern-status-copy:disabled{opacity:.65;cursor:not-allowed}
+
+/* The Scene / Compare status bars sit on dark canvas chrome. Preserve their
+   readable palette for ordinary diagnostics; error/warning cards keep their
+   light backgrounds and high contrast. */
+.modern-viewport-foot .modern-status-message[data-status-kind="info"]{
+  color:#b9cce2;border-left-color:#526e88;margin:0;padding:3px 7px;
+}
+.modern-viewport-foot .modern-status-message[data-status-kind="error"],
+.modern-viewport-foot .modern-status-message[data-status-kind="warning"]{
+  margin:2px 0;
+}
+/* Alerts in the narrow snapshot toolbar must wrap, not overflow its actions. */
+#ModernSnapshotSaveStatus.modern-status-message{max-width:100%;min-width:0}
+
+/* Persistence updates are global but should not span edge-to-edge. */
+.modern-persistence-status.modern-status-message:not(:empty){margin:5px 18px}

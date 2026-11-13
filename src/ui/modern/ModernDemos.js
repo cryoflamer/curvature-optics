@@ -9,7 +9,11 @@
   var directRuntime=null,unsubscribeDirect=null,directGeneration=0;
   var names=[];
   function el(id){return root.document.getElementById(id);}
-  function status(message){var node=el('ModernDemoStatus');if(node)node.textContent=message;}
+  function status(message,kind){
+    var node=el('ModernDemoStatus');if(!node)return;
+    if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.set(node,message,kind||'info');
+    else node.textContent=message;
+  }
   function enable(available){
     ['ModernDemoPlay','ModernDemoPrev','ModernDemoNext','ModernDemoReset'].forEach(function(id){
       var node=el(id);if(node)node.disabled=!available;
@@ -95,7 +99,7 @@
       unsubscribeDirect=candidate.subscribe(function(data){
         if(directGeneration===generation&&directRuntime===candidate)accept(data);
       });
-    }catch(error){directRuntime=null;status('Unable to connect to Demos host.');return;}
+    }catch(error){directRuntime=null;status('Unable to connect to Demos host.','error');return;}
     // The child may initialize before or after iframe load. Subscription
     // replays state when available; a not-yet-started manager publishes later.
     if(ready)send('status');

@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -94,10 +94,10 @@
 <script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&amp;target-indicator=1"></script>
 <script src="src/animation/ModernAnimationVideoCapabilities.js"></script>
 <script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1&amp;target-indicator=1&amp;spline-parity=1"></script>
-<script src="src/ui/modern/ModernStatusMessage.js?status-messages=1"></script>
-<script src="src/ui/modern/ModernAnimationStudioUI.js?compatible-sequences=1&amp;thumbnail-preview=1&amp;preview-navigation=1&amp;library-card-state=2&amp;stash-restore=1&amp;explicit-card-details=1&amp;unified-delete-corners=1"></script>
+<script src="src/ui/modern/ModernStatusMessage.js?status-messages=2"></script>
+<script src="src/ui/modern/ModernAnimationStudioUI.js?status-messages=2&amp;compatible-sequences=1&amp;thumbnail-preview=1&amp;preview-navigation=1&amp;library-card-state=2&amp;stash-restore=1&amp;explicit-card-details=1&amp;unified-delete-corners=1"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
-<script src="src/ui/modern/ModernDemos.js?v=direct-host"></script>
+<script src="src/ui/modern/ModernDemos.js?v=direct-host&amp;status-messages=2"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -167,7 +167,7 @@
       <input type="file" id="ModernHistoryImportFile" accept=".json,application/json" hidden>
     </div>
     <p class="modern-history-portable-note">History exports retain names, notes, pins and available previews. Plain experiment JSON remains supported for sharing.</p>
-    <p id="ModernHistoryStatus" class="modern-library-status" role="status" aria-live="polite"></p>
+    <p id="ModernHistoryStatus" class="modern-library-status modern-status-message" role="status" aria-live="polite"></p>
   </section>
   <dialog id="ModernHistoryMetadataDialog" class="modern-history-editor" aria-labelledby="ModernHistoryMetadataTitle">
     <form id="ModernHistoryMetadataForm">
@@ -181,7 +181,7 @@
       <div class="modern-history-editor-actions"><button type="button" id="ModernHistoryMetadataCancel">Cancel</button><button type="submit" id="ModernHistoryMetadataSave">Save details</button></div>
     </form>
   </dialog>
-  <div class="modern-persistence-status" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
+  <div class="modern-persistence-status modern-status-message" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
   <section id="ModernAnimationWorkspace" class="modern-animation-workspace" aria-label="Animation workspace" hidden>
     <div class="modern-animation-workspace-heading">
       <div><h1>Animation Studio</h1><p>New project → Edit keyframes → Preview animation → Save project → Export PNG/video. Preview never adds an entry to Animation Library; your working draft autosaves separately. Scene / Compare remains unchanged.</p></div>
@@ -327,7 +327,7 @@
         <output id="ModernDemoProgress" aria-live="polite">Not loaded</output>
       </div>
       <div class="modern-demos-frame-wrap"><iframe id="ModernDemoFrame" title="Legacy demonstration simulation" loading="lazy" referrerpolicy="no-referrer" src="about:blank"></iframe></div>
-      <p class="modern-demos-status" id="ModernDemoStatus" role="status" aria-live="polite">Open Demos to load the original renderer.</p>
+      <p class="modern-demos-status modern-status-message" id="ModernDemoStatus" role="status" aria-live="polite">Open Demos to load the original renderer.</p>
       <p class="modern-note">The original Legacy Canvas runs in a dedicated, isolated demo engine host, independent of the old Legacy UI page. This is not an RK4 reproduction. Scene/Compare and saved experiments are unchanged.</p>
     </section>
     <aside class="modern-sidebar" aria-label="Experiment settings">
@@ -441,7 +441,7 @@
           <button type="button" id="ModernSequenceStop" disabled>Stop here</button>
           <button type="button" id="ModernSequenceCancel" disabled>Cancel / restore</button>
         </div>
-        <p class="modern-note" id="ModernSequenceStatus" role="status" aria-live="polite">Add at least two views to play an animation.</p>
+        <p class="modern-note modern-status-message" id="ModernSequenceStatus" role="status" aria-live="polite">Add at least two views to play an animation.</p>
         <div class="modern-display-inline-actions"><span class="modern-display-hint">Fast during playback</span>
           <button type="button" class="modern-help" aria-label="Help: animation playback" data-tip="Fast Preview runs during playback; the selected optical quality returns afterward. Stop keeps the current camera; Cancel restores the view from before Play. Manual navigation interrupts playback.">?</button></div>
           </div>
@@ -461,7 +461,7 @@
           </div>
           <div class="modern-field"><label for="ModernSequencePosition">Add saved view to animation</label><select id="ModernSequencePosition"><option value="">No saved views</option></select></div>
           <button type="button" id="ModernSequenceAddSaved">Add selected saved view</button>
-          <p class="modern-note" id="ModernCameraPositionsStatus" role="status" aria-live="polite"></p>
+          <p class="modern-note modern-status-message" id="ModernCameraPositionsStatus" role="status" aria-live="polite"></p>
         </details>
 
         <p class="modern-note modern-camera-location-status" id="ModernCameraPositionInfo">East 0 m · North 0 m</p>
@@ -736,7 +736,7 @@
               <option value="4">Every 4th</option><option value="8">Every 8th</option>
               <option value="16">Every 16th</option><option value="32">Every 32nd</option></select></div>
           <p id="ModernPreviewDetailStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Auto LOD: full detail initially.</p>
-          <p id="ModernOpticalQualityStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Active: Accurate (RK4)</p>
+          <p id="ModernOpticalQualityStatus" class="modern-note modern-display-status modern-status-message" role="status" aria-live="polite">Active: Accurate (RK4)</p>
         </div>
         <div class="modern-gpu-diagnostics" aria-label="Experimental geometry renderer">
           <div class="modern-gpu-heading"><strong>Geometry renderer · experimental</strong></div>
@@ -745,7 +745,7 @@
               <button type="button" class="modern-help" aria-label="Help: rendering backend" data-tip="Optical rays and geometry are unchanged. WebGL2 draws projected triangles and approximate 1px line quads, then copies into Canvas for annotations and shimmer. Line joints/antialiasing may differ; no automatic speedup is assumed.">?</button></div>
             <select id="ModernGeometryBackend"><option value="canvas">Canvas 2D · reference</option>
               <option value="webgl2">WebGL2 · experimental</option></select></div>
-          <p id="ModernGeometryBackendStatus" class="modern-note modern-display-status" role="status" aria-live="polite">Active: Canvas 2D</p>
+          <p id="ModernGeometryBackendStatus" class="modern-note modern-display-status modern-status-message" role="status" aria-live="polite">Active: Canvas 2D</p>
         </div>
         <details class="modern-display-fold" id="ModernDisplayAdvanced" data-workspace-section="display.advanced">
           <summary>Advanced settings</summary>
@@ -756,7 +756,7 @@
             <span class="modern-display-hint">Resets only tabs and open sections; retains optical and navigation preferences.</span>
           </div>
         </details>
-        <p id="ModernPreferencesStatus" class="modern-note modern-display-status" role="status" aria-live="polite" hidden></p>
+        <p id="ModernPreferencesStatus" class="modern-note modern-display-status modern-status-message" role="status" aria-live="polite" hidden></p>
         <details class="modern-display-fold" id="ModernDisplayDiagnostics" data-workspace-section="display.diagnostics">
           <summary>Diagnostics &amp; profiling <span class="modern-recording-indicator" id="ModernDiagnosticsRecordingState" hidden>Recording</span></summary>
           <div class="modern-display-fold-content">
@@ -776,7 +776,7 @@
                   <dt>Hardware acceleration</dt><dd id="ModernGpuHardware">Unverified</dd>
                   <dt>Selected scene backend</dt><dd id="ModernGpuActiveBackend">Canvas 2D</dd>
                 </dl>
-                <p id="ModernGpuNote" class="modern-note" role="status"></p>
+                <p id="ModernGpuNote" class="modern-note modern-status-message" role="status"></p>
               </div>
             </details>
             <details class="modern-display-subfold modern-performance-diagnostics" id="ModernDisplayProfiler" data-workspace-section="display.profiler">
@@ -831,10 +831,10 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
-        <div class="modern-viewport-foot"><span id="ModernStatus" role="status" aria-live="polite">Preparing physical scene…</span></div>
+        <div class="modern-viewport-foot"><span id="ModernStatus" class="modern-status-message" role="status" aria-live="polite">Preparing physical scene…</span></div>
       </section>
         <details class="modern-camera-controls" aria-label="Scene camera controls">
           <summary><strong>Camera controls</strong><span class="modern-camera-controls-quick">Drag: look around · Shift + drag: move sideways / vertically · Alt + wheel: forward / back · Shift + wheel: FOV · W A S D: move · Q E: height · Arrows: turn</span><span class="modern-camera-controls-expand">Full guide</span></summary>
@@ -852,7 +852,7 @@
               <script src="src/ui/modern/ModernCompareGraph.js" data-compare-side="A"></script>
               <div class="modern-temperature-column" id="ModernTemperatureA" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
             </div>
-            <div class="modern-viewport-foot"><span id="ModernCompareStatusA" role="status">Preparing model A…</span><span class="modern-horizon-readout" id="ModernHorizonStatusA">Horizon: not calculated</span></div>
+            <div class="modern-viewport-foot"><span id="ModernCompareStatusA" class="modern-status-message" role="status">Preparing model A…</span><span class="modern-horizon-readout" id="ModernHorizonStatusA">Horizon: not calculated</span></div>
           </section>
           <section class="modern-viewport-panel" aria-label="Physical model B">
             <div class="modern-viewport-head"><span>Model B · Physical optics</span><span id="ModernCompareLabelB">κ = 0 · shared atmosphere</span></div>
@@ -860,7 +860,7 @@
               <script src="src/ui/modern/ModernCompareGraph.js" data-compare-side="B"></script>
               <div class="modern-temperature-column" id="ModernTemperatureB" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
             </div>
-            <div class="modern-viewport-foot"><span id="ModernCompareStatusB" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
+            <div class="modern-viewport-foot"><span id="ModernCompareStatusB" class="modern-status-message" role="status">Preparing model B…</span><span class="modern-horizon-readout" id="ModernHorizonStatusB">Horizon: not calculated</span></div>
           </section>
         </div>
         <details class="modern-camera-controls" aria-label="Compare camera controls">
@@ -879,7 +879,7 @@
       </div>
       <div class="modern-snapshot-savebar" id="ModernSnapshotSaveBar" aria-label="Current experiment snapshot">
         <button type="button" id="ModernSnapshotSave" hidden>Save snapshot</button>
-        <span id="ModernSnapshotSaveStatus" role="status" aria-live="polite">Checking History…</span>
+        <span id="ModernSnapshotSaveStatus" class="modern-status-message" role="status" aria-live="polite">Checking History…</span>
       </div>
       <div class="modern-footnote">Advanced Legacy diagnostics and saved Legacy-state links remain available at <a href="CurvatureApp.html?ui=legacy">Legacy diagnostics</a>. Modern Demos runs the original animations in its isolated engine host.</div>
     </main>

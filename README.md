@@ -30,10 +30,13 @@ if the profiler is folded. Optical/backend errors and live statuses are not
 hidden in help text. These changes affect presentation only, not optics or
 rendering behavior.
 
-**Modern status messages:** Animation Studio, Preview, PNG ZIP and WebM/MP4
-export now distinguish visible errors, cancellation warnings, successful
-completion and quiet progress. Errors remain until the next action replaces
-them and can be copied for diagnostics. See [status semantics](docs/modern-status-messages.md).
+**Modern status messages:** Animation Studio, Preview, PNG ZIP, WebM/MP4,
+History and snapshot actions, Animation Library and JSON backup, preferences,
+camera tools, Demos and optical/geometry diagnostics share explicit error,
+warning, success and quiet progress presentation. Errors are copyable and
+remain until their owning status is next updated. Unresolved ray counts are
+warnings rather than exceptions; the dark Scene/Compare footer preserves
+readable normal status text. See [status semantics](docs/modern-status-messages.md).
 
 **Modern camera navigation:** Shift + left drag moves the observer sideways and
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or

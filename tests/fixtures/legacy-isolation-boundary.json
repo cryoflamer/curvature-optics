@@ -2292,6 +2292,7 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernStatusMessageSurfaces.test.js",
         "tests/ModernThumbnailPreview.test.js"
       ],
       "commonJsToolCallers": []
@@ -2742,11 +2743,14 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernAnimationStudioUI.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernStatusMessage.test.js",
-        "tests/ModernStatusMessageExportUI.test.js"
+        "tests/ModernStatusMessageExportUI.test.js",
+        "tests/ModernStatusMessageSurfaces.test.js"
       ],
       "commonJsToolCallers": []
     },
