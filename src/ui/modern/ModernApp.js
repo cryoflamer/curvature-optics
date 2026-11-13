@@ -1060,7 +1060,9 @@
   // writes are debounced and serialized so late transactions cannot win.
   function studioDraftStatus(message,error){
     var node=newUiEl('ModernAnimationDraftStatus');
-    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
+    if(node){node.textContent=message;node.classList.toggle('is-error',!!error);
+      if(root.CurvatureModernStatusMessage)
+        root.CurvatureModernStatusMessage.decorate(node,error?'error':'info');}
   }
   // One content comparison for the active editor and retained workspace cards.
   // Legacy projects can omit interpolation; the editor restores them as Linear.
@@ -1844,8 +1846,9 @@
     var position=studioPlayback.status().positionMs;
     studioFrameLoading(true,'Rendering physical frame at '+(position/1000).toFixed(2)+' s…');
     var status=newUiEl('ModernAnimationPlaybackStatus');
-    if(status)status.textContent=(reason==='restored'?'Restored project · ':'')+
+    if(status){status.textContent=(reason==='restored'?'Restored project · ':'')+
       'Rendering the '+(position===0?'first':'saved')+' frame (playback paused)…';
+      if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
     // Two layout frames allow the hidden workspace and its parser-created
     // GraphX3DX canvas to acquire final dimensions before pixel painting.
     function next(){studioInitialPaintFrame=requestAnimationFrame(paint);}
@@ -1866,16 +1869,19 @@
         if(studioPreviewNavigation)
           studioPreviewNavigation.finish(newUiEl('ModernAnimationPlaybackStage'));
         var ready=newUiEl('ModernAnimationPlaybackStatus');
-        if(ready)ready.textContent='Frame at '+(studioPlaybackRenderedAt/1000).toFixed(2)+
+        if(ready){ready.textContent='Frame at '+(studioPlaybackRenderedAt/1000).toFixed(2)+
           ' s ready · playback paused.';
+          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(ready,'success');}
       }catch(error){
         studioFrameLoading(true,'Physical frame unavailable · use Retry frame');
         var failed=newUiEl('ModernAnimationPlaybackStatus');
-        if(failed)failed.textContent='Unable to render frame: '+error.message+' · Retry frame is available.';
+        if(failed){failed.textContent='Unable to render frame: '+error.message+' · Retry frame is available.';
+          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(failed,'error');}
         if(studioPreviewNavigation&&studioPreviewNavigation.isPending()){
           var message=newUiEl('ModernAnimationStudioMessage');
           if(message){message.textContent='Preview frame failed: '+error.message+
-            '. Use Retry frame in Playback.';message.classList.add('is-error');}
+            '. Use Retry frame in Playback.';message.classList.add('is-error');
+            if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(message,'error');}
           studioPreviewNavigation.finish(message);
         }
       }
@@ -2017,12 +2023,14 @@
       saveStudioDraft(!!next.playing);
       if(!next.playing){
         var status=newUiEl('ModernAnimationPlaybackStatus');
-        if(status)status.textContent='Animation finished · live Scene / Compare unchanged.';
+        if(status){status.textContent='Animation finished · live Scene / Compare unchanged.';
+          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'success');}
       }
     }catch(error){
       stopStudioPlayback(false);
       var status=newUiEl('ModernAnimationPlaybackStatus');
-      if(status)status.textContent='Playback failed: '+error.message;
+      if(status){status.textContent='Playback failed: '+error.message;
+        if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'error');}
     }
   }
   function syncStudioQualitySummary(){
@@ -2296,8 +2304,10 @@
     var profilePanel=newUiEl('ModernAnimationVideoProfileSummary');
     var profileDownload=newUiEl('ModernAnimationVideoProfileDownload');
     var lastProfile=null;
-    function message(text){var node=newUiEl('ModernAnimationVideoExportStatus');
-      if(node)node.textContent=text;}
+    function message(text,kind){var node=newUiEl('ModernAnimationVideoExportStatus');
+      if(node){node.textContent=text;
+        if(root.CurvatureModernStatusMessage)
+          root.CurvatureModernStatusMessage.decorate(node,kind||'info');}}
     if(profileDownload)profileDownload.addEventListener('click',function(){
       if(lastProfile)downloadHistoryJson(JSON.stringify(lastProfile,null,2),
         'curvature-animation-video-profile.json');
@@ -2311,12 +2321,12 @@
     cancel.addEventListener('click',function(){
       if(!studioVideoExportTask)return;
       studioVideoExportTask.controller.cancel();
-      message('Video export cancelled. All render and encoder workers terminated; no video saved.');
+      message('Video export cancelled. All render and encoder workers terminated; no video saved.','warning');
     });
     start.addEventListener('click',async function(){
       if(studioVideoExportTask||studioFrameExportTask)return;
       if(!studioVideoExportApi||!studioVideoExportPlan){
-        message('Video export modules unavailable. Check the browser console.');return;
+        message('Video export modules unavailable. Check the browser console.','error');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
         rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1',
@@ -2403,7 +2413,7 @@
           ' video file(s), '+result.manifest.width+'×'+result.manifest.height+', '+(result.manifest.durationUs/1e6).toFixed(3)+
           ' s · '+result.workers+' workers · '+((profileNow()-started)/1000).toFixed(1)+
           ' s total · peak RGBA in-flight '+result.peakInflightFrames+
-          ' frames ('+result.manifest.frameWindow+' maximum) · saved as '+result.filename+'.');
+          ' frames ('+result.manifest.frameWindow+' maximum) · saved as '+result.filename+'.','success');
         var breakdown=result.manifest.profiling;
         if(breakdown){
           lastProfile={manifest:result.manifest,controller:result.controllerProfile};
@@ -2431,7 +2441,7 @@
             profilePanel.hidden=false;
           }
         }
-      }catch(error){message('Video export failed: '+error.message+' · No partial video saved.');}
+      }catch(error){message('Video export failed: '+error.message+' · No partial video saved.','error');}
       finally{if(studioVideoExportTask===task)studioVideoExportTask=null;
         syncStudioFrameExportControls();}
     });
@@ -2442,18 +2452,20 @@
     var cancel=newUiEl('ModernAnimationFrameExportCancel');
     if(!start||!cancel)return;
     var progress=newUiEl('ModernAnimationFrameExportProgress');
-    function message(text){var node=newUiEl('ModernAnimationFrameExportStatus');
-      if(node)node.textContent=text;}
+    function message(text,kind){var node=newUiEl('ModernAnimationFrameExportStatus');
+      if(node){node.textContent=text;
+        if(root.CurvatureModernStatusMessage)
+          root.CurvatureModernStatusMessage.decorate(node,kind||'info');}}
     cancel.addEventListener('click',function(){
       if(!studioFrameExportTask)return;
       studioFrameExportTask.controller.cancel();
       // Terminate every worker, even if an Accurate RK4 calculation is blocked.
-      message('PNG export cancelled. Render and archive workers terminated; no ZIP saved.');
+      message('PNG export cancelled. Render and archive workers terminated; no ZIP saved.','warning');
     });
     start.addEventListener('click',async function(){
       if(studioFrameExportTask)return;
       if(!studioFrameExportApi||!studioBackgroundExportApi){
-        message('PNG export modules did not load. Check the browser console.');return;
+        message('PNG export modules did not load. Check the browser console.','error');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
         workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1',
@@ -2506,8 +2518,8 @@
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
         message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+
           result.manifest.sides.length+' view(s), including exact final frame · '+
-          result.workers+' worker(s) · total '+((profileNow()-startAt)/1000).toFixed(1)+' s.');
-      }catch(error){message('PNG export failed: '+error.message+' · No partial archive saved.');}
+          result.workers+' worker(s) · total '+((profileNow()-startAt)/1000).toFixed(1)+' s.','success');
+      }catch(error){message('PNG export failed: '+error.message+' · No partial archive saved.','error');}
       finally{if(studioFrameExportTask===task)studioFrameExportTask=null;
         syncStudioFrameExportControls();}
     });
@@ -2539,17 +2551,23 @@
     if(updatedPlayback.status().playing)
       studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
     var status=newUiEl('ModernAnimationPlaybackStatus');
-    if(status)status.textContent='Camera interpolation: '+(value==='spline'?'Smooth · Spline':'Linear')+
+    if(status){status.textContent='Camera interpolation: '+(value==='spline'?'Smooth · Spline':'Linear')+
       ' · keyframes and timeline preserved.';
+      if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
   }
   function bindStudioPlayback(){
+    function playbackNotice(text,kind){
+      var status=newUiEl('ModernAnimationPlaybackStatus');
+      if(!status)return;status.textContent=text;
+      if(root.CurvatureModernStatusMessage)
+        root.CurvatureModernStatusMessage.decorate(status,kind||'info');
+    }
     var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
     if(interpolation)interpolation.addEventListener('change',function(){
       try{setStudioPreviewInterpolation(interpolation.value);}
       catch(error){
         syncStudioPlaybackControls();
-        var status=newUiEl('ModernAnimationPlaybackStatus');
-        if(status)status.textContent='Camera interpolation: '+error.message;
+        playbackNotice('Camera interpolation: '+error.message,'error');
       }
     });
     var optics=newUiEl('ModernAnimationPlaybackOptics');
@@ -2564,23 +2582,20 @@
       stopStudioPlayback(false);
       studioPlaybackLastPaint=-Infinity;
       try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
-      catch(error){var status=newUiEl('ModernAnimationPlaybackStatus');
-        if(status)status.textContent='Playback optics: '+error.message;}
+      catch(error){playbackNotice('Playback optics: '+error.message,'error');}
     });}
     var play=newUiEl('ModernAnimationPlaybackPlay');
     if(!play)return;
     function safely(fn){try{fn();}catch(error){
       stopStudioPlayback(false);
-      var status=newUiEl('ModernAnimationPlaybackStatus');
-      if(status)status.textContent='Playback failed: '+error.message;
+      playbackNotice('Playback failed: '+error.message,'error');
     }}
     play.addEventListener('click',function(){safely(function(){
       if(!studioPlayback)throw Error('Prepare a compatible animation project first');
       cancelStudioInitialPaint();
       studioPlayback.start(profileNow());
-      var status=newUiEl('ModernAnimationPlaybackStatus');
-      if(status)status.textContent=(studioPrepared.mode==='camera'?'Camera':'Physical')+
-        ' animation playing in an independent optical viewport.';
+      playbackNotice((studioPrepared.mode==='camera'?'Camera':'Physical')+
+        ' animation playing in an independent optical viewport.','info');
       renderStudioPlaybackSample(true);syncStudioPlaybackControls();
       saveStudioDraft(false);
       if(studioPlaybackFrame===null)studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
@@ -2588,7 +2603,7 @@
     var pause=newUiEl('ModernAnimationPlaybackPause');
     if(pause)pause.addEventListener('click',function(){safely(function(){
       stopStudioPlayback(false);saveStudioDraft(false);
-      var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Paused.';
+      playbackNotice('Paused.','info');
     });});
     var stop=newUiEl('ModernAnimationPlaybackStop');
     if(stop)stop.addEventListener('click',function(){safely(function(){
@@ -2637,7 +2652,8 @@
     if(experimentHistory){
       refreshHistoryList().catch(function(error){
         var msg=newUiEl('ModernAnimationStudioMessage');
-        if(msg){msg.textContent=error.message;msg.classList.add('is-error');}
+        if(msg){msg.textContent=error.message;msg.classList.add('is-error');
+          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(msg,'error');}
       });
     }
   }
@@ -2679,12 +2695,14 @@
         studioSelectedKey=next.frames.length?next.frames[0].key:null;
       saveStudioDraft(false);
       var status=newUiEl('ModernAnimationStudioMessage');
-      if(status){status.textContent='';status.classList.remove('is-error');}
+      if(status){status.textContent='';status.classList.remove('is-error');
+        if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
       renderAnimationStudio(entries);
     }
     function report(error){
       var status=newUiEl('ModernAnimationStudioMessage');
-      if(status){status.textContent=error.message;status.classList.add('is-error');}
+      if(status){status.textContent=error.message;status.classList.add('is-error');
+        if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'error');}
     }
     function safe(action){try{action();}catch(error){report(error);}}
     renderStudioLibrary();
@@ -2767,7 +2785,9 @@
             status.textContent=studioPlayback?
               (studioPrepared.mode==='camera'?'Camera':'Physical')+
                 ' preview ready above. No project was saved to Animation Library.':
-              'Independent animation playback is unavailable.';}
+              'Independent animation playback is unavailable.';
+            if(root.CurvatureModernStatusMessage)
+              root.CurvatureModernStatusMessage.decorate(status,studioPlayback?'success':'error');}
           if(studioPlayback){
             if(studioPreviewNavigation)studioPreviewNavigation.start();
             scheduleStudioInitialPaint('prepared');

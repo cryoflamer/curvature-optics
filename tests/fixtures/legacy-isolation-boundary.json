@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 92,
-      "uniqueScripts": 90,
+      "scriptTags": 93,
+      "uniqueScripts": 91,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -206,6 +206,7 @@
         "src/animation/ModernAnimationVideoPipeline.js",
         "src/animation/ModernAnimationVideoCapabilities.js",
         "src/animation/ModernAnimationBackgroundVideoExport.js",
+        "src/ui/modern/ModernStatusMessage.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
@@ -389,6 +390,7 @@
       "src/ui/modern/ModernSceneState.js",
       "src/ui/modern/ModernSemanticNaming.js",
       "src/ui/modern/ModernSessionAutosave.js",
+      "src/ui/modern/ModernStatusMessage.js",
       "src/ui/modern/ModernTargetIndicator.js",
       "src/ui/modern/ModernThumbnailPreview.js"
     ],
@@ -415,7 +417,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 178,
+  "sourceJsCount": 179,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2733,6 +2735,18 @@
       "commonJsTestCallers": [
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernSessionAutosave.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernStatusMessage.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
+        "tests/ModernStatusMessage.test.js",
+        "tests/ModernStatusMessageExportUI.test.js"
       ],
       "commonJsToolCallers": []
     },

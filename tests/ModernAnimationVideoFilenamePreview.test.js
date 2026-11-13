@@ -40,7 +40,8 @@ function harness(mode='compare',returnedFilename=null){
     'ModernAnimationVideoExportFilename','ModernAnimationVideoExportLayoutInfo',
     'ModernAnimationVideoExportCompareLayoutControl',
     'ModernAnimationVideoExportProgress','ModernAnimationVideoExportStatus']){
-    elements[id]={value:'',textContent:'',disabled:false,hidden:false,
+    elements[id]={value:'',textContent:'',disabled:false,hidden:false,attrs:{},
+      setAttribute(k,v){this.attrs[k]=v;},
       addEventListener:(event,handler)=>{handlers[id+':'+event]=handler;}};
   }
   Object.assign(elements.ModernAnimationVideoExportCompareLayout,{value:'side-by-side'});
@@ -72,7 +73,8 @@ function harness(mode='compare',returnedFilename=null){
     studioVideoExportTask:null,studioFrameExportTask:null,
     studioHudAppearance:()=>hud.normalizeAppearance(),targetIndicatorSelection:'scene',
     profileNow:()=>0,
-    root:{navigator:{hardwareConcurrency:2},URL:{createObjectURL:()=> 'blob:preview-test',revokeObjectURL(){}},Worker:class{}},
+    root:{CurvatureModernStatusMessage:require('../src/ui/modern/ModernStatusMessage'),
+      navigator:{hardwareConcurrency:2},URL:{createObjectURL:()=> 'blob:preview-test',revokeObjectURL(){}},Worker:class{}},
     document:{body:{appendChild(){}},createElement:tag=>{
       assert.equal(tag,'a');
       return {download:'',href:'',click(){downloads.push(this.download);},remove(){}};
@@ -119,6 +121,7 @@ test('the real export click downloads the same filename as the preview, without 
   assert.equal(preview,'Export filename: '+h.downloads[0]);
   assert.equal(h.received().expectedFilename,h.downloads[0]);
   assert.match(e.ModernAnimationVideoExportStatus.textContent,/saved as/);
+  assert.equal(e.ModernAnimationVideoExportStatus.attrs['data-status-kind'],'success');
 });
 
 test('mismatched worker output is blocked before an anchor download',async()=>{
@@ -127,6 +130,7 @@ test('mismatched worker output is blocked before an anchor download',async()=>{
   assert.deepEqual(h.downloads,[]);
   assert.match(h.elements.ModernAnimationVideoExportStatus.textContent,
     /Encoder filename differs from the preview/);
+  assert.equal(h.elements.ModernAnimationVideoExportStatus.attrs['data-status-kind'],'error');
 });
 
 test('stale encoder ready-message name is rejected before any frame renders',async()=>{

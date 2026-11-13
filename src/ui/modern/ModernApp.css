@@ -1079,3 +1079,39 @@ button{cursor:pointer}
   :is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
       .modern-history-storyboard-item,.modern-studio-filmstrip-item) > .modern-card-delete:disabled{opacity:.35}
 }
+
+/* Shared Modern status semantics: progress is quiet; failures are unmissable.
+   Opt-in here (Animation Studio + export); other Modern panels migrate later. */
+.modern-status-message:not(:empty){
+  display:block;position:relative;max-width:100%;margin:9px 0;
+  padding:4px 9px;border:0;border-left:2px solid #a8bdcf;
+  border-radius:4px;background:transparent;color:#425a72;
+  font-size:12px;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap;
+}
+.modern-status-message:empty{display:none}
+.modern-status-message[data-status-kind="info"]{background:transparent;color:#425a72}
+.modern-status-message[data-status-kind="error"],
+.modern-status-message.is-error{
+  background:#fff0ef;color:#8a1d20;border-color:#e7a8a8;
+  border-left:4px solid #b4232b;font-weight:600;
+}
+.modern-status-message[data-status-kind="warning"]{
+  background:#fff8e9;color:#72501c;border-color:#ead3a6;
+  border-left:4px solid #be841d;
+}
+.modern-status-message[data-status-kind="success"]{
+  background:#edf8f2;color:#236046;border-color:#b5ddca;
+  border-left:4px solid #308760;
+}
+.modern-status-message[data-status-kind="error"]::before,
+.modern-status-message.is-error::before{content:'✕  Error · ';font-weight:800}
+.modern-status-message[data-status-kind="warning"]::before{content:'⚠  Warning · ';font-weight:750}
+.modern-status-message[data-status-kind="success"]::before{content:'✓  Success · ';font-weight:750}
+.modern-status-copy{
+  display:inline-flex;vertical-align:baseline;margin:0 0 0 10px;padding:2px 7px;
+  border:1px solid #c77d80;border-radius:5px;background:#fff9f9;color:#7b2429;
+  font:inherit;font-size:11px;font-weight:600;cursor:pointer;
+}
+.modern-status-copy:hover,.modern-status-copy:focus-visible{background:#ffe1e0;outline-offset:2px}
+
+.modern-status-copy:disabled{opacity:.65;cursor:not-allowed}

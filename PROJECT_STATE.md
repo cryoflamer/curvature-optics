@@ -1,3 +1,10 @@
+> **Modern status presentation (2026-11-13):** A reusable, opt-in status
+> component distinguishes errors, warnings, successes and progress in Animation
+> Studio and offline PNG/video export. Errors have high-contrast persistent
+> styling and a copy action; semantics and error text are unchanged.
+> See `docs/modern-status-messages.md`. The remaining Modern status surfaces
+> are reserved for a separate integration.
+
 > **Saved card details (2026-11-13):** History snapshots, shortlist, picker,
 > timeline keyframes and Animation Library projects share a click-only `ⓘ`
 > inspector. Hover cannot obstruct drag/drop; click outside, Escape and

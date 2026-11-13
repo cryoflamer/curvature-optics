@@ -30,6 +30,11 @@ if the profiler is folded. Optical/backend errors and live statuses are not
 hidden in help text. These changes affect presentation only, not optics or
 rendering behavior.
 
+**Modern status messages:** Animation Studio, Preview, PNG ZIP and WebM/MP4
+export now distinguish visible errors, cancellation warnings, successful
+completion and quiet progress. Errors remain until the next action replaces
+them and can be copied for diagnostics. See [status semantics](docs/modern-status-messages.md).
+
 **Modern camera navigation:** Shift + left drag moves the observer sideways and
 changes eye height without changing Pan/Nick/Roll; Alt + wheel moves forward or
 backward horizontally. Shift + wheel continues to zoom. The shared position is
