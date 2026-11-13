@@ -2196,3 +2196,25 @@ preferences, and removal of the now-duplicated target CSS block.
   confirmation for nonempty timelines. Invalid imports and cancelled replacements
   leave the existing draft unchanged. No project schema, optical physics, Legacy
   behavior or playback/export implementation changed.
+
+## #140.12.120.9.13 — semantic snapshot/animation/export naming
+
+- `src/ui/modern/ModernSemanticNaming.js` provides a pure deterministic
+  naming layer. `snapshot()` examines the saved Modern experiment including
+  mode, geometry, camera height, and *active* A/B atmosphere fields; `animation()`
+  uses the actual selected camera/physical channel and keyframe values.
+  It has short, descriptive (default) and technical formatting APIs, plus
+  portable ASCII filename sanitizing and coordinated video/ZIP entry names.
+- Newly recorded History snapshots receive generated names; deduplicated
+  existing entries, old records/imports and manually renamed snapshots are
+  not overwritten. Snapshot JSON downloads carry meaningful filenames.
+- Fresh, unnamed Studio drafts adopt automatic titles when their active
+  keyframes are compatible; chosen compatible subsequences take precedence.
+  Custom titles and existing library projects remain authoritative. A neutral
+  default is retained for unpreparable mixed collections.
+- Video Worker names one-file MP4/WebM and two-file A/B ZIP output using the
+  shared title + output resolution/FPS, including matching internal filenames.
+  PNG frame archive downloads use the same naming rules without changing the
+  image/manifest schema or the frame encoder.
+- Scope: Modern UI + export metadata only. Legacy, Camera HUD, WGSL, RK4,
+  project format and History/animation persistence remain unchanged.

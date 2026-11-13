@@ -7,17 +7,19 @@
   var compatibility=root.CurvatureModernAnimationCompatibility;
   var projects=root.CurvatureModernAnimationProject;
   var sequences=root.CurvatureModernAnimationSequences;
+  var naming=root.CurvatureModernSemanticNaming;
   if(typeof module==='object'&&module.exports){
     state=require('../ui/modern/ModernExperimentState');
     sequence=require('../camera/ModernCameraSequence');
     compatibility=require('./ModernAnimationCompatibility');
     projects=require('./ModernAnimationProject');
     sequences=require('./ModernAnimationSequences');
+    naming=require('../ui/modern/ModernSemanticNaming');
   }
-  var api=factory(state,sequence,compatibility,projects,sequences);
+  var api=factory(state,sequence,compatibility,projects,sequences,naming);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudio=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,sequence,compatibility,projects,sequences){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,sequence,compatibility,projects,sequences,naming){
   'use strict';
   var MAX_FRAMES=200;
   function cleanText(text,max){
@@ -45,7 +47,7 @@
     }).map(function(id,i){
       var entry=found.get(id),before=old.get('history-'+id);
       return {key:'history-'+id,sourceSnapshotId:id,
-        name:before?before.name:(entry.name||'Frame '+(i+1)),
+        name:before?before.name:(entry.name||naming.snapshot(entry.experiment)),
         experiment:state.validate(entry.experiment),
         travelMs:i===0?0:before&&before.travelMs?before.travelMs:5000,
         holdMs:before?before.holdMs:0,
@@ -168,7 +170,7 @@
       seen.add(id);
       var entry=found.get(id);
       incoming.push({key:'history-'+id,sourceSnapshotId:id,
-        name:entry.name||'Frame '+(next.frames.length+incoming.length+1),
+        name:entry.name||naming.snapshot(entry.experiment),
         experiment:state.validate(entry.experiment),travelMs:5000,holdMs:0,easing:'linear'});
     });
     if(next.frames.length+incoming.length>MAX_FRAMES)
@@ -241,7 +243,17 @@
       mode:result.mode,target:result.target},draft.cameraHudAppearance?
       {cameraHudAppearance:draft.cameraHudAppearance}:{}));
   }
-  return Object.freeze({blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
+  // Suggest names only for usable sequences; invalid mixed sequences retain the
+  // neutral placeholder until the user chooses a compatible variant.
+  function suggestName(draft){
+    try{
+      var assessment=inspect(draft);
+      if(!assessment.compatible)return 'Animation study';
+      var project=build(Object.assign({},draft,{name:'Semantic name'}),'semantic_name');
+      return naming.animation(project);
+    }catch(_error){return 'Animation study';}
+  }
+  return Object.freeze({suggestName:suggestName,blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
     edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,
     activeFrames:activeFrames,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});

@@ -26,7 +26,7 @@ const required = [
   'ModernExperimentThumbnail.js', 'ModernExperimentLibrary.js',
   'ModernExperimentState.js', 'ModernGpuCapabilities.js',
   'ModernPerformanceReport.js', 'ModernRenderProfiler.js',
-  'ModernRoute.js', 'ModernSceneState.js', 'ModernSessionAutosave.js', 'ModernTargetIndicator.js',
+  'ModernRoute.js', 'ModernSceneState.js', 'ModernSemanticNaming.js', 'ModernSessionAutosave.js', 'ModernTargetIndicator.js',
   'ModernThumbnailPreview.js'
 ];
 

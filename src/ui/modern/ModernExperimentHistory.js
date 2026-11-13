@@ -11,10 +11,12 @@
   }
   var thumbnail=root.CurvatureModernExperimentThumbnail;
   if(!thumbnail&&typeof module==='object'&&module.exports)thumbnail=require('./ModernExperimentThumbnail');
-  var api=factory(state,fp,thumbnail);
+  var naming=root.CurvatureModernSemanticNaming;
+  if(!naming&&typeof module==='object'&&module.exports)naming=require('./ModernSemanticNaming');
+  var api=factory(state,fp,thumbnail,naming);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentHistory=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,fp,thumbnailApi){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,fp,thumbnailApi,naming){
   'use strict';
   var DATABASE='curvature-modern-experiment-history',VERSION=1,STORE='snapshots';
   var MAX_AUTO=200,MAX_NAME=120,MAX_DESCRIPTION=1000;
@@ -162,7 +164,7 @@
             set({created:false,entry:match});return;
           }
           var entry={version:VERSION,createdAt:now(),source:source,pinned:source!=='auto',
-            name:'',description:'',experiment:snapshot,signature:signature,physicalSignature:physical,
+            name:naming.snapshot(snapshot),description:'',experiment:snapshot,signature:signature,physicalSignature:physical,
             features:metadata,thumbnail:image};
           var add=store.add(entry);
           add.onsuccess=function(){

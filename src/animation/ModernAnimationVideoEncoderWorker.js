@@ -7,6 +7,7 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
+  '../ui/modern/ModernSemanticNaming.js?semantic-names=1',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
@@ -99,15 +100,17 @@ async function maybeFinish(){
     if(p.targetIndicator){manifest.targetIndicatorIncluded=true;
       manifest.targetSelection=p.targetSelection;}
     manifest.profiling=reportProfile(current,flushMs,muxMs,null);
+    var naming=self.CurvatureModernSemanticNaming.exportNames(p.project,{
+      format:current.format,fps:p.fps,width:p.outputWidth,height:p.outputHeight,
+      compareLayout:p.compareLayout});
     var blob,filename;
-    if(files.length===1){blob=files[0].blob;filename='curvature-animation'+
-      (p.compareLayout==='side-by-side'?'-compare':'')+'.'+current.format;}
+    if(files.length===1){blob=files[0].blob;filename=naming.filename;}
     else{
       // Blobs remain immutable file parts. ZIP CRC is read in small stream
       // chunks; no full file.arrayBuffer() copies are made for Compare A/B.
       var entries=[];
       for(var i=0;i<files.length;i++){
-        entries.push({name:'curvature-animation-'+files[i].side+'.'+current.format,
+        entries.push({name:naming.entries[files[i].side],
           data:files[i].blob});
       }
       entries.push({name:'manifest.json',data:new Blob([JSON.stringify(manifest,null,2)+'\n'])});
@@ -117,7 +120,7 @@ async function maybeFinish(){
           total:info.total});}
       });
       zipMs=mark()-zipStarted;
-      filename='curvature-animation-'+current.format+'-compare.zip';
+      filename=naming.filename;
     }
     if(failed||session!==current)return;
     // Compare's in-ZIP manifest is a snapshot BEFORE packaging, so its ZIP

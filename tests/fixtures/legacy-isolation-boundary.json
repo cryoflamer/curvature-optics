@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 91,
-      "uniqueScripts": 89,
+      "scriptTags": 92,
+      "uniqueScripts": 90,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -185,6 +185,7 @@
         "src/ui/modern/ModernExperimentLibrary.js",
         "src/ui/modern/ModernExperimentFingerprint.js",
         "src/ui/modern/ModernExperimentThumbnail.js",
+        "src/ui/modern/ModernSemanticNaming.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernThumbnailPreview.js",
         "src/ui/modern/ModernExperimentHistoryUI.js",
@@ -386,6 +387,7 @@
       "src/ui/modern/ModernPerformanceReport.js",
       "src/ui/modern/ModernRenderProfiler.js",
       "src/ui/modern/ModernSceneState.js",
+      "src/ui/modern/ModernSemanticNaming.js",
       "src/ui/modern/ModernSessionAutosave.js",
       "src/ui/modern/ModernTargetIndicator.js",
       "src/ui/modern/ModernThumbnailPreview.js"
@@ -413,7 +415,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 177,
+  "sourceJsCount": 178,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -645,6 +647,7 @@
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernSemanticNaming.test.js",
         "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
@@ -683,7 +686,8 @@
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationSequences.test.js",
-        "tests/ModernAnimationStudio.test.js"
+        "tests/ModernAnimationStudio.test.js",
+        "tests/ModernSemanticNaming.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2460,6 +2464,7 @@
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
+        "tests/ModernSemanticNaming.test.js",
         "tests/ModernSharedCompareControls.test.js",
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
@@ -2588,6 +2593,7 @@
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
+        "tests/ModernSemanticNaming.test.js",
         "tests/ModernSessionAutosave.test.js",
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js"
@@ -2677,6 +2683,19 @@
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernSemanticNaming.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationStudio.js",
+        "src/ui/modern/ModernExperimentHistory.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernSemanticNaming.test.js"
       ],
       "commonJsToolCallers": []
     },

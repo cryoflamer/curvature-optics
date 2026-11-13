@@ -853,3 +853,30 @@ History's pin/delete/restore shortcuts and Studio select/reorder/drag actions
 remain unchanged. The popup uses the **original persisted WebP thumbnail**, not
 a new upscale/optical capture. Legacy and animation/project persistence formats
 are unchanged.
+
+### Semantic names for new History snapshots and animations
+
+Modern History now proposes a deterministic title from the **saved**, validated
+experiment (scene/preset, Globe/Flat or Compare A/B, observer height and active
+atmosphere). For different Compare profiles, the A and B values are distinguished:
+for example `Pontchartrain · Compare Globe/Flat · H 1.85 m · A: dT/dh −13.1 K/km · B: Standard`.
+The standard History rename/notes action still overrides any suggestion. Existing
+records, imports, and user-edited names are not retroactively renamed.
+
+For **new unsaved Animation Studio drafts**, compatible active keyframes suggest
+an animation-oriented title (e.g. `Pontchartrain · Camera height 1.85 → 75 m`,
+`Pontchartrain · Earth curvature Flat → Globe` or `Pontchartrain · Camera motion · 5 keyframes`).
+Incompatible unselected collections retain the neutral placeholder until a
+usable sequence is selected. Editing the project name manually stops automatic
+updates. Opening or changing an **existing saved project** never rewrites its
+name merely because an automatic alternative is available.
+
+Exports derive safe, readable filenames from the saved/project title and
+settings, including dimensions and FPS. For example:
+`pontchartrain-camera-height-1-85-75-m_960x540_25fps.mp4` or
+`..._960x540_25fps_compare-separate.zip` with matching `_A.mp4` and
+`_B.mp4` inside. PNG frame ZIPs and single-snapshot JSON exports use the same
+sanitizer. The on-disk experiment/project JSON schema, History identities,
+manifest content, optical renderers and Legacy are unchanged. Naming is a
+presentation/export concern; it does **not** infer physical visibility or
+silently change the user's saved experiments.

@@ -598,7 +598,7 @@ test('Named snapshots persist independently of experiment state and survive dedu
   const db=indexedDB(),store=history.create({indexedDB:db,now:()=>1710000000000});
   const original=await store.record(experiment('compare'),'manual');
   const before=await store.get(original.entry.id);
-  assert.equal(before.name,'');assert.equal(before.description,'');
+  assert.match(before.name,/Pontchartrain.*Compare.*15 m/);assert.equal(before.description,'');
   const updated=await store.updateMetadata(before.id,'  Refracted horizon  ',
     '  Compare the same camera with different atmosphere.\r\nKeep for animation.  ');
   assert.equal(updated.name,'Refracted horizon');

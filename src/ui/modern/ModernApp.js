@@ -19,6 +19,7 @@
   var compareState=root.CurvatureModernCompareState;
   var experiments=root.CurvatureModernExperimentState;
   var historyFactory=root.CurvatureModernExperimentHistory;
+  var semanticNaming=root.CurvatureModernSemanticNaming;
   var historyFingerprint=root.CurvatureModernExperimentFingerprint;
   var thumbnailApi=root.CurvatureModernExperimentThumbnail;
   var historyUI=root.CurvatureModernExperimentHistoryUI;
@@ -1300,6 +1301,13 @@
       var id=replace?active.id:studioLibrary.makeId(root.crypto);
       if(!replace&&studioDraft.cameraHudAppearance==null)
         studioDraft=studioApi.edit(studioDraft,'cameraHudAppearance',cameraHudAppearance);
+      // Placeholder-only drafts receive a semantic name when saved. Explicit
+      // user titles, including names of existing library projects, stay intact.
+      if(!studioLibraryActive&&semanticNaming&&studioApi.suggestName&&
+         semanticNaming.autoProjectName(studioDraft.name)){
+        var recommended=studioApi.suggestName(studioDraft);
+        if(recommended!=='Animation study')studioDraft=studioApi.edit(studioDraft,'name',recommended);
+      }
       project=studioApi.build(studioDraft,id);
     }catch(error){studioLibraryNotice('Cannot save animation: '+error.message,true);return Promise.resolve(false);}
     var startGeneration=studioDraftGeneration;
@@ -2373,7 +2381,8 @@
         var url=root.URL.createObjectURL(result.blob);
         try{
           var link=document.createElement('a');
-          link.href=url;link.download='curvature-animation-frames.zip';
+          link.href=url;link.download=semanticNaming.exportNames(plan.project,{
+            kind:'frames',format:'png',fps:plan.fps,width:plan.width,height:plan.height}).filename;
           document.body.appendChild(link);link.click();link.remove();
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
         message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+
@@ -2475,6 +2484,18 @@
       });
     }
   }
+  function applySuggestedStudioName(next){
+    // A saved record's title is always intentional, even when it still uses
+    // the older generic "Animation study" name. Fresh drafts can follow the
+    // currently selected compatible sequence until renamed by the user.
+    if(!studioLibraryActive&&semanticNaming&&studioApi&&studioApi.suggestName&&
+      (semanticNaming.autoProjectName(studioDraft.name)||
+       studioDraft.name===studioApi.suggestName(studioDraft))){
+      var suggestion=studioApi.suggestName(next);
+      if(suggestion!=='Animation study')return studioApi.edit(next,'name',suggestion);
+    }
+    return next;
+  }
   // Animation Studio owns a working draft separate from History and the live
   // renderer. Both the picker and the older History collection append saved
   // snapshots; only an explicitly confirmed Camera Animation import replaces
@@ -2494,7 +2515,8 @@
     if(oldStrip&&!resetFilmstrip)studioFilmstripScroll=oldStrip.scrollLeft;
     function update(next,removedFrameUndo){
       studioDiagnosticTransition=null;
-      studioDraft=next;studioRemovedFrameUndo=removedFrameUndo||null;
+      studioDraft=applySuggestedStudioName(next);
+      studioRemovedFrameUndo=removedFrameUndo||null;
       stopStudioPlayback(true);studioPrepared=null;
       if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
         studioSelectedKey=next.frames.length?next.frames[0].key:null;
@@ -3027,8 +3049,8 @@
         try{
           // Full History bulk hand-off adds frames; it must not silently
           // replace an in-progress Animation Studio draft.
-          studioDraft=studioApi.insertSnapshots(studioDraft,Array.from(selected),entries,
-            studioDraft.frames.length);
+          studioDraft=applySuggestedStudioName(studioApi.insertSnapshots(studioDraft,
+            Array.from(selected),entries,studioDraft.frames.length));
           stopStudioPlayback(true);studioPrepared=null;renderAnimationStudio(entries);
         }catch(error){historyStatus(error.message,true);
           var message=newUiEl('ModernAnimationStudioMessage');
@@ -3045,7 +3067,7 @@
           studioDraft.frames.length);
         setHistoryOpen(false);setMode('animation');
         if(next.frames.length!==studioDraft.frames.length){
-          studioDraft=next;studioRemovedFrameUndo=null;
+          studioDraft=applySuggestedStudioName(next);studioRemovedFrameUndo=null;
           stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
         }
         renderAnimationStudio(entries);
@@ -3148,7 +3170,8 @@
       if(!id)throw RangeError('Select a snapshot to export');
       return experimentHistory.get(id).then(function(entry){
         if(!entry)throw RangeError('Snapshot not found');
-        downloadHistoryJson(historyFactory.exportPortable([entry]),'curvature-snapshot.json');
+        downloadHistoryJson(historyFactory.exportPortable([entry]),
+          semanticNaming.slug(entry.name||semanticNaming.snapshot(entry.experiment))+'-snapshot.json');
         historyStatus('Snapshot exported with name, notes and preview.');
       });
     });});

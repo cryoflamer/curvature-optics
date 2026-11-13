@@ -560,7 +560,7 @@ function projectLifecycleHarness(){
   const autosave={projectWorkspaceId:id=>'project_'+id,
     makeWorkspaceId:()=> 'draft_'+(++sequence),
     getWorkspace:(_,id)=>checkpoints.get(id)||null};
-  const ctx={Promise,Date,Object,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
+  const ctx={Promise,Date,Object,semanticNaming:null,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
     studioDraftAutosave:autosave,studioWorkspaceReady:true,studioWorkspaceId:'project_old',
     studioWorkspaces:{workspaces:[{id:'project_old',checkpoint:checkpoints.get('project_old')}]},
     studioLibraryActive:stored.get('old'),studioLibraryPending:null,
