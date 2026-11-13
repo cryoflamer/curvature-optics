@@ -1032,7 +1032,7 @@ test('History and all animation card delete corners share one visual class',()=>
     'modern-animation-workspace-item','modern-history-storyboard-item','modern-studio-filmstrip-item']){
     assert.ok(css.includes('.'+kind),'shared delete-corner selector must cover '+kind);
   }
-  assert.match(css,/\.modern-card-delete::after\{content:"✕";font-weight:750;font-size:17px/);
+  assert.match(css,/\.modern-card-delete::after\{content:"\\2715 ";font-weight:750;font-size:17px/);
   assert.match(css,/\.modern-card-delete:not\(:disabled\):hover\{\s*color:#a12a38;background:#fff0f1;border-color:#df9ca3\}/);
   assert.match(css,/\.modern-card-delete:focus-visible\{outline:2px solid #287ac5/);
   assert.match(css,/@media\(hover:none\)\{[\s\S]*\.modern-card-delete:not\(:disabled\)\{opacity:1\}/);

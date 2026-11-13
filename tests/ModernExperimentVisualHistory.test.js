@@ -192,7 +192,7 @@ test('Compact section grids use bounded columns and menu-free minimal controls',
   assert.match(css,/data-size="large"\] \.modern-history-section-grid/);
   assert.match(css,/\.modern-history-pin\{position:absolute;top:5px;right:35px;/);
   assert.match(css,/@media\(hover:none\)\{\.modern-history-pin\{opacity:1\}/);
-  assert.match(css,/\.modern-card-delete::after\{content:"✕"/);
+  assert.match(css,/\.modern-card-delete::after\{content:"\\2715 "/);
   const {doc}=dom(),host=doc.createElement('div');
   ui.render(doc,host,[entry(3,'compare',true)],3,{
     select(){},restore(){},pin(){},remove(){},multi(){}

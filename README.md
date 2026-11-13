@@ -955,3 +955,5 @@ physical settings. The details panel closes by `×`, Escape, clicking outside,
 scrolling or starting a drag. Hovering a card no longer opens a large overlay;
 select, double-click/Open, reorder and drag-and-drop keep their existing actions.
 This changes only the UI and does not re-render optics or alter saved records.
+
+Modern UI: CSS-generated icons (History pin, delete corners, status glyphs and disclosure arrows) use Unicode escape sequences in `content` declarations, avoiding incorrect rendering when stylesheets are served without an explicit UTF-8 charset.

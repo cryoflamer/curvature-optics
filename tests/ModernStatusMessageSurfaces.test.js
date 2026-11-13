@@ -95,3 +95,16 @@ test('Modern errors are consistently opt-in; dark viewport info remains readable
   assert.match(read('src/ui/modern/ModernDemos.js'),/Unable to connect to Demos host\.','error'/);
   assert.doesNotMatch(read('CurvatureApp.html'),/ModernStatusMessage\.js/);
 });
+
+
+test('CSS-generated History pins, deletion crosses and status icons are encoding-independent',()=>{
+  const css=read('src/ui/modern/ModernApp.css');
+  assert.match(css,/\.modern-history-pin::after\{content:"\\1F4CC "/);
+  assert.match(css,/\.modern-card-delete::after\{content:"\\2715 "/);
+  assert.match(css,/\.modern-status-message\.is-error::before\{content:'\\2715  Error \\00B7 '/);
+  assert.match(css,/\.modern-status-message\[data-status-kind="warning"\]::before\{content:'\\26A0  Warning \\00B7 '/);
+  assert.match(css,/\.modern-status-message\[data-status-kind="success"\]::before\{content:'\\2713  Success \\00B7 '/);
+  for(const declaration of css.matchAll(/content\s*:\s*(["'])(.*?)\1/g)){
+    assert.match(declaration[2],/^[\x00-\x7F]*$/,'CSS content must not contain raw multibyte glyphs');
+  }
+});
