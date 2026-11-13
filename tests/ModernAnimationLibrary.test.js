@@ -848,7 +848,7 @@ test('Portable JSON retains both Linear and Spline alternatives and restores leg
 
 test('Studio Save changes compares restored Spline mode but keeps old v1 Linear projects clean',()=>{
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  const start=app.indexOf('  function studioLibraryDirty(){');
+  const start=app.indexOf('  function studioProjectDiffers(');
   const end=app.indexOf('  function renderStudioLibrary(){',start);
   assert.ok(start>0&&end>start);
   const a=experiment(),b=structuredClone(a),c=structuredClone(a);
@@ -873,4 +873,42 @@ test('Studio Save changes compares restored Spline mode but keeps old v1 Linear 
   assert.equal(context.dirty(),true,'switching back to Linear is also an unsaved edit');
   context.studioLibraryActive={id:'saved_v1',project:old,quality:'auto'};
   assert.equal(context.dirty(),false,'returning to a legacy v1 Linear project clears the dirty flag');
+});
+
+
+test('Library card edit badge and Save changes agree for legacy Linear and actual Spline edits',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const helper=app.slice(app.indexOf('  function studioProjectDiffers('),
+    app.indexOf('  function studioHasUnsavedWork(){'));
+  const card=app.slice(app.indexOf('  function studioWorkspaceEditedIds(){'),
+    app.indexOf('  function studioWorkspaceDraftCards(){'));
+  const a=experiment(),b=structuredClone(a),c=structuredClone(a);
+  b.scene.camera.Height=45;c.scene.camera.Height=25;
+  let draft=studio.history([21,22,23],[a,b,c].map((scene,i)=>({
+    id:21+i,name:'Camera '+i,experiment:scene
+  })));
+  draft=studio.edit(draft,'name','Legacy camera motion');
+  const saved=structuredClone(studio.build(draft,'saved_v1'));
+  delete saved.interpolation;
+  const record={id:'saved_v1',project:saved,quality:'auto',updatedAt:100};
+  const checkpoint={draft:studio.fromProject(saved),quality:'auto',libraryRevision:100};
+  const ctx=vm.createContext({studioApi:studio,studioDraft:checkpoint.draft,
+    studioPlaybackQuality:'auto',studioLibraryActive:record,studioLibraryEntries:[record],
+    studioWorkspaces:{},studioDraftAutosave:{projectWorkspaceId:id=>'project_'+id,
+      getWorkspace:()=>checkpoint}});
+  vm.runInContext(helper+card+'\nthis.dirty=studioLibraryDirty;this.edited=studioWorkspaceEditedIds;',ctx);
+  assert.equal(ctx.dirty(),false);
+  assert.deepEqual(Array.from(ctx.edited()),[],'legacy Linear draft has no false badge');
+  checkpoint.libraryRevision=50;
+  assert.deepEqual(Array.from(ctx.edited()),[],'revision mismatch alone is not an edit');
+  checkpoint.draft=studio.edit(checkpoint.draft,'interpolation','spline');
+  ctx.studioDraft=checkpoint.draft;
+  assert.equal(ctx.dirty(),true);
+  assert.deepEqual(Array.from(ctx.edited()),['saved_v1']);
+  record.project=studio.build(checkpoint.draft,'saved_v1');
+  assert.equal(ctx.dirty(),false);
+  assert.deepEqual(Array.from(ctx.edited()),[]);
+  checkpoint.quality='fast';ctx.studioPlaybackQuality='fast';
+  assert.equal(ctx.dirty(),true);
+  assert.deepEqual(Array.from(ctx.edited()),['saved_v1']);
 });

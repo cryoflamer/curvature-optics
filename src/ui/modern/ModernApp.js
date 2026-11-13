@@ -1062,21 +1062,23 @@
     var node=newUiEl('ModernAnimationDraftStatus');
     if(node){node.textContent=message;node.classList.toggle('is-error',!!error);}
   }
-  function studioLibraryDirty(){
-    if(!studioLibraryActive)return false;
+  // One content comparison for the active editor and retained workspace cards.
+  // Legacy projects can omit interpolation; the editor restores them as Linear.
+  function studioProjectDiffers(draft,quality,entry){
     try{
-      var edited=studioApi.build(studioDraft,studioLibraryActive.id);
-      var saved=studioLibraryActive.project;
-      // An old v1 project may omit interpolation. Reopening it must not
-      // advertise unsaved changes simply because the editor defaults to Linear.
+      var edited=studioApi.build(draft,entry.id);
+      var saved=entry.project;
       if(!Object.prototype.hasOwnProperty.call(saved,'interpolation')&&
          edited.interpolation==='linear'){
         edited=Object.assign({},edited);delete edited.interpolation;
       }
-      return studioPlaybackQuality!==studioLibraryActive.quality||
-        JSON.stringify(edited)!==JSON.stringify(saved);
+      return quality!==entry.quality||JSON.stringify(edited)!==JSON.stringify(saved);
     }
     catch(error){return true;}
+  }
+  function studioLibraryDirty(){
+    return !!studioLibraryActive&&
+      studioProjectDiffers(studioDraft,studioPlaybackQuality,studioLibraryActive);
   }
   function studioHasUnsavedWork(){
     if(studioLibraryActive)return studioLibraryDirty();
@@ -1282,11 +1284,9 @@
       var checkpoint=studioDraftAutosave.getWorkspace(studioWorkspaces,
         studioDraftAutosave.projectWorkspaceId(entry.id));
       if(!checkpoint)return false;
-      if(checkpoint.libraryRevision!==entry.updatedAt)return true;
-      try{return checkpoint.quality!==entry.quality||
-        JSON.stringify(studioApi.build(checkpoint.draft,entry.id))!==
-        JSON.stringify(entry.project);}
-      catch(error){return true;}
+      // A stale library revision is not itself an unsaved content edit.
+      // The badge must agree with the same comparison used by Save changes.
+      return studioProjectDiffers(checkpoint.draft,checkpoint.quality,entry);
     }).map(function(entry){return entry.id;});
   }
   function studioWorkspaceDraftCards(){
