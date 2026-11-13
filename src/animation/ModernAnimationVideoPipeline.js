@@ -56,17 +56,27 @@
       throw RangeError('Video animation must have positive finite duration');
     // Use the rounded microsecond duration for BOTH frame count and final
     // boundary; fractional-ms project inputs cannot produce zero-length tails.
-    var count=Math.ceil(durationUs*settings.fps/1000000);
+    var normalCount=Math.ceil(durationUs*settings.fps/1000000);
+    // A sub-frame animation still needs to show BOTH its initial and final
+    // states. Split its one nominal display interval into two real intervals
+    // rather than silently exporting only the initial camera pose or extending
+    // the requested video duration by an extra frame.
+    var shortTimeline=normalCount===1;
+    if(shortTimeline&&durationUs<2)throw RangeError('Video is too short for two frames');
+    var count=shortTimeline?2:normalCount;
     if(count>MAX_VIDEO_FRAMES)throw RangeError('Video plan exceeds '+MAX_VIDEO_FRAMES+' frames');
     var times=[];
     for(var i=0;i<count;i++){
-      // Round once at each boundary, so there is no accumulated 30-FPS drift.
-      var timestampUs=Math.round(i*1000000/settings.fps);
-      var nextUs=i===count-1?durationUs:Math.round((i+1)*1000000/settings.fps);
+      // Normal frames retain rounded FPS boundaries without accumulated drift.
+      // In the one-interval case only, split the existing duration in half.
+      var timestampUs=shortTimeline&&i===1?Math.floor(durationUs/2):
+        Math.round(i*1000000/settings.fps);
+      var nextUs=i===count-1?durationUs:shortTimeline?Math.floor(durationUs/2):
+        Math.round((i+1)*1000000/settings.fps);
       if(timestampUs>=nextUs)throw RangeError('Video timing has a non-positive frame duration');
       // The final display interval is painted from the EXACT final physical
       // state, but displayed within the original duration (not an extra frame).
-      var sampleTimeMs=(i===count-1 && count>1)?totalMs:timestampUs/1000;
+      var sampleTimeMs=i===count-1?totalMs:timestampUs/1000;
       times.push(Object.freeze({index:i,timestampUs:timestampUs,
         durationUs:nextUs-timestampUs,sampleTimeMs:sampleTimeMs}));
     }

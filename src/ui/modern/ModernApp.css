@@ -689,6 +689,8 @@ button{cursor:pointer}
 .modern-studio-field input,.modern-studio-field select,.modern-studio-field textarea{box-sizing:border-box;
   width:100%;min-width:0;border:1px solid #c5d8e8;border-radius:6px;background:#fff;
   color:#1e4667;padding:7px;font:inherit;font-size:12px}
+.modern-studio-field select:disabled{opacity:.65;cursor:not-allowed;background:#eef3f7}
+.modern-studio-field-note{font-size:11px;line-height:1.4;color:#607d94}
 .modern-studio-status{padding:10px 12px;background:#f2f7fd;border:1px solid #d3e2f1;
   border-radius:7px;margin:9px 0;white-space:normal;overflow-wrap:anywhere}
 .modern-studio-status.is-ready{background:#effaf4;border-color:#b5dfc7;color:#256349}

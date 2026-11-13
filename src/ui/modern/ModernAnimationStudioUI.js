@@ -862,9 +862,22 @@
       fields.appendChild(field(doc,'Hold after arrival (s)',selected.holdMs/1000,'number',
         function(value){actions.frame(selected.key,'holdMs',value);},null,
         function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'holdMs',value);}));
-      if(index>0)fields.appendChild(field(doc,'Easing',selected.easing,'select',function(value){
-        actions.frame(selected.key,'easing',value);
-      },[['linear','Linear'],['smoothstep','Ease in / out']]));
+      if(index>0){
+        var spline=draft.interpolation==='spline';
+        var easing=field(doc,'Easing',selected.easing,'select',function(value){
+          if(!spline)actions.frame(selected.key,'easing',value);
+        },[['linear','Linear'],['smoothstep','Ease in / out']]);
+        if(spline){
+          var easingControl=easing.children[1];
+          easingControl.disabled=true;
+          var explanation=el(doc,'small','modern-studio-field-note',
+            'Spline ignores per-frame easing. This value is kept for Linear.');
+          explanation.id='modern-studio-easing-note';
+          easingControl.setAttribute('aria-describedby',explanation.id);
+          easing.appendChild(explanation);
+        }
+        fields.appendChild(easing);
+      }
       panel.appendChild(fields);host.appendChild(panel);
     }
     host.appendChild(previewBar(doc,result,actions,prepared,options,true));

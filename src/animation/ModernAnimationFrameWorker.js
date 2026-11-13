@@ -60,7 +60,7 @@ importScripts(
   'ModernAnimationPreview.js',
   'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1',
   'ModernAnimationCompareComposition.js',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1'
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1'
 );
 
 function createGraph(canvas){

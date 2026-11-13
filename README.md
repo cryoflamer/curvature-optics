@@ -178,8 +178,13 @@ of a named project requires **Save changes**; importing a JSON backup does not
 alter the active draft. Stage 4 verifies equal-time Preview/PNG/WebM/MP4
 camera sampling for Scene and Compare A/B, strengthens the pre-render Worker
 sample handshake across multiple transitions, and records the chosen
-interpolation in export manifests. Pixel equivalence with Fast Preview is not
-claimed. See [camera interpolation](docs/modern-camera-interpolation.md).
+interpolation in export manifests. In Spline mode the keyframe editor disables
+per-frame Easing (its saved Linear value is retained and restored when switching
+back). For very short videos occupying only one nominal FPS interval, video
+export splits that interval into two positive-duration samples so both initial
+and terminal camera poses appear without extending the video. Pixel equivalence
+with Fast Preview is not claimed. See
+[camera interpolation](docs/modern-camera-interpolation.md).
 
 ### Modern camera animation
 

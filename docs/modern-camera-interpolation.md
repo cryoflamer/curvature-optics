@@ -62,8 +62,12 @@ same working draft and keyframes, preserves the current elapsed playback time,
 repaints the independent optical preview, and does not require re-preparing
 or saving a second project. It also preserves the Play/Pause state. The mode
 is autosaved to the working draft; **Save changes** is still required to
-update a previously saved Animation Library project. For physical animations
-the control is hidden. The project's shared `sampleAt` path applies the chosen
+update a previously saved Animation Library project. The **Easing** selector
+in the selected keyframe editor is disabled in Spline mode and explains why;
+its previous `linear` / `smoothstep` value remains stored, so switching back to
+Linear makes the same selection editable again without a semantic draft change
+from merely viewing it. Switching modes refreshes the editor immediately.
+For physical animations the control is hidden. The project's shared `sampleAt` path applies the chosen
 mode to preview and export; this stage does not alter video codecs or frame
 renderers. The independent Scene/Compare Camera Animation panel still uses its
 original interpolation.
@@ -97,6 +101,13 @@ samples, non-uniform travel times, holds, angular wrap and final keyframes in
 Scene and synchronized Compare A/B (one composed video or separate streams).
 Video samples its **last display interval at the exact endpoint** without
 adding time; the PNG timeline instead includes a separate endpoint image.
+When the entire project fits in one nominal video FPS interval (for example,
+200 ms at 5 FPS), video intentionally splits that interval into two positive,
+contiguous, variable-duration frames: first at time zero, second sampling the
+exact final camera pose, both within the original total duration. The FPS
+selection remains a nominal encoding setting in this exceptional case; frame
+timestamps and durations reflect the split. Regular video timelines retain
+their previous FPS boundaries.
 Sampling equivalence refers to camera/experiment state at equal times, **not
 pixel identity** between an interactive Fast/Auto Preview and a fixed-size
 Accurate RK4 export. Physical optics and codec quality are not altered.

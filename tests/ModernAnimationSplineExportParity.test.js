@@ -153,3 +153,30 @@ test('old Linear projects remain Linear across plans and PNG manifests',async()=
   assert.equal(png.assemble(pp,frames).manifest.cameraInterpolation,'linear');
   assert.equal(video.plan(p,{fps:5,width:640,height:360}).project.interpolation,undefined);
 });
+
+
+test('short Spline camera export retains the first and final poses in Scene and Compare',()=>{
+  for(const mode of ['scene','compare']){
+    const p=structuredClone(make(mode,'spline'));
+    p.keyframes=p.keyframes.slice(0,2);
+    p.keyframes[0].holdMs=0;
+    p.keyframes[1].travelMs=200;
+    p.keyframes[1].holdMs=0;
+    const pp=png.plan(p,{fps:5,width:640,height:360});
+    const vp=video.plan(p,{fps:5,width:640,height:360});
+    assert.equal(vp.frameCount,2,'even one nominal FPS interval needs both endpoints');
+    assert.deepEqual(vp.frames.map(frame=>frame.sampleTimeMs),[0,200]);
+    assert.equal(vp.frames.at(-1).timestampUs+vp.frames.at(-1).durationUs,200000);
+    assert.deepEqual(vp.frames.map(frame=>frame.sampleTimeMs),pp.timesMs);
+    const first=projects.sampleAt(vp.project,vp.frames[0].sampleTimeMs);
+    const last=projects.sampleAt(vp.project,vp.frames[1].sampleTimeMs);
+    assert.notDeepEqual(signature(first.scene.camera),signature(last.scene.camera));
+    for(const side of mode==='compare'?['A','B']:['A']){
+      assert.deepEqual(signature(first.scene.camera),
+        signature(projects.sampleAt(pp.project,pp.timesMs[0]).scene.camera));
+      assert.deepEqual(signature(last.scene.camera),
+        signature(projects.sampleAt(pp.project,pp.timesMs.at(-1)).scene.camera));
+      assert.ok(vp.sides.includes(side));
+    }
+  }
+});

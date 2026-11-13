@@ -2340,8 +2340,8 @@
         message('Video export modules unavailable. Check the browser console.','error');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
-        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1',
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};studioVideoExportTask=task;
       syncStudioFrameExportControls();
@@ -2556,6 +2556,9 @@
     studioDraft=updatedDraft;studioPrepared=updatedProject;studioPlayback=updatedPlayback;
     studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
     saveStudioDraft(false);renderStudioLibrary();
+    // Playback owns the interpolation switch, but the Studio keyframe editor
+    // must immediately reflect whether its per-frame Easing control applies.
+    renderAnimationStudio(studioHistoryEntries);
     syncStudioPlaybackControls();
     if(animationWorkspaceOpen&&!document.hidden)renderStudioPlaybackSample(true);
     else studioRestorePreviewPending=true;

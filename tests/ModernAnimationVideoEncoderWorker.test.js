@@ -342,3 +342,30 @@ test('Spline camera interpolation is retained in VP9 and H.264 Compare export ma
     assert.equal(messages.filter(message=>message.type==='error').length,0);
   }
 });
+
+
+test('short Spline animations encode both endpoints at 5 FPS in WebM and MP4',async()=>{
+  const base=project().baseExperiment,final=structuredClone(base);
+  final.scene.camera.Height=55;
+  const spline=projects.create([{experiment:base,holdMs:0},
+    {experiment:final,travelMs:200,holdMs:0}],
+    {id:'spline_short_export',name:'Short Spline export',mode:'camera',interpolation:'spline'});
+  for(const format of ['webm','mp4']){
+    const plan=video.plan(spline,{fps:5,width:640,height:360});
+    const {root,messages}=sandbox();
+    assert.equal(plan.frameCount,2);
+    root.onmessage({data:{type:'init',project:spline,format,
+      fps:5,width:640,height:360,workers:1,frameWindow:2,quality:'standard'}});
+    await tick();assert.equal(messages.at(-1).type,'ready');
+    for(const t of plan.frames)
+      root.onmessage({data:{type:'frame',frame:frame(plan,t.index)}});
+    await tick();await tick();
+    const complete=messages.find(message=>message.type==='complete');
+    assert.ok(complete,format+' must encode both short Spline samples');
+    assert.equal(complete.manifest.frameCount,2);
+    assert.equal(complete.manifest.durationUs,200000);
+    assert.equal(complete.manifest.endSampleTimeMs,200);
+    assert.equal(complete.manifest.cameraInterpolation,'spline');
+    assert.equal(messages.some(message=>message.type==='error'),false);
+  }
+});

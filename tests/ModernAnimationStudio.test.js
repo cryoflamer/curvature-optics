@@ -210,6 +210,40 @@ test('Studio fields persist valid in-progress edits on input before focus leaves
   assert.deepEqual(calls.at(-1),['liveEdit','description','An important physical experiment']);
 });
 
+test('Spline disables Easing but retains the previous value for Linear',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=75;
+  const base=studio.editFrame(studio.history([1,2],[entry(1,a),entry(2,b)]),
+    'history-2','easing','smoothstep');
+  const {doc,host}=mockDom(),calls=[];
+  const actions={frame:(...args)=>calls.push(args),edit(){},select(){},prepare(){}};
+  const easing=()=>collect(host,n=>n.tagName==='select'&&
+    n.children.some(child=>child.value==='smoothstep'))[0];
+  editor.render(doc,host,base,studio.inspect(base),actions,false,{selectedKey:'history-2'});
+  assert.equal(easing().disabled,false);
+  assert.equal(easing().value,'smoothstep');
+  easing().value='linear';easing().listeners.change();
+  assert.deepEqual(calls.pop(),['history-2','easing','linear']);
+  const spline=studio.edit(base,'interpolation','spline');
+  host.children=[];
+  editor.render(doc,host,spline,studio.inspect(spline),actions,false,{selectedKey:'history-2'});
+  const inactive=easing();
+  assert.equal(inactive.disabled,true);
+  assert.equal(inactive.value,'smoothstep','the saved easing is not reset');
+  assert.equal(inactive['aria-describedby'],'modern-studio-easing-note');
+  assert.match(collect(host,n=>n.className==='modern-studio-field-note')[0].textContent,
+    /Spline ignores per-frame easing.*kept for Linear/);
+  const before=calls.length;
+  inactive.value='linear';inactive.listeners.change();
+  assert.equal(calls.length,before,'a stale change event cannot edit easing in Spline');
+  assert.equal(spline.frames[1].easing,'smoothstep');
+  const restored=studio.edit(spline,'interpolation','linear');
+  host.children=[];
+  editor.render(doc,host,restored,studio.inspect(restored),actions,false,{selectedKey:'history-2'});
+  assert.equal(easing().disabled,false);
+  assert.equal(easing().value,'smoothstep');
+  assert.equal(collect(host,n=>n.className==='modern-studio-field-note').length,0);
+});
+
 test('Studio thumbnail filmstrip uses saved History images, selected-only controls and camera placeholders',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=75;
   let draft=studio.history([1,2],[entry(1,a,'Base'),entry(2,b,'High')]);

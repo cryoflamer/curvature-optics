@@ -17,7 +17,7 @@ importScripts(
   'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-parity=1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1',
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1',
   'ModernAnimationVideoCapabilities.js',
   'ModernAnimationWebMMuxer.js',
   'ModernAnimationMP4Muxer.js',

@@ -64,11 +64,32 @@ test('non-integral FPS boundaries never accumulate time drift or extend duration
   assert.equal(p.frames.at(-1).timestampUs+p.frames.at(-1).durationUs,1051000);
   assert.equal(p.width,1280);assert.equal(p.height,720);
 });
-test('sub-microsecond excess over an FPS boundary does not create a zero-duration frame',()=>{
-  const p=video.plan(make('scene',200.0001),{fps:5});
-  assert.equal(p.durationUs,200000);
-  assert.equal(p.frameCount,1);
-  assert.equal(p.frames[0].durationUs,200000);
+test('one nominal FPS interval is split to retain both endpoints without extending the video',()=>{
+  for(const mode of ['scene','compare']){
+    const p=video.plan(make(mode,200.0001),{fps:5});
+    assert.equal(p.durationUs,200000,'fractional microsecond is rounded consistently');
+    assert.equal(p.frameCount,2);
+    assert.deepEqual(p.frames.map(f=>({timestampUs:f.timestampUs,durationUs:f.durationUs})),[
+      {timestampUs:0,durationUs:100000},
+      {timestampUs:100000,durationUs:100000}]);
+    assert.equal(p.frames[0].sampleTimeMs,0);
+    assert.equal(p.frames[1].sampleTimeMs,200.0001);
+    assert.equal(p.frames.at(-1).timestampUs+p.frames.at(-1).durationUs,p.durationUs);
+    assert.equal(p.frames.every(f=>f.durationUs>0),true);
+    if(mode==='scene'){
+      assert.equal(projects.sampleAt(p.project,p.frames[0].sampleTimeMs).scene.surface.showModel,1);
+      assert.equal(projects.sampleAt(p.project,p.frames[1].sampleTimeMs).scene.surface.showModel,2);
+    }else{
+      assert.equal(projects.sampleAt(p.project,p.frames[0].sampleTimeMs).compare.A.surface,'globe');
+      assert.equal(projects.sampleAt(p.project,p.frames[1].sampleTimeMs).compare.A.surface,'flat');
+    }
+  }
+  assert.equal(png.plan(make('scene',200),{fps:5}).timesMs.length,2,
+    'PNG retains its independent inclusive endpoint timeline');
+  const normal=video.plan(make('scene',250),{fps:5});
+  assert.equal(normal.frameCount,2,'ordinary two-frame timelines keep their FPS boundary');
+  assert.equal(normal.frames[1].timestampUs,200000);
+  assert.equal(normal.frames[1].durationUs,50000);
 });
 test('scene and Compare plans use the same timestamps but distinct side sets',()=>{
   const a=video.plan(make('scene'));

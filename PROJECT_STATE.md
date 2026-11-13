@@ -2355,3 +2355,23 @@ corner via `.modern-card-delete`. The CSS pseudo-element renders `✕`; hover,
 focus, disabled and touch states are centralized. Existing confirmation,
 selection, drag-and-drop and storage semantics are unchanged. Tests cover
 shared styling and card-specific click isolation.
+
+### Spline final audit follow-up: short videos and inactive Easing
+
+- Fixed a one-nominal-frame video corner case (e.g. a 200 ms transition at
+  5 FPS): the encoder now receives two contiguous display intervals within the
+  original duration. One sample preserves the initial camera state, the other
+  samples the exact endpoint. Other video timelines keep their original FPS
+  boundary/timestamp logic. PNG's inclusive endpoint plan is unchanged.
+- In the Animation Studio keyframe editor, incoming Easing is read-only while
+  Spline interpolation is active, with an explanation. Per-frame easing values
+  are retained without mutation so Linear restores the previous choice.
+  Switching the Preview interpolation immediately refreshes the editor while
+  preserving the playhead and playback state.
+- Refreshed browser and renderer/encoder Worker cache keys for changed scripts.
+  Added Scene/Compare Spline short-video parity, VP9/H.264 short encoding,
+  Easing/Preview UI and timeline regression tests. No physics, camera spline
+  geometry, saved-project schema, Legacy or codec algorithm changes.
+- Browser Opera playback and visual frame fidelity remain manual verification;
+  Node-based Worker tests validate contracts and muxing, not the installed
+  browser's hardware/software encoders.

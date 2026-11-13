@@ -36,7 +36,7 @@ function makeDraft(mode='camera'){
   return studio.history([1,2,3],[a,b,c].map((experiment,i)=>({id:i+1,name:'Frame '+(i+1),experiment})));
 }
 function harness(mode='camera'){
-  let now=0,saveCount=0,rendered=[];
+  let now=0,saveCount=0,rendered=[],editorRefreshes=0;
   const draft=makeDraft(mode),prepared=studio.build(draft,'preview_test');
   const originalFrames=structuredClone(draft.frames);
   const handlers={},elements={},queue=new Map();
@@ -60,6 +60,7 @@ function harness(mode='camera'){
     cancelStudioInitialPaint(){},syncStudioHudAppearance(){},
     syncStudioFrameExportControls(){},
     saveStudioDraft(){saveCount++;},renderStudioLibrary(){},
+    studioHistoryEntries:[],renderAnimationStudio(){editorRefreshes++;},
     renderStudioPlaybackSample(force){
       assert.equal(force,true);
       rendered.push({time:context.studioPlayback.status().positionMs,
@@ -81,7 +82,7 @@ function harness(mode='camera'){
     context,{filename:'ModernApp.js:spline-preview'});
   context.bind();context.sync();
   return {context,elements,handlers,queue,originalFrames,rendered:()=>rendered,
-    count:()=>saveCount,now(value){now=value;},
+    count:()=>saveCount,editorRefreshes:()=>editorRefreshes,now(value){now=value;},
     change(value){elements.ModernAnimationPlaybackInterpolation.value=value;
       handlers['ModernAnimationPlaybackInterpolation:change']();}};
 }
@@ -106,6 +107,7 @@ test('paused Preview changes its spline sample at the same playhead, without cha
   h.now(5000);h.change('spline');
   assert.equal(h.context.studioDraft.interpolation,'spline');
   assert.equal(h.context.studioPrepared.interpolation,'spline');
+  assert.equal(h.editorRefreshes(),1,'the Easing control is disabled immediately');
   assert.equal(h.context.studioPlayback.status().positionMs,1500);
   assert.equal(h.context.studioPlayback.status().playing,false);
   assert.notEqual(h.context.studioPlayback.sample().scene.camera.Height,previousHeight);
@@ -140,6 +142,7 @@ test('physical mode and invalid values cannot change a prepared project',()=>{
   assert.equal(h.context.studioPrepared,before);
   assert.equal(h.context.studioDraft.interpolation,'linear');
   assert.equal(h.elements.ModernAnimationPlaybackInterpolation.value,'linear');
+  assert.equal(h.editorRefreshes(),0,'rejected switches never rerender the editor');
   assert.match(h.elements.ModernAnimationPlaybackStatus.textContent,/Prepare a camera animation/);
   assert.equal(h.count(),0);
   const camera=harness(),original=camera.context.studioPrepared;
