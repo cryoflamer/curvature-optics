@@ -1,3 +1,11 @@
+> **Animation Studio spline foundation (2026-11-13):** Camera-only Animation
+> Projects now accept an optional `interpolation: "spline"`, implemented as a
+> bounded, timing-aware cubic Hermite camera sampler. Existing projects lacking
+> the field retain Linear / per-frame easing semantics. The draft and
+> checkpoint models preserve the choice; physical-channel animation, Legacy,
+> live optics, and the separate Camera Animation panel are unchanged.
+> **No UI toggle in this stage**; see `docs/modern-camera-interpolation.md`.
+
 > **History thumbnail correction (2026-11-08):** The physical painter
 > calls `clearRect`, leaving pixels transparent. The main Modern viewport
 > appears white via CSS, but History previously copied only the transparent

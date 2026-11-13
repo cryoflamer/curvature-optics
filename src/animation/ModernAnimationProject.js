@@ -94,13 +94,19 @@
   function validate(input){
     // Optional appearance keeps existing v1 projects byte-for-byte compatible.
     var hasHud=Object.prototype.hasOwnProperty.call(input||{},'cameraHudAppearance');
+    var hasInterpolation=Object.prototype.hasOwnProperty.call(input||{},'interpolation');
     shape(input,['version','id','name','description','mode','target','baseExperiment',
-      'keyframes'].concat(hasHud?['cameraHudAppearance']:[]));
+      'keyframes'].concat(hasHud?['cameraHudAppearance']:[],
+      hasInterpolation?['interpolation']:[]));
     if(input.version!==VERSION)throw RangeError('Unsupported animation project version');
     var id=text(input.id,80,false),name=text(input.name,120,false);
     if(!/^[A-Za-z0-9_-]+$/.test(id))throw RangeError('Invalid animation project ID');
     var description=text(input.description,1000,true),mode=input.mode,target=input.target;
     if(!['camera','physical'].includes(mode))throw RangeError('Invalid animation mode');
+    var interpolation=hasInterpolation?input.interpolation:'linear';
+    if(!['linear','spline'].includes(interpolation))throw RangeError('Invalid animation interpolation');
+    if(mode!=='camera'&&interpolation==='spline')
+      throw RangeError('Spline interpolation requires camera animation');
     if(mode==='camera'){
       if(target!==null)throw RangeError('Camera animation target must be null');
     }else compat.targetPath(target);
@@ -130,6 +136,7 @@
       target:mode==='camera'?null:{scope:target.scope,parameter:target.parameter},
       baseExperiment:baseExperiment,keyframes:keyframes};
     if(hasHud)result.cameraHudAppearance=hud.validateAppearance(input.cameraHudAppearance);
+    if(hasInterpolation)result.interpolation=interpolation;
     return freeze(result);
   }
   function create(snapshots,options){
@@ -161,6 +168,7 @@
       description:options.description||'',mode:mode,target:target,
       baseExperiment:entries[0].experiment,keyframes:frames};
     if(options.cameraHudAppearance!==undefined)result.cameraHudAppearance=options.cameraHudAppearance;
+    if(options.interpolation!==undefined)result.interpolation=options.interpolation;
     return validate(result);
   }
   function totalMs(input){var p=validate(input);return p.keyframes.reduce(function(n,f){return n+f.travelMs+f.holdMs;},0);}
@@ -182,7 +190,9 @@
         var arrival=clock+frame.travelMs;
         if(time<arrival){
           var u=(time-clock)/frame.travelMs;
-          if(p.mode==='camera')return at(camera.interpolate(frames[i-1].value,frame.value,u,frame.easing));
+          if(p.mode==='camera')return at(p.interpolation==='spline'?
+            camera.interpolateSpline(frames,i,u):
+            camera.interpolate(frames[i-1].value,frame.value,u,frame.easing));
           var eased=frame.easing==='smoothstep'?u*u*(3-2*u):u;
           var number=frames[i-1].value+(frame.value-frames[i-1].value)*eased;
           return at(number);

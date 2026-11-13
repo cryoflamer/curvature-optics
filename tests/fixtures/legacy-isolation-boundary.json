@@ -555,7 +555,8 @@
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationLibrary.test.js",
-        "tests/ModernAnimationSequences.test.js"
+        "tests/ModernAnimationSequences.test.js",
+        "tests/ModernCameraSpline.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -651,6 +652,7 @@
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernCameraSpline.test.js",
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernTargetIndicator.test.js"
       ],
@@ -691,6 +693,7 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernCameraSpline.test.js",
         "tests/ModernSemanticNaming.test.js"
       ],
       "commonJsToolCallers": []
@@ -899,6 +902,7 @@
       "commonJsTestCallers": [
         "tests/ModernCameraInterpolator.test.js",
         "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCameraSpline.test.js",
         "tests/ModernCameraTelemetry.test.js"
       ],
       "commonJsToolCallers": []
@@ -2459,6 +2463,7 @@
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js",
+        "tests/ModernCameraSpline.test.js",
         "tests/ModernCurvatureRecalculation.integration.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentHistoryFilters.test.js",
@@ -2592,6 +2597,7 @@
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js",
+        "tests/ModernCameraSpline.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentHistoryFilters.test.js",
         "tests/ModernExperimentLibrary.test.js",

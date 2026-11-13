@@ -27,8 +27,10 @@
     return text;
   }
   function blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
+    interpolation:'linear',
     source:'none',frames:[],activeFrameKeys:null,cameraHudAppearance:null};}
   function copy(draft){return {name:draft.name,description:draft.description,mode:draft.mode,
+    interpolation:draft.interpolation||'linear',
     target:draft.target,source:draft.source,
     activeFrameKeys:draft.activeFrameKeys?draft.activeFrameKeys.slice():null,
     cameraHudAppearance:draft.cameraHudAppearance||null,
@@ -76,6 +78,7 @@
     var project=projects.validate(input),arrivals=projects.timeline(project);
     var draft=blank();
     draft.name=project.name;draft.description=project.description;draft.mode=project.mode;
+    draft.interpolation=project.interpolation||'linear';
     draft.cameraHudAppearance=project.cameraHudAppearance||null;
     draft.target=project.target?project.target.scope+'|'+project.target.parameter:'auto';
     draft.source='mixed';
@@ -99,6 +102,10 @@
     var next=copy(draft);
     if(property==='name')next.name=cleanText(value,120);
     else if(property==='description')next.description=cleanText(value,1000);
+    else if(property==='interpolation'){
+      if(!['linear','spline'].includes(value))throw RangeError('Invalid interpolation');
+      next.interpolation=value;
+    }
     else if(property==='mode'){
       if(!['auto','camera','physical'].includes(value))throw RangeError('Invalid mode');
       next.mode=value;next.target='auto';next.activeFrameKeys=null;
@@ -221,6 +228,9 @@
       var result=compatibility.inspect(frames.map(function(frame){return frame.experiment;}),options);
       var issues=result.issues.slice();
       if(!draft.name.trim())issues.push({code:'missing-name',path:'name'});
+      if(!['linear','spline'].includes(draft.interpolation||'linear')||
+        (result.mode!=='camera'&&draft.interpolation==='spline'))
+        issues.push({code:'invalid-interpolation',path:'interpolation'});
       frames.forEach(function(f,i){
         if(!f.name.trim())issues.push({code:'missing-frame-name',path:'keyframes.'+i+'.name'});
         if(i&&f.travelMs<200)issues.push({code:'invalid-duration',path:'keyframes.'+i+'.travelMs'});
@@ -240,7 +250,8 @@
         name:f.name,experiment:f.experiment,travelMs:f.travelMs,
         holdMs:f.holdMs,easing:f.easing};
     }),Object.assign({id:id,name:draft.name,description:draft.description,
-      mode:result.mode,target:result.target},draft.cameraHudAppearance?
+      mode:result.mode,target:result.target,interpolation:draft.interpolation||'linear'},
+      draft.cameraHudAppearance?
       {cameraHudAppearance:draft.cameraHudAppearance}:{}));
   }
   // Suggest names only for usable sequences; invalid mixed sequences retain the

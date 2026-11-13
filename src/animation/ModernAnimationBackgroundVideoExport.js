@@ -28,8 +28,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1&target-indicator=1';
-    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1';
+    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
+    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1';
     var active=null;
     function cancel(){
       if(!active)return false;

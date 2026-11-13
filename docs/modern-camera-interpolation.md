@@ -28,6 +28,39 @@ keyframes and intermediate aim/aspect constraints are validated before playback.
 Sampling is stateless; seeking to a time never requires calculating previous
 frames. Frames outside the timeline clamp to the respective endpoints.
 
+## Animation Studio spline core (headless stage)
+
+Animation Studio projects (`src/animation/ModernAnimationProject.js`) optionally
+store `interpolation: "linear" | "spline"`. Existing version-1 projects without
+this field retain their **unchanged Linear behavior**, including each frame's
+`linear` / `smoothstep` inbound easing. Only **camera** projects support Spline;
+physical curvature and temperature-gradient projects remain linear.
+
+`ModernCameraInterpolator.interpolateSpline(frames, segmentIndex, progress)`
+interpolates between the numbered arrival keyframes using a **shape-preserving
+cubic Hermite** curve. It uses the actual inbound `travelMs` intervals when
+estimating neighboring tangents, not uniform keyframe indexes. Interior keys
+without a hold have continuous first derivatives in physical transition time;
+endpoint keys and keys with `holdMs > 0` stop smoothly. With exactly two keys,
+the cubic has zero end velocities. Per-frame easing is retained in the project
+but not *also* applied in Spline mode: doing so would force an artificial stop
+at every keyframe.
+
+East/North, Height and Nick are shape-preserving **per coordinate**, with no
+overshoot beyond each segment's endpoint values. Pan and Roll take shortest
+angular differences and are wrapped to the supported Modern pose ranges.
+FocalLengthField follows a shape-preserving spline **in log-space** to remain
+positive. View aim mode and aspect ratio cannot change across a segment.
+This is not constant-speed or geodesic motion, and the local tangent constraint
+does not constrain the total three-dimensional path to a fixed ground altitude.
+
+Studio's pure draft API carries the new property through `blank`, `edit`,
+`build`, `fromProject` and crash-recovery checkpoints. This **first stage has
+no new UI control**; Preview/Video may sample a programmatically created Spline
+project through the existing shared `sampleAt` path. A user-facing Linear/Spline
+switch in Animation Studio is a separate follow-up stage. The independent
+Scene/Compare Camera Animation panel still uses its original interpolation.
+
 ## Browser controls: direct camera animation
 
 In **Scene / Compare → Camera → Camera Animation**:
@@ -67,9 +100,10 @@ and the `experiment=` share URL; old experiments and empty sequences omit it.
 The saved sequence references *poses*, not IDs of Camera Positions. Editor
 selection and navigation speed are intentionally not serialized.
 
-This is a sequence of independent segments: smoothstep stops at keyframes.
-Fly-through splines, a scrubbable timeline, geodesic paths, final accurate
-frame-by-frame rendering and video export remain future work. Live Chromium
+The **direct Camera Animation panel** is a sequence of independent segments:
+smoothstep stops at keyframes. It does not expose the new Animation Studio
+spline core. Geodesic motion and constant-speed path parametrization remain
+out of scope; Animation Studio already has a separate Preview and video export. Live Chromium
 visual validation is separate from the Node integration tests.
 
 ## Checks

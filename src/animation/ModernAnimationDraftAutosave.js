@@ -34,6 +34,8 @@
       throw RangeError('Invalid animation draft');
     if(draft.target!=='auto'&&!/^(scene|A|B)\|(surface\.curvature|temperatureProfile\.gradientKPerKm)$/.test(draft.target))
       throw RangeError('Invalid animation physical target');
+    var interpolation=draft.interpolation===undefined?'linear':draft.interpolation;
+    if(!['linear','spline'].includes(interpolation))throw RangeError('Invalid animation interpolation');
     var keys=new Set(),frames=draft.frames.map(function(frame,i){
       if(!object(frame))throw RangeError('Invalid animation frame');
       var key=string(frame.key,140);
@@ -68,7 +70,8 @@
       throw RangeError('Invalid saved animation revision');
     return {version:VERSION,savedAt:input.savedAt,
       draft:{name:string(draft.name,120),description:string(draft.description,1000),
-        mode:draft.mode,target:draft.target,source:draft.source,frames:frames,
+        mode:draft.mode,target:draft.target,interpolation:interpolation,
+        source:draft.source,frames:frames,
         activeFrameKeys:active?active.slice():null,
         cameraHudAppearance:draft.cameraHudAppearance==null?null:
           hud.validateAppearance(draft.cameraHudAppearance)},
