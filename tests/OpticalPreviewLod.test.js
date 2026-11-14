@@ -45,6 +45,22 @@ test('auto frame-budget controller decreases density quickly but restores it wit
   c.reset();assert.equal(c.stride(),1);
   assert.throws(()=>lod.createController(0),/budget/);
 });
+test('motion frame pacing adapts to complete scene cost without oscillating or exceeding bounds',()=>{
+  const p=lod.createFramePacer();
+  assert.equal(p.intervalMs(),100);
+  assert.equal(p.observe(NaN),100);
+  assert.equal(p.observe(-1),100);
+  const quick=[];
+  for(let i=0;i<8;i++)quick.push(p.observe(25));
+  assert.ok(quick.every((x,i)=>i===0||x<=quick[i-1]));
+  assert.ok(quick.at(-1)<=70,'cheap scenes should approach roughly 15 fps');
+  assert.ok(p.observe(300)>=160,'slow frames back off immediately');
+  for(let i=0;i<6;i++)assert.ok(p.observe(1000)<=180,'heavy scenes must be capped');
+  const recovery=p.observe(10);
+  assert.ok(recovery<=180,'recovery must remain bounded');
+  p.reset();
+  assert.equal(p.intervalMs(),100,'each new gesture starts with a neutral cadence');
+});
 test('Fast Preview LOD projects fewer complete towers with zero RK4; Accurate ignores it',()=>{
   for(const geometry of ['globe','flat']){
     const {m,c}=input(85,geometry),session=optics.create();

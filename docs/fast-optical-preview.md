@@ -108,6 +108,13 @@ by RK4. The independent accurate path and cache are unaffected.
 The initial adapter integration enabled the explicit **Fast** selector.
 Camera-motion integration (stage 3) also permits the same built-in profiles
 in **Auto** and Camera Animation, without changing the accurate RK4 path.
+Stage 4 retains up to **12** recently used atmospheric gradient tables
+(256 samples each), keyed by geometry, Earth radius, named profile and its
+physical parameters. Observer height does not change the atmospheric table,
+so varying camera height can reuse it. Each new ray field still owns its
+scratch path and counters, and the tracer validates the atmospheric options
+on cache hits. `stats().tableCacheHit` reports lookup reuse; it does **not**
+mean that a partially unresolved Fast composition was cached or reused.
 Performance of a fully rendered browser scene is not established by
 isolated-kernel timings.
 
@@ -178,12 +185,15 @@ isolated-kernel timings.
   batch with their independent atmospheric parameters. Manual Fast stays Fast
   on release; Auto returns to full Accurate RK4. Accurate manual drag retains
   the older CSS-only compositor before a single exact commit on release.
-- RAF batches are coalesced and nominally spaced by 100 ms; the final changed
-  camera pose is also scheduled after the throttle interval if mouse movement
-  stops without a `pointerup`. Releasing/cancelling the gesture clears that
-  pending timer. This is a responsiveness policy, not a guaranteed 10 FPS:
-  synchronous optical/Canvas work can exceed the budget. Browser visual checks
-  are still outstanding.
+- RAF batches are coalesced. A navigation gesture starts at 100 ms cadence;
+  measured **complete** Scene or A+B Compare redraw time adjusts that interval
+  toward 65–180 ms, with immediate slowdown and gradual speed-up. Pointer
+  motion marks the pose dirty: an unchanged held pointer does **not** trigger
+  repeated physical frames. The final changed pose is still scheduled after a
+  throttle interval even if mouse movement stops without `pointerup`.
+  Release/cancellation clears pending timers. This is not guaranteed FPS:
+  synchronous optics/Canvas work can still exceed the budget, and Opera
+  end-to-end timings need manual verification.
 - Compare actual rasterized contours/fills with Accurate under Scene and
   Compare A/B, at varied camera poses, camera FOVs and atmospheres.
 - Time end-to-end Canvas renders (including tessellation), assess image artifacts
@@ -201,10 +211,12 @@ isolated-kernel timings.
   Scene/Compare atmospheric profiles, pressing and holding camera navigation
   keys, dragging the camera, or using Alt/Shift + wheel produces **Fast**
   projections; the final released/idle camera is recomputed with Accurate.
-- The Fast path is limited to at most one pending physical repaint and a
-  nominal **100 ms** interval between newly scheduled frames. This is **not** a
-  guaranteed FPS: a synchronous Canvas/optical draw still blocks the UI while
-  it runs. The first frame of each Auto LOD navigation sequence starts with
+- The Fast path is limited to at most one pending physical repaint. The
+  initial **100 ms** motion interval adapts to measured rendering time within
+  **65–180 ms**. There is no repeated redraw for an unchanged camera pose.
+  This is **not** a guaranteed FPS: a synchronous Canvas/optical draw still
+  blocks the UI while it runs. The first frame of each Auto LOD navigation
+  sequence starts with
   every eighth tower to avoid a dense-scene cold-frame delay; the measured
   budget controller then adapts subsequent images. A manually chosen LOD
   stride is respected. Both Compare sides use a common stride.

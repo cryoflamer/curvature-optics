@@ -102,9 +102,9 @@
   // Manual Fast and Auto motion use real optical frames, not the cached
   // raster compositor. Auto alone returns to Accurate when navigation stops.
   var autoCameraActive=false,autoCameraLastFrame=-Infinity,autoCameraSettleTimer=null;
-  var cameraMotionTimer=null;
+  var cameraMotionTimer=null,autoCameraChangeSeq=0,autoCameraPaintedSeq=0;
   var cameraTransition=null;
-  var AUTO_FRAME_INTERVAL_MS=100,AUTO_WHEEL_IDLE_MS=220;
+  var AUTO_WHEEL_IDLE_MS=220;
   function qualifiedFastProfile(atmosphere){
     // These profiles are implemented by OpticalFastRayField (analytic or
     // adaptive). Do not silently render Standard for a different atmosphere.
@@ -131,18 +131,26 @@
   }
   function stopAutoCameraPreview(){
     clearAutoCameraSettle();autoCameraActive=false;autoCameraLastFrame=-Infinity;
+    autoCameraChangeSeq=0;autoCameraPaintedSeq=0;
     if(cameraMotionTimer!==null){clearTimeout(cameraMotionTimer);cameraMotionTimer=null;}
   }
   function paintCameraMotion(){
-    if(!autoCameraActive)return;
-    var now=profileNow(),wait=AUTO_FRAME_INTERVAL_MS-(now-autoCameraLastFrame);
+    // Do not repeatedly redraw an unchanged pose merely because the pointer
+    // is still held. A real motion request marks the current pose dirty.
+    if(!autoCameraActive||autoCameraPaintedSeq===autoCameraChangeSeq)return;
+    var scope=state.mode==='compare'?'compare':'Scene',
+      pacer=previewFramePacers&&previewFramePacers[scope],
+      interval=pacer?pacer.intervalMs():100,
+      now=profileNow(),wait=interval-(now-autoCameraLastFrame);
     if(state.frame===null&&wait<=0){
+      if(cameraMotionTimer!==null){clearTimeout(cameraMotionTimer);cameraMotionTimer=null;}
       autoCameraLastFrame=now;
+      autoCameraPaintedSeq=autoCameraChangeSeq;
       redraw('camera-motion');
       return;
     }
-    // A pointer may stop moving between two throttle slots. Keep its last
-    // physical pose queued even when no further pointermove events arrive.
+    // Preserve the latest held-pointer pose even if no more events arrive
+    // after a throttled input; never leave duplicate timers behind.
     if(cameraMotionTimer===null)cameraMotionTimer=setTimeout(function(){
       cameraMotionTimer=null;
       paintCameraMotion();
@@ -154,11 +162,12 @@
     if(!autoCameraActive){
       autoCameraActive=true;autoCameraLastFrame=-Infinity;
       // Start sparse in dense scenes; LOD then adapts from measured batches.
-      if(state.previewDetail==='auto'&&previewLodControllers){
-        var scope=state.mode==='compare'?'compare':'Scene';
+      var scope=state.mode==='compare'?'compare':'Scene';
+      if(state.previewDetail==='auto'&&previewLodControllers)
         previewLodControllers[scope].reset(8);
-      }
+      if(previewFramePacers)previewFramePacers[scope].reset();
     }
+    autoCameraChangeSeq++;
     paintCameraMotion();
     return true;
   }
@@ -166,6 +175,9 @@
   var previewLodControllers=previewLodApi?{
     Scene:previewLodApi.createController(45),
     compare:previewLodApi.createController(70)}:null;
+  var previewFramePacers=previewLodApi&&previewLodApi.createFramePacer?{
+    Scene:previewLodApi.createFramePacer(),
+    compare:previewLodApi.createFramePacer()}:null;
   function previewStride(view){
     if(effectiveOpticalQuality()!=='fast')return 1;
     if(state.previewDetail!=='auto')return Number(state.previewDetail);
@@ -206,8 +218,12 @@
       fullBatch&&state.compareLast.A&&state.compareLast.B&&
       state.compareLast.A.opticalQuality==='fast'&&state.compareLast.B.opticalQuality==='fast'&&
       state.compareLast.A.previewLod&&state.compareLast.B.previewLod;
-    if(effectiveOpticalQuality()==='fast'&&state.previewDetail==='auto'&&
-        previewLodControllers&&valid)previewLodControllers[scope].observe(ms);
+    if(effectiveOpticalQuality()==='fast'&&valid){
+      if(state.previewDetail==='auto'&&previewLodControllers)
+        previewLodControllers[scope].observe(ms);
+      if(autoCameraActive&&previewFramePacers)
+        previewFramePacers[scope].observe(ms);
+    }
     updatePreviewDetailStatus();
   }
   function bindOpticalQuality(){

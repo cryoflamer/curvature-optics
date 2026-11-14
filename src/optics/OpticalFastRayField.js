@@ -14,6 +14,21 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(tracer){
   'use strict';
   var HALF_PI=Math.PI/2;
+  // Only the immutable atmospheric-gradient lookup is shared across frames.
+  // Field-specific paths, counters and sampled rays remain independent. Keep
+  // the cache bounded: UI interactions may generate many distinct gradients.
+  var ADAPTIVE_TABLE_CACHE_LIMIT=12,adaptiveTables=new Map();
+  function cachedAdaptiveTable(key){
+    if(!adaptiveTables.has(key))return null;
+    var table=adaptiveTables.get(key);
+    adaptiveTables.delete(key);adaptiveTables.set(key,table);
+    return table;
+  }
+  function storeAdaptiveTable(key,table){
+    adaptiveTables.set(key,table);
+    if(adaptiveTables.size>ADAPTIVE_TABLE_CACHE_LIMIT)
+      adaptiveTables.delete(adaptiveTables.keys().next().value);
+  }
   function create(options){
     options=options||{};
     var geometry=options.geometry,atmosphere=options.atmosphere,
@@ -145,20 +160,30 @@
     var mode=supported?'adaptive-conformal-curvature':'unsupported';
     var segments=8,passes=2,tableSize=256,tableTop=50000,scale=4,
       // Log-spaced heights resolve metre-scale near-ground gradient changes.
-      logTop=Math.log1p(tableTop/scale),table=new Float64Array(tableSize),
+      logTop=Math.log1p(tableTop/scale),table=null,tableCacheHit=false,
       eyeU=geometry==='globe'?radius*Math.log1p(eye/radius):eye,
       margin=options.contactMarginMeters===undefined?0.25:options.contactMarginMeters;
     if(!Number.isFinite(margin)||margin<=0||margin>100)
       throw RangeError('Invalid preview contact margin');
     if(supported){
-      var profile=tracer.atmosphere(atmosphere,options.profileOptions);
-      for(var t=0;t<tableSize;t++){
-        var h=scale*Math.expm1(logTop*t/(tableSize-1)),
-          n=profile.n(h),dn=profile.dn(h);
-        if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))
-          throw RangeError('Invalid adaptive preview refractive profile');
-        table[t]=(geometry==='globe'?1/radius+(1+h/radius)*dn/n:dn/n);
-        if(!Number.isFinite(table[t]))throw RangeError('Invalid adaptive preview gradient');
+      // Always validate profile parameters, including on cache hits. The key
+      // contains every physical input to n(h)/dn(h), but not observer height:
+      // the latter changes only the launch path, not the lookup table.
+      var profile=tracer.atmosphere(atmosphere,options.profileOptions),key=null;
+      try{key=JSON.stringify([geometry,atmosphere,radius,options.profileOptions||null]);}
+      catch(_error){/* Exotic non-serializable input: recompute; never reuse. */}
+      if(key!==null){table=cachedAdaptiveTable(key);tableCacheHit=table!==null;}
+      if(!table){
+        table=new Float64Array(tableSize);
+        for(var t=0;t<tableSize;t++){
+          var h=scale*Math.expm1(logTop*t/(tableSize-1)),
+            n=profile.n(h),dn=profile.dn(h);
+          if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))
+            throw RangeError('Invalid adaptive preview refractive profile');
+          table[t]=(geometry==='globe'?1/radius+(1+h/radius)*dn/n:dn/n);
+          if(!Number.isFinite(table[t]))throw RangeError('Invalid adaptive preview gradient');
+        }
+        if(key!==null)storeAdaptiveTable(key,table);
       }
     }
     // Scratch is owned by one field and reused between synchronous sample()
@@ -237,6 +262,7 @@
     }
     function stats(){return Object.assign({geometry:geometry,atmosphere:atmosphere,
       mode:mode,segments:segments,passes:passes,tableSize:supported?tableSize:0,
+      tableCacheHit:tableCacheHit,
       tableTopMeters:tableTop,contactMarginMeters:margin,shootRK4Calls:0,
       solves:counters.samples,hits:0,exactSolveMs:0},counters);}
     return {sample:sample,stats:stats,mode:mode};

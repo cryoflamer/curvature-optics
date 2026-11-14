@@ -377,6 +377,23 @@ test('motion-throttled Fast paints the final moved pose while pointer is still d
   assert.equal(r.length,count+1,'cancelled drag must not leak delayed Fast frames');
 });
 
+test('stationary held-pointer Fast does not run redundant physical frames',()=>{
+  const h=boot(),n=h.nodes,r=h.renders;h.flushFrames();
+  n.get('ModernOpticalQuality').value='fast';n.get('ModernOpticalQuality').dispatch('change');
+  h.flushFrames();
+  const pointer={button:0,pointerId:8,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:95,clientY:65});
+  h.flushFrames(16);
+  const count=r.length;
+  h.flushTimers();h.flushFrames(200);
+  h.flushTimers();h.flushFrames(200);
+  assert.equal(r.length,count,'holding an unchanged pose must not churn optical frames');
+  h.canvas.dispatch('pointerup',{...pointer,clientX:95,clientY:65});
+  h.flushFrames();
+  assert.equal(r.at(-1).quality,'fast');
+});
+
 test('manual Fast pointercancel restores the initial camera without an Accurate frame',()=>{
   const h=boot(),n=h.nodes,r=h.renders;h.flushFrames();
   n.get('ModernOpticalQuality').value='fast';n.get('ModernOpticalQuality').dispatch('change');

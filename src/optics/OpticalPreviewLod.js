@@ -66,6 +66,27 @@
       }
     });
   }
+  // Motion-only pacing uses observed *complete* Scene/Compare redraw times.
+  // It does not make the optical field less accurate or change authored LOD.
+  // A brief expensive frame backs off immediately; a faster sequence reduces
+  // the interval gradually to avoid oscillations on mixed-cost atmospheres.
+  function createFramePacer(){
+    var interval=100,average=null;
+    return Object.freeze({
+      intervalMs:function(){return interval;},
+      reset:function(){interval=100;average=null;},
+      observe:function(ms){
+        if(!Number.isFinite(ms)||ms<0)return interval;
+        average=average===null?ms:average*0.6+ms*0.4;
+        var wanted=Math.max(65,Math.min(180,Math.ceil(average*1.35)));
+        if(wanted>interval)interval=wanted;
+        else if(wanted<interval-4)
+          interval=Math.max(wanted,Math.ceil(interval*0.65+wanted*0.35));
+        return interval;
+      }
+    });
+  }
   return Object.freeze({thin:thin,validateStride:validateStride,
-    createController:createController,strides:STRIDES.slice()});
+    createController:createController,createFramePacer:createFramePacer,
+    strides:STRIDES.slice()});
 }));

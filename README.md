@@ -13,7 +13,11 @@ angles **including real intermediate camera frames while dragging**, or
 **Auto** to show throttled Fast Preview during navigation and restore Accurate
 RK4 on release/idle. Accurate RK4 remains the default; the near-horizon image
 may be incorrect. Fast Preview object detail can be
-selected manually or adapted to measured redraw cost (`Auto`); full object
+selected manually or adapted to measured redraw cost (`Auto`). During
+navigation, the Fast frame interval also adapts to measured Scene/Compare
+rendering cost (about 65–180 ms), and stationary held-pointer poses do not
+trigger repeated physical work. Adaptive atmospheric gradient tables are
+reused across camera heights for unchanged profile settings. Full object
 geometry remains intact in Accurate. Some profiles are not qualified and
 show an explicit error instead of silently using RK4 in manual Fast mode.
 All built-in atmospheric models now qualify for Fast/Auto camera-motion
@@ -87,7 +91,7 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 
 - [Architecture](docs/architecture.md) — entry points, module ownership, data flow, retained/archived boundaries.
 - [Physics and numerical methods](docs/physics.md) — surface geometry, atmospheric models, RK4, shooting, and limits of validation.
-- [Fast optical preview](docs/fast-optical-preview.md) — manual Fast now supports all built-in atmospheric models through analytic or adaptive curvature fields; Auto profile eligibility remains limited until the next phase. Includes Preview-only tower LOD, RK4 isolation and validation limits.
+- [Fast optical preview](docs/fast-optical-preview.md) — Fast/Auto support all seven built-in atmospheric models through analytic or adaptive curvature fields, with live motion rendering, measured frame pacing, bounded gradient-table reuse, Preview-only tower LOD and RK4 isolation.
 - [User guide](docs/user-guide.md) — Legacy storyboards, Modern Scene/Compare, rendering, URLs and saved scenes.
 - [Development and tests](docs/development.md) — no-build workflow, test commands, preserved baselines and contribution rules.
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.

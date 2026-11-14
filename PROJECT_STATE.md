@@ -2451,3 +2451,24 @@ shared styling and card-specific click isolation.
   `unsupported` and cause partial fills; fixing that is outside this routing
   patch. Tests exercise intermediate paint before pointerup, Compare B routing,
   latest-pose scheduling, cancellation and adaptive-profile Auto frames.
+
+### Adaptive Fast Preview: measured frame pacing and gradient reuse (stage 4)
+
+- Existing Scene/Compare Fast/Auto live optics now pace motion frames using
+  the measured complete redraw duration rather than a fixed 100 ms limit.
+  Cadence starts at 100 ms and is bounded to 65–180 ms with smoothing; an
+  expensive frame backs off promptly and faster frames recover gradually.
+  The existing Preview-only LOD controller still manages object thinning;
+  both Compare sides share the same stride. Accurate/RK4 remains unchanged.
+- The camera motion scheduler tracks requested versus drawn poses. A held,
+  stationary pointer no longer causes a repeated physical-redraw timer loop.
+  Any newer pose requested during a throttle interval still receives its
+  trailing Fast frame before release. Pending timers are cleared on stop.
+- The adaptive field now reuses **read-only** 256-point gradient tables from
+  a bounded 12-entry LRU keyed by atmosphere, parameters, geometry and radius.
+  Camera height does not invalidate those gradients, but each field retains
+  independent ray paths/counters. Tracer validation remains in effect on
+  cache hits; cache status is reported in field diagnostics. Partial/unresolved
+  optical compositions are still not cached by the physical scene adapter.
+- Added cache isolation/eviction, cadence and stationary-drag tests. Browser
+  visual quality, frame time and GPU/render-driver behavior remain unverified.

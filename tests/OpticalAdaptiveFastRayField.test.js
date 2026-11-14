@@ -93,7 +93,7 @@ test('adaptive field conservatively rejects invalid/custom/steep inputs',()=>{
   const duct=make({profileOptions:{refractivity:0.1,scaleHeight:1000}});
   assert.equal(duct.sample(100000,30).status,'unsupported','strong ducting may violate approximation');
 });
-test('adaptive field maintains independent per-instance tables and sampling counters',()=>{
+test('adaptive field maintains independent sampling counters with separate atmospheres',()=>{
   const a=fast.createAdaptive({geometry:'flat',atmosphere:'standard',observerHeight:15});
   const b=fast.createAdaptive({geometry:'flat',atmosphere:'temperature-lapse',observerHeight:15,
     profileOptions:{gradientKPerKm:20}});
@@ -108,4 +108,33 @@ test('adaptive field maintains independent per-instance tables and sampling coun
   const legacy=fast.create({geometry:'flat',atmosphere:'temperature-lapse',observerHeight:15});
   assert.equal(legacy.sample(10000,40).status,'unsupported',
     'existing create() mode is unchanged until later integration');
+});
+
+test('adaptive tables are reused across camera heights but isolated by profile, radius and geometry',()=>{
+  const base={geometry:'globe',atmosphere:'temperature-lapse',radius:6381234,
+    observerHeight:15,profileOptions:{gradientKPerKm:11.72,temperatureC:12}};
+  const a=fast.createAdaptive(base);
+  assert.equal(a.stats().tableCacheHit,false,'new atmosphere should build its gradient table');
+  const b=fast.createAdaptive({...base,observerHeight:60});
+  assert.equal(b.stats().tableCacheHit,true,'camera height must not rebuild n(h)');
+  assert.equal(a.sample(10000,40).status,'visible');
+  assert.equal(b.stats().samples,0,'table reuse must not reuse ray results or counters');
+  const same=fast.createAdaptive(base);
+  assert.equal(same.stats().tableCacheHit,true);
+  assert.equal(same.sample(10000,40).angle,a.sample(10000,40).angle,
+    'cached table must preserve sampled angle');
+  assert.equal(fast.createAdaptive({...base,profileOptions:{...base.profileOptions,
+    gradientKPerKm:11.73}}).stats().tableCacheHit,false);
+  assert.equal(fast.createAdaptive({...base,radius:base.radius+1}).stats().tableCacheHit,false);
+  assert.equal(fast.createAdaptive({...base,geometry:'flat'}).stats().tableCacheHit,false);
+  assert.throws(()=>fast.createAdaptive({...base,profileOptions:{gradientKPerKm:50}}),
+    /Invalid temperature-lapse atmosphere/);
+});
+
+test('adaptive gradient cache has a finite LRU limit',()=>{
+  const base={geometry:'flat',atmosphere:'standard',radius:6410001,observerHeight:10};
+  assert.equal(fast.createAdaptive(base).stats().tableCacheHit,false);
+  for(let i=0;i<13;i++)fast.createAdaptive({...base,radius:base.radius+i+1});
+  assert.equal(fast.createAdaptive(base).stats().tableCacheHit,false,
+    'old gradient tables must be evicted instead of accumulating forever');
 });
