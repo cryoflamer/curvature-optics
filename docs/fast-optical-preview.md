@@ -25,8 +25,9 @@ atmosphere, profileOptions, contactMarginMeters })` returns
 - There is deliberately no `exact()` method or hidden RK4 call. The Modern
   adapter uses `sample()` for objects **and** metric ground guides in Fast mode.
   Accurate uses its original `.exact()` path and remains independently cached.
-- Unsupported atmosphere/geometry combinations are explicit. They must not be
-  treated as vacuum, invisible, or clear. No custom profile is accepted.
+- Unsupported targets (steep rays, samples outside the table or unstable
+  curvature) are explicit. They must not be treated as vacuum, invisible,
+  or clear. No custom profile is accepted.
 
 ## Mathematical models
 
@@ -69,8 +70,8 @@ for:
 
 For built-in Standard it is an **approximation**: `n(h)=1+N₀ exp(-h/H)`
 does not have constant conformal log-gradient. In Globe, nonpositive
-`g` (strong-refraction/ducting cases) is deliberately unsupported. Other
-profile families are not yet qualified. The 3 m default contact band for
+`g` (strong-refraction/ducting cases) is deliberately unsupported. Other profile families use the opt-in adaptive kernel for explicitly selected
+**Fast** rendering (see below); the original `create()` API remains restricted. The 3 m default contact band for
 Standard is a safety convention, **not an experimentally certified global
 error bound**; the exact-model branch uses a 1 µm numerical contact band.
 
@@ -90,26 +91,53 @@ camera, and sampled computation time. It does not compare finished Canvas
 images or validate global first-ground events. A reported `indeterminate`
 should not be counted as an incorrect occlusion or silent success.
 
+## Adaptive kernel integration (stage 2)
+
+`CurvatureOpticalFastRayField.createAdaptive(options)` is now selected by the
+physical scene adapter for built-in profiles that are not already covered by
+the existing Fast analytic/local-gradient implementation. It tables `n(h)` and
+`dn(h)` to 50 km (256 log-height samples), integrates eight piecewise-curvature
+intervals with two passes and returns approximate angles and ground-clearance
+statuses. The physics inputs match Accurate's per-model options: **direct**
+`temperatureProfile` for temperature-lapse; nested `transitionProfile` and
+`inverseProfile` with their `temperatureProfile` and `occlusionRadius` where
+needed. The choice does not change saved experiment parameters. Unresolved
+steep rays or unstable/over-range trajectories are never automatically retraced
+by RK4. The independent accurate path and cache are unaffected.
+
+This stage enables the explicit **Fast** selector; **Auto** eligibility still
+uses the earlier limited profile allowlist until a subsequent integration
+patch. Animation Fast eligibility likewise remains unchanged. The next phase
+must validate those UI policies before broadening them. Performance of the
+full browser-rendered scene is not established by isolated-kernel timings.
+
 ## Manual Modern integration, adaptive object LOD and known limits
 
 1. Open **Modern → Scene or Compare → Display → Optical ray field**. Select
    `Fast Preview · approximate` to draw a new scene through the cheap ray
    field. `Accurate · RK4` restores the original full optical calculation.
    Selection is session-local, **not** saved to the experiment URL or JSON.
-2. Qualifying atmospheres are Standard Globe/Flat, Flat exponential-occlusion,
-   Flat inverse-temperature **at exactly 100%** strength, and vacuum (which
-   continues to use the existing exact analytic vacuum geometry). A complete
-   Flat profile-transition endpoint may resolve to exponential-occlusion.
-   Other profiles deliberately produce **Fast Preview is unavailable**, with
-   a cleared viewport, rather than silently invoking RK4 or displaying stale
-   pixels. Compare A and B can qualify independently.
+2. Explicit **Fast** now routes all built-in named atmospheres on Globe and
+   Flat. Standard preserves its existing local constant-conformal-gradient
+   field; Flat exponential-occlusion and Flat inverse-temperature at exactly
+   100% engineered weight retain their analytic field; vacuum retains its
+   separate analytic geometry. Temperature-lapse, intermediate profile-transition,
+   intermediate inverse-temperature, inverse-spherical and the remaining Globe
+   engineered cases use `createAdaptive()` with each model's actual profile
+   parameters. Transition weight 0/1 resolves to the original named endpoints.
+   No hidden RK4 or Standard substitution occurs. Compare sides have separate
+   atmospheric inputs/field instances; their existing LOD policy is unchanged.
 3. **Fast Preview is approximate.** The standalone field's default 3 m
    near-contact margin is retained for conservative mathematical diagnostics;
    the *scene Preview adapter* explicitly uses a narrower **0.1 m band** to
    avoid removing thousands of otherwise drawable foundation fragments. This
    trades horizon confidence for speed and visual continuity, and is *not* a
-   measured error bound. Missing/incorrect near-horizon silhouettes remain
-   possible. An `indeterminate` is never promoted to a visible ray.
+   measured error bound. The adaptive kernel has an independent default 0.25 m
+   contact band; the scene adapter uses the common 0.1 m preview setting.
+   Missing/incorrect near-horizon silhouettes remain possible. An
+   `indeterminate` is never promoted to a visible ray. Shallow-ray limits
+   (e.g. steep, near-camera targets) remain `unsupported`, potentially leaving
+   incomplete fills; these partial scenes are deliberately not cached.
 4. The separate Scene and Compare A/B cache sessions, plus an explicit quality
    key, prevent Approximate results from being mistaken for Accurate. Traced
    horizon overlays are suppressed in Fast mode to avoid accidental RK4
@@ -136,18 +164,23 @@ should not be counted as an incorrect occlusion or silent success.
    Its object counts can differ from the nominal tower count because the scene
    includes another object bank. End-to-end browser timing remains necessary.
 7. `tests/ModernFastPreview.test.js` covers real geometric fills/outlines,
-   zero RK4 calls in Fast, unsupported profile refusal, quality switch/cache
-   isolation, and UI routing for Scene/Compare. Browser pixel parity and
-   complete end-to-end FPS have **not** been established.
+   unchanged analytic paths, adaptive routes across both geometries, the
+   profile-settings effect on rendered strokes, zero RK4 calls in Fast,
+   quality/cache isolation, and UI routing for Scene/Compare. Browser pixel
+   parity and complete end-to-end FPS have **not** been established.
 
 ### Next evaluation and Auto-navigation work
 
+- Extend **Auto** eligibility in the Scene/Compare/animation controllers
+  to the new supported models; this stage changes *manual Fast* routing only.
+  An explicit Fast scene may now work for a profile for which Auto navigation
+  still stays Accurate. Browser visual checks are still outstanding.
 - Compare actual rasterized contours/fills with Accurate under Scene and
   Compare A/B, at varied camera poses, camera FOVs and atmospheres.
 - Time end-to-end Canvas renders (including tessellation), assess image artifacts
-  from tower thinning, and develop an Auto-preview scheduler for navigation.
-  Adaptive object LOD is available in manual Fast Preview, but **not**
-  automatic switching between Fast and Accurate during camera motion.
+  from tower thinning and tune the existing Auto-preview scheduler for the
+  broader atmosphere set. Adaptive object LOD is already available in manual
+  Fast Preview and existing Auto-supported profiles.
 - Keep exact caches, exact horizon/ground events and final offline animation
   rendering completely independent of Preview.
 

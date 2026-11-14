@@ -39,30 +39,84 @@ test('Fast Preview renders real Modern Globe/Flat geometry without invoking RK4 
   }finally{projection.solve=original;}
 });
 
-test('Fast Preview qualifies analytic Flat endpoints and rejects unsupported profiles without RK4 fallback',()=>{
-  const s=scene('flat');
-  for(const [atmosphere,profile] of [
-    ['exponential-occlusion',null],
-    ['inverse-temperature',{weight:1,source:'standard'}]]){
-    const opts={atmosphere,opticalQuality:'fast',occlusionRadius:6371000};
-    if(profile)opts.inverseProfile=profile;
-    const result=optics.create().transform(s.composed,s.model,opts);
-    assert.equal(result.stats.opticalQuality,'fast');
-    assert.equal(result.stats.fieldStats.mode,'analytic');
-    assert.equal(result.stats.fieldStats.shootRK4Calls,0);
-    assert.ok(result.stats.visibleSegments>0);
-  }
-  for(const opts of [
-    {atmosphere:'temperature-lapse'},
-    {atmosphere:'inverse-temperature',inverseProfile:{weight:0.5,source:'standard'}},
-    {atmosphere:'exponential-occlusion',shape:'globe'}]){
-    const current=opts.shape==='globe'?scene('globe'):s;
-    assert.throws(()=>optics.create().transform(current.composed,current.model,
-      {atmosphere:opts.atmosphere,inverseProfile:opts.inverseProfile,
-        opticalQuality:'fast',occlusionRadius:6371000}),/Fast Preview is unavailable/);
-  }
-  assert.throws(()=>optics.create().transform(s.composed,s.model,
-    {atmosphere:'vacuum',opticalQuality:'ultra'}),/Unknown optical quality/);
+test('Fast Preview retains legacy analytic profiles and uses adaptive curvature for the remaining built-ins',()=>{
+  const flat=scene('flat'),globe=scene('globe');
+  const original=projection.solve;
+  projection.solve=()=>{throw Error('RK4 reached during Fast Preview');};
+  try{
+    for(const [atmosphere,profile] of [
+      ['exponential-occlusion',null],
+      ['inverse-temperature',{weight:1,source:'standard'}]]){
+      const opts={atmosphere,opticalQuality:'fast',occlusionRadius:6371000};
+      if(profile)opts.inverseProfile=profile;
+      const result=optics.create().transform(flat.composed,flat.model,opts);
+      assert.equal(result.stats.fieldStats.mode,'analytic');
+      assert.ok(result.stats.visibleSegments>0);
+    }
+    const cases=[
+      {atmosphere:'temperature-lapse',temperatureProfile:{temperatureC:15,gradientKPerKm:20}},
+      {atmosphere:'temperature-lapse',temperatureProfile:{gradientKPerKm:-20}},
+      {atmosphere:'profile-transition',transitionProfile:{source:'temperature-lapse',weight:0.4},
+        temperatureProfile:{gradientKPerKm:10}},
+      {atmosphere:'profile-transition',transitionProfile:{source:'standard',weight:0.7}},
+      {atmosphere:'inverse-temperature',inverseProfile:{source:'temperature-lapse',weight:0.45},
+        temperatureProfile:{gradientKPerKm:12}},
+      {atmosphere:'inverse-spherical'},
+      {atmosphere:'exponential-occlusion'}
+    ];
+    for(const entry of cases)for(const [shape,current] of [['flat',flat],['globe',globe]]){
+      // Flat exponential remains exact; Globe requires a varying-curvature field.
+      const expected=entry.atmosphere==='exponential-occlusion'&&shape==='flat'?
+        'analytic':'adaptive-conformal-curvature';
+      const result=optics.create().transform(current.composed,current.model,
+        {...entry,opticalQuality:'fast',occlusionRadius:6371000,previewLod:{stride:8}});
+      assert.equal(result.stats.opticalQuality,'fast',shape+'/'+entry.atmosphere);
+      assert.equal(result.stats.fieldStats.mode,expected,shape+'/'+entry.atmosphere);
+      assert.equal(result.stats.fieldStats.shootRK4Calls,0);
+      assert.ok(result.stats.fieldStats.samples>0);
+      assert.ok(result.stats.visibleSegments>0,'outline '+shape+'/'+entry.atmosphere);
+      assert.ok(result.stats.fillTriangles>0,'fills '+shape+'/'+entry.atmosphere);
+      assert.ok(result.composition.scene.primitives.some(p=>
+        p.metadata?.kind==='physical-object-fill'));
+    }
+    // Both transition endpoints must retain the original named tracer route.
+    for(const [weight,expected] of [[0,'local-conformal-gradient'],
+      [1,'adaptive-conformal-curvature']]){
+      const r=optics.create().transform(globe.composed,globe.model,{
+        opticalQuality:'fast',atmosphere:'profile-transition',occlusionRadius:6371000,
+        transitionProfile:{source:'standard',weight}});
+      assert.equal(r.stats.fieldStats.mode,expected);
+    }
+  }finally{projection.solve=original;}
+  assert.throws(()=>optics.create().transform(flat.composed,flat.model,{
+    atmosphere:'temperature-lapse',temperatureProfile:{gradientKPerKm:50},
+    opticalQuality:'fast'}),/Invalid temperature-lapse atmosphere/);
+  assert.throws(()=>optics.create().transform(flat.composed,flat.model,{
+    atmosphere:'vacuum',opticalQuality:'ultra'}),/Unknown optical quality/);
+});
+
+test('Fast adaptive scene separates atmospheric parameters and Accurate remains unchanged',()=>{
+  const {model:m,composed:c}=scene('globe');
+  const session=optics.create();
+  const base={atmosphere:'temperature-lapse',opticalQuality:'fast',previewLod:{stride:8}};
+  const warm={...base,temperatureProfile:{gradientKPerKm:-10}};
+  const changed={...base,temperatureProfile:{gradientKPerKm:20}};
+  const a=session.transform(c,m,warm);
+  // Ordinary near-camera steep rays exceed the shallow-ray scope, producing
+  // unresolved fill fragments. The existing adapter deliberately avoids
+  // caching those partial compositions, even for identical scene settings.
+  assert.ok(a.stats.fillUnresolvedReasons['optical-solver']>0);
+  assert.equal(session.transform(c,m,warm).reused,false);
+  const b=session.transform(c,m,changed);
+  assert.equal(b.reused,false);
+  const projected=(r)=>r.composition.scene.primitives.find(p=>p.type==='line'&&
+    p.metadata?.kind==='physical-object-stroke')?.points;
+  assert.ok(projected(a)&&projected(b));
+  assert.notDeepEqual(projected(a),projected(b),'Fast must reflect the selected gradient');
+  const accurate=session.transform(c,m,{...changed,opticalQuality:'accurate'});
+  assert.equal(accurate.reused,false);
+  assert.ok(accurate.stats.fieldStats.shootRK4Calls>0);
+  assert.equal(session.transform(c,m,{...changed,opticalQuality:'accurate'}).reused,true);
 });
 
 test('Accurate/Preview cache keys are isolated and switching back recovers full RK4',()=>{

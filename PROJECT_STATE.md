@@ -2406,3 +2406,26 @@ shared styling and card-specific click isolation.
 - The next integration stage must explicitly decide when to route Fast Field
   construction through this new opt-in API; no UI switch or production fallback
   is enabled by the mathematical-kernel patch.
+
+### Adaptive Fast Preview: physical scene profile routing (stage 2)
+
+- Manual Fast in `CurvaturePhysicalSceneOptics.js` now selects the independent
+  `createAdaptive()` field for built-in models that lack the existing qualified
+  analytic/local-gradient Fast path. This supports temperature-lapse, intermediate
+  profile-transition and inverse-temperature, inverse-spherical, and Globe
+  engineered profiles on either surface. Standard, Vacuum, and Flat analytic
+  engineered endpoints keep their previous routes unchanged.
+- Atmospheric options are passed with the same structure as Accurate: direct
+  temperature-lapse settings, nested transition/inverse configurations and the
+  independent `occlusionRadius`. Model parameters are neither replaced with
+  Standard nor persisted differently. No hidden RK4 is called during manual
+  Fast. Accurate uses the original shooting/ray-field code unchanged.
+- The adaptive shallow-ray kernel intentionally rejects steep near-camera
+  trajectories and extreme/over-range cases, which can leave incomplete fills
+  in complex scenes. Existing partial-frame caching safeguards remain in force.
+  Manual Fast is usable for the newly supported models; **Auto and Animation
+  fast-eligibility allowlists remain unchanged** for the next stage.
+- Real composed Flat/Globe tower tests cover new atmospheric routes, filling
+  and contours, preservation of analytic endpoints, profile-parameter effects,
+  the absence of RK4 work, and Fast-vs-Accurate isolation. Browser interaction,
+  final frame-rate and visual differences have not yet been validated.

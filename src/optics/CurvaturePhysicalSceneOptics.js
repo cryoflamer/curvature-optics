@@ -261,14 +261,29 @@
       if(preview&&kind!=='vacuum'){
         if(!fastFields||typeof fastFields.create!=='function')
           throw Error('Fast Preview module is unavailable');
-        var fastProfileOptions=traceKind==='inverse-temperature'?{
-          inverseProfile:options.inverseProfile,temperatureProfile:options.temperatureProfile,
-          occlusionRadius:R}: {occlusionRadius:R};
-        var previewField=fastFields.create({geometry:geometry,radius:model.rEarth,
+        // Forward the same named profile/options as Accurate. In particular,
+        // temperature-lapse takes the *direct* temperature settings, while
+        // transitions and inverse-temperature carry their nested sources and
+        // comparison-sphere radius. Do not silently fall back to Standard.
+        var fastProfileOptions=traceKind==='temperature-lapse'?options.temperatureProfile:
+          traceKind==='profile-transition'?{transitionProfile:options.transitionProfile,
+            temperatureProfile:options.temperatureProfile,occlusionRadius:R}:
+          traceKind==='inverse-temperature'?{inverseProfile:options.inverseProfile,
+            temperatureProfile:options.temperatureProfile,occlusionRadius:R}:
+          {occlusionRadius:R};
+        // Keep the previously qualified constant-gradient and exact analytic
+        // branches unchanged. Other built-in profiles opt into the adaptive
+        // shallow-ray surrogate (8 intervals, 2 passes), never hidden RK4.
+        var legacyFast=traceKind==='standard'||
+          (geometry==='flat'&&(traceKind==='exponential-occlusion'||
+            (traceKind==='inverse-temperature'&&options.inverseProfile&&
+              options.inverseProfile.weight===1)));
+        var fastFactory=legacyFast?fastFields.create:fastFields.createAdaptive;
+        if(typeof fastFactory!=='function')throw Error('Adaptive Fast Preview module is unavailable');
+        var previewField=fastFactory({geometry:geometry,radius:model.rEarth,
           observerHeight:model.Height,atmosphere:traceKind,profileOptions:fastProfileOptions,
-          // In exploratory preview, keep narrow ground-contact uncertainty
-          // instead of erasing whole foundation fills. This is NOT a certified
-          // first-ground accuracy band: final Accurate RK4 remains authoritative.
+          // Narrow preview contact uncertainty helps retain foundation fills;
+          // this is NOT a certified ground-contact error bound.
           contactMarginMeters:0.1});
         // Never substitute an RK4 result for an unqualified preview profile.
         // The UI shows the explicit error and leaves Accurate available.
