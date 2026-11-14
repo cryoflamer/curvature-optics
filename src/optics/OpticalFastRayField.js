@@ -2,8 +2,9 @@
  * Coordinates match OpticalSharedRayField: horizontal distance (flat) or
  * surface-arc distance (globe), altitude above the surface, metres.
  * Only vacuum and flat exponential endpoints are exact physical models.
- * The standard profile uses a LOCAL constant conformal log-gradient and
- * MUST NOT be treated as an authoritative visibility/ground oracle.
+ * The standard profile uses a LOCAL constant conformal log-gradient.
+ * createAdaptive() adds an opt-in altitude-dependent curvature surrogate.
+ * Neither approximate mode is an authoritative visibility/ground oracle.
  */
 (function(root,factory){
   var api=factory(typeof module==='object'&&module.exports?
@@ -116,5 +117,129 @@
       solves:counters.samples,hits:0,exactSolveMs:0},counters);}
     return {sample:sample,stats:stats,mode:mode};
   }
-  return {create:create};
+  // Standalone experimental preview kernel. No caller opts into this by using
+  // create(): UI wiring and model qualification are separate changes.
+  // u=R*log(1+h/R) on a globe, u=h on flat Earth; X is surface-arc distance.
+  // For shallow, forward-going rays: u''(X) ~= d(log((1+h/R)*n))/du
+  //   = 1/R + (1+h/R)*dn(h)/n(h) (globe), or dn(h)/n(h) (flat).
+  // Approximate each of eight x intervals by constant curvature, choose the
+  // initial slope so the final position matches the target, then repeat once
+  // with gradients sampled on the estimated bent path. This is NOT RK4 or an
+  // exact optical solution, especially near ducting/multipath/steep rays.
+  function createAdaptive(options){
+    options=options||{};
+    var geometry=options.geometry,atmosphere=options.atmosphere,
+      radius=options.radius===undefined?6371000:options.radius,
+      eye=options.observerHeight;
+    if(geometry!=='flat'&&geometry!=='globe')throw RangeError('Fast field requires flat or globe geometry');
+    if(!Number.isFinite(radius)||radius<=0||!Number.isFinite(eye)||eye<0)
+      throw RangeError('Invalid fast-field radius or observer height');
+    if(options.profile!==undefined)throw RangeError('Custom optical profiles are not preview-qualified');
+    if(options.curvature!==undefined&&(!Number.isFinite(options.curvature)||
+        options.curvature<0||(geometry==='flat'&&options.curvature!==0)||
+        (geometry==='globe'&&Math.abs(options.curvature*radius-1)>1e-9)))
+      throw RangeError('Fast-field curvature contradicts geometry/radius');
+    if(typeof atmosphere!=='string')throw RangeError('Fast field requires an explicit atmosphere');
+    var supported=['vacuum','standard','temperature-lapse','profile-transition',
+      'inverse-temperature','exponential-occlusion','inverse-spherical'].indexOf(atmosphere)!==-1;
+    var mode=supported?'adaptive-conformal-curvature':'unsupported';
+    var segments=8,passes=2,tableSize=256,tableTop=50000,scale=4,
+      // Log-spaced heights resolve metre-scale near-ground gradient changes.
+      logTop=Math.log1p(tableTop/scale),table=new Float64Array(tableSize),
+      eyeU=geometry==='globe'?radius*Math.log1p(eye/radius):eye,
+      margin=options.contactMarginMeters===undefined?0.25:options.contactMarginMeters;
+    if(!Number.isFinite(margin)||margin<=0||margin>100)
+      throw RangeError('Invalid preview contact margin');
+    if(supported){
+      var profile=tracer.atmosphere(atmosphere,options.profileOptions);
+      for(var t=0;t<tableSize;t++){
+        var h=scale*Math.expm1(logTop*t/(tableSize-1)),
+          n=profile.n(h),dn=profile.dn(h);
+        if(!(n>0)||!Number.isFinite(n)||!Number.isFinite(dn))
+          throw RangeError('Invalid adaptive preview refractive profile');
+        table[t]=(geometry==='globe'?1/radius+(1+h/radius)*dn/n:dn/n);
+        if(!Number.isFinite(table[t]))throw RangeError('Invalid adaptive preview gradient');
+      }
+    }
+    // Scratch is owned by one field and reused between synchronous sample()
+    // calls: preview rasters issue many sequential queries with one atmosphere.
+    var path=new Float64Array(segments+1),curvature=new Float64Array(segments);
+    var counters={samples:0,visible:0,blocked:0,indeterminate:0,unsupported:0};
+    function fromU(u){return geometry==='globe'?radius*Math.expm1(u/radius):u;}
+    function atHeight(h){
+      var pos=Math.log1p(Math.max(0,h)/scale)/logTop*(tableSize-1),
+        i=Math.min(tableSize-2,Math.floor(pos)),w=pos-i;
+      return table[i]+(table[i+1]-table[i])*w;
+    }
+    function report(status,angle,minimum,reason){
+      counters.samples++;counters[status]++;
+      return {status:status,angle:angle,residual:null,
+        method:'fast-adaptive-conformal-curvature',accuracy:'approximation',
+        minClearanceMeters:minimum,reason:reason||null};
+    }
+    function sample(distance,height){
+      if(!Number.isFinite(distance)||!(distance>0)||!Number.isFinite(height)||height<0)
+        throw RangeError('Invalid fast-field target coordinates');
+      if(mode==='unsupported')
+        return report('unsupported',null,null,'Atmosphere not adaptive-preview-qualified');
+      if(eye>tableTop||height>tableTop||
+          (geometry==='globe'&&distance>=radius*Math.PI/2))
+        return report('unsupported',null,null,'Outside adaptive preview height or forward-arc scope');
+      var targetU=geometry==='globe'?radius*Math.log1p(height/radius):height,
+        dx=distance/segments,dx2=dx*dx,du=targetU-eyeU;
+      if(!Number.isFinite(dx2)||Math.abs(du/distance)>0.25)
+        return report('unsupported',null,null,'Outside shallow-ray approximation');
+      for(var i=0;i<=segments;i++)path[i]=eyeU+du*i/segments;
+      var launchSlope=0,finalSlope=0,minInterior=Infinity;
+      for(var pass=0;pass<passes;pass++){
+        var correction=0;
+        for(i=0;i<segments;i++){
+          var midHeight=fromU((path[i]+path[i+1])*0.5);
+          if(!Number.isFinite(midHeight)||midHeight>tableTop)
+            return report('unsupported',null,null,'Outside sampled adaptive height range');
+          curvature[i]=atHeight(midHeight);
+          correction+=curvature[i]*dx2*(segments-i-0.5);
+        }
+        launchSlope=(du-correction)/distance;
+        var slope=launchSlope;
+        path[0]=eyeU;
+        minInterior=Infinity;
+        for(i=0;i<segments;i++){
+          var g=curvature[i],next=path[i]+slope*dx+0.5*g*dx2;
+          // A positive curvature may turn a downward-going ray upwards.
+          // Account for a minimum *within* this interval, not only its ends.
+          if(g>0&&slope<0&&slope+g*dx>0){
+            var vertex=-slope/g;
+            minInterior=Math.min(minInterior,path[i]-slope*slope/(2*g));
+          }
+          if(i<segments-1)minInterior=Math.min(minInterior,next);
+          path[i+1]=next;
+          slope+=g*dx;
+        }
+        finalSlope=slope;
+      }
+      if(!Number.isFinite(launchSlope)||!Number.isFinite(finalSlope)||
+          Math.abs(launchSlope)>0.25||Math.abs(finalSlope)>0.25||
+          !Number.isFinite(minInterior)||!Number.isFinite(path[segments]))
+        return report('unsupported',null,null,'Non-forward or unstable adaptive approximation');
+      // Endpoints may be on the ground; only a lower INTERIOR minimum can
+      // indicate premature ground contact (or an uncertain grazing ray).
+      var endpointMin=Math.min(eyeU,targetU),
+        interior=minInterior<endpointMin,
+        minimum=fromU(interior?minInterior:endpointMin),angle=Math.atan(launchSlope);
+      if(!Number.isFinite(minimum)||!Number.isFinite(angle))
+        return report('unsupported',null,null,'Invalid adaptive preview clearance');
+      if(interior&&minimum < -margin)
+        return report('blocked',angle,minimum,'Approximate first-ground intersection only');
+      if(interior&&minimum<=margin)
+        return report('indeterminate',angle,minimum,'Near predicted ground contact; RK4 required');
+      return report('visible',angle,minimum,null);
+    }
+    function stats(){return Object.assign({geometry:geometry,atmosphere:atmosphere,
+      mode:mode,segments:segments,passes:passes,tableSize:supported?tableSize:0,
+      tableTopMeters:tableTop,contactMarginMeters:margin,shootRK4Calls:0,
+      solves:counters.samples,hits:0,exactSolveMs:0},counters);}
+    return {sample:sample,stats:stats,mode:mode};
+  }
+  return {create:create,createAdaptive:createAdaptive};
 }));

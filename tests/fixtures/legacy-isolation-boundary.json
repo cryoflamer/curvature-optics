@@ -1507,9 +1507,11 @@
         "src/optics/CurvaturePhysicalSceneOptics.js"
       ],
       "commonJsTestCallers": [
+        "tests/OpticalAdaptiveFastRayField.test.js",
         "tests/OpticalFastRayField.test.js"
       ],
       "commonJsToolCallers": [
+        "tools/benchmark-adaptive-fast-preview.js",
         "tools/compare-fast-ray-field.js"
       ]
     },
@@ -1645,6 +1647,7 @@
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/InversePreparedGradient.test.js",
         "tests/ModernFastPreview.test.js",
+        "tests/OpticalAdaptiveFastRayField.test.js",
         "tests/OpticalContinuousCurvature125.test.js",
         "tests/OpticalEngineeredExperiment1404.test.js",
         "tests/OpticalEngineeredQualification1405.test.js",

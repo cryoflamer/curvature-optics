@@ -2385,3 +2385,24 @@ shared styling and card-specific click isolation.
 - Browser Opera playback and visual frame fidelity remain manual verification;
   Node-based Worker tests validate contracts and muxing, not the installed
   browser's hardware/software encoders.
+
+### Adaptive Fast Preview: isolated mathematical kernel (stage 1)
+
+- Added opt-in `CurvatureOpticalFastRayField.createAdaptive(options)` without
+  changing `create(options)` or any Scene/Compare/Auto user-visible behavior.
+- The experimental shallow-ray approximation uses conformal altitude on Globe,
+  a log-height lookup of atmospheric `n(h), dn(h)` (256 samples to 50 km),
+  eight piecewise-constant curvature intervals, and two path-refinement passes.
+  The table belongs to each field instance and is reused across sample calls.
+- Built-in atmospheric profiles, including temperature-lapse, transitions and
+  inverse-temperature, can be sampled in isolation; custom profiles, steep
+  rays, distant Globe arcs and ill-conditioned cases remain unsupported.
+  Ground contact is an approximate/uncertain classification, never an exact
+  visibility oracle or a replacement for RK4.
+- `tests/OpticalAdaptiveFastRayField.test.js` compares ordinary cases against
+  independently computed RK4 and checks invalid profiles, endpoint contacts,
+  counters and isolation. `tools/benchmark-adaptive-fast-preview.js` measures
+  isolated Node.js target-query cost, **not** browser FPS or full-scene draw.
+- The next integration stage must explicitly decide when to route Fast Field
+  construction through this new opt-in API; no UI switch or production fallback
+  is enabled by the mathematical-kernel patch.
