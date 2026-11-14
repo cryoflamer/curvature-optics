@@ -91,7 +91,7 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 
 - [Architecture](docs/architecture.md) — entry points, module ownership, data flow, retained/archived boundaries.
 - [Physics and numerical methods](docs/physics.md) — surface geometry, atmospheric models, RK4, shooting, and limits of validation.
-- [Fast optical preview](docs/fast-optical-preview.md) — Fast/Auto support all seven built-in atmospheric models through analytic or adaptive curvature fields, with live motion rendering, measured frame pacing, bounded gradient-table reuse, Preview-only tower LOD and RK4 isolation.
+- [Fast optical preview](docs/fast-optical-preview.md) — Fast/Auto support all seven built-in atmospheric models through analytic or adaptive curvature fields, with live motion rendering, measured frame pacing, bounded gradient-table reuse, Preview-only tower LOD and RK4 isolation. A sampled RK4 comparison and its explicit visual limits are recorded there; rerun with `node tools/compare-adaptive-fast-preview.js`.
 - [User guide](docs/user-guide.md) — Legacy storyboards, Modern Scene/Compare, rendering, URLs and saved scenes.
 - [Development and tests](docs/development.md) — no-build workflow, test commands, preserved baselines and contribution rules.
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.

@@ -138,3 +138,57 @@ test('adaptive gradient cache has a finite LRU limit',()=>{
   assert.equal(fast.createAdaptive(base).stats().tableCacheHit,false,
     'old gradient tables must be evicted instead of accumulating forever');
 });
+
+test('adaptive shallow-ray stress grid is compared with an independent RK4 oracle',()=>{
+  const {audit}=require('../tools/compare-adaptive-fast-preview');
+  const result=audit({quick:true});
+  assert.equal(result.totalSamples,180);
+  assert.equal(result.totalMismatches,0,
+    JSON.stringify(result.summaries.filter(s=>s.statusMismatches.length)));
+  assert.ok(result.maxVisibleAngleErrorPx<1,
+    'hypothetical angular pixel difference across selected shallow rays (not raster parity)');
+  assert.ok(result.summaries.every(s=>s.visible>=10&&s.blocked>=2&&
+    s.unsupported>=1),'stress grid must exercise visible, blocked and explicit unsupported rays');
+});
+
+test('grazing adaptive paths remain indeterminate rather than silently visible',()=>{
+  for(const config of [
+    {geometry:'globe',atmosphere:'temperature-lapse',profileOptions:{gradientKPerKm:-20}},
+    {geometry:'globe',atmosphere:'profile-transition',profileOptions:{
+      transitionProfile:{source:'standard',weight:0.5},occlusionRadius:R}},
+    {geometry:'flat',atmosphere:'inverse-spherical',profileOptions:{occlusionRadius:R}}
+  ]){
+    const field=fast.createAdaptive({...config,radius:R,observerHeight:15,
+      contactMarginMeters:0.1});
+    const distance=50000;
+    let low=0,high=200;
+    assert.equal(field.sample(distance,low).status,'blocked');
+    assert.equal(field.sample(distance,high).status,'visible');
+    for(let i=0;i<45;i++){
+      const mid=(low+high)/2;
+      if(field.sample(distance,mid).minClearanceMeters<0)low=mid;
+      else high=mid;
+    }
+    const grazing=field.sample(distance,(low+high)/2);
+    assert.equal(grazing.status,'indeterminate',config.atmosphere);
+    assert.ok(Math.abs(grazing.minClearanceMeters)<0.01,config.atmosphere);
+    assert.ok(Number.isFinite(grazing.angle));
+    assert.equal(field.stats().shootRK4Calls,0);
+  }
+});
+
+test('steep and high-altitude adaptive requests have explicit non-physical statuses',()=>{
+  const field=fast.createAdaptive({geometry:'globe',atmosphere:'temperature-lapse',
+    observerHeight:15,profileOptions:{gradientKPerKm:20}});
+  for(const [d,h] of [[1000,1000],[5000,50001],[100,100],[1000,50000]]){
+    const r=field.sample(d,h);
+    assert.equal(r.status,'unsupported',`d=${d} h=${h}`);
+    assert.equal(r.angle,null);
+    assert.ok(r.reason);
+  }
+  const stats=field.stats();
+  assert.equal(stats.samples,4);
+  assert.equal(stats.unsupported,4);
+  assert.equal(stats.visible,0);
+  assert.equal(stats.shootRK4Calls,0);
+});

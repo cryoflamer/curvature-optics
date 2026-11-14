@@ -2472,3 +2472,24 @@ shared styling and card-specific click isolation.
   optical compositions are still not cached by the physical scene adapter.
 - Added cache isolation/eviction, cadence and stationary-drag tests. Browser
   visual quality, frame time and GPU/render-driver behavior remain unverified.
+
+
+### Adaptive Fast Preview: sampled edge-case audit and closure (stage 5)
+
+- Added `tools/compare-adaptive-fast-preview.js` as a reproducible Node-only
+  comparison of adaptive shallow-ray status/angle against independently shot
+  RK4. Six selected model/geometry settings, eye heights 2/15/100 m, target
+  ranges 1–80 km and heights 0–1000 m give 540 samples. At this closure:
+  337 visible, 179 blocked, 6 indeterminate, 18 unsupported, **no disagreement
+  on 516 definite results**, and a maximum visible angle difference of about
+  0.34 *hypothetical* px (1920 px/5°). This does **not** assert pixel parity,
+  global ground-occlusion correctness or multipath completeness.
+- Regression tests check an RK4 subset, multiple near-grazing contacts at
+  the 0.1 m scene margin, and explicit unsupported steep/high-altitude rays.
+  Unresolved is kept separate, never treated as clear/blocked or sent to RK4
+  during Fast. Recorded other limitations include absent steep near-camera
+  fills, uncertain horizon contacts and lack of Opera FPS/pixel measurements.
+- `docs/fast-optical-preview.md` now holds the reproducible audit steps,
+  supported numerical envelope, measured diagnostic results, limitations,
+  and the stage-5 closure contract. No physics, RK4, animation export or
+  browser UI changes were necessary for this audit-only compatpatch.

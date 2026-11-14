@@ -91,7 +91,7 @@ camera, and sampled computation time. It does not compare finished Canvas
 images or validate global first-ground events. A reported `indeterminate`
 should not be counted as an incorrect occlusion or silent success.
 
-## Adaptive kernel integration (stage 2)
+## Adaptive kernel integration (stages 1–4)
 
 `CurvatureOpticalFastRayField.createAdaptive(options)` is now selected by the
 physical scene adapter for built-in profiles that are not already covered by
@@ -176,7 +176,7 @@ isolated-kernel timings.
    quality/cache isolation, and UI routing for Scene/Compare. Browser pixel
    parity and complete end-to-end FPS have **not** been established.
 
-### Camera-motion integration and remaining evaluation
+### Camera-motion integration and visual caveats
 
 - Manual Fast and Auto now physically recompute the shared camera pose during
   pointer drag, including for temperature-lapse, profile-transition,
@@ -194,14 +194,13 @@ isolated-kernel timings.
   Release/cancellation clears pending timers. This is not guaranteed FPS:
   synchronous optics/Canvas work can still exceed the budget, and Opera
   end-to-end timings need manual verification.
-- Compare actual rasterized contours/fills with Accurate under Scene and
-  Compare A/B, at varied camera poses, camera FOVs and atmospheres.
-- Time end-to-end Canvas renders (including tessellation), assess image artifacts
-  from tower thinning and tune the existing Auto-preview scheduler for the
-  broader atmosphere set. Adaptive object LOD is already available in manual
-  Fast Preview and existing Auto-supported profiles.
-- Keep exact caches, exact horizon/ground events and final offline animation
-  rendering completely independent of Preview.
+- Compare finished Canvas silhouettes, occlusion and fills with Accurate under
+  Scene and Compare A/B at different camera poses, FOVs and atmospheres when
+  assessing *visual* quality: the numerical audit below cannot prove this.
+  Frame time, perceived smoothness and object thinning must be checked in a
+  browser; the scheduler is adaptive but not asynchronous.
+- Exact caches, exact horizon/ground events and final offline animation
+  rendering remain completely independent of Preview.
 
 
 ## Auto navigation mode
@@ -243,3 +242,63 @@ isolated-kernel timings.
   atmospheres, LOD restoration and Compare B pointer routing. Browser visual and
   long-session interaction tests remain necessary before relying on an FPS
   target, especially in high-object-count experiments.
+
+## Adaptive Fast Preview validation and closure (stage 5)
+
+Reproduce the **sampled numerical check**, which deliberately runs outside
+Canvas and does not modify application physics:
+
+```sh
+node tools/compare-adaptive-fast-preview.js > /tmp/curvature-adaptive-fast-audit.json
+node tools/compare-adaptive-fast-preview.js --quick
+node --test tests/OpticalAdaptiveFastRayField.test.js tests/ModernFastPreview.test.js
+node tools/benchmark-adaptive-fast-preview.js
+```
+
+The independent comparison calls `OpticalTargetProjection.solve()` with RK4
+for **definite** Fast results; `indeterminate` and `unsupported` stay explicitly
+unresolved and are **not** counted as accuracy successes or disagreements.
+The deterministic sample grid contains 6 configurations: Globe temperature
+lapse at −20/+20 K/km, Globe standard→engineered transition at weight 0.5,
+Flat inverse-temperature at weight 0.5, Flat inverse-spherical, and Globe
+exponential-occlusion. It checks observer heights **2/15/100 m**, target
+ranges **1/10/25/50/80 km**, and target heights **0/3/15/50/200/1000 m**
+(540 targets total). This is a **bounded sampled envelope**, *not* a global
+accuracy guarantee for these models or all refractive profiles.
+
+At stage-5 closure, this sample produced **337 visible, 179 blocked,
+6 indeterminate and 18 unsupported** Fast results, with **0 status disagreements**
+on the 516 definitive targets; maximum visible angular difference was about
+**0.34 equivalent pixel** for a **hypothetical** 1920 px wide, 5° viewport.
+Equivalent pixels convert the ray-angle discrepancy only; **no Canvas pixels
+were compared**. The `--quick` mode uses only the 15 m observer, and the unit
+test asserts its sampled definitive statuses and a loose angular sanity bound.
+The tests additionally check near-grazing uncertainty with the scene's
+0.1 m contact band, steep/above-table rejections, separate per-field counters,
+profile cache isolation and absence of hidden RK4 fallback.
+
+**Known limitations and practical interpretation:**
+
+- `unsupported` means the approximation declines to predict the ray — notably
+  steep/near-camera directions (initial slope >0.25), targets above the
+  50 km lookup ceiling, very strong ducting/unstable paths, or rays beyond the
+  supported forward Globe arc. It does **not** imply physical invisibility.
+- `indeterminate` means a predicted near-ground contact; it is not promoted
+  to visible. With a **0.1 m** scene band, exact horizon placement, very thin
+  silhouettes and support fills may differ visibly from Accurate. Neither
+  status proves all possible multipath rays, mirages, or ground intersections.
+- `unresolved` in the Scene/Compare footer counts unresolved projected
+  **fragments**, not missing objects or RK4 failures. It can be large on the
+  Globe with many near-camera tower segments even when Fast preview is useful.
+  The object LOD drops work; it does not fix these optical uncertainties.
+- Frame pacing is based on real measured redraw duration, but no browser FPS,
+  exact-raster parity or heavy-session performance is certified by these tests.
+  The reported user check confirmed that live Fast dragging now produces
+  moving optical frames, **not** that every high-gradient scene is accurate.
+
+**Closure:** Fast/Auto atmospheres, live Scene/Compare drag, bounded cache,
+LOD/pacing and sampled numerical guardrails are implemented. The current
+preview is intentionally approximate; high-accuracy horizons and final
+images remain an Accurate RK4 task. Further work should respond to a
+reproducible visual regression or measured browser bottleneck rather than
+chasing an arbitrary optical-precision threshold in Fast.
