@@ -2429,3 +2429,25 @@ shared styling and card-specific click isolation.
   and contours, preservation of analytic endpoints, profile-parameter effects,
   the absence of RK4 work, and Fast-vs-Accurate isolation. Browser interaction,
   final frame-rate and visual differences have not yet been validated.
+
+### Adaptive Fast Preview: physical camera-motion routing (stage 3)
+
+- The cause of missing live imagery in manual Fast was the pre-existing
+  `pointermove` branch: it used `ModernCameraDragPreview` to move a cached
+  Canvas instead of updating the model and scheduling physical redraw. Manual
+  Fast and supported Auto now share live camera updates on Scene and Compare
+  (either viewport); Accurate keeps its inexpensive raster-only pointer drag.
+- `autoPreviewSupported()` now qualifies all seven built-in Fast atmospheric
+  families on Flat/Globe. Auto Camera Navigation and Camera Animation can
+  therefore use the stage-2 adaptive field instead of skipping motion frames.
+  Manual Fast remains Fast on gesture release; Auto commits Accurate RK4.
+- One requestAnimationFrame is queued at a time. A nominal 100 ms throttle
+  and trailing timer preserve the latest held-pointer pose without relying on
+  additional mouse events; pointer cancellation restores the starting pose,
+  clears timers and restores the correct idle quality. LOD and cache isolation
+  are inherited, not replaced. No changes to RK4 or experiment schemas.
+- Browser end-to-end FPS and high-gradient visual quality need manual
+  verification. In particular, steep near-camera rays can still return
+  `unsupported` and cause partial fills; fixing that is outside this routing
+  patch. Tests exercise intermediate paint before pointerup, Compare B routing,
+  latest-pose scheduling, cancellation and adaptive-profile Auto frames.

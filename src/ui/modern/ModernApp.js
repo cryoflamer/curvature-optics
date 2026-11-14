@@ -99,26 +99,27 @@
   // Preview LOD is an ephemeral display preference, NOT experiment physics.
   // The same stride is used by both Compare viewports, so A/B always show
   // identical tower subsets even when their optical atmospheres differ.
-  // Auto is an opt-in navigation policy, never an optical field handed to
-  // the renderer. Fast is used only for qualified camera-motion samples;
-  // idle renders and unsupported profiles always retain Accurate.
+  // Manual Fast and Auto motion use real optical frames, not the cached
+  // raster compositor. Auto alone returns to Accurate when navigation stops.
   var autoCameraActive=false,autoCameraLastFrame=-Infinity,autoCameraSettleTimer=null;
+  var cameraMotionTimer=null;
   var cameraTransition=null;
-  var AUTO_FRAME_INTERVAL_MS=120,AUTO_WHEEL_IDLE_MS=220;
-  function qualifiedFastProfile(atmosphere,surface,inverse){
-    return atmosphere==='vacuum'||atmosphere==='standard'||
-      (surface==='flat'&&(atmosphere==='exponential-occlusion'||
-        (atmosphere==='inverse-temperature'&&inverse&&inverse.weight===1)));
+  var AUTO_FRAME_INTERVAL_MS=100,AUTO_WHEEL_IDLE_MS=220;
+  function qualifiedFastProfile(atmosphere){
+    // These profiles are implemented by OpticalFastRayField (analytic or
+    // adaptive). Do not silently render Standard for a different atmosphere.
+    return ['vacuum','standard','temperature-lapse','profile-transition',
+      'inverse-temperature','inverse-spherical','exponential-occlusion'].includes(atmosphere);
   }
   function autoPreviewSupported(){
     if(state.mode==='demos'||state.demosActive)return false;
     if(state.mode==='compare'){
-      if(!state.compareConfig)return state.atmosphere==='standard'||state.atmosphere==='vacuum';
+      if(!state.compareConfig)return qualifiedFastProfile(state.atmosphere);
       return ['A','B'].every(function(side){var spec=state.compareConfig[side];
-        return spec&&qualifiedFastProfile(spec.atmosphere,spec.surface,spec.inverseProfile);
+        return spec&&qualifiedFastProfile(spec.atmosphere);
       });
     }
-    return qualifiedFastProfile(state.atmosphere,model.showModel===2?'flat':'globe',state.inverseProfile);
+    return qualifiedFastProfile(state.atmosphere);
   }
   function effectiveOpticalQuality(){
     if(cameraTransition)return 'fast';
@@ -130,23 +131,35 @@
   }
   function stopAutoCameraPreview(){
     clearAutoCameraSettle();autoCameraActive=false;autoCameraLastFrame=-Infinity;
+    if(cameraMotionTimer!==null){clearTimeout(cameraMotionTimer);cameraMotionTimer=null;}
+  }
+  function paintCameraMotion(){
+    if(!autoCameraActive)return;
+    var now=profileNow(),wait=AUTO_FRAME_INTERVAL_MS-(now-autoCameraLastFrame);
+    if(state.frame===null&&wait<=0){
+      autoCameraLastFrame=now;
+      redraw('camera-motion');
+      return;
+    }
+    // A pointer may stop moving between two throttle slots. Keep its last
+    // physical pose queued even when no further pointermove events arrive.
+    if(cameraMotionTimer===null)cameraMotionTimer=setTimeout(function(){
+      cameraMotionTimer=null;
+      paintCameraMotion();
+    },state.frame!==null?Math.max(16,wait):Math.max(1,wait));
   }
   function requestAutoCameraPreview(){
-    if((state.opticalQuality!=='auto'&&!cameraTransition)||!autoPreviewSupported())return false;
+    if((!['auto','fast'].includes(state.opticalQuality)&&!cameraTransition)||
+        !autoPreviewSupported())return false;
     if(!autoCameraActive){
       autoCameraActive=true;autoCameraLastFrame=-Infinity;
-      // The first dense-scene frame should be inexpensive. Auto LOD will
-      // subsequently tune the stride from measured complete frame times.
+      // Start sparse in dense scenes; LOD then adapts from measured batches.
       if(state.previewDetail==='auto'&&previewLodControllers){
         var scope=state.mode==='compare'?'compare':'Scene';
         previewLodControllers[scope].reset(8);
       }
     }
-    var now=profileNow();
-    if(now-autoCameraLastFrame>=AUTO_FRAME_INTERVAL_MS&&state.frame===null){
-      autoCameraLastFrame=now;
-      redraw('camera-motion');
-    }
+    paintCameraMotion();
     return true;
   }
   var previewLodApi=root.CurvatureOpticalPreviewLod;
@@ -4888,8 +4901,8 @@
       if(document.hidden)stopCameraKeyboard();
     });
   }
-  // 137.2: the existing raster Canvas is compositor-translated during drag.
-  // The shared physical model remains untouched until the final pointerup.
+  // Accurate navigation retains the cheap 137.2 raster compositor. Fast
+  // and supported Auto navigation render intermediate physical camera poses.
   var activeCameraPointer=null;
   function cameraViewport(view){
     if(view==='Scene')return graph;
@@ -5029,6 +5042,11 @@
       scheduleShimmerFrame();
     }
     if(!active)return;
+    if(active.liveOptics){
+      if(active.canvas&&active.canvas.classList)active.canvas.classList.remove('is-camera-dragging');
+      if(root.CurvatureModernCameraDragPreview&&root.CurvatureModernCameraDragPreview.setCursor)
+        root.CurvatureModernCameraDragPreview.setCursor(active.canvas,'grab');
+    }
     if(active.hud)active.hud.hidden=true;
     updateCameraHud();
     if(active.canvas&&typeof active.canvas.releasePointerCapture==='function'){
@@ -5077,8 +5095,14 @@
             CameraEast:model.CameraEast,CameraNorth:model.CameraNorth},
           referenceDistance:cameraReferenceDistance(),
           fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
-        var liveCameraDrag=state.opticalQuality==='auto'&&autoPreviewSupported();
-        if(liveCameraDrag)cancelPending();
+        var liveCameraDrag=(state.opticalQuality==='auto'||state.opticalQuality==='fast')&&
+          autoPreviewSupported();
+        if(liveCameraDrag){
+          cancelPending();
+          if(canvas.classList)canvas.classList.add('is-camera-dragging');
+          if(root.CurvatureModernCameraDragPreview&&root.CurvatureModernCameraDragPreview.setCursor)
+            root.CurvatureModernCameraDragPreview.setCursor(canvas,'grabbing');
+        }
         if(cameraPreview&&!liveCameraDrag){
           var sides=state.mode==='compare'?['A','B']:['Scene'];
           cameraPreview.begin({source:view,viewports:sides.map(function(side){
@@ -5096,7 +5120,7 @@
         }
         if(atmosphericPresentation){stopShimmerFrame();atmosphericPresentation.suspend();}
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud,
-          autoLive:liveCameraDrag,moved:false,startPose:liveCameraDrag?captureCameraPose():null};
+          liveOptics:liveCameraDrag,moved:false,startPose:liveCameraDrag?captureCameraPose():null};
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
       }catch(error){cancelCameraDrag();updateStatus('Camera drag: '+error.message,true);}
@@ -5106,7 +5130,7 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.move({x:event.clientX,y:event.clientY});
       if(Math.hypot(sample.dx,sample.dy)<2)return;
-      if(active.autoLive){
+      if(active.liveOptics){
         try{
           var position=sample.mode==='translate'?checkedCameraPosition(
             root.CurvatureModernCameraInteraction.translate(sample)):
@@ -5129,7 +5153,7 @@
       }
       // The compositor preview has a provisional camera pose; show it in
       // both visible viewports without mutating their physical models.
-      if(!active.autoLive)updateCameraHud(sample.mode==='translate'?
+      if(!active.liveOptics)updateCameraHud(sample.mode==='translate'?
         root.CurvatureModernCameraInteraction.translate(sample):
         root.CurvatureModernCameraInteraction.angles(sample));
       if(event.preventDefault)event.preventDefault();
@@ -5139,8 +5163,8 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.end({x:event.clientX,y:event.clientY});
       var changed=sample&&Math.hypot(sample.dx,sample.dy)>=2;
-      if(active.autoLive){
-        cancelCameraDrag();stopAutoCameraPreview();
+      if(active.liveOptics){
+        stopAutoCameraPreview();cancelCameraDrag();
         if(!changed&&!active.moved)return;
         try{
           var finalCamera=sample.mode==='translate'?checkedCameraPosition(
@@ -5251,7 +5275,7 @@
   }
   function abortCameraDrag(){
     var active=activeCameraPointer;
-    if(active&&active.autoLive&&active.startPose){
+    if(active&&active.liveOptics&&active.startPose){
       CAMERA_POSE_FIELDS.forEach(function(field){model[field]=active.startPose[field];});
       stopAutoCameraPreview();
       cancelCameraDrag();

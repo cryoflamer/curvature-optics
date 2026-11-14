@@ -320,7 +320,7 @@ test('Auto pointer drag projects live Fast and commits an Accurate frame at rele
   assert.equal(h.app.getEffectiveOpticalQuality(),'accurate');
 });
 
-test('Auto never draws Fast for unqualified atmospheric profiles',()=>{
+test('Auto uses the adaptive Fast field for temperature-lapse during keyboard navigation',()=>{
   const h=boot(),selector=h.nodes.get('ModernOpticalQuality'),r=h.renders;
   const atmosphere=h.nodes.get('ModernAtmosphere');
   atmosphere.value='temperature-lapse';atmosphere.dispatch('change');h.flushFrames();
@@ -328,10 +328,89 @@ test('Auto never draws Fast for unqualified atmospheric profiles',()=>{
   const begin=r.length;
   h.dispatchGlobal('keydown',{code:'KeyW'});
   for(let i=0;i<8;i++)h.flushFrames(50);
-  assert.equal(r.length,begin,'no expensive rendering should run while an unsupported camera is moving');
+  assert.ok(r.slice(begin).some(x=>x.quality==='fast'&&x.North>0),
+    'adaptive Fast must render while the keyboard is still held');
   h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames(16);
   assert.equal(r.at(-1).quality,'accurate');
-  assert.ok(r.slice(begin).every(x=>x.quality==='accurate'));
+  assert.equal(r.at(-1).stride,1);
+});
+
+test('manual Fast drag renders the changing camera before pointerup and keeps Fast at rest',()=>{
+  const h=boot(),n=h.nodes,r=h.renders;
+  h.flushFrames();
+  n.get('ModernAtmosphere').value='temperature-lapse';
+  n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
+  n.get('ModernOpticalQuality').value='fast';n.get('ModernOpticalQuality').dispatch('change');
+  h.flushFrames();
+  const m=h.app.getModel(),pan=m.Pan,begin=r.length;
+  const pointer={button:0,pointerId:3,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:95,clientY:75});
+  assert.notEqual(m.Pan,pan,'live Fast updates the authoritative camera pose');
+  assert.equal(r.length,begin,'physical redraw is queued in RAF, not in pointermove');
+  h.flushFrames(16);
+  assert.ok(r.slice(begin).some(x=>x.quality==='fast'&&x.Pan===m.Pan),
+    'a real Fast camera frame must be rendered before releasing the mouse');
+  assert.equal(h.app.getEffectiveOpticalQuality(),'fast');
+  h.canvas.dispatch('pointerup',{...pointer,clientX:95,clientY:75});h.flushFrames();
+  assert.equal(r.at(-1).quality,'fast','manual Fast never switches to RK4 on release');
+  assert.equal(h.app.getEffectiveOpticalQuality(),'fast');
+});
+
+test('motion-throttled Fast paints the final moved pose while pointer is still down',()=>{
+  const h=boot(),n=h.nodes,r=h.renders;h.flushFrames();
+  n.get('ModernOpticalQuality').value='fast';n.get('ModernOpticalQuality').dispatch('change');
+  h.flushFrames();
+  const pointer={button:0,pointerId:6,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:80,clientY:40});h.flushFrames(16);
+  const first=r.at(-1).Pan;
+  h.canvas.dispatch('pointermove',{...pointer,clientX:120,clientY:70});
+  const latest=h.app.getModel().Pan;
+  assert.notEqual(first,latest);
+  h.flushFrames(140);h.flushTimers();h.flushFrames(16);
+  assert.equal(r.at(-1).Pan,latest,
+    'last pose is rendered even without another mousemove after throttle interval');
+  const count=r.length;
+  h.canvas.dispatch('pointercancel',pointer);h.flushFrames();
+  h.flushTimers();h.flushFrames(200);
+  assert.equal(r.length,count+1,'cancelled drag must not leak delayed Fast frames');
+});
+
+test('manual Fast pointercancel restores the initial camera without an Accurate frame',()=>{
+  const h=boot(),n=h.nodes,r=h.renders;h.flushFrames();
+  n.get('ModernOpticalQuality').value='fast';n.get('ModernOpticalQuality').dispatch('change');
+  h.flushFrames();
+  const m=h.app.getModel(),pan=m.Pan;
+  const pointer={button:0,pointerId:7,isPrimary:true,clientX:20,clientY:20};
+  h.canvas.dispatch('pointerdown',pointer);
+  h.canvas.dispatch('pointermove',{...pointer,clientX:100,clientY:70});h.flushFrames();
+  assert.notEqual(m.Pan,pan);
+  h.canvas.dispatch('pointercancel',pointer);h.flushFrames();
+  assert.equal(m.Pan,pan);
+  assert.equal(r.at(-1).quality,'fast');
+});
+
+test('Auto Compare renders adaptive A/B together when each side uses a different profile',()=>{
+  const h=boot(),n=h.nodes,r=h.renders;h.flushFrames();
+  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+  n.get('ModernModelAtmosphere').value='temperature-lapse';
+  n.get('ModernModelAtmosphere').dispatch('change');h.flushFrames();
+  n.get('ModernModelTabB').dispatch('click');
+  n.get('ModernModelAtmosphere').value='inverse-temperature';
+  n.get('ModernModelAtmosphere').dispatch('change');h.flushFrames();
+  assert.equal(h.app.getCompareConfig().A.atmosphere,'temperature-lapse');
+  assert.equal(h.app.getCompareConfig().B.atmosphere,'inverse-temperature');
+  n.get('ModernOpticalQuality').value='auto';n.get('ModernOpticalQuality').dispatch('change');
+  h.flushFrames();
+  const begin=r.length;
+  h.dispatchGlobal('keydown',{code:'KeyW'});h.flushFrames(140);h.flushFrames(16);
+  const fast=r.slice(begin).filter(x=>x.quality==='fast');
+  assert.equal(fast.length,2,'both viewports must render adaptive Fast in one batch');
+  assert.equal(fast[0].stride,fast[1].stride);
+  assert.equal(fast[0].North,fast[1].North);
+  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames(16);
+  assert.deepEqual(r.slice(-2).map(x=>x.quality),['accurate','accurate']);
 });
 
 test('Auto Compare uses the same Fast LOD for both sides and restores both Accurate',()=>{
@@ -417,13 +496,15 @@ test('animation Stop holds interpolated pose, Cancel restores the pre-Play camer
   approx(m.CameraNorth,held);
 });
 
-test('unsupported optics and mismatched aim modes prevent animation without moving camera',()=>{
+test('adaptive atmosphere permits animation while mismatched aim modes remain rejected',()=>{
   const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();twoFrameAnimation(h);
   const original=m.CameraNorth;
   n.get('ModernAtmosphere').value='temperature-lapse';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
   n.get('ModernSequencePlay').dispatch('click');
-  assert.equal(h.app.getCameraAnimation().playing,false);
-  assert.match(n.get('ModernSequenceStatus').textContent,/Fast Preview/i);
+  assert.equal(h.app.getCameraAnimation().playing,true);
+  h.flushFrames(100);h.flushFrames();
+  assert.ok(h.renders.some(r=>r.quality==='fast'));
+  n.get('ModernSequenceCancel').dispatch('click');h.flushFrames();
   n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');h.flushFrames();
   const mismatch=boot(),v=mismatch.app.getModel(),controls=mismatch.nodes;
   mismatch.flushFrames();
@@ -633,14 +714,14 @@ test('restored camera sequence can be edited and persisted by the live Modern ap
   assert.equal(stored.scene.camera.CameraNorth,0,'camera pose unchanged by keyframe editing');
 });
 
-test('invalid sequence inputs and unsupported atmosphere reject playback without camera mutation',()=>{
+test('invalid sequence inputs remain rejected after adaptive-atmosphere animation',()=>{
   const h=boot(),n=h.nodes,m=h.app.getModel();h.flushFrames();savedSequence(h);
   const before=m.CameraNorth;
   n.get('ModernAtmosphere').value='temperature-lapse';n.get('ModernAtmosphere').dispatch('change');
   h.flushFrames();n.get('ModernSequencePlay').dispatch('click');
-  assert.equal(h.app.getCameraTransition().playing,false);
+  assert.equal(h.app.getCameraTransition().playing,true);
+  n.get('ModernSequenceCancel').dispatch('click');h.flushFrames();
   assert.equal(m.CameraNorth,before);
-  assert.match(n.get('ModernSequenceStatus').textContent,/Fast Preview/i);
   n.get('ModernAtmosphere').value='standard';n.get('ModernAtmosphere').dispatch('change');
   n.get('ModernSequenceKeyframes').value='2';n.get('ModernSequenceKeyframes').dispatch('change');
   const old=JSON.stringify(h.app.getCameraSequence());

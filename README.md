@@ -9,14 +9,17 @@ The former standalone WebGPU optics harness and Modern's optional CPU research p
 
 **Experimental Fast Preview:** In Modern → Scene/Compare → Display, choose
 **Optical ray field → Fast Preview** to draw with cheaper approximate ray
-angles, or **Auto** to show a throttled Fast Preview while navigating and
-restore Accurate RK4 on release/idle. Accurate RK4 remains the default; the
-near-horizon image may be incorrect. Fast Preview object detail can be
+angles **including real intermediate camera frames while dragging**, or
+**Auto** to show throttled Fast Preview during navigation and restore Accurate
+RK4 on release/idle. Accurate RK4 remains the default; the near-horizon image
+may be incorrect. Fast Preview object detail can be
 selected manually or adapted to measured redraw cost (`Auto`); full object
 geometry remains intact in Accurate. Some profiles are not qualified and
 show an explicit error instead of silently using RK4 in manual Fast mode.
-In Auto, unsupported profiles do not render intermediate optical frames and
-return to Accurate when motion stops. See [limits and tests](docs/fast-optical-preview.md).
+All built-in atmospheric models now qualify for Fast/Auto camera-motion
+previews; invalid or unsupported custom profiles still fail explicitly instead
+of silently substituting Standard or RK4. During manual Accurate drag, the
+older cheap raster compositor is retained. See [limits and tests](docs/fast-optical-preview.md).
 
 **Compact Modern Display:** Under **Scene/Compare → Display**, the optical ray
 field, Fast Preview detail, geometry backend and reference overlays remain

@@ -100,7 +100,7 @@ test('Modern shell and app connect shared telemetry, independent HUD toggle and 
   assert.match(app,/function updateCameraHud\(override\)/);
   assert.match(app,/function cameraHudModel\(view,override\)/);
   assert.match(app,/cameraHudVisible=!!toggle.checked;/);
-  assert.match(app,/if\(!active.autoLive\)updateCameraHud\(/);
+  assert.match(app,/if\(!active.liveOptics\)updateCameraHud\(/);
   assert.match(app,/cameraHudVisible:cameraHudVisible/);
   assert.match(css,/\.modern-camera-telemetry\{position:absolute/);
   assert.match(css,/pointer-events:none/);

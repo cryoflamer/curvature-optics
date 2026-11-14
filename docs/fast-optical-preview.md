@@ -105,11 +105,11 @@ needed. The choice does not change saved experiment parameters. Unresolved
 steep rays or unstable/over-range trajectories are never automatically retraced
 by RK4. The independent accurate path and cache are unaffected.
 
-This stage enables the explicit **Fast** selector; **Auto** eligibility still
-uses the earlier limited profile allowlist until a subsequent integration
-patch. Animation Fast eligibility likewise remains unchanged. The next phase
-must validate those UI policies before broadening them. Performance of the
-full browser-rendered scene is not established by isolated-kernel timings.
+The initial adapter integration enabled the explicit **Fast** selector.
+Camera-motion integration (stage 3) also permits the same built-in profiles
+in **Auto** and Camera Animation, without changing the accurate RK4 path.
+Performance of a fully rendered browser scene is not established by
+isolated-kernel timings.
 
 ## Manual Modern integration, adaptive object LOD and known limits
 
@@ -169,12 +169,21 @@ full browser-rendered scene is not established by isolated-kernel timings.
    quality/cache isolation, and UI routing for Scene/Compare. Browser pixel
    parity and complete end-to-end FPS have **not** been established.
 
-### Next evaluation and Auto-navigation work
+### Camera-motion integration and remaining evaluation
 
-- Extend **Auto** eligibility in the Scene/Compare/animation controllers
-  to the new supported models; this stage changes *manual Fast* routing only.
-  An explicit Fast scene may now work for a profile for which Auto navigation
-  still stays Accurate. Browser visual checks are still outstanding.
+- Manual Fast and Auto now physically recompute the shared camera pose during
+  pointer drag, including for temperature-lapse, profile-transition,
+  inverse-temperature, inverse-spherical and engineered profiles. This is
+  **not** a cached raster displacement. In Compare, A and B repaint as a single
+  batch with their independent atmospheric parameters. Manual Fast stays Fast
+  on release; Auto returns to full Accurate RK4. Accurate manual drag retains
+  the older CSS-only compositor before a single exact commit on release.
+- RAF batches are coalesced and nominally spaced by 100 ms; the final changed
+  camera pose is also scheduled after the throttle interval if mouse movement
+  stops without a `pointerup`. Releasing/cancelling the gesture clears that
+  pending timer. This is a responsiveness policy, not a guaranteed 10 FPS:
+  synchronous optical/Canvas work can exceed the budget. Browser visual checks
+  are still outstanding.
 - Compare actual rasterized contours/fills with Accurate under Scene and
   Compare A/B, at varied camera poses, camera FOVs and atmospheres.
 - Time end-to-end Canvas renders (including tessellation), assess image artifacts
@@ -193,7 +202,7 @@ full browser-rendered scene is not established by isolated-kernel timings.
   keys, dragging the camera, or using Alt/Shift + wheel produces **Fast**
   projections; the final released/idle camera is recomputed with Accurate.
 - The Fast path is limited to at most one pending physical repaint and a
-  nominal **120 ms** interval between newly scheduled frames. This is **not** a
+  nominal **100 ms** interval between newly scheduled frames. This is **not** a
   guaranteed FPS: a synchronous Canvas/optical draw still blocks the UI while
   it runs. The first frame of each Auto LOD navigation sequence starts with
   every eighth tower to avoid a dense-scene cold-frame delay; the measured
@@ -202,14 +211,15 @@ full browser-rendered scene is not established by isolated-kernel timings.
 - Wheel bursts restore Accurate approximately **220 ms** after the last input.
   A pointer drag restores Accurate on release; a cancelled pointer drag
   restores the original pose. Keyboard movement completes with Accurate on
-  key release. The prior CSS-only drag preview is preserved for manual
-  Accurate and Fast modes.
-- Auto only activates Fast when **all** affected viewports are qualified:
-  Vacuum/Standard for either surface, or the qualified Flat engineered
-  exponential profiles (including inverse temperature at 100%). Unsupported
-  atmospheres **do not** trigger repeated RK4 during keyboard movement; the
-  final released pose is rendered Accurate. Manual Fast still reports an
-  explicit unsupported-profile error rather than falling back to RK4.
+  key release. The prior CSS-only compositor is preserved for manual
+  **Accurate** drag only; manual **Fast** now displays changing optical frames
+  before mouse release, and stays Fast afterward.
+- Auto activates Fast only when **all** affected viewports use supported
+  built-in profiles: Vacuum, Standard, temperature-lapse, profile-transition,
+  inverse-temperature, inverse-spherical or exponential-occlusion, on Flat or
+  Globe. Unknown profiles do not trigger repeated RK4 during movement; the
+  final released pose is Accurate. A Fast error does not silently fall back
+  to a different atmospheric model or to RK4.
 - Preview-only unresolved rays near grazing contact remain approximate
   and may cause missing silhouettes. The `unresolved` count is a number of
   unresolved projected fragments, not a number of failed towers. It tends
@@ -217,6 +227,7 @@ full browser-rendered scene is not established by isolated-kernel timings.
   fragments and must not change the physics or Accurate result.
 - Tests in `tests/ModernCameraNavigation.test.js` exercise Auto's frame
   throttling, scene/Compare quality transitions, wheel settling, pointer
-  cancel, LOD restoration and unsupported profiles. Browser visual and
+  cancel, manual Fast live frames, end-of-throttle motion frames, adaptive
+  atmospheres, LOD restoration and Compare B pointer routing. Browser visual and
   long-session interaction tests remain necessary before relying on an FPS
   target, especially in high-object-count experiments.

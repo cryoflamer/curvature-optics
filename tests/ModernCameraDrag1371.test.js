@@ -59,7 +59,8 @@ function harness(options={}){
     'ModernModelTabB','ModernModelCurvature','ModernModelCurvatureLabel','ModernModelEarth',
     'ModernModelFlat','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
-    'ModernCompareEyeLevel','ModernCompareHorizon'];
+    'ModernCompareEyeLevel','ModernCompareHorizon',
+    'ModernOpticalQuality','ModernOpticalQualityStatus'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
@@ -99,12 +100,15 @@ function harness(options={}){
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
-    CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){draws.push({g,m,opt});return {drawn:20,fillTriangles:10,unresolved:0};}},
+    CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){draws.push({g,m,opt,
+      camera:{Pan:m.Pan,Nick:m.Nick,Height:m.Height,CameraEast:m.CameraEast,CameraNorth:m.CameraNorth}});
+      return {drawn:20,fillTriangles:10,unresolved:0};}},
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
     NewGraphX3D(params){const graph={Canvas:makeCanvas('Scene'),UpdateCanvasSize(){},
       Redraw(){params.DrawFunc({Canvas:graph.Canvas});}};graphs.Scene=graph;return graph;},
     xOnLoad(fn){onloads.push(fn);},console:{error(e){throw e;}}};
   const document={documentElement:{classList:classes()},getElementById(id){return nodes.get(id)||null;},
+    querySelector(selector){return selector.startsWith('#')?nodes.get(selector.slice(1))||null:null;},
     createElement(){return {className:'',hidden:false,textContent:'',setAttribute(){}};}};
   const ctx={window,document,requestAnimationFrame:requestFrame,cancelAnimationFrame:cancelFrame,
     setTimeout(fn,delay){const id=++zoomTimerId;
@@ -144,6 +148,28 @@ test('137.1: Scene drag commits both axes once; no physical redraw on pointermov
   assert.equal(h.nodes.get('ModernNick').value,String(model.Nick));
   assert.equal(h.nodes.get('ModernPreset').value,'custom');
 });
+test('Adaptive Fast: dragging Compare B paints both physical viewports before pointerup',()=>{
+  const h=harness({deferred:true}),n=h.nodes;h.flush();
+  n.get('ModernCompareTab').listeners.click();h.flush();
+  n.get('ModernOpticalQuality').value='fast';n.get('ModernOpticalQuality').listeners.change();h.flush();
+  const model=h.app.getModel(),pan=model.Pan,initial=h.draws.length,b=h.canvases.B;
+  b.emit('pointerdown',{pointerId:9});
+  b.emit('pointermove',{pointerId:9,clientX:125,clientY:100});
+  assert.notEqual(model.Pan,pan,'B drag updates shared observer without release');
+  assert.equal(h.draws.length,initial,'live physical redraw is batched in RAF');
+  assert.equal(b.classList.contains('is-camera-dragging'),true);
+  h.flush();
+  assert.equal(h.draws.length,initial+2,'both Compare sides re-render before pointerup');
+  const aFrame=h.draws.at(-2),bFrame=h.draws.at(-1);
+  assert.equal(aFrame.opt.opticalQuality,'fast');assert.equal(bFrame.opt.opticalQuality,'fast');
+  assert.equal(aFrame.camera.Pan,bFrame.camera.Pan);
+  assert.equal(aFrame.camera.Nick,bFrame.camera.Nick);
+  assert.equal(b.style.transform||'','', 'no compositor-only displacement in live Fast');
+  b.emit('pointerup',{pointerId:9,clientX:125,clientY:100});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'fast');
+  assert.equal(b.classList.contains('is-camera-dragging'),false);
+});
+
 test('137.1: either Compare canvas commits shared camera and redraws A/B together',()=>{
   const h=harness(),a=h.canvases.A,b=h.canvases.B;
   h.nodes.get('ModernCompareTab').listeners.click();
