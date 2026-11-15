@@ -30,10 +30,21 @@ remain readable and editable; the wizard does not migrate them.
    checked** action are disabled for wizard selection. Incompatible entries
    are hidden by default; optionally reveal disabled entries with diagnostic
    reasons, or inspect them via **Open in History**. Chosen IDs persist across
-   searches. Changing mode, reference or physical channel clears stale
-   selections.
-5. **Project details.** Supply a name and optional description. **Create
-   project** first backs up the previous editor workspace, then creates a v2
+   searches. **Select all matching** adds all *compatible* snapshots currently
+   matching the wizard's search/physics filters, keeping previous selections
+   hidden by the filters. **Deselect matching** removes only the currently
+   visible selections; **Clear selection** removes all selections, including
+   hidden ones. Visible and hidden selection counts are shown separately.
+   The reference (if included) counts toward the 200-frame cap; bulk select
+   rejects an over-cap request atomically rather than partially selecting.
+   Changing mode, reference or physical channel clears stale selections.
+5. **Project details.** A meaningful name is prefilled from the chosen
+   animation type, reference name (or current scene), and active physical
+   channel for Physics Transition. The suggestion refreshes when these choices
+   change **until the name is edited manually**, including when the user
+   deliberately clears it; manual names are never silently overwritten.
+   The name remains editable, and an empty name cannot be saved. Add an
+   optional description. **Create project** first backs up the previous editor workspace, then creates a v2
    working draft and attempts a named Animation Library save. On library-save
    failure, the independently autosaved draft remains for a manual retry.
 

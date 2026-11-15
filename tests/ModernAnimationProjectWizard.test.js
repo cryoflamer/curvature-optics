@@ -308,3 +308,67 @@ test('Wizard leaves old editor intact on checkpoint failure and retains new draf
   assert.ok(failedLibrary.events.some(x=>/Library save failed/.test(x)));
   assert.equal(failedLibrary.ctx.studioLibraryBusy,false);
 });
+
+test('Project name is suggested from mode, reference and physical channel until edited',()=>{
+  const base=snapshot();
+  let w=wizard.reference(wizard.initial(),base,1,'Lake observation');
+  assert.equal(w.name,'Camera Motion · Lake observation');
+  assert.equal(w.nameEdited,false);
+  w=wizard.mode(w,'physical');
+  assert.equal(w.name,'Physics Transition · Lake observation');
+  w=wizard.chooseTarget(w,'scene|temperatureProfile.gradientKPerKm');
+  assert.equal(w.name,'Temperature Gradient Transition · Lake observation');
+  w=wizard.patch(w,'description','A description');
+  assert.equal(w.nameEdited,false);
+  w=wizard.patch(w,'name','My own title');
+  assert.equal(w.nameEdited,true);
+  w=wizard.chooseTarget(w,'scene|surface.curvature');
+  assert.equal(w.name,'My own title','changing the channel must not overwrite edited name');
+  w=wizard.reference(w,base,2,'Other reference');
+  assert.equal(w.name,'My own title','choosing another reference must not overwrite edited name');
+  w=wizard.mode(w,'experimental');
+  assert.equal(w.name,'My own title','changing animation type must not overwrite edited name');
+  w=wizard.patch(w,'name','');
+  assert.equal(w.name,'','even intentionally clearing a custom name stays manual');
+  assert.throws(()=>wizard.build(w,[]),/name the project/);
+  const current=wizard.reference(wizard.initial(),base,null,'Current experiment');
+  assert.equal(current.name,'Camera Motion · Base');
+  const long=wizard.reference(wizard.initial(),base,1,'x'.repeat(120));
+  assert.ok(long.name.length<=120);
+  assert.equal(wizard.build(current,[]).name,current.name);
+});
+
+test('Wizard bulk selection keeps filtered hidden IDs and excludes incompatible snapshots',()=>{
+  const base=snapshot(),good2=copy(base),good3=copy(base),bad=copy(base);
+  good2.scene.camera.Height=20;good3.scene.camera.Height=25;
+  bad.scene.objects.ObjDist[0]+=2;
+  let w=wizard.reference(wizard.initial(),base,1,'Base');
+  const rows=[entry(2,good2),entry(3,good3),entry(4,bad)];
+  w=wizard.toggle(w,3,rows);
+  const before=w;
+  w=wizard.selectMatching(w,[rows[0],rows[2],rows[0]]);
+  assert.deepEqual(w.selectedIds,[3,2],'existing hidden choice precedes new visible choice');
+  assert.deepEqual(before.selectedIds,[3],'bulk selection never mutates the original wizard');
+  assert.equal(wizard.selectMatching(w,[rows[0]]).selectedIds.length,2,'selection is idempotent');
+  w=wizard.deselectMatching(w,[rows[0],rows[2]]);
+  assert.deepEqual(w.selectedIds,[3],'deselect matching must leave hidden choice intact');
+  w=wizard.clearSelection(w);
+  assert.deepEqual(w.selectedIds,[]);
+  assert.equal(w.referenceId,1,'reference remains untouched');
+});
+
+test('Bulk select enforces 200-frame limit atomically and accounts for reference',()=>{
+  const base=snapshot();
+  const w=wizard.reference(wizard.initial(),base,1,'Base');
+  const rows=Array.from({length:200},(_,i)=>entry(i+2,base));
+  assert.throws(()=>wizard.selectMatching(w,rows),/at most 200 keyframes/);
+  assert.deepEqual(w.selectedIds,[]);
+  const limited=wizard.selectMatching(w,rows.slice(0,199));
+  assert.equal(limited.selectedIds.length,199);
+  assert.throws(()=>wizard.selectMatching(limited,[rows[199]]),/at most 200 keyframes/);
+  assert.equal(limited.selectedIds.length,199);
+  const withoutReference=wizard.patch(w,'includeReference',false);
+  const all=wizard.selectMatching(withoutReference,rows);
+  assert.equal(all.selectedIds.length,200);
+  assert.equal(wizard.chosen(all,rows).length,200);
+});

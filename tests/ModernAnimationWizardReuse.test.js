@@ -156,3 +156,76 @@ test('Wizard step 4 delegates filtering and selection to the shared Picker witho
   assert.deepEqual(Array.from(ctx.studioWizard.selectedIds),[2]);
   assert.match(ctx.studioWizardError,/violates project constraints/);
 });
+
+test('Wizard Picker exposes bulk tools without changing normal Studio Picker',()=>{
+  const {doc,host}=dom(),base=snapshot(),good=structuredClone(base),bad=structuredClone(base);
+  good.scene.camera.Height+=10;bad.scene.objects.ObjDist[0]+=10;
+  const w=wizard.reference(wizard.initial(),base,1,'Base');
+  const rows=[entry(2,good),entry(3,bad)],events=[];
+  function actions(){return {pickerFilter(){},pickerFiltersClear(){},pickerAdvancedToggle(){},
+    pickerToggle(){},pickerOpenHistory(){},pickerClearSelection(){events.push('clear');},
+    pickerSelectMatching(){events.push('select');},
+    pickerDeselectMatching(){events.push('deselect');}};}
+  picker.renderPicker(doc,host,rows,actions(),{open:true,wizard:true,
+    checked:{2:true},selectedCount:2,totalEntries:rows.length,
+    compatibility:row=>wizard.check(w,row)});
+  let buttons=find(host,n=>n.tagName==='button');
+  assert.equal(buttons.find(n=>n.textContent==='Select all matching').disabled,true,
+    'only compatible visible snapshot is already selected');
+  assert.equal(buttons.find(n=>n.textContent==='Deselect matching').disabled,false);
+  buttons.find(n=>n.textContent==='Deselect matching').dispatch('click');
+  buttons.find(n=>n.textContent==='Clear selection').dispatch('click');
+  assert.deepEqual(events,['deselect','clear']);
+  assert.equal(buttons.some(n=>n.textContent==='Add checked'),false);
+  const {doc:d2,host:h2}=dom();
+  picker.renderPicker(d2,h2,rows,actions(),{open:true,wizard:false,checked:{},totalEntries:2});
+  buttons=find(h2,n=>n.tagName==='button');
+  assert.equal(buttons.some(n=>n.textContent==='Select all matching'),false);
+  assert.equal(buttons.some(n=>n.textContent==='Deselect matching'),false);
+});
+
+test('Wizard bulk picker actions use only filtered entries and preserve other Picker preferences',()=>{
+  const src=read('src/ui/modern/ModernApp.js');
+  const a=src.indexOf('  function renderStudioWizard(){');
+  const b=src.indexOf('  function renderStudioLibrary(){',a);
+  const base=snapshot(),good1=structuredClone(base),good2=structuredClone(base),bad=structuredClone(base);
+  good1.scene.camera.Height=20;good2.scene.camera.Height=30;
+  bad.scene.objects.ObjDist[0]+=100;
+  let w=wizard.reference(wizard.initial(),base,1,'Base');
+  w=wizard.navigate(w,1);w=wizard.navigate(w,2);w=wizard.navigate(w,3);
+  const rows=[entry(1,base),entry(2,good1),entry(3,good2),entry(4,bad)];
+  rows[1].name='UniqueCameraFrame';
+  const pickerHost={querySelector(){return null;}},host={querySelector(query){
+    return query==='[data-wizard-picker]'?pickerHost:null;
+  }};
+  const captures=[];
+  const independentPrefs=filters.update(filters.normalize(),'geometry','flat');
+  const ctx={Promise,Map,Object,Number,String,RangeError,Error,document:{},
+    studioWizard:w,studioWizardError:'',studioLibraryBusy:false,
+    studioWizardPickerFilters:filters.normalize(),studioWizardPickerQueryDraft:'',
+    studioWizardPickerAdvancedOpen:false,studioWizardPickerScroll:0,
+    studioHistoryEntries:rows,studioPickerFilters:independentPrefs,
+    studioWizardUI:{render(){}},studioUI:{renderPicker(_d,_h,items,actions,options){
+      captures.push({items,actions,options});}},studioWizardApi:wizard,historyFiltersApi:filters,
+    newUiEl(){return host;},experimentSnapshot:()=>base,
+    requestStudioSwitch(){throw Error('Unexpected creation');},openHistoryFromPicker:async()=>{},
+  };
+  vm.createContext(ctx);vm.runInContext(src.slice(a,b),ctx);
+  ctx.renderStudioWizard();
+  captures.at(-1).actions.pickerSelectMatching();
+  assert.deepEqual(Array.from(ctx.studioWizard.selectedIds),[2,3]);
+  ctx.studioWizard=wizard.patch(ctx.studioWizard,'showIncompatible',true);
+  ctx.renderStudioWizard();
+  assert.equal(captures.at(-1).items.length,3);
+  captures.at(-1).actions.pickerSelectMatching();
+  assert.deepEqual(Array.from(ctx.studioWizard.selectedIds),[2,3],
+    'incompatible visible entry is never selected');
+  captures.at(-1).actions.pickerFilter('query','UniqueCameraFrame');
+  assert.deepEqual(Array.from(captures.at(-1).items,e=>e.id),[2]);
+  captures.at(-1).actions.pickerDeselectMatching();
+  assert.deepEqual(Array.from(ctx.studioWizard.selectedIds),[3],
+    'hidden ID must remain selected');
+  captures.at(-1).actions.pickerClearSelection();
+  assert.deepEqual(Array.from(ctx.studioWizard.selectedIds),[]);
+  assert.equal(ctx.studioPickerFilters,independentPrefs);
+});

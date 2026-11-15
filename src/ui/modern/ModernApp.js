@@ -1299,12 +1299,20 @@
             if(list)studioWizardPickerScroll=list.scrollTop;
             apply(function(w){return studioWizardApi.toggle(w,id,studioHistoryEntries);});
           },
-          pickerClearSelection:function(){
-            if(!studioWizard)return;
+          pickerSelectMatching:function(){
             var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
             if(list)studioWizardPickerScroll=list.scrollTop;
-            studioWizard=Object.assign({},studioWizard,{selectedIds:[]});
-            renderStudioWizard();
+            apply(function(w){return studioWizardApi.selectMatching(w,found);});
+          },
+          pickerDeselectMatching:function(){
+            var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
+            if(list)studioWizardPickerScroll=list.scrollTop;
+            apply(function(w){return studioWizardApi.deselectMatching(w,found);});
+          },
+          pickerClearSelection:function(){
+            var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
+            if(list)studioWizardPickerScroll=list.scrollTop;
+            apply(function(w){return studioWizardApi.clearSelection(w);});
           },
           pickerOpenHistory:function(id){
             openHistoryFromPicker(id).catch(function(error){

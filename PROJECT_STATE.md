@@ -1,3 +1,12 @@
+> **Animation wizard usability (2026-11-15):** Step 5 now suggests a
+> contextual project name from animation type, reference and physical channel;
+> it remains editable, and manual changes are not overwritten. Step 4 uses
+> the shared Snapshot Picker's Select all matching / Deselect matching / Clear
+> selection controls. Bulk additions only include contract-compatible entries.
+> Hidden selections are retained unless explicitly cleared; exceeding the 200-frame
+> limit rejects the whole bulk operation. No project format, physics or
+> persistent filter state was changed. See `docs/modern-animation-project-wizard.md`.
+
 > **Animation wizard reuses History and Snapshot Picker (2026-11-15):**
 > The creation wizard no longer renders separate snapshot galleries. Step 2
 > opens the ordinary History panel with a temporary **Use as project reference**

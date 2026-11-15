@@ -497,17 +497,31 @@
       entries.filter(function(e){return !!selected[e.id];}).length:options.selectedCount;
     var total=options.totalEntries===undefined?entries.length:options.totalEntries;
     var hidden=Math.max(0,n-entries.filter(function(e){return !!selected[e.id];}).length);
+    var eligible=options.wizard?entries.filter(function(e){
+      return !options.compatibility||options.compatibility(e).allowed;
+    }):[];
     var tools=el(doc,'div','modern-studio-picker-tools');
     tools.appendChild(el(doc,'small','',n+' selected'+(hidden?' ('+hidden+' hidden)':'')+
-      ' · '+entries.length+' of '+total+' found'));
+      ' · '+entries.length+' of '+total+' found'+
+      (options.wizard?' · '+eligible.length+' compatible':'')));
     if(hidden)tools.appendChild(el(doc,'small','modern-studio-picker-hidden-note',
       options.wizard?'Hidden selections remain selected for project creation.':
       'Add checked and dragging a checked card include hidden selections.'));
-    if(!options.wizard){
+    if(options.wizard){
+      var unselected=eligible.filter(function(e){return !selected[e.id];});
+      var selectAll=button(doc,'Select all matching',
+        'Select all compatible snapshots matching the current filters',actions.pickerSelectMatching);
+      selectAll.disabled=!unselected.length;tools.appendChild(selectAll);
+      var selectedVisible=entries.some(function(e){return !!selected[e.id];});
+      var deselect=button(doc,'Deselect matching',
+        'Deselect matching snapshots without changing hidden selections',actions.pickerDeselectMatching);
+      deselect.disabled=!selectedVisible;tools.appendChild(deselect);
+    }else{
       var add=button(doc,'Add checked','Add checked snapshots after selected frame',function(){actions.insertChecked();});
       add.disabled=n===0;tools.appendChild(add);
     }
-    if(n)tools.appendChild(button(doc,'Clear selected','Uncheck all selected snapshots',actions.pickerClearSelection));
+    if(n)tools.appendChild(button(doc,options.wizard?'Clear selection':'Clear selected',
+      'Uncheck all selected snapshots',actions.pickerClearSelection));
     host.appendChild(tools);
     var list=el(doc,'ol','modern-studio-picker-list');
     if(!entries.length)list.appendChild(el(doc,'li','modern-history-empty','No matching snapshots.'));

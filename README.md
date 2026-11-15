@@ -78,9 +78,14 @@ five-step v2 wizard** to choose an animation type, reference snapshot, active
 physical channel, compatible initial frames and project metadata. Reference
 selection opens the existing History panel with **Use as project reference**;
 initial keyframes use the existing Snapshot Picker in a contract-filtered
-selection-only mode, without duplicating their galleries. It saves the
-previous independent draft before creating a new Library entry. Unfinished
-projects and Experimental collections remain valid, though not video-ready.
+selection-only mode, without duplicating their galleries. Its **Select all
+matching** and **Deselect matching** actions apply only to visible matching
+frames, while **Clear selection** includes hidden choices; incompatible frames
+can never be bulk-selected. Project names are suggested automatically from
+the reference, mode and active physical channel, but remain user-editable.
+It saves the previous independent draft before creating a new Library entry.
+Unfinished projects and Experimental collections remain valid, though not
+video-ready.
 See the [Project creation guide](docs/modern-animation-project-wizard.md) and
 [Animation contracts and v2 persistence](docs/modern-animation-contract.md).
 

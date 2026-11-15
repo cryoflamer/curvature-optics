@@ -113,6 +113,9 @@
       pickerHost.setAttribute('data-wizard-picker','');
       content.appendChild(pickerHost);
     }else{
+      content.appendChild(el(doc,'p','modern-studio-hint',
+        w.nameEdited?'Custom project name — it will not be overwritten.':
+        'Name suggested from the animation type and reference. You can edit it.'));
       content.appendChild(input(doc,'Project name',w.name,120,
         function(value,live){actions.field('name',value,live);},false));
       content.appendChild(input(doc,'Description (optional)',w.description,1000,

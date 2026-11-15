@@ -21,12 +21,28 @@
     ['temperatureProfile.gradientKPerKm','Temperature gradient']];
   function initial(){return {step:0,mode:'camera',reference:null,referenceId:null,
     referenceName:'',target:null,includeReference:true,selectedIds:[],
-    name:'',description:'',query:'',showIncompatible:false};}
+    name:'',nameEdited:false,description:'',query:'',showIncompatible:false};}
   function clone(w){return Object.assign({},w,{selectedIds:w.selectedIds.slice()});}
+  function suggestedName(w){
+    if(!w.reference)return '';
+    var title=w.referenceName.trim()||w.reference.scene.title.trim()||
+      (w.reference.display.mode==='compare'?'Compare A/B':'Scene');
+    if(title==='Current experiment')title=w.reference.scene.title.trim()||
+      (w.reference.display.mode==='compare'?'Compare A/B':'Scene');
+    title=title.replace(/\s+/g,' ');
+    var kind=w.mode==='camera'?'Camera Motion':w.mode==='experimental'?
+      'Experimental':!w.target?'Physics Transition':
+      w.target.parameter==='surface.curvature'?'Curvature Transition':
+      'Temperature Gradient Transition';
+    if(w.mode==='physical'&&w.target&&w.target.scope!=='scene')
+      kind+=' · Compare '+w.target.scope;
+    return (kind+' · '+title).slice(0,120).trim();
+  }
+  function refreshName(w){if(!w.nameEdited)w.name=suggestedName(w);return w;}
   function mode(w,value){
     if(!MODES.includes(value))throw RangeError('Unknown animation type');
     var result=clone(w);result.mode=value;result.target=null;result.selectedIds=[];
-    return result;
+    return refreshName(result);
   }
   function reference(w,experiment,id,name){
     if(id!==null&&!(Number.isSafeInteger(id)&&id>0)&&
@@ -36,7 +52,7 @@
     result.reference=state.validate(experiment);result.referenceId=id;
     result.referenceName=typeof name==='string'?name.slice(0,120):'';
     result.target=null;result.selectedIds=[];result.query='';
-    return result;
+    return refreshName(result);
   }
   function targets(w){
     if(!w.reference)return [];
@@ -55,7 +71,7 @@
     var found=targets(w).find(function(t){return t.value===value;});
     if(!found)throw RangeError('Physical channel is not active for this reference');
     var result=clone(w);result.target=found.target;result.selectedIds=[];
-    return result;
+    return refreshName(result);
   }
   function contract(w){
     if(!w.reference)throw RangeError('Choose a reference experiment first');
@@ -80,6 +96,29 @@
     }
     return result;
   }
+  // Bulk actions receive only the current filtered Picker entries. The
+  // contract is checked again here: Show incompatible can never bypass it.
+  // All-or-nothing selection prevents silently dropping frames at the cap.
+  function selectMatching(w,entries){
+    if(!Array.isArray(entries))throw TypeError('Expected matching snapshots');
+    var result=clone(w),seen=new Set(result.selectedIds);
+    entries.forEach(function(entry){
+      if(!entry||entry.id===w.referenceId||seen.has(entry.id))return;
+      if(!check(w,entry).allowed)return;
+      result.selectedIds.push(entry.id);seen.add(entry.id);
+    });
+    if(result.selectedIds.length+(w.includeReference?1:0)>200)
+      throw RangeError('Project allows at most 200 keyframes; narrow the filters');
+    return result;
+  }
+  function deselectMatching(w,entries){
+    if(!Array.isArray(entries))throw TypeError('Expected matching snapshots');
+    var ids=new Set(entries.map(function(entry){return entry.id;}));
+    var result=clone(w);
+    result.selectedIds=result.selectedIds.filter(function(id){return !ids.has(id);});
+    return result;
+  }
+  function clearSelection(w){var result=clone(w);result.selectedIds=[];return result;}
   function patch(w,key,value){
     if(!['name','description','query','includeReference','showIncompatible'].includes(key))
       throw RangeError('Invalid wizard property');
@@ -89,6 +128,7 @@
       var limit=key==='description'?1000:key==='query'?160:120;
       if(value.length>limit)throw RangeError('Wizard text is too long');
       result[key]=value;
+      if(key==='name')result.nameEdited=true;
     }else throw RangeError('Invalid wizard text');
     return result;
   }
@@ -121,7 +161,8 @@
     return projects.createV2(c,frames,{id:'wizard_draft',name:w.name.trim(),
       description:w.description.trim()});
   }
-  return Object.freeze({initial:initial,mode:mode,reference:reference,
+  return Object.freeze({initial:initial,mode:mode,reference:reference,suggestedName:suggestedName,
     targets:targets,chooseTarget:chooseTarget,contract:contract,check:check,
-    toggle:toggle,patch:patch,navigate:navigate,chosen:chosen,build:build});
+    toggle:toggle,selectMatching:selectMatching,deselectMatching:deselectMatching,
+    clearSelection:clearSelection,patch:patch,navigate:navigate,chosen:chosen,build:build});
 }));
