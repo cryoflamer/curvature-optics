@@ -185,8 +185,8 @@ test('Compare gradient playback sends only A changing lapse to Accurate renderer
   const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(graph,model,options)=>{
     calls.push({options,model});return {};
   }}});
-  view.render(sampled,'A',{Canvas:{}});
-  view.render(sampled,'B',{Canvas:{}});
+  view.render(sampled,'A',{Canvas:{}},{animationMode:'physical'});
+  view.render(sampled,'B',{Canvas:{}},{animationMode:'physical'});
   assert.equal(calls[0].options.opticalQuality,'accurate');
   assert.equal(calls[0].options.atmosphere,'temperature-lapse');
   assert.equal(calls[0].options.temperatureProfile.gradientKPerKm,1);
@@ -197,15 +197,66 @@ test('Compare gradient playback sends only A changing lapse to Accurate renderer
   assert.deepEqual(a,before);
   assert.match(playback.describeSample(p,sampled),/Model A · Temperature gradient 1.00 K\/km/);
 });
-test('Temperature-lapse preview uses accurate optics, not a false fast approximation',()=>{
-  const e=snapshot();e.scene.atmosphere='temperature-lapse';
+test('Animation Fast eligibility matches all seven production named atmospheres',()=>{
+  const names=['vacuum','standard','temperature-lapse','profile-transition',
+    'inverse-temperature','exponential-occlusion','inverse-spherical'];
+  const before=snapshot();
   class FakeModel {Update(){}}
-  const engine=preview.create({Model:FakeModel,
-    renderer:{renderPhysical:()=>({})}});
-  assert.equal(engine.build(e,'A').options.opticalQuality,'accurate');
-  assert.equal(preview.fastEligible({atmosphere:'vacuum',surface:'globe'}),true);
-  assert.equal(preview.fastEligible({atmosphere:'temperature-lapse',surface:'globe'}),false);
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:()=>({})}});
+  for(const atmosphere of names)for(const surface of ['globe','flat']){
+    const e=structuredClone(before);
+    e.scene.atmosphere=atmosphere;
+    e.scene.surface.showModel=surface==='flat'?2:1;
+    e.scene.transitionProfile={source:'temperature-lapse',weight:0.4};
+    e.scene.inverseProfile={source:'temperature-lapse',weight:0.45};
+    assert.equal(preview.fastEligible({atmosphere,surface}),true,atmosphere+'/'+surface);
+    const camera=view.build(e,'A',{animationMode:'camera',quality:'fast'});
+    assert.equal(camera.quality,'fast',atmosphere+'/'+surface);
+    assert.equal(camera.options.opticalQuality,'fast');
+    assert.equal(camera.options.atmosphere,atmosphere,
+      'Fast must forward the actual named profile, not substitute Standard');
+    assert.equal(camera.options.previewLod.stride,4);
+    assert.equal(view.build(e,'A',{animationMode:'camera',quality:'auto'}).quality,
+      'fast',atmosphere+'/'+surface+' Auto camera');
+    assert.equal(view.build(e,'A',{animationMode:'physical',quality:'auto'}).quality,
+      'accurate',atmosphere+'/'+surface+' Auto physical');
+    assert.equal(view.build(e,'A',{animationMode:'physical',quality:'fast'}).quality,
+      'fast',atmosphere+'/'+surface+' explicit physical Fast');
+    assert.equal(view.build(e,'A',{animationMode:'physical',quality:'accurate'}).quality,
+      'accurate',atmosphere+'/'+surface+' explicit Accurate');
+  }
+  assert.equal(preview.fastEligible({atmosphere:'unsupported',surface:'flat'}),false);
+  assert.equal(preview.fastEligible(null),false);
+  assert.throws(()=>view.build(before,'A',{quality:'invented'}),/optics choice/);
 });
+
+test('Fast renders Scene and independent Compare A/B without profile substitution',()=>{
+  const e=snapshot('compare'),calls=[];
+  e.compare.A.atmosphere='temperature-lapse';
+  e.compare.A.temperatureProfile.gradientKPerKm=12;
+  e.compare.B.atmosphere='inverse-temperature';
+  e.compare.B.inverseProfile={source:'temperature-lapse',weight:0.45};
+  e.compare.B.temperatureProfile.gradientKPerKm=-10;
+  class FakeModel {Update(){}}
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(graph,model,options)=>{
+    calls.push({geometry:model.showModel,quality:options.opticalQuality,
+      atmosphere:options.atmosphere,temperature:options.temperatureProfile.gradientKPerKm,
+      inverse:options.inverseProfile.weight,transition:options.transitionProfile.weight});
+    return {drawn:1};
+  }}});
+  const original=structuredClone(e),graph={Canvas:{}};
+  const a=view.render(e,'A',graph,{quality:'fast',animationMode:'physical'});
+  const b=view.render(e,'B',graph,{quality:'fast',animationMode:'physical'});
+  assert.equal(a.quality,'fast');assert.equal(b.quality,'fast');
+  assert.deepEqual(calls,[
+    {geometry:1,quality:'fast',atmosphere:'temperature-lapse',temperature:12,
+      inverse:0,transition:0},
+    {geometry:2,quality:'fast',atmosphere:'inverse-temperature',temperature:-10,
+      inverse:0.45,transition:0}
+  ]);
+  assert.deepEqual(e,original,'Fast cannot mutate the source Compare experiment');
+});
+
 test('Animation uses distinct parser-time Canvas graphs, not live Scene/Compare canvases',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
@@ -245,7 +296,8 @@ test('Physical optics defaults to Accurate even when Fast supports the profile',
   assert.equal(view.build(e,'A',{animationMode:'camera',quality:'accurate'}).quality,'accurate');
   assert.equal(view.build(e,'A',{animationMode:'physical'}).options.previewLod.stride,1);
   e.scene.atmosphere='temperature-lapse';
-  assert.equal(view.build(e,'A',{animationMode:'physical',quality:'fast'}).quality,'accurate');
+  assert.equal(view.build(e,'A',{animationMode:'physical',quality:'fast'}).quality,'fast');
+  assert.equal(view.build(e,'A',{animationMode:'physical',quality:'auto'}).quality,'accurate');
   assert.throws(()=>view.build(e,'A',{quality:'invented'}),/optics choice/);
 });
 

@@ -590,8 +590,10 @@ independent Animation Studio optical view, including Earth curvature
 (Globe ↔ Flat) or a single active temperature gradient with a fixed camera.
 Prepare the project, then Play/Pause/Stop/Seek; the parameter shown above
 the viewport tracks the current physical frame. Scene/Compare and History
-remain unchanged. Temperature-lapse uses Accurate optics (potentially slow);
-absolute-time playback may skip displayed frames. See
+remain unchanged. Auto keeps Accurate optics for physical animations
+(potentially slow); manually selecting Fast now also supports
+`temperature-lapse` and the other built-in atmospheric profiles using the
+approximate adaptive field. Absolute-time playback may skip displayed frames. See
 [`docs/modern-animation-research.md`](docs/modern-animation-research.md).
 
 #### Animation optical diagnostics
@@ -599,8 +601,14 @@ absolute-time playback may skip displayed frames. See
 In **Animation**, the **Optics** selector controls the isolated renderer.
 **Auto** means Accurate RK4 for curvature/temperature animations (Fast only
 for qualified camera motion); explicit Accurate is also available, while
-**Fast if supported** is an opt-in approximation. When the physical
-renderer rejects a Fast atmosphere/geometry combination at runtime, the
+**Fast if supported** is an opt-in approximation for all seven built-in
+atmosphere families on Flat and Globe (`vacuum`, `standard`,
+`temperature-lapse`, `profile-transition`, `inverse-temperature`,
+`exponential-occlusion`, `inverse-spherical`). The field uses each frame's
+own atmospheric parameters; custom profiles are not qualified. Auto camera
+motion can use Fast; Auto physical playback still defaults to Accurate.
+The dedicated background video-export worker still renders Accurate, not Fast.
+When the physical renderer rejects a Fast atmosphere/geometry combination at runtime, the
 Animation preview automatically retries that frame using Accurate RK4
 instead of stopping Playback. Runtime rejections are remembered **only for the same physical state**, not
 for all `standard + globe` frames: at near-Flat curvature Fast may be

@@ -431,6 +431,34 @@ state-specific runtime failure memory, and retry on manual quality change.
 A real-browser visual check in Opera is still necessary.
 
 
+## Animation Fast atmosphere routing audit (current state)
+
+The early isolated Animation preview had a narrower `fastEligible()` whitelist
+than the production Scene/Compare optics adapter. That whitelist was the reason
+Fast was unavailable in Animation for `temperature-lapse`,
+`profile-transition`, `inverse-temperature` with intermediate weights,
+`inverse-spherical`, and Globe engineered profiles, even though
+`OpticalFastRayField.createAdaptive()` and the scene adapter already support
+them. The Animation preview now admits the same seven named built-in
+atmospheres on both Flat and Globe, including intermediate profile parameters.
+The renderer still selects the appropriate analytic, local-gradient or adaptive
+kernel using the **sample's** parameters (Compare A/B are independent); it does
+not replace an atmosphere with Standard or invoke hidden RK4 in a Fast frame.
+
+The existing curvature-dependent Standard Globe preflight, bounded runtime
+failure cache, explicit Fast → Accurate retry, and Compare quality consistency
+remain intact. Auto camera playback can select Fast for these profiles; Auto
+physical playback remains Accurate by design. Explicit Fast is available for
+both animation types. A partial/adaptive Fast image is approximate: steep,
+near-contact or outside-domain rays may be unresolved, and browser pixel/FPS
+parity has **not** been established. Video/PNG background export still uses
+Accurate RK4 rather than this preview-quality selector.
+
+Regression coverage: `tests/ModernAnimationPlayback.test.js`,
+`tests/ModernFastPreview.test.js`, and `tests/OpticalAdaptiveFastRayField.test.js`;
+independent sampled-ray diagnostic: `node tools/compare-adaptive-fast-preview.js
+--quick`. Historical sections above describe the earlier limited whitelist.
+
 ## Named Animation Library foundation (#140.12.120.5.1)
 
 `ModernAnimationLibrary` provides a versioned IndexedDB `projects` store,

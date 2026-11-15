@@ -2591,3 +2591,20 @@ shared styling and card-specific click isolation.
   History/Picker preferences and from persisted animation projects.
 - This stage does not modify Project v1/v2, History, IndexedDB, physics,
   playback or media export. See README and the wizard guide.
+
+
+### Animation Studio: Fast routing to every built-in atmospheric family
+
+- Animation's old `fastEligible()` whitelist disagreed with the production
+  Scene/Compare optical adapter. It now accepts the seven built-in named
+  atmospheres on both Flat and Globe, including temperature-lapse, mixed
+  transition/inverse profiles and inverse-spherical, without substituting
+  Standard or altering physical parameters. The existing scene adapter chooses
+  analytic/local-gradient or adaptive Fast for the actual sampled state.
+- Auto camera playback may use Fast for these profiles; Auto physical playback
+  remains Accurate unless Fast is explicitly selected. Standard/Globe
+  curvature preflight and the per-state Fast → Accurate fallback remain.
+- Background animation video/PNG export still uses Accurate rendering. Fast
+  is approximate and can leave unresolved rays; full-frame browser pixel
+  accuracy and FPS have not been certified. RK4/physics, projects, and
+  IndexedDB were unchanged.

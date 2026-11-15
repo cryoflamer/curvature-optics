@@ -20,10 +20,16 @@
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
+  // Keep the Animation choice aligned with the named profiles already
+  // supported by the production Scene/Compare Fast field. The physical scene
+  // adapter selects the legacy analytic/local field or createAdaptive() using
+  // each sample's actual geometry and atmospheric parameters. This is only an
+  // eligibility check: individual samples may still require Accurate fallback.
+  var FAST_ATMOSPHERES=['vacuum','standard','temperature-lapse',
+    'profile-transition','inverse-temperature','exponential-occlusion',
+    'inverse-spherical'];
   function fastEligible(spec){
-    return spec.atmosphere==='vacuum'||spec.atmosphere==='standard'||
-      (spec.surface==='flat'&&(spec.atmosphere==='exponential-occlusion'||
-      (spec.atmosphere==='inverse-temperature'&&spec.inverseProfile.weight===1)));
+    return !!spec&&FAST_ATMOSPHERES.includes(spec.atmosphere);
   }
   function opticalQuality(spec,choice,animationMode){
     if(!['auto','fast','accurate'].includes(choice))throw RangeError('Invalid animation optics choice');
