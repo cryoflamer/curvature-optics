@@ -26,6 +26,7 @@
   var historyFiltersApi=root.CurvatureModernExperimentHistoryFilters;
   var sessionAutosave=root.CurvatureModernSessionAutosave;
   var studioApi=root.CurvatureModernAnimationStudio;
+  var studioContractApi=root.CurvatureModernAnimationContract;
   var studioUI=root.CurvatureModernAnimationStudioUI;
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
@@ -570,6 +571,7 @@
   var studioPreviewRenderer=null;
   var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
+  var studioPickerShowIncompatible=false;
   var studioPickerFilters=historyFiltersApi?historyFiltersApi.normalize():
     {query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
   var studioPickerAdvancedOpen=false;
@@ -1718,6 +1720,7 @@
     studioDiagnosticTransition=null;
     stopStudioPlayback(true);studioPrepared=null;
     studioFilmstripScroll=0;studioPickerOpen=false;studioPickerScroll=0;
+    studioPickerShowIncompatible=false;
     studioPickerChecked=Object.create(null);studioDragSession=null;
     studioRemovedFrameUndo=null;studioRestorePreviewPending=false;
     if(kind==='wizard'){
@@ -2910,10 +2913,30 @@
     return animationPickerAllEntries(historyFiltersApi?
       historyFiltersApi.filter(entries,studioPickerFilters):entries);
   }
+  function animationPickerVerdict(entry){
+    if(!studioDraft||!studioDraft.contract)return null;
+    // Fail closed when an archived snapshot or contract cannot be validated;
+    // opening History remains available for inspection and repair.
+    try{return studioContractApi.inspectCandidate(studioDraft.contract,entry.experiment);}
+    catch(error){return {allowed:false,issues:[{path:'snapshot / project contract',
+      code:'invalid',message:String(error.message||error)}]};}
+  }
+  function animationPickerPruneSelection(entries){
+    if(!studioDraft||!studioDraft.contract)return;
+    var byId=new Map(entries.map(function(entry){return [String(entry.id),entry];}));
+    Object.keys(studioPickerChecked).forEach(function(id){
+      var row=byId.get(id);
+      if(!row||!animationPickerVerdict(row).allowed)delete studioPickerChecked[id];
+    });
+  }
   function animationPickerSelectedEntries(entries){
     // Keep checked IDs across searches. They belong to the current History
-    // records, not to the presently visible filter result.
-    return animationPickerAllEntries(entries).filter(function(e){return studioPickerChecked[e.id];});
+    // records, not to the presently visible filter result. A locked project
+    // can only insert compatible selections, including ones hidden by search.
+    return animationPickerAllEntries(entries).filter(function(e){
+      return !!studioPickerChecked[e.id]&&
+        (!studioDraft||!studioDraft.contract||animationPickerVerdict(e).allowed);
+    });
   }
   function toggleAnimationPicker(open){
     studioPickerOpen=!!open;
@@ -2981,6 +3004,7 @@
     if(!studioApi||!studioUI||!host)return;
     syncLegacyHistorySelection(entries);
     if(!studioDraft)studioDraft=studioApi.blank();
+    animationPickerPruneSelection(entries);
     var assessment=studioApi.inspect(studioDraft);
     var resetFilmstrip=studioSelectedKey===null;
     if(!studioDraft.frames.some(function(f){return f.key===studioSelectedKey;}))
@@ -3110,6 +3134,14 @@
         }
       },
       dragStart:function(payload,event){
+        if(payload.kind==='snapshots'&&studioDraft.contract){
+          var source=entries.find(function(e){return e.id===payload.id;});
+          if(!source||!animationPickerVerdict(source).allowed){
+            studioDragSession=null;
+            if(event&&event.preventDefault)event.preventDefault();
+            return;
+          }
+        }
         var chosen=payload.kind==='snapshots'&&studioPickerChecked[payload.id]?
           animationPickerSelectedEntries(entries)
             .map(function(e){return e.id;}):[payload.id];
@@ -3170,8 +3202,30 @@
     var picker=newUiEl('ModernAnimationSnapshotPicker');
     if(picker&&studioUI.renderPicker){
       var shown=animationPickerEntries(entries);
+      var contractMode=null,compatibleCount=0,incompatibleCount=0,verdicts=new Map();
+      if(studioDraft.contract){
+        var contract=studioDraft.contract;
+        contractMode=contract.mode==='camera'?'Camera Motion · project rules':
+          contract.mode==='physical'?'Physics Transition · '+
+            contract.target.scope+' / '+contract.target.parameter:
+            'Experimental · unrestricted snapshots';
+        shown=shown.filter(function(entry){
+          var verdict=animationPickerVerdict(entry);verdicts.set(entry.id,verdict);
+          if(verdict.allowed)compatibleCount++;
+          else incompatibleCount++;
+          return verdict.allowed||studioPickerShowIncompatible;
+        });
+      }
       var dragActions={
         dragStart:function(payload,event){
+          if(studioDraft.contract){
+            var source=entries.find(function(e){return e.id===payload.id;});
+            if(!source||!animationPickerVerdict(source).allowed){
+              studioDragSession=null;
+              if(event&&event.preventDefault)event.preventDefault();
+              return;
+            }
+          }
           var ids=studioPickerChecked[payload.id]?
             animationPickerSelectedEntries(entries).map(function(e){return e.id;}):[payload.id];
           studioDragSession={kind:'snapshots',ids:ids};
@@ -3184,6 +3238,11 @@
         dragEnd:function(){studioDragSession=null;},
         drop:function(){},
         pickerClose:function(){toggleAnimationPicker(false);},
+        pickerShowIncompatible:function(value){
+          var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
+          if(list)studioPickerScroll=list.scrollTop;
+          studioPickerShowIncompatible=!!value;renderAnimationStudio(entries);
+        },
         pickerOpenHistory:function(id){
           openHistoryFromPicker(id).catch(function(error){
             var message=newUiEl('ModernAnimationStudioMessage');
@@ -3220,7 +3279,11 @@
         },
         pickerAdvancedToggle:function(open){studioPickerAdvancedOpen=!!open;},
         pickerToggle:function(id,checked){
-          if(checked)studioPickerChecked[id]=true;
+          if(checked){
+            var row=entries.find(function(entry){return entry.id===id;});
+            if(!row||studioDraft.contract&&!animationPickerVerdict(row).allowed)return;
+            studioPickerChecked[id]=true;
+          }
           else delete studioPickerChecked[id];
           renderAnimationStudio(entries);
         },
@@ -3247,7 +3310,11 @@
         open:studioPickerOpen,filters:studioPickerFilters,search:studioPickerQueryDraft,
         advancedOpen:studioPickerAdvancedOpen,totalEntries:entries.length,
         selectedCount:animationPickerSelectedEntries(entries).length,
-        checked:studioPickerChecked});
+        checked:studioPickerChecked,contractMode:contractMode,
+        showIncompatible:studioPickerShowIncompatible,incompatibleCount:incompatibleCount,
+        compatibleCount:compatibleCount,
+        compatibility:contractMode?function(entry){return verdicts.get(entry.id)||
+          animationPickerVerdict(entry);}:null});
       var pickerList=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
       if(pickerList)pickerList.scrollTop=studioPickerScroll;
     }

@@ -436,6 +436,22 @@
     host.appendChild(el(doc,'p','modern-studio-hint',
       options.wizard?'Check compatible snapshots to include in the new project. Selection is not added to the current timeline.':
       'Drag saved snapshots to a gap in the timeline. Check several to insert them together.'));
+    if(options.contractMode&&!options.wizard){
+      var contract=el(doc,'div','modern-studio-picker-contract');
+      contract.appendChild(el(doc,'strong','',options.contractMode));
+      contract.appendChild(el(doc,'small','',
+        'Project compatibility is required for both checked frames and drag-and-drop.'));
+      var show=el(doc,'label','modern-studio-picker-show-incompatible');
+      var showCheck=el(doc,'input');showCheck.type='checkbox';
+      showCheck.checked=!!options.showIncompatible;
+      showCheck.setAttribute('aria-label','Show incompatible project snapshots');
+      showCheck.addEventListener('change',function(){
+        if(actions.pickerShowIncompatible)actions.pickerShowIncompatible(showCheck.checked);
+      });
+      show.appendChild(showCheck);
+      show.appendChild(el(doc,'span','','Show incompatible ('+(options.incompatibleCount||0)+')'));
+      contract.appendChild(show);host.appendChild(contract);
+    }
     var filters=options.filters||{query:options.search||'',mode:'all',geometry:'any',
       atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
     var search=el(doc,'input','modern-studio-picker-search');
@@ -503,7 +519,8 @@
     var tools=el(doc,'div','modern-studio-picker-tools');
     tools.appendChild(el(doc,'small','',n+' selected'+(hidden?' ('+hidden+' hidden)':'')+
       ' · '+entries.length+' of '+total+' found'+
-      (options.wizard?' · '+eligible.length+' compatible':'')));
+      (options.wizard?' · '+eligible.length+' compatible':
+        options.contractMode?' · '+(options.compatibleCount||0)+' compatible':'')));
     if(hidden)tools.appendChild(el(doc,'small','modern-studio-picker-hidden-note',
       options.wizard?'Hidden selections remain selected for project creation.':
       'Add checked and dragging a checked card include hidden selections.'));
@@ -524,17 +541,20 @@
       'Uncheck all selected snapshots',actions.pickerClearSelection));
     host.appendChild(tools);
     var list=el(doc,'ol','modern-studio-picker-list');
-    if(!entries.length)list.appendChild(el(doc,'li','modern-history-empty','No matching snapshots.'));
+    if(!entries.length)list.appendChild(el(doc,'li','modern-history-empty',
+      options.contractMode&&!options.showIncompatible?
+        'No compatible snapshots match these filters. Show incompatible to inspect why.':
+        'No matching snapshots.'));
     entries.forEach(function(entry){
       var item=el(doc,'li','modern-studio-picker-card');
       item.setAttribute('data-picker-id',String(entry.id));
       item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+snapshotPresentation.displayName(entry));
       var check=el(doc,'input','modern-studio-picker-checkbox');check.type='checkbox';
       var verdict=options.compatibility?options.compatibility(entry):null;
-      check.checked=!!selected[entry.id];
+      check.checked=!!selected[entry.id]&&(!verdict||verdict.allowed);
       // A previously chosen History record may have changed. Keep it
       // uncheckable even if it is no longer eligible for new selection.
-      check.disabled=!!verdict&&!verdict.allowed&&!check.checked;
+      check.disabled=!!verdict&&!verdict.allowed;
       check.setAttribute('aria-label','Select snapshot '+entry.id);
       if(check.disabled)item.className+=' is-incompatible';
       check.addEventListener('change',function(){actions.pickerToggle(entry.id,check.checked);});
@@ -546,7 +566,9 @@
       var summary=el(doc,'small','',snapshotPresentation.frameSummary(entry));
       summary.title=summary.textContent;info.appendChild(summary);
       if(verdict&&!verdict.allowed){
-        var issue=(verdict.issues||[]).slice(0,3).map(function(x){return x.path;}).join(', ');
+        var issue=(verdict.issues||[]).slice(0,3).map(function(x){
+          return friendlyPath(x.path||'snapshot');
+        }).join(', ');
         info.appendChild(el(doc,'small','modern-studio-picker-incompatibility',
           'Incompatible: '+(issue||'does not satisfy project constraints')));
       }
@@ -567,7 +589,7 @@
         });
       });
       info.appendChild(openHistory);item.appendChild(info);
-      if(!options.wizard){
+      if(!options.wizard&&(!verdict||verdict.allowed)){
         var handle=el(doc,'span','modern-studio-drag-handle','⠿');
         handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
         item.appendChild(handle);

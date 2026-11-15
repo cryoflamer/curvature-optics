@@ -64,10 +64,13 @@ editor and import behavior.
 
 When used from the **creation wizard**, the shared Snapshot Picker is
 contract-filtered and keeps its search state separate from the ordinary
-Studio Picker. **Outside the wizard**, the ordinary Picker is not yet
-pre-filtered by the current saved v2 contract: incompatible entries can still
-appear, but their insertion is rejected before changing the timeline. The next
-stage will make that ordinary Picker contract-aware as well. Changing the declared project contract after creation is
+Studio Picker. **Outside the wizard**, the ordinary Picker now applies the opened v2 project
+contract automatically: incompatible entries are hidden by default, with a
+**Show incompatible** option for disabled cards and reasons. The additional
+History filters cannot weaken the contract. Checked compatible snapshots stay
+selected even when hidden by search, and `Add checked`/drag-and-drop revalidate
+before timeline insertion. Project v1 keeps the old Picker workflow. Changing
+the declared project contract after creation is
 not supported. No new physics interpolation, media exporter or IndexedDB
 migration is introduced here. Experimental remains a save-only collection.
 

@@ -883,6 +883,13 @@ button{cursor:pointer}
 .modern-studio-picker-filters > button{align-self:flex-start;border:1px solid #bcd5ec;
   border-radius:6px;background:#fff;padding:6px 9px;font:inherit;color:#256195;cursor:pointer}
 .modern-studio-picker-hidden-note{flex-basis:100%;font-size:10px;color:#566d84}
+.modern-studio-picker-contract{display:flex;flex-direction:column;gap:5px;margin-top:9px;
+  padding:8px 9px;border:1px solid #bdd7eb;border-radius:7px;background:#eaf5ff}
+.modern-studio-picker-contract strong{font-size:12px;color:#23577f}
+.modern-studio-picker-contract small{font-size:10px;color:#4b6780}
+.modern-studio-picker-show-incompatible{display:flex;align-items:center;gap:6px;
+  font-size:11px;color:#285b82;cursor:pointer}
+.modern-studio-picker-show-incompatible input{margin:0;accent-color:#287ac5}
 .modern-studio-picker-list{min-height:0;overflow:visible;flex:0 0 auto;list-style:none;margin:0;padding:0;
   display:flex;flex-direction:column;gap:7px;scrollbar-width:thin}
 .modern-studio-picker-card{position:relative;display:grid;grid-template-columns:auto 85px minmax(0,1fr) auto;
@@ -1241,6 +1248,6 @@ button{cursor:pointer}
 
 /* Wizard History selection is a read-only alternative to Restore. */
 .modern-history-selection-actions button[hidden]{display:none!important}
-.modern-project-wizard-picker .modern-studio-picker-card.is-incompatible{background:#f4f6f8;opacity:.75}
-.modern-project-wizard-picker .modern-studio-picker-incompatibility{
+.modern-studio-picker-card.is-incompatible{background:#f4f6f8;opacity:.75;cursor:default}
+.modern-studio-picker-incompatibility{
   color:#934b37;white-space:normal;overflow-wrap:anywhere;text-overflow:clip}

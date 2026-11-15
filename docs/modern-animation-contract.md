@@ -107,16 +107,18 @@ validated contracts and can save unfinished projects. See
 - The five-step creation wizard is implemented. **Editing an existing locked
   contract** remains unsupported; create a new project to change its invariant
   parameters.
-- Snapshot Picker does not yet prefilter by the project contract. However,
-  `buildSaved()` and `createV2()` reject incompatible keyframes before writing
-  to Library, and Studio insertions now reject them before changing the draft.
-  Showing incompatible/compatible candidates directly in the ordinary Picker
-  remains separate work.
+- The ordinary Studio Snapshot Picker now enforces the currently opened v2
+  contract in addition to the independent History search/physics filters.
+  Only compatible records are shown by default. **Show incompatible** reveals
+  blocked cards and diagnostic paths for inspection / Open in History, but
+  never enables checking or dragging them. Hidden, compatible selections remain
+  checked across searches; incompatible selections left from a prior project
+  are cleared before rendering. All insertions are revalidated by Studio.
+  Project v1 retains the former unrestricted Picker workflow.
 - Experimental stores collections only; it does not make mixed Scene/Compare
   or hard-cut exports available. The existing v1 `build()` path remains the
   sole Preview/Export preparation path for ready Camera/Physical drafts.
 - No physics, RK4, refraction, image generation or IndexedDB schema migration.
 
-Next stages: Picker contract filtering and candidate diagnostics,
-project-library search/grouping by declared contracts,
+Next stages: project-library search/grouping by declared contracts,
 then a final stabilization and browser acceptance pass.

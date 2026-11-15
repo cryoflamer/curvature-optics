@@ -58,7 +58,7 @@ test('Wizard reuses Snapshot Picker without drag or insertion into the current e
   assert.equal(input.length,2);assert.equal(input[0].disabled,false);
   assert.equal(input[1].disabled,true);
   assert.ok(nodes.some(n=>n.className==='modern-studio-picker-incompatibility'&&
-    /scene\.objects/.test(n.textContent)));
+    /Objects · ObjDist/.test(n.textContent)));
   input[0].dispatch('change');assert.deepEqual(events,[['toggle',2]]);
   assert.ok(nodes.some(n=>n.textContent==='Open in History'));
 });

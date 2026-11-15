@@ -7,6 +7,7 @@ const codec=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 const sequence=require('../src/camera/ModernCameraSequence');
 const studio=require('../src/animation/ModernAnimationStudio');
+const contracts=require('../src/animation/ModernAnimationContract');
 const animation=require('../src/animation/ModernAnimationProject');
 const editor=require('../src/ui/modern/ModernAnimationStudioUI');
 function experiment(mode='scene'){
@@ -577,7 +578,7 @@ test('Live Picker actions filter independently, keep hidden selections and inser
   const ctx={historyFiltersApi:filters,studioPickerFilters:filters.normalize(),
     historyFilters:filters.normalize({query:'History exclusive',mode:'scene'}),
     studioPickerQueryDraft:'',studioPickerAdvancedOpen:true,studioPickerOpen:true,
-    studioPickerChecked:Object.create(null),studioPickerScroll:0,studioFilmstripScroll:0,
+    studioPickerShowIncompatible:false,studioPickerChecked:Object.create(null),studioPickerScroll:0,studioFilmstripScroll:0,
     studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
     studioRemovedFrameUndo:null,studioPrepared:null,studioPlayback:null,
     studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
@@ -753,4 +754,126 @@ test('Preview navigation is one-shot, gesture-cancellable and respects reduced m
   navigation.start();navigation.cancel();assert.equal(navigation.finish(target),false);
   navigation.start();assert.equal(navigation.finish({hidden:true,scrollIntoView(){throw Error('hidden');}}),false);
   navigation.start();assert.equal(editor.createPreviewNavigation(view,{hidden:true}).finish(target),false);
+});
+
+test('Locked v2 Picker filters by contract, protects hidden selections and blocks incompatible drags',()=>{
+  const vm=require('node:vm');
+  const src=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const functions=src.slice(src.indexOf('  function animationPickerAllEntries(entries){'),
+    src.indexOf('  function toggleAnimationPicker(open){'));
+  const render=src.slice(src.indexOf('  function renderAnimationStudio(entries){'),
+    src.indexOf('  var historyMetadataEditingId=null;'));
+  const filters=require('../src/ui/modern/ModernExperimentHistoryFilters');
+  const base=experiment(),camera=clone(base),pan=clone(base),objects=clone(base),physics=clone(base);
+  camera.scene.camera.Height=30;pan.scene.camera.Pan=6;
+  objects.scene.objects.ObjDist[0]+=10;
+  physics.scene.temperatureProfile.gradientKPerKm+=10;
+  const entries=[entry(1,base,'Reference'),entry(2,camera,'Compatible high'),
+    entry(3,objects,'Bad objects'),entry(4,physics,'Bad atmosphere'),
+    entry(5,pan,'Compatible pan')];
+  const draft={...studio.blank(),contract:contracts.create(base,{mode:'camera'})};
+  const host={querySelector(){return null;},querySelectorAll(){return [];}};
+  let picker,edits=0;
+  const ctx={historyFiltersApi:filters,studioContractApi:contracts,studioPickerFilters:filters.normalize(),
+    studioPickerQueryDraft:'',studioPickerAdvancedOpen:true,studioPickerOpen:true,
+    studioPickerShowIncompatible:false,
+    studioPickerChecked:{2:true,3:true,4:true},studioPickerScroll:0,studioFilmstripScroll:0,
+    studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
+    studioRemovedFrameUndo:null,studioPrepared:null,studioPlayback:null,
+    studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
+    studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
+    studioDraft:draft,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
+      picker={shown,actions,options};}},studioApi:studio,
+    newUiEl(id){if(id==='ModernAnimationStudio')return host;
+      if(id==='ModernAnimationSnapshotPicker')return {querySelector(){return null;}};
+      return null;},document:{},renderStudioLibrary(){},syncLegacyHistorySelection(){},
+    saveApplicationPreferences(){},saveStudioDraft(){edits++;return true;},
+    applySuggestedStudioName:v=>v,stopStudioPlayback(){},root:{},
+    Promise,Array,Object,Map,Set,Number,String,RangeError,Error};
+  vm.runInNewContext(functions+'\n'+render,ctx);
+  ctx.renderAnimationStudio(entries);
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[1,2,5]);
+  assert.match(picker.options.contractMode,/Camera Motion/);
+  assert.equal(picker.options.compatibleCount,3);
+  assert.equal(picker.options.incompatibleCount,2);
+  assert.equal(picker.options.selectedCount,1);
+  assert.deepEqual(Object.keys(ctx.studioPickerChecked),['2'],
+    'previous checked frames outside the contract are removed');
+  picker.actions.pickerShowIncompatible(true);
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[1,2,3,4,5]);
+  assert.equal(picker.options.compatibility(entries[2]).allowed,false);
+  picker.actions.pickerToggle(3,true);
+  assert.deepEqual(Object.keys(ctx.studioPickerChecked),['2']);
+  let dragPrevented=false;
+  picker.actions.dragStart({kind:'snapshots',id:3},
+    {preventDefault(){dragPrevented=true;}});
+  assert.equal(dragPrevented,true);
+  assert.equal(ctx.studioDragSession,null);
+  picker.actions.pickerFilter('query','Bad objects');
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[3]);
+  assert.equal(picker.options.selectedCount,1,'compatible selection survives search');
+  picker.actions.insertChecked();
+  assert.deepEqual(Array.from(ctx.studioDraft.frames,f=>f.sourceSnapshotId),[2],
+    'Add checked includes compatible hidden selection, not rejected rows');
+  assert.equal(edits,1);
+  picker.actions.pickerShowIncompatible(false);
+  assert.equal(picker.shown.length,0);
+  picker.actions.pickerFiltersClear();
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[1,2,5]);
+  assert.equal(picker.options.selectedCount,0);
+});
+
+test('Picker shows incompatible v2 snapshots read-only with reasons and History navigation',()=>{
+  const base=experiment(),good=clone(base),bad=clone(base);
+  good.scene.camera.Height+=15;bad.scene.objects.ObjSize[0]+=20;
+  const contract=contracts.create(base,{mode:'camera'});
+  const rows=[entry(1,good,'Good'),entry(2,bad,'Different objects')];
+  const {doc,host}=mockDom(),events=[];
+  const actions={pickerFilter(){},pickerFiltersClear(){},pickerAdvancedToggle(){},
+    pickerClose(){},pickerToggle(){events.push('toggle');},pickerClearSelection(){},
+    pickerShowIncompatible:v=>events.push(['show',v]),
+    pickerOpenHistory:id=>events.push(['history',id]),insertChecked(){},
+    dragStart(){events.push('drag');},dragEnd(){}};
+  editor.renderPicker(doc,host,rows,actions,{open:true,contractMode:'Camera Motion · project rules',
+    compatibleCount:1,incompatibleCount:1,showIncompatible:true,
+    compatibility:row=>contracts.inspectCandidate(contract,row.experiment),checked:{2:true}});
+  const cards=collect(host,n=>String(n.className).split(' ').includes('modern-studio-picker-card'));
+  assert.equal(cards.length,2);
+  assert.equal(cards[0].draggable,true);
+  assert.notEqual(cards[1].draggable,true,'incompatible snapshots cannot start a drag');
+  assert.equal(cards[1].children[0].disabled,true);
+  assert.equal(cards[1].children[0].checked,false);
+  assert.match(collect(cards[1],n=>n.className==='modern-studio-picker-incompatibility')[0]
+    .textContent,/Objects · ObjSize/);
+  assert.equal(collect(cards[1],n=>n.className==='modern-studio-drag-handle').length,0);
+  const toggle=collect(host,n=>n.getAttribute&&
+    n.getAttribute('aria-label')==='Show incompatible project snapshots')[0];
+  toggle.checked=false;toggle.listeners.change();
+  assert.deepEqual(events,[['show',false]]);
+  const openHistory=collect(cards[1],n=>n.className==='modern-studio-picker-open-history')[0];
+  openHistory.listeners.click({stopPropagation(){}});
+  assert.deepEqual(events.at(-1),['history',2],
+    'incompatible snapshots remain inspectable in History');
+});
+
+test('Picker compatibility follows the selected physical channel, Experimental permits mixed snapshots, and v1 is unrestricted',()=>{
+  const vm=require('node:vm');
+  const src=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const helpers=src.slice(src.indexOf('  function animationPickerAllEntries(entries){'),
+    src.indexOf('  function toggleAnimationPicker(open){'));
+  const base=experiment(),gradient=clone(base),moved=clone(base),mixed=experiment('compare');
+  gradient.scene.temperatureProfile.gradientKPerKm+=5;
+  moved.scene.camera.Height+=10;
+  const target={scope:'scene',parameter:'temperatureProfile.gradientKPerKm'};
+  const ctx={studioContractApi:contracts,studioDraft:{contract:contracts.create(base,{mode:'physical',target})},
+    studioPickerChecked:{2:true,3:true},Map,Object,String,Array};
+  vm.runInNewContext(helpers,ctx);
+  assert.equal(ctx.animationPickerVerdict(entry(2,gradient)).allowed,true);
+  assert.equal(ctx.animationPickerVerdict(entry(3,moved)).allowed,false);
+  ctx.animationPickerPruneSelection([entry(2,gradient),entry(3,moved)]);
+  assert.deepEqual(Object.keys(ctx.studioPickerChecked),['2']);
+  ctx.studioDraft={contract:contracts.create(base,{mode:'experimental'})};
+  assert.equal(ctx.animationPickerVerdict(entry(4,mixed)).allowed,true);
+  ctx.studioDraft={contract:null};
+  assert.equal(ctx.animationPickerVerdict(entry(4,mixed)),null);
 });

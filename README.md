@@ -85,7 +85,11 @@ can never be bulk-selected. Project names are suggested automatically from
 the reference, mode and active physical channel, but remain user-editable.
 It saves the previous independent draft before creating a new Library entry.
 Unfinished projects and Experimental collections remain valid, though not
-video-ready.
+video-ready. When editing a v2 project, the ordinary Studio Snapshot Picker
+also enforces its locked contract: it displays compatible History records by
+default, with an optional read-only view of incompatible cards and reasons.
+Project v1 retains the unrestricted Picker. Search filters remain independent
+of the mandatory compatibility check.
 See the [Project creation guide](docs/modern-animation-project-wizard.md) and
 [Animation contracts and v2 persistence](docs/modern-animation-contract.md).
 

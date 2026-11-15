@@ -1,3 +1,13 @@
+> **Contract-aware Studio Snapshot Picker (2026-11-15):** Editing an opened
+> v2 project now prefilters the ordinary Picker by its immutable Animation
+> Contract after History search/physics filters. An opt-in **Show incompatible**
+> reveals unselectable, non-draggable cards with diagnostic paths and **Open
+> in History**. Compatible selections survive search changes; stale incompatible
+> checks are pruned on render, and programmatic checked/drag insertion remains
+> blocked by both Picker and the Studio model. The extra visibility toggle is
+> temporary and resets on project switch. V1 Picker behavior and independent
+> History/Picker preferences are unchanged. See `docs/modern-animation-contract.md`.
+
 > **Animation wizard usability (2026-11-15):** Step 5 now suggests a
 > contextual project name from animation type, reference and physical channel;
 > it remains editable, and manual changes are not overwritten. Step 4 uses
@@ -32,7 +42,7 @@
 > storage, portable JSON, named Save/Save As, Studio open and autosave preserve
 > contracts and incomplete projects without any IndexedDB migration. The
 > New project now opens the v2 wizard; contract-based filtering inside
-> the ordinary Studio Picker remains future work. See
+> the ordinary Studio Picker is now implemented (see entry above). See
 > `docs/modern-animation-contract.md`.
 
 > **Snapshot Picker → History navigation (2026-11-15):** The redundant top-of-Studio
