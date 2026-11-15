@@ -53,6 +53,13 @@ for coordinate semantics, spherical recentering, and limitations.
 **Camera → Camera Animation** now creates transitions directly from current views,
 without requiring saved position names.
 
+**Saved snapshot presentation:** Modern History and Animation Studio share
+`src/ui/modern/ModernSnapshotPresentation.js` for read-only snapshot
+names, physics summaries, saved images and inspector markup. History owns
+archive actions; Animation Studio owns Snapshot Picker and the timeline.
+Neither UI module imports the other. See
+[Experiment History](docs/modern-experiment-history.md) for details.
+
 ## Run locally
 
 Serve the **repository root** with a static HTTP server (Python 3 is sufficient; no npm install or bundling is required for these entry points):

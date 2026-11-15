@@ -27,7 +27,7 @@ const required = [
   'ModernExperimentState.js', 'ModernGpuCapabilities.js',
   'ModernPerformanceReport.js', 'ModernRenderProfiler.js',
   'ModernRoute.js', 'ModernSceneState.js', 'ModernSemanticNaming.js', 'ModernSessionAutosave.js', 'ModernStatusMessage.js', 'ModernTargetIndicator.js',
-  'ModernThumbnailPreview.js'
+  'ModernThumbnailPreview.js', 'ModernSnapshotPresentation.js'
 ];
 
 function tagsFor(name) {

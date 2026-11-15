@@ -130,6 +130,25 @@ results.
   separate Animation Studio Snapshot Picker, where ordering and timing belong.
   A preexisting chronological History shortlist remains migration-only data.
 
+## Snapshot presentation boundary (History / Animation)
+
+`src/ui/modern/ModernSnapshotPresentation.js` is the shared, read-only
+formatting and DOM presentation layer: snapshot names/classifications,
+compact camera/physics summaries, saved thumbnail placeholders, and the
+Scene/Compare inspector. It takes already loaded records and never opens
+IndexedDB, captures fresh optics, restores an experiment, or changes a draft.
+
+`ModernExperimentHistoryUI.js` owns the History gallery and archive actions;
+`ModernAnimationStudioUI.js` owns its timeline, Snapshot Picker and project
+cards. Both import `ModernSnapshotPresentation.js` directly; Animation Studio
+never imports History UI. The Modern browser entry loads the shared script
+before either consumer; CommonJS tests import it from the same path. History
+retains forwarding aliases for the old read-only formatting helpers for
+compatibility with existing integrations, not for new code.
+
+No thumbnail, experiment JSON, project, or IndexedDB schema migration is
+required by this presentation-only boundary.
+
 ## Smart History Filters (search and A/B differences)
 
 History has an always-visible **Search experiments** field and collapsible

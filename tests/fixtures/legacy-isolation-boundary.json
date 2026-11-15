@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 93,
-      "uniqueScripts": 91,
+      "scriptTags": 94,
+      "uniqueScripts": 92,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -188,6 +188,7 @@
         "src/ui/modern/ModernSemanticNaming.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernThumbnailPreview.js",
+        "src/ui/modern/ModernSnapshotPresentation.js",
         "src/ui/modern/ModernExperimentHistoryUI.js",
         "src/ui/modern/ModernExperimentHistoryFilters.js",
         "src/animation/ModernAnimationCompatibility.js",
@@ -390,6 +391,7 @@
       "src/ui/modern/ModernSceneState.js",
       "src/ui/modern/ModernSemanticNaming.js",
       "src/ui/modern/ModernSessionAutosave.js",
+      "src/ui/modern/ModernSnapshotPresentation.js",
       "src/ui/modern/ModernStatusMessage.js",
       "src/ui/modern/ModernTargetIndicator.js",
       "src/ui/modern/ModernThumbnailPreview.js"
@@ -417,7 +419,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 179,
+  "sourceJsCount": 180,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -703,6 +705,7 @@
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernCameraSpline.test.js",
+        "tests/ModernHistoryCleanup.test.js",
         "tests/ModernSemanticNaming.test.js"
       ],
       "commonJsToolCallers": []
@@ -2297,6 +2300,7 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernSnapshotPresentation.test.js",
         "tests/ModernStatusMessageSurfaces.test.js",
         "tests/ModernThumbnailPreview.test.js"
       ],
@@ -2319,6 +2323,7 @@
         "tests/ModernApplicationPreferences.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernExperimentHistory.test.js",
+        "tests/ModernHistoryCleanup.test.js",
         "tests/ModernObjectPanelLayout.test.js",
         "tests/ModernSurfaceAtmosphereLayout.test.js",
         "tests/ModernTargetIndicator.test.js"
@@ -2488,6 +2493,7 @@
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernHistoryCleanup.test.js",
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
@@ -2553,12 +2559,11 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [
-        "src/ui/modern/ModernAnimationStudioUI.js"
-      ],
+      "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernSnapshotPresentation.test.js",
         "tests/ModernThumbnailPreview.test.js"
       ],
       "commonJsToolCallers": []
@@ -2623,6 +2628,7 @@
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernHistoryCleanup.test.js",
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
@@ -2744,6 +2750,19 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernSnapshotPresentation.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernAnimationStudioUI.js",
+        "src/ui/modern/ModernExperimentHistoryUI.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernSnapshotPresentation.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernStatusMessage.js": {
       "directHtmlLoads": [
         "modern"
@@ -2777,8 +2796,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/ui/modern/ModernAnimationStudioUI.js",
-        "src/ui/modern/ModernExperimentHistoryUI.js"
+        "src/ui/modern/ModernAnimationStudioUI.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernThumbnailPreview.test.js"

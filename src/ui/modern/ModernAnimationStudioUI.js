@@ -1,19 +1,19 @@
 /* Compact DOM-only editor for an autosaved animation draft. The filmstrip
- * resolves saved thumbnails from History but never captures or renders optics.
+ * uses the shared saved-snapshot presentation; never captures or renders optics.
  */
 (function(root,factory){
-  var historyUI=root.CurvatureModernExperimentHistoryUI;
+  var snapshotPresentation=root.CurvatureModernSnapshotPresentation;
   var thumbnailPreview=root.CurvatureModernThumbnailPreview;
   var statusMessages=root.CurvatureModernStatusMessage;
   if(typeof module==='object'&&module.exports){
-    historyUI=require('./ModernExperimentHistoryUI');
+    snapshotPresentation=require('./ModernSnapshotPresentation');
     thumbnailPreview=require('./ModernThumbnailPreview');
     statusMessages=require('./ModernStatusMessage');
   }
-  var api=factory(historyUI,thumbnailPreview,statusMessages);
+  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(historyUI,thumbnailPreview,statusMessages){
+}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
@@ -75,7 +75,7 @@
   function galleryPreview(doc,host,enabled){
     if(host.__thumbnailPreview){host.__thumbnailPreview.destroy();host.__thumbnailPreview=null;}
     if(enabled===false||!thumbnailPreview)return null;
-    var controller=thumbnailPreview.create(doc,host,historyUI.inspectorMarkup);
+    var controller=thumbnailPreview.create(doc,host,snapshotPresentation.inspectorMarkup);
     host.__thumbnailPreview=controller;
     return controller;
   }
@@ -360,7 +360,7 @@
           if(event.preventDefault)event.preventDefault();actions.select(entry.id);
         }
       });
-      var visual=historyUI.frameVisual(doc,{name:p.name,experiment:p.baseExperiment,
+      var visual=snapshotPresentation.frameVisual(doc,{name:p.name,experiment:p.baseExperiment,
         thumbnail:entry.thumbnail},'modern-animation-library-visual');
       if(!entry.thumbnail)visual.appendChild(el(doc,'small','modern-animation-library-no-preview',
         'No saved screenshot'));
@@ -385,7 +385,7 @@
           'Earth curvature':'Temperature gradient')+' · '+p.keyframes.length+
         ' frames · '+duration.toFixed(1)+' s'));
       var summary=el(doc,'small','modern-animation-library-card-summary',
-        historyUI.frameSummary({experiment:p.baseExperiment}));
+        snapshotPresentation.frameSummary({experiment:p.baseExperiment}));
       summary.title=summary.textContent;info.appendChild(summary);
       if(p.description){var desc=el(doc,'small','modern-animation-library-card-summary',p.description);
         desc.title=p.description;info.appendChild(desc);}
@@ -453,22 +453,22 @@
     entries.forEach(function(entry){
       var item=el(doc,'li','modern-studio-picker-card');
       item.setAttribute('data-picker-id',String(entry.id));
-      item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+historyUI.displayName(entry));
+      item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+snapshotPresentation.displayName(entry));
       var check=el(doc,'input','modern-studio-picker-checkbox');check.type='checkbox';
       check.checked=!!selected[entry.id];check.setAttribute('aria-label','Select snapshot '+entry.id);
       check.addEventListener('change',function(){actions.pickerToggle(entry.id,check.checked);});
       item.appendChild(check);
-      var visual=historyUI.frameVisual(doc,entry,'modern-studio-picker-visual');item.appendChild(visual);
+      var visual=snapshotPresentation.frameVisual(doc,entry,'modern-studio-picker-visual');item.appendChild(visual);
       var info=el(doc,'div','modern-studio-picker-info');
-      var title=el(doc,'strong','',historyUI.displayName(entry));title.title=title.textContent;
+      var title=el(doc,'strong','',snapshotPresentation.displayName(entry));title.title=title.textContent;
       info.appendChild(title);
-      var summary=el(doc,'small','',historyUI.frameSummary(entry));
+      var summary=el(doc,'small','',snapshotPresentation.frameSummary(entry));
       summary.title=summary.textContent;info.appendChild(summary);item.appendChild(info);
       var handle=el(doc,'span','modern-studio-drag-handle','⠿');
       handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
       item.appendChild(handle);
       makeDragSource(doc,item,handle,{kind:'snapshots',id:entry.id},actions);
-      if(inspector)inspector.infoButton(item,entry,item,historyUI.displayName(entry));
+      if(inspector)inspector.infoButton(item,entry,item,snapshotPresentation.displayName(entry));
       list.appendChild(item);
     });
     host.appendChild(list);
@@ -761,11 +761,11 @@
       var previewEntry=frameEntry(selected,entries);
       var preview=el(doc,'section','modern-studio-preview');
       preview.setAttribute('aria-label','Selected saved keyframe preview');
-      var previewVisual=historyUI.frameVisual(doc,previewEntry,'modern-studio-preview-visual');
+      var previewVisual=snapshotPresentation.frameVisual(doc,previewEntry,'modern-studio-preview-visual');
       preview.appendChild(previewVisual);
       var previewCaption=el(doc,'div','modern-studio-preview-caption');
       previewCaption.appendChild(el(doc,'strong','',selected.name));
-      previewCaption.appendChild(el(doc,'p','',historyUI.frameSummary(previewEntry)));
+      previewCaption.appendChild(el(doc,'p','',snapshotPresentation.frameSummary(previewEntry)));
       previewCaption.appendChild(el(doc,'small','',
         'Saved thumbnail · use the independent optical viewport above to play a prepared project.'));
       preview.appendChild(previewCaption);host.appendChild(preview);
@@ -807,10 +807,10 @@
       if(hasSelection)pick.appendChild(el(doc,'span','modern-studio-sequence-status'+
         (inPreview?' is-included':' is-excluded'),inPreview?'✓ IN PREVIEW':'− EXCLUDED'));
       if(frame===selected&&hasSelection)pick.appendChild(el(doc,'span','modern-studio-editing-status','EDITING'));
-      pick.appendChild(historyUI.frameVisual(doc,entry,'modern-studio-keyframe-visual'));
+      pick.appendChild(snapshotPresentation.frameVisual(doc,entry,'modern-studio-keyframe-visual'));
       var name=el(doc,'strong','modern-studio-keyframe-name',(i+1)+'. '+frame.name);
       name.title=frame.name;pick.appendChild(name);
-      var summary=el(doc,'small','modern-studio-keyframe-summary',historyUI.frameSummary(entry));
+      var summary=el(doc,'small','modern-studio-keyframe-summary',snapshotPresentation.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
       if(inspector)inspector.infoButton(item,{name:frame.name,description:'Animation keyframe '+(i+1),
