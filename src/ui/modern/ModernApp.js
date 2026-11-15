@@ -646,6 +646,21 @@
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
   }
   var animationWorkspaceOpen=false;
+  // Navigation from a particular Picker card is UI-only and never restored
+  // from preferences or included in a physical experiment snapshot.
+  var historyFocusFromPickerId='';
+  var historyOpenedFromPicker=false;
+  var animationReturnAfterRestore=false;
+  function syncHistoryNavigation(){
+    var panel=newUiEl('ModernHistoryPanel');
+    var fromPicker=historyOpenedFromPicker&&!!panel&&!panel.hidden&&animationWorkspaceOpen;
+    var goBack=newUiEl('ModernHistoryReturnToAnimation');
+    if(goBack)goBack.hidden=!fromPicker;
+    var close=newUiEl('ModernHistoryClose');
+    if(close)close.hidden=fromPicker;
+    var fromEditor=newUiEl('ModernReturnToAnimation');
+    if(fromEditor)fromEditor.hidden=!animationReturnAfterRestore||animationWorkspaceOpen;
+  }
   function syncWorkspaceVisibility(){
     var physical=newUiEl('ModernWorkspace'),animation=newUiEl('ModernAnimationWorkspace');
     if(physical)physical.hidden=animationWorkspaceOpen;
@@ -655,6 +670,7 @@
     var tab=newUiEl('ModernAnimationTab');
     if(tab){tab.classList.toggle('is-active',animationWorkspaceOpen);
       tab.setAttribute('aria-pressed',String(animationWorkspaceOpen));}
+    syncHistoryNavigation();
   }
   function workspaceScope(){return state.demosActive?'scene':state.mode==='compare'?'compare':'scene';}
   function workspaceSectionValue(scope,suffix){
@@ -2973,7 +2989,12 @@
         dragEnd:function(){studioDragSession=null;},
         drop:function(){},
         pickerClose:function(){toggleAnimationPicker(false);},
-        pickerFullHistory:function(){setHistoryOpen(true);},
+        pickerOpenHistory:function(id){
+          openHistoryFromPicker(id).catch(function(error){
+            var message=newUiEl('ModernAnimationStudioMessage');
+            if(message){message.textContent=error.message;message.classList.add('is-error');}
+          });
+        },
         pickerFilter:function(key,value,caret){
           if(!historyFiltersApi)return;
           // Keep the untrimmed query while typing (including a trailing space).
@@ -3068,6 +3089,18 @@
       if(typeof name.focus==='function')name.focus();
     });
   }
+  function openHistoryFromPicker(id){
+    // Check the source immediately before navigation; a deleted or unavailable
+    // History record must not silently select an unrelated first gallery card.
+    if(!experimentHistory)return Promise.reject(Error('History is unavailable'));
+    return experimentHistory.get(id).then(function(entry){
+      if(!entry)throw RangeError('The selected snapshot is no longer in History');
+      historyFocusFromPickerId=String(entry.id);
+      historyOpenedFromPicker=true;
+      animationReturnAfterRestore=false;
+      setHistoryOpen(true);
+    });
+  }
   function updateHistorySelection(entry){
     historySelectedId=entry?String(entry.id):'';
     var gallery=newUiEl('ModernHistoryGallery');
@@ -3141,20 +3174,36 @@
       historySelectedIds().forEach(function(id){if(!ids.has(id))delete historyMultiSelection[id];});
       renderAnimationStudio(entries);
       var visible=historyFiltersApi?historyFiltersApi.filter(entries,historyFilters):entries;
+      var filteredCount=visible.length;
+      var focused=historyFocusFromPickerId&&entries.find(function(entry){
+        return String(entry.id)===historyFocusFromPickerId;
+      });
+      var outsideFilters=!!focused&&!visible.some(function(entry){return entry.id===focused.id;});
+      if(outsideFilters)visible=[focused].concat(visible);
+      var focusNotice=newUiEl('ModernHistoryFocusNotice');
+      if(focusNotice){
+        focusNotice.hidden=!outsideFilters;
+        focusNotice.textContent=outsideFilters?
+          'Snapshot opened from Animation Studio is shown despite current History filters. '+
+          'Your saved filters have not changed.':'';
+      }
       var count=newUiEl('ModernHistoryFilterCount');
-      if(count)count.textContent='Showing '+visible.length+' of '+entries.length+' snapshots';
+      if(count)count.textContent='Showing '+filteredCount+' of '+entries.length+' snapshots'+
+        (outsideFilters?' + selected from Animation':'');
       var order=newUiEl('ModernHistorySort');
       if(order&&order.value==='oldest')visible=visible.slice().reverse();
       // A collapsed Pinned section contains no selectable cards. Never let a
       // bulk action silently modify snapshots that are no longer shown.
-      historyShownIds=visible.filter(function(entry){return !!entry.pinned&&!historyPinnedCollapsed;})
+      var pinnedCollapsedForView=historyPinnedCollapsed&&!(focused&&focused.pinned);
+      historyShownIds=visible.filter(function(entry){return !!entry.pinned&&!pinnedCollapsedForView;})
         .concat(visible.filter(function(entry){return !entry.pinned;}))
         .map(function(entry){return entry.id;});
       historySelectedIds().forEach(function(id){
         if(!historyShownIds.includes(id))delete historyMultiSelection[id];
       });
       historyMultiCount();
-      var wanted=selectedId===undefined?historySelectedId:String(selectedId);
+      var wanted=focused?String(focused.id):
+        selectedId===undefined?historySelectedId:String(selectedId);
       var chosen=visible.find(function(entry){
         return String(entry.id)===wanted&&historyShownIds.includes(entry.id);
       })||visible.find(function(entry){return historyShownIds.includes(entry.id);})||null;
@@ -3165,9 +3214,17 @@
         historyUI.setSize(gallery,historyGallerySize);
         historyUI.render(document,gallery,visible,chosen&&chosen.id,{
           select:function(id){
-            updateHistorySelection(visible.find(function(entry){return entry.id===id;})||null);
+            if(historyFocusFromPickerId){
+              // An explicit History selection supersedes the temporary card
+              // injected from the Picker, without resetting saved filters.
+              historyFocusFromPickerId='';
+              refreshHistoryList(id).catch(function(error){historyStatus(error.message,true);});
+            }else updateHistorySelection(visible.find(function(entry){return entry.id===id;})||null);
           },
           setPinnedCollapsed:function(collapsed){
+            // If the focused card made collapsed Pinned visible temporarily,
+            // honor a user's explicit request to collapse it again.
+            if(collapsed)historyFocusFromPickerId='';
             historyPinnedCollapsed=collapsed;
             historyMultiSelection=Object.create(null);
             saveApplicationPreferences();refreshHistoryList();
@@ -3183,10 +3240,20 @@
           remove:function(id){
             deleteHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
           }
-        },historyMultiSelection,{pinnedCollapsed:historyPinnedCollapsed,
+        },historyMultiSelection,{pinnedCollapsed:pinnedCollapsedForView,
           manage:historyManageMode,emptyFiltered:entries.length>0,
           filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
           hasPinned:entries.some(function(entry){return !!entry.pinned;})});
+        if(focused&&chosen&&gallery.querySelectorAll){
+          // Bring the requested card into view, without moving the outer page
+          // or modifying History's persisted search and sorting preferences.
+          var cards=gallery.querySelectorAll('.modern-history-card');
+          Array.prototype.forEach.call(cards,function(card){
+            if(String(card.getAttribute('data-snapshot-id'))===String(focused.id)&&
+               typeof card.scrollIntoView==='function')
+              card.scrollIntoView({block:'nearest',inline:'nearest'});
+          });
+        }
       }
       updateHistorySelection(chosen);
       return entries;
@@ -3211,6 +3278,9 @@
       return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
         if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
         applyExperiment(target);syncNumericInputs();syncCompareEditor();
+        // Keep a visible route back to the existing Studio draft while the
+        // user tweaks physical settings and saves a derived snapshot.
+        if(historyOpenedFromPicker)animationReturnAfterRestore=true;
         setMode(state.mode,true);resetHistoryBaseline();
         historyStatus('Snapshot restored. Previous state '+
           (backup.created?'saved as protected recovery point.':'already in history.'));
@@ -3232,6 +3302,12 @@
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle)return;
     historyPanelOpen=!!open;panel.hidden=!historyPanelOpen;
+    var returningToPicker=!historyPanelOpen&&historyOpenedFromPicker&&animationWorkspaceOpen;
+    if(!historyPanelOpen){
+      historyFocusFromPickerId='';
+      historyOpenedFromPicker=false;
+    }
+    syncHistoryNavigation();
     var backdrop=newUiEl('ModernHistoryBackdrop');if(backdrop)backdrop.hidden=!historyPanelOpen;
     toggle.setAttribute('aria-expanded',String(historyPanelOpen));
     saveApplicationPreferences();
@@ -3240,7 +3316,12 @@
       if(typeof panel.focus==='function')panel.focus();
     }else{
       setHistoryManageMode(false);
-      if(typeof toggle.focus==='function')toggle.focus();
+      // Focus a still-mounted picker control when closing its History view.
+      var picker=newUiEl('ModernAnimationSnapshotPicker');
+      var pickerAction=returningToPicker&&picker&&picker.querySelector&&
+        picker.querySelector('.modern-studio-picker-open-history');
+      if(pickerAction&&typeof pickerAction.focus==='function')pickerAction.focus();
+      else if(typeof toggle.focus==='function')toggle.focus();
     }
   }
   function bindHistory(){
@@ -3280,6 +3361,8 @@
       historyFilters=historyFiltersApi.update(historyFilters,key,value);
       if(key==='mode'||key==='geometryRelation'||key==='refractionRelation')
         syncHistoryFilterControls();
+      // A user-edited History filter ends the temporary Picker focus.
+      historyFocusFromPickerId='';syncHistoryNavigation();
       // A bulk operation must not silently affect records now hidden by filters.
       historyMultiSelection=Object.create(null);historyMultiCount();
       saveApplicationPreferences();
@@ -3303,6 +3386,7 @@
     });
     var clearFilters=newUiEl('ModernHistoryFiltersClear');
     if(clearFilters)clearFilters.addEventListener('click',function(){
+      historyFocusFromPickerId='';syncHistoryNavigation();
       historyFilters=historyFiltersApi?historyFiltersApi.normalize():
         {query:'',mode:'all',geometry:'any',atmosphere:'any',
           geometryRelation:'any',refractionRelation:'any'};
@@ -3334,6 +3418,8 @@
       if(event&&event.key==='Escape'){event.preventDefault();setHistoryOpen(false);}
     });
     el('ModernHistoryClose').addEventListener('click',function(){setHistoryOpen(false);});
+    var returnFromHistory=newUiEl('ModernHistoryReturnToAnimation');
+    if(returnFromHistory)returnFromHistory.addEventListener('click',function(){setHistoryOpen(false);});
     // The preference is applied before IndexedDB has finished opening. Once
     // open() resolves, refreshHistoryList() populates the visible panel.
     panel.hidden=!historyPanelOpen;
@@ -5468,6 +5554,7 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode,remember){
+    if(mode==='animation')animationReturnAfterRestore=false;
     if(mode!=='animation'&&animationWorkspaceOpen){
       cancelStudioInitialPaint();stopStudioPlayback(false);
       if(studioPlayback)saveStudioDraft(false);
@@ -5921,8 +6008,13 @@
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
     var animationTab=newUiEl('ModernAnimationTab');
     if(animationTab)animationTab.addEventListener('click',function(){setMode('animation');});
-    var chooseSnapshots=newUiEl('ModernAnimationChooseSnapshots');
-    if(chooseSnapshots)chooseSnapshots.addEventListener('click',function(){toggleAnimationPicker(!studioPickerOpen);});
+    var returnToStudio=newUiEl('ModernReturnToAnimation');
+    if(returnToStudio)returnToStudio.addEventListener('click',function(){
+      setMode('animation');
+      var timeline=newUiEl('ModernAnimationStudio');
+      if(timeline&&typeof timeline.scrollIntoView==='function')
+        timeline.scrollIntoView({block:'start'});
+    });
     var recoverLegacy=newUiEl('ModernAnimationLegacyAppend');
     if(recoverLegacy)recoverLegacy.addEventListener('click',function(){
       try{appendLegacyHistorySelection();}

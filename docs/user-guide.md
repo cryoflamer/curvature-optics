@@ -72,11 +72,16 @@ Do **not** treat a matching silhouette or a pixel difference alone as proof of p
   atmosphere model names). Those constraints show Compare records only, and
   ignore inactive Flat radii and Vacuum gradients. Use **Clear filters** to return to all snapshots;
   filter preferences survive reloads in the same browser. In **Animation →
-  Choose snapshots from History**, Snapshot Picker offers the same physical
+  Choose from History** beside the timeline, Snapshot Picker offers the same physical
   filters with its own independent saved preferences. A/B relation controls
   appear there in Compare mode. Checked snapshots remain checked through filter
   changes, including when hidden; **Add checked** inserts all selections,
   **Clear selected** unchecks them, and **Clear filters** only resets the view.
+  **Open in History** on a Picker card inspects that specific saved snapshot in
+  full History without changing physics. History filters remain saved even if
+  they hide the selected record. **Restore experiment** is a separate action;
+  after restoring and modifying physical settings, use **Return to Animation
+  Studio** to continue the same draft.
 - **History → Export snapshot** (selected card) or **More history tools → Export all snapshots** creates portable JSON including annotations, pins and available previews; **Import JSON** adds validated snapshots to History (it does not silently replace the live experiment). **Export current experiment JSON** preserves the original plain v1 schema for shared URLs and older releases.
 - Named entries from the retired Experiment Library (`curvature-modern-library-v1` in localStorage) are copied automatically into History on startup; the original library is retained for rollback. If IndexedDB is unavailable, migration is retried on a later load. Browser storage is still device/profile/origin-specific until exported.
 - Historical `gpuProbe` fields may still be accepted by the experiment validator for backward compatibility. They **do not** restore the removed research execution paths.

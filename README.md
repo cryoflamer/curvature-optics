@@ -380,7 +380,7 @@ History filtering covers Search, Type, Geometry and Atmosphere plus active
 Compare A/B relations. Checkbox selection is cleared on filter changes or
 Pinned collapse, and never edits the Animation timeline.
 
-To add keyframes, open **Animation → Choose snapshots from History**. The
+To add keyframes, open **Animation → Choose from History** beside the timeline. The
 Snapshot Picker copies selected experiments into the autosaved Studio draft;
 History does not maintain a second storyboard or staging editor. The Picker
 shares History's physical search rules: **Search**, **Type**, **Geometry**,
@@ -416,7 +416,7 @@ returning to their respective screens.
 
 **History** opens as an overlay instead of pushing the viewport down the page.
 It manages archived experiments and does not enqueue animation frames.
-To add frames, use **Animation → Choose snapshots from History → Add checked**;
+To add frames, use **Animation → Choose from History → Add checked**;
 this preserves existing timeline frames and timing. For previously saved
 History shortlists, Animation exposes a one-time **Append saved selection**
 operation and an explicit **Discard selection** action; missing source IDs
@@ -435,14 +435,20 @@ experiment links open their physical Scene/Compare context.
 
 ### Animation Studio drag-and-drop
 
-In **Animation**, use **Choose snapshots from History** to open a compact
+In **Animation**, use **Choose from History** beside the timeline to open a compact
 side-by-side Snapshot Picker. Drag saved screenshots into timeline gaps, or
 reorder existing frames using their drag handles. Drop onto the left or right
 half of a frame to insert before or after it. To add several snapshots, check
 multiple picker cards and drag a checked card, or use **Add checked** / the
 `+` insertion controls. Existing Up/Down and keyboard-accessible buttons
-remain available. The full History manager is still accessible through the
-header or **Full History** inside the picker. Dragging does not alter original
+remain available. Each picker card has **Open in History**, which opens that exact snapshot in the
+History overlay without restoring the experiment. This works even when saved
+History filters would otherwise hide it; those filters remain unchanged.
+The overlay offers **Return to Animation Studio**. To modify the source, choose
+**Restore experiment** explicitly, edit in Scene/Compare, and use the contextual
+**Return to Animation Studio** next to Save snapshot to continue the existing
+Studio draft. The redundant Animation workspace header button was removed.
+Dragging does not alter original
 snapshots, active physics, or saved experiment URLs; incompatible sequences
 continue to be rejected by Preview animation. See the
 [History and Animation guide](docs/modern-experiment-history.md) for details.

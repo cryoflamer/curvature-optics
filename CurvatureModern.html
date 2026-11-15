@@ -121,7 +121,8 @@
   </div>
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>
-    <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
+    <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryReturnToAnimation" hidden>Return to Animation Studio</button><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
+    <p id="ModernHistoryFocusNotice" class="modern-history-focus-notice" role="status" hidden></p>
     <p class="modern-history-hint">Click a snapshot to inspect its saved image and physical settings, then choose <strong>Restore experiment</strong>. A recovery copy of the current experiment is saved before replacement.</p>
     <div class="modern-history-toolbar">
       <label class="modern-history-search" for="ModernHistoryFilterQuery">Search experiments
@@ -203,7 +204,6 @@
   <section id="ModernAnimationWorkspace" class="modern-animation-workspace" aria-label="Animation workspace" hidden>
     <div class="modern-animation-workspace-heading">
       <div><h1>Animation Studio</h1><p>New project → Edit keyframes → Preview animation → Save project → Export PNG/video. Preview never adds an entry to Animation Library; your working draft autosaves separately. Scene / Compare remains unchanged.</p></div>
-      <button type="button" id="ModernAnimationChooseSnapshots">Choose snapshots from History</button>
     </div>
     <div id="ModernAnimationLegacySelection" class="modern-animation-legacy-selection" hidden>
       <span id="ModernAnimationLegacyCount" role="status"></span>
@@ -902,6 +902,7 @@
       </div>
       <div class="modern-snapshot-savebar" id="ModernSnapshotSaveBar" aria-label="Current experiment snapshot">
         <button type="button" id="ModernSnapshotSave" hidden>Save snapshot</button>
+        <button type="button" id="ModernReturnToAnimation" hidden>Return to Animation Studio</button>
         <span id="ModernSnapshotSaveStatus" class="modern-status-message" role="status" aria-live="polite">Checking History…</span>
       </div>
       <div class="modern-footnote">Advanced Legacy diagnostics and saved Legacy-state links remain available at <a href="CurvatureApp.html?ui=legacy">Legacy diagnostics</a>. Modern Demos runs the original animations in its isolated engine host.</div>

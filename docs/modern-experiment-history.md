@@ -206,7 +206,7 @@ to prevent hidden records from being modified. Pinned snapshots cannot be bulk
 deleted until unpinned, and destructive operations require confirmation.
 
 New Animation keyframes are selected **inside Animation Studio**: choose
-**Choose snapshots from History**, check cards in the docked Snapshot Picker,
+**Choose from History** beside the timeline, check cards in the docked Snapshot Picker,
 then choose **Add checked** (or drag them to a gap in the timeline). This
 appends owned copies without replacing existing frames or changing Scene /
 Compare physics. There are no Add selected, Add collected, Clear collected,
@@ -477,7 +477,7 @@ existing viewport. The last UI tab is kept in Application Preferences;
 explicit shared experiment URLs retain their own Scene/Compare context.
 
 History is a bounded, scrollable **overlay**, accessible from any workspace
-through the header or **Choose snapshots from History** in Animation. The
+through the header or **Open in History** on an Animation Snapshot Picker card. The
 backdrop, Close button and Escape close it without shifting the current
 viewport down. Animation Studio owns snapshot selection via its docked Snapshot Picker.
 The redundant History handoff bar and Storyboard shortlist renderer have been
@@ -493,7 +493,7 @@ still not provided in this stage.
 
 ## Drag-and-drop between History and Animation Studio
 
-**Animation → Choose snapshots from History** now toggles a compact, docked
+**Animation → Choose from History** beside the timeline toggles a compact, docked
 **Snapshot Picker** beside the Animation Studio timeline. It reads exactly the
 same saved History records and screenshots as the full overlay, with
 independent **Search**, **Type**, **Geometry**, **Atmosphere** and Compare-only
@@ -505,9 +505,17 @@ selected, and selected-but-hidden entries. **Add checked** and dragging a
 checked card insert all selected snapshots (including filtered-out checks),
 in pinned-first order; **Clear selected** unchecks everything. No new previews
 are rendered, no experiment is restored, and no second snapshot database is
-introduced. **Full History** still opens the complete manager for pinning,
-renaming, and import/export.
-The header History action remains available in every workspace.
+introduced. Every Picker card offers **Open in History**, which opens the
+complete History overlay with that exact record selected, without restoring
+physics or changing the Studio draft and checked Picker snapshots. If the
+snapshot is excluded by current History filters or collapsed Pinned, the
+overlay shows it temporarily and keeps saved History filters intact. From
+the overlay, **Return to Animation Studio** closes History. Explicit
+**Restore experiment** switches to physical Scene/Compare, preserving Studio
+keyframes; the contextual **Return to Animation Studio** control beside
+Save snapshot supports editing and saving a derived snapshot first. The
+old Animation header button has been removed. History remains reachable
+from the global header as before.
 
 - **Reorder:** drag a timeline keyframe by its grip into any gap, or onto the
   left/right half of another frame. The blue insertion indicator shows the

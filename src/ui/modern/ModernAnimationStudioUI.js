@@ -503,7 +503,6 @@
     var add=button(doc,'Add checked','Add checked snapshots after selected frame',function(){actions.insertChecked();});
     add.disabled=n===0;tools.appendChild(add);
     if(n)tools.appendChild(button(doc,'Clear selected','Uncheck all selected snapshots',actions.pickerClearSelection));
-    tools.appendChild(button(doc,'Full History','Open complete History management',actions.pickerFullHistory));
     host.appendChild(tools);
     var list=el(doc,'ol','modern-studio-picker-list');
     if(!entries.length)list.appendChild(el(doc,'li','modern-history-empty','No matching snapshots.'));
@@ -520,7 +519,24 @@
       var title=el(doc,'strong','',snapshotPresentation.displayName(entry));title.title=title.textContent;
       info.appendChild(title);
       var summary=el(doc,'small','',snapshotPresentation.frameSummary(entry));
-      summary.title=summary.textContent;info.appendChild(summary);item.appendChild(info);
+      summary.title=summary.textContent;info.appendChild(summary);
+      var openHistory=button(doc,'Open in History',
+        'Open '+snapshotPresentation.displayName(entry)+' in History without restoring it',function(event){
+          if(event&&event.stopPropagation)event.stopPropagation();
+          if(actions.pickerOpenHistory)actions.pickerOpenHistory(entry.id);
+        });
+      openHistory.className='modern-studio-picker-open-history';
+      openHistory.draggable=false;
+      // Picker cards are draggable. Their navigation buttons must not start a
+      // card drag or change the checked snapshot selection.
+      ['pointerdown','mousedown','dblclick','dragstart'].forEach(function(type){
+        openHistory.addEventListener(type,function(event){
+          if(event&&event.stopPropagation)event.stopPropagation();
+          if((type==='mousedown'||type==='dragstart')&&event&&event.preventDefault)
+            event.preventDefault();
+        });
+      });
+      info.appendChild(openHistory);item.appendChild(info);
       var handle=el(doc,'span','modern-studio-drag-handle','⠿');
       handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
       item.appendChild(handle);

@@ -1,3 +1,11 @@
+> **Snapshot Picker → History navigation (2026-11-15):** The redundant top-of-Studio
+> Choose snapshots button was removed. Every Picker card now has **Open in History**,
+> selecting that exact saved record in the History overlay without Restore or
+> changing the Animation draft. A temporary focus can bypass History filters
+> and collapsed Pinned without changing saved preferences; an explicit Return
+> to Animation Studio action is available in History and after a physical
+> Restore/edit workflow. No schema or optical algorithm changes.
+
 > **Animation Snapshot Picker filters (2026-11-15):** The docked Picker reuses
 > History's pure active-physics search for name/notes/physics, Scene/Compare,
 > Globe/Flat, atmosphere and Compare-only A/B geometry/refraction relations.

@@ -1185,7 +1185,8 @@ test('Animation picker keeps modal History separate; full History closes without
   const h=boot(experiment([]),{},undefined,undefined,factory),n=h.nodes;
   n.get('ModernAnimationTab').dispatch('click');
   const before={mode:h.app.getMode(),height:h.app.getModel().Height,renders:h.renders.length};
-  n.get('ModernAnimationChooseSnapshots').dispatch('click');
+  assert.equal(n.has('ModernAnimationChooseSnapshots'),false,
+    'the remote Animation header picker button was removed');
   assert.equal(n.get('ModernHistoryPanel').hidden,true,
     'choosing snapshots now opens a docked picker, not modal History');
   assert.equal(n.get('ModernHistoryBackdrop').hidden,true);
