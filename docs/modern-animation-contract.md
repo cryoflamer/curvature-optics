@@ -120,5 +120,8 @@ validated contracts and can save unfinished projects. See
   sole Preview/Export preparation path for ready Camera/Physical drafts.
 - No physics, RK4, refraction, image generation or IndexedDB schema migration.
 
-Next stages: project-library search/grouping by declared contracts,
-then a final stabilization and browser acceptance pass.
+Animation Library search by project type, reference physics and metadata is
+implemented. Stabilization tests now cover first-keyframe thumbnail identity,
+portable/library duplicate detection and static Legacy/Modern dependency
+audits. Actual visual interaction and IndexedDB behavior still require
+acceptance testing in the target Opera/Chromium installation.

@@ -1511,17 +1511,18 @@
   }
   function bindStudioLibrary(){refreshStudioLibrary();}
   function studioLibraryThumbnail(project){
-    // The library owns its preview. Never use a History screenshot if the
-    // first frame's actual physical state no longer matches that snapshot.
-    if(!studioDraft||!studioDraft.frames.length||!thumbnailApi)return null;
+    // V2 projects keep the reference fixed even when their first frame moves.
+    // A screenshot belongs to that *first frame*, never merely to the reference.
+    if(!studioDraft||!studioDraft.frames.length||!thumbnailApi||!studioLibrary||
+       !studioLibrary.thumbnailMatchesFirstFrame)return null;
     var first=studioApi.activeFrames(studioDraft)[0];
     var found=studioHistoryEntries.find(function(e){return e.id===first.sourceSnapshotId;});
-    if(found&&found.thumbnail&&JSON.stringify(found.experiment)===
-       JSON.stringify(project.baseExperiment))
+    if(found&&found.thumbnail&&
+       studioLibrary.thumbnailMatchesFirstFrame(project,found.experiment))
       return thumbnailApi.validate(found.thumbnail,project.baseExperiment.display.mode);
     if(studioLibraryActive&&studioLibraryActive.thumbnail&&
-       JSON.stringify(studioLibraryActive.project.baseExperiment)===
-       JSON.stringify(project.baseExperiment))return studioLibraryActive.thumbnail;
+       studioLibrary.sameFirstFrame(project,studioLibraryActive.project))
+      return studioLibraryActive.thumbnail;
     return null;
   }
   function renameNamedAnimation(id,name){

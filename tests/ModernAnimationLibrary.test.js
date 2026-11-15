@@ -7,6 +7,7 @@ const vm=require('node:vm');
 const library=require('../src/animation/ModernAnimationLibrary');
 const studio=require('../src/animation/ModernAnimationStudio');
 const animation=require('../src/animation/ModernAnimationProject');
+const contracts=require('../src/animation/ModernAnimationContract');
 const codec=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 
@@ -133,6 +134,51 @@ test('semantic fingerprint ignores metadata and inactive controls but preserves 
   // First frame travelMs must remain zero, so move the physical values only.
   reversed.keyframes[0].travelMs=0;reversed.keyframes[1].travelMs=5000;
   assert.notEqual(library.fingerprint(base),library.fingerprint(reversed));
+});
+
+test('V2 Camera Motion identity ignores the reference camera, but not fixed physics',()=>{
+  const reference=experiment(),movingReference=structuredClone(reference);
+  const start=structuredClone(reference),finish=structuredClone(reference);
+  movingReference.scene.camera.Height=60;
+  start.scene.camera.Height=30;finish.scene.camera.Height=90;
+  const options={name:'Camera study',description:''};
+  const a=animation.createV2(contracts.create(reference,{mode:'camera'}),[start,finish],
+    {...options,id:'reference_one'});
+  const b=animation.createV2(contracts.create(movingReference,{mode:'camera'}),[start,finish],
+    {...options,id:'reference_two'});
+  assert.deepEqual(a.keyframes,b.keyframes);
+  assert.equal(library.fingerprint(a),library.fingerprint(b),
+    'a different unused reference camera is not a different animation');
+  const changedPhysics=structuredClone(reference);
+  changedPhysics.scene.visibility.enabled=true;
+  const changed=animation.createV2(contracts.create(changedPhysics,{mode:'camera'}),
+    [changedPhysics,structuredClone(changedPhysics)],{...options,id:'different_physics'});
+  assert.notEqual(library.fingerprint(a),library.fingerprint(changed),
+    'fixed scene and physics remain part of project identity');
+  const alteredPose=structuredClone(b);
+  alteredPose.keyframes[0].value.Height+=1;
+  assert.notEqual(library.fingerprint(a),library.fingerprint(alteredPose),
+    'actual camera keyframes remain part of identity');
+});
+
+test('V2 Physics Transition identity ignores the animated reference channel only',()=>{
+  const globe=experiment(),flat=structuredClone(globe);
+  flat.scene.surface.showModel=2;
+  const target={scope:'scene',parameter:'surface.curvature'};
+  const opt={name:'Curvature study',description:''};
+  const first=animation.createV2(contracts.create(globe,{mode:'physical',target}),
+    [globe,flat],{...opt,id:'globe_reference'});
+  const second=animation.createV2(contracts.create(flat,{mode:'physical',target}),
+    [globe,flat],{...opt,id:'flat_reference'});
+  assert.deepEqual(first.keyframes,second.keyframes);
+  assert.equal(library.fingerprint(first),library.fingerprint(second),
+    'the target curvature is already encoded in the identical keyframes');
+  const altered=structuredClone(flat);
+  altered.scene.objects.ObjDist[0]+=10;
+  const changed=animation.createV2(contracts.create(altered,{mode:'physical',target}),
+    [altered,structuredClone(altered)],{...opt,id:'different_objects'});
+  assert.notEqual(library.fingerprint(first),library.fingerprint(changed),
+    'scene object layout remains a fixed invariant');
 });
 
 test('duplicate create is blocked atomically, Save copy anyway is explicit, and groups are review-only',async()=>{
@@ -307,6 +353,51 @@ test('saved thumbnails are bounded, optional and detached from History',async()=
   assert.equal(resaved.thumbnail,null,'a changed initial physical frame invalidates the old screenshot');
   const old={...updated};delete old.thumbnail;
   assert.equal(library.normalize(old).thumbnail,null);
+});
+
+test('V2 thumbnail follows the actual first frame rather than the immutable reference',async()=>{
+  const db=memoryIndexedDB();
+  const reference=experiment(),start=structuredClone(reference),end=structuredClone(reference);
+  start.scene.camera.Height=40;end.scene.camera.Height=100;
+  const contract=contracts.create(reference,{mode:'camera'});
+  const metadata={id:'v2_camera_thumb',name:'Camera Move',description:''};
+  const project=animation.createV2(contract,[start,end],metadata);
+  const image={dataUrl:'data:image/png;base64,AAAA',width:2,height:2,mode:'scene'};
+  assert.deepEqual(project.baseExperiment,reference);
+  assert.equal(library.thumbnailMatchesFirstFrame(project,reference),false,
+    'a screenshot of the reference must not stand in for the first frame');
+  assert.equal(library.thumbnailMatchesFirstFrame(project,start),true);
+  assert.equal(library.sameFirstFrame(project,project),true);
+  const saved=await library.create(db,project,'auto',100,image);
+  assert.deepEqual(saved.thumbnail,image);
+  // Changing only the second frame, metadata or timing retains a genuine first-frame image.
+  const differentEnd=structuredClone(reference);differentEnd.scene.camera.Height=120;
+  const sameStart=animation.createV2(contract,[start,differentEnd],metadata);
+  const updated=await library.update(db,sameStart,'auto',100,110);
+  assert.deepEqual(updated.thumbnail,image);
+  // A new first keyframe still has the same baseExperiment. The image must go.
+  const changedStart=structuredClone(reference);changedStart.scene.camera.Height=65;
+  const next=animation.createV2(contract,[changedStart,end],metadata);
+  assert.deepEqual(next.baseExperiment,project.baseExperiment);
+  assert.equal(library.sameFirstFrame(project,next),false);
+  const resaved=await library.update(db,next,'auto',110,120);
+  assert.equal(resaved.thumbnail,null);
+  // Removing the only frame also invalidates any former project thumbnail.
+  const empty=animation.createV2(contract,[],metadata);
+  const cleared=await library.update(db,empty,'auto',120,130);
+  assert.equal(cleared.thumbnail,null);
+  assert.equal(library.thumbnailMatchesFirstFrame(empty,reference),false);
+  assert.equal(library.sameFirstFrame(empty,next),false);
+});
+
+test('Studio thumbnail reuse checks first-frame identity on both History and Library paths',()=>{
+  const src=require('node:fs').readFileSync(require('node:path').join(__dirname,
+    '../src/ui/modern/ModernApp.js'),'utf8');
+  const body=src.slice(src.indexOf('  function studioLibraryThumbnail('),
+    src.indexOf('  function renameNamedAnimation(',src.indexOf('  function studioLibraryThumbnail(')));
+  assert.match(body,/thumbnailMatchesFirstFrame\(project,found\.experiment\)/);
+  assert.match(body,/sameFirstFrame\(project,studioLibraryActive\.project\)/);
+  assert.doesNotMatch(body,/JSON\.stringify\(project\.baseExperiment\)/);
 });
 
 test('rename changes only saved metadata with revision safety and preserves preview',async()=>{

@@ -38,7 +38,12 @@ test('140.12.76: retired chronological migration and patch notes stay out of act
     'refactor-closure-140.12.73.md','cpu-hybrid-shooting.md']) {
     assert.ok(!names.includes(name), `superseded documentation is back: ${name}`);
   }
-  assert.ok(names.length < 50, 'a chronological documentation tree was reintroduced');
+  // Two reviewed, topic-based Animation v2 guides were added after the
+  // chronological-document cleanup. Keep them explicit and cap the tree at 50;
+  // this is not permission to bring migration/patch diaries back.
+  for(const name of ['modern-animation-contract.md','modern-animation-project-wizard.md'])
+    assert.ok(names.includes(name), 'required Animation v2 guide missing: '+name);
+  assert.ok(names.length <= 50, 'a chronological documentation tree was reintroduced');
 });
 
 test('140.12.76: current guides, test-backed contracts, and physical evidence survive', () => {

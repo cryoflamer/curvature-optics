@@ -89,3 +89,21 @@ filters only determine which Library cards are shown and never relax an active
 v2 project's compatibility contract or affect JSON backup of all projects.
 Browser-local filter preferences survive reload; projects and IndexedDB remain
 unchanged.
+
+### Library screenshot and duplicate stability
+
+A saved project's optional screenshot depicts its **first keyframe**, not
+necessarily its immutable reference experiment. In Project v2 those can be
+different: a camera-motion reference may be at 15 m while the first actual
+keyframe starts at 50 m. History images are reused only if they match that
+first keyframe; Save Changes retains an earlier image only while the actual
+first frame is unchanged. Removing/replacing the first frame invalidates an
+old picture. An unfinished project with zero frames has no first-frame image.
+
+Find duplicates / portable JSON import compare animation content, including
+keyframes and timing. A different **reference value of the animated channel**
+(camera pose, curvature, or temperature gradient) does not make an otherwise
+identical camera-motion or physical-transition video unique. Fixed scene
+objects, other physics, presentation settings and actual keyframe values
+remain part of the identity. These rules do not change stored projects or
+the physical renderer.

@@ -57,15 +57,29 @@
   // otherwise irrelevant base camera is excluded only in that mode.
   function fingerprint(project){
     var p=projects.validate(project),fixed=compatibility.effective(p.baseExperiment);
-    if(p.mode==='camera')delete fixed.camera;
+    var reference=p.version===projects.VERSION_V2?
+      compatibility.effective(p.contract.referenceExperiment):null;
+    // The animated channel lives in keyframe values, not in the contract's
+    // reference pose/value. References with different initial values but the
+    // same fixed environment and the same keyframes render the same movie.
+    function omitAnimatedChannel(e){
+      if(p.mode==='camera'){delete e.camera;return;}
+      if(p.mode==='physical'){
+        var keys=compatibility.targetPath(p.target).split('.'),owner=e;
+        for(var i=0;i<keys.length-1;i++)owner=owner[keys[i]];
+        delete owner[keys[keys.length-1]];
+      }
+    }
+    omitAnimatedChannel(fixed);
+    if(reference)omitAnimatedChannel(reference);
     // Playback interpolation changes the rendered trajectory even when all
     // keyframes, timing and physical endpoints are identical. Old projects
     // without the optional v1 field are semantically equivalent to Linear.
     return JSON.stringify({mode:p.mode,target:p.target,
       // V2 contracts are semantic data; Experimental owns whole scenes rather
       // than scalar or camera-pose values. Source IDs remain provenance only.
-      contract:p.version===projects.VERSION_V2?{mode:p.contract.mode,
-        target:p.contract.target,reference:compatibility.effective(p.contract.referenceExperiment)}:null,
+      contract:reference?{mode:p.contract.mode,target:p.contract.target,
+        reference:reference}:null,
       interpolation:p.interpolation||'linear',fixed:fixed,
       keyframes:p.keyframes.map(function(frame){return {
         value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing
@@ -179,6 +193,19 @@
     error.existingName=existing.project.name;
     return error;
   }
+  // A V2 reference experiment is NOT necessarily the first animation frame.
+  // Thumbnails depict the first playable keyframe, not the immutable reference.
+  // Comparing only baseExperiment would retain stale pictures after a camera
+  // move, or after removing/replacing the first frame of a V2 project.
+  function thumbnailMatchesFirstFrame(project,experiment){
+    if(!project||!Array.isArray(project.keyframes)||!project.keyframes.length)return false;
+    return JSON.stringify(projects.frameExperiment(project,0))===JSON.stringify(experiment);
+  }
+  function sameFirstFrame(a,b){
+    return !!(a&&b&&Array.isArray(a.keyframes)&&a.keyframes.length&&
+      Array.isArray(b.keyframes)&&b.keyframes.length&&
+      thumbnailMatchesFirstFrame(a,projects.frameExperiment(b,0)));
+  }
   function record(project,optics,id,createdAt,updatedAt,thumbnail){
     var valid=projects.validate(project);
     return normalize({version:VERSION,id:id||valid.id,createdAt:createdAt||Date.now(),
@@ -265,8 +292,7 @@
           throw Error('Animation Library project changed in another tab; reopen it or use Save As');
         // Preserve the old screenshot only while the initial physical state
         // is identical. An edited first frame must not retain a misleading image.
-        var image=thumbnail||((JSON.stringify(valid.baseExperiment)===
-          JSON.stringify(old.project.baseExperiment))?old.thumbnail:null);
+        var image=thumbnail||(sameFirstFrame(valid,old.project)?old.thumbnail:null);
         var next=record(valid,optics,valid.id,old.createdAt,
           Math.max(stamp(now||Date.now()),old.updatedAt+1),image);
         store.put(next);finish(next);
@@ -302,6 +328,7 @@
   return Object.freeze({VERSION:VERSION,DATABASE:DATABASE,STORE:STORE,
     normalize:normalize,makeId:makeId,record:record,
     fingerprint:fingerprint,findDuplicates:findDuplicates,
+    thumbnailMatchesFirstFrame:thumbnailMatchesFirstFrame,sameFirstFrame:sameFirstFrame,
     PORTABLE_FORMAT:PORTABLE_FORMAT,PORTABLE_VERSION:PORTABLE_VERSION,
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
     exportPortable:exportPortable,parsePortable:parsePortable,importEntries:importEntries,
