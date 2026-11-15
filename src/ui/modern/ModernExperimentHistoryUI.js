@@ -241,6 +241,22 @@
         body.appendChild(multiLabel);
       }
       card.appendChild(body);
+      // Primary card actions stay visible in every gallery size. They never
+      // select a card or restore the current experiment as a side effect.
+      var pin=button(doc,'',(entry.pinned?'Unpin ':'Pin ')+displayName(entry),function(){
+        if(actions.pin)actions.pin(entry.id);
+      });
+      pin.className='modern-history-pin'+(entry.pinned?' is-pinned':'');
+      pin.setAttribute('aria-pressed',String(!!entry.pinned));
+      card.appendChild(pin);
+      var deleteTitle=entry.pinned?'Unpin '+displayName(entry)+' before deleting':
+        'Delete '+displayName(entry);
+      var remove=button(doc,'',deleteTitle,function(){
+        if(actions.remove)actions.remove(entry.id);
+      });
+      remove.className='modern-history-delete modern-card-delete';
+      remove.disabled=!!entry.pinned;
+      card.appendChild(remove);
       return card;
     }
     function section(name,items,collapsible,collapsed){

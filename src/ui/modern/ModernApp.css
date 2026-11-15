@@ -525,7 +525,8 @@ button{cursor:pointer}
  * .modern-card-delete below so all saved-item corners look identical. */
 .modern-history-pin{position:absolute;top:5px;right:35px;width:25px;height:25px;z-index:1;
   border:1px solid #b7cadd;border-radius:7px;background:#f7fbffed;color:#285b83;
-  display:grid;place-items:center;cursor:pointer;padding:0;opacity:0;transition:opacity .12s}
+  display:grid;place-items:center;cursor:pointer;padding:0;opacity:1;
+  transition:background-color .12s,border-color .12s}
 .modern-history-pin::after{content:"\1F4CC ";font-size:16px;line-height:1;filter:grayscale(1);opacity:.65}
 .modern-history-pin.is-pinned{opacity:1;background:#fff2cb;border-color:#d6af47;color:#8d5f09}
 .modern-history-pin.is-pinned::after{filter:none;opacity:1}
@@ -1124,6 +1125,8 @@ button{cursor:pointer}
 :is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,
     .modern-history-storyboard-item,.modern-studio-filmstrip-item):is(:hover,:focus-within) > .modern-card-delete:disabled{opacity:.35}
 .modern-card-delete:focus-visible{outline:2px solid #287ac5;outline-offset:1px}
+.modern-history-card > .modern-history-delete{opacity:1}
+.modern-history-card > .modern-history-delete:disabled{opacity:.55}
 .modern-animation-workspace-item > .modern-card-delete{right:3px;top:5px}
 @media(hover:none){
   :is(.modern-history-card,.modern-animation-library-card,.modern-animation-workspace-item,

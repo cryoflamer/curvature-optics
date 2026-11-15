@@ -123,6 +123,7 @@ test('Pinned/Recent cards select only, with bulk checkboxes available in Manage 
   const {doc}=dom(),host=doc.createElement('div'),calls=[];
   const actions={select:id=>calls.push(['select',id]),restore:id=>calls.push(['restore',id]),
     multi:(id,value)=>calls.push(['multi',id,value]),
+    pin:id=>calls.push(['pin',id]),remove:id=>calls.push(['remove',id]),
     setPinnedCollapsed:value=>calls.push(['collapse',value])};
   const a=entry(1,'scene',true),b=entry(2,'compare',false),c=entry(3,'scene',true);
   a.pinned=true;
@@ -137,11 +138,22 @@ test('Pinned/Recent cards select only, with bulk checkboxes available in Manage 
   assert.equal(pinned['data-snapshot-id'],'1');
   assert.equal(recent['data-snapshot-id'],'2');
   assert.deepEqual(pinned.children.map(c=>c.className),
-    ['modern-history-card-select has-preview','modern-history-card-body']);
+    ['modern-history-card-select has-preview','modern-history-card-body',
+      'modern-history-pin is-pinned','modern-history-delete modern-card-delete']);
+  assert.equal(pinned.children[2]['aria-pressed'],'true');
+  assert.equal(pinned.children[3].disabled,true,'pinned snapshots require unpinning');
   assert.match(pinned.children[1].children.at(-1).textContent,/Pinned/);
   assert.ok(!recent.querySelector('.modern-history-multi'));
   recent.children[0].listeners.click({stopPropagation(){}});
   assert.deepEqual(calls,[['select',2]]);
+  let stopped=0;
+  recent.children[2].listeners.click({stopPropagation(){stopped++;}});
+  assert.deepEqual(calls.at(-1),['pin',2],'Pin is independent of card selection');
+  assert.equal(recent.children[2]['aria-pressed'],'false');
+  recent.children[3].listeners.click({stopPropagation(){stopped++;}});
+  assert.deepEqual(calls.at(-1),['remove',2],'Delete is independent of card selection');
+  assert.equal(stopped,2);
+  assert.equal(calls.filter(call=>call[0]==='select').length,1);
   pinnedSection.children[0].children[0].listeners.click({stopPropagation(){}});
   assert.deepEqual(calls.at(-1),['collapse',true]);
   ui.select(host,1);
@@ -170,7 +182,7 @@ test('Thumbnail click selects but double-click and keyboard never trigger hidden
   ui.render(doc,host,[pinned],10,actions,{}, {manage:true});
   const card=host.children[0].children[1].children[0],thumbnail=card.children[0];
   const checkbox=card.querySelector('.modern-history-multi').children[0];
-  assert.equal(card.children.length,2,'no per-card destructive or restore icons');
+  assert.equal(card.children.length,4,'two independent card actions, no per-card Restore');
   thumbnail.listeners.click({stopPropagation(){}});
   assert.deepEqual(calls,[['select',10]]);
   thumbnail.listeners.dblclick({stopPropagation(){}});
@@ -184,18 +196,22 @@ test('Thumbnail click selects but double-click and keyboard never trigger hidden
   assert.deepEqual(calls.at(-1),['multi',10,true]);
 });
 
-test('Compact section grids and persistent side panel replace extra card controls',()=>{
+test('Compact section grids and persistent side panel keep per-card Pin and Delete visible',()=>{
   const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
   assert.match(css,/\.modern-history-workspace\{display:grid/);
   assert.match(css,/\.modern-history-details\{display:flex/);
   assert.match(css,/data-size="medium"\] \.modern-history-section-grid/);
   assert.match(css,/data-size="large"\] \.modern-history-section-grid/);
   assert.match(css,/\.modern-history-selection-actions \.modern-history-restore/);
+  assert.match(css,/\.modern-history-card > \.modern-history-delete\{opacity:1\}/);
+  assert.match(css,/\.modern-history-pin\{[\s\S]*?opacity:1/);
   const {doc}=dom(),host=doc.createElement('div');
   ui.render(doc,host,[entry(3,'compare',true)],3,{select(){},multi(){}},{},{manage:false});
   const card=host.children[1].children[1].children[0];
   assert.deepEqual(card.children.map(c=>c.className),
-    ['modern-history-card-select has-preview','modern-history-card-body']);
+    ['modern-history-card-select has-preview','modern-history-card-body',
+      'modern-history-pin','modern-history-delete modern-card-delete']);
+  assert.equal(card.children[3].disabled,false);
   assert.deepEqual(card.children[1].children.map(c=>c.className),
     ['modern-history-card-title','modern-history-card-meta','modern-history-card-kind']);
   assert.equal(card.querySelector('.modern-history-multi'),null);
@@ -227,7 +243,7 @@ test('Visual History loaded before Modern app; restore guards remain and thumbna
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   assert.ok(html.indexOf('ModernExperimentThumbnail.js')<html.indexOf('ModernExperimentHistory.js'));
   assert.ok(html.indexOf('ModernExperimentHistoryUI.js')<html.indexOf('ModernApp.js'));
-  for(const id of ['ModernHistoryGallery','ModernHistoryPin','ModernHistoryClearAll','ModernHistorySort','ModernHistoryMultiCount','ModernHistoryDeleteChecked','ModernHistorySize'])
+  for(const id of ['ModernHistoryGallery','ModernHistoryClearAll','ModernHistorySort','ModernHistoryMultiCount','ModernHistoryDeleteChecked','ModernHistorySize'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.match(app,/historyRenderedKeys\[view\]!==historyViewKey\(snapshot,view\)/);
   assert.match(app,/return restoreHistorySnapshot\(historySelectedId\)/);

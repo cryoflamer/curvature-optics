@@ -74,10 +74,14 @@ results.
   it, and closes History only after success (including an already-matching
   snapshot). If the recovery write fails, the live experiment is unchanged and
   the error remains visible beside the Restore controls.
-- **Edit details**, **Pin/Unpin**, **Export snapshot** and **Delete snapshot**
-  belong to the selection panel, not the thumbnail corners. Pinned entries
-  cannot be deleted until unpinned. **Manage** reveals checkbox-based batch
-  selection (Pin checked, Delete checked and Add selected to Animation);
+- **Pin/Unpin** (pushpin) and **Delete** (cross) are permanently visible on
+  each thumbnail card, including in the compact gallery layout. These actions
+  never select a card or restore an experiment. Pinned snapshots show an active
+  pin, and their delete cross remains visible but disabled until unpinned.
+  Individual Delete always asks for confirmation; cancellation is a no-op.
+  **Edit details** and **Export snapshot** remain in the selected-experiment
+  panel. **Manage** reveals checkbox-based batch selection (Pin checked,
+  Delete checked and Add selected to Animation);
   leaving Manage clears temporary checkbox selection. The separate **More
   history tools** section contains Import/Export all, Clear automatic and
   Clear all history. The latter requires confirmation and deletes protected
@@ -113,12 +117,14 @@ results.
   does not create new images or modify the current experiment. It replaces the
   old floating preview in History; Animation Studio retains its separate
   thumbnail inspection controls.
-- **Edit details** opens the metadata editor. **Pin/Unpin** and **Export
-  snapshot** act on the selected card. **Delete snapshot** is disabled for a
-  pinned record and otherwise requests confirmation. Success closes History
-  after Restore; failures leave it open with a visible error beside the
-  action buttons. The current experiment is backed up to protected recovery
-  before any replacement.
+- **Pin/Unpin** and **Delete** are on every visible card, not duplicated in
+  the side inspector. Pin updates the Pinned/Recent grouping immediately;
+  pinning a card also expands Pinned if that section was collapsed so the card
+  remains visible. The Delete cross is disabled for pinned snapshots and asks
+  for confirmation on unpinned ones. **Edit details** opens the metadata editor,
+  and **Export snapshot** acts on the selected card. Restore closes History
+  only on success; failures leave it open with an error beside Restore.
+  The live experiment is backed up to protected recovery before replacement.
 - **Manage** toggles the group-selection workspace; only this mode renders
   checkboxes and group actions. To collect History records into Animation,
   enter Manage, check the cards and use **Add selected to Animation**. The
@@ -268,13 +274,17 @@ specified. A screenshot crossfade is not a physical optics calculation.
    selection immediately. Search for a missing name: the selection must clear
    and Restore must be disabled, without deleting history records. Keyboard
    Tab + Enter on a card should only select it.
-5. Pin two snapshots and check both move into **Pinned** above **Recent**.
-   Collapse Pinned and reload to check the saved fold preference. Unpin a
-   snapshot and verify that it returns to Recent. Change S/M/L and check the
-   card size preference persists.
-6. Confirm **Delete snapshot** is disabled when pinned, then unpin and delete
-   with confirmation. Enter **Manage** to expose checkboxes, test bulk Pin,
-   Delete (pinned entries must be blocked) and **Add selected to Animation**.
+5. Use the visible pushpin on two cards; check both move into **Pinned** above
+   **Recent** without altering the current scene or changing the selected card.
+   Collapse Pinned and reload to check the saved fold preference. Pin a Recent
+   card with Pinned collapsed: it should automatically expand so the card stays
+   visible. Unpin a snapshot and verify that it returns to Recent. Change S/M/L
+   and check both corner actions remain visible and card size persists.
+6. Confirm the Delete cross is visible but disabled when pinned, then unpin
+   and delete using the card cross. Cancel the confirmation once: the snapshot
+   must remain. Confirm a second time: only the selected record is removed.
+   Enter **Manage** to expose checkboxes, test bulk Pin, Delete (pinned
+   entries must be blocked) and **Add selected to Animation**.
    Exit Manage and verify checkboxes disappear. Separately test **More history
    tools → Clear automatic** and **Clear all history**, with confirmation.
 7. Verify that inspecting History does not trigger optical redraws and that

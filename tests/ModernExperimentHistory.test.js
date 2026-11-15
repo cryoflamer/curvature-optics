@@ -179,7 +179,7 @@ test('Modern panel integrates separately from library and never rewrites existin
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   assert.equal(ids.length,new Set(ids).size);
   for(const id of ['ModernHistoryPanel','ModernHistoryToggle','ModernSnapshotSave','ModernSnapshotSaveBar','ModernSnapshotSaveStatus','ModernHistoryManage','ModernHistoryDetailsContent',
-    'ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto','ModernHistoryStatus'])
+    'ModernHistoryRestore','ModernHistoryClearAuto','ModernHistoryStatus'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.ok(html.indexOf('ModernSnapshotSaveBar')>html.indexOf('ModernCompareViews'));
   assert.ok(html.indexOf('ModernSnapshotSaveBar')>html.indexOf('ModernHistoryPanel'));
@@ -215,7 +215,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHistoryPanel','ModernHistoryToggle','ModernHistoryClose','ModernSnapshotSave',
     'ModernSnapshotSaveBar','ModernSnapshotSaveStatus',
     'ModernHistoryManage','ModernHistoryManageTools','ModernHistoryDetailsContent',
-    'ModernHistoryEdit','ModernHistoryExportSelected','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
+    'ModernHistoryEdit','ModernHistoryExportSelected','ModernHistoryRestore','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
     'ModernHistoryFilterQuery','ModernHistoryFilterMode','ModernHistoryFilterGeometry',
     'ModernHistoryFilterAtmosphere','ModernHistoryFilterGeometryRelation',
@@ -223,7 +223,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
     'ModernHistorySelectVisible','ModernHistoryClearChecked','ModernHistoryQueueChecked',
     'ModernHistoryQueueCount','ModernHistoryQueueClear','ModernHistoryStoryboardQueue',
-    'ModernHistoryPin','ModernHistoryClearAll','ModernHistoryMultiCount',
+    'ModernHistoryClearAll','ModernHistoryMultiCount',
     'ModernHistoryMetadataDialog','ModernHistoryMetadataForm','ModernHistoryMetadataName',
     'ModernHistoryMetadataDescription','ModernHistoryMetadataCancel','ModernHistoryMetadataSave',
     'ModernHistoryMetadataError'];
@@ -324,6 +324,24 @@ test('Live Modern integration saves and restores a full experiment and protects 
   const id=list[0].id;
   assert.equal(nodes.get('ModernSnapshotSave').hidden,true,'existing saved experiment hides Save');
   assert.match(nodes.get('ModernSnapshotSaveStatus').textContent,/Already in History/);
+  // The card itself exposes its two actions; neither is a hidden hover-only
+  // action or an alternate Restore/selection trigger.
+  let cardActions=findCard(id);
+  assert.equal(cardActions.children[2].className,'modern-history-pin is-pinned');
+  assert.equal(cardActions.children[2]['aria-pressed'],'true');
+  assert.equal(cardActions.children[3].className,'modern-history-delete modern-card-delete');
+  assert.equal(cardActions.children[3].disabled,true,'pinned manual snapshots are protected');
+  cardActions.children[2].listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal((await store.get(id)).pinned,false);
+  cardActions=findCard(id);
+  assert.equal(cardActions.children[3].disabled,false);
+  assert.equal(cardActions.children[2]['aria-pressed'],'false');
+  cardActions.children[2].listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal((await store.get(id)).pinned,true);
+  assert.equal(findCard(id).children[3].disabled,true);
+  assert.equal(app.getModel().Height,15,'Pin/Unpin does not restore or alter physics');
   // The selection is on the card; Edit details is alongside the persistent
   // physical inspector rather than hidden in a footer beneath each thumbnail.
   assert.ok(findCard(id));
@@ -595,6 +613,54 @@ test('Live Modern integration saves and restores a full experiment and protects 
     ordered.map(e=>e.id));
   nodes.get('ModernHistoryQueueClear').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
+  // A per-card Delete must ask confirmation, leave other cards untouched, and
+  // never modify the active experiment. Rejection must be a strict no-op.
+  const heightBeforeDelete=app.getModel().Height;
+  const extraExperiment=JSON.parse(JSON.stringify((await store.get(id)).experiment));
+  extraExperiment.scene.camera.Height=47.125;
+  const extra=await store.record(extraExperiment,'auto');
+  assert.equal(extra.entry.pinned,false);
+  if(nodes.get('ModernHistoryPanel').hidden)nodes.get('ModernHistoryToggle').listeners.click();
+  nodes.get('ModernHistoryFiltersClear').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  let extraCard=findCard(extra.entry.id);
+  assert.ok(extraCard);
+  assert.equal(extraCard.children[3].disabled,false);
+  // Pinning from Recent must expand a collapsed Pinned section, otherwise the
+  // moved card would appear to vanish immediately after the user's action.
+  let sectionToggle=nodes.get('ModernHistoryGallery').children[0].children[0].children[0];
+  if(sectionToggle['aria-expanded']==='true'){
+    sectionToggle.listeners.click({stopPropagation(){}});
+    await new Promise(resolve=>setTimeout(resolve,35));
+  }
+  assert.equal(nodes.get('ModernHistoryGallery').children[0].children.length,1);
+  extraCard=findCard(extra.entry.id);
+  extraCard.children[2].listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal((await store.get(extra.entry.id)).pinned,true);
+  assert.equal(nodes.get('ModernHistoryGallery').children[0].children[0].children[0]['aria-expanded'],'true');
+  assert.equal(findCard(extra.entry.id).children[3].disabled,true);
+  findCard(extra.entry.id).children[2].listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal((await store.get(extra.entry.id)).pinned,false);
+  assert.equal(app.getModel().Height,heightBeforeDelete);
+  extraCard=findCard(extra.entry.id);
+  assert.equal(extraCard.children[3].disabled,false);
+  let confirms=0;
+  rootWindow.confirm=()=>{confirms++;return false;};
+  extraCard.children[3].listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(confirms,1);
+  assert.ok(await store.get(extra.entry.id),'cancelled deletion does not touch IDB');
+  rootWindow.confirm=()=>{confirms++;return true;};
+  extraCard=findCard(extra.entry.id);
+  extraCard.children[3].listeners.click({stopPropagation(){}});
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(confirms,2);
+  assert.equal(await store.get(extra.entry.id),null);
+  assert.equal(findCard(extra.entry.id),null);
+  assert.equal(app.getModel().Height,heightBeforeDelete,
+    'per-card deletion never restores or changes the active experiment');
 });
 
 test('Visual History attaches bounded screenshots, upgrades deduplicated entries, pins and clears explicitly',async()=>{
