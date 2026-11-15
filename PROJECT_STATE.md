@@ -1,11 +1,20 @@
+> **Animation Project creation wizard (2026-11-15):** Animation Library's
+> New project opens a five-step v2 wizard for mode, independent reference
+> snapshot, supported physical target, optional compatible initial keyframes,
+> and metadata. It explicitly backs up the previous draft before saving the
+> new project; the old draft remains available. V2 Studio insertions now reject
+> incompatible snapshots before changing the timeline. Existing Project v1,
+> imports and playback remain unchanged. See
+> `docs/modern-animation-project-wizard.md`.
+
 > **Animation Project v2 storage foundation (2026-11-15):** The app now reads
 > legacy v1 projects unchanged and version 2 projects with embedded validated
 > physical compatibility contracts. A v2 project may hold 0–200 keyframes;
 > Experimental stores full snapshots and is not preview/export-ready. Library
 > storage, portable JSON, named Save/Save As, Studio open and autosave preserve
 > contracts and incomplete projects without any IndexedDB migration. The
-> current New project UI still creates v1 drafts; the creation wizard and
-> Picker-level contract filters remain future work. See
+> New project now opens the v2 wizard; contract-based filtering inside
+> the ordinary Studio Picker remains future work. See
 > `docs/modern-animation-contract.md`.
 
 > **Snapshot Picker → History navigation (2026-11-15):** The redundant top-of-Studio

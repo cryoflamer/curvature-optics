@@ -73,10 +73,13 @@ at least two frames; Experimental never silently falls back to interpolation.
 
 Opening a saved v2 project preserves its locked mode, reference experiment,
 frames and independent autosaved draft; saved project JSON and the existing
-Animation Library record formats are still portable. **The current New project
-UI continues to create the old unconstrained draft** until the guided v2
-creation workflow arrives. See [Animation contracts and v2 persistence](docs/modern-animation-contract.md)
-for schema details and current restrictions.
+Animation Library record formats are still portable. **New project now opens a
+five-step v2 wizard** to choose an animation type, reference snapshot, active
+physical channel, compatible initial frames and project metadata. It saves the
+previous independent draft before creating a new Library entry. Unfinished
+projects and Experimental collections remain valid, though not video-ready.
+See the [Project creation guide](docs/modern-animation-project-wizard.md) and
+[Animation contracts and v2 persistence](docs/modern-animation-contract.md).
 
 ## Run locally
 
@@ -1019,5 +1022,6 @@ Physical Transition locks the camera and all but one supported curvature or
 lapse-gradient channel. Experimental accepts arbitrary valid snapshots without
 claiming interpolation or export support. The checks share the existing
 `ModernAnimationCompatibility` renderer authority and normalize dormant object
-controls in zero-count groups. This stage has **no wizard or stored Project v2**;
-see [`docs/modern-animation-contract.md`](docs/modern-animation-contract.md).
+controls in zero-count groups. Project v2 persistence and the guided creation wizard are now implemented;
+see [`docs/modern-animation-contract.md`](docs/modern-animation-contract.md)
+and [`docs/modern-animation-project-wizard.md`](docs/modern-animation-project-wizard.md).

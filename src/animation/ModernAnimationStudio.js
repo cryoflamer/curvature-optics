@@ -8,6 +8,7 @@
   var projects=root.CurvatureModernAnimationProject;
   var sequences=root.CurvatureModernAnimationSequences;
   var naming=root.CurvatureModernSemanticNaming;
+  var contracts=root.CurvatureModernAnimationContract;
   if(typeof module==='object'&&module.exports){
     state=require('../ui/modern/ModernExperimentState');
     sequence=require('../camera/ModernCameraSequence');
@@ -15,11 +16,12 @@
     projects=require('./ModernAnimationProject');
     sequences=require('./ModernAnimationSequences');
     naming=require('../ui/modern/ModernSemanticNaming');
+    contracts=require('./ModernAnimationContract');
   }
-  var api=factory(state,sequence,compatibility,projects,sequences,naming);
+  var api=factory(state,sequence,compatibility,projects,sequences,naming,contracts);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudio=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,sequence,compatibility,projects,sequences,naming){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,sequence,compatibility,projects,sequences,naming,contracts){
   'use strict';
   var MAX_FRAMES=200;
   function cleanText(text,max){
@@ -58,6 +60,7 @@
     draft.source='history';draft.activeFrameKeys=null;return draft;
   }
   function importCamera(experiment,frames,previous){
+    if(previous&&previous.contract)throw RangeError('Locked project contract cannot be replaced by Camera Animation');
     var validated=sequence.validate(frames);
     if(validated.length<2)throw RangeError('Camera Animation needs at least two keyframes');
     var base=state.validate(experiment),draft=previous?copy(previous):blank();
@@ -194,6 +197,20 @@
     next.activeFrameKeys=null;
     next.source=next.source==='none'||next.source==='history'?'history':'mixed';
     normalizeTravel(next);
+    if(next.contract){
+      // The picker will filter candidates in the next stage, but every
+      // insertion path (bulk, drag or programmatic) must enforce the contract
+      // already. Never mutate the original draft on rejection.
+      var review=contracts.inspectFrames(next.contract,next.frames.map(function(frame){
+        return frame.experiment;
+      }));
+      if(!review.accepted||
+        (next.contract.mode!=='experimental'&&next.frames.length>=2&&!review.previewCompatible)){
+        var issue=review.checks.flatMap(function(check){return check.issues||[];})
+          .concat(review.previewIssues||[])[0];
+        throw RangeError('Snapshot violates project contract'+(issue?': '+issue.path:''));
+      }
+    }
     return next;
   }
   function remove(draft,key){

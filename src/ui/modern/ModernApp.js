@@ -533,6 +533,9 @@
   // Only retained for a one-time, explicit migration of pre-Gallery History
   // shortlists. Never add new IDs; the Animation Snapshot Picker owns selection.
   var historyStoryboardQueue=[];
+  var studioWizardApi=root.CurvatureModernAnimationProjectWizard;
+  var studioWizardUI=root.CurvatureModernAnimationProjectWizardUI;
+  var studioWizard=null,studioWizardError='';
   var studioDraft=studioApi?studioApi.blank():null;
   var studioSelectedKey=null;
   var studioDiagnosticTransition=null;
@@ -1168,6 +1171,70 @@
     try{studioApi.buildSaved(studioDraft,'studio_save_check');return true;}
     catch(error){return false;}
   }
+  function openStudioWizard(){
+    if(!studioWizardApi||!studioWizardUI||studioLibraryBusy||!studioWorkspaceReady){
+      studioLibraryNotice('Project wizard is not available until the workspace has loaded.',true);
+      return;
+    }
+    studioWizard=studioWizardApi.initial();studioWizardError='';
+    renderStudioWizard();
+    var host=newUiEl('ModernAnimationProjectWizard');
+    if(host&&host.scrollIntoView)host.scrollIntoView({behavior:'smooth',block:'start'});
+    // History is read-only in the wizard. Refresh it independently of the
+    // current editor (a delayed refresh must not reset the wizard state).
+    if(experimentHistory)refreshHistoryList().catch(function(error){
+      studioWizardError='History cannot be read: '+error.message;renderStudioWizard();
+    });
+  }
+  function renderStudioWizard(){
+    if(typeof studioWizardUI==='undefined'||!studioWizardUI||!studioWizardUI.render)return;
+    var host=newUiEl('ModernAnimationProjectWizard');if(!host)return;
+    function apply(work){
+      if(studioLibraryBusy||!studioWizard)return;
+      try{studioWizard=work(studioWizard);studioWizardError='';}
+      catch(error){studioWizardError=error.message;}
+      renderStudioWizard();
+    }
+    studioWizardUI.render(document,host,studioWizard,studioHistoryEntries,
+      studioWizard?experimentSnapshot():null,{
+      cancel:function(){if(studioLibraryBusy)return;studioWizard=null;studioWizardError='';renderStudioWizard();},
+      mode:function(value){apply(function(w){return studioWizardApi.mode(w,value);});},
+      referenceCurrent:function(){apply(function(w){return studioWizardApi.reference(w,experimentSnapshot(),null,'Current experiment');});},
+      reference:function(id){apply(function(w){
+        var entry=studioHistoryEntries.find(function(e){return e.id===id;});
+        if(!entry)throw RangeError('History snapshot is no longer available');
+        return studioWizardApi.reference(w,entry.experiment,entry.id,entry.name||'Snapshot '+id);
+      });},
+      target:function(value){apply(function(w){return studioWizardApi.chooseTarget(w,value);});},
+      field:function(key,value,live){
+        if(live){
+          if(studioLibraryBusy||!studioWizard)return;
+          try{studioWizard=studioWizardApi.patch(studioWizard,key,value);
+            studioWizardError='';
+            if(key==='name'&&host.querySelector){
+              var create=host.querySelector('.modern-project-wizard-create');
+              if(create)create.disabled=!studioWizard.name.trim();
+            }
+          }catch(error){studioWizardError=error.message;}
+          // Do not rebuild a focused text input on input/change: removing its
+          // node on blur can swallow the subsequent Create/Next button click.
+          return;
+        }
+        apply(function(w){return studioWizardApi.patch(w,key,value);});
+      },
+      refresh:function(){renderStudioWizard();},
+      toggle:function(id){apply(function(w){return studioWizardApi.toggle(w,id,studioHistoryEntries);});},
+      back:function(){apply(function(w){return studioWizardApi.navigate(w,w.step-1);});},
+      next:function(){apply(function(w){return studioWizardApi.navigate(w,w.step+1);});},
+      finish:function(){
+        if(studioLibraryBusy||!studioWizard)return;
+        try{
+          var project=studioWizardApi.build(studioWizard,studioHistoryEntries);
+          studioWizardError='';requestStudioSwitch('wizard',project);
+        }catch(error){studioWizardError=error.message;renderStudioWizard();}
+      }
+    },{error:studioWizardError,busy:studioLibraryBusy});
+  }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
     var host=newUiEl('ModernAnimationLibrary');
@@ -1209,7 +1276,7 @@
       renameStart:function(id){studioLibraryRenamingId=id;studioLibraryExpanded=true;renderStudioLibrary();},
       renameCancel:function(){studioLibraryRenamingId='';renderStudioLibrary();},
       rename:function(id,name){renameNamedAnimation(id,name);},
-      newProject:function(){requestStudioSwitch('new');},
+      newProject:function(){openStudioWizard();},
       save:function(){saveNamedAnimation(!!studioLibraryActive);},
       stashRestore:function(){return restoreSavedAnimation(true);},
       discardChanges:function(){return restoreSavedAnimation(false);},
@@ -1224,6 +1291,7 @@
     });
     var gallery=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery');
     if(gallery)gallery.scrollLeft=studioLibraryScroll;
+    renderStudioWizard();
   }
   function studioLibraryNotice(message,error){
     studioLibraryMessage=message;studioLibraryError=!!error;renderStudioLibrary();
@@ -1520,12 +1588,14 @@
       studioLibraryNotice('Cannot switch: current working draft failed validation or storage.',true);
       return;
     }
+    var wizardSwitched=false;
     persistStudioWorkspace().then(function(ok){
       if(!ok)throw Error('Current draft could not be stored; switching was cancelled to protect your work');
       if(studioDraftGeneration!==startGeneration+1)
         throw Error('The draft changed while switching; please try again');
       function finish(next,value){
         performStudioSwitch(next,value);
+        if(next==='wizard')wizardSwitched=true;
         // A pristine, unedited scratch draft has nothing to recover.
         if(dropEmpty&&formerId!==studioWorkspaceId)dropStudioWorkspace(formerId);
       }
@@ -1539,7 +1609,17 @@
     }).catch(function(error){
       studioLibraryMessage='Cannot switch project: '+error.message;
       studioLibraryError=true;
-    }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
+    }).then(function(){
+      studioLibraryBusy=false;
+      if(wizardSwitched){
+        studioWizard=null;studioWizardError='';renderStudioWizard();
+        return saveNamedAnimation(false).then(function(saved){
+          if(!saved)studioLibraryNotice(
+            'Library save failed. The new project remains open in the working draft; use Save project to retry.',true);
+        });
+      }
+      renderStudioLibrary();renderStudioWizard();
+    });
   }
   function performStudioSwitch(kind,value){
     studioDiagnosticTransition=null;
@@ -1547,7 +1627,14 @@
     studioFilmstripScroll=0;studioPickerOpen=false;studioPickerScroll=0;
     studioPickerChecked=Object.create(null);studioDragSession=null;
     studioRemovedFrameUndo=null;studioRestorePreviewPending=false;
-    if(kind==='new'){
+    if(kind==='wizard'){
+      studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
+      studioDraft=studioApi.fromProject(value);
+      studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
+      studioPlaybackQuality='auto';studioLibraryActive=null;studioLibraryPending=null;
+      studioLibrarySelected='';
+      studioLibraryMessage='New v2 project draft created; saving to Animation Library.';
+    }else if(kind==='new'){
       studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
       studioDraft=studioApi.edit(studioApi.blank(),'cameraHudAppearance',cameraHudAppearance);
       studioSelectedKey=null;studioPlaybackQuality='auto';
@@ -3179,6 +3266,7 @@
       historyLoadError=null;snapshotSaveError=null;
       savedHistorySignatures=new Map();
       studioHistoryEntries=entries;
+      if(typeof studioWizard!=='undefined'&&studioWizard)renderStudioWizard();
       entries.forEach(function(entry){
         // list() is newest-first; preserve the newest matching record.
         if(!savedHistorySignatures.has(entry.signature))

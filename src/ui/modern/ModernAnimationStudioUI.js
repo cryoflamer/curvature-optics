@@ -790,7 +790,7 @@
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
-    toolbar.appendChild(button(doc,'Replace with Camera Animation…',
+    if(!draft.contract)toolbar.appendChild(button(doc,'Replace with Camera Animation…',
       'Replace ALL current keyframes with the Camera Animation after confirmation',actions.importCamera));
     host.appendChild(toolbar);
     var basics=el(doc,'div','modern-studio-basics');

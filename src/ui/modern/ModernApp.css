@@ -1195,3 +1195,42 @@ button{cursor:pointer}
 
 /* Persistence updates are global but should not span edge-to-edge. */
 .modern-persistence-status.modern-status-message:not(:empty){margin:5px 18px}
+
+/* Animation Project v2 creation: one document scroll, no nested picker panels. */
+.modern-project-wizard{margin:14px 0;padding:15px;background:#f5faff;
+  border:1px solid #a8cbe6;border-radius:10px;color:#214a6c;scroll-margin-top:14px}
+.modern-project-wizard[hidden]{display:none!important}
+.modern-project-wizard-heading,.modern-project-wizard-navigation{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.modern-project-wizard-heading strong{font-size:15px}
+.modern-project-wizard-progress{font-size:12px;font-weight:650;color:#426b8c;
+  padding:7px 0;margin:6px 0;border-bottom:1px solid #d6e5f2}
+.modern-project-wizard-content{display:flex;flex-direction:column;gap:9px;min-width:0;
+  overflow:visible;padding:6px 0 12px}
+.modern-project-wizard-button{border:1px solid #aac9e2;background:#fff;color:#225d89;
+  border-radius:6px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
+.modern-project-wizard-button:hover:not(:disabled),
+.modern-project-wizard-button:focus-visible{background:#e5f3ff}
+.modern-project-wizard-button:disabled{opacity:.45;cursor:not-allowed}
+.modern-project-wizard-choice{text-align:left;width:100%;white-space:normal;line-height:1.45}
+.modern-project-wizard-choice.is-active{border-color:#2578ba;background:#e4f3ff;
+  box-shadow:inset 3px 0 #2578ba}
+.modern-project-wizard-field{display:flex;flex-direction:column;gap:5px;font-size:12px;
+  font-weight:600;min-width:0}
+.modern-project-wizard-field input,.modern-project-wizard-field textarea{
+  box-sizing:border-box;width:100%;min-width:0;font:inherit;font-weight:400;
+  border:1px solid #b9d2e5;border-radius:6px;background:#fff;padding:8px}
+.modern-project-wizard-snapshots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(245px,100%),1fr));
+  gap:8px;min-width:0;max-height:none;overflow:visible}
+.modern-project-wizard-snapshot{display:flex;align-items:center;gap:8px;padding:9px;
+  border:1px solid #d0dfed;border-radius:7px;background:#fff;min-width:0;
+  font-size:12px;overflow-wrap:anywhere}
+.modern-project-wizard-snapshot>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.modern-project-wizard-snapshot small{color:#607d94;font-size:11px}
+.modern-project-wizard-snapshot .modern-project-wizard-choice{min-width:0}
+.modern-project-wizard-snapshot.is-incompatible{background:#f4f5f6;opacity:.78}
+.modern-project-wizard-include{display:flex;align-items:center;gap:8px;font-size:12px}
+.modern-project-wizard-status{font-size:12px;font-weight:600;color:#275d86;margin:4px 0}
+.modern-project-wizard-error{color:#a02c27;background:#fff2ee;border:1px solid #f3c8b9;
+  border-radius:7px;padding:10px;font-size:12px}
+.modern-project-wizard-navigation{border-top:1px solid #d6e5f2;padding-top:11px}

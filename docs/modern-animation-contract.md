@@ -98,22 +98,25 @@ collection **without preparing Preview**. Its named Save/Save As path preserves
 v2 and the locked contract; the independent autosaved workspace includes the
 contract without changing its existing checkpoint/collection formats. V1
 workspaces without a contract remain readable. The UI displays a read-only
-contract description when an existing v2 project is opened. This is a storage
-foundation: the current **New project** command still creates an ordinary v1
-working draft, not a new constrained v2 project.
+contract description when an existing v2 project is opened. The **New project** command now opens the v2 creation wizard, which writes
+validated contracts and can save unfinished projects. See
+[Project creation wizard](modern-animation-project-wizard.md).
 
 ## Still outside this stage
 
-- No creation wizard or new contract editor. The first-class UI for creating
-  v2 projects is planned for the next stage.
+- The five-step creation wizard is implemented. **Editing an existing locked
+  contract** remains unsupported; create a new project to change its invariant
+  parameters.
 - Snapshot Picker does not yet prefilter by the project contract. However,
   `buildSaved()` and `createV2()` reject incompatible keyframes before writing
-  to Library. UI-level filtering and early rejection are separate work.
+  to Library, and Studio insertions now reject them before changing the draft.
+  Showing incompatible/compatible candidates directly in the ordinary Picker
+  remains separate work.
 - Experimental stores collections only; it does not make mixed Scene/Compare
   or hard-cut exports available. The existing v1 `build()` path remains the
   sole Preview/Export preparation path for ready Camera/Physical drafts.
 - No physics, RK4, refraction, image generation or IndexedDB schema migration.
 
-Next stages: wizard and reference selection, Picker contract filtering and
-candidate diagnostics, project-library search/grouping by declared contracts,
+Next stages: Picker contract filtering and candidate diagnostics,
+project-library search/grouping by declared contracts,
 then a final stabilization and browser acceptance pass.
