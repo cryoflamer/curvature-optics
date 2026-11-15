@@ -62,6 +62,10 @@
     // keyframes, timing and physical endpoints are identical. Old projects
     // without the optional v1 field are semantically equivalent to Linear.
     return JSON.stringify({mode:p.mode,target:p.target,
+      // V2 contracts are semantic data; Experimental owns whole scenes rather
+      // than scalar or camera-pose values. Source IDs remain provenance only.
+      contract:p.version===projects.VERSION_V2?{mode:p.contract.mode,
+        target:p.contract.target,reference:compatibility.effective(p.contract.referenceExperiment)}:null,
       interpolation:p.interpolation||'linear',fixed:fixed,
       keyframes:p.keyframes.map(function(frame){return {
         value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing
@@ -103,9 +107,10 @@
     if(typeof text!=='string'||text.length>MAX_PORTABLE_LENGTH)
       throw RangeError('Animation JSON file too large');
     var value=JSON.parse(text);
-    // Accept a standalone validated v1 Animation Project for convenient
+    // Accept standalone validated v1 or v2 Animation Projects for convenient
     // interoperability; a portable bundle is the canonical export format.
-    if(value&&value.version===projects.VERSION&&value.keyframes&&value.baseExperiment)
+    if(value&&(value.version===projects.VERSION||value.version===projects.VERSION_V2)&&
+      Array.isArray(value.keyframes)&&value.baseExperiment)
       return [portableItem({project:value,quality:'auto'})];
     if(!value||typeof value!=='object'||Array.isArray(value)||
       Object.keys(value).sort().join(',')!=='animations,format,version'||

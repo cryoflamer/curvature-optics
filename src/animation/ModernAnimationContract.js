@@ -1,7 +1,7 @@
 /* Prospective, self-contained constraints for Animation Projects. This pure
  * module describes which snapshots may join a project BEFORE a timeline has
- * been assembled. It reuses the existing renderer's authoritative validator;
- * it is not a new interpolation engine or a persisted Project v2 format.
+ * been assembled. Project v2 embeds this immutable contract. It reuses the
+ * existing renderer's authoritative validator; it is not a new interpolator.
  */
 (function(root,factory){
   var state=root.CurvatureModernExperimentState;

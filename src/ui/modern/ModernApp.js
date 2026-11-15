@@ -1135,7 +1135,8 @@
   // Legacy projects can omit interpolation; the editor restores them as Linear.
   function studioProjectDiffers(draft,quality,entry){
     try{
-      var edited=studioApi.build(draft,entry.id);
+      var edited=draft.contract&&studioApi.buildSaved?
+        studioApi.buildSaved(draft,entry.id):studioApi.build(draft,entry.id);
       var saved=entry.project;
       if(!Object.prototype.hasOwnProperty.call(saved,'interpolation')&&
          edited.interpolation==='linear'){
@@ -1157,8 +1158,15 @@
       studioDraft.description!==blank.description||studioDraft.mode!==blank.mode||
       studioDraft.interpolation!==blank.interpolation||
       studioDraft.target!==blank.target||studioDraft.source!==blank.source||
+      !!studioDraft.contract||
       (studioDraft.cameraHudAppearance!=null&&
         JSON.stringify(studioDraft.cameraHudAppearance)!==JSON.stringify(cameraHudAppearance));
+  }
+  function studioCanSave(){
+    if(!studioApi||!studioDraft)return false;
+    if(!studioDraft.contract)return studioApi.inspect(studioDraft).compatible;
+    try{studioApi.buildSaved(studioDraft,'studio_save_check');return true;}
+    catch(error){return false;}
   }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
@@ -1168,7 +1176,7 @@
     studioUI.renderLibrary(document,host,studioLibraryEntries,{
       selectedId:studioLibrarySelected,activeId:studioLibraryActive&&studioLibraryActive.id,
       activeName:studioLibraryActive&&studioLibraryActive.project.name,
-      canSave:!!(studioApi&&studioDraft&&studioApi.inspect(studioDraft).compatible),
+      canSave:studioCanSave(),
       dirty:studioLibraryDirty(),unsaved:studioHasUnsavedWork(),
       busy:studioLibraryBusy,
       draftWorkspaces:studioWorkspaceDraftCards(),
@@ -1389,7 +1397,9 @@
         var recommended=studioApi.suggestName(studioDraft);
         if(recommended!=='Animation study')studioDraft=studioApi.edit(studioDraft,'name',recommended);
       }
-      project=studioApi.build(studioDraft,id);
+      if(studioDraft.contract&&studioApi.buildSaved)
+        project=studioApi.buildSaved(studioDraft,id);
+      else project=studioApi.build(studioDraft,id);
     }catch(error){studioLibraryNotice('Cannot save animation: '+error.message,true);return Promise.resolve(false);}
     var startGeneration=studioDraftGeneration;
     var priorWorkspaceId=studioWorkspaceId;
@@ -1573,13 +1583,18 @@
         }
       }else{
         studioDraft=studioApi.fromProject(record.project);
-        studioSelectedKey=studioDraft.frames[0].key;
+        studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
         studioPlaybackQuality=record.quality;
         studioLibraryActive=record;studioLibraryPending=null;
-        studioPrepared=studioApi.build(studioDraft,'studio_draft');
-        studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
+        // A saved V2 project may be unfinished or Experimental. It must open
+        // without attempting to prepare an unsupported video.
+        if(studioApi.inspect(studioDraft).compatible){
+          studioPrepared=studioApi.build(studioDraft,'studio_draft');
+          studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
+        }else{studioPrepared=null;studioPlayback=null;}
         studioRestorePreviewPending=!!studioPlayback;
-        studioLibraryMessage='Opened '+record.project.name+' · playback paused at first frame.';
+        studioLibraryMessage='Opened '+record.project.name+
+          (studioPlayback?' · playback paused at first frame.':' · editing without preview.');
       }
       studioLibrarySelected=id;
     }

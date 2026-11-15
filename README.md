@@ -60,6 +60,24 @@ archive actions; Animation Studio owns Snapshot Picker and the timeline.
 Neither UI module imports the other. See
 [Experiment History](docs/modern-experiment-history.md) for details.
 
+### Animation Project contracts — saved-schema foundation
+
+Modern Animation Library can now retain both **legacy v1 projects** and
+**v2 projects with embedded physical compatibility contracts**. Camera Motion
+locks the scene and physics; Physical Transition locks the scene and camera
+while varying one supported channel; Experimental can retain arbitrary
+complete Scene/Compare snapshots without promising a playable video. A v2
+project may be saved with zero or one frame and resumed later. Playback and
+video export remain restricted to compatible Camera/Physical sequences with
+at least two frames; Experimental never silently falls back to interpolation.
+
+Opening a saved v2 project preserves its locked mode, reference experiment,
+frames and independent autosaved draft; saved project JSON and the existing
+Animation Library record formats are still portable. **The current New project
+UI continues to create the old unconstrained draft** until the guided v2
+creation workflow arrives. See [Animation contracts and v2 persistence](docs/modern-animation-contract.md)
+for schema details and current restrictions.
+
 ## Run locally
 
 Serve the **repository root** with a static HTTP server (Python 3 is sufficient; no npm install or bundling is required for these entry points):

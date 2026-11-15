@@ -381,7 +381,8 @@
           'Local draft edits · not yet saved to Library'));
       var duration=p.keyframes.reduce(function(sum,frame){return sum+frame.travelMs+frame.holdMs;},0)/1000;
       info.appendChild(el(doc,'small','modern-animation-library-card-meta',
-        (p.mode==='camera'?'Camera motion':p.target.parameter==='surface.curvature'?
+        (p.mode==='experimental'?'Experimental · no playback':
+          p.mode==='camera'?'Camera motion':p.target.parameter==='surface.curvature'?
           'Earth curvature':'Temperature gradient')+' · '+p.keyframes.length+
         ' frames · '+duration.toFixed(1)+' s'));
       var summary=el(doc,'small','modern-animation-library-card-summary',
@@ -671,6 +672,15 @@
     var variants=options.sequences||[];
     var area=el(doc,'section','modern-studio-sequences');
     area.setAttribute('aria-label','Compatible animation sequences');
+    if(draft.contract){
+      area.appendChild(el(doc,'strong','','Project compatibility contract'));
+      area.appendChild(el(doc,'p','modern-studio-hint',
+        draft.contract.mode==='experimental'?
+          'Experimental keeps full snapshots; it can be saved without a playable sequence.':
+          'All saved keyframes must match the locked reference experiment. '+
+          'Preview becomes available when at least two compatible frames are present.'));
+      return area;
+    }
     area.appendChild(el(doc,'strong','','Compatible sequences'));
     area.appendChild(el(doc,'p','modern-studio-hint',
       'Choose a ready-to-preview sequence for the selected Animation mode. All original keyframes stay in the timeline and working draft; only chosen frames are used for Preview and project/video export. Other frames remain in this local draft, not in exported project JSON.'));
@@ -788,9 +798,17 @@
       function(value){if(actions.liveEdit)actions.liveEdit('name',value);}));
     basics.appendChild(field(doc,'Description',draft.description,'textarea',function(value){actions.edit('description',value);},null,
       function(value){if(actions.liveEdit)actions.liveEdit('description',value);}));
-    basics.appendChild(field(doc,'Animation mode',draft.mode,'select',function(value){actions.edit('mode',value);},
+    if(draft.contract){
+      basics.appendChild(el(doc,'p','modern-studio-hint',
+        'Locked project contract: '+(draft.mode==='experimental'?'Experimental · snapshots retained, video not supported':
+          draft.mode==='camera'?'Camera motion':'One physical parameter')+
+        '. Project mode and physical channel cannot be changed here.'));
+    }else basics.appendChild(field(doc,'Animation mode',draft.mode,'select',function(value){actions.edit('mode',value);},
       [['auto','Auto-detect'],['camera','Camera motion'],['physical','One physical parameter']]));
-    if(draft.mode==='physical'){
+    if(draft.mode==='physical'&&draft.contract){
+      basics.appendChild(el(doc,'p','modern-studio-hint',
+        'Locked physical target: '+draft.target.replace('|',' · ')));
+    }else if(draft.mode==='physical'){
       var scopes=[];
       draft.frames.forEach(function(frame){
         var mode=frame.experiment.display.mode;
@@ -811,7 +829,9 @@
     var status=el(doc,'div','modern-studio-status');
     status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     if(draft.frames.length<2){
-      status.textContent='Choose at least two snapshots to start an animation.';
+      status.textContent=draft.contract&&draft.contract.mode==='experimental'?
+        'Experimental project · complete snapshots can be saved, but video playback is not available.':
+        'Choose at least two snapshots to start an animation.';
     }else if(result.compatible){
       status.className+=' is-ready';
       status.textContent='Compatible · '+(result.mode==='camera'?'Camera motion':
@@ -823,10 +843,13 @@
       status.className+=' is-invalid';
       status.appendChild(el(doc,'strong','','Cannot preview this sequence'));
       status.appendChild(el(doc,'p','',
-        'One animation supports camera motion OR one physical parameter; all other scene settings must stay fixed. Inspect the exact transitions below.'));
+        draft.contract&&draft.contract.mode==='experimental'?
+          'Experimental projects preserve all valid snapshots. No interpolation or video export is supported.':
+          'One animation supports camera motion OR one physical parameter; all other scene settings must stay fixed. Inspect the exact transitions below.'));
     }
     host.appendChild(status);
-    if(draft.frames.length>=2&&(!result.compatible||options.diagnosticTransition!==null&&
+    if(draft.frames.length>=2&&!(draft.contract&&draft.contract.mode==='experimental')&&
+      (!result.compatible||options.diagnosticTransition!==null&&
       options.diagnosticTransition!==undefined))
       host.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
 

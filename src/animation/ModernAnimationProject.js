@@ -1,24 +1,27 @@
-/* Self-contained, deterministic Modern animation projects. The embedded v1
- * experiment is authoritative; local History IDs are provenance only.
- * Playback samples an owned copy and never mutates live session or History.
+/* Self-contained Modern animation projects. V1 remains readable and playable.
+ * V2 embeds an immutable compatibility contract and also supports unfinished
+ * projects; Experimental frames own entire snapshots, never interpolation values.
+ * Local History IDs are provenance only.
  */
 (function(root,factory){
   var state=root.CurvatureModernExperimentState;
   var compat=root.CurvatureModernAnimationCompatibility;
   var camera=root.CurvatureModernCameraInterpolator;
   var hud=root.CurvatureModernCameraHud;
+  var contracts=root.CurvatureModernAnimationContract;
   if(typeof module==='object'&&module.exports){
     state=require('../ui/modern/ModernExperimentState');
     compat=require('./ModernAnimationCompatibility');
     camera=require('../camera/ModernCameraInterpolator');
     hud=require('../ui/modern/ModernCameraHud');
+    contracts=require('./ModernAnimationContract');
   }
-  var api=factory(state,compat,camera,hud);
+  var api=factory(state,compat,camera,hud,contracts);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationProject=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,compat,camera,hud){
+}(typeof globalThis!=='undefined'?globalThis:this,function(state,compat,camera,hud,contracts){
   'use strict';
-  var VERSION=1,MAX_FRAMES=200,MAX_TIME=120000;
+  var VERSION=1,VERSION_V2=2,MAX_FRAMES=200,MAX_TIME=120000;
   var POSE=['Height','FocalLengthField','Pan','Nick','Roll',
     'CameraEast','CameraNorth','viewcenterHorizon','deviceRatio'];
   function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
@@ -93,27 +96,37 @@
   }
   function validate(input){
     // Optional appearance keeps existing v1 projects byte-for-byte compatible.
+    var v2=object(input)&&input.version===VERSION_V2;
     var hasHud=Object.prototype.hasOwnProperty.call(input||{},'cameraHudAppearance');
     var hasInterpolation=Object.prototype.hasOwnProperty.call(input||{},'interpolation');
     shape(input,['version','id','name','description','mode','target','baseExperiment',
-      'keyframes'].concat(hasHud?['cameraHudAppearance']:[],
+      'keyframes'].concat(v2?['contract']:[],hasHud?['cameraHudAppearance']:[],
       hasInterpolation?['interpolation']:[]));
-    if(input.version!==VERSION)throw RangeError('Unsupported animation project version');
+    if(input.version!==VERSION&&!v2)throw RangeError('Unsupported animation project version');
     var id=text(input.id,80,false),name=text(input.name,120,false);
     if(!/^[A-Za-z0-9_-]+$/.test(id))throw RangeError('Invalid animation project ID');
     var description=text(input.description,1000,true),mode=input.mode,target=input.target;
-    if(!['camera','physical'].includes(mode))throw RangeError('Invalid animation mode');
+    if(!['camera','physical'].includes(mode)&&!(v2&&mode==='experimental'))
+      throw RangeError('Invalid animation mode');
     var interpolation=hasInterpolation?input.interpolation:'linear';
     if(!['linear','spline'].includes(interpolation))throw RangeError('Invalid animation interpolation');
     if(mode!=='camera'&&interpolation==='spline')
       throw RangeError('Spline interpolation requires camera animation');
-    if(mode==='camera'){
-      if(target!==null)throw RangeError('Camera animation target must be null');
+    if(mode!=='physical'){
+      if(target!==null)throw RangeError('Non-physical animation target must be null');
     }else compat.targetPath(target);
     var baseExperiment=state.validate(input.baseExperiment);
     if(mode==='physical')readTarget(baseExperiment,target);
-    if(!Array.isArray(input.keyframes)||input.keyframes.length<2||input.keyframes.length>MAX_FRAMES)
-      throw RangeError('Animation requires 2–200 keyframes');
+    var contract=null;
+    if(v2){
+      contract=contracts.validate(input.contract);
+      if(contract.mode!==mode||JSON.stringify(contract.target)!==JSON.stringify(target)||
+        JSON.stringify(contract.referenceExperiment)!==JSON.stringify(baseExperiment))
+        throw RangeError('Animation contract disagrees with project reference or channel');
+    }
+    if(!Array.isArray(input.keyframes)||input.keyframes.length<(v2?0:2)||input.keyframes.length>MAX_FRAMES)
+      throw RangeError(v2?'Animation project allows 0–200 keyframes':
+        'Animation requires 2–200 keyframes');
     var keyframes=input.keyframes.map(function(frame,index){
       shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing']);
       var source=frame.sourceSnapshotId;
@@ -124,17 +137,19 @@
       var travel=finite(frame.travelMs,index===0?0:200,index===0?0:MAX_TIME);
       var hold=finite(frame.holdMs,0,MAX_TIME);
       if(!['linear','smoothstep'].includes(frame.easing))throw RangeError('Invalid keyframe easing');
-      var value=mode==='camera'?pose(frame.value):readTarget(
-        applyValue(baseExperiment,mode,target,frame.value),target);
+      var value=mode==='experimental'?state.validate(frame.value):
+        mode==='camera'?pose(frame.value):readTarget(
+          applyValue(baseExperiment,mode,target,frame.value),target);
       return {sourceSnapshotId:source,name:name,value:value,travelMs:travel,
         holdMs:hold,easing:frame.easing};
     });
     if(mode==='camera'){
       for(var i=1;i<keyframes.length;i++)camera.interpolate(keyframes[i-1].value,keyframes[i].value,.5,keyframes[i].easing);
     }
-    var result={version:VERSION,id:id,name:name,description:description,mode:mode,
-      target:mode==='camera'?null:{scope:target.scope,parameter:target.parameter},
+    var result={version:input.version,id:id,name:name,description:description,mode:mode,
+      target:mode!=='physical'?null:{scope:target.scope,parameter:target.parameter},
       baseExperiment:baseExperiment,keyframes:keyframes};
+    if(v2)result.contract=contract;
     if(hasHud)result.cameraHudAppearance=hud.validateAppearance(input.cameraHudAppearance);
     if(hasInterpolation)result.interpolation=interpolation;
     return freeze(result);
@@ -171,6 +186,56 @@
     if(options.interpolation!==undefined)result.interpolation=options.interpolation;
     return validate(result);
   }
+  // V2 persistence is independent of Preview readiness. New projects and
+  // experimental collections may be saved with zero or one frame, but a real
+  // interpolated movie still requires a supported mode and at least two frames.
+  function createV2(contract,snapshots,options){
+    var c=contracts.validate(contract);options=options||{};
+    if(!Array.isArray(snapshots)||snapshots.length>MAX_FRAMES)
+      throw RangeError('Animation needs 0–200 snapshots');
+    var entries=snapshots.map(function(item){
+      if(object(item)&&item.experiment)return {source:item,experiment:state.validate(item.experiment)};
+      return {source:{},experiment:state.validate(item)};
+    });
+    var check=contracts.inspectFrames(c,entries.map(function(e){return e.experiment;}));
+    if(!check.accepted||
+      (c.mode!=='experimental'&&entries.length>=2&&!check.previewCompatible)){
+      var error=new RangeError('Incompatible animation snapshots for project contract');
+      error.issues=check.checks.flatMap(function(item){return item.issues;}).concat(check.previewIssues);
+      throw error;
+    }
+    var frames=entries.map(function(entry,i){
+      var source=entry.source,id=source.sourceSnapshotId===undefined?source.id:source.sourceSnapshotId;
+      return {sourceSnapshotId:id===undefined?null:id,
+        name:source.name&&source.name.trim()?source.name:'Frame '+(i+1),
+        value:c.mode==='experimental'?entry.experiment:
+          c.mode==='camera'?entry.experiment.scene.camera:readTarget(entry.experiment,c.target),
+        travelMs:i===0?0:(source.travelMs===undefined?5000:source.travelMs),
+        holdMs:source.holdMs===undefined?0:source.holdMs,
+        easing:source.easing===undefined?(c.mode==='camera'?'smoothstep':'linear'):source.easing};
+    });
+    var result={version:VERSION_V2,id:options.id,name:options.name||'Animation',
+      description:options.description||'',mode:c.mode,target:c.target,
+      baseExperiment:c.referenceExperiment,contract:c,keyframes:frames};
+    if(options.interpolation!==undefined)result.interpolation=options.interpolation;
+    if(options.cameraHudAppearance!==undefined)result.cameraHudAppearance=options.cameraHudAppearance;
+    return validate(result);
+  }
+  function ready(input){
+    var p=validate(input);return p.mode!=='experimental'&&p.keyframes.length>=2;
+  }
+  function requireReady(project){
+    if(project.mode==='experimental'||project.keyframes.length<2)
+      throw RangeError('Animation project is not preview-ready');
+  }
+  function frameExperiment(input,index){
+    var p=validate(input);
+    if(!Number.isInteger(index)||index<0||index>=p.keyframes.length)
+      throw RangeError('Unknown animation keyframe');
+    var value=p.keyframes[index].value;
+    return p.mode==='experimental'?state.validate(value):
+      applyValue(p.baseExperiment,p.mode,p.target,value);
+  }
   // Renderer handshake: compare a genuine in-between camera pose before any
   // expensive Accurate RK4 frames are dispatched. Sample multiple distinct
   // transitions, not just the first one: a stale renderer can agree at the
@@ -178,7 +243,7 @@
   // Cap probes to keep very large (200-keyframe) projects cheap to initialize.
   // A row contains [timeMs, ...cameraPose] in the stable POSE field order.
   function splineProof(input){
-    var p=validate(input);
+    var p=validate(input);requireReady(p);
     if(p.mode!=='camera'||p.interpolation!=='spline')return null;
     var points=timeline(p),segments=points.length-1;
     var count=Math.min(segments,8),result=[];
@@ -190,16 +255,16 @@
     }
     return result;
   }
-  function totalMs(input){var p=validate(input);return p.keyframes.reduce(function(n,f){return n+f.travelMs+f.holdMs;},0);}
+  function totalMs(input){var p=validate(input);requireReady(p);return p.keyframes.reduce(function(n,f){return n+f.travelMs+f.holdMs;},0);}
   function timeline(input){
-    var p=validate(input),ms=0;
+    var p=validate(input),ms=0;requireReady(p);
     return p.keyframes.map(function(frame){
       ms+=frame.travelMs;var arrivalMs=ms;ms+=frame.holdMs;
       return {name:frame.name,arrivalMs:arrivalMs,departureMs:ms};
     });
   }
   function sampleAt(input,timeMs){
-    var p=validate(input);
+    var p=validate(input);requireReady(p);
     if(typeof timeMs!=='number'||!Number.isFinite(timeMs))throw RangeError('Invalid sample time');
     var time=Math.max(0,timeMs),clock=0,frames=p.keyframes;
     function at(value){return applyValue(p.baseExperiment,p.mode,p.target,value);}
@@ -223,7 +288,8 @@
     }
     return at(frames[frames.length-1].value);
   }
-  return Object.freeze({VERSION:VERSION,validate:validate,create:create,
+  return Object.freeze({VERSION:VERSION,VERSION_V2:VERSION_V2,validate:validate,create:create,
+    createV2:createV2,ready:ready,frameExperiment:frameExperiment,
     validateHudAppearance:hud.validateAppearance,
     totalMs:totalMs,timeline:timeline,sampleAt:sampleAt,splineProof:splineProof});
 }));

@@ -6,14 +6,16 @@
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
   var hud=root.CurvatureModernCameraHud;
+  var contracts=root.CurvatureModernAnimationContract;
   if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
     hud=require('../ui/modern/ModernCameraHud');
+    contracts=require('./ModernAnimationContract');
   }
-  var api=factory(experiment,hud);
+  var api=factory(experiment,hud,contracts);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationDraftAutosave=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts){
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
@@ -27,13 +29,17 @@
     if(!object(input)||input.version!==VERSION||!Number.isSafeInteger(input.savedAt)||input.savedAt<=0)
       throw RangeError('Invalid animation checkpoint');
     var draft=input.draft;
-    if(!object(draft)||!['auto','camera','physical'].includes(draft.mode)||
+    if(!object(draft)||!['auto','camera','physical','experimental'].includes(draft.mode)||
       !['none','history','camera-sequence','mixed'].includes(draft.source)||
       typeof draft.target!=='string'||draft.target.length>90||
       !Array.isArray(draft.frames)||draft.frames.length>200)
       throw RangeError('Invalid animation draft');
     if(draft.target!=='auto'&&!/^(scene|A|B)\|(surface\.curvature|temperatureProfile\.gradientKPerKm)$/.test(draft.target))
       throw RangeError('Invalid animation physical target');
+    var contract=draft.contract==null?null:contracts.validate(draft.contract);
+    if(contract&&(contract.mode!==draft.mode||
+      (contract.target?contract.target.scope+'|'+contract.target.parameter:'auto')!==draft.target))
+      throw RangeError('Animation draft contract disagrees with mode or target');
     var interpolation=draft.interpolation===undefined?'linear':draft.interpolation;
     if(!['linear','spline'].includes(interpolation))throw RangeError('Invalid animation interpolation');
     var keys=new Set(),frames=draft.frames.map(function(frame,i){
@@ -70,7 +76,7 @@
       throw RangeError('Invalid saved animation revision');
     return {version:VERSION,savedAt:input.savedAt,
       draft:{name:string(draft.name,120),description:string(draft.description,1000),
-        mode:draft.mode,target:draft.target,interpolation:interpolation,
+        mode:draft.mode,target:draft.target,interpolation:interpolation,contract:contract,
         source:draft.source,frames:frames,
         activeFrameKeys:active?active.slice():null,
         cameraHudAppearance:draft.cameraHudAppearance==null?null:

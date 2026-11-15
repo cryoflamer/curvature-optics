@@ -1,3 +1,13 @@
+> **Animation Project v2 storage foundation (2026-11-15):** The app now reads
+> legacy v1 projects unchanged and version 2 projects with embedded validated
+> physical compatibility contracts. A v2 project may hold 0–200 keyframes;
+> Experimental stores full snapshots and is not preview/export-ready. Library
+> storage, portable JSON, named Save/Save As, Studio open and autosave preserve
+> contracts and incomplete projects without any IndexedDB migration. The
+> current New project UI still creates v1 drafts; the creation wizard and
+> Picker-level contract filters remain future work. See
+> `docs/modern-animation-contract.md`.
+
 > **Snapshot Picker → History navigation (2026-11-15):** The redundant top-of-Studio
 > Choose snapshots button was removed. Every Picker card now has **Open in History**,
 > selecting that exact saved record in the History overlay without Restore or

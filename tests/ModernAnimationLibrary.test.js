@@ -1049,3 +1049,37 @@ test('History and Animation card delete corners share the same visual class',()=
   // The visual glyph is a CSS pseudo-element, not a second text glyph.
   assert.match(animation,/var remove=button\(doc,'',description/);
 });
+
+test('V2 unfinished and Experimental projects persist, import with safe provenance and retain revision checks',async()=>{
+  const contracts=require('../src/animation/ModernAnimationContract');
+  const a=experiment(),b=structuredClone(a);b.display.mode='compare';
+  const reference=contracts.create(a,{mode:'experimental'});
+  const saved=animation.createV2(reference,[{id:8,name:'Scene',experiment:a},
+    {id:9,name:'Compare',experiment:b}],{id:'mixed_v2',name:'Experiment collection'});
+  const empty=animation.createV2(contracts.create(a,{mode:'camera'}),[],
+    {id:'empty_v2',name:'Planning camera moves'});
+  const db=memoryIndexedDB();
+  const first=await library.create(db,saved,'auto',100);
+  const second=await library.create(db,empty,'fast',101);
+  assert.equal((await library.list(db)).length,2);
+  assert.equal((await library.get(db,first.id)).project.version,2);
+  assert.equal((await library.get(db,second.id)).project.keyframes.length,0);
+  const renamed=await library.rename(db,second.id,'Empty renamed',second.updatedAt,110);
+  assert.equal(renamed.project.contract.mode,'camera');
+  await assert.rejects(library.update(db,empty,'fast',second.updatedAt,111),/another tab/);
+  const wire=library.exportPortable(await library.list(db));
+  const imported=library.parsePortable(wire);
+  assert.deepEqual(imported.map(p=>p.project.version),[2,2]);
+  const destination=memoryIndexedDB();
+  const result=await library.importEntries(destination,imported,200,{randomUUID:()=> '11-22-33-44'});
+  assert.equal(result.created,2);assert.equal(result.reused,0);
+  const entries=await library.list(destination);
+  assert.equal(entries.find(p=>p.project.mode==='camera').project.keyframes.length,0);
+  const restored=entries.find(p=>p.project.mode==='experimental').project;
+  assert.deepEqual(restored.keyframes.map(f=>f.sourceSnapshotId),[null,null],
+    'History provenance must not point at unrelated destination snapshots');
+  assert.equal(restored.keyframes[1].value.display.mode,'compare');
+  assert.equal(restored.contract.referenceExperiment.display.mode,'scene');
+  assert.equal((await library.importEntries(destination,imported,201,
+    {randomUUID:()=> '11-22-33-44'})).reused,2);
+});

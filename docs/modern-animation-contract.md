@@ -53,20 +53,67 @@ means *configuration relative to the surface*, not fixed world coordinates:
 when curvature is the animated channel, the renderer may recompute world
 positions from the same object parameters on a different surface.
 
-## What this stage deliberately does not do
+## Saved Animation Project contracts
 
-- No wizard or Picker filtering, no new saved project schema, no IndexedDB or
-  autosave migration and no automatic modification of existing projects.
-- The existing `ModernAnimationProject` remains version 1, requires 2–200
-  frames, and supports only `camera` or `physical` for playback/export.
-- `experimental` may collect arbitrary valid snapshots in a future project
-  model, but *does not* make mixed modes or hard cuts exportable. Its
-  candidate-level `previewCompatible` is `null`, never an optimistic `true`.
-- `inspectFrames()` must be used for a whole-sequence verdict before preview;
-  pairwise checks against the reference are not a substitute.
-- No tolerance-based approximate equality is used. Normalization only drops
-  inactive controls; it never silently equates two active configurations.
+`src/animation/ModernAnimationProject.js` now reads **both** project schemas:
 
-Next stages: define v2 project persistence and v1 migration, build wizard
-and reference selection, enforce contract on every insertion/import route,
-then add project-library search and grouping by declared contract.
+- **v1** (unchanged): `version: 1`, Camera/Physical only, 2–200 keyframes,
+  optional HUD and interpolation settings. Existing exports and playback remain
+  valid. `create()` still produces v1; existing unconstrained UI drafts are
+  not silently upgraded.
+- **v2**: `version: 2`, the same identity, metadata, `mode`, `target`,
+  `baseExperiment`, `keyframes` and optional settings, **plus `contract`**.
+  The `baseExperiment` must match the contract's embedded
+  `referenceExperiment` exactly after validation, and `mode`/`target` must
+  agree with the contract. A v2 project may hold **0–200 keyframes**, including
+  a named, unfinished project with none.
+- **v2 Camera / Physical**: frame `value` keeps the existing compact pose or
+  scalar representation. It can change only the contract's allowed channel;
+  the fixed scene, surface or camera is reconstructed from the embedded
+  reference. The creation API checks the complete proposed snapshot sequence
+  with `ModernAnimationContract.inspectFrames()` before encoding it.
+- **v2 Experimental**: every keyframe's `value` is a fully validated, owned
+  experiment snapshot. Scene/Compare and different physical scenes can
+  coexist in one collection. No interpolation, Playback, PNG-frame or video
+  export is promised or enabled for Experimental.
+
+The new API `createV2(contract, snapshots, options)` creates a validated
+project. `frameExperiment(project, index)` reconstructs a frame independently
+of History, even in an unfinished or Experimental project. `ready(project)` is
+true **only** for a valid Camera/Physical project with at least two frames.
+`sampleAt`, `timeline`, `totalMs` and `splineProof` explicitly reject an
+unfinished or Experimental project instead of fabricating a video.
+
+Animation Library's **record/database schema remains version 1**, and its
+portable **bundle envelope also remains version 1**; either can now carry
+nested project v1 or v2 records. Standalone v1/v2 JSON is accepted on import.
+The importer validates the entire payload before writing, creates fresh local
+IDs, clears source History IDs and uses revision checks and content-aware
+fingerprints. Rename, Save As, JSON backup and import retain v2 contracts.
+Older program versions are not expected to read a v2 project; retain a backup
+before opening exported projects in older builds.
+
+Animation Studio can reopen a v2 project with 0/1 frames or an Experimental
+collection **without preparing Preview**. Its named Save/Save As path preserves
+v2 and the locked contract; the independent autosaved workspace includes the
+contract without changing its existing checkpoint/collection formats. V1
+workspaces without a contract remain readable. The UI displays a read-only
+contract description when an existing v2 project is opened. This is a storage
+foundation: the current **New project** command still creates an ordinary v1
+working draft, not a new constrained v2 project.
+
+## Still outside this stage
+
+- No creation wizard or new contract editor. The first-class UI for creating
+  v2 projects is planned for the next stage.
+- Snapshot Picker does not yet prefilter by the project contract. However,
+  `buildSaved()` and `createV2()` reject incompatible keyframes before writing
+  to Library. UI-level filtering and early rejection are separate work.
+- Experimental stores collections only; it does not make mixed Scene/Compare
+  or hard-cut exports available. The existing v1 `build()` path remains the
+  sole Preview/Export preparation path for ready Camera/Physical drafts.
+- No physics, RK4, refraction, image generation or IndexedDB schema migration.
+
+Next stages: wizard and reference selection, Picker contract filtering and
+candidate diagnostics, project-library search/grouping by declared contracts,
+then a final stabilization and browser acceptance pass.

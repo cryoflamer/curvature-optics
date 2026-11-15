@@ -27,10 +27,10 @@
     return text;
   }
   function blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
-    interpolation:'linear',
+    interpolation:'linear',contract:null,
     source:'none',frames:[],activeFrameKeys:null,cameraHudAppearance:null};}
   function copy(draft){return {name:draft.name,description:draft.description,mode:draft.mode,
-    interpolation:draft.interpolation||'linear',
+    interpolation:draft.interpolation||'linear',contract:draft.contract||null,
     target:draft.target,source:draft.source,
     activeFrameKeys:draft.activeFrameKeys?draft.activeFrameKeys.slice():null,
     cameraHudAppearance:draft.cameraHudAppearance||null,
@@ -75,19 +75,23 @@
   // History IDs are provenance only; all image-producing physics comes from
   // the embedded project, so deleted History snapshots cannot break playback.
   function fromProject(input){
-    var project=projects.validate(input),arrivals=projects.timeline(project);
+    var project=projects.validate(input),legacy=project.version===projects.VERSION;
+    var arrivals=legacy?projects.timeline(project):null;
     var draft=blank();
     draft.name=project.name;draft.description=project.description;draft.mode=project.mode;
+    draft.contract=project.contract||null;
     draft.interpolation=project.interpolation||'linear';
     draft.cameraHudAppearance=project.cameraHudAppearance||null;
     draft.target=project.target?project.target.scope+'|'+project.target.parameter:'auto';
     draft.source='mixed';
     draft.frames=project.keyframes.map(function(frame,i){
       return {key:'library-'+i,sourceSnapshotId:frame.sourceSnapshotId,
-        name:frame.name,experiment:projects.sampleAt(project,arrivals[i].arrivalMs),
+        name:frame.name,experiment:legacy?projects.sampleAt(project,arrivals[i].arrivalMs):
+          projects.frameExperiment(project,i),
         travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing};
     });
-    if(!inspect(draft).compatible)throw RangeError('Saved animation project cannot be edited');
+    if(legacy&&!inspect(draft).compatible)
+      throw RangeError('Saved animation project cannot be edited');
     return draft;
   }
   function target(value){
@@ -107,9 +111,12 @@
       next.interpolation=value;
     }
     else if(property==='mode'){
+      if(next.contract)throw RangeError('Animation contract locks the project mode');
       if(!['auto','camera','physical'].includes(value))throw RangeError('Invalid mode');
       next.mode=value;next.target='auto';next.activeFrameKeys=null;
-    }else if(property==='target'){target(value);next.target=value;next.activeFrameKeys=null;}
+    }else if(property==='target'){
+      if(next.contract)throw RangeError('Animation contract locks the physical channel');
+      target(value);next.target=value;next.activeFrameKeys=null;}
     else if(property==='cameraHudAppearance'){
       next.cameraHudAppearance=projects.validateHudAppearance(value);
     }else throw RangeError('Invalid editor property');
@@ -203,7 +210,7 @@
       throw RangeError('Selected animation frames no longer exist');
     return draft.frames.filter(function(frame){return keys.has(frame.key);});
   }
-  function findSequences(draft){return sequences.discover(draft.frames,draft.mode);}
+  function findSequences(draft){return draft.contract?[]:sequences.discover(draft.frames,draft.mode);}
   function selectSequence(draft,id){
     var found=findSequences(draft).find(function(item){return item.id===id;});
     if(!found)throw RangeError('Selected animation sequence is no longer available');
@@ -221,12 +228,21 @@
       issues:[{code:'invalid-selection',path:error.message}]};}
     if(frames.length<2)return {compatible:false,mode:null,target:null,changedPaths:[],
       issues:[{code:'insufficient-frames',path:'keyframes'}]};
+    if(draft.contract&&draft.contract.mode==='experimental')return {compatible:false,
+      mode:'experimental',target:null,changedPaths:[],
+      issues:[{code:'experimental-project',path:'keyframes'}]};
     try{
       var options={};
       if(draft.mode!=='auto')options.mode=draft.mode;
       if(draft.target!=='auto')options.target=target(draft.target);
       var result=compatibility.inspect(frames.map(function(frame){return frame.experiment;}),options);
       var issues=result.issues.slice();
+      if(draft.contract){
+        var accepted=projects.createV2(draft.contract,frames.map(function(frame){return frame;}),
+          {id:'studio_contract_check',name:'Contract check'});
+        if(accepted.mode!==result.mode)
+          issues.push({code:'contract-mode',path:'mode'});
+      }
       if(!draft.name.trim())issues.push({code:'missing-name',path:'name'});
       if(!['linear','spline'].includes(draft.interpolation||'linear')||
         (result.mode!=='camera'&&draft.interpolation==='spline'))
@@ -254,6 +270,17 @@
       draft.cameraHudAppearance?
       {cameraHudAppearance:draft.cameraHudAppearance}:{}));
   }
+  // Persistence and playback are different operations. A V2 contract owns an
+  // unfinished or Experimental project without claiming it can be rendered.
+  function buildSaved(draft,id){
+    if(!draft.contract)return build(draft,id); // preserve untouched V1 exports
+    return projects.createV2(draft.contract,draft.frames.map(function(f){
+      return {sourceSnapshotId:f.sourceSnapshotId,name:f.name,experiment:f.experiment,
+        travelMs:f.travelMs,holdMs:f.holdMs,easing:f.easing};
+    }),{id:id,name:draft.name,description:draft.description,
+      interpolation:draft.interpolation||'linear',
+      cameraHudAppearance:draft.cameraHudAppearance||undefined});
+  }
   // Suggest names only for usable sequences; invalid mixed sequences retain the
   // neutral placeholder until the user chooses a compatible variant.
   function suggestName(draft){
@@ -265,7 +292,7 @@
     }catch(_error){return 'Animation study';}
   }
   return Object.freeze({suggestName:suggestName,blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
-    edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,
+    edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
     activeFrames:activeFrames,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});
 }));
