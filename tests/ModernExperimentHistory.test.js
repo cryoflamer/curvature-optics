@@ -221,8 +221,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHistoryFilterAtmosphere','ModernHistoryFilterGeometryRelation',
     'ModernHistoryFilterRefractionRelation','ModernHistoryFiltersClear','ModernHistoryFilterCount',
     'ModernHistoryPinChecked','ModernHistoryDeleteChecked',
-    'ModernHistorySelectVisible','ModernHistoryClearChecked','ModernHistoryQueueChecked',
-    'ModernHistoryQueueCount','ModernHistoryQueueClear','ModernHistoryStoryboardQueue',
+    'ModernHistorySelectVisible','ModernHistoryClearChecked',
     'ModernHistoryClearAll','ModernHistoryMultiCount',
     'ModernHistoryMetadataDialog','ModernHistoryMetadataForm','ModernHistoryMetadataName',
     'ModernHistoryMetadataDescription','ModernHistoryMetadataCancel','ModernHistoryMetadataSave',
@@ -231,9 +230,6 @@ test('Live Modern integration saves and restores a full experiment and protects 
     hidden:false,textContent:'',children:[],listeners:{},classList:{toggle(){},remove(){}},
     addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(key,value){this[key]=value;},
     appendChild(child){this.children.push(child);},closest(){return {set hidden(value){}};}}]));
-  Object.defineProperty(nodes.get('ModernHistoryStoryboardQueue'),'textContent',{
-    get(){return '';},set(value){if(value==='')this.children=[];}
-  });
   Object.defineProperty(nodes.get('ModernHistoryGallery'),'textContent',{
     get(){return '';},set(value){if(value==='')this.children=[];}
   });
@@ -506,8 +502,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernHistoryFiltersClear').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(count.textContent,'Showing 4 of 4 snapshots');
-  // Storyboard picks are separate from temporary bulk selection and persist
-  // as ordered stable IDs, even while collecting from different filters.
+  // Manage is now only for archive operations; no History-to-Studio
+  // staging or second persistent shortlist is created by selecting cards.
   enterManage();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistoryManageTools').hidden,false);
@@ -520,44 +516,24 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernHistorySelectVisible').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistoryMultiCount').textContent,'1 shown snapshot selected');
-  nodes.get('ModernHistoryQueueChecked').listeners.click();
-  await new Promise(resolve=>setTimeout(resolve,45));
-  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'1 frame');
-  let queue=JSON.parse(rootWindow.localStorage.data.get(
-    'curvature-modern-application-preferences-v1')).historyStoryboardQueue;
-  assert.deepEqual(queue,[pair.id]);
-  nodes.get('ModernHistoryToggle').listeners.click(); // reopen the overlay to select more
-  enterManage();await new Promise(resolve=>setTimeout(resolve,35));
   kind.value='scene';kind.listeners.change();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistoryMultiCount').textContent,'0 shown snapshots selected',
-    'changing filters resets temporary bulk selection but retains shortlist');
-  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'1 frame');
+    'changing filters clears bulk selection');
   nodes.get('ModernHistorySelectVisible').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistoryMultiCount').textContent,'3 shown snapshots selected');
   assert.equal(nodes.get('ModernHistorySelectVisible').disabled,true);
-  nodes.get('ModernHistoryQueueChecked').listeners.click();
-  await new Promise(resolve=>setTimeout(resolve,50));
-  queue=JSON.parse(rootWindow.localStorage.data.get(
-    'curvature-modern-application-preferences-v1')).historyStoryboardQueue;
-  const sceneRecords=(await store.list()).filter(e=>e.features.mode==='scene');
-  const shownScene=[...sceneRecords.filter(e=>e.pinned),...sceneRecords.filter(e=>!e.pinned)];
-  assert.deepEqual(queue,[pair.id,...shownScene.map(e=>e.id)],
-    'shortlist follows displayed Pinned then Recent order, not numeric IDs');
-  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'4 frames');
-  assert.equal(app.getWorkspaceMode(),'animation','history handoff opens the separate workspace');
-  nodes.get('ModernHistorySelectVisible').listeners.click();
+  nodes.get('ModernHistoryClearChecked').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
-  nodes.get('ModernHistoryQueueChecked').listeners.click();
-  await new Promise(resolve=>setTimeout(resolve,50));
+  assert.equal(nodes.get('ModernHistoryMultiCount').textContent,'0 shown snapshots selected');
+  kind.value='all';kind.listeners.change();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(app.getWorkspaceMode()!=='animation',true,
+    'History checkboxes never switch into Animation Studio');
   assert.deepEqual(JSON.parse(rootWindow.localStorage.data.get(
-    'curvature-modern-application-preferences-v1')).historyStoryboardQueue,queue,
-    're-adding a checked card never duplicates or reorders earlier picks');
-  // Frame reordering now belongs to the Studio timeline, not a second History strip.
-  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'4 frames');
-  nodes.get('ModernHistoryToggle').listeners.click(); // handoff closed the overlay
-  enterManage();await new Promise(resolve=>setTimeout(resolve,35));
+    'curvature-modern-application-preferences-v1')).historyStoryboardQueue,[],
+    'normal History operations never populate the old migration-only queue');
   // Bulk operations cannot silently delete pinned or filtered-out records.
   nodes.get('ModernHistorySelectVisible').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
@@ -579,39 +555,17 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernHistoryGallery').children[0].children[0].children[0]
     .listeners.click({stopPropagation(){}});
   await new Promise(resolve=>setTimeout(resolve,35));
-  // A vanished History record is pruned from the shortlist, but surviving IDs
-  // retain their established relative sequence.
-  const automatic=sceneRecords.find(e=>e.source==='auto');
+  // Removed History records disappear from the archive, not from an
+  // independent animation timeline or a new persistent selection.
+  const automatic=(await store.list()).find(e=>e.source==='auto');
   assert.ok(automatic);
   await store.remove(automatic.id);
   nodes.get('ModernHistoryClearChecked').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
-  const afterPrune=JSON.parse(rootWindow.localStorage.data.get(
-    'curvature-modern-application-preferences-v1')).historyStoryboardQueue;
-  assert.ok(!afterPrune.includes(automatic.id));
-  assert.equal(afterPrune.length,3);
-  nodes.get('ModernHistoryQueueClear').listeners.click();
-  await new Promise(resolve=>setTimeout(resolve,35));
-  assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'0 frames');
+  assert.equal((await store.list()).length,3);
   assert.deepEqual(JSON.parse(rootWindow.localStorage.data.get(
     'curvature-modern-application-preferences-v1')).historyStoryboardQueue,[]);
-  // Collect in oldest-first order: Pinned/Recent grouping still determines
-  // the displayed sequence and therefore the future Storyboard frame order.
-  kind.value='all';kind.listeners.change();
-  await new Promise(resolve=>setTimeout(resolve,35));
   const sort=nodes.get('ModernHistorySort');sort.value='oldest';sort.listeners.change();
-  await new Promise(resolve=>setTimeout(resolve,35));
-  nodes.get('ModernHistorySelectVisible').listeners.click();
-  await new Promise(resolve=>setTimeout(resolve,35));
-  nodes.get('ModernHistoryQueueChecked').listeners.click();
-  await new Promise(resolve=>setTimeout(resolve,50));
-  const remaining=await store.list();
-  const ordered=[...remaining.filter(e=>e.pinned).reverse(),
-    ...remaining.filter(e=>!e.pinned).reverse()];
-  assert.deepEqual(JSON.parse(rootWindow.localStorage.data.get(
-    'curvature-modern-application-preferences-v1')).historyStoryboardQueue,
-    ordered.map(e=>e.id));
-  nodes.get('ModernHistoryQueueClear').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));
   // A per-card Delete must ask confirmation, leave other cards untouched, and
   // never modify the active experiment. Rejection must be a strict no-op.

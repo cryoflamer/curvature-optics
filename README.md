@@ -362,24 +362,26 @@ camera and objects. **Restore experiment** is the only Restore action and
 closes History after a successful recovery-protected load. Errors remain
 visible beside the actions without closing the dialog. Browser-local **S / M /
 L** card sizes remain available. **Pinned** records appear in a collapsible
-section above **Recent**, with no duplication. Pin, Edit details, Export and
-Delete live in the selected snapshot's panel. Pinned records must be unpinned
-before deletion. **Manage** reveals checkbox-based bulk selection and Animation
-handoff; **More history tools** holds archival import/export and clearing.
-There is no duplicate snapshot dropdown, hidden double-click Restore or floating
-Preview in History. Saved thumbnails are read-only and no optics recalculation
-happens during inspection. No History storage schema was changed.
-History supports browser-local **Search, Type, Geometry and Atmosphere** filters
-across both Pinned and Recent, with a match counter and persistent preferences.
-Compare A/B physical choices match either model, but combined Geometry and
-Atmosphere must apply to the same side. **Geometry A/B** and **Refraction A/B**
-Same/Different use the active physical parameters, not merely model labels.
-**Select shown** checks only currently rendered cards; temporary bulk selection
-is cleared when filters change or Pinned collapses. Checked snapshots can be sent in display order to **Animation Studio**.
-The former Storyboard shortlist remains an ordered, browser-local staging
-selection (with missing/deleted IDs pruned), but no longer creates a second
-thumbnail strip inside History. Animation Studio owns frame ordering/timings;
-physical-parameter playback remains future work.
+section above **Recent**, with no duplication. **Pin/Unpin** and **Delete** are
+always on their respective cards; **Edit details**, **Export snapshot** and
+**Restore experiment** act on the selected snapshot in the details panel.
+Pinned records must be unpinned before deletion. **Manage** reveals only
+archive-oriented checkbox actions (**Pin checked** and **Delete checked**),
+while **More history tools** holds archival import/export and clearing.
+There is no double-click Restore or floating Preview on History cards.
+History filtering covers Search, Type, Geometry and Atmosphere plus active
+Compare A/B relations. Checkbox selection is cleared on filter changes or
+Pinned collapse, and never edits the Animation timeline.
+
+To add keyframes, open **Animation → Choose snapshots from History**. The
+Snapshot Picker copies selected experiments into the autosaved Studio draft;
+History does not maintain a second storyboard or staging editor. An ordered
+shortlist saved by an older version is retained *only for migration*: when
+present, Animation shows **Append saved selection** and **Discard selection**.
+Appending copies available snapshots into the current draft without replacing
+existing keyframes and removes only successfully transferred IDs from the old
+preference; missing IDs remain recoverable if those History records are
+re-imported later. Otherwise the migration UI stays hidden.
 See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment URLs and plain JSON remain compatible; named Experiment Library records migrate into History.
 
@@ -399,12 +401,12 @@ Scene/Compare experiment and the old Camera Animation remain available when
 returning to their respective screens.
 
 **History** opens as an overlay instead of pushing the viewport down the page.
-Filter and select snapshot cards, then use **Add selected to Animation**: the
-selected IDs are added to the Animation Studio timeline in display order,
-without replacing existing frames or losing their timing. Add more snapshots
-from the editor using **Choose from History → Add checked**. The old History
-shortlist remains in browser preferences for compatibility; **Add collected to
-Animation** in History appends any missing IDs, never replaces the timeline.
+It manages archived experiments and does not enqueue animation frames.
+To add frames, use **Animation → Choose snapshots from History → Add checked**;
+this preserves existing timeline frames and timing. For previously saved
+History shortlists, Animation exposes a one-time **Append saved selection**
+operation and an explicit **Discard selection** action; missing source IDs
+are kept until available again or discarded by the user.
 Studio no longer shows a duplicate Staged snapshots gallery or Load staged
 snapshots button. The explicitly destructive **Replace with Camera Animation…**
 asks for confirmation when the timeline is nonempty.
@@ -713,8 +715,7 @@ or dragging the card. The selection panel retains frame timing and move
 controls, but no longer duplicates frame deletion. Immediately after removal,
 **Undo** restores the previous draft, including its frame settings and
 selection; undo is one step, lasts until the next draft edit, and is not stored
-across a reload. The old History shortlist remains accessible from History only, not as a
-second gallery inside the editor. Adding from the picker preserves existing
+across a reload. Old History shortlists can be migrated once from Animation, not edited in History. Adding from the picker preserves existing
 frames; deleting a History record remains a separate, confirmed operation.
 
 ### Animation Studio HUD integration compatibility
@@ -882,9 +883,7 @@ change: sequence selection, autosave, Preview, exports and optics are unaffected
 The four currently mounted Modern image-card surfaces share the same **saved
 snapshot inspector**: History gallery, Studio **Choose from History** Snapshot
 Picker, keyframe timeline (both IN PREVIEW and EXCLUDED), and named
-**Animation Library** cards. The reusable History-to-Animation
-storyboard renderer also supports the inspector if mounted; the current
-History handoff toolbar itself displays only counts/buttons, not extra cards. Hover for a short dwell or focus a card to
+**Animation Library** cards. No extra History-to-Animation storyboard renderer or handoff toolbar is mounted. Hover for a short dwell or focus a card to
 see its stored screenshot enlarged, alongside the saved Scene/Compare physical
 settings. Saved Compare screenshots retain both A and B sides. Cards without a
 stored screenshot explicitly say so; they are **never reconstructed by a physics
@@ -953,18 +952,17 @@ autosave cannot overwrite a stash.
 
 ### Shared delete corners
 
-History snapshots, Animation Library projects, Working drafts, Storyboard items
+History snapshots, Animation Library projects, Working drafts
 and Animation Studio keyframes now use the **same History-style `✕` corner**.
 One `.modern-card-delete` CSS control supplies its size, icon, neutral background,
 red hover, keyboard focus and touch visibility; individual card types only supply
 their action and accessibility label. The corner is revealed on hover/focus
 (or always on touch devices). Deleting a saved project or working draft still
-requires confirmation; removing a storyboard item or keyframe retains its
-previous, non-destructive meaning. The `ⓘ` details action stays separate.
+requires confirmation; removing an Animation keyframe never deletes its History snapshot. The `ⓘ` details action stays separate.
 
 ### Explicit details for saved cards
 
-History snapshots, Storyboard shortlist items, Snapshot Picker entries,
+History snapshots, Snapshot Picker entries,
 Animation Studio keyframes and saved Animation Library projects use a shared
 `ⓘ` button. Click or keyboard-activate it to view the saved screenshot and
 physical settings. The details panel closes by `×`, Escape, clicking outside,

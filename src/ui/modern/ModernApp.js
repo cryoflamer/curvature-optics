@@ -530,6 +530,8 @@
   var historyGallerySize='small';
   var historyPinnedCollapsed=false;
   var historyPanelOpen=false;
+  // Only retained for a one-time, explicit migration of pre-Gallery History
+  // shortlists. Never add new IDs; the Animation Snapshot Picker owns selection.
   var historyStoryboardQueue=[];
   var studioDraft=studioApi?studioApi.blank():null;
   var studioSelectedKey=null;
@@ -781,7 +783,6 @@
       if(historyPanel)historyPanel.hidden=true;
       var historyBackdrop=newUiEl('ModernHistoryBackdrop');if(historyBackdrop)historyBackdrop.hidden=true;
       if(historyToggle)historyToggle.setAttribute('aria-expanded','false');
-      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
       var historySizeControl=newUiEl('ModernHistorySize');
       if(historySizeControl)historySizeControl.value=historyGallerySize;
       if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
@@ -1082,20 +1083,12 @@
     var count=historyVisibleSelectedIds().length;
     var node=newUiEl('ModernHistoryMultiCount');
     if(node)node.textContent=count+' shown '+(count===1?'snapshot':'snapshots')+' selected';
-    ['ModernHistoryClearChecked','ModernHistoryPinChecked','ModernHistoryDeleteChecked',
-      'ModernHistoryQueueChecked'].forEach(function(id){
-      var button=newUiEl(id);if(button)button.disabled=count===0;
-    });
+    ['ModernHistoryClearChecked','ModernHistoryPinChecked','ModernHistoryDeleteChecked']
+      .forEach(function(id){
+        var button=newUiEl(id);if(button)button.disabled=count===0;
+      });
     var select=newUiEl('ModernHistorySelectVisible');
     if(select)select.disabled=!historyShownIds.length||count===historyShownIds.length;
-  }
-  function renderHistoryStoryboard(entries){
-    var count=newUiEl('ModernHistoryQueueCount');
-    if(count)count.textContent=historyStoryboardQueue.length+' '+
-      (historyStoryboardQueue.length===1?'frame':'frames');
-    ['ModernHistoryQueueClear','ModernHistoryQueueOpen'].forEach(function(id){
-      var button=newUiEl(id);if(button)button.disabled=historyStoryboardQueue.length===0;
-    });
   }
   // Animation Studio has its OWN single editable checkpoint. Never put the
   // draft into the physical experiment URL, Session Autosave or History.
@@ -1806,8 +1799,8 @@
       if(document.hidden&&studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
     });
   }
-  // Staging IDs survive History filtering; actual animation states are copied
-  // into the draft only on explicit hand-off. Missing IDs are pruned by History.
+  // The old History shortlist is only consumed on explicit user action inside
+  // Animation Studio. Missing IDs remain recoverable until explicitly dismissed.
   function stopStudioPlayback(clear){
     if(clear){
       if(studioPreviewNavigation)studioPreviewNavigation.cancel();
@@ -2715,13 +2708,48 @@
     }
     return next;
   }
-  // Animation Studio owns a working draft separate from History and the live
-  // renderer. Both the picker and the older History collection append saved
-  // snapshots; only an explicitly confirmed Camera Animation import replaces
-  // the timeline.
+  // Pre-Gallery shortlists are a migration source, not a second animation editor.
+  // Missing entries remain in preferences in case History data is re-imported.
+  function syncLegacyHistorySelection(entries){
+    var banner=newUiEl('ModernAnimationLegacySelection');
+    if(!banner)return;
+    banner.hidden=!historyStoryboardQueue.length;
+    if(!historyStoryboardQueue.length)return;
+    var available=new Set(entries.map(function(entry){return entry.id;}));
+    var count=historyStoryboardQueue.filter(function(id){return available.has(id);}).length;
+    var label=newUiEl('ModernAnimationLegacyCount');
+    if(label)label.textContent='Saved History selection: '+historyStoryboardQueue.length+
+      ' snapshots ('+count+' available). Append available frames to this draft, or discard the old selection.';
+    var append=newUiEl('ModernAnimationLegacyAppend');
+    if(append)append.disabled=!count||!studioWorkspaceReady;
+  }
+  function appendLegacyHistorySelection(){
+    if(!studioApi||!studioWorkspaceReady)throw Error('Animation workspace is not ready');
+    var found=new Set(studioHistoryEntries.map(function(entry){return entry.id;}));
+    var available=historyStoryboardQueue.filter(function(id){return found.has(id);});
+    if(!available.length)throw RangeError('No saved selection snapshots are available in History');
+    // insertSnapshots copies owned experiments and skips already imported IDs.
+    // It must not silently replace the existing Animation Studio timeline.
+    var next=studioApi.insertSnapshots(studioDraft,available,studioHistoryEntries,
+      studioDraft.frames.length);
+    studioDraft=applySuggestedStudioName(next);
+    if(!saveStudioDraft(false)||!studioWorkspaceLocalSaved)
+      throw Error('Could not reliably save the Animation draft locally. The saved selection was kept.');
+    studioRemovedFrameUndo=null;
+    stopStudioPlayback(true);studioPrepared=null;
+    historyStoryboardQueue=historyStoryboardQueue.filter(function(id){return !found.has(id);});
+    saveApplicationPreferences();
+    renderAnimationStudio(studioHistoryEntries);
+    var message=newUiEl('ModernAnimationStudioMessage');
+    if(message)message.textContent='Saved History selection appended to the Animation draft. '+
+      (historyStoryboardQueue.length?'Unavailable snapshots remain for recovery.':'Migration complete.');
+  }
+  // Animation Studio owns an independent draft, thumbnail picker and timeline.
+  // Only an explicitly confirmed Camera Animation import replaces keyframes.
   function renderAnimationStudio(entries){
     var host=newUiEl('ModernAnimationStudio');
     if(!studioApi||!studioUI||!host)return;
+    syncLegacyHistorySelection(entries);
     if(!studioDraft)studioDraft=studioApi.blank();
     var assessment=studioApi.inspect(studioDraft);
     var resetFilmstrip=studioSelectedKey===null;
@@ -2988,7 +3016,6 @@
     if(!dialog||!name||!description)return Promise.reject(Error('Snapshot editor unavailable'));
     return experimentHistory.get(id).then(function(entry){
       if(!entry)throw RangeError('History snapshot not found');
-      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
       historyMetadataEditingId=entry.id;
       name.value=entry.name||'';description.value=entry.description||'';
       var errorNode=newUiEl('ModernHistoryMetadataError');
@@ -3070,11 +3097,6 @@
       updateSnapshotSaveAction();
       var ids=new Set(entries.map(function(entry){return entry.id;}));
       historySelectedIds().forEach(function(id){if(!ids.has(id))delete historyMultiSelection[id];});
-      var surviving=historyStoryboardQueue.filter(function(id){return ids.has(id);});
-      if(surviving.length!==historyStoryboardQueue.length){
-        historyStoryboardQueue=surviving;saveApplicationPreferences();
-      }
-      renderHistoryStoryboard(entries);
       renderAnimationStudio(entries);
       var visible=historyFiltersApi?historyFiltersApi.filter(entries,historyFilters):entries;
       var count=newUiEl('ModernHistoryFilterCount');
@@ -3175,7 +3197,6 @@
       refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
       if(typeof panel.focus==='function')panel.focus();
     }else{
-      if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
       setHistoryManageMode(false);
       if(typeof toggle.focus==='function')toggle.focus();
     }
@@ -3293,52 +3314,6 @@
     var clearChecked=newUiEl('ModernHistoryClearChecked');
     if(clearChecked)clearChecked.addEventListener('click',function(){
       historyMultiSelection=Object.create(null);
-      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
-    });
-    var queueChecked=newUiEl('ModernHistoryQueueChecked');
-    if(queueChecked)queueChecked.addEventListener('click',function(){handle(function(){
-      var selected=new Set(historyVisibleSelectedIds());
-      if(!selected.size)throw RangeError('Select visible snapshots first');
-      var added=0;
-      historyShownIds.forEach(function(id){
-        if(selected.has(id)&&!historyStoryboardQueue.includes(id)&&historyStoryboardQueue.length<200){
-          historyStoryboardQueue.push(id);added++;
-        }
-      });
-      historyMultiSelection=Object.create(null);
-      saveApplicationPreferences();
-      return refreshHistoryList().then(function(entries){
-        setHistoryOpen(false);setMode('animation');
-        try{
-          // Full History bulk hand-off adds frames; it must not silently
-          // replace an in-progress Animation Studio draft.
-          studioDraft=applySuggestedStudioName(studioApi.insertSnapshots(studioDraft,
-            Array.from(selected),entries,studioDraft.frames.length));
-          stopStudioPlayback(true);studioPrepared=null;renderAnimationStudio(entries);
-        }catch(error){historyStatus(error.message,true);
-          var message=newUiEl('ModernAnimationStudioMessage');
-          if(message){message.classList.add('is-error');message.textContent=error.message;}}
-      });
-    });});
-    var openStaged=newUiEl('ModernHistoryQueueOpen');
-    if(openStaged)openStaged.addEventListener('click',function(){handle(function(){
-      return refreshHistoryList().then(function(entries){
-        // Older saved History shortlists are still usable, but loading them
-        // must never replace manually edited Studio keyframes. insertSnapshots
-        // keeps frame order/timing and skips IDs already in the timeline.
-        var next=studioApi.insertSnapshots(studioDraft,historyStoryboardQueue,entries,
-          studioDraft.frames.length);
-        setHistoryOpen(false);setMode('animation');
-        if(next.frames.length!==studioDraft.frames.length){
-          studioDraft=applySuggestedStudioName(next);studioRemovedFrameUndo=null;
-          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
-        }
-        renderAnimationStudio(entries);
-      });
-    });});
-    var clearQueue=newUiEl('ModernHistoryQueueClear');
-    if(clearQueue)clearQueue.addEventListener('click',function(){
-      historyStoryboardQueue=[];saveApplicationPreferences();
       refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
     });
     var pinChecked=newUiEl('ModernHistoryPinChecked');
@@ -5906,6 +5881,22 @@
     if(animationTab)animationTab.addEventListener('click',function(){setMode('animation');});
     var chooseSnapshots=newUiEl('ModernAnimationChooseSnapshots');
     if(chooseSnapshots)chooseSnapshots.addEventListener('click',function(){toggleAnimationPicker(!studioPickerOpen);});
+    var recoverLegacy=newUiEl('ModernAnimationLegacyAppend');
+    if(recoverLegacy)recoverLegacy.addEventListener('click',function(){
+      try{appendLegacyHistorySelection();}
+      catch(error){
+        var message=newUiEl('ModernAnimationStudioMessage');
+        if(message){message.textContent=error.message;message.classList.add('is-error');}
+      }
+    });
+    var discardLegacy=newUiEl('ModernAnimationLegacyDismiss');
+    if(discardLegacy)discardLegacy.addEventListener('click',function(){
+      if(!historyStoryboardQueue.length)return;
+      if(!root.confirm||!root.confirm('Discard the old saved History selection? '+
+        'No History snapshots or Animation keyframes will be deleted.'))return;
+      historyStoryboardQueue=[];saveApplicationPreferences();
+      syncLegacyHistorySelection(studioHistoryEntries);
+    });
     var demosTab=newUiEl('ModernDemosTab');
     if(demosTab)demosTab.addEventListener('click',function(){setMode('demos');});
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});

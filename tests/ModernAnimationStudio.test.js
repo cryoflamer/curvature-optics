@@ -353,7 +353,8 @@ test('Studio uses one History picker and never exposes a second staged gallery o
   assert.ok(!labels.some(label=>label.startsWith('Load staged snapshots')));
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   assert.doesNotMatch(app,/loadStagedAnimation/);
-  assert.match(app,/studioApi\.insertSnapshots\(studioDraft,historyStoryboardQueue,entries,/);
+  assert.match(app,/function appendLegacyHistorySelection\(\)/);
+  assert.match(app,/studioApi\.insertSnapshots\(studioDraft,available,studioHistoryEntries,/);
   assert.match(app,/Replace all .*keyframes with Camera Animation/);
   assert.match(app,/root\.confirm\(/);
 });

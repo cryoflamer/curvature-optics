@@ -117,7 +117,7 @@ test('Info button stops bubbling and cannot initiate selection, double-click or 
   ctrl.destroy();
 });
 
-test('History shows persistent details without a popup; shortlist retains its info button',()=>{
+test('History shows persistent details without a popup; Animation uses independent preview',()=>{
   const {doc,host}=fakeDom(),details=doc.createElement('aside'),s=snapshot(),calls=[];
   history.render(doc,host,[s],null,{select:id=>calls.push('select:'+id),
     restore:id=>calls.push('restore:'+id),multi(){}},{},{});
@@ -130,14 +130,9 @@ test('History shows persistent details without a popup; shortlist retains its in
   assert.equal(overlay(doc),undefined);
   click(card.children[0]);
   assert.deepEqual(calls,['select:'+s.id],'card selection never restores a snapshot');
-  history.renderStoryboardQueue(doc,host,[s.id],[s],{move(){},remove(id){calls.push('remove:'+id);}});
-  const item=collect(host,n=>n.className==='modern-history-storyboard-item')[0];
-  click(info(item));assert.equal(imageSrc(overlay(doc)),s.thumbnail.dataUrl);
-  send(item.children[0],'click',{stopPropagation(){}});
-  assert.deepEqual(calls,['select:'+s.id,'remove:'+s.id]);
-  history.renderStoryboardQueue(doc,host,[s.id],[s],{move(){},remove(){}});
-  assert.equal(doc.body.children.length,1,'shortlist rerender replaces its previous dialog');
-  host.__thumbnailPreview.destroy();
+  assert.equal(typeof history.renderStoryboardQueue,'undefined',
+    'the removed History shortlist does not create preview controllers');
+  assert.equal(doc.body.children.length,0);
 });
 
 test('Snapshot Picker and timeline keyframes expose explicit info controls',()=>{
@@ -200,7 +195,7 @@ test('History has a persistent inspector, other galleries share the popup, Legac
   assert.match(hist,/function renderDetails\(doc,host,entry\)/);
   assert.match(hist,/host\.appendChild\(inspectorMarkup\(doc,entry\)\)/);
   assert.doesNotMatch(hist,/inspector\.infoButton\(card,entry,card/);
-  assert.match(hist,/inspector\.infoButton\(item,entry,item/);
+  assert.doesNotMatch(hist,/inspector\.infoButton\(item,entry,item/);
   assert.doesNotMatch(hist,/inspector\.hover\(/);
   assert.doesNotMatch(old,/ModernThumbnailPreview/);
 });

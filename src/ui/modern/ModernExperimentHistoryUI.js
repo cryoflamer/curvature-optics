@@ -2,12 +2,10 @@
  * Rendering a card MUST NOT restore, recalculate or alter experiment physics.
  */
 (function(root,factory){
-  var preview=root.CurvatureModernThumbnailPreview;
-  if(typeof module==='object'&&module.exports)preview=require('./ModernThumbnailPreview');
-  var api=factory(preview);
+  var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentHistoryUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(preview){
+}(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   function label(entry){
     var f=entry.features||{},mode=f.mode||entry.experiment.display.mode;
@@ -19,7 +17,7 @@
     return 'Scene · '+(f.scene&&f.scene.geometry&&f.scene.geometry.kind==='flat'?'Flat':'Globe');
   }
   function displayName(entry){return entry.name&&entry.name.trim()?entry.name:label(entry);}
-  // Shared compact identity for the shortlist and Animation Studio. This is
+  // Shared compact identity for Animation Studio (to be extracted separately). This is
   // presentation only: never capture a fresh thumbnail or mutate experiment state.
   function frameSummary(entry){
     var e=entry.experiment||{},scene=e.scene||{},camera=scene.camera||{};
@@ -159,9 +157,6 @@
     card.appendChild(shared);
     return card;
   }
-  function createInspector(doc,host){
-    return preview.create(doc,host,inspectorMarkup);
-  }
   function el(doc,name,className,text){
     var node=doc.createElement(name);
     if(className)node.className=className;
@@ -188,9 +183,7 @@
   // Layout state belongs to application preferences, never to snapshot metadata.
   function render(doc,host,entries,selectedId,actions,multi,options){
     if(!host||!doc)return;
-    if(host.__historyInspector){host.__historyInspector.destroy();host.__historyInspector=null;}
     host.textContent='';
-    host.__historyInspector=null;
     if(!entries.length){
       host.appendChild(el(doc,'p','modern-history-empty',
         options&&options.emptyFiltered?'No snapshots match these filters. Clear filters to see your saved experiments.':
@@ -231,7 +224,7 @@
       if(entry.pinned)body.appendChild(el(doc,'span','modern-history-card-pinned','Pinned'));
       if(options&&options.manage){
         var multiLabel=el(doc,'label','modern-history-multi');
-        multiLabel.title='Select for bulk actions or Animation Studio';
+        multiLabel.title='Select for bulk History actions';
         var check=el(doc,'input');check.type='checkbox';check.checked=!!(multi&&multi[entry.id]);
         check.setAttribute('aria-label','Select snapshot '+entry.id+' for bulk actions');
         check.addEventListener('change',function(){actions.multi(entry.id,check.checked);});
@@ -287,42 +280,6 @@
     section('Pinned',pinned,true,!!(options&&options.pinnedCollapsed));
     section('Recent',recent,false,false);
   }
-  // A Storyboard shortlist is an ordered list of stable History IDs, not an
-  // animation and not a second snapshot store. Refresh always resolves labels
-  // from the current records, so renaming cannot stale the display.
-  function renderStoryboardQueue(doc,host,ids,entries,actions){
-    if(!host||!doc)return;
-    if(host.__thumbnailPreview){host.__thumbnailPreview.destroy();host.__thumbnailPreview=null;}
-    host.textContent='';
-    var inspector=ids.length?createInspector(doc,host):null;
-    host.__thumbnailPreview=inspector;
-    var records=new Map(entries.map(function(entry){return [entry.id,entry];}));
-    ids.forEach(function(id,index){
-      var entry=records.get(id);
-      if(!entry)return;
-      var item=el(doc,'li','modern-history-storyboard-item');
-      item.tabIndex=0;item.setAttribute('aria-label','Snapshot '+displayName(entry));
-      var remove=button(doc,'','Remove frame '+(index+1)+' from shortlist',function(){actions.remove(id);});
-      remove.className='modern-history-storyboard-remove modern-card-delete';
-      item.appendChild(remove);
-      item.appendChild(frameVisual(doc,entry,'modern-history-storyboard-visual'));
-      var title=el(doc,'strong','modern-history-storyboard-name',(index+1)+'. '+displayName(entry));
-      title.title=displayName(entry);item.appendChild(title);
-      var detail=el(doc,'span','modern-history-storyboard-detail',frameSummary(entry));
-      detail.title=detail.textContent;item.appendChild(detail);
-      var line=el(doc,'div','modern-history-storyboard-frame');
-      function action(symbol,title,disabled,fn){
-        var control=button(doc,symbol,title,fn);control.disabled=disabled;
-        control.className='modern-history-storyboard-control';
-        line.appendChild(control);
-      }
-      action('↑','Move frame '+(index+1)+' earlier',index===0,function(){actions.move(id,-1);});
-      action('↓','Move frame '+(index+1)+' later',index===ids.length-1,function(){actions.move(id,1);});
-      item.appendChild(line);
-      if(inspector)inspector.infoButton(item,entry,item,displayName(entry));
-      host.appendChild(item);
-    });
-  }
   // The selected snapshot is inspected in a stable, visible side panel rather
   // than in a hover popover that obscures the gallery.
   function renderDetails(doc,host,entry){
@@ -332,7 +289,6 @@
     else host.appendChild(el(doc,'p','modern-history-empty',
       'No visible snapshots. Clear your filters or save a new experiment.'));
   }
-  function hideInspector(host){if(host&&host.__historyInspector)host.__historyInspector.hide();}
   function select(host,id){
     if(!host)return;
     var cards=host.querySelectorAll?host.querySelectorAll('.modern-history-card'):[];
@@ -345,6 +301,6 @@
     });
   }
   return Object.freeze({render:render,select:select,label:label,displayName:displayName,inspect:inspect,
-    inspectorMarkup:inspectorMarkup,renderDetails:renderDetails,hideInspector:hideInspector,setSize:setSize,
-    renderStoryboardQueue:renderStoryboardQueue,frameSummary:frameSummary,frameVisual:frameVisual});
+    inspectorMarkup:inspectorMarkup,renderDetails:renderDetails,setSize:setSize,
+    frameSummary:frameSummary,frameVisual:frameVisual});
 }));

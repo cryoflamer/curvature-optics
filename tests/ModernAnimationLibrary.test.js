@@ -1029,7 +1029,7 @@ test('History and Animation card delete corners share the same visual class',()=
   const history=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernExperimentHistoryUI.js'),'utf8');
   const animation=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
   for(const kind of ['modern-history-card','modern-animation-library-card',
-    'modern-animation-workspace-item','modern-history-storyboard-item','modern-studio-filmstrip-item']){
+    'modern-animation-workspace-item','modern-studio-filmstrip-item']){
     assert.ok(css.includes('.'+kind),'shared delete-corner selector must cover '+kind);
   }
   assert.match(css,/\.modern-card-delete::after\{content:"\\2715 ";font-weight:750;font-size:17px/);
@@ -1043,11 +1043,9 @@ test('History and Animation card delete corners share the same visual class',()=
   const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
   assert.doesNotMatch(html,/id="ModernHistoryDelete"/,
     'individual Delete is no longer duplicated in the inspector');
-  assert.match(history,/modern-history-storyboard-remove modern-card-delete/);
   assert.match(animation,/modern-studio-card-remove modern-card-delete/);
   assert.match(animation,/modern-animation-library-delete modern-card-delete/);
   assert.match(animation,/modern-animation-workspace-delete/);
   // The visual glyph is a CSS pseudo-element, not a second text glyph.
   assert.match(animation,/var remove=button\(doc,'',description/);
-  assert.match(history,/var remove=button\(doc,'','Remove frame '/);
 });

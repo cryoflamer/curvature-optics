@@ -80,8 +80,8 @@ results.
   pin, and their delete cross remains visible but disabled until unpinned.
   Individual Delete always asks for confirmation; cancellation is a no-op.
   **Edit details** and **Export snapshot** remain in the selected-experiment
-  panel. **Manage** reveals checkbox-based batch selection (Pin checked,
-  Delete checked and Add selected to Animation);
+  panel. **Manage** reveals checkbox-based batch selection (Pin checked
+  and Delete checked);
   leaving Manage clears temporary checkbox selection. The separate **More
   history tools** section contains Import/Export all, Clear automatic and
   Clear all history. The latter requires confirmation and deletes protected
@@ -126,10 +126,9 @@ results.
   only on success; failures leave it open with an error beside Restore.
   The live experiment is backed up to protected recovery before replacement.
 - **Manage** toggles the group-selection workspace; only this mode renders
-  checkboxes and group actions. To collect History records into Animation,
-  enter Manage, check the cards and use **Add selected to Animation**. The
-  existing chronological staging list is preserved for compatibility, but
-  frame editing and timing belong to Animation Studio.
+  checkboxes and archive-wide Pin/Delete actions. To collect frames, use the
+  separate Animation Studio Snapshot Picker, where ordering and timing belong.
+  A preexisting chronological History shortlist remains migration-only data.
 
 ## Smart History Filters (search and A/B differences)
 
@@ -178,38 +177,38 @@ Scene excludes A/B constraints, and that the inspector always shows a visible ca
 reload with History open, then clear filters and verify all original records
 remain unchanged. Check that the no-matches message differs from empty History.
 
-## Bulk selection and Animation staging (current; formerly Storyboard shortlist)
+## History management and one-time legacy shortlist recovery (current)
 
-Enter **Manage** to expose checkboxes and group actions. The **Select shown**
-action checks only the currently rendered cards (respecting
-filters, sort order, and a collapsed Pinned section). **Clear selection** resets
-the temporary checkbox selection. Pin selected and Delete selected operate on
-shown checked records only; pinned deletion remains blocked and explicitly
-confirmed. Changing a filter or collapsing Pinned clears checkboxes rather
-than allowing hidden records to be deleted accidentally.
+**Manage** in History reveals temporary checkbox selection and the archive
+operations **Pin checked** and **Delete checked**. **Select shown** respects
+current search, filters, sort order and collapsed Pinned; **Clear selection**
+only unchecks cards. Changing filters or collapsing Pinned clears this selection
+to prevent hidden records from being modified. Pinned snapshots cannot be bulk
+deleted until unpinned, and destructive operations require confirmation.
 
-**Add selected to Animation** copies checked visible snapshot **IDs** into an
-ordered staging selection, then opens the separate Animation workspace and
-loads the selected states into its in-memory draft. Order follows the displayed
-gallery, including oldest/newest sorting and Pinned/Recent grouping; further
-picks append without duplication. **Add collected to Animation** appends
-missing snapshots from the old staging selection (without replacing existing
-Studio frames), and **Clear selection** empties that History-only collection. The
-selection is kept in Application Preferences (up to 200 unique History IDs),
-with deleted snapshots pruned automatically. It is not itself an animation,
-does not rerender optics and is independent of Pin. Pin important automatic
-snapshots to protect them from pruning.
+New Animation keyframes are selected **inside Animation Studio**: choose
+**Choose snapshots from History**, check cards in the docked Snapshot Picker,
+then choose **Add checked** (or drag them to a gap in the timeline). This
+appends owned copies without replacing existing frames or changing Scene /
+Compare physics. There are no Add selected, Add collected, Clear collected,
+or Storyboard controls inside History.
 
-Reordering and frame timing now belong to **Animation Studio**, rather than a
-second thumbnail strip in History. To gather more frames, use **Choose
-snapshots from History** inside Animation, check them and press **Add checked**.
-The History collection is not displayed as a second gallery inside Studio.
-Adding collected snapshots retains all existing keyframes and timing; it does
-not alter the live experiment.
+**Migration for existing browsers:** `historyStoryboardQueue` remains in the
+version-1 application preferences only to recover old ordered selections. If
+nonempty, the Animation workspace displays a one-time **Saved History selection**
+notice with **Append saved selection** and **Discard selection** actions.
+Appending resolves IDs against the currently available History records and
+adds those frames in their saved order, without duplicates; it requires a
+locally persisted Animation draft before consuming the available IDs.
+Missing/deleted History IDs are not silently discarded — they remain pending
+in case a portable History archive is imported later. Discard requires an
+explicit confirmation and deletes only the obsolete selection, never History
+snapshots or Animation frames. Nothing is migrated automatically on startup.
 
-Manual check: select saved experiments with filters and sorting, send them to
-Animation, return to History to add more, and confirm that the Studio timeline
-reflects the new staged order without creating a duplicate History shortlist.
+Manual check: after an update from an old version, verify the recovery notice
+appears if a shortlist was saved; append, reload and confirm the frames remain
+in the Studio draft. Repeat with a missing History record and verify its ID
+stays pending until that snapshot is re-imported or explicitly discarded.
 
 ## Comparison semantics and future steps
 
@@ -283,8 +282,8 @@ specified. A screenshot crossfade is not a physical optics calculation.
 6. Confirm the Delete cross is visible but disabled when pinned, then unpin
    and delete using the card cross. Cancel the confirmation once: the snapshot
    must remain. Confirm a second time: only the selected record is removed.
-   Enter **Manage** to expose checkboxes, test bulk Pin, Delete (pinned
-   entries must be blocked) and **Add selected to Animation**.
+   Enter **Manage** to expose checkboxes and test bulk Pin and Delete
+   (pinned entries must be blocked).
    Exit Manage and verify checkboxes disappear. Separately test **More history
    tools → Clear automatic** and **Clear all history**, with confirmation.
 7. Verify that inspecting History does not trigger optical redraws and that
@@ -461,13 +460,10 @@ explicit shared experiment URLs retain their own Scene/Compare context.
 History is a bounded, scrollable **overlay**, accessible from any workspace
 through the header or **Choose snapshots from History** in Animation. The
 backdrop, Close button and Escape close it without shifting the current
-viewport down. Selection is handed to Animation by **Add selected to
-Animation**. The redundant permanent Storyboard shortlist strip and its
-second rendering of thumbnails have been removed; its ordered, stable-ID
-staging data survives for existing users and remains independent of the owned
-Animation draft. The History collection bar shows the number of collected snapshots and
-provides Add collected/Clear actions; the Studio editor no longer duplicates
-this collection as staged cards.
+viewport down. Animation Studio owns snapshot selection via its docked Snapshot Picker.
+The redundant History handoff bar and Storyboard shortlist renderer have been
+removed. Previously saved ordered IDs remain available only through the
+one-time migration controls in Animation, without replacing edited keyframes.
 
 Animation Studio presents a larger **saved-thumbnail preview** of the selected
 keyframe above one horizontal timeline and the selected frame's fields.
@@ -500,16 +496,15 @@ The header History action remains available in every workspace.
 - **De-duplication:** a History snapshot already in the draft is not inserted
   again. Imported Camera Animation frames remain intact when saved snapshots
   are appended. The **Load staged snapshots** replacement action has been removed;
-  **Add selected to Animation** in History and **Add checked** in the picker
-  append rather than replace an active draft. **Replace with Camera Animation…**
+  **Add checked** in the picker appends rather than replaces an active draft. **Replace with Camera Animation…**
   is a separate, clearly named operation requiring confirmation.
 - **Validation:** reordering and inserting change only the in-memory frame
   list, not History, the live Scene/Compare experiment, or its optical render.
   `ModernAnimationCompatibility` still checks the entire resulting sequence;
   invalid combinations are shown and cannot be prepared.
 
-Shortlist IDs continue to be stored as legacy staging preferences, while the
-Studio draft itself is not saved across reloads. Playback and permanent
+Old shortlist IDs are only retained until explicit recovery or discard.
+The Studio working draft is autosaved independently across reloads. Playback and permanent
 animation-project storage remain out of scope. This interface uses native
 HTML Drag and Drop on desktop plus a touch/pen Pointer Events fallback;
 interactive Opera checks are still needed to confirm its look and feel.
