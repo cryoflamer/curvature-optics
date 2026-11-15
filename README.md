@@ -638,8 +638,9 @@ playback and never creates a library record. Playback appears above the editor;
 editing a keyframe invalidates the previous preview until Preview is clicked again.
 **Save project** creates the permanent named record in IndexedDB and immediately
 expands the library, selects the card, and returns the horizontal gallery to its
-start. When a saved record is open, the action becomes **Save changes**; **Save As**
-creates an independent record. An explicit **Open** button on each card opens
+start. When a saved record is open, the action becomes **Save changes**; **Duplicate**
+creates and opens an independent record with a new ID, leaving the original unchanged.
+For an unsaved draft, the same action is labeled **Save as new**. An explicit **Open** button on each card opens
 that project for editing (restoring its own autosaved edits). A single click selects
 it only for **Export selected** in the distinct **JSON backup** controls; JSON
 backup does not render a video. Videos and PNG frames are exported from the
@@ -651,7 +652,7 @@ saves never claim to have created a library project.
 Animation Studio now has a compact **Animation Library** toolbar, separate from
 History and from separate autosaved working checkpoints. For a compatible set
 of frames, **Save project** creates a new named project in its own IndexedDB
-store; **Save As** creates another independent copy. Select a project and use
+store; **Duplicate** creates another independent copy. Select a project and use
 **Open** to load its editable keyframes and optics settings, with playback
 prepared and paused at frame zero. **Save changes** explicitly updates the
 opened project; simply editing a draft never overwrites a saved animation.
@@ -665,7 +666,7 @@ saved animation playback. Opening a project restores its own local editable work
 or reconstructs it from the saved version on first open; neither changes the live
 Scene/Compare state. Every workspace retains its own library ID and revision across F5.
 If a different tab changes a named project before **Save changes**, a revision
-check rejects the stale write; use **Open** or **Save As** instead. An unavailable
+check rejects the stale write; use **Open** or **Duplicate** instead. An unavailable
 IndexedDB database is reported rather than claiming that a project was saved.
 
 ### Animation Library visual gallery (#140.12.120.5.2)
@@ -675,7 +676,7 @@ saved-project cards**. Each card shows the project name, Camera or Physical
 animation type, animated variable, keyframe count, total duration, updated
 date, a short description and a first-frame physics summary. Use **Open**, **Rename**, or **Delete** directly from a card; a single click
 selects a card for JSON backup without replacing the draft (double-click still opens).
-**Save project**, **Save changes**, and **Save As** remain explicit actions above
+**Save project**, **Save changes**, and **Duplicate** (or **Save as new** for drafts) remain explicit actions above
 the gallery. A successful save automatically expands the gallery, selects the new
 record and scrolls it into view. A saved project with unsaved draft edits is
 clearly identified.
@@ -696,7 +697,7 @@ new HTML entrypoint, or Legacy change.
 
 ### Animation Library duplicate review (nonblocking)
 
-**Save project** and **Save As** deliberately create a named record even when its
+**Save project**, **Save as new**, and **Duplicate** deliberately create a named record even when its
 physics/timing exactly match another saved project. They no longer open a second
 warning or interrupt switching. **Save changes** still revision-checks the
 opened project. The optional **Find duplicates** command groups existing
@@ -886,8 +887,8 @@ RK4 optics, the Legacy interface or the animation timeline.
   paused Playback position. Library records remain untouched until **Save changes**.
   When no workspace exists, the saved version is loaded as the starting point.
 - **Save project** promotes the active untitled workspace to a named project;
-  **Save As** forks a saved project to a new ID and preserves the original's
-  working checkpoint. Identical saved content is allowed on explicit Save As.
+  **Duplicate** forks a saved project to a new ID and preserves the original's
+  working checkpoint. Identical saved content is allowed on explicit duplication.
 - No `Save and continue`/`Discard and continue` decision is needed for routine
   switching, and no simultaneous duplicate/conflict prompts are rendered.
 - The versioned workspace collection uses both synchronous localStorage
@@ -897,7 +898,7 @@ RK4 optics, the Legacy interface or the animation timeline.
 - **Delete draft** requires explicit confirmation; deleting a named Library
   project detaches its working checkpoint instead of destroying unsaved edits.
   If an external tab modified a saved record, revision validation protects the
-  Library and **Save As** remains available to preserve current work.
+  Library and **Duplicate** remains available to preserve current work.
 
 ### Animation Studio keyframe compatibility diagnostics (#140.12.120.9.11)
 

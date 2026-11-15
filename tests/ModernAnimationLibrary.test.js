@@ -259,7 +259,8 @@ test('HTML load order and application expose named project save/open actions sep
   assert.match(ui,/New project/);
   assert.doesNotMatch(ui,/Save and continue|Discard and continue|Identical animation already saved/);
   assert.match(ui,/Open draft/);
-  assert.match(ui,/Save As/);
+  assert.match(ui,/Duplicate/);
+  assert.match(ui,/Save as new/);
   assert.match(app,/function requestStudioSwitch\(kind,id\)/);
   assert.match(app,/function studioHasUnsavedWork\(\)/);
   assert.match(app,/Animation Library module failed to load; check the browser console/);
@@ -444,7 +445,7 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   assert.equal(nodes().find(n=>n.tagName==='img').src,preview.dataUrl);
   assert.ok(nodes().find(n=>n.textContent==='Physical · Surface curvature' ||
     n.textContent.includes('Earth curvature · 2 frames')));
-  for(const [label,value] of [['New project','newProject'],['Save changes','save'],['Save As','saveAs']]){
+  for(const [label,value] of [['New project','newProject'],['Save changes','save'],['Duplicate','saveAs']]){
     nodes().find(n=>n.tagName==='button'&&n.textContent===label).listeners.click();
     assert.equal(calls.at(-1),value);
   }
@@ -530,13 +531,13 @@ test('Animation Library distinguishes selected backup card from opened editing c
   assert.equal(cards().length,2);
   assert.ok(cards()[0].className.includes('is-editing'));
   assert.ok(!cards()[0].className.includes('is-selected'));
-  assert.ok(badge(cards()[0],'Editing'));
+  assert.ok(badge(cards()[0],'Opened'));
   assert.ok(!badge(cards()[0],'Selected for backup'));
   assert.ok(cards()[1].className.includes('is-selected'));
   assert.ok(!cards()[1].className.includes('is-editing'));
   assert.ok(badge(cards()[1],'Selected for backup'));
-  assert.ok(!badge(cards()[1],'Editing'));
-  assert.match(cards()[0]['aria-label'],/Editing animation/);
+  assert.ok(!badge(cards()[1],'Opened'));
+  assert.match(cards()[0]['aria-label'],/Opened animation/);
   cards()[1].listeners.click({target:cards()[1]});
   assert.deepEqual(calls.pop(),['select','animation_b']);
   // Simulate the in-place class update used for single-click selection.
@@ -544,7 +545,7 @@ test('Animation Library distinguishes selected backup card from opened editing c
   cards()[1].className=cards()[1].className.replace(' is-selected','');
   assert.ok(badge(cards()[0],'Selected for backup'));
   assert.ok(!badge(cards()[1],'Selected for backup'));
-  assert.ok(badge(cards()[0],'Editing'));
+  assert.ok(badge(cards()[0],'Opened'));
   // Same DOM cards survive the click, so dblclick is still delivered.
   const originalSecond=cards()[1];
   cards()[1].listeners.dblclick({target:cards()[1]});
@@ -554,15 +555,15 @@ test('Animation Library distinguishes selected backup card from opened editing c
   // The same project may be both selected and opened, without losing either signal.
   host.children=[];
   ui.renderLibrary(doc,host,entries,{selectedId:'animation_a',activeId:'animation_a',expanded:true},actions);
-  assert.ok(badge(cards()[0],'Editing'));
+  assert.ok(badge(cards()[0],'Opened'));
   assert.ok(badge(cards()[0],'Selected for backup'));
-  assert.ok(!badge(cards()[1],'Editing'));
+  assert.ok(!badge(cards()[1],'Opened'));
   assert.ok(!badge(cards()[1],'Selected for backup'));
 
   // Independent working draft has no opened Library card.
   host.children=[];
   ui.renderLibrary(doc,host,entries,{selectedId:'animation_b',activeId:null,expanded:true},actions);
-  assert.ok(!cards().some(card=>badge(card,'Editing')));
+  assert.ok(!cards().some(card=>badge(card,'Opened')));
   assert.ok(badge(cards()[1],'Selected for backup'));
 });
 
@@ -701,7 +702,7 @@ test('project lifecycle has independent draft controls and no conflicting confir
     {id:'draft_two',name:'Current work',frames:1,active:true}
   ]},actions);
   const button=label=>nodes().find(n=>n.tagName==='button'&&n.textContent===label);
-  for(const [label,event] of [['New project','new'],['Save project','save'],['Save As','saveAs']]){
+  for(const [label,event] of [['New project','new'],['Save project','save'],['Save as new','saveAs']]){
     button(label).listeners.click();assert.equal(calls.at(-1),event);
   }
   button('Open draft').listeners.click();assert.deepEqual(calls.at(-1),['openDraft','draft_one']);

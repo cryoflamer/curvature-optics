@@ -1461,7 +1461,7 @@
           studioLibraryActive=match;
         }else{
           studioLibraryActive=null;
-          studioLibraryMessage='Saved project changed or was removed in another tab. This workspace is preserved; use Save As.';
+          studioLibraryMessage='Saved project changed or was removed in another tab. This workspace is preserved; use Duplicate.';
           studioLibraryError=true;
         }
         if(match&&match.updatedAt===studioLibraryPending.revision)studioLibraryPending=null;
@@ -1815,7 +1815,7 @@
         }else{
           studioLibraryActive=null;
           studioLibraryPending={id:id,revision:previous.checkpoint.libraryRevision};
-          studioLibraryMessage='The saved project changed elsewhere; local edits are preserved. Use Save As.';
+          studioLibraryMessage='The saved project changed elsewhere; local edits are preserved. Use Duplicate.';
           studioLibraryError=true;
         }
       }else{

@@ -232,7 +232,9 @@
     action(projectActions,options.activeId?'Save changes':'Save project',
       options.activeId?'Update the opened project in Animation Library':'Add this draft to Animation Library',
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
-    action(projectActions,'Save As','Save an independent project with a new ID',actions.saveAs,
+    action(projectActions,options.activeId?'Duplicate':'Save as new',
+      options.activeId?'Create and open an independent copy with a new project ID; keep the original unchanged':
+        'Save this draft as an independent project with a new ID',actions.saveAs,
       options.busy||!options.canSave);
     if(options.activeId){
       action(projectActions,'Stash & restore',
@@ -262,9 +264,9 @@
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
     }
     var message=el(doc,'p','modern-animation-library-note',options.activeId?
-      'Editing: '+(options.activeName||'saved project')+
+      'Opened: '+(options.activeName||'saved project')+
         (options.dirty?' · Working edits autosaved separately · Save changes updates library':
-         ' · Library version saved · Local working copy retained'):
+         ' · Saved · Local draft retained'):
       'Independent working draft · Autosaved in this browser · Save project adds it to Animation Library');
     host.appendChild(message);
     if(options.message){
@@ -286,7 +288,7 @@
         var item=el(doc,'div','modern-animation-workspace-item'+(draft.active?' is-active':''));
         item.appendChild(el(doc,'span','',draft.name+' · '+draft.frames+' keyframes'+
           ' · '+new Date(draft.savedAt).toLocaleString()+
-          (draft.active?' · Editing':'')));
+          (draft.active?' · Opened':'')));
         var open=button(doc,draft.active?'Current':'Open draft','Resume this local draft',function(){
           actions.openDraft(draft.id);
         });
@@ -394,7 +396,7 @@
     clear.disabled=!options.filtersActive;results.appendChild(clear);
     filterbar.appendChild(results);host.appendChild(filterbar);
     host.appendChild(el(doc,'p','modern-animation-library-hint',
-      'Single-click selects for JSON backup (blue outline) · Open or double-click loads for editing (Editing badge)'));
+      'Single-click selects for JSON backup (blue outline) · Open or double-click opens a project (Opened badge)'));
     var list=el(doc,'div','modern-animation-library-gallery');
     list.setAttribute('aria-label','Saved animation projects');
     found.forEach(function(entry){
@@ -404,7 +406,7 @@
       card.setAttribute('data-animation-id',entry.id);
       card.setAttribute('tabindex','0');
       card.setAttribute('role','group');
-      card.setAttribute('aria-label',(editing?'Editing animation: ':selected?'Selected animation: ':'Animation: ')+p.name+
+      card.setAttribute('aria-label',(editing?'Opened animation: ':selected?'Selected animation: ':'Animation: ')+p.name+
         (selected?' · Selected for JSON backup.':'')+
         '. Click to select for backup; choose Open to edit.');
       function insideControl(event){
@@ -443,7 +445,7 @@
       statuses.appendChild(el(doc,'span','modern-animation-library-status-selected',
         'Selected for backup'));
       if(editing)statuses.appendChild(el(doc,'span','modern-animation-library-status-editing',
-        'Editing'));
+        'Opened'));
       info.appendChild(statuses);
       if((options.editedIds||[]).includes(entry.id))
         info.appendChild(el(doc,'small','modern-animation-library-local-edits',
