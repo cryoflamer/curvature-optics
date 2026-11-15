@@ -102,6 +102,7 @@
       historyPinnedCollapsed:data.historyPinnedCollapsed===true,
       historyPanelOpen:data.historyPanelOpen===true,
       historyFilters:historyFilters(data.historyFilters),
+      studioPickerFilters:historyFilters(data.studioPickerFilters),
       historyStoryboardQueue:storyboardQueue(data.historyStoryboardQueue),
       displayPanels:panels(data.displayPanels),
       workspace:workspace(data.workspace),
@@ -136,6 +137,7 @@
       targetIndicatorSelection:data.targetIndicatorSelection,
       historyGallerySize:data.historyGallerySize,historyPinnedCollapsed:data.historyPinnedCollapsed,
       historyPanelOpen:data.historyPanelOpen,historyFilters:data.historyFilters,
+      studioPickerFilters:data.studioPickerFilters,
       historyStoryboardQueue:data.historyStoryboardQueue,
       displayPanels:data.displayPanels,navigation:data.navigation,workspace:data.workspace}));
     // Old navigation data cannot override the new selection on reload.

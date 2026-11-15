@@ -492,11 +492,17 @@ test('Snapshot Picker contains saved images, search, bulk select and drag handle
   const {doc,host}=mockDom(),calls=[];
   const saved=[{...entry(1,a,'First'),thumbnail:{dataUrl:'data:image/webp;base64,YQ=='}},
     {...entry(2,b,'Second'),thumbnail:null}];
-  const actions={pickerSearch:(...args)=>calls.push(['search',...args]),
+  const actions={pickerFilter:(...args)=>calls.push(['filter',...args]),
+    pickerFiltersClear:()=>calls.push('clear'),
+    pickerClearSelection:()=>calls.push('uncheck'),
+    pickerAdvancedToggle:open=>calls.push(['advanced',open]),
     pickerToggle:(...args)=>calls.push(['toggle',...args]),pickerClose:()=>calls.push('close'),
     pickerFullHistory:()=>calls.push('full'),insertChecked:()=>calls.push('insert'),
     dragStart:(...args)=>calls.push(['drag',...args]),dragEnd:()=>calls.push('end')};
-  editor.renderPicker(doc,host,saved,actions,{open:true,search:'test',checked:{1:true}});
+  editor.renderPicker(doc,host,saved,actions,{open:true,search:'test',checked:{1:true},
+    filters:{query:'test',mode:'compare',geometry:'flat',atmosphere:'vacuum',
+      geometryRelation:'same',refractionRelation:'different'},
+    advancedOpen:true,totalEntries:5,selectedCount:3});
   assert.equal(host.hidden,false);
   const cards=collect(host,n=>n.className==='modern-studio-picker-card');
   assert.equal(cards.length,2);
@@ -509,9 +515,120 @@ test('Snapshot Picker contains saved images, search, bulk select and drag handle
   assert.deepEqual(calls.at(-1)[1],{kind:'snapshots',id:1});
   const query=collect(host,n=>n.className==='modern-studio-picker-search')[0];
   query.value='camera';query.listeners.input();
-  assert.equal(calls.at(-1)[1],'camera');
+  assert.deepEqual(calls.at(-1).slice(0,3),['filter','query','camera']);
+  const detail=collect(host,n=>n.className==='modern-studio-picker-filter-details')[0];
+  assert.equal(detail.open,true);
+  const select=key=>collect(host,n=>n.className==='modern-studio-picker-filter-'+key)[0];
+  for(const [key,value] of [['mode','compare'],['geometry','flat'],['atmosphere','vacuum'],
+    ['geometryRelation','same'],['refractionRelation','different']]){
+    assert.equal(select(key).value,value);
+  }
+  select('atmosphere').value='standard';select('atmosphere').listeners.change();
+  assert.deepEqual(calls.at(-1),['filter','atmosphere','standard']);
+  detail.open=false;detail.listeners.toggle();
+  assert.deepEqual(calls.at(-1),['advanced',false]);
+  const count=collect(host,n=>n.tagName==='small'&&n.textContent.includes('found'))[0];
+  assert.match(count.textContent,/3 selected \(2 hidden\) · 2 of 5 found/);
+  assert.equal(collect(host,n=>n.className==='modern-studio-picker-hidden-note').length,1);
+  const buttons=collect(host,n=>n.tagName==='button');
+  buttons.find(n=>n.textContent==='Clear filters').listeners.click();
+  assert.equal(calls.at(-1),'clear');
+  buttons.find(n=>n.textContent==='Add checked').listeners.click();
+  assert.equal(calls.at(-1),'insert');
+  buttons.find(n=>n.textContent==='Clear selected').listeners.click();
+  assert.equal(calls.at(-1),'uncheck');
   editor.renderPicker(doc,host,saved,actions,{open:false});
   assert.equal(host.hidden,true);
+});
+
+test('Picker shows A/B relations only in Compare and keeps checked totals independent of matches',()=>{
+  const {doc,host}=mockDom(),calls=[],entries=[entry(1,experiment(),'One')];
+  const actions={pickerFilter:(...args)=>calls.push(args),pickerFiltersClear(){},
+    pickerClose(){},pickerFullHistory(){},pickerToggle(){},insertChecked(){},
+    dragStart(){},dragEnd(){}};
+  editor.renderPicker(doc,host,entries,actions,{open:true,checked:{1:true,2:true},
+    selectedCount:2,totalEntries:8,filters:{query:'',mode:'scene',geometry:'any',
+      atmosphere:'any',geometryRelation:'any',refractionRelation:'any'}});
+  assert.equal(collect(host,n=>n.className==='modern-studio-picker-relations').length,0);
+  assert.match(collect(host,n=>n.tagName==='small'&&n.textContent.includes('found'))[0].textContent,
+    /2 selected \(1 hidden\) · 1 of 8 found/);
+  const mode=collect(host,n=>n.className==='modern-studio-picker-filter-mode')[0];
+  mode.value='compare';mode.listeners.change();
+  assert.deepEqual(calls.at(-1),['mode','compare']);
+  editor.renderPicker(doc,host,entries,actions,{open:true,filters:{mode:'compare'},
+    checked:{1:true},selectedCount:1,totalEntries:8});
+  assert.equal(collect(host,n=>n.className==='modern-studio-picker-relations').length,1);
+});
+
+test('Live Picker actions filter independently, keep hidden selections and insert them in pinned order',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const functions=source.slice(source.indexOf('  function animationPickerAllEntries(entries){'),
+    source.indexOf('  function toggleAnimationPicker(open){'));
+  const render=source.slice(source.indexOf('  function renderAnimationStudio(entries){'),
+    source.indexOf('  var historyMetadataEditingId=null;'));
+  const filters=require('../src/ui/modern/ModernExperimentHistoryFilters');
+  const flat=clone(experiment());flat.scene.surface.showModel=2;flat.scene.atmosphere='vacuum';
+  const entries=[entry(1,experiment(),'Globe scene'),entry(2,flat,'Flat scene'),
+    {...entry(3,experiment('compare'),'Compare demo'),pinned:true}];
+  const sourceCopy=clone(entries);
+  let picker,preferencesSaved=0,draftSaved=0;
+  const host={querySelector(){return null;},querySelectorAll(){return [];}};
+  const ctx={historyFiltersApi:filters,studioPickerFilters:filters.normalize(),
+    historyFilters:filters.normalize({query:'History exclusive',mode:'scene'}),
+    studioPickerQueryDraft:'',studioPickerAdvancedOpen:true,studioPickerOpen:true,
+    studioPickerChecked:Object.create(null),studioPickerScroll:0,studioFilmstripScroll:0,
+    studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
+    studioRemovedFrameUndo:null,studioPrepared:null,studioPlayback:null,
+    studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
+    studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
+    studioDraft:{frames:[]},studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
+      picker={shown,actions,options};}},
+    studioApi:{inspect(){return {};},findSequences(){return [];},activeFrames(){return [];},
+      insertSnapshots(draft,ids){return {...draft,frames:draft.frames.concat(ids.map(id=>({
+        key:'snapshot-'+id,sourceSnapshotId:id})))}}},
+    newUiEl(id){if(id==='ModernAnimationStudio')return host;
+      if(id==='ModernAnimationSnapshotPicker')return {querySelector(){return null;}};
+      return null;},document:{},renderStudioLibrary(){},syncLegacyHistorySelection(){},
+    saveApplicationPreferences(){preferencesSaved++;},saveStudioDraft(){draftSaved++;},
+    applySuggestedStudioName(v){return v;},stopStudioPlayback(){},root:{},
+    Promise,Array,Object,Number,RangeError,Error};
+  vm.runInNewContext(functions+'\n'+render,ctx);
+  ctx.renderAnimationStudio(entries);
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[3,1,2]);
+  picker.actions.pickerToggle(2,true);
+  picker.actions.pickerFilter('mode','compare');
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[3]);
+  assert.equal(picker.options.selectedCount,1);
+  assert.equal(picker.options.totalEntries,3);
+  picker.actions.pickerToggle(3,true);
+  picker.actions.pickerFilter('geometryRelation','different');
+  picker.actions.pickerFilter('atmosphere','vacuum');
+  picker.actions.pickerFilter('query','Compare ');
+  assert.equal(picker.options.search,'Compare ', 'trailing query space is retained for typing');
+  picker.actions.pickerFilter('query','Compare demo');
+  assert.equal(ctx.studioPickerFilters.query,'Compare demo');
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[3]);
+  picker.actions.pickerFilter('mode','scene');
+  assert.equal(ctx.studioPickerFilters.geometryRelation,'any',
+    'switching away from Compare clears hidden A/B conditions');
+  assert.equal(ctx.studioPickerFilters.refractionRelation,'any');
+  assert.equal(picker.options.selectedCount,2,'hidden checks survive filtering');
+  picker.actions.pickerFiltersClear();
+  assert.equal(picker.options.search,'');
+  assert.equal(picker.options.selectedCount,2,'resetting filters does not reset selection');
+  assert.deepEqual(Array.from(picker.shown,e=>e.id),[3,1,2]);
+  picker.actions.insertChecked();
+  assert.deepEqual(Array.from(ctx.studioDraft.frames,f=>f.sourceSnapshotId),[3,2],
+    'Add checked inserts both selected cards, including formerly hidden ones, pinned first');
+  assert.equal(picker.options.selectedCount,0);
+  assert.equal(ctx.historyFilters.query,'History exclusive');
+  assert.ok(preferencesSaved>=6);
+  assert.equal(draftSaved,1);
+  assert.deepEqual(entries,sourceCopy,'Picker filtering and insertion never mutate History records');
+  picker.actions.pickerToggle(1,true);
+  picker.actions.pickerClearSelection();
+  assert.equal(picker.options.selectedCount,0);
 });
 
 test('Animation workspace renders a docked picker, rather than making History the DnD target',()=>{

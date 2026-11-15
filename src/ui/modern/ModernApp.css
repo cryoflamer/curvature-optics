@@ -864,6 +864,23 @@ button{cursor:pointer}
 .modern-studio-picker-tools button:disabled{opacity:.5;cursor:not-allowed}
 .modern-studio-picker-search{width:100%;box-sizing:border-box;border:1px solid #c7dae9;
   border-radius:6px;padding:8px;font:inherit;background:white;color:#254d6d}
+.modern-studio-picker-filter-details{margin-top:7px;border:1px solid #d1e1f0;
+  border-radius:7px;background:#f2f8ff;flex-shrink:0}
+.modern-studio-picker-filter-details summary{cursor:pointer;padding:7px 9px;
+  font-weight:650;font-size:11px;color:#285b82}
+.modern-studio-picker-filters{display:flex;flex-direction:column;gap:8px;padding:4px 9px 9px;
+  max-height:min(38vh,330px);overflow:auto}
+.modern-studio-picker-filter{display:flex;flex-direction:column;gap:3px;font-size:11px;
+  font-weight:600;color:#426281;min-width:0}
+.modern-studio-picker-filter select{width:100%;min-width:0;box-sizing:border-box;
+  border:1px solid #bfd4e7;border-radius:6px;padding:6px;color:#20415e;
+  background:#fff;font-size:12px}
+.modern-studio-picker-relations{display:flex;flex-direction:column;gap:7px;
+  border:1px solid #cbddeb;border-radius:7px;padding:8px;margin:0;min-width:0}
+.modern-studio-picker-relations legend{font-size:11px;font-weight:650;color:#315b7e}
+.modern-studio-picker-filters > button{align-self:flex-start;border:1px solid #bcd5ec;
+  border-radius:6px;background:#fff;padding:6px 9px;font:inherit;color:#256195;cursor:pointer}
+.modern-studio-picker-hidden-note{flex-basis:100%;font-size:10px;color:#566d84}
 .modern-studio-picker-list{min-height:0;overflow:auto;flex:1;list-style:none;margin:0;padding:0;
   display:flex;flex-direction:column;gap:7px;scrollbar-width:thin}
 .modern-studio-picker-card{position:relative;display:grid;grid-template-columns:auto 85px minmax(0,1fr) auto;
@@ -902,7 +919,8 @@ button{cursor:pointer}
 .modern-studio-drop-slot.is-drop-target .modern-studio-drop-button{opacity:1}
 @media(max-width:950px){
   .modern-animation-workspace.has-snapshot-picker .modern-animation-editor-layout{grid-template-columns:1fr}
-  .modern-animation-snapshot-picker{position:static;max-height:270px}
+  .modern-animation-snapshot-picker{position:static;max-height:min(75vh,620px)}
+  .modern-studio-picker-filters{max-height:min(27vh,180px)}
   .modern-studio-picker-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));overflow:auto}
   .modern-studio-picker-card{grid-template-columns:auto 64px minmax(0,1fr) auto}
 }

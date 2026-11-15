@@ -434,18 +434,74 @@
     host.appendChild(head);
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Drag saved snapshots to a gap in the timeline. Check several to insert them together.'));
+    var filters=options.filters||{query:options.search||'',mode:'all',geometry:'any',
+      atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
     var search=el(doc,'input','modern-studio-picker-search');
-    search.type='search';search.maxLength=160;search.value=options.search||'';
-    search.placeholder='Search saved snapshots…';search.setAttribute('aria-label','Find saved snapshots');
+    search.type='search';search.maxLength=160;search.value=options.search===undefined?filters.query||'':options.search;
+    search.placeholder='Name, notes, physics…';search.setAttribute('aria-label','Find saved snapshots');
     search.addEventListener('input',function(){
-      var offset=search.selectionStart;
-      actions.pickerSearch(search.value,offset);
+      actions.pickerFilter('query',search.value,search.selectionStart);
     });host.appendChild(search);
-    var selected=options.checked||{},n=entries.filter(function(e){return !!selected[e.id];}).length;
+    function selector(label,key,choices,description){
+      var wrapper=el(doc,'label','modern-studio-picker-filter');
+      wrapper.appendChild(el(doc,'span','',label));
+      var select=el(doc,'select','modern-studio-picker-filter-'+key);
+      if(description)select.title=description;
+      select.setAttribute('aria-label','Filter picker by '+label);
+      choices.forEach(function(pair){
+        var opt=el(doc,'option','',pair[1]);opt.value=pair[0];select.appendChild(opt);
+      });
+      select.value=filters[key]||choices[0][0];
+      select.addEventListener('change',function(){actions.pickerFilter(key,select.value);});
+      wrapper.appendChild(select);return wrapper;
+    }
+    var advanced=el(doc,'details','modern-studio-picker-filter-details');
+    advanced.open=!!options.advancedOpen;
+    advanced.addEventListener('toggle',function(){
+      if(actions.pickerAdvancedToggle)actions.pickerAdvancedToggle(advanced.open);
+    });
+    var advancedActive=filters.mode!=='all'||filters.geometry!=='any'||
+      filters.atmosphere!=='any'||filters.geometryRelation!=='any'||
+      filters.refractionRelation!=='any';
+    advanced.appendChild(el(doc,'summary','','Advanced filters'+(advancedActive?' · active':'')));
+    var controls=el(doc,'div','modern-studio-picker-filters');
+    controls.appendChild(selector('Type','mode',[
+      ['all','Scene + Compare'],['scene','Scene only'],['compare','Compare A/B only']]));
+    controls.appendChild(selector('Geometry','geometry',[
+      ['any','Any geometry'],['globe','Globe (either A/B)'],['flat','Flat (either A/B)']],
+      'In Compare, matches either A or B'));
+    controls.appendChild(selector('Atmosphere','atmosphere',[
+      ['any','Any atmosphere'],['vacuum','Vacuum'],['standard','Standard'],
+      ['temperature-lapse','Temperature lapse'],['profile-transition','Profile transition'],
+      ['inverse-temperature','Inverse temperature'],['inverse-spherical','Inverse spherical'],
+      ['exponential-occlusion','Exponential occlusion']],
+      'In Compare, matches either A or B'));
+    if(filters.mode==='compare'){
+      var relations=el(doc,'fieldset','modern-studio-picker-relations');
+      relations.appendChild(el(doc,'legend','','A/B differences · active physics only'));
+      relations.appendChild(selector('Geometry A/B','geometryRelation',[
+        ['any','Any'],['same','Same'],['different','Different']],
+        'Compare active geometry including Globe radius; Flat radius is ignored'));
+      relations.appendChild(selector('Refraction A/B','refractionRelation',[
+        ['any','Any'],['same','Same'],['different','Different']],
+        'Compare active refraction including gradients and profiles'));
+      controls.appendChild(relations);
+    }
+    controls.appendChild(button(doc,'Clear filters','Clear Snapshot Picker filters',actions.pickerFiltersClear));
+    advanced.appendChild(controls);host.appendChild(advanced);
+    var selected=options.checked||{};
+    var n=options.selectedCount===undefined?
+      entries.filter(function(e){return !!selected[e.id];}).length:options.selectedCount;
+    var total=options.totalEntries===undefined?entries.length:options.totalEntries;
+    var hidden=Math.max(0,n-entries.filter(function(e){return !!selected[e.id];}).length);
     var tools=el(doc,'div','modern-studio-picker-tools');
-    tools.appendChild(el(doc,'small','',n+' selected · '+entries.length+' found'));
+    tools.appendChild(el(doc,'small','',n+' selected'+(hidden?' ('+hidden+' hidden)':'')+
+      ' · '+entries.length+' of '+total+' found'));
+    if(hidden)tools.appendChild(el(doc,'small','modern-studio-picker-hidden-note',
+      'Add checked and dragging a checked card include hidden selections.'));
     var add=button(doc,'Add checked','Add checked snapshots after selected frame',function(){actions.insertChecked();});
     add.disabled=n===0;tools.appendChild(add);
+    if(n)tools.appendChild(button(doc,'Clear selected','Uncheck all selected snapshots',actions.pickerClearSelection));
     tools.appendChild(button(doc,'Full History','Open complete History management',actions.pickerFullHistory));
     host.appendChild(tools);
     var list=el(doc,'ol','modern-studio-picker-list');

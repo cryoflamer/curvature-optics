@@ -495,10 +495,18 @@ still not provided in this stage.
 
 **Animation → Choose snapshots from History** now toggles a compact, docked
 **Snapshot Picker** beside the Animation Studio timeline. It reads exactly the
-same saved History records and screenshots as the full overlay, with a local
-text search; no new previews are rendered, no experiment is restored, and no
-second snapshot database is introduced. **Full History** still opens the
-complete manager for pinning, renaming, import/export and advanced filters.
+same saved History records and screenshots as the full overlay, with
+independent **Search**, **Type**, **Geometry**, **Atmosphere** and Compare-only
+**Geometry A/B** / **Refraction A/B** filters. The Picker reuses History's
+active-physics matching logic without depending on the History UI; each panel
+has separate filters. Picker filters persist in browser preferences across F5.
+**Clear filters** keeps all checked snapshots. The counter shows found/total,
+selected, and selected-but-hidden entries. **Add checked** and dragging a
+checked card insert all selected snapshots (including filtered-out checks),
+in pinned-first order; **Clear selected** unchecks everything. No new previews
+are rendered, no experiment is restored, and no second snapshot database is
+introduced. **Full History** still opens the complete manager for pinning,
+renaming, and import/export.
 The header History action remains available in every workspace.
 
 - **Reorder:** drag a timeline keyframe by its grip into any gap, or onto the
@@ -507,7 +515,8 @@ The header History action remains available in every workspace.
 - **Insert:** drag a snapshot from the picker into a timeline gap; its saved
   experiment is copied into the in-memory Studio draft at that position. To
   insert a group, check several picker cards and drag a checked card; the group
-  follows its displayed order (pinned first), or choose **Add checked**. Small
+  follows pinned-first History order, including checked snapshots currently
+  hidden by filters, or choose **Add checked**. Small
   `+` controls in the gaps insert checked snapshots at an exact position.
 - **Touch:** hold and move a grip (⠿) to drag via Pointer Events; tapping the
   checkbox plus **Add checked** is the non-drag fallback. The timeline scrolls

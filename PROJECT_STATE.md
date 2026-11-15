@@ -1,3 +1,14 @@
+> **Animation Snapshot Picker filters (2026-11-15):** The docked Picker reuses
+> History's pure active-physics search for name/notes/physics, Scene/Compare,
+> Globe/Flat, atmosphere and Compare-only A/B geometry/refraction relations.
+> Picker preferences are browser-local and independent of History filters.
+> Multi-select survives filtering: adding or dragging a checked record includes
+> other selected records hidden by filters, in pinned-first order. Selection
+> counts show hidden items; Clear filters preserves checks and Clear selected
+> discards them. The History archive, IndexedDB schema, experiment JSON,
+> Animation draft ownership and physics were not changed. See
+> `docs/modern-experiment-history.md` for usage and browser checks.
+
 > **Spline Animation stage-5 closure (2026-11-13):** Camera-only Spline math,
 > Linear/Spline Preview selection, autosaved drafts/Library/JSON persistence,
 > shared Preview/PNG/WebM/MP4 camera sampling, short-video endpoint behavior

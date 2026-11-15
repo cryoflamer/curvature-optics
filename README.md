@@ -382,7 +382,14 @@ Pinned collapse, and never edits the Animation timeline.
 
 To add keyframes, open **Animation → Choose snapshots from History**. The
 Snapshot Picker copies selected experiments into the autosaved Studio draft;
-History does not maintain a second storyboard or staging editor. An ordered
+History does not maintain a second storyboard or staging editor. The Picker
+shares History's physical search rules: **Search**, **Type**, **Geometry**,
+**Atmosphere**, plus **Geometry A/B** and **Refraction A/B** in Compare mode.
+Its filters persist as separate browser preferences, never changing the full
+History gallery's filters. Checks survive filter changes; **Add checked** and
+dragging a checked card include selections currently hidden by filters (shown
+in the selection count). **Clear selected** unchecks all, while **Clear filters**
+restores all matches without discarding the checks. An ordered
 shortlist saved by an older version is retained *only for migration*: when
 present, Animation shows **Append saved selection** and **Discard selection**.
 Appending copies available snapshots into the current draft without replacing

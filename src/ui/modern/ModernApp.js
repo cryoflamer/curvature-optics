@@ -563,7 +563,10 @@
   var studioPreviewRenderer=null;
   var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
-  var studioPickerSearch='';
+  var studioPickerFilters=historyFiltersApi?historyFiltersApi.normalize():
+    {query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
+  var studioPickerAdvancedOpen=false;
+  var studioPickerQueryDraft='';
   var studioPickerScroll=0;
   var studioPickerChecked=Object.create(null);
   var studioDragSession=null;
@@ -599,6 +602,14 @@
     historyPinnedCollapsed=remembered.historyPinnedCollapsed;
     historyPanelOpen=remembered.historyPanelOpen;
     historyFilters=remembered.historyFilters;
+    studioPickerFilters=remembered.studioPickerFilters;
+    // Picker hides A/B relation controls outside Compare, so a malformed
+    // stored All-mode filter must not leave an invisible active constraint.
+    if(historyFiltersApi&&studioPickerFilters.mode!=='compare'){
+      studioPickerFilters=historyFiltersApi.update(studioPickerFilters,'geometryRelation','any');
+      studioPickerFilters=historyFiltersApi.update(studioPickerFilters,'refractionRelation','any');
+    }
+    studioPickerQueryDraft=studioPickerFilters.query;
     historyStoryboardQueue=remembered.historyStoryboardQueue.slice();
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
@@ -627,6 +638,7 @@
         navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
+        studioPickerFilters:studioPickerFilters,
         historyStoryboardQueue:historyStoryboardQueue,
         workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
@@ -776,6 +788,8 @@
       historyPinnedCollapsed=defaults.historyPinnedCollapsed;
       historyPanelOpen=defaults.historyPanelOpen;
       historyFilters=defaults.historyFilters;
+      studioPickerFilters=defaults.studioPickerFilters;
+      studioPickerQueryDraft='';
       historyStoryboardQueue=[];
       historySelectedId='';setHistoryManageMode(false);
       syncHistoryFilterControls();
@@ -805,6 +819,7 @@
       stopAutoCameraPreview();
       if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
       updateGeometryBackendStatus(null);updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
+      if(studioPickerOpen)renderAnimationStudio(studioHistoryEntries);
       preferencesStatus(cleared?'Application preferences reset to defaults.':
         'Defaults restored for this session; browser storage is unavailable.',!cleared);
     });
@@ -1503,7 +1518,7 @@
   function performStudioSwitch(kind,value){
     studioDiagnosticTransition=null;
     stopStudioPlayback(true);studioPrepared=null;
-    studioFilmstripScroll=0;studioPickerOpen=false;studioPickerSearch='';studioPickerScroll=0;
+    studioFilmstripScroll=0;studioPickerOpen=false;studioPickerScroll=0;
     studioPickerChecked=Object.create(null);studioDragSession=null;
     studioRemovedFrameUndo=null;studioRestorePreviewPending=false;
     if(kind==='new'){
@@ -2677,13 +2692,17 @@
       }
     });
   }
+  function animationPickerAllEntries(entries){
+    return entries.slice().sort(function(a,b){return Number(!!b.pinned)-Number(!!a.pinned);});
+  }
   function animationPickerEntries(entries){
-    var query=studioPickerSearch.trim();
-    var found=!query||!historyFiltersApi?entries:historyFiltersApi.filter(entries,{
-      query:query,mode:'all',geometry:'any',atmosphere:'any',
-      geometryRelation:'any',refractionRelation:'any'
-    });
-    return found.slice().sort(function(a,b){return Number(!!b.pinned)-Number(!!a.pinned);});
+    return animationPickerAllEntries(historyFiltersApi?
+      historyFiltersApi.filter(entries,studioPickerFilters):entries);
+  }
+  function animationPickerSelectedEntries(entries){
+    // Keep checked IDs across searches. They belong to the current History
+    // records, not to the presently visible filter result.
+    return animationPickerAllEntries(entries).filter(function(e){return studioPickerChecked[e.id];});
   }
   function toggleAnimationPicker(open){
     studioPickerOpen=!!open;
@@ -2881,7 +2900,7 @@
       },
       dragStart:function(payload,event){
         var chosen=payload.kind==='snapshots'&&studioPickerChecked[payload.id]?
-          animationPickerEntries(entries).filter(function(e){return studioPickerChecked[e.id];})
+          animationPickerSelectedEntries(entries)
             .map(function(e){return e.id;}):[payload.id];
         studioDragSession=payload.kind==='snapshots'?{kind:'snapshots',ids:chosen}:
           {kind:'frame',key:payload.key};
@@ -2916,7 +2935,7 @@
       },
       dragEnd:function(){studioDragSession=null;},
       insertChecked:function(index){safe(function(){
-        var ids=animationPickerEntries(entries).filter(function(e){return studioPickerChecked[e.id];})
+        var ids=animationPickerSelectedEntries(entries)
           .map(function(e){return e.id;});
         if(!ids.length)throw RangeError('Check snapshots in the picker first');
         var gap=Number.isInteger(index)?index:studioSelectedKey?
@@ -2936,14 +2955,14 @@
       undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
         studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?
         studioRemovedFrameUndo.frameName:null,
-      pickerSelectedCount:Object.keys(studioPickerChecked).filter(function(id){return studioPickerChecked[id];}).length});
+      pickerSelectedCount:animationPickerSelectedEntries(entries).length});
     var picker=newUiEl('ModernAnimationSnapshotPicker');
     if(picker&&studioUI.renderPicker){
       var shown=animationPickerEntries(entries);
       var dragActions={
         dragStart:function(payload,event){
-          var ids=studioPickerChecked[payload.id]?shown.filter(function(e){return studioPickerChecked[e.id];})
-            .map(function(e){return e.id;}):[payload.id];
+          var ids=studioPickerChecked[payload.id]?
+            animationPickerSelectedEntries(entries).map(function(e){return e.id;}):[payload.id];
           studioDragSession={kind:'snapshots',ids:ids};
           if(event&&event.dataTransfer){
             event.dataTransfer.effectAllowed='copy';
@@ -2955,29 +2974,49 @@
         drop:function(){},
         pickerClose:function(){toggleAnimationPicker(false);},
         pickerFullHistory:function(){setHistoryOpen(true);},
-        pickerSearch:function(query,caret){
-          studioPickerSearch=query;
-          renderAnimationStudio(entries);
+        pickerFilter:function(key,value,caret){
+          if(!historyFiltersApi)return;
+          // Keep the untrimmed query while typing (including a trailing space).
+          // The normalized saved filter remains the source of search semantics.
+          if(key==='query')studioPickerQueryDraft=String(value).slice(0,160);
+          studioPickerFilters=historyFiltersApi.update(studioPickerFilters,key,value);
+          // Compare-specific constraints must not silently remain in force
+          // when their controls are hidden under All or Scene.
+          if(key==='mode'&&value!=='compare'){
+            studioPickerFilters=historyFiltersApi.update(studioPickerFilters,'geometryRelation','any');
+            studioPickerFilters=historyFiltersApi.update(studioPickerFilters,'refractionRelation','any');
+          }
+          saveApplicationPreferences();
           studioPickerScroll=0;
-          var freshList=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
-          if(freshList)freshList.scrollTop=0;
-          var search=picker.querySelector&&picker.querySelector('.modern-studio-picker-search');
-          if(search&&typeof search.focus==='function'){
-            search.focus({preventScroll:true});
-            if(typeof search.setSelectionRange==='function')search.setSelectionRange(caret,caret);
+          renderAnimationStudio(entries);
+          if(key==='query'){
+            var search=picker.querySelector&&picker.querySelector('.modern-studio-picker-search');
+            if(search&&typeof search.focus==='function'){
+              search.focus({preventScroll:true});
+              if(typeof search.setSelectionRange==='function'&&Number.isInteger(caret))
+                search.setSelectionRange(caret,caret);
+            }
           }
         },
+        pickerFiltersClear:function(){
+          studioPickerFilters=historyFiltersApi.normalize();studioPickerQueryDraft='';
+          saveApplicationPreferences();studioPickerScroll=0;renderAnimationStudio(entries);
+        },
+        pickerAdvancedToggle:function(open){studioPickerAdvancedOpen=!!open;},
         pickerToggle:function(id,checked){
           if(checked)studioPickerChecked[id]=true;
           else delete studioPickerChecked[id];
           renderAnimationStudio(entries);
+        },
+        pickerClearSelection:function(){
+          studioPickerChecked=Object.create(null);renderAnimationStudio(entries);
         },
         insertChecked:function(index){
           // Reuse the same action as the timeline gaps.
           var slots=host.querySelectorAll&&host.querySelectorAll('.modern-studio-drop-button');
           if(slots&&Number.isInteger(index)&&slots[index])slots[index].click();
           else{
-            var selected=shown.filter(function(e){return studioPickerChecked[e.id];}).map(function(e){return e.id;});
+            var selected=animationPickerSelectedEntries(entries).map(function(e){return e.id;});
             safe(function(){
               var at=studioSelectedKey?studioDraft.frames.findIndex(function(f){return f.key===studioSelectedKey;})+1:studioDraft.frames.length;
               if(at<0)at=studioDraft.frames.length;
@@ -2989,7 +3028,10 @@
         }
       };
       studioUI.renderPicker(document,picker,shown,dragActions,{
-        open:studioPickerOpen,search:studioPickerSearch,checked:studioPickerChecked});
+        open:studioPickerOpen,filters:studioPickerFilters,search:studioPickerQueryDraft,
+        advancedOpen:studioPickerAdvancedOpen,totalEntries:entries.length,
+        selectedCount:animationPickerSelectedEntries(entries).length,
+        checked:studioPickerChecked});
       var pickerList=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
       if(pickerList)pickerList.scrollTop=studioPickerScroll;
     }

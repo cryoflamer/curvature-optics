@@ -12,13 +12,13 @@ function storage(values={}){
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
   assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',geometryBackend:'canvas',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,studioPickerFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
   assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,studioPickerFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
   {opticalQuality:'auto',previewDetail:'32',geometryBackend:'webgl2',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
-    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,historyStoryboardQueue:[],
+    displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,studioPickerFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
   const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
@@ -144,6 +144,29 @@ test('History filters round-trip in browser preferences, independent of experime
   assert.deepEqual(badRelation.historyFilters,historyFilterDefaults);
   preferences.reset(db);
   assert.deepEqual(preferences.read(db).historyFilters,historyFilterDefaults);
+});
+
+test('Snapshot Picker filters are persisted and validated independently of History',()=>{
+  const db=storage();
+  const history={query:'Lake',mode:'scene',geometry:'globe'};
+  const picker={query:'Cloud towers',mode:'compare',geometry:'flat',atmosphere:'vacuum',
+    geometryRelation:'different',refractionRelation:'same'};
+  preferences.write(db,{historyFilters:history,studioPickerFilters:picker});
+  assert.equal(preferences.read(db).historyFilters.query,'Lake');
+  assert.deepEqual(preferences.read(db).studioPickerFilters,picker);
+  assert.equal(Object.isFrozen(preferences.read(db).studioPickerFilters),true);
+  assert.deepEqual(preferences.normalize({studioPickerFilters:{mode:'scene',
+    geometryRelation:'different'}}).studioPickerFilters,
+    {...historyFilterDefaults,mode:'scene'});
+  assert.deepEqual(preferences.normalize({studioPickerFilters:{mode:'what',query:8}})
+    .studioPickerFilters,historyFilterDefaults);
+  assert.equal(preferences.normalize({studioPickerFilters:{query:'x'.repeat(400)}})
+    .studioPickerFilters.query.length,160);
+  assert.deepEqual(preferences.read(storage({[preferences.STORAGE_KEY]:
+    JSON.stringify({version:1,historyFilters:history})})).studioPickerFilters,
+    historyFilterDefaults,'older preferences load with independent Picker defaults');
+  preferences.reset(db);
+  assert.deepEqual(preferences.read(db).studioPickerFilters,historyFilterDefaults);
 });
 
 test('Storyboard shortlist preferences are ordered, bounded, unique and never contain untrusted identifiers',()=>{
