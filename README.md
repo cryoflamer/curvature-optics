@@ -991,3 +991,15 @@ select, double-click/Open, reorder and drag-and-drop keep their existing actions
 This changes only the UI and does not re-render optics or alter saved records.
 
 Modern UI: CSS-generated icons (History pin, delete corners, status glyphs and disclosure arrows) use Unicode escape sequences in `content` declarations, avoiding incorrect rendering when stylesheets are served without an explicit UTF-8 charset.
+
+### Animation Project compatibility contracts (foundation)
+
+`src/animation/ModernAnimationContract.js` provides a pure, immutable preflight
+contract to plan animation projects before selecting keyframes. Camera Motion
+locks the active physical scene and permits only supported camera pose/zoom;
+Physical Transition locks the camera and all but one supported curvature or
+lapse-gradient channel. Experimental accepts arbitrary valid snapshots without
+claiming interpolation or export support. The checks share the existing
+`ModernAnimationCompatibility` renderer authority and normalize dormant object
+controls in zero-count groups. This stage has **no wizard or stored Project v2**;
+see [`docs/modern-animation-contract.md`](docs/modern-animation-contract.md).

@@ -27,12 +27,24 @@
     Object.keys(ref).forEach(function(k){if(k!=='kind')result[k]=ref[k];});
     return result;
   }
+  function activeObjects(objects){
+    // Each of the two object groups is independent. Parameters of a group
+    // containing zero objects do not affect the rendered scene. Keep the
+    // count, but ignore all of that group's dormant editing controls.
+    var result={};
+    Object.keys(objects).forEach(function(field){
+      result[field]=objects[field].map(function(value,index){
+        return field==='NObjects'||objects.NObjects[index]>0?value:null;
+      });
+    });
+    return result;
+  }
   function effective(input){
     var e=state.validate(input),f=fingerprint.features(e);
     // Only the active Scene or Compare optics matter. Unused editor presets,
     // title, saved camera positions and legacy camera sequence are not imagery.
     var result={mode:e.display.mode,camera:e.scene.camera,
-      scene:{objects:e.scene.objects,showGrid:e.scene.showGrid},
+      scene:{objects:activeObjects(e.scene.objects),showGrid:e.scene.showGrid},
       display:{eyeLevel:e.display.eyeLevel,horizon:e.display.horizon,
         gpuProbe:e.display.gpuProbe,probeTargets:e.display.probeTargets,
         showTemperatureProfile:e.display.showTemperatureProfile,

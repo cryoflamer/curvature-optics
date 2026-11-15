@@ -2512,3 +2512,21 @@ shared styling and card-specific click isolation.
   supported numerical envelope, measured diagnostic results, limitations,
   and the stage-5 closure contract. No physics, RK4, animation export or
   browser UI changes were necessary for this audit-only compatpatch.
+
+### Animation project contracts: pure preflight foundation
+
+- `ModernAnimationContract.js` provides immutable reference-based Camera,
+  single-channel Physical and Experimental contracts, deterministic active
+  scene/physics/camera/display signatures, prospective candidate diagnostics,
+  and whole-sequence preflight through the existing authoritative renderer
+  compatibility inspector. Experimental accepts valid snapshots as draft
+  material but promises no interpolation or export.
+- An empty object group (`NObjects[i] = 0`) now ignores its dormant settings
+  in `ModernAnimationCompatibility.effective()`, eliminating a false fixed-scene
+  change without changing experiment data or render geometry. Active groups
+  remain strictly compared. Scene/Compare, camera/physical and A/B physical
+  channels retain their existing playback limits.
+- This is not Project v2: existing saved projects, History, autosave, IndexedDB,
+  browser controls and physics engines remain unchanged. Wizard/Picker wiring,
+  durable contract storage and migration are subsequent stages. See
+  `docs/modern-animation-contract.md`.
