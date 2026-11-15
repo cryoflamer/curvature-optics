@@ -477,8 +477,9 @@
       ['exponential-occlusion','Exponential occlusion']],
       'In Compare, matches either A or B'));
     if(filters.mode==='compare'){
-      var relations=el(doc,'fieldset','modern-studio-picker-relations');
-      relations.appendChild(el(doc,'legend','','A/B differences · active physics only'));
+      var relations=el(doc,'div','modern-studio-picker-relations');
+      relations.appendChild(el(doc,'strong','modern-studio-picker-relations-title',
+        'A/B differences · active physics only'));
       relations.appendChild(selector('Geometry A/B','geometryRelation',[
         ['any','Any'],['same','Same'],['different','Different']],
         'Compare active geometry including Globe radius; Flat radius is ignored'));

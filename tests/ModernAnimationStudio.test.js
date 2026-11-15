@@ -645,6 +645,32 @@ test('Animation workspace renders a docked picker, rather than making History th
   assert.match(app,/toggleAnimationPicker\(!studioPickerOpen\)/);
 });
 
+test('Snapshot Picker uses a single scroll container and unboxed A/B filters',()=>{
+  const root=path.resolve(__dirname,'..');
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
+  const rule=selector=>{
+    const i=css.indexOf(selector+'{');
+    assert.ok(i>=0,'Missing CSS selector '+selector);
+    return css.slice(i+selector.length+1,css.indexOf('}',i));
+  };
+  assert.match(rule('.modern-animation-snapshot-picker'),/overflow-y:auto/,
+    'Picker itself owns the vertical scroll');
+  assert.doesNotMatch(rule('.modern-studio-picker-filters'),/max-height|overflow:auto|overflow-y:auto/,
+    'Advanced filters expand naturally without a second scrollbar');
+  assert.match(rule('.modern-studio-picker-filters'),/overflow:visible/);
+  assert.doesNotMatch(rule('.modern-studio-picker-list'),/overflow:auto|overflow-y:auto/,
+    'Snapshot cards scroll together with filters');
+  assert.doesNotMatch(rule('.modern-studio-picker-relations'),/border:1px/,
+    'Compare-specific controls have no extra nested frame');
+  assert.match(ui,/el\(doc,'div','modern-studio-picker-relations'\)/);
+  assert.doesNotMatch(ui,/el\(doc,'fieldset','modern-studio-picker-relations'\)/);
+  assert.doesNotMatch(css,/\.modern-studio-picker-filters\{max-height:/,
+    'Narrow screens must not restore nested filter scrolling');
+  assert.match(css,/grid-template-columns:repeat\(auto-fill,minmax\(190px,1fr\)\);overflow:visible/,
+    'Narrow screens must not restore a separate snapshot-list scrollbar');
+});
+
 test('Touch pointer drag resolves drop position without relying on native HTML drag events',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=43;
   const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
