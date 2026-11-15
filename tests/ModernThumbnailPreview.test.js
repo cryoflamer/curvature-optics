@@ -117,23 +117,26 @@ test('Info button stops bubbling and cannot initiate selection, double-click or 
   ctrl.destroy();
 });
 
-test('History and shortlist expose buttons without changing selection/restore/remove',()=>{
-  const {doc,host}=fakeDom(),s=snapshot(),calls=[];
+test('History shows persistent details without a popup; shortlist retains its info button',()=>{
+  const {doc,host}=fakeDom(),details=doc.createElement('aside'),s=snapshot(),calls=[];
   history.render(doc,host,[s],null,{select:id=>calls.push('select:'+id),
-    restore:id=>calls.push('restore:'+id),pin(){},remove(){},multi(){}},{},{});
+    restore:id=>calls.push('restore:'+id),multi(){}},{},{});
   const card=collect(host,n=>n.className.startsWith('modern-history-card')&&n.tagName==='article')[0];
-  assert.ok(info(card));
-  send(card,'mouseover',{target:card});assert.equal(overlay(doc).hidden,true);
-  click(info(card));assert.equal(imageSrc(overlay(doc)),s.thumbnail.dataUrl);
-  assert.deepEqual(calls,[],'info does not select or restore the snapshot');
-  host.__historyInspector.destroy();host.__historyInspector=null;
+  assert.ok(card);
+  assert.equal(info(card),undefined,'History cards have no floating preview buttons');
+  history.renderDetails(doc,details,s);
+  assert.equal(collect(details,n=>n.className==='modern-history-preview-image')[0].src,
+    s.thumbnail.dataUrl);
+  assert.equal(overlay(doc),undefined);
+  click(card.children[0]);
+  assert.deepEqual(calls,['select:'+s.id],'card selection never restores a snapshot');
   history.renderStoryboardQueue(doc,host,[s.id],[s],{move(){},remove(id){calls.push('remove:'+id);}});
   const item=collect(host,n=>n.className==='modern-history-storyboard-item')[0];
   click(info(item));assert.equal(imageSrc(overlay(doc)),s.thumbnail.dataUrl);
   send(item.children[0],'click',{stopPropagation(){}});
-  assert.deepEqual(calls,['remove:'+s.id]);
+  assert.deepEqual(calls,['select:'+s.id,'remove:'+s.id]);
   history.renderStoryboardQueue(doc,host,[s.id],[s],{move(){},remove(){}});
-  assert.equal(doc.body.children.length,1,'rerender replaces and destroys previous dialog');
+  assert.equal(doc.body.children.length,1,'shortlist rerender replaces its previous dialog');
   host.__thumbnailPreview.destroy();
 });
 
@@ -185,7 +188,7 @@ test('Imported frames without screenshots show metadata, not a fabricated image'
   ctrl.destroy();
 });
 
-test('All five galleries use the shared details control; Legacy is untouched',()=>{
+test('History has a persistent inspector, other galleries share the popup, Legacy unchanged',()=>{
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const old=fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8');
   const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
@@ -194,7 +197,9 @@ test('All five galleries use the shared details control; Legacy is untouched',()
   assert.match(ui,/inspector\.infoButton\(card,libraryPreviewEntry\(entry\)/);
   assert.match(ui,/inspector\.infoButton\(item,entry,item/);
   assert.match(ui,/inspector\.infoButton\(item,\{name:frame\.name/);
-  assert.match(hist,/inspector\.infoButton\(card,entry,card/);
+  assert.match(hist,/function renderDetails\(doc,host,entry\)/);
+  assert.match(hist,/host\.appendChild\(inspectorMarkup\(doc,entry\)\)/);
+  assert.doesNotMatch(hist,/inspector\.infoButton\(card,entry,card/);
   assert.match(hist,/inspector\.infoButton\(item,entry,item/);
   assert.doesNotMatch(hist,/inspector\.hover\(/);
   assert.doesNotMatch(old,/ModernThumbnailPreview/);

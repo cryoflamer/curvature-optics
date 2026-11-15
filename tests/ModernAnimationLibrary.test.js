@@ -1024,7 +1024,7 @@ test('Stash and discard actions are wired to safe durable restore before editor 
   assert.match(flow,/studioWorkspaces=previous/);
 });
 
-test('History and all animation card delete corners share one visual class',()=>{
+test('Animation delete corners retain shared class while History deletion moves to inspector',()=>{
   const css=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
   const history=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernExperimentHistoryUI.js'),'utf8');
   const animation=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
@@ -1036,7 +1036,10 @@ test('History and all animation card delete corners share one visual class',()=>
   assert.match(css,/\.modern-card-delete:not\(:disabled\):hover\{\s*color:#a12a38;background:#fff0f1;border-color:#df9ca3\}/);
   assert.match(css,/\.modern-card-delete:focus-visible\{outline:2px solid #287ac5/);
   assert.match(css,/@media\(hover:none\)\{[\s\S]*\.modern-card-delete:not\(:disabled\)\{opacity:1\}/);
-  assert.match(history,/modern-history-delete modern-card-delete/);
+  assert.doesNotMatch(history,/modern-history-delete modern-card-delete/,
+    'the new History cards have no destructive corner action');
+  const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
+  assert.match(html,/id="ModernHistoryDelete"[^>]*>Delete snapshot/);
   assert.match(history,/modern-history-storyboard-remove modern-card-delete/);
   assert.match(animation,/modern-studio-card-remove modern-card-delete/);
   assert.match(animation,/modern-animation-library-delete modern-card-delete/);

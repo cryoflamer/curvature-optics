@@ -64,23 +64,25 @@ results.
   normal Scene/Compare switching, and workspace tab navigation do **not** create
   automatic snapshots. The camera pose is nevertheless included in each saved
   experiment. Initial boot never invents an automatic entry.
-- The visual gallery shows time, Scene or Compare A/B, source, thumbnail and
-  pin state; a native snapshot picker remains available for keyboard users. **Restore selected** fully validates its target,
-  persists the current live experiment as a protected recovery point *before*
-  changing the model, and then applies the target via existing `applyExperiment`.
-  On failed/blocked/quota storage, the live experiment is not replaced. An
-  identical existing automatic entry is upgraded to protected if saved manually
-  or used as a recovery point.
-- **Delete selected** removes an unpinned record after confirmation; individual cards
-  use corner icons for **Pin / Unpin** and **Delete**. A pinned record must be
-  unpinned before individual or bulk deletion. Checkboxes enable
-  multiple selection for **Pin selected** and **Delete selected**; selection
-  is in-memory only and will later serve Storyboard. Newest/oldest sorting
-  is available. **Clear automatic** only removes unpinned automatic records;
-  **Clear all history** asks for explicit confirmation and deletes pinned and
-  recovery records too. Manual and recovery entries are never
-  automatically purged. A limit of 200 unpinned automatic entries evicts oldest
-  automatic records transactionally.
+- The visual gallery shows saved thumbnails grouped into **Pinned** and
+  **Recent**. Click (or keyboard-activate) a card to select it; the fixed
+  **Selected experiment** panel displays its saved image, names/notes, Scene or
+  Compare A/B physical parameters, camera and objects. There is no duplicate
+  snapshot dropdown or hidden double-click Restore action.
+- **Restore experiment** on that panel validates the selection, stores the
+  current live experiment as a protected recovery point **before** replacing
+  it, and closes History only after success (including an already-matching
+  snapshot). If the recovery write fails, the live experiment is unchanged and
+  the error remains visible beside the Restore controls.
+- **Edit details**, **Pin/Unpin**, **Export snapshot** and **Delete snapshot**
+  belong to the selection panel, not the thumbnail corners. Pinned entries
+  cannot be deleted until unpinned. **Manage** reveals checkbox-based batch
+  selection (Pin checked, Delete checked and Add selected to Animation);
+  leaving Manage clears temporary checkbox selection. The separate **More
+  history tools** section contains Import/Export all, Clear automatic and
+  Clear all history. The latter requires confirmation and deletes protected
+  records; Clear automatic only deletes unpinned automatic entries. Automatic
+  retention remains bounded to 200 unpinned entries.
 - The local IndexedDB database `curvature-modern-experiment-history`, version
   1, object store `snapshots`, keeps monotonic stable numeric IDs. Entries have
   `version`, `createdAt`, `source`, `pinned`, a full validated `experiment`,
@@ -91,46 +93,42 @@ results.
   already existed. Browsers may evict site storage;
   these local records are not a backup across browsers/devices or origins.
 
-## History gallery controls and unified Preview
+## History gallery and selected-experiment inspector
 
-- **One click** on a snapshot selects it; **double-click** on the image or card
-  text restores the full experiment. **Enter** on the thumbnail also restores.
-  Restore is guarded and records a protected recovery checkpoint before
-  changing live physics. Card sizes **S / M / L** are stored in Application
-  Preferences, without modifying experiment JSON or IndexedDB entries.
-- **Pinned** snapshots appear at the top, in their own collapsible section.
-  **Recent** contains only unpinned records, so no entry appears twice. The
-  current newest/oldest sort order applies inside each section. Pinned collapse
-  state persists in browser Application Preferences and survives reload; it is
-  reset by Reset Application Preferences, not Reset Workspace Layout. Pinning
-  does not imply Storyboard membership or order.
-- Both thumbnail corners contain compact Pin/Unpin and Delete controls. A
-  pinned record's Delete control is disabled until it is unpinned. Bulk and
-  selected-record deletion reject pinned entries as well. **Clear all history**
-  remains a separate explicitly confirmed destructive operation. Checkboxes
-  for multi-selection remain available, and interacting with corner controls
-  or checkboxes never triggers Restore.
-- Hover the **thumbnail** for approximately **400 ms** to open the unified
-  Preview. It combines the saved, enlarged real-Canvas image (or an accurate
-  missing-image message) with the existing physics inspector: Scene has one
-  model column; Compare presents independent A/B surface, atmosphere and
-  active refraction parameters, meaningful A/B difference flags, and shared
-  camera and objects. Old transparent images are still shown on white.
-- The floating Preview is positioned within the viewport, is not clipped by
-  the gallery and remains open while the pointer moves over it. **Keep open**
-  locks it for inspection. A touch/pen tap on the thumbnail or keyboard
-  **Space** opens a persistent Preview. Keyboard focus shows it immediately;
-  **Esc** or Close dismisses it, and clicking outside dismisses a locked
-  preview. Double-click and Enter continue to restore the snapshot instead.
-- Hovering, locking and closing Preview only use already loaded validated
-  snapshot data. They do not query IndexedDB, invoke the optics renderer,
-  create history records, or change stored experiments. The former View dialog
-  and Info/Actions menu have been replaced rather than duplicated.
+- **One click or keyboard activation** on a snapshot thumbnail selects it;
+  the currently selected card is highlighted. **Restore experiment** is a
+  separate, clearly labelled action in the persistent details panel. Neither
+  double-click nor Enter restores an experiment implicitly. There is no
+  `Selected snapshot` dropdown. The first visible card is selected when the
+  gallery opens, but no physical state changes until Restore is pressed.
+- **Pinned** snapshots form a collapsible section above **Recent**, without
+  duplicates. The preferred S/M/L card size, Pinned-collapse state, sorting
+  and filters remain browser-local display preferences. The inspector always
+  corresponds to a visible card; a filtered-out or collapsed selection is
+  replaced by the first visible match. If no records match, Restore is disabled
+  and the inspector displays an empty state.
+- The inspector displays the original persisted screenshot (white background
+  for older transparent previews) or an explicit missing-image message, plus
+  the saved physical classification and active Scene/Compare parameters. It
+  does not create new images or modify the current experiment. It replaces the
+  old floating preview in History; Animation Studio retains its separate
+  thumbnail inspection controls.
+- **Edit details** opens the metadata editor. **Pin/Unpin** and **Export
+  snapshot** act on the selected card. **Delete snapshot** is disabled for a
+  pinned record and otherwise requests confirmation. Success closes History
+  after Restore; failures leave it open with a visible error beside the
+  action buttons. The current experiment is backed up to protected recovery
+  before any replacement.
+- **Manage** toggles the group-selection workspace; only this mode renders
+  checkboxes and group actions. To collect History records into Animation,
+  enter Manage, check the cards and use **Add selected to Animation**. The
+  existing chronological staging list is preserved for compatibility, but
+  frame editing and timing belong to Animation Studio.
 
 ## Smart History Filters (search and A/B differences)
 
-History now includes an inline **Search** field and **Type**, **Geometry** and
-**Atmosphere** dropdowns. Search is case-insensitive and requires every word to
+History has an always-visible **Search experiments** field and collapsible
+**Advanced filters** with **Type**, **Geometry** and **Atmosphere** dropdowns. Search is case-insensitive and requires every word to
 appear somewhere in the name, notes, Scene/Compare classification or active
 physical features; multiple words can match different fields. The geometry
 filter matches **Globe** or **Flat** and atmosphere covers all supported models,
@@ -159,9 +157,8 @@ stored in History; missing cached relation flags are recalculated read-only.
 
 Filters apply to **Pinned and Recent** together, retaining their sections,
 order and absence of duplicate records. The panel reports **Showing N of M
-snapshots**; a no-match result gives a clear empty state. Only matching records
-appear in the selected-snapshot dropdown. **Clear filters** restores the full
-view. Changing any filter clears bulk checkbox selection so hidden records are
+snapshots**; a no-match result gives a clear empty state. Only matching records appear in the gallery and the selection panel follows
+visible results. **Clear filters** restores the full view. Changing any filter clears bulk checkbox selection so hidden records are
 not accidentally targeted by a later batch operation. Search refresh is
 briefly debounced (150 ms). Choices persist with browser-local Application
 Preferences (`historyFilters`); neither exported experiments nor portable
@@ -171,13 +168,14 @@ clears the filters; Reset Workspace Layout does not.
 Manual check: save a named Scene and Compare snapshots that differ only by
 Globe radius, only by temperature gradient, and only by inactive Vacuum
 settings. Verify Same/Different and ordinary physical filters agree, that
-Scene excludes A/B constraints, and that the same IDs appear in the dropdown and gallery,
+Scene excludes A/B constraints, and that the inspector always shows a visible card,
 reload with History open, then clear filters and verify all original records
 remain unchanged. Check that the no-matches message differs from empty History.
 
 ## Bulk selection and Animation staging (current; formerly Storyboard shortlist)
 
-The **Select shown** action checks only the currently rendered cards (respecting
+Enter **Manage** to expose checkboxes and group actions. The **Select shown**
+action checks only the currently rendered cards (respecting
 filters, sort order, and a collapsed Pinned section). **Clear selection** resets
 the temporary checkbox selection. Pin selected and Delete selected operate on
 shown checked records only; pinned deletion remains blocked and explicitly
@@ -252,30 +250,36 @@ specified. A screenshot crossfade is not a physical optics calculation.
 
 ## Smoke test in Opera
 
-1. Open Modern and use **Save snapshot** below Scene (or Compare) output. Open History, change surface/atmosphere,
-   and wait for an automatic snapshot. Moving only the camera must not create
-   more automatic snapshots.
-2. Save Compare A/B with different physics for A and B. Hover its thumbnail:
-   the unified Preview must show the larger, correctly white-background image,
-   both model configurations and A/B differences; the live scene must not change.
-   Test a saved snapshot without a thumbnail, as well as an older transparent
-   screenshot if one is available.
-3. Move the pointer from the thumbnail onto the Preview, activate **Keep open**,
-   move away, then use Esc or Close. Test near the right/bottom window edges.
-   With keyboard focus on a thumbnail, use **Space** for persistent preview
-   and **Enter** for Restore; on a touch device, tap once for preview. A desktop
-   single click selects and double-click restores via protected recovery.
-4. Pin two snapshots and check that both move into **Pinned** above **Recent**,
-   with no duplicates. Collapse Pinned and reload: the fold state should persist.
-   Unpin one snapshot and check that it returns to Recent. Change S/M/L and
-   verify the card size preference also persists.
-5. Try the Delete icon on a pinned snapshot (disabled), unpin and delete it
-   (confirmation required). Test that batch deletion rejects checked pinned
-   records, and that clicking/holding corner icons or checkboxes never
-   restores. Test Clear automatic separately from the explicit Clear all action.
-6. Check that History inspection does not trigger expensive physical redraws,
-   that Scene/Compare selection continues to work, and that the live viewport
-   remains unaffected by merely opening the Preview.
+1. Open Modern and use **Save snapshot** below Scene (or Compare) output.
+   Change surface/atmosphere and wait for an automatic snapshot. Moving only
+   the camera must not create another automatic snapshot.
+2. Save Compare A/B with different physics for A and B. Open History and click
+   the card: the **Selected experiment** panel must show the original enlarged
+   image, both model configurations and A/B differences, without changing the
+   live scene. Try an entry without a thumbnail and an older transparent image.
+3. Press **Restore experiment** on a snapshot different from the active scene.
+   The current scene must be recorded as protected recovery and History must
+   close after the new scene loads. Reopen History and try the identical
+   snapshot; this also closes the dialog, without creating new history records.
+   Simulate a failed recovery write: the live scene must be unchanged and the
+   error visible beside the Restore button.
+4. Check that clicking, double-clicking or keyboard-activating cards never
+   restores by itself. Click another card and verify the side panel tracks
+   selection immediately. Search for a missing name: the selection must clear
+   and Restore must be disabled, without deleting history records. Keyboard
+   Tab + Enter on a card should only select it.
+5. Pin two snapshots and check both move into **Pinned** above **Recent**.
+   Collapse Pinned and reload to check the saved fold preference. Unpin a
+   snapshot and verify that it returns to Recent. Change S/M/L and check the
+   card size preference persists.
+6. Confirm **Delete snapshot** is disabled when pinned, then unpin and delete
+   with confirmation. Enter **Manage** to expose checkboxes, test bulk Pin,
+   Delete (pinned entries must be blocked) and **Add selected to Animation**.
+   Exit Manage and verify checkboxes disappear. Separately test **More history
+   tools → Clear automatic** and **Clear all history**, with confirmation.
+7. Verify that inspecting History does not trigger optical redraws and that
+   Scene/Compare switching, retained animation picks and current scene remain
+   unaffected by card selection alone.
 
 ## Working-session reload checks
 
@@ -294,13 +298,13 @@ specified. A screenshot crossfade is not a physical optics calculation.
 
 ## Named snapshots and descriptions
 
-Use the small **✎** action beneath a History thumbnail to open the snapshot
-editor. A snapshot can have an optional **name** (up to 120 characters) and
+Choose a History card and press **Edit details** in the selection panel to
+open the snapshot editor. A snapshot can have an optional **name** (up to 120 characters) and
 **description** (up to 1000 characters). Save details to update that particular
 IndexedDB history record. Empty name falls back to the automatic Scene/Compare
-physics label; the classification is retained in the unified Preview even for
-named snapshots. Notes appear in Preview, without increasing compact card size.
-The selected-snapshot dropdown also displays user names.
+physics label; the classification is retained in the selected-experiment inspector even for
+named snapshots. Notes appear in the inspector without increasing card size.
+The gallery uses the saved name when present.
 
 Names and descriptions belong to the **history record**, not the version-1
 experiment JSON, its full-state fingerprint, physical signature or screenshot.
@@ -326,8 +330,7 @@ remains in the source only for migration and compatible plain experiment JSON.
 
 History has four portable actions:
 
-- **Export selected snapshot** exports the chosen History record (use the
-  selected-snapshot dropdown first). **Export all snapshots** backs up the
+- **Export snapshot** exports the selected History card from its detail panel. **Export all snapshots** backs up the
   journal, including protected manual/recovery and automatic records. Both use
   `format: "curvature-modern-history"`, `version: 1` and a `snapshots` array.
   Each entry contains validated version-1 `experiment`, optional `name` and

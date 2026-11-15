@@ -59,17 +59,20 @@ Do **not** treat a matching silhouette or a pixel difference alone as proof of p
 ### Save and share Modern scenes
 
 - **Copy experiment URL** creates a direct `CurvatureModern.html?ui=modern&experiment=...` link. Its data format is different from Legacy `?state=`.
-- **History** is now the single browser-local archive for named and automatic experiments. Use **Save snapshot** below the Scene/Compare result, ✎ in History to add a name and notes, and **Restore selected** or double-click to load a saved configuration.
+- **History** is now the single browser-local archive for named and automatic experiments. Use **Save snapshot** below the Scene/Compare result, open History, click a card to view its saved image and physical settings, and press **Restore experiment**. History closes after success; a protected recovery snapshot is created first. **Edit details** adds a name and notes.
 - **History filters** search saved names, notes and physical characteristics, with
   **Type** (Scene/Compare), **Geometry** (Globe/Flat) and **Atmosphere** choices.
-  Filtered results appear in Pinned/Recent and the snapshot dropdown without
-  altering or deleting saved records. In Compare, geometry and atmosphere must
+  Filtered results appear in Pinned/Recent and the selected-card inspector
+  without altering or deleting saved records. Search is always visible; advanced
+  filters are collapsed by default. Use **Manage** for checkbox selection and
+  batch actions; use **More history tools** for import/export of the archive and
+  clearing old records. In Compare, geometry and atmosphere must
   match one model together. The **A/B differences** group offers independent
   **Same / Different** filters for geometry and active refraction (not merely
   atmosphere model names). Those constraints show Compare records only, and
   ignore inactive Flat radii and Vacuum gradients. Use **Clear filters** to return to all snapshots;
   filter preferences survive reloads in the same browser.
-- **History → Export selected snapshot** or **Export all snapshots** creates portable JSON including annotations, pins and available previews; **Import JSON** adds validated snapshots to History (it does not silently replace the live experiment). **Export current experiment JSON** preserves the original plain v1 schema for shared URLs and older releases.
+- **History → Export snapshot** (selected card) or **More history tools → Export all snapshots** creates portable JSON including annotations, pins and available previews; **Import JSON** adds validated snapshots to History (it does not silently replace the live experiment). **Export current experiment JSON** preserves the original plain v1 schema for shared URLs and older releases.
 - Named entries from the retired Experiment Library (`curvature-modern-library-v1` in localStorage) are copied automatically into History on startup; the original library is retained for rollback. If IndexedDB is unavailable, migration is retried on a later load. Browser storage is still device/profile/origin-specific until exported.
 - Historical `gpuProbe` fields may still be accepted by the experiment validator for backward compatibility. They **do not** restore the removed research execution paths.
 

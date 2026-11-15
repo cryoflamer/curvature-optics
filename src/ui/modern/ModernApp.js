@@ -775,6 +775,7 @@
       historyPanelOpen=defaults.historyPanelOpen;
       historyFilters=defaults.historyFilters;
       historyStoryboardQueue=[];
+      historySelectedId='';setHistoryManageMode(false);
       syncHistoryFilterControls();
       var historyPanel=newUiEl('ModernHistoryPanel'),historyToggle=newUiEl('ModernHistoryToggle');
       if(historyPanel)historyPanel.hidden=true;
@@ -990,6 +991,8 @@
   }
   var historyMultiSelection=Object.create(null);
   var historyShownIds=[];
+  var historySelectedId='';
+  var historyManageMode=false;
   var historyRenderedKeys={Scene:null,A:null,B:null};
   var HISTORY_IDLE_MS=1600;
   // Timestamped physical renders are the only eligible screenshot sources.
@@ -2996,9 +2999,30 @@
       if(typeof name.focus==='function')name.focus();
     });
   }
+  function updateHistorySelection(entry){
+    historySelectedId=entry?String(entry.id):'';
+    var gallery=newUiEl('ModernHistoryGallery');
+    if(gallery&&historyUI)historyUI.select(gallery,historySelectedId);
+    if(historyUI)historyUI.renderDetails(document,newUiEl('ModernHistoryDetailsContent'),entry);
+    [['ModernHistoryRestore',!!entry],['ModernHistoryEdit',!!entry],
+      ['ModernHistoryPin',!!entry],['ModernHistoryExportSelected',!!entry],
+      ['ModernHistoryDelete',!!entry&&!entry.pinned]].forEach(function(item){
+      var node=newUiEl(item[0]);if(node)node.disabled=!item[1];
+    });
+    var pin=newUiEl('ModernHistoryPin');
+    if(pin)pin.textContent=entry&&entry.pinned?'Unpin snapshot':'Pin snapshot';
+  }
+  function setHistoryManageMode(enabled){
+    historyManageMode=!!enabled;
+    if(!historyManageMode)historyMultiSelection=Object.create(null);
+    var tools=newUiEl('ModernHistoryManageTools');if(tools)tools.hidden=!historyManageMode;
+    var button=newUiEl('ModernHistoryManage');
+    if(button){button.setAttribute('aria-pressed',String(historyManageMode));
+      button.textContent=historyManageMode?'Done managing':'Manage';}
+    historyMultiCount();
+  }
   function refreshHistoryList(selectedId){
     if(!experimentHistory)return Promise.resolve([]);
-    var select=newUiEl('ModernHistorySelect');
     return experimentHistory.list().then(function(entries){
       historyLoadError=null;snapshotSaveError=null;
       savedHistorySignatures=new Map();
@@ -3031,61 +3055,35 @@
         if(!historyShownIds.includes(id))delete historyMultiSelection[id];
       });
       historyMultiCount();
-      if(!select)return entries;
-      var previous=selectedId===undefined?select.value:String(selectedId);
-      select.textContent='';
-      var placeholder=document.createElement('option');
-      placeholder.value='';placeholder.textContent=!entries.length?'No snapshots yet':
-        !visible.length?'No matches':'Choose snapshot';
-      select.appendChild(placeholder);
-      visible.forEach(function(entry){
-        var option=document.createElement('option');option.value=String(entry.id);
-        var scene=entry.features&&entry.features.mode||entry.experiment.display.mode;
-        var label=scene==='compare'?'Compare A/B':'Scene';
-        option.textContent=(entry.name?entry.name+' · ':'')+
-          new Date(entry.createdAt).toLocaleString()+' · '+label+' · '+entry.source+
-          (entry.pinned?' · pinned':'');
-        select.appendChild(option);
-      });
-      select.value=previous&&visible.some(function(entry){return String(entry.id)===previous;})?previous:'';
+      var wanted=selectedId===undefined?historySelectedId:String(selectedId);
+      var chosen=visible.find(function(entry){
+        return String(entry.id)===wanted&&historyShownIds.includes(entry.id);
+      })||visible.find(function(entry){return historyShownIds.includes(entry.id);})||null;
+      // Select the first visible card by default; the selection never restores
+      // anything until the user explicitly presses Restore experiment.
       var gallery=newUiEl('ModernHistoryGallery'),panel=newUiEl('ModernHistoryPanel');
       if(gallery&&historyUI&&panel&&!panel.hidden){
         historyUI.setSize(gallery,historyGallerySize);
-        historyUI.render(document,gallery,visible,select.value,{
-        select:function(id){select.value=String(id);historyUI.select(gallery,id);},
-        restore:function(id){handleHistoryRestore(id);},
-        pin:function(id,pinned){
-          experimentHistory.pin(id,pinned).then(function(){return refreshHistoryList(id);})
-            .catch(function(error){historyStatus(error.message,true);});
-        },
-        edit:function(id){openHistoryMetadataEditor(id).catch(function(error){
-          historyStatus(error.message,true);
-        });},
-        remove:function(id){
-          if(entries.some(function(entry){return entry.id===id&&entry.pinned;})){
-            historyStatus('Unpin this snapshot before deleting it.',true);return;
+        historyUI.render(document,gallery,visible,chosen&&chosen.id,{
+          select:function(id){
+            updateHistorySelection(visible.find(function(entry){return entry.id===id;})||null);
+          },
+          setPinnedCollapsed:function(collapsed){
+            historyPinnedCollapsed=collapsed;
+            historyMultiSelection=Object.create(null);
+            saveApplicationPreferences();refreshHistoryList();
+          },
+          multi:function(id,checked){
+            if(checked)historyMultiSelection[id]=true;
+            else delete historyMultiSelection[id];
+            historyMultiCount();
           }
-          if(!root.confirm||!root.confirm('Delete snapshot '+id+'?'))return;
-          experimentHistory.remove(id).then(function(){
-            delete historyMultiSelection[id];
-            historyStatus('Snapshot deleted.');return refreshHistoryList();
-          }).catch(function(error){historyStatus(error.message,true);});
-        },
-        setPinnedCollapsed:function(collapsed){
-          historyPinnedCollapsed=collapsed;
-          historyMultiSelection=Object.create(null);
-          saveApplicationPreferences();refreshHistoryList();
-        },
-        multi:function(id,checked){
-          if(checked)historyMultiSelection[id]=true;
-          else delete historyMultiSelection[id];
-          historyMultiCount();
-        }
-      },historyMultiSelection,{pinnedCollapsed:historyPinnedCollapsed,
-        emptyFiltered:entries.length>0,
-        filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
-        hasPinned:entries.some(function(entry){return !!entry.pinned;})});
+        },historyMultiSelection,{pinnedCollapsed:historyPinnedCollapsed,
+          manage:historyManageMode,emptyFiltered:entries.length>0,
+          filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
+          hasPinned:entries.some(function(entry){return !!entry.pinned;})});
       }
+      updateHistorySelection(chosen);
       return entries;
     });
   }
@@ -3103,15 +3101,15 @@
       var current=experimentSnapshot();
       if(historyFingerprint.exactSignature(current)===historyFingerprint.exactSignature(target)){
         historyStatus('This snapshot already matches the current experiment.');
-        return refreshHistoryList(id);
+        return refreshHistoryList(id).then(function(){setHistoryOpen(false);});
       }
       return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
         if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
         applyExperiment(target);syncNumericInputs();syncCompareEditor();
-        setMode(state.mode,false);resetHistoryBaseline();
+        setMode(state.mode,true);resetHistoryBaseline();
         historyStatus('Snapshot restored. Previous state '+
           (backup.created?'saved as protected recovery point.':'already in history.'));
-        return refreshHistoryList(id);
+        return refreshHistoryList(id).then(function(){setHistoryOpen(false);});
       });
     }).finally(function(){historyRestoreBusy=false;});
   }
@@ -3137,6 +3135,7 @@
       if(typeof panel.focus==='function')panel.focus();
     }else{
       if(historyUI)historyUI.hideInspector(newUiEl('ModernHistoryGallery'));
+      setHistoryManageMode(false);
       if(typeof toggle.focus==='function')toggle.focus();
     }
   }
@@ -3223,6 +3222,7 @@
     function handle(operation){
       Promise.resolve().then(operation).catch(function(error){historyStatus(error.message,true);});
     }
+    setHistoryManageMode(false);
     toggle.addEventListener('click',function(){setHistoryOpen(panel.hidden);});
     var historyBackdrop=newUiEl('ModernHistoryBackdrop');
     if(historyBackdrop)historyBackdrop.addEventListener('click',function(){setHistoryOpen(false);});
@@ -3235,8 +3235,10 @@
     panel.hidden=!historyPanelOpen;
     if(historyBackdrop)historyBackdrop.hidden=!historyPanelOpen;
     toggle.setAttribute('aria-expanded',String(historyPanelOpen));
-    el('ModernHistorySelect').addEventListener('change',function(){
-      handle(function(){return refreshHistoryList();});
+    var manageButton=newUiEl('ModernHistoryManage');
+    if(manageButton)manageButton.addEventListener('click',function(){
+      setHistoryManageMode(!historyManageMode);
+      refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
     });
     var historySort=newUiEl('ModernHistorySort');
     if(historySort)historySort.addEventListener('change',function(){
@@ -3321,9 +3323,14 @@
         historyStatus('Deleted '+ids.length+' selected snapshots.');return refreshHistoryList();
       });
     });});
+    var editSelected=newUiEl('ModernHistoryEdit');
+    if(editSelected)editSelected.addEventListener('click',function(){handle(function(){
+      if(!historySelectedId)throw RangeError('Choose an experiment to edit');
+      return openHistoryMetadataEditor(historySelectedId);
+    });});
     var selectedPin=newUiEl('ModernHistoryPin');
     if(selectedPin)selectedPin.addEventListener('click',function(){handle(function(){
-      var id=el('ModernHistorySelect').value;
+      var id=historySelectedId;
       if(!id)throw RangeError('Select a history snapshot to pin or unpin');
       return experimentHistory.get(id).then(function(entry){
         if(!entry)throw RangeError('History snapshot not found');
@@ -3362,10 +3369,10 @@
         }).finally(function(){snapshotSaveBusy=false;updateSnapshotSaveAction();});
     });
     el('ModernHistoryRestore').addEventListener('click',function(){handle(function(){
-      return restoreHistorySnapshot(el('ModernHistorySelect').value);
+      return restoreHistorySnapshot(historySelectedId);
     });});
     el('ModernHistoryDelete').addEventListener('click',function(){handle(function(){
-      var id=el('ModernHistorySelect').value;
+      var id=historySelectedId;
       if(!id)throw RangeError('Select a history snapshot to delete');
       return experimentHistory.get(id).then(function(entry){
         if(entry&&entry.pinned)throw RangeError('Unpin this snapshot before deletion');
@@ -3386,7 +3393,7 @@
     });});
     var exportSelected=newUiEl('ModernHistoryExportSelected');
     if(exportSelected)exportSelected.addEventListener('click',function(){handle(function(){
-      var id=newUiEl('ModernHistorySelect').value;
+      var id=historySelectedId;
       if(!id)throw RangeError('Select a snapshot to export');
       return experimentHistory.get(id).then(function(entry){
         if(!entry)throw RangeError('Snapshot not found');

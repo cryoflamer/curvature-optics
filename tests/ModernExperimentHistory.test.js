@@ -178,12 +178,16 @@ test('Modern panel integrates separately from library and never rewrites existin
   const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   assert.equal(ids.length,new Set(ids).size);
-  for(const id of ['ModernHistoryPanel','ModernHistoryToggle','ModernSnapshotSave','ModernSnapshotSaveBar','ModernSnapshotSaveStatus','ModernHistorySelect',
+  for(const id of ['ModernHistoryPanel','ModernHistoryToggle','ModernSnapshotSave','ModernSnapshotSaveBar','ModernSnapshotSaveStatus','ModernHistoryManage','ModernHistoryDetailsContent',
     'ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto','ModernHistoryStatus'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.ok(html.indexOf('ModernSnapshotSaveBar')>html.indexOf('ModernCompareViews'));
   assert.ok(html.indexOf('ModernSnapshotSaveBar')>html.indexOf('ModernHistoryPanel'));
   assert.doesNotMatch(html,/id="ModernHistorySave"/);
+  assert.doesNotMatch(html,/id="ModernHistorySelect"/,
+    'card selection replaces the redundant top dropdown');
+  assert.match(html,/id="ModernHistoryManageTools"[^>]+hidden/,
+    'bulk operations start hidden');
   assert.ok(html.indexOf('ModernExperimentFingerprint.js')<html.indexOf('ModernExperimentHistory.js'));
   assert.ok(html.indexOf('ModernExperimentHistory.js')<html.indexOf('ModernApp.js'));
   assert.match(app,/experimentHistory\.record\(current,'recovery',historyThumbnail\(current\)\)\.then\(function\(backup\)/);
@@ -210,7 +214,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'ModernHorizonStatusA','ModernHorizonStatusB',
     'ModernHistoryPanel','ModernHistoryToggle','ModernHistoryClose','ModernSnapshotSave',
     'ModernSnapshotSaveBar','ModernSnapshotSaveStatus',
-    'ModernHistorySelect','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
+    'ModernHistoryManage','ModernHistoryManageTools','ModernHistoryDetailsContent',
+    'ModernHistoryEdit','ModernHistoryExportSelected','ModernHistoryRestore','ModernHistoryDelete','ModernHistoryClearAuto',
     'ModernHistoryStatus','ModernHistoryGallery','ModernHistorySize','ModernHistorySort',
     'ModernHistoryFilterQuery','ModernHistoryFilterMode','ModernHistoryFilterGeometry',
     'ModernHistoryFilterAtmosphere','ModernHistoryFilterGeometryRelation',
@@ -230,6 +235,9 @@ test('Live Modern integration saves and restores a full experiment and protects 
     get(){return '';},set(value){if(value==='')this.children=[];}
   });
   Object.defineProperty(nodes.get('ModernHistoryGallery'),'textContent',{
+    get(){return '';},set(value){if(value==='')this.children=[];}
+  });
+  Object.defineProperty(nodes.get('ModernHistoryDetailsContent'),'textContent',{
     get(){return '';},set(value){if(value==='')this.children=[];}
   });
   nodes.get('ModernPreset').value='pontchartrain';
@@ -293,6 +301,21 @@ test('Live Modern integration saves and restores a full experiment and protects 
   nodes.get('ModernHistoryToggle').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,25)); // allow accurate scheduled redraw to complete
   const store=app.getHistoryStore();assert.ok(store);
+  function findCard(id){
+    const sections=nodes.get('ModernHistoryGallery').children.filter(
+      node=>node.className==='modern-history-section');
+    for(const section of sections){
+      const grid=section.children.find(node=>node.className==='modern-history-section-grid');
+      if(!grid)continue;
+      const card=grid.children.find(node=>node['data-snapshot-id']===String(id));
+      if(card)return card;
+    }
+    return null;
+  }
+  function enterManage(){
+    if(nodes.get('ModernHistoryManage')['aria-pressed']!=='true')
+      nodes.get('ModernHistoryManage').listeners.click();
+  }
   nodes.get('ModernSnapshotSave').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,60));
   const list=await store.list();assert.equal(list.length,1);assert.equal(list[0].source,'manual');
@@ -301,12 +324,15 @@ test('Live Modern integration saves and restores a full experiment and protects 
   const id=list[0].id;
   assert.equal(nodes.get('ModernSnapshotSave').hidden,true,'existing saved experiment hides Save');
   assert.match(nodes.get('ModernSnapshotSaveStatus').textContent,/Already in History/);
-  // Rename through the real card action and form, not just through the store.
-  const renameSections=nodes.get('ModernHistoryGallery').children.filter(
-    node=>node.className==='modern-history-section');
-  const renameCard=renameSections.at(-2).children[1].children[0];
-  const editButton=renameCard.children[3].children[2].children[1];
-  editButton.listeners.click({stopPropagation(){}});
+  // The selection is on the card; Edit details is alongside the persistent
+  // physical inspector rather than hidden in a footer beneath each thumbnail.
+  assert.ok(findCard(id));
+  assert.ok(nodes.get('ModernHistoryDetailsContent').children.length,
+    'the selected snapshot has a visible preview/physical details panel');
+  assert.equal(nodes.get('ModernHistoryManageTools').hidden,true);
+  assert.equal(findCard(id).children.some(node=>node.className==='modern-history-multi'),false,
+    'bulk checkboxes are absent until Manage is enabled');
+  nodes.get('ModernHistoryEdit').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,20));
   assert.equal(nodes.get('ModernHistoryMetadataDialog').open,true);
   nodes.get('ModernHistoryMetadataName').value='Inversion study';
@@ -316,15 +342,13 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.equal(nodes.get('ModernHistoryMetadataDialog').open,false);
   assert.equal((await store.get(id)).name,'Inversion study');
   assert.equal((await store.get(id)).description,'Observed at 15 m');
-  assert.ok(nodes.get('ModernHistorySelect').children.some(node=>/Inversion study/.test(node.textContent)),
-    'named snapshot appears in the selection menu');
+  assert.ok(nodes.get('ModernHistoryDetailsContent').children[0].children.some(
+    node=>node.textContent==='Inversion study'),
+    'the visible inspector shows the renamed snapshot');
   assert.equal(nodes.get('ModernSnapshotSave').hidden,true,
     'renaming never changes the active experiment signature');
   // Cancelling a subsequent edit must not persist the partial form data.
-  const currentSections=nodes.get('ModernHistoryGallery').children.filter(
-    node=>node.className==='modern-history-section');
-  currentSections.at(-2).children[1].children[0].children[3].children[2].children[1]
-    .listeners.click({stopPropagation(){}});
+  nodes.get('ModernHistoryEdit').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,12));
   nodes.get('ModernHistoryMetadataName').value='Unsaved draft';
   nodes.get('ModernHistoryMetadataCancel').listeners.click();
@@ -334,25 +358,36 @@ test('Live Modern integration saves and restores a full experiment and protects 
   await new Promise(resolve=>setTimeout(resolve,25));
   assert.equal(nodes.get('ModernSnapshotSave').hidden,false,
     'changing camera creates a new full experiment without auto-history');
-  nodes.get('ModernHistorySelect').value=String(id);
+  findCard(id).children[0].listeners.click({stopPropagation(){}});
   db.failAdd=true;
   nodes.get('ModernHistoryRestore').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,60));
   assert.equal(app.getModel().Height,66,'failed recovery must block restoration');
   assert.match(nodes.get('ModernHistoryStatus').textContent,/Quota exceeded/);
+  assert.equal(nodes.get('ModernHistoryPanel').hidden,false,
+    'on recovery failure the History dialog stays open');
   db.failAdd=false;
   const gallery=nodes.get('ModernHistoryGallery');
   assert.equal(gallery['data-size'],'small','compact is the default gallery density');
-  const sections=gallery.children.filter(x=>x.className==='modern-history-section');
-  const card=sections[0].children[1].children.find(x=>x['data-snapshot-id']===String(id));
+  const card=findCard(id);
   // Manual checkpoints are pinned by the existing History policy.
   assert.ok(card,'manual snapshot appears in the real rendered gallery');
-  card.children[0].listeners.dblclick({stopPropagation(){}});
-  await new Promise(resolve=>setTimeout(resolve,60));
-  assert.equal(app.getModel().Height,15,'double-click restores through guarded path');
+  // A card click only selects. The explicit Restore action closes History.
+  card.children[0].listeners.click({stopPropagation(){}});
+  assert.equal(app.getModel().Height,66,'selecting never changes physics');
   nodes.get('ModernHistoryRestore').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,60));
-  assert.equal((await store.list()).length,2,'toolbar Restore of active state is a no-op');
+  assert.equal(app.getModel().Height,15,'selected card restores through guarded path');
+  assert.equal(nodes.get('ModernHistoryPanel').hidden,true,
+    'successful Restore dismisses the dialog to reveal the experiment');
+  assert.equal(nodes.get('ModernHistoryToggle')['aria-expanded'],'false');
+  nodes.get('ModernHistoryToggle').listeners.click();
+  nodes.get('ModernHistoryRestore').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal((await store.list()).length,2,'Restoring already-active snapshot is a no-op');
+  assert.equal(nodes.get('ModernHistoryPanel').hidden,true,
+    'Restore of the active snapshot still returns to the experiment');
+  nodes.get('ModernHistoryToggle').listeners.click();
   const sizeControl=nodes.get('ModernHistorySize');
   sizeControl.value='large';sizeControl.listeners.change();
   assert.equal(gallery['data-size'],'large');
@@ -387,15 +422,15 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.equal(pair.features.mode,'compare');
   assert.equal(pair.thumbnail.mode,'compare');
   assert.equal(pair.thumbnail.width,960);
-  // Search and filters affect both gallery and select, never IndexedDB/physics.
+  // Search and filters affect the gallery and selected inspector, never IndexedDB/physics.
   const count=nodes.get('ModernHistoryFilterCount');
   assert.equal(count.textContent,'Showing 4 of 4 snapshots');
   const query=nodes.get('ModernHistoryFilterQuery');
   query.value='Inversion study';query.listeners.input();
   await new Promise(resolve=>setTimeout(resolve,230));
   assert.equal(count.textContent,'Showing 1 of 4 snapshots');
-  assert.equal(nodes.get('ModernHistorySelect').children.at(-1).value,String(id),
-    'latest selection option is the one matching named snapshot');
+  assert.ok(findCard(id),'the named snapshot remains visible after search');
+  assert.equal(nodes.get('ModernHistoryRestore').disabled,false);
   assert.match(nodes.get('ModernHistoryGallery').children.at(-1).className,/modern-history-section/);
   assert.equal(rootWindow.localStorage.data.size>0,true);
   assert.equal(JSON.parse(rootWindow.localStorage.data.get('curvature-modern-application-preferences-v1')).historyFilters.query,'Inversion study');
@@ -429,7 +464,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
   geometryRelation.listeners.change();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(count.textContent,'Showing 1 of 4 snapshots');
-  assert.equal(nodes.get('ModernHistorySelect').children.at(-1).value,String(pair.id));
+  assert.ok(findCard(pair.id),'Compare snapshot matches the relation filter');
   refractionRelation.value=pair.features.relations.refractionSame?'same':'different';
   refractionRelation.listeners.change();
   await new Promise(resolve=>setTimeout(resolve,35));
@@ -455,6 +490,12 @@ test('Live Modern integration saves and restores a full experiment and protects 
   assert.equal(count.textContent,'Showing 4 of 4 snapshots');
   // Storyboard picks are separate from temporary bulk selection and persist
   // as ordered stable IDs, even while collecting from different filters.
+  enterManage();
+  await new Promise(resolve=>setTimeout(resolve,35));
+  assert.equal(nodes.get('ModernHistoryManageTools').hidden,false);
+  assert.ok(findCard(pair.id).children.some(node=>node.children&&node.children.some(
+    child=>child.className==='modern-history-multi')),
+    'bulk checkboxes only exist in Manage mode');
   kind.value='compare';kind.listeners.change();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistorySelectVisible').disabled,false);
@@ -468,6 +509,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
     'curvature-modern-application-preferences-v1')).historyStoryboardQueue;
   assert.deepEqual(queue,[pair.id]);
   nodes.get('ModernHistoryToggle').listeners.click(); // reopen the overlay to select more
+  enterManage();await new Promise(resolve=>setTimeout(resolve,35));
   kind.value='scene';kind.listeners.change();
   await new Promise(resolve=>setTimeout(resolve,35));
   assert.equal(nodes.get('ModernHistoryMultiCount').textContent,'0 shown snapshots selected',
@@ -497,6 +539,7 @@ test('Live Modern integration saves and restores a full experiment and protects 
   // Frame reordering now belongs to the Studio timeline, not a second History strip.
   assert.equal(nodes.get('ModernHistoryQueueCount').textContent,'4 frames');
   nodes.get('ModernHistoryToggle').listeners.click(); // handoff closed the overlay
+  enterManage();await new Promise(resolve=>setTimeout(resolve,35));
   // Bulk operations cannot silently delete pinned or filtered-out records.
   nodes.get('ModernHistorySelectVisible').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,35));

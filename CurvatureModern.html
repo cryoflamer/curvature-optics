@@ -121,53 +121,77 @@
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
-    <p class="modern-history-hint">Double-click a snapshot to restore it; one click selects it. Use ✎ to name it or add notes. Hover for a larger preview and physical settings; use Space on the focused image or tap on touch devices to keep it open. <span title="Automatic snapshots follow physical changes, not camera moves, animation playback or editor tabs. Manual snapshots retain the full experiment and camera.">Automatic history tracks physics only.</span></p>
-    <div class="modern-history-toolbar"><div class="modern-library-row"><label for="ModernHistorySelect">Selected snapshot</label><select id="ModernHistorySelect"><option value="">No snapshots yet</option></select></div><label class="modern-history-sort">Order <select id="ModernHistorySort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label><label class="modern-history-size" for="ModernHistorySize">Cards <select id="ModernHistorySize" aria-label="History card size"><option value="small">S · Compact</option><option value="medium">M · Medium</option><option value="large">L · Large</option></select></label></div>
-    <div class="modern-history-filters" role="search" aria-label="Filter saved experiments">
-      <label class="modern-history-filter-search" for="ModernHistoryFilterQuery">Search
-        <input id="ModernHistoryFilterQuery" type="search" maxlength="160" placeholder="Name, notes, physical settings…" autocomplete="off">
+    <p class="modern-history-hint">Click a snapshot to inspect its saved image and physical settings, then choose <strong>Restore experiment</strong>. A recovery copy of the current experiment is saved before replacement.</p>
+    <div class="modern-history-toolbar">
+      <label class="modern-history-search" for="ModernHistoryFilterQuery">Search experiments
+        <input id="ModernHistoryFilterQuery" type="search" maxlength="160" placeholder="Name, notes, physics…" autocomplete="off">
       </label>
-      <label for="ModernHistoryFilterMode">Type <select id="ModernHistoryFilterMode">
-        <option value="all">Scene + Compare</option><option value="scene">Scene only</option><option value="compare">Compare A/B only</option>
-      </select></label>
-      <label for="ModernHistoryFilterGeometry">Geometry <select id="ModernHistoryFilterGeometry" title="In Compare, matches either A or B">
-        <option value="any">Any geometry</option><option value="globe">Globe (either A/B)</option><option value="flat">Flat (either A/B)</option>
-      </select></label>
-      <label for="ModernHistoryFilterAtmosphere">Atmosphere <select id="ModernHistoryFilterAtmosphere" title="In Compare, matches either A or B">
-        <option value="any">Any atmosphere</option><option value="vacuum">Vacuum</option><option value="standard">Standard</option>
-        <option value="temperature-lapse">Temperature lapse</option><option value="profile-transition">Profile transition</option>
-        <option value="inverse-temperature">Inverse temperature</option><option value="inverse-spherical">Inverse spherical</option>
-        <option value="exponential-occlusion">Exponential occlusion</option>
-      </select></label>
-      <fieldset class="modern-history-relations" aria-label="Compare A/B difference filters">
-        <legend>A/B differences <span>active physics only · Compare snapshots</span></legend>
-        <label for="ModernHistoryFilterGeometryRelation">Geometry A/B <select id="ModernHistoryFilterGeometryRelation" title="Compare active geometry including Globe radius; Flat radius is ignored">
-          <option value="any">Any</option><option value="same">Same</option><option value="different">Different</option>
+      <span id="ModernHistoryFilterCount" class="modern-history-count" role="status" aria-live="polite">Showing 0 of 0 snapshots</span>
+      <label class="modern-history-sort">Order <select id="ModernHistorySort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+      <label class="modern-history-size" for="ModernHistorySize">Cards <select id="ModernHistorySize" aria-label="History card size"><option value="small">S · Compact</option><option value="medium">M · Medium</option><option value="large">L · Large</option></select></label>
+      <button type="button" id="ModernHistoryManage" aria-pressed="false" aria-controls="ModernHistoryManageTools">Manage</button>
+    </div>
+    <details class="modern-history-filter-details">
+      <summary>Advanced filters</summary>
+      <div class="modern-history-filters" role="search" aria-label="Filter saved experiments">
+        <label for="ModernHistoryFilterMode">Type <select id="ModernHistoryFilterMode">
+          <option value="all">Scene + Compare</option><option value="scene">Scene only</option><option value="compare">Compare A/B only</option>
         </select></label>
-        <label for="ModernHistoryFilterRefractionRelation">Refraction A/B <select id="ModernHistoryFilterRefractionRelation" title="Compare active refraction including profiles and gradients, not merely the atmosphere model name">
-          <option value="any">Any</option><option value="same">Same</option><option value="different">Different</option>
+        <label for="ModernHistoryFilterGeometry">Geometry <select id="ModernHistoryFilterGeometry" title="In Compare, matches either A or B">
+          <option value="any">Any geometry</option><option value="globe">Globe (either A/B)</option><option value="flat">Flat (either A/B)</option>
         </select></label>
-      </fieldset>
-      <button type="button" id="ModernHistoryFiltersClear">Clear filters</button>
-      <span id="ModernHistoryFilterCount" role="status" aria-live="polite">Showing 0 of 0 snapshots</span>
+        <label for="ModernHistoryFilterAtmosphere">Atmosphere <select id="ModernHistoryFilterAtmosphere" title="In Compare, matches either A or B">
+          <option value="any">Any atmosphere</option><option value="vacuum">Vacuum</option><option value="standard">Standard</option>
+          <option value="temperature-lapse">Temperature lapse</option><option value="profile-transition">Profile transition</option>
+          <option value="inverse-temperature">Inverse temperature</option><option value="inverse-spherical">Inverse spherical</option>
+          <option value="exponential-occlusion">Exponential occlusion</option>
+        </select></label>
+        <fieldset class="modern-history-relations" aria-label="Compare A/B difference filters">
+          <legend>A/B differences <span>active physics only · Compare snapshots</span></legend>
+          <label for="ModernHistoryFilterGeometryRelation">Geometry A/B <select id="ModernHistoryFilterGeometryRelation" title="Compare active geometry including Globe radius; Flat radius is ignored">
+            <option value="any">Any</option><option value="same">Same</option><option value="different">Different</option>
+          </select></label>
+          <label for="ModernHistoryFilterRefractionRelation">Refraction A/B <select id="ModernHistoryFilterRefractionRelation" title="Compare active refraction including profiles and gradients, not merely the atmosphere model name">
+            <option value="any">Any</option><option value="same">Same</option><option value="different">Different</option>
+          </select></label>
+        </fieldset>
+        <button type="button" id="ModernHistoryFiltersClear">Clear filters</button>
+      </div>
+    </details>
+    <div class="modern-history-workspace">
+      <div id="ModernHistoryGallery" class="modern-history-gallery" aria-label="Saved experiments"></div>
+      <aside class="modern-history-details" aria-label="Selected experiment details">
+        <div id="ModernHistoryDetailsContent" aria-live="polite"><p class="modern-history-empty">Choose an experiment to view its saved preview and physical settings.</p></div>
+        <div class="modern-history-selection-footer">
+          <p id="ModernHistoryStatus" class="modern-library-status modern-status-message" role="status" aria-live="polite"></p>
+          <div class="modern-history-selection-actions">
+            <button type="button" id="ModernHistoryRestore" class="modern-history-restore" disabled>Restore experiment</button>
+            <button type="button" id="ModernHistoryEdit" disabled>Edit details</button>
+            <button type="button" id="ModernHistoryPin" disabled>Pin snapshot</button>
+            <button type="button" id="ModernHistoryExportSelected" disabled>Export snapshot</button>
+            <button type="button" id="ModernHistoryDelete" disabled>Delete snapshot</button>
+          </div>
+        </div>
+      </aside>
     </div>
-    <div id="ModernHistoryGallery" class="modern-history-gallery" aria-label="Saved experiment thumbnails"></div>
-    <div class="modern-history-bulk" role="group" aria-label="Bulk selection of visible snapshots"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistorySelectVisible" type="button">Select shown</button><button id="ModernHistoryClearChecked" type="button">Clear selection</button><button id="ModernHistoryPinChecked" type="button">Pin checked</button><button id="ModernHistoryDeleteChecked" type="button">Delete checked</button><button id="ModernHistoryQueueChecked" type="button">Add selected to Animation</button></div>
-    <div class="modern-history-handoff" role="group" aria-label="Animation frame selection">
-      <span>Collected snapshots: <strong id="ModernHistoryQueueCount">0 frames</strong></span>
-      <button type="button" id="ModernHistoryQueueOpen" title="Append collected snapshots without replacing existing keyframes">Add collected to Animation</button>
-      <button type="button" id="ModernHistoryQueueClear">Clear selection</button>
+    <div id="ModernHistoryManageTools" class="modern-history-manage-tools" hidden>
+      <div class="modern-history-bulk" role="group" aria-label="Bulk selection of visible snapshots"><span id="ModernHistoryMultiCount" role="status">0 snapshots selected</span><button id="ModernHistorySelectVisible" type="button">Select shown</button><button id="ModernHistoryClearChecked" type="button">Clear selection</button><button id="ModernHistoryPinChecked" type="button">Pin checked</button><button id="ModernHistoryDeleteChecked" type="button">Delete checked</button><button id="ModernHistoryQueueChecked" type="button">Add selected to Animation</button></div>
+      <div class="modern-history-handoff" role="group" aria-label="Animation frame selection">
+        <span>Collected snapshots: <strong id="ModernHistoryQueueCount">0 frames</strong></span>
+        <button type="button" id="ModernHistoryQueueOpen" title="Append collected snapshots without replacing existing keyframes">Add collected to Animation</button>
+        <button type="button" id="ModernHistoryQueueClear">Clear selection</button>
+      </div>
     </div>
-    <div class="modern-library-buttons"><button type="button" id="ModernHistoryRestore">Restore selected</button><button type="button" id="ModernHistoryDelete">Delete selected</button><button type="button" id="ModernHistoryPin">Pin / unpin selected</button><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>
-    <div class="modern-history-portable" aria-label="History import and export">
-      <button type="button" id="ModernHistoryExportSelected">Export selected snapshot</button>
-      <button type="button" id="ModernHistoryExportAll">Export all snapshots</button>
-      <button type="button" id="ModernHistoryExportCurrent">Export current experiment JSON</button>
-      <button type="button" id="ModernHistoryImport">Import JSON</button>
-      <input type="file" id="ModernHistoryImportFile" accept=".json,application/json" hidden>
-    </div>
-    <p class="modern-history-portable-note">History exports retain names, notes, pins and available previews. Plain experiment JSON remains supported for sharing.</p>
-    <p id="ModernHistoryStatus" class="modern-library-status modern-status-message" role="status" aria-live="polite"></p>
+    <details class="modern-history-tools"><summary>More history tools</summary>
+      <div class="modern-library-buttons"><button type="button" id="ModernHistoryClearAuto">Clear automatic</button><button type="button" id="ModernHistoryClearAll">Clear all history</button></div>
+      <div class="modern-history-portable" aria-label="History import and export">
+        <button type="button" id="ModernHistoryExportAll">Export all snapshots</button>
+        <button type="button" id="ModernHistoryExportCurrent">Export current experiment JSON</button>
+        <button type="button" id="ModernHistoryImport">Import JSON</button>
+        <input type="file" id="ModernHistoryImportFile" accept=".json,application/json" hidden>
+      </div>
+      <p class="modern-history-portable-note">History exports retain names, notes, pins and available previews. Plain experiment JSON remains supported for sharing.</p>
+    </details>
   </section>
   <dialog id="ModernHistoryMetadataDialog" class="modern-history-editor" aria-labelledby="ModernHistoryMetadataTitle">
     <form id="ModernHistoryMetadataForm">

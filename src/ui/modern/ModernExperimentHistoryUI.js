@@ -190,7 +190,7 @@
     if(!host||!doc)return;
     if(host.__historyInspector){host.__historyInspector.destroy();host.__historyInspector=null;}
     host.textContent='';
-    var inspector=entries.length?createInspector(doc,host):null;host.__historyInspector=inspector;
+    host.__historyInspector=null;
     if(!entries.length){
       host.appendChild(el(doc,'p','modern-history-empty',
         options&&options.emptyFiltered?'No snapshots match these filters. Clear filters to see your saved experiments.':
@@ -200,81 +200,46 @@
     var pinned=entries.filter(function(entry){return !!entry.pinned;});
     var recent=entries.filter(function(entry){return !entry.pinned;});
     function makeCard(entry){
-      var card=el(doc,'article','modern-history-card'+(String(entry.id)===String(selectedId)?' is-selected':''));
+      var active=String(entry.id)===String(selectedId);
+      var card=el(doc,'article','modern-history-card'+(active?' is-selected':''));
       card.setAttribute('data-snapshot-id',String(entry.id));
       card.addEventListener('click',function(event){
         if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename, .modern-card-info-button'))return;
+          event.target.closest('.modern-history-multi'))return;
         actions.select(entry.id);
       });
-      card.addEventListener('dblclick',function(event){
-        if(event&&event.target&&typeof event.target.closest==='function'&&
-          event.target.closest('.modern-history-multi, .modern-history-pin, .modern-history-delete, .modern-history-rename, .modern-card-info-button'))return;
-        if(inspector)inspector.hide();
-        if(actions.restore)actions.restore(entry.id);
-      });
-      var select=button(doc,'','Select snapshot '+entry.id,function(){actions.select(entry.id);});
+      // A card selects only. Restore is an explicit action in the details panel;
+      // double-click/Enter must never change the current physical experiment.
+      var select=button(doc,'','View snapshot '+entry.id,function(){actions.select(entry.id);});
       select.className='modern-history-card-select';
-      select.title=''; // Native tooltips should not obscure the rich preview.
-      select.setAttribute('aria-label','Select snapshot '+entry.id+'; double-click or Enter to restore');
-      select.setAttribute('aria-pressed',String(String(entry.id)===String(selectedId)));
-      select.addEventListener('dblclick',function(event){
-        if(event&&event.stopPropagation)event.stopPropagation();
-        if(inspector)inspector.hide();
-        if(actions.restore)actions.restore(entry.id);
-      });
-      select.addEventListener('keydown',function(event){
-        if(!event)return;
-        if(event.key==='Enter'&&actions.restore){
-          if(event.preventDefault)event.preventDefault();
-          if(inspector)inspector.hide();actions.restore(entry.id);
-        }
-      });
+      select.title='';
+      select.setAttribute('aria-label','View '+displayName(entry)+' and its physical settings');
+      select.setAttribute('aria-pressed',String(active));
       if(entry.thumbnail&&entry.thumbnail.dataUrl){
         var image=el(doc,'img','modern-history-image');
         image.src=entry.thumbnail.dataUrl;image.alt=displayName(entry)+' thumbnail';image.loading='lazy';
         select.className+=' has-preview';select.appendChild(image);
       }else select.appendChild(el(doc,'span','modern-history-no-image','No preview available'));
       card.appendChild(select);
-      if(inspector)inspector.infoButton(card,entry,card,displayName(entry));
-      var pin=button(doc,'',(entry.pinned?'Unpin':'Pin')+' snapshot '+entry.id,function(){
-        if(inspector)inspector.hide();
-        actions.pin(entry.id,!entry.pinned);
-      });
-      pin.className='modern-history-pin'+(entry.pinned?' is-pinned':'');
-      pin.setAttribute('aria-pressed',String(!!entry.pinned));
-      card.appendChild(pin);
-      var remove=button(doc,'',entry.pinned?'Unpin snapshot before deleting':'Delete snapshot '+entry.id,function(){
-        if(entry.pinned)return;
-        if(inspector)inspector.hide();
-        actions.remove(entry.id);
-      });
-      remove.className='modern-history-delete modern-card-delete';
-      remove.disabled=!!entry.pinned;
-      card.appendChild(remove);
       var body=el(doc,'div','modern-history-card-body');
       var title=el(doc,'strong','modern-history-card-title',displayName(entry));
       title.title=entry.name?label(entry):'';
       body.appendChild(title);
       body.appendChild(el(doc,'span','modern-history-card-meta',
         new Date(entry.createdAt).toLocaleString()+' · '+entry.source));
-      var footer=el(doc,'div','modern-history-card-footer');
-      var multiLabel=el(doc,'label','modern-history-multi');
-      multiLabel.title='Select for storyboard / bulk actions';
-      var check=el(doc,'input');check.type='checkbox';check.checked=!!(multi&&multi[entry.id]);
-      check.setAttribute('aria-label','Select snapshot '+entry.id+' for bulk actions');
-      check.addEventListener('change',function(){actions.multi(entry.id,check.checked);});
-      check.addEventListener('click',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
-      check.addEventListener('dblclick',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
-      multiLabel.appendChild(check);
-      multiLabel.appendChild(el(doc,'span','','Select'));
-      footer.appendChild(multiLabel);
-      var rename=button(doc,'✎','Edit snapshot name and description',function(){
-        if(inspector)inspector.hide();
-        if(actions.edit)actions.edit(entry.id);
-      });
-      rename.className='modern-history-rename';
-      footer.appendChild(rename);body.appendChild(footer);
+      body.appendChild(el(doc,'span','modern-history-card-kind',label(entry)));
+      if(entry.pinned)body.appendChild(el(doc,'span','modern-history-card-pinned','Pinned'));
+      if(options&&options.manage){
+        var multiLabel=el(doc,'label','modern-history-multi');
+        multiLabel.title='Select for bulk actions or Animation Studio';
+        var check=el(doc,'input');check.type='checkbox';check.checked=!!(multi&&multi[entry.id]);
+        check.setAttribute('aria-label','Select snapshot '+entry.id+' for bulk actions');
+        check.addEventListener('change',function(){actions.multi(entry.id,check.checked);});
+        check.addEventListener('click',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
+        check.addEventListener('dblclick',function(event){if(event&&event.stopPropagation)event.stopPropagation();});
+        multiLabel.appendChild(check);multiLabel.appendChild(el(doc,'span','','Select for bulk actions'));
+        body.appendChild(multiLabel);
+      }
       card.appendChild(body);
       return card;
     }
@@ -298,7 +263,7 @@
         if(!items.length)grid.appendChild(el(doc,'p','modern-history-empty',
           options&&options.filtersActive&&options.hasPinned?
             'No pinned snapshots match these filters.':
-            'Pin an experiment to keep it here for future Storyboards.'));
+            'Pin an experiment to keep it in this section.'));
         section.appendChild(grid);
       }
       host.appendChild(section);
@@ -342,6 +307,15 @@
       host.appendChild(item);
     });
   }
+  // The selected snapshot is inspected in a stable, visible side panel rather
+  // than in a hover popover that obscures the gallery.
+  function renderDetails(doc,host,entry){
+    if(!host||!doc)return;
+    host.textContent='';
+    if(entry)host.appendChild(inspectorMarkup(doc,entry));
+    else host.appendChild(el(doc,'p','modern-history-empty',
+      'No visible snapshots. Clear your filters or save a new experiment.'));
+  }
   function hideInspector(host){if(host&&host.__historyInspector)host.__historyInspector.hide();}
   function select(host,id){
     if(!host)return;
@@ -355,6 +329,6 @@
     });
   }
   return Object.freeze({render:render,select:select,label:label,displayName:displayName,inspect:inspect,
-    inspectorMarkup:inspectorMarkup,hideInspector:hideInspector,setSize:setSize,
+    inspectorMarkup:inspectorMarkup,renderDetails:renderDetails,hideInspector:hideInspector,setSize:setSize,
     renderStoryboardQueue:renderStoryboardQueue,frameSummary:frameSummary,frameVisual:frameVisual});
 }));

@@ -356,22 +356,19 @@ viewport, instead of showing the gallery's navy background through the image.
 Previously stored transparent thumbnails also display over white without
 IndexedDB migration; opaque dark-filled older captures must be recreated.
 Older Core entries are readable without migration.
-Gallery UX: one click selects a snapshot; double-clicking its image/text
-restores the experiment with the protected recovery checkpoint. Browser-local
-**S / M / L** card sizes are available. **Pinned** records appear in a
-collapsible section above **Recent**, never duplicated; the collapsed state and
-card size are Application Preferences, independent of experiment/IndexedDB data.
-Pin/Unpin and Delete are thumbnail-corner icons. Pinned records must be
-unpinned before individual or batch deletion. A checkbox remains available
-for bulk selection and future Storyboard composition.
-Unified Preview: hovering over the thumbnail for 400 ms shows its enlarged
-saved screenshot and physical-settings inspector together. Compare exposes
-both A/B physics and their differences; Scene exposes one configuration.
-The popup is viewport-bounded, stays open while hovered and can be locked with
-**Keep open**. Keyboard **Space** or a touch tap opens a persistent preview;
-**Enter** and double-click still restore. **Esc** closes the popup. No
-IndexedDB query or optics recalculation happens when inspecting a snapshot.
-No new History schema is introduced.
+Gallery UX: one click or keyboard activation selects a snapshot; the
+persistent side panel shows its saved screenshot, active Scene/Compare physics,
+camera and objects. **Restore experiment** is the only Restore action and
+closes History after a successful recovery-protected load. Errors remain
+visible beside the actions without closing the dialog. Browser-local **S / M /
+L** card sizes remain available. **Pinned** records appear in a collapsible
+section above **Recent**, with no duplication. Pin, Edit details, Export and
+Delete live in the selected snapshot's panel. Pinned records must be unpinned
+before deletion. **Manage** reveals checkbox-based bulk selection and Animation
+handoff; **More history tools** holds archival import/export and clearing.
+There is no duplicate snapshot dropdown, hidden double-click Restore or floating
+Preview in History. Saved thumbnails are read-only and no optics recalculation
+happens during inspection. No History storage schema was changed.
 History supports browser-local **Search, Type, Geometry and Atmosphere** filters
 across both Pinned and Recent, with a match counter and persistent preferences.
 Compare A/B physical choices match either model, but combined Geometry and
@@ -386,7 +383,7 @@ physical-parameter playback remains future work.
 See [Modern Experiment History](docs/modern-experiment-history.md)
 for retention, comparison semantics and browser checks. Existing experiment URLs and plain JSON remain compatible; named Experiment Library records migrate into History.
 
-History snapshots support optional saved names/descriptions via ✎, independent of experiment JSON and Pin. **History replaces the former Experiment Library panel:** it provides **Export selected snapshot**, **Export all snapshots** and **Import JSON** for portable backups containing names, notes, pins and existing thumbnails. **Export current experiment JSON** retains the plain version-1 format for sharing with older Curvature builds. Old named localStorage Library entries are copied to History at first launch; the original data is not deleted. See `docs/modern-experiment-history.md` for migration and JSON compatibility details.
+History snapshots support optional saved names/descriptions via the selection panel's **Edit details**, independent of experiment JSON and Pin. Click a snapshot card to inspect it, then choose **Restore experiment**; History closes after a successful restore. **Manage** reveals bulk checkbox actions and **More history tools** holds archive-wide operations. **History replaces the former Experiment Library panel:** it provides **Export selected snapshot**, **Export all snapshots** and **Import JSON** for portable backups containing names, notes, pins and existing thumbnails. **Export current experiment JSON** retains the plain version-1 format for sharing with older Curvature builds. Old named localStorage Library entries are copied to History at first launch; the original data is not deleted. See `docs/modern-experiment-history.md` for migration and JSON compatibility details.
 
 - [Animation Studio architecture research and #120.1 compatibility/project API](docs/modern-animation-research.md): two mutually exclusive animation modes, physical interpolation limits, self-contained keyframes and planned integration.
 - **Animation Studio draft editor (#120.2)** (historical handoff, replaced by the separate Animation workspace): load selected History snapshots or import the existing Camera Animation; check camera-only / one-physical-channel compatibility and adjust names, order, travel, hold and easing before preparing an in-memory project. No playback or persistent animation project yet; see [History guide](docs/modern-experiment-history.md).
@@ -901,8 +898,8 @@ only one popup is visible across galleries. It fits inside the viewport,
 repositions on resize, closes on scroll/Esc, supports keyboard focus and
 pinned touch/pen previews, and is cleaned up on gallery rerender. Hovering
 card controls (Delete, Open, checkbox, drag handle) does not trigger previews.
-History's pin/delete/restore shortcuts and Studio select/reorder/drag actions
-remain unchanged. The popup uses the **original persisted WebP thumbnail**, not
+History's old pin/delete/restore corner shortcuts were superseded by its
+selected-experiment panel; Studio select/reorder/drag actions remain unchanged. The popup uses the **original persisted WebP thumbnail**, not
 a new upscale/optical capture. Legacy and animation/project persistence formats
 are unchanged.
 
