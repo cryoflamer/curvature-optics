@@ -43,6 +43,7 @@
   var studioLastParity=null;
   var studioDraftAutosave=root.CurvatureModernAnimationDraftAutosave;
   var studioLibrary=root.CurvatureModernAnimationLibrary;
+  var studioLibraryFiltersApi=root.CurvatureModernAnimationLibraryFilters;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
     root.CurvatureModernCameraInteraction.create():null;
@@ -563,6 +564,10 @@
   var studioWorkspaces=null,studioWorkspaceId=null,studioWorkspaceReady=false;
   var studioWorkspaceLocalSaved=false;
   var studioLibraryScroll=0;
+  var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
+  var studioLibraryFilters=studioLibraryFiltersApi?studioLibraryFiltersApi.normalize():null;
+  var studioLibraryFilterAdvancedOpen=false;
+  var studioLibraryQueryDraft='';
   var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
   var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
   var studioDraftWriteQueue=Promise.resolve(),studioRestorePreviewPending=false;
@@ -596,6 +601,22 @@
   };
   function preferencesStorage(){
     try{return root.localStorage||null;}catch(error){return null;}
+  }
+  // Library filters are view preferences only. Never store them in a project,
+  // named Library records, or the autosaved editor workspace.
+  if(studioLibraryFiltersApi){
+    try{
+      var storedLibraryFilters=preferencesStorage()&&
+        preferencesStorage().getItem(STUDIO_LIBRARY_FILTER_KEY);
+      if(storedLibraryFilters)studioLibraryFilters=studioLibraryFiltersApi.normalize(
+        JSON.parse(storedLibraryFilters));
+    }catch(error){studioLibraryFilters=studioLibraryFiltersApi.normalize();}
+    studioLibraryQueryDraft=studioLibraryFilters.query;
+  }
+  function rememberStudioLibraryFilters(){
+    try{var storage=preferencesStorage();if(storage&&studioLibraryFilters)
+      storage.setItem(STUDIO_LIBRARY_FILTER_KEY,JSON.stringify(studioLibraryFilters));}
+    catch(error){/* Private mode or disabled storage: in-memory filters still work. */}
   }
   if(applicationPreferences){
     var remembered=applicationPreferences.read(preferencesStorage());
@@ -1335,7 +1356,17 @@
     var host=newUiEl('ModernAnimationLibrary');
     var previous=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery');
     if(previous)studioLibraryScroll=previous.scrollLeft;
+    var wasSearching=host&&host.querySelector&&
+      host.querySelector('.modern-animation-library-search')===document.activeElement;
+    var caret=wasSearching&&document.activeElement.selectionStart;
+    var focusClass=!wasSearching&&document.activeElement&&
+      String(document.activeElement.className||'').match(/modern-animation-library-filter-[a-zA-Z]+/);
+    var visible=studioLibraryFiltersApi&&studioLibraryFilters?
+      studioLibraryFiltersApi.filter(studioLibraryEntries,studioLibraryFilters):studioLibraryEntries;
     studioUI.renderLibrary(document,host,studioLibraryEntries,{
+      filters:studioLibraryFilters,search:studioLibraryQueryDraft,
+      filtersActive:studioLibraryFiltersApi&&studioLibraryFiltersApi.active(studioLibraryFilters),
+      filtersAdvancedOpen:studioLibraryFilterAdvancedOpen,visibleEntries:visible,
       selectedId:studioLibrarySelected,activeId:studioLibraryActive&&studioLibraryActive.id,
       activeName:studioLibraryActive&&studioLibraryActive.project.name,
       canSave:studioCanSave(),
@@ -1367,6 +1398,19 @@
         }
       },
       toggleExpanded:function(){studioLibraryExpanded=!studioLibraryExpanded;renderStudioLibrary();},
+      filter:function(key,value){
+        if(!studioLibraryFiltersApi)return;
+        studioLibraryFilters=studioLibraryFiltersApi.update(studioLibraryFilters,key,value);
+        studioLibraryQueryDraft=key==='query'?String(value).slice(0,160):studioLibraryFilters.query;
+        rememberStudioLibraryFilters();studioLibraryScroll=0;renderStudioLibrary();
+      },
+      clearFilters:function(){
+        if(!studioLibraryFiltersApi)return;
+        studioLibraryFilters=studioLibraryFiltersApi.normalize();
+        studioLibraryQueryDraft='';rememberStudioLibraryFilters();
+        studioLibraryScroll=0;renderStudioLibrary();
+      },
+      toggleFilterDetails:function(open){studioLibraryFilterAdvancedOpen=!!open;},
       toggleDuplicates:function(){studioLibraryShowDuplicates=!studioLibraryShowDuplicates;renderStudioLibrary();},
       renameStart:function(id){studioLibraryRenamingId=id;studioLibraryExpanded=true;renderStudioLibrary();},
       renameCancel:function(){studioLibraryRenamingId='';renderStudioLibrary();},
@@ -1386,6 +1430,15 @@
     });
     var gallery=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery');
     if(gallery)gallery.scrollLeft=studioLibraryScroll;
+    if(wasSearching||focusClass){
+      var replacement=host&&host.querySelector&&host.querySelector(wasSearching?
+        '.modern-animation-library-search':'.'+focusClass[0]);
+      if(replacement&&replacement.focus){
+        replacement.focus();
+        if(wasSearching&&Number.isInteger(caret)&&replacement.setSelectionRange)
+          try{replacement.setSelectionRange(caret,caret);}catch(error){}
+      }
+    }
     renderStudioWizard();
   }
   function studioLibraryNotice(message,error){

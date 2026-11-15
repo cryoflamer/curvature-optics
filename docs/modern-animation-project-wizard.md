@@ -76,3 +76,16 @@ migration is introduced here. Experimental remains a save-only collection.
 
 See [Animation Project contracts](modern-animation-contract.md) for the
 underlying validator, data format and interpolation limitations.
+
+## Finding existing projects in Animation Library
+
+The saved Animation Library gallery supports independent project filters:
+name/description/physics search, animation mode, physical channel, Scene vs
+Compare base experiment, active geometry and atmospheric model, Compare A/B
+relations, scene object count, keyframe count, duration and sorting. Advanced physical filters use
+the **base experiment** (the project's reference scene), not every individual
+frame; an Experimental project may contain very different later frames. These
+filters only determine which Library cards are shown and never relax an active
+v2 project's compatibility contract or affect JSON backup of all projects.
+Browser-local filter preferences survive reload; projects and IndexedDB remain
+unchanged.

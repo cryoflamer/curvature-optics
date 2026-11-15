@@ -1017,6 +1017,30 @@ button{cursor:pointer}
 .modern-animation-library-pending-actions{display:flex;flex-wrap:wrap;gap:7px}
 .modern-animation-library-pending-actions button{padding:6px 9px;border:1px solid #bea075;
   background:#fff;border-radius:6px;color:#604a2d;cursor:pointer}
+.modern-animation-library-filters{display:flex;align-items:end;flex-wrap:wrap;gap:8px;
+  margin:10px 0 0;padding:10px;border:1px solid #d5e4f0;border-radius:8px;background:#f6faff}
+.modern-animation-library-search{flex:2 1 210px;min-width:150px;box-sizing:border-box;
+  padding:7px 9px;border:1px solid #9fbfd9;border-radius:6px;font:inherit;color:#25465f}
+.modern-animation-library-filter{display:flex;flex:1 1 140px;min-width:130px;flex-direction:column;gap:4px;
+  font-size:11px;color:#4b6e89}
+.modern-animation-library-filter select{box-sizing:border-box;max-width:100%;width:100%;
+  padding:7px 8px;border:1px solid #9fbfd9;border-radius:6px;background:#fff;
+  font:inherit;color:#25465f}
+.modern-animation-library-filter-details{flex:1 0 100%;min-width:0}
+.modern-animation-library-filter-details summary{cursor:pointer;font-size:12px;font-weight:600;
+  color:#245d8e;padding:5px 0}
+.modern-animation-library-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:8px;margin-top:8px}
+.modern-animation-library-filter-results{flex:1 0 100%;display:flex;justify-content:space-between;
+  align-items:center;gap:8px;flex-wrap:wrap;color:#5b7791;font-size:11px}
+.modern-animation-library-filter-results button{padding:5px 8px;border:1px solid #a9c8e0;
+  border-radius:5px;background:#fff;color:#245d8e;cursor:pointer}
+@media(max-width:550px){
+  .modern-animation-library-filters{padding:8px}
+  .modern-animation-library-search{flex-basis:100%;min-width:0}
+  .modern-animation-library-filter{flex-basis:calc(50% - 8px);min-width:0}
+  .modern-animation-library-filter-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+}
 .modern-animation-library-gallery{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
   margin:10px 0 0;padding:2px 2px 10px;scrollbar-width:thin}
 .modern-animation-library-card{position:relative;box-sizing:border-box;flex:0 0 226px;min-width:0;

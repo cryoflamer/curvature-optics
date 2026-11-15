@@ -93,6 +93,26 @@ of the mandatory compatibility check.
 See the [Project creation guide](docs/modern-animation-project-wizard.md) and
 [Animation contracts and v2 persistence](docs/modern-animation-contract.md).
 
+### Animation Library — project search and filters
+
+The **Animation Library** gallery now supports project-name/description search,
+animation kind (Camera Motion / Physics Transition / Experimental), and
+sorting by updated date or title. Advanced filters include the physical
+transition channel, Scene/Compare mode of the **base experiment**, its active
+surface geometry and atmosphere (including A/B relations), reference-scene object count, number of keyframes,
+and total project duration. These physical filters deliberately describe the
+**reference experiment**, not an arbitrary frame anywhere in the animation;
+contract rules remain separate from library discovery. Search terms can match
+project metadata and physical characteristics together. Filter preferences are
+stored independently in local browser storage and never written to projects.
+
+Filtering does not open, restore, delete, or alter any project or draft. The
+backup selection and currently edited project are preserved even when hidden
+by filters; **Export all** still includes the entire saved library. Working
+drafts and duplicate review are not restricted by the project gallery filters.
+The **Clear filters** action restores the unfiltered gallery. No IndexedDB
+schema or portable JSON changes are needed.
+
 ## Run locally
 
 Serve the **repository root** with a static HTTP server (Python 3 is sufficient; no npm install or bundling is required for these entry points):

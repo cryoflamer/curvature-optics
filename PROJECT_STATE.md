@@ -2577,3 +2577,17 @@ shared styling and card-specific click isolation.
   browser controls and physics engines remain unchanged. Wizard/Picker wiring,
   durable contract storage and migration are subsequent stages. See
   `docs/modern-animation-contract.md`.
+
+
+### Animation Library project search and reference-physics filters
+
+- Added pure, read-only `ModernAnimationLibraryFilters.js` to search/sort named
+  v1/v2/Experimental projects by name, description, mode, physical transition
+  channel, keyframe count and duration, and by the **base experiment's**
+  active Scene/Compare geometry/refraction (reusing History physics semantics).
+- Animation Library renders only matched gallery cards while keeping all named
+  entries available for Export all, Export selected, duplicate review, active
+  editing, and workspace drafts. Local filter preferences are separate from
+  History/Picker preferences and from persisted animation projects.
+- This stage does not modify Project v1/v2, History, IndexedDB, physics,
+  playback or media export. See README and the wizard guide.
