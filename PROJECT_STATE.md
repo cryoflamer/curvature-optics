@@ -1,3 +1,12 @@
+> **Animation wizard reuses History and Snapshot Picker (2026-11-15):**
+> The creation wizard no longer renders separate snapshot galleries. Step 2
+> opens the ordinary History panel with a temporary **Use as project reference**
+> action (no Restore); Step 4 embeds the shared Snapshot Picker in selection-only
+> mode with contract validation, search and physical filters. Ordinary Studio
+> Picker preferences and the active editor timeline remain untouched. History
+> selection and wizard Picker state are transient; existing v1/v2 persistence
+> is unchanged. See `docs/modern-animation-project-wizard.md`.
+
 > **Animation Project creation wizard (2026-11-15):** Animation Library's
 > New project opens a five-step v2 wizard for mode, independent reference
 > snapshot, supported physical target, optional compatible initial keyframes,

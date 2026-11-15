@@ -162,6 +162,7 @@ test('Wizard UI renders all stages, disabled incompatible frames, and explicit c
   const entries=[entry(1,base,'Baseline'),entry(2,changed,'Move'),entry(3,bad,'Bad')];
   const calls=[];const actions={cancel:()=>calls.push('cancel'),mode:x=>calls.push(x),
     referenceCurrent:()=>calls.push('current'),reference:x=>calls.push(x),
+    openHistory:()=>calls.push('browse'),
     target:x=>calls.push(x),field:(k,v)=>calls.push(k+':'+v),
     toggle:id=>calls.push(id),back:()=>calls.push('back'),next:()=>calls.push('next'),
     finish:()=>calls.push('finish')};
@@ -170,12 +171,16 @@ test('Wizard UI renders all stages, disabled incompatible frames, and explicit c
   assert.ok(nodes(host).some(n=>n.textContent==='Next'&&!n.disabled));
   w=wizard.navigate(w,1);ui.render(doc,host,w,entries,base,actions,{});
   assert.ok(nodes(host).some(n=>n.textContent==='Next'&&n.disabled));
+  const browse=nodes(host).find(n=>n.textContent==='Choose reference from History');
+  assert.ok(browse);browse.listeners.click();assert.deepEqual(calls,['browse']);calls.length=0;
+  assert.equal(nodes(host).some(n=>n.className==='modern-project-wizard-snapshots'),false);
   w=wizard.reference(w,base,1,'Baseline');w=wizard.navigate(w,2);
   w=wizard.navigate(w,3);w=wizard.patch(w,'showIncompatible',true);
   ui.render(doc,host,w,entries,base,actions,{});
-  const checkboxes=nodes(host).filter(n=>n.type==='checkbox');
-  assert.ok(checkboxes.some(n=>n.disabled));
-  assert.ok(checkboxes.some(n=>!n.disabled));
+  const picker=nodes(host).find(n=>n['data-wizard-picker']!==undefined);
+  assert.ok(picker,'the step mounts the shared Snapshot Picker');
+  assert.equal(nodes(host).some(n=>n.className==='modern-project-wizard-snapshots'),false);
+  assert.equal(nodes(host).some(n=>n.textContent==='Search additional History frames'),false);
   w=wizard.navigate(w,4);w=wizard.patch(w,'name','The project');
   ui.render(doc,host,w,entries,base,actions,{});
   const create=nodes(host).find(n=>n.textContent==='Create project');
@@ -195,7 +200,9 @@ test('Browser wiring loads wizard before ModernApp and contains a dedicated host
   assert.match(app,/if\(next==='wizard'\)wizardSwitched=true/);
   assert.match(app,/saveNamedAnimation\(false\)/);
   const css=fs.readFileSync(path.join(basePath,'src/ui/modern/ModernApp.css'),'utf8');
-  assert.match(css,/\.modern-project-wizard-snapshots\{[^}]*overflow:visible/s);
+  assert.match(css,/\.modern-project-wizard-picker\{[^}]*overflow:visible/s);
+  assert.ok(html.includes('id="ModernHistoryUseAsReference"'));
+  assert.match(app,/studioUI\.renderPicker\(document,picker,found,/);
 });
 
 test('Locked V2 drafts reject incompatible bulk/drag insertions before modifying the timeline',()=>{

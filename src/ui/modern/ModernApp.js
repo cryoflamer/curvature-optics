@@ -536,6 +536,10 @@
   var studioWizardApi=root.CurvatureModernAnimationProjectWizard;
   var studioWizardUI=root.CurvatureModernAnimationProjectWizardUI;
   var studioWizard=null,studioWizardError='';
+  var studioWizardPickerFilters=historyFiltersApi?historyFiltersApi.normalize():null;
+  var studioWizardPickerQueryDraft='',studioWizardPickerAdvancedOpen=false;
+  var studioWizardPickerScroll=0;
+  var historyWizardReferenceChoosing=false;
   var studioDraft=studioApi?studioApi.blank():null;
   var studioSelectedKey=null;
   var studioDiagnosticTransition=null;
@@ -660,7 +664,18 @@
     var goBack=newUiEl('ModernHistoryReturnToAnimation');
     if(goBack)goBack.hidden=!fromPicker;
     var close=newUiEl('ModernHistoryClose');
-    if(close)close.hidden=fromPicker;
+    if(close){close.hidden=fromPicker;
+      close.textContent=historyWizardReferenceChoosing?'Back to project wizard':'Close';}
+    var useReference=newUiEl('ModernHistoryUseAsReference');
+    if(useReference)useReference.hidden=!historyWizardReferenceChoosing;
+    var hint=newUiEl('ModernHistoryHint');
+    if(hint)hint.textContent=historyWizardReferenceChoosing?
+      'Select a snapshot, inspect its details, then choose Use as project reference. The live scene is not restored.':
+      'Click a snapshot to inspect its saved image and physical settings, then choose Restore experiment. '+
+      'A recovery copy of the current experiment is saved before replacement.';
+    ['ModernHistoryRestore','ModernHistoryEdit','ModernHistoryExportSelected'].forEach(function(id){
+      var element=newUiEl(id);if(element)element.hidden=historyWizardReferenceChoosing;
+    });
     var fromEditor=newUiEl('ModernReturnToAnimation');
     if(fromEditor)fromEditor.hidden=!animationReturnAfterRestore||animationWorkspaceOpen;
   }
@@ -1177,6 +1192,9 @@
       return;
     }
     studioWizard=studioWizardApi.initial();studioWizardError='';
+    studioWizardPickerFilters=historyFiltersApi?historyFiltersApi.normalize():null;
+    studioWizardPickerQueryDraft='';studioWizardPickerAdvancedOpen=false;
+    studioWizardPickerScroll=0;
     renderStudioWizard();
     var host=newUiEl('ModernAnimationProjectWizard');
     if(host&&host.scrollIntoView)host.scrollIntoView({behavior:'smooth',block:'start'});
@@ -1200,6 +1218,10 @@
       cancel:function(){if(studioLibraryBusy)return;studioWizard=null;studioWizardError='';renderStudioWizard();},
       mode:function(value){apply(function(w){return studioWizardApi.mode(w,value);});},
       referenceCurrent:function(){apply(function(w){return studioWizardApi.reference(w,experimentSnapshot(),null,'Current experiment');});},
+      openHistory:function(){
+        if(!studioWizard||studioWizard.step!==1)return;
+        historyWizardReferenceChoosing=true;setHistoryOpen(true);
+      },
       reference:function(id){apply(function(w){
         var entry=studioHistoryEntries.find(function(e){return e.id===id;});
         if(!entry)throw RangeError('History snapshot is no longer available');
@@ -1234,6 +1256,69 @@
         }catch(error){studioWizardError=error.message;renderStudioWizard();}
       }
     },{error:studioWizardError,busy:studioLibraryBusy});
+    if(studioWizard&&studioWizard.step===3&&studioUI&&studioUI.renderPicker){
+      var picker=host.querySelector&&host.querySelector('[data-wizard-picker]');
+      if(picker){
+        var entries=studioHistoryEntries.filter(function(entry){return entry.id!==studioWizard.referenceId;});
+        var found=historyFiltersApi&&studioWizardPickerFilters?
+          historyFiltersApi.filter(entries,studioWizardPickerFilters):entries;
+        var verdicts=new Map();
+        found=found.filter(function(entry){
+          var verdict=studioWizardApi.check(studioWizard,entry);
+          verdicts.set(entry.id,verdict);
+          return verdict.allowed||studioWizard.showIncompatible;
+        });
+        var checked=Object.create(null);
+        studioWizard.selectedIds.forEach(function(id){checked[id]=true;});
+        studioUI.renderPicker(document,picker,found,{
+          pickerFilter:function(key,value,caret){
+            if(!historyFiltersApi||!studioWizard)return;
+            if(key==='query')studioWizardPickerQueryDraft=String(value).slice(0,160);
+            studioWizardPickerFilters=historyFiltersApi.update(studioWizardPickerFilters,key,value);
+            if(key==='mode'&&value!=='compare'){
+              studioWizardPickerFilters=historyFiltersApi.update(studioWizardPickerFilters,'geometryRelation','any');
+              studioWizardPickerFilters=historyFiltersApi.update(studioWizardPickerFilters,'refractionRelation','any');
+            }
+            studioWizardPickerScroll=0;renderStudioWizard();
+            if(key==='query'){
+              var search=host.querySelector&&host.querySelector('.modern-project-wizard-picker .modern-studio-picker-search');
+              if(search&&typeof search.focus==='function'){
+                search.focus({preventScroll:true});
+                if(typeof search.setSelectionRange==='function'&&Number.isInteger(caret))
+                  search.setSelectionRange(caret,caret);
+              }
+            }
+          },
+          pickerFiltersClear:function(){
+            studioWizardPickerFilters=historyFiltersApi.normalize();
+            studioWizardPickerQueryDraft='';studioWizardPickerScroll=0;renderStudioWizard();
+          },
+          pickerAdvancedToggle:function(open){studioWizardPickerAdvancedOpen=!!open;},
+          pickerToggle:function(id){
+            var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
+            if(list)studioWizardPickerScroll=list.scrollTop;
+            apply(function(w){return studioWizardApi.toggle(w,id,studioHistoryEntries);});
+          },
+          pickerClearSelection:function(){
+            if(!studioWizard)return;
+            var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
+            if(list)studioWizardPickerScroll=list.scrollTop;
+            studioWizard=Object.assign({},studioWizard,{selectedIds:[]});
+            renderStudioWizard();
+          },
+          pickerOpenHistory:function(id){
+            openHistoryFromPicker(id).catch(function(error){
+              studioWizardError=error.message;renderStudioWizard();
+            });
+          }
+        },{open:true,wizard:true,filters:studioWizardPickerFilters,
+          search:studioWizardPickerQueryDraft,advancedOpen:studioWizardPickerAdvancedOpen,
+          selectedCount:studioWizard.selectedIds.length,totalEntries:entries.length,
+          checked:checked,compatibility:function(entry){return verdicts.get(entry.id);}});
+        var list=picker.querySelector&&picker.querySelector('.modern-studio-picker-list');
+        if(list)list.scrollTop=studioWizardPickerScroll;
+      }
+    }
   }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
@@ -3203,11 +3288,28 @@
       setHistoryOpen(true);
     });
   }
+  function chooseWizardHistoryReference(){
+    if(!historyWizardReferenceChoosing||!studioWizard||studioWizard.step!==1)
+      return Promise.reject(RangeError('No project reference selection is active'));
+    if(!historySelectedId)return Promise.reject(RangeError('Choose a History snapshot first'));
+    return experimentHistory.get(historySelectedId).then(function(entry){
+      if(!entry)throw RangeError('Selected History snapshot is no longer available');
+      // Immutable, owned reference; no Restore, no change to the live scene.
+      studioWizard=studioWizardApi.reference(studioWizard,entry.experiment,
+        entry.id,entry.name||'Snapshot '+entry.id);
+      studioWizardError='';setHistoryOpen(false);renderStudioWizard();
+      var wizardHost=newUiEl('ModernAnimationProjectWizard');
+      if(wizardHost&&typeof wizardHost.scrollIntoView==='function')
+        wizardHost.scrollIntoView({block:'nearest'});
+    });
+  }
   function updateHistorySelection(entry){
     historySelectedId=entry?String(entry.id):'';
     var gallery=newUiEl('ModernHistoryGallery');
     if(gallery&&historyUI)historyUI.select(gallery,historySelectedId);
     if(historyUI)historyUI.renderDetails(document,newUiEl('ModernHistoryDetailsContent'),entry);
+    var useReference=newUiEl('ModernHistoryUseAsReference');
+    if(useReference)useReference.disabled=!entry;
     [['ModernHistoryRestore',!!entry],['ModernHistoryEdit',!!entry],
       ['ModernHistoryExportSelected',!!entry]].forEach(function(item){
       var node=newUiEl(item[0]);if(node)node.disabled=!item[1];
@@ -3285,8 +3387,9 @@
       if(outsideFilters)visible=[focused].concat(visible);
       var focusNotice=newUiEl('ModernHistoryFocusNotice');
       if(focusNotice){
-        focusNotice.hidden=!outsideFilters;
-        focusNotice.textContent=outsideFilters?
+        focusNotice.hidden=!outsideFilters&&!historyWizardReferenceChoosing;
+        focusNotice.textContent=historyWizardReferenceChoosing?
+          'Select a History snapshot, then click Use as project reference. The live scene will not be restored.':outsideFilters?
           'Snapshot opened from Animation Studio is shown despite current History filters. '+
           'Your saved filters have not changed.':'';
       }
@@ -3406,7 +3509,9 @@
     if(!panel||!toggle)return;
     historyPanelOpen=!!open;panel.hidden=!historyPanelOpen;
     var returningToPicker=!historyPanelOpen&&historyOpenedFromPicker&&animationWorkspaceOpen;
+    var returningToWizard=!historyPanelOpen&&historyWizardReferenceChoosing;
     if(!historyPanelOpen){
+      historyWizardReferenceChoosing=false;
       historyFocusFromPickerId='';
       historyOpenedFromPicker=false;
     }
@@ -3423,7 +3528,11 @@
       var picker=newUiEl('ModernAnimationSnapshotPicker');
       var pickerAction=returningToPicker&&picker&&picker.querySelector&&
         picker.querySelector('.modern-studio-picker-open-history');
-      if(pickerAction&&typeof pickerAction.focus==='function')pickerAction.focus();
+      var wizardAction=returningToWizard&&newUiEl('ModernAnimationProjectWizard');
+      wizardAction=wizardAction&&wizardAction.querySelector&&
+        wizardAction.querySelector('.modern-project-wizard-open-history');
+      if(wizardAction&&typeof wizardAction.focus==='function')wizardAction.focus();
+      else if(pickerAction&&typeof pickerAction.focus==='function')pickerAction.focus();
       else if(typeof toggle.focus==='function')toggle.focus();
     }
   }
@@ -3521,6 +3630,10 @@
       if(event&&event.key==='Escape'){event.preventDefault();setHistoryOpen(false);}
     });
     el('ModernHistoryClose').addEventListener('click',function(){setHistoryOpen(false);});
+    var chooseWizardReference=newUiEl('ModernHistoryUseAsReference');
+    if(chooseWizardReference)chooseWizardReference.addEventListener('click',function(){
+      handle(chooseWizardHistoryReference);
+    });
     var returnFromHistory=newUiEl('ModernHistoryReturnToAnimation');
     if(returnFromHistory)returnFromHistory.addEventListener('click',function(){setHistoryOpen(false);});
     // The preference is applied before IndexedDB has finished opening. Once

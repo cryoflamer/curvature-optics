@@ -82,6 +82,7 @@ function createHistoryNavigationHarness(){
   const ctx={
     ...state,Promise,Map,Set,Object,String,Array,Number,RangeError,Error,
     historyFocusFromPickerId:'',historyOpenedFromPicker:false,
+    historyWizardReferenceChoosing:false,
     animationReturnAfterRestore:false,animationWorkspaceOpen:true,
     historyPanelOpen:false,historyGallerySize:'medium',historyPinnedCollapsed:true,
     historyManageMode:false,historyMultiSelection:Object.create(null),
@@ -208,6 +209,7 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
   const ctx={
     Promise,JSON,Error,RangeError,historyRestoreBusy:false,
     historyOpenedFromPicker:true,historyFocusFromPickerId:'42',
+    historyWizardReferenceChoosing:false,
     animationReturnAfterRestore:false,animationWorkspaceOpen:true,
     studioDraft:draft,historyStatus(){},
     historyFingerprint:{exactSignature:JSON.stringify},

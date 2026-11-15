@@ -430,10 +430,11 @@
     if(!options.open){host.textContent='';return;}
     host.textContent='';
     var head=el(doc,'div','modern-studio-picker-head');
-    head.appendChild(el(doc,'strong','','Snapshot Picker'));
-    head.appendChild(button(doc,'×','Close Snapshot Picker',actions.pickerClose));
+    head.appendChild(el(doc,'strong','',options.wizard?'Choose initial keyframes':'Snapshot Picker'));
+    if(!options.wizard)head.appendChild(button(doc,'×','Close Snapshot Picker',actions.pickerClose));
     host.appendChild(head);
     host.appendChild(el(doc,'p','modern-studio-hint',
+      options.wizard?'Check compatible snapshots to include in the new project. Selection is not added to the current timeline.':
       'Drag saved snapshots to a gap in the timeline. Check several to insert them together.'));
     var filters=options.filters||{query:options.search||'',mode:'all',geometry:'any',
       atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
@@ -500,9 +501,12 @@
     tools.appendChild(el(doc,'small','',n+' selected'+(hidden?' ('+hidden+' hidden)':'')+
       ' · '+entries.length+' of '+total+' found'));
     if(hidden)tools.appendChild(el(doc,'small','modern-studio-picker-hidden-note',
+      options.wizard?'Hidden selections remain selected for project creation.':
       'Add checked and dragging a checked card include hidden selections.'));
-    var add=button(doc,'Add checked','Add checked snapshots after selected frame',function(){actions.insertChecked();});
-    add.disabled=n===0;tools.appendChild(add);
+    if(!options.wizard){
+      var add=button(doc,'Add checked','Add checked snapshots after selected frame',function(){actions.insertChecked();});
+      add.disabled=n===0;tools.appendChild(add);
+    }
     if(n)tools.appendChild(button(doc,'Clear selected','Uncheck all selected snapshots',actions.pickerClearSelection));
     host.appendChild(tools);
     var list=el(doc,'ol','modern-studio-picker-list');
@@ -512,7 +516,13 @@
       item.setAttribute('data-picker-id',String(entry.id));
       item.tabIndex=0;item.setAttribute('aria-label','Preview snapshot '+snapshotPresentation.displayName(entry));
       var check=el(doc,'input','modern-studio-picker-checkbox');check.type='checkbox';
-      check.checked=!!selected[entry.id];check.setAttribute('aria-label','Select snapshot '+entry.id);
+      var verdict=options.compatibility?options.compatibility(entry):null;
+      check.checked=!!selected[entry.id];
+      // A previously chosen History record may have changed. Keep it
+      // uncheckable even if it is no longer eligible for new selection.
+      check.disabled=!!verdict&&!verdict.allowed&&!check.checked;
+      check.setAttribute('aria-label','Select snapshot '+entry.id);
+      if(check.disabled)item.className+=' is-incompatible';
       check.addEventListener('change',function(){actions.pickerToggle(entry.id,check.checked);});
       item.appendChild(check);
       var visual=snapshotPresentation.frameVisual(doc,entry,'modern-studio-picker-visual');item.appendChild(visual);
@@ -521,6 +531,11 @@
       info.appendChild(title);
       var summary=el(doc,'small','',snapshotPresentation.frameSummary(entry));
       summary.title=summary.textContent;info.appendChild(summary);
+      if(verdict&&!verdict.allowed){
+        var issue=(verdict.issues||[]).slice(0,3).map(function(x){return x.path;}).join(', ');
+        info.appendChild(el(doc,'small','modern-studio-picker-incompatibility',
+          'Incompatible: '+(issue||'does not satisfy project constraints')));
+      }
       var openHistory=button(doc,'Open in History',
         'Open '+snapshotPresentation.displayName(entry)+' in History without restoring it',function(event){
           if(event&&event.stopPropagation)event.stopPropagation();
@@ -538,10 +553,12 @@
         });
       });
       info.appendChild(openHistory);item.appendChild(info);
-      var handle=el(doc,'span','modern-studio-drag-handle','⠿');
-      handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
-      item.appendChild(handle);
-      makeDragSource(doc,item,handle,{kind:'snapshots',id:entry.id},actions);
+      if(!options.wizard){
+        var handle=el(doc,'span','modern-studio-drag-handle','⠿');
+        handle.title='Drag snapshot into timeline';handle.setAttribute('aria-label','Drag snapshot '+entry.id);
+        item.appendChild(handle);
+        makeDragSource(doc,item,handle,{kind:'snapshots',id:entry.id},actions);
+      }
       if(inspector)inspector.infoButton(item,entry,item,snapshotPresentation.displayName(entry));
       list.appendChild(item);
     });

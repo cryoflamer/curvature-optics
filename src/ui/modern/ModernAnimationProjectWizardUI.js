@@ -4,16 +4,14 @@
 (function(root,factory){
   var workflow=root.CurvatureModernAnimationProjectWizard;
   var presentation=root.CurvatureModernSnapshotPresentation;
-  var filters=root.CurvatureModernExperimentHistoryFilters;
   if(typeof module==='object'&&module.exports){
     workflow=require('../../animation/ModernAnimationProjectWizard');
     presentation=require('./ModernSnapshotPresentation');
-    filters=require('./ModernExperimentHistoryFilters');
   }
-  var api=factory(workflow,presentation,filters);
+  var api=factory(workflow,presentation);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationProjectWizardUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(workflow,presentation,filters){
+}(typeof globalThis!=='undefined'?globalThis:this,function(workflow,presentation){
   'use strict';
   var LABELS=['Animation type','Reference experiment','Allowed changes',
     'Initial keyframes','Project details'];
@@ -50,11 +48,6 @@
     });
     wrap.appendChild(control);return wrap;
   }
-  function explanation(check){
-    if(check.allowed)return 'Compatible';
-    var issue=(check.issues||[]).slice(0,3).map(function(x){return x.path;}).join(', ');
-    return issue?'Incompatible: '+issue:'Incompatible with this project';
-  }
   function render(doc,host,w,entries,current,actions,options){
     if(!host||!doc)return;
     host.textContent='';
@@ -81,23 +74,14 @@
         content.appendChild(choice(doc,'Use current Scene/Compare as reference',
           w.referenceId===null&&!!w.reference,function(){actions.referenceCurrent();}));
       }
-      content.appendChild(input(doc,'Search History references',w.query,160,
-        function(value,live){actions.field('query',value,live);},false,actions.refresh));
-      content.appendChild(button(doc,'Search references',actions.refresh));
-      var visible=filters.filter(entries,{query:w.query});
-      var list=el(doc,'div','modern-project-wizard-snapshots');
-      visible.forEach(function(entry){
-        var card=el(doc,'div','modern-project-wizard-snapshot');
-        var label=presentation.displayName(entry);
-        card.appendChild(choice(doc,label+(w.referenceId===entry.id&&w.reference?' · Reference':''),
-          w.referenceId===entry.id&&!!w.reference,function(){actions.reference(entry.id);}));
-        card.appendChild(el(doc,'small','',presentation.frameSummary(entry)));
-        list.appendChild(card);
-      });
-      if(!visible.length)list.appendChild(el(doc,'p','modern-studio-hint','No matching History snapshots.'));
-      content.appendChild(list);
-      if(w.reference)content.appendChild(el(doc,'p','modern-project-wizard-status',
-        'Reference selected: '+(w.referenceName||'Current experiment')));
+      var browse=button(doc,'Choose reference from History',actions.openHistory);
+      browse.className+=' modern-project-wizard-open-history';content.appendChild(browse);
+      if(w.reference){
+        var reference=el(doc,'div','modern-project-wizard-reference');
+        reference.appendChild(el(doc,'strong','',w.referenceName||'Current experiment'));
+        reference.appendChild(el(doc,'small','',presentation.frameSummary({experiment:w.reference})));
+        content.appendChild(reference);
+      }else content.appendChild(el(doc,'p','modern-studio-hint','No reference selected yet.'));
     }else if(w.step===2){
       if(w.mode==='physical'){
         content.appendChild(el(doc,'p','modern-studio-hint',
@@ -118,40 +102,16 @@
       checkbox.addEventListener('change',function(){actions.field('includeReference',checkbox.checked);});
       include.appendChild(checkbox);include.appendChild(el(doc,'span','',
         'Include reference as first keyframe'));content.appendChild(include);
-      content.appendChild(input(doc,'Search additional History frames',w.query,160,
-        function(value,live){actions.field('query',value,live);},false,actions.refresh));
-      content.appendChild(button(doc,'Search frames',actions.refresh));
       var show=el(doc,'label','modern-project-wizard-include');
       var showCheck=el(doc,'input');showCheck.type='checkbox';showCheck.checked=w.showIncompatible;
       showCheck.addEventListener('change',function(){actions.field('showIncompatible',showCheck.checked);});
       show.appendChild(showCheck);show.appendChild(el(doc,'span','','Show incompatible snapshots and reasons'));
       content.appendChild(show);
-      var shown=filters.filter(entries,{query:w.query}).filter(function(entry){return entry.id!==w.referenceId;});
-      var compatible=0,choices=[];
-      shown.forEach(function(entry){
-        var verdict=workflow.check(w,entry);
-        if(verdict.allowed)compatible++;
-        if(!verdict.allowed&&!w.showIncompatible)return;
-        choices.push({entry:entry,verdict:verdict});
-      });
       content.appendChild(el(doc,'p','modern-project-wizard-status',
-        compatible+' compatible found · '+w.selectedIds.length+' additional selected'));
-      var available=el(doc,'div','modern-project-wizard-snapshots');
-      choices.forEach(function(row){
-        var entry=row.entry,verdict=row.verdict;
-        var card=el(doc,'label','modern-project-wizard-snapshot'+(verdict.allowed?'':' is-incompatible'));
-        var check=el(doc,'input');check.type='checkbox';check.disabled=!verdict.allowed;
-        check.checked=w.selectedIds.includes(entry.id);
-        check.addEventListener('change',function(){actions.toggle(entry.id);});
-        card.appendChild(check);
-        var info=el(doc,'div');
-        info.appendChild(el(doc,'strong','',presentation.displayName(entry)));
-        info.appendChild(el(doc,'small','',explanation(verdict)));
-        card.appendChild(info);available.appendChild(card);
-      });
-      if(!choices.length)available.appendChild(el(doc,'p','modern-studio-hint',
-        'No snapshots match the current search and compatibility settings.'));
-      content.appendChild(available);
+        w.selectedIds.length+' additional keyframes selected'));
+      var pickerHost=el(doc,'div','modern-animation-snapshot-picker modern-project-wizard-picker');
+      pickerHost.setAttribute('data-wizard-picker','');
+      content.appendChild(pickerHost);
     }else{
       content.appendChild(input(doc,'Project name',w.name,120,
         function(value,live){actions.field('name',value,live);},false));

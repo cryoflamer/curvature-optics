@@ -126,7 +126,7 @@
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryReturnToAnimation" hidden>Return to Animation Studio</button><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
     <p id="ModernHistoryFocusNotice" class="modern-history-focus-notice" role="status" hidden></p>
-    <p class="modern-history-hint">Click a snapshot to inspect its saved image and physical settings, then choose <strong>Restore experiment</strong>. A recovery copy of the current experiment is saved before replacement.</p>
+    <p id="ModernHistoryHint" class="modern-history-hint">Click a snapshot to inspect its saved image and physical settings, then choose <strong>Restore experiment</strong>. A recovery copy of the current experiment is saved before replacement.</p>
     <div class="modern-history-toolbar">
       <label class="modern-history-search" for="ModernHistoryFilterQuery">Search experiments
         <input id="ModernHistoryFilterQuery" type="search" maxlength="160" placeholder="Name, notes, physics…" autocomplete="off">
@@ -170,6 +170,7 @@
         <div class="modern-history-selection-footer">
           <p id="ModernHistoryStatus" class="modern-library-status modern-status-message" role="status" aria-live="polite"></p>
           <div class="modern-history-selection-actions">
+            <button type="button" id="ModernHistoryUseAsReference" class="modern-history-restore" hidden disabled>Use as project reference</button>
             <button type="button" id="ModernHistoryRestore" class="modern-history-restore" disabled>Restore experiment</button>
             <button type="button" id="ModernHistoryEdit" disabled>Edit details</button>
             <button type="button" id="ModernHistoryExportSelected" disabled>Export snapshot</button>

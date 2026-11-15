@@ -75,7 +75,10 @@ Opening a saved v2 project preserves its locked mode, reference experiment,
 frames and independent autosaved draft; saved project JSON and the existing
 Animation Library record formats are still portable. **New project now opens a
 five-step v2 wizard** to choose an animation type, reference snapshot, active
-physical channel, compatible initial frames and project metadata. It saves the
+physical channel, compatible initial frames and project metadata. Reference
+selection opens the existing History panel with **Use as project reference**;
+initial keyframes use the existing Snapshot Picker in a contract-filtered
+selection-only mode, without duplicating their galleries. It saves the
 previous independent draft before creating a new Library entry. Unfinished
 projects and Experimental collections remain valid, though not video-ready.
 See the [Project creation guide](docs/modern-animation-project-wizard.md) and
