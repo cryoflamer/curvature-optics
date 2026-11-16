@@ -1,3 +1,16 @@
+> **Animation workspace concurrent recovery (2026-11-16):** Synchronous
+> workspace backups are now scoped per browser tab; initial recovery merges
+> unrelated tab backups and preserves divergent same-ID unsent drafts as
+> independent recovery entries. The existing V2 IndexedDB collection remains
+> backward-compatible but is committed through a *single atomic transaction*
+> that reconciles only changed workspace IDs against a durable baseline.
+> Concurrent edits of different drafts no longer erase one another; same-ID
+> conflicts fork the second branch into an independent draft, and stale deletes
+> cannot discard newer edits. Tombstones prevent stale backup resurrection.
+> Regression tests emulate interleaved IndexedDB transactions, tab-local crash
+> recovery, deletion races, and the Studio conflict path. No animation JSON,
+> named Library schema, physics or rendering behavior was changed.
+
 > **Contract-aware Studio Snapshot Picker (2026-11-15):** Editing an opened
 > v2 project now prefilters the ordinary Picker by its immutable Animation
 > Contract after History search/physics filters. An opt-in **Show incompatible**

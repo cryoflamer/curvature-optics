@@ -891,10 +891,20 @@ RK4 optics, the Legacy interface or the animation timeline.
   working checkpoint. Identical saved content is allowed on explicit duplication.
 - No `Save and continue`/`Discard and continue` decision is needed for routine
   switching, and no simultaneous duplicate/conflict prompts are rendered.
-- The versioned workspace collection uses both synchronous localStorage
-  snapshots and serialized IndexedDB writes. A V1 single-draft checkpoint is
-  migrated without deleting the old recovery source. On storage failure,
-  switching is blocked if no durable backup is available.
+- Each browser tab writes its own synchronous localStorage recovery backup,
+  so unfinished writes in one tab cannot overwrite another tab's backup.
+  IndexedDB commits use an atomic, per-workspace **change merge** against the
+  tab's last known durable state (the v2 database record stays compatible).
+  Changes to different drafts survive regardless of save order. If two tabs
+  edit the *same* workspace, the competing edits are saved under a separate
+  independent draft ID instead of silently replacing the other tab's work;
+  the user is notified and may save that copy to Animation Library.
+  An edit that races with deletion is preserved, and deletion markers prevent
+  older backup copies from silently resurrecting removed drafts. Different
+  unsent same-ID drafts recovered from separate tabs receive stable independent
+  recovery IDs. These checks apply to working drafts, not Library revision checks.
+  A V1 single-draft checkpoint still migrates without deleting the recovery
+  source. On storage failure, switching is blocked if no backup is available.
 - **Delete draft** requires explicit confirmation; deleting a named Library
   project detaches its working checkpoint instead of destroying unsaved edits.
   If an external tab modified a saved record, revision validation protects the

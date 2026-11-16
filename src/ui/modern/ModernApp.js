@@ -563,6 +563,11 @@
   var studioLibraryShowDuplicates=false;
   var studioWorkspaces=null,studioWorkspaceId=null,studioWorkspaceReady=false;
   var studioWorkspaceLocalSaved=false;
+  // Each page has its own synchronous recovery slot. Multiple tabs must never
+  // overwrite one another's pending localStorage backups.
+  var studioWorkspaceSessionId='session_'+Math.random().toString(36).slice(2)+
+    '_'+Date.now().toString(36);
+  var studioIndexedBaseline=null;
   var studioLibraryScroll=0;
   var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
   var studioLibraryFilters=studioLibraryFiltersApi?studioLibraryFiltersApi.normalize():null;
@@ -1557,8 +1562,8 @@
           studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
             studioWorkspaces,{activeId:activeWorkspace}));
           studioDraftGeneration++;
-          try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
-            preferencesStorage(),studioWorkspaces);}
+          try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+            preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
           catch(error){studioWorkspaceLocalSaved=false;
             studioDraftStatus('Renamed workspace backup failed: '+error.message,true);}
           if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
@@ -1685,13 +1690,28 @@
       var previous=studioWorkspaces,previousLocalSaved=studioWorkspaceLocalSaved;
       var staged=studioDraftAutosave.restoreSavedProject(previous,workspaceId,clean,stashId,when);
       studioWorkspaces=staged;
-      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
-        preferencesStorage(),staged);}
+      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+        preferencesStorage(),staged,studioWorkspaceSessionId);}
       catch(error){studioWorkspaceLocalSaved=false;}
       return persistStudioWorkspace().then(function(ok){
         if(!ok){
+          // A concurrent tab may have caused the staged restore to be forked.
+          // Keep that durable recovery draft, but return the live editor to
+          // its original working project instead of leaving a dangling ID.
+          var diverted=studioWorkspaceId!==workspaceId&&
+            studioWorkspaceId.indexOf('draft_')===0?studioWorkspaceId:null;
+          var recovered=diverted?studioDraftAutosave.getWorkspace(
+            studioWorkspaces,diverted):null;
+          studioWorkspaceId=workspaceId;studioLibraryActive=original;
           studioWorkspaces=previous;studioWorkspaceLocalSaved=previousLocalSaved;
-          try{studioDraftAutosave.writeCollectionLocal(preferencesStorage(),previous);}
+          if(recovered){
+            studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,
+              diverted,recovered);
+            studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
+              studioWorkspaces,{activeId:workspaceId}));
+          }
+          try{studioDraftAutosave.writeSessionLocal(preferencesStorage(),
+            studioWorkspaces,studioWorkspaceSessionId);}
           catch(error){}
           throw Error('Restored workspace could not be persisted; editor was not changed');
         }
@@ -1906,16 +1926,47 @@
   function persistStudioWorkspace(){
     if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
     if(!studioWorkspaces||!studioDraftAutosave)return Promise.resolve(false);
-    var current=studioWorkspaces;
+    var current=studioWorkspaces,atGeneration=studioDraftGeneration;
     if(!root.indexedDB)return Promise.resolve(!!studioWorkspaceLocalSaved);
-    // The queue serializes every snapshot, so older asynchronous transactions
-    // cannot overwrite a newer workspace collection. Failed transactions must
-    // still allow subsequent writes to be retried.
+    // A single IndexedDB readwrite transaction reconciles this tab's changes
+    // against the latest durable collection. Only changed workspace IDs are
+    // applied; unrelated drafts from other tabs are preserved atomically.
     var attempt=studioDraftWriteQueue.catch(function(){return false;}).then(function(){
-      return studioDraftAutosave.writeCollection(root.indexedDB,current).then(function(){return true;});
+      return studioDraftAutosave.writeCollectionMerged(root.indexedDB,current,
+        studioIndexedBaseline,root.crypto).then(function(result){
+        studioIndexedBaseline=result.collection;
+        studioDraftAutosave.pruneSessionLocals(preferencesStorage(),
+          result.collection,studioWorkspaceSessionId);
+        if(atGeneration===studioDraftGeneration){
+          studioWorkspaces=result.collection;
+          var activeConflict=result.conflicts.find(function(item){
+            return item.id===studioWorkspaceId;
+          });
+          if(activeConflict){
+            studioWorkspaceId=activeConflict.forkId;
+            studioLibraryActive=null;studioLibraryPending=null;
+            studioLibraryMessage='This workspace was changed in another tab. Your edits were '+
+              'preserved as a separate draft; save it as a new Library project.';
+            studioLibraryError=true;
+            studioDraftStatus(studioLibraryMessage,true);
+          }else if(result.protectedDeletes.length){
+            studioDraftStatus('A draft was changed in another tab and was not deleted.',true);
+          }
+          try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+            preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
+          catch(error){studioWorkspaceLocalSaved=false;}
+          if(activeConflict)renderStudioLibrary();
+        }else{
+          // More edits arrived during the transaction. Do not swap the editor;
+          // merge independent remote drafts and schedule another checkpoint.
+          absorbLateStudioWorkspaces(result.collection);
+        }
+        return {ok:!result.conflicts.some(function(item){return item.id===current.activeId;}),
+          conflictCount:result.conflicts.length};
+      });
     });
     studioDraftWriteQueue=attempt;
-    return attempt.then(function(){return true;}).catch(function(error){
+    return attempt.then(function(result){return result.ok;}).catch(function(error){
       studioDraftStatus('IndexedDB backup failed: '+error.message+
         (studioWorkspaceLocalSaved?' · local backup retained.':' · project switching blocked.'),true);
       return !!studioWorkspaceLocalSaved;
@@ -1924,11 +1975,14 @@
   function writeStudioDraftIndexedDB(){return persistStudioWorkspace();}
   function dropStudioWorkspace(id){
     if(!studioWorkspaces||id===studioWorkspaceId)return;
+    // Invalidate any earlier asynchronous write snapshot before removing a
+    // workspace, otherwise its completion could resurrect the deleted draft.
+    studioDraftGeneration++;
     studioWorkspaces=studioDraftAutosave.withoutWorkspace(studioWorkspaces,id,
       studioWorkspaceId,Math.max(Date.now(),studioDraftSavedAt+1));
     studioDraftSavedAt=studioWorkspaces.savedAt;
-    try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
-      preferencesStorage(),studioWorkspaces);}
+    try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+      preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
     catch(error){studioWorkspaceLocalSaved=false;
       studioDraftStatus('Local draft backup failed: '+error.message,true);}
     if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
@@ -1947,11 +2001,11 @@
         studioDraftAutosave.withWorkspace(studioWorkspaces,studioWorkspaceId,
           studioDraftCheckpoint,Math.max(now,studioDraftSavedAt)):
         studioDraftAutosave.collection(studioWorkspaceId,studioDraftCheckpoint,now);
-      // Synchronous, whole-collection LocalStorage snapshot. Never overwrite
-      // another workspace just because the active editor changed.
+      // Synchronous tab-scoped backup before the debounced IndexedDB write.
+      // A second tab cannot overwrite this page's pending recovery snapshot.
       studioWorkspaceLocalSaved=false;
-      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
-        preferencesStorage(),studioWorkspaces);}
+      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+        preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
       catch(error){studioDraftStatus('Local workspace backup failed: '+error.message+
         '; trying IndexedDB.',true);}
       if(!studioWorkspaceLocalSaved&&!root.indexedDB)
@@ -2015,8 +2069,8 @@
     if(!changed)return;
     studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
       studioWorkspaces,{activeId:active}));
-    try{studioWorkspaceLocalSaved=studioDraftAutosave.writeCollectionLocal(
-      preferencesStorage(),studioWorkspaces);}
+    try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+      preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
     catch(error){studioWorkspaceLocalSaved=false;
       studioDraftStatus('Recovered drafts require IndexedDB: '+error.message,true);}
     if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
@@ -2025,7 +2079,9 @@
   }
   function bindStudioDraftPersistence(){
     if(!studioDraftAutosave)return;
-    var local=studioDraftAutosave.readCollectionLocal(preferencesStorage());
+    var local=studioDraftAutosave.combineCollections([
+      studioDraftAutosave.readCollectionLocal(preferencesStorage())
+    ].concat(studioDraftAutosave.readSessionLocals(preferencesStorage())));
     var oldLocal=studioDraftAutosave.readLocal(preferencesStorage());
     var freshPlaceholder=!local&&!oldLocal;
     if(!local&&oldLocal){
@@ -2053,20 +2109,25 @@
     ]).then(function(records){
       var remote=records[0];
       if(!remote&&records[1])remote=studioDraftAutosave.migrate(records[1],root.crypto);
+      studioIndexedBaseline=remote;
+      if(remote)studioDraftAutosave.pruneSessionLocals(preferencesStorage(),
+        remote,studioWorkspaceSessionId);
       if(studioDraftGeneration!==generation){
         absorbLateStudioWorkspaces(remote);return; // never overwrite active edits
       }
       var best=freshPlaceholder&&remote?remote:
-        studioDraftAutosave.newerCollection(local,remote);
-      if(best&&(freshPlaceholder&&remote||!local||best.savedAt>local.savedAt)){
+        studioDraftAutosave.combineCollections([local,remote]);
+      if(best&&(freshPlaceholder&&remote||!local||
+         JSON.stringify(best)!==JSON.stringify(local))){
         restoreStudioCollection(best);studioDraftCheckpoint=studioDraftAutosave.getWorkspace(best,best.activeId);
         studioDraftStatus('Animation workspaces restored from IndexedDB.',false);
         if(experimentHistory)refreshHistoryList().catch(function(){/* retain draft */});
         if(studioLibraryPending)refreshStudioLibrary();
         else renderStudioLibrary();
       }
-      // A V1 record is migrated without overwriting a newer V1 IndexedDB
-      // checkpoint. The first edit persists the V2 collection automatically.
+      // Migrate or reconcile any local-only drafts without replacing a newer
+      // IndexedDB collection. The writer merges individual workspace changes.
+      if(best&&JSON.stringify(best)!==JSON.stringify(remote))persistStudioWorkspace();
     }).catch(function(error){
       if(!local)studioDraftStatus('Animation workspace recovery unavailable: '+error.message,true);
     });

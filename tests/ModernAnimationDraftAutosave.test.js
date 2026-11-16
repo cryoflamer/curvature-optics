@@ -345,11 +345,12 @@ test('Stash/Discard app flow commits backups before switching, rejects failed wr
     const record={id:'saved_project',updatedAt:51,project:saved,quality:'auto'};
     const workspaces=autosave.collection('project_saved_project',original,1001);
     const local=storage(),events=[];
-    let persistCount=0,failSecond=false,stale=false,permission=true,modifyLate=false;
+    let persistCount=0,failSecond=false,stale=false,permission=true,modifyLate=false,conflictSecond=false;
     const ctx={Promise,Date,Error,Math,Object,studioDraftAutosave:autosave,
       studioLibraryActive:record,studioLibraryBusy:false,studioWorkspaceReady:true,
       studioWorkspaceId:'project_saved_project',studioWorkspaces:workspaces,
-      studioWorkspaceLocalSaved:true,studioDraftSavedAt:1001,
+      studioWorkspaceLocalSaved:true,studioWorkspaceSessionId:'tab_restore_test',
+      studioDraftSavedAt:1001,
       studioDraftGeneration:0,studioDraft:dirty,studioPlaybackApi:{},
       studioApi:studio,studioLibraryMessage:'',studioLibraryError:false,
       root:{indexedDB:{},crypto:{randomUUID:()=> '11112222333344445555666677778888'},
@@ -369,7 +370,15 @@ test('Stash/Discard app flow commits backups before switching, rejects failed wr
           ctx.studioDraft=studio.edit(ctx.studioDraft,'name','Very late changes');
           ctx.studioDraftGeneration++;
         }
-        return Promise.resolve(!(persistCount===2&&failSecond));},
+        if(persistCount===2&&conflictSecond){
+          const current=autosave.getWorkspace(ctx.studioWorkspaces,'project_saved_project');
+          const independent=autosave.checkpoint({...current,libraryId:null,libraryRevision:null},
+            current.savedAt+1);
+          ctx.studioWorkspaces=autosave.withWorkspace(ctx.studioWorkspaces,
+            'draft_conflict',independent,current.savedAt+2);
+          ctx.studioWorkspaceId='draft_conflict';
+        }
+        return Promise.resolve(!(persistCount===2&&(failSecond||conflictSecond)));},
       studioLibrary:{get(){events.push('get');return Promise.resolve(stale?{...record,updatedAt:52}:record);}},
       performStudioSwitch(kind,updated){events.push('switch '+kind);
         assert.equal(kind,'restore');assert.equal(updated.updatedAt,51);
@@ -379,6 +388,7 @@ test('Stash/Discard app flow commits backups before switching, rejects failed wr
     return {ctx,events,record,configure(o){
       failSecond=!!o.failSecond;stale=!!o.stale;
       permission=o.permission!==false;modifyLate=!!o.modifyLate;
+      conflictSecond=!!o.conflictSecond;
     }};
   }
   const kept=setup();
@@ -395,6 +405,12 @@ test('Stash/Discard app flow commits backups before switching, rejects failed wr
   assert.equal(rejected.ctx.studioDraft.name,'Unsaved camera project');
   assert.equal(rejected.ctx.studioWorkspaces.workspaces.length,1);
   assert.ok(!rejected.events.includes('switch restore'));
+  const conflict=setup();conflict.configure({conflictSecond:true});
+  assert.equal(await conflict.ctx.restoreSavedAnimation(true),false);
+  assert.equal(conflict.ctx.studioWorkspaceId,'project_saved_project');
+  assert.equal(conflict.ctx.studioWorkspaces.activeId,'project_saved_project');
+  assert.equal(conflict.ctx.studioDraft.name,'Unsaved camera project');
+  assert.ok(autosave.getWorkspace(conflict.ctx.studioWorkspaces,'draft_conflict'));
   const obsolete=setup();obsolete.configure({stale:true});
   assert.equal(await obsolete.ctx.restoreSavedAnimation(true),false);
   assert.equal(obsolete.ctx.studioDraft.name,'Unsaved camera project');

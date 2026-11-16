@@ -592,6 +592,7 @@
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationProjectWizard.test.js",
         "tests/ModernAnimationSequences.test.js",
+        "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernCameraSpline.test.js"
       ],
       "commonJsToolCallers": []
@@ -771,6 +772,7 @@
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernCameraSpline.test.js",
         "tests/ModernHistoryCleanup.test.js",
         "tests/ModernSemanticNaming.test.js"
@@ -2569,6 +2571,7 @@
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernAnimationWizardReuse.test.js",
+        "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
@@ -2717,6 +2720,7 @@
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernAnimationWizardReuse.test.js",
+        "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",

@@ -21,6 +21,7 @@
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
   var COLLECTION_VERSION=2,COLLECTION_KEY='curvature-modern-animation-workspaces-v2';
   var COLLECTION_DB_KEY='workspaces';
+  var SESSION_LOCAL_PREFIX=COLLECTION_KEY+'-session-';
   function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
   function string(v,max){if(typeof v!=='string'||v.length>max)throw RangeError('Invalid animation draft text');return v;}
   function number(v,min,max){if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)
@@ -140,8 +141,22 @@
     });
     var activeId=workspaceId(input.activeId);
     if(!ids.has(activeId))throw RangeError('Active animation workspace missing');
-    return {version:COLLECTION_VERSION,savedAt:input.savedAt,activeId:activeId,
+    // Deletion markers stop stale tabs or old local backups resurrecting a draft.
+    // Omit the field for untouched v2 collections to retain legacy JSON parity.
+    var removed=input.removed===undefined?[]:input.removed;
+    if(!Array.isArray(removed)||removed.length>512)throw RangeError('Invalid removed workspaces');
+    var deleted=new Set(),tombstones=removed.map(function(item){
+      if(!object(item))throw RangeError('Invalid workspace deletion marker');
+      var id=workspaceId(item.id),when=number(item.removedAt,1,Number.MAX_SAFE_INTEGER);
+      if(deleted.has(id)||ids.has(id)||!Number.isSafeInteger(when))
+        throw RangeError('Conflicting workspace deletion marker');
+      deleted.add(id);
+      return {id:id,removedAt:when};
+    });
+    var normalized={version:COLLECTION_VERSION,savedAt:input.savedAt,activeId:activeId,
       workspaces:workspaces};
+    if(tombstones.length)normalized.removed=tombstones;
+    return normalized;
   }
   function collection(id,checkpoint,savedAt){
     return normalizeCollection({version:COLLECTION_VERSION,activeId:id,
@@ -153,13 +168,16 @@
     });
     next.push({id:workspaceId(id),checkpoint:normalize(checkpoint)});
     return normalizeCollection({version:COLLECTION_VERSION,activeId:id,
-      savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),workspaces:next});
+      savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),workspaces:next,
+      removed:(original.removed||[]).filter(function(item){return item.id!==id;})});
   }
   function withoutWorkspace(collectionValue,id,activeId,savedAt){
     var original=normalizeCollection(collectionValue);
+    var removed=(original.removed||[]).filter(function(item){return item.id!==id;});
+    removed.push({id:workspaceId(id),removedAt:Math.max(savedAt||Date.now(),original.savedAt+1)});
     return normalizeCollection({version:COLLECTION_VERSION,
       savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),activeId:activeId,
-      workspaces:original.workspaces.filter(function(item){return item.id!==id;})});
+      workspaces:original.workspaces.filter(function(item){return item.id!==id;}),removed:removed});
   }
   // Prepare the next durable workspace collection before changing the live
   // editor. A stash is an independent draft, never the named project's slot.
@@ -210,6 +228,221 @@
     var a=normalizeCollection(local),b=normalizeCollection(remote);
     return b.savedAt>a.savedAt?b:a;
   }
+  // A tab may know only a subset of the latest workspaces. Treat the delta
+  // against its last IndexedDB snapshot as an operation, not as a replacement
+  // for the complete database. Simultaneous edits of one ID are forked instead
+  // of allowing last-writer-wins to destroy either draft.
+  function reconcileCollection(staged,base,remote,crypto){
+    var next=normalizeCollection(staged),prior=base?normalizeCollection(base):null;
+    var stored=remote?normalizeCollection(remote):null;
+    var originals=new Map((prior?prior.workspaces:[]).map(function(e){return [e.id,e.checkpoint];}));
+    var latest=new Map((stored?stored.workspaces:[]).map(function(e){return [e.id,e.checkpoint];}));
+    var deletions=new Map((stored&&stored.removed||[]).map(function(e){return [e.id,e.removedAt];}));
+    var previouslyDeleted=new Map((prior&&prior.removed||[]).map(function(e){return [e.id,e.removedAt];}));
+    var conflicts=[],lostDeletes=[];
+    function equal(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+    function sameContent(a,b){return a&&b&&equal(a.draft,b.draft)&&
+      a.quality===b.quality&&a.libraryId===b.libraryId&&
+      a.libraryRevision===b.libraryRevision;}
+    function fork(id,saved){
+      var copy=checkpoint(Object.assign({},saved,{libraryId:null,libraryRevision:null}),saved.savedAt);
+      var forkId=makeWorkspaceId(crypto);
+      while(latest.has(forkId)||deletions.has(forkId))forkId=makeWorkspaceId(crypto);
+      latest.set(forkId,copy);
+      conflicts.push({id:id,forkId:forkId});
+      return forkId;
+    }
+    // Deletions must be guarded by the same baseline as edits. A different
+    // tab's newer edits take precedence over a stale delete.
+    var removalIds=new Set((prior?prior.workspaces:[]).filter(function(entry){
+      return !next.workspaces.some(function(e){return e.id===entry.id;});
+    }).map(function(e){return e.id;}));
+    (next.removed||[]).forEach(function(item){
+      if(!previouslyDeleted.has(item.id))removalIds.add(item.id);
+    });
+    removalIds.forEach(function(id){
+      var old=originals.get(id),live=latest.get(id);
+      if(live&&!equal(old,live)){
+        lostDeletes.push(id);return;
+      }
+      latest.delete(id);
+      deletions.set(id,Math.max(next.savedAt,deletions.get(id)||0));
+    });
+    next.workspaces.forEach(function(entry){
+      var old=originals.get(entry.id),live=latest.get(entry.id);
+      // Untouched workspaces belong to the durable version, not the stale tab.
+      if(equal(entry.checkpoint,old))return;
+      if((live&&!equal(live,old))||(!live&&deletions.has(entry.id))){
+        // A position-only autosave must not produce spurious duplicate drafts.
+        if(sameContent(entry.checkpoint,live)){
+          if(entry.checkpoint.savedAt>live.savedAt)latest.set(entry.id,entry.checkpoint);
+        }else fork(entry.id,entry.checkpoint);
+        return;
+      }
+      latest.set(entry.id,entry.checkpoint);deletions.delete(entry.id);
+    });
+    var active=next.activeId;
+    var conflict=conflicts.find(function(item){return item.id===active;});
+    // Even a tab that has not edited since its last backup can have an open
+    // editor on a now-deleted/changed project. Do not silently switch its
+    // backing workspace underneath the live editor on a later flush.
+    if(!conflict&&originals.has(active)){
+      var opened=next.workspaces.find(function(e){return e.id===active;});
+      var remoteOpened=latest.get(active);
+      if(opened&&equal(opened.checkpoint,originals.get(active))&&
+        ((!remoteOpened&&deletions.has(active))||
+          (remoteOpened&&!sameContent(opened.checkpoint,remoteOpened)))){
+        conflict={id:active,forkId:fork(active,opened.checkpoint)};
+      }
+    }
+    if(conflict)active=conflict.forkId;
+    if(!latest.has(active))active=stored&&latest.has(stored.activeId)?stored.activeId:
+      latest.keys().next().value;
+    if(!active)throw Error('No animation workspaces remain');
+    var result=normalizeCollection({version:COLLECTION_VERSION,activeId:active,
+      savedAt:Math.max(Date.now(),next.savedAt,(stored?stored.savedAt:0)+1),
+      workspaces:Array.from(latest,function(pair){return {id:pair[0],checkpoint:pair[1]};}),
+      removed:Array.from(deletions,function(pair){return {id:pair[0],removedAt:pair[1]};})});
+    return {collection:result,conflicts:conflicts,protectedDeletes:lostDeletes};
+  }
+  // Each tab owns an independent synchronous fallback, so another tab cannot
+  // erase its most recent unsent work while IndexedDB is still committing.
+  function writeSessionLocal(storage,value,sessionId){
+    if(!storage||typeof storage.setItem!=='function')return false;
+    if(!/^[A-Za-z0-9_-]{8,100}$/.test(sessionId||''))throw RangeError('Invalid workspace session');
+    storage.setItem(SESSION_LOCAL_PREFIX+sessionId,JSON.stringify(normalizeCollection(value)));
+    return true;
+  }
+  function readSessionLocals(storage){
+    if(!storage||typeof storage.key!=='function'||!Number.isSafeInteger(storage.length))return [];
+    var values=[];
+    try{
+      for(var i=0;i<storage.length;i++){
+        var key=storage.key(i);
+        if(typeof key!=='string'||key.indexOf(SESSION_LOCAL_PREFIX)!==0)continue;
+        var raw=storage.getItem(key);
+        if(raw!==null)try{
+          var snapshot=normalizeCollection(JSON.parse(raw));
+          Object.defineProperty(snapshot,'sessionId',{value:key.slice(SESSION_LOCAL_PREFIX.length)});
+          values.push(snapshot);
+        }catch(error){}
+      }
+    }catch(error){}
+    return values;
+  }
+  // Remove only older tab snapshots already present *exactly* in a
+  // committed IndexedDB collection (possibly under a conflict-recovery ID).
+  // Never remove the current tab's synchronous backup or an unsent branch.
+  function pruneSessionLocals(storage,durable,currentSessionId){
+    if(!storage||typeof storage.key!=='function'||
+      typeof storage.removeItem!=='function'||!Number.isSafeInteger(storage.length))return 0;
+    var stored=normalizeCollection(durable),entries=stored.workspaces.map(function(e){
+      return JSON.stringify(e.checkpoint);
+    });
+    var removed=new Map((stored.removed||[]).map(function(e){return [e.id,e.removedAt];}));
+    var discarded=0,keys=[];
+    try{
+      for(var i=0;i<storage.length;i++){
+        var key=storage.key(i);
+        if(typeof key==='string'&&key.indexOf(SESSION_LOCAL_PREFIX)===0&&
+          key!==SESSION_LOCAL_PREFIX+currentSessionId)keys.push(key);
+      }
+      keys.forEach(function(key){
+        var source;
+        try{source=normalizeCollection(JSON.parse(storage.getItem(key)));}catch(error){return;}
+        var backed=source.workspaces.every(function(item){
+          return entries.includes(JSON.stringify(item.checkpoint));
+        });
+        var deletions=(source.removed||[]).every(function(item){
+          return (removed.get(item.id)||0)>=item.removedAt;
+        });
+        if(backed&&deletions){storage.removeItem(key);discarded++;}
+      });
+    }catch(error){/* Leave recovery copies in place if browser storage denies cleanup. */}
+    return discarded;
+  }
+  // Pure recovery merge. Tombstones outrank older workspaces, and later
+  // checkpoints win for an identical ID. All unrelated drafts survive.
+  function combineCollections(values){
+    var sources=values.filter(Boolean).map(function(value){
+      return {collection:normalizeCollection(value),sessionId:value.sessionId||null};
+    });
+    if(!sources.length)return null;
+    var entries=new Map(),removed=new Map(),active=sources[0].collection.activeId;
+    sources.sort(function(a,b){return a.collection.savedAt-b.collection.savedAt;});
+    function keyForRecovery(id,session){
+      var text=id+'|'+session,hash=2166136261;
+      for(var i=0;i<text.length;i++)hash=Math.imul(hash^text.charCodeAt(i),16777619);
+      return workspaceId('draft_recovered_'+(hash>>>0).toString(36));
+    }
+    sources.forEach(function(source){
+      var current=source.collection;
+      active=current.activeId;
+      (current.removed||[]).forEach(function(t){
+        if(t.removedAt>(removed.get(t.id)||0))removed.set(t.id,t.removedAt);
+      });
+      current.workspaces.forEach(function(e){
+        var previous=entries.get(e.id);
+        if(previous&&source.sessionId&&previous.sessionId&&
+          source.sessionId!==previous.sessionId&&
+          JSON.stringify(previous.checkpoint.draft)!==JSON.stringify(e.checkpoint.draft)){
+          // Both tabs may have crashed before their IndexedDB flush. Recover
+          // the older divergent branch under a stable independent draft ID.
+          var recoveryId=keyForRecovery(e.id,previous.sessionId);
+          var recovered=checkpoint(Object.assign({},previous.checkpoint,{
+            libraryId:null,libraryRevision:null
+          }),previous.checkpoint.savedAt);
+          if(!entries.has(recoveryId)||
+            entries.get(recoveryId).checkpoint.savedAt<recovered.savedAt)
+            entries.set(recoveryId,{id:recoveryId,checkpoint:recovered,sessionId:null});
+        }
+        if(!previous||e.checkpoint.savedAt>previous.checkpoint.savedAt)
+          entries.set(e.id,{id:e.id,checkpoint:e.checkpoint,sessionId:source.sessionId});
+      });
+    });
+    removed.forEach(function(when,id){
+      if(entries.has(id)&&entries.get(id).checkpoint.savedAt<=when)entries.delete(id);
+      else removed.delete(id);
+    });
+    if(!entries.size)return null;
+    if(!entries.has(active))active=entries.keys().next().value;
+    return normalizeCollection({version:COLLECTION_VERSION,activeId:active,
+      savedAt:Math.max.apply(null,sources.map(function(s){return s.collection.savedAt;})),
+      workspaces:Array.from(entries.values(),function(e){return {id:e.id,checkpoint:e.checkpoint};}),
+      removed:Array.from(removed,function(t){return {id:t[0],removedAt:t[1]};})});
+  }
+  function writeCollectionMerged(indexedDB,staged,baseline,crypto){
+    var next=normalizeCollection(staged),before=baseline?normalizeCollection(baseline):null;
+    if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
+    return new Promise(function(resolve,reject){
+      var db=null,settled=false,request,result;
+      function fail(error){if(settled)return;settled=true;if(db)db.close();reject(error);}
+      try{request=indexedDB.open(DATABASE,1);}catch(error){fail(error);return;}
+      request.onupgradeneeded=function(){db=request.result;
+        if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE);};
+      request.onerror=function(){fail(request.error||Error('Workspace database unavailable'));};
+      request.onblocked=function(){fail(Error('Workspace database blocked'));};
+      request.onsuccess=function(){
+        if(settled){request.result.close();return;}
+        db=request.result;
+        try{
+          var tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);
+          var read=store.get(COLLECTION_DB_KEY);
+          read.onsuccess=function(){
+            try{
+              result=reconcileCollection(next,before,
+                read.result==null?null:normalizeCollection(read.result),crypto);
+              store.put(result.collection,COLLECTION_DB_KEY);
+            }catch(error){tx.abort();fail(error);}
+          };
+          read.onerror=function(){fail(read.error||Error('Workspace read failed'));};
+          tx.oncomplete=function(){if(settled)return;settled=true;db.close();resolve(result);};
+          tx.onerror=function(){fail(tx.error||Error('Workspace write failed'));};
+          tx.onabort=function(){fail(tx.error||Error('Workspace write aborted'));};
+        }catch(error){fail(error);}
+      };
+    });
+  }
   function withStore(indexedDB,mode,act){
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
@@ -255,5 +488,9 @@
     restoreSavedProject:restoreSavedProject,
     getWorkspace:getWorkspace,readCollectionLocal:readCollectionLocal,
     writeCollectionLocal:writeCollectionLocal,readCollection:readCollection,
-    writeCollection:writeCollection,migrate:migrate,newerCollection:newerCollection});
+    writeCollection:writeCollection,migrate:migrate,newerCollection:newerCollection,
+    reconcileCollection:reconcileCollection,writeCollectionMerged:writeCollectionMerged,
+    writeSessionLocal:writeSessionLocal,readSessionLocals:readSessionLocals,
+    combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
+    SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX});
 }));
