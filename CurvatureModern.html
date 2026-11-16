@@ -15,7 +15,7 @@
 <script src="src/scene/CurvatureSceneContract.js"></script>
 <script src="src/scene/CurvatureRenderFrame.js"></script>
 <script src="src/geometry/CurvatureSurfaceGeometry.js"></script>
-<script src="src/geometry/CurvaturePhysicalWorldGeometry.js"></script>
+<script src="src/geometry/CurvaturePhysicalWorldGeometry.js?v=adaptive-grid-41"></script>
 <script src="src/geometry/CurvatureCameraTranslation.js"></script>
 <script src="src/geometry/CurvatureGeometryEngine.js"></script>
 <script src="src/renderers/CurvatureCanvasProjection.js"></script>
@@ -28,12 +28,12 @@
 <script src="src/renderers/CurvatureStrokePreview.js"></script>
 <script src="src/renderers/CurvatureStyledCombinedPreview.js"></script>
 <script src="src/renderers/CurvatureLegacyOrderPreview.js"></script>
-<script src="src/scene/CurvatureIndependentComposition.js"></script>
+<script src="src/scene/CurvatureIndependentComposition.js?v=adaptive-grid-41"></script>
 <script src="src/geometry/CurvatureEarClip.js"></script>
 <script src="src/renderers/CurvatureWebGLGeometryRenderer.js?v=140.2"></script>
 <script src="src/renderers/CurvatureFrameRenderer.js?v=140.2"></script>
 <script src="src/renderers/CurvatureScreenSpaceGuides.js"></script>
-<script src="src/scene/CurvatureFullSceneDecorations.js?v=metric-grid-40"></script>
+<script src="src/scene/CurvatureFullSceneDecorations.js?v=metric-grid-40-adaptive-41"></script>
 <script src="src/optics/OpticalRayTracer.js?v=140.12.99"></script>
 <script src="src/optics/OpticalRayHorizon.js"></script>
 <script src="src/optics/OpticalTargetProjection.js?v=140.12.99"></script>
@@ -42,14 +42,14 @@
 <script src="src/optics/OpticalFastRayField.js?gradient-cache=1"></script>
 <script src="src/optics/OpticalPreviewLod.js?motion-pacer=1"></script>
 <script src="src/optics/OpticalTowerSilhouette.js?v=140.12.37.2"></script>
-<script src="src/optics/CurvaturePhysicalGroundGuides.js?v=140.12.97"></script>
+<script src="src/optics/CurvaturePhysicalGroundGuides.js?v=adaptive-grid-41"></script>
 <script src="src/optics/CurvaturePhysicalPolygonFills.js?v=140.12.37.2"></script>
-<script src="src/optics/CurvaturePhysicalSceneOptics.js?v=adaptive-fast-profiles"></script>
+<script src="src/optics/CurvaturePhysicalSceneOptics.js?v=adaptive-fast-profiles&amp;adaptive-grid-41=1"></script>
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/renderers/CurvatureAtmosphericVisibility.js?v=140.12.91"></script>
-<script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40"></script>
+<script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40&amp;adaptive-grid-41=1"></script>
 <script src="src/ui/modern/ModernLocationCatalog.js?bedford-native=1&amp;metric-grid-40=1"></script>
 <script src="src/ui/modern/ModernSceneState.js?bedford-native=1&amp;metric-grid-40=1"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
@@ -70,7 +70,7 @@
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=camera-position"></script>
 <script src="src/ui/modern/ModernCompareState.js?v=140.12.97"></script>
-<script src="src/ui/modern/ModernExperimentState.js?v=camera-position&amp;bedford-native=1&amp;preset-navigation=1"></script>
+<script src="src/ui/modern/ModernExperimentState.js?v=camera-position&amp;bedford-native=1&amp;preset-navigation=1&amp;adaptive-grid-41=1"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 <script src="src/ui/modern/ModernExperimentFingerprint.js"></script>
 <script src="src/ui/modern/ModernExperimentThumbnail.js"></script>
@@ -734,6 +734,15 @@
           <label class="modern-check" for="ModernGrid"><input id="ModernGrid" type="checkbox" checked> Show metric ground grid</label>
           <button type="button" class="modern-help" aria-label="Help: metric ground grid" data-tip="Metric guide lines follow the physical surface and do not determine the optical horizon.">?</button>
         </div>
+        <div class="modern-field">
+          <div class="modern-display-label"><label for="ModernGridExtent">Ground grid distance</label>
+            <button type="button" class="modern-help" aria-label="Help: ground grid distance" data-tip="Auto extends the ground guides beyond the farthest scene object, up to 500 km. The limit affects only the surface grid; physical horizon and object visibility are independent. On a Globe, guides beyond the visible ground remain hidden.">?</button></div>
+          <select id="ModernGridExtent"><option value="0" selected>Auto · by scene objects</option>
+            <option value="10">10 km</option><option value="25">25 km</option>
+            <option value="50">50 km</option><option value="100">100 km</option>
+            <option value="200">200 km</option><option value="300">300 km</option>
+            <option value="500">500 km</option></select>
+        </div>
         <div class="modern-display-check">
           <label class="modern-check" for="ModernShowTemperatureProfile"><input id="ModernShowTemperatureProfile" type="checkbox"> Show temperature column (0–2 km)</label>
           <button type="button" class="modern-help" aria-label="Help: temperature column" data-tip="Shown for hydrostatic, hydrostatic-start transition, and inverse-temperature atmospheres. Outside positions reserve a separate strip; inside positions overlay the scene. In inverse mode the shared scale is −273.15…+60 °C; otherwise −40…+60 °C. Gray indicates invalid temperature. This legend does not change atmospheric physics.">?</button>
@@ -875,7 +884,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;adaptive-grid-41=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" class="modern-status-message" role="status" aria-live="polite">Preparing physical scene…</span></div>

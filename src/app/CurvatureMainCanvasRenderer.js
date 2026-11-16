@@ -206,7 +206,8 @@
       fillTriangles:stats.fillTriangles,fillUnresolved:stats.fillUnresolved,
       fillUnresolvedReasons:stats.fillUnresolvedReasons,fillHidden:stats.fillHidden,
       fillSamples:stats.fillSamples,fillSubdivisions:stats.fillSubdivisions,
-      warning:'Physical optics in shared painter; metric ground guides (100 m to 100 km) projected through optical rays, horizon independent; view-aligned guides are annotations.'+
+      warning:'Physical optics in shared painter; metric ground guides projected through optical rays up to '+
+        Math.round(stats.guideRenderExtent/1000)+' km (drawing limit, not horizon); view-aligned guides are annotations.'+
         ' Authored foundations are filled where ground-visible; mutual object occlusion is pending.'+
         (stats.budgetExceeded?' Numerical preview budget exceeded.':'')+
         ((stats.sampleStatuses.solver_failed||0)?' Some optical point solves failed.':'')+

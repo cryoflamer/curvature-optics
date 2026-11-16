@@ -2814,3 +2814,28 @@ shared styling and card-specific click isolation.
   `tests/ModernAtmosphericPresentation13822.test.js` and browser smoke.
 - Browser CI must be confirmed on GitHub Actions (local browser access may
   be restricted). #41 remains Grace shared geometry and scene migration.
+
+
+### Modern geographic migration #41 — Scene-adaptive physical ground grid
+
+- Physical metric grid extent is now determined from the farthest authored
+  object and observer-relative camera translation (10–500 km bounded, with
+  10% clearance and discrete geometric landmarks). Canigou extends to 300 km,
+  distant Chicago to 75 km. Legacy/standalone physical adapters without the
+  Modern setting retain their former 100 km rendering default.
+- The same extent flows through physical metric geometry, ground optical
+  projection and rendering; there is no separate optical visibility limit at
+  100 km. Flat ground grids now extend toward distant mountains where their
+  own ground rays are visible; Globe rings beyond the **verified** refracted
+  horizon are still hidden. Distant metric samples are sparsely subdivided to
+  limit expensive ground-only RK4 requests. The grid never blocks or moves
+  the mountains or defines a horizon.
+- Modern Scene and Compare share a Display control (`Auto`, 10/25/50/100/
+  200/300/500 km); this is a persisted experiment field and round-trips via
+  History, JSON/URL and working-session storage. Older v1 payloads without the
+  field migrate to Auto. Changing or resetting a preset restores Auto.
+- `tests/PhysicalAdaptiveGridExtent.test.js` checks Canigou / Chicago,
+  physical extended guides, Globe horizon, Flat 300 km, Compare invariants
+  and backward-compatible serialization; existing geometry/ring tests keep
+  the 100 km default. A full browser/pixel/FPS check remains for Opera and
+  GitHub Actions. The next scenario geometry is Grace (#42).

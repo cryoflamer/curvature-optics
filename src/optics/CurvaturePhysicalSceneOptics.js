@@ -48,7 +48,7 @@
       model.ObjType,model.NObjects,model.ObjDist,model.ObjDeltaDist,
       model.ObjSidePos,model.ObjSideVar,model.ObjSideType,
       model.ObjSize,model.ObjSizeVar,model.ObjSizeType,
-      model.showGrid,
+      model.showGrid,model.metricGridExtentKm,
       options.metricWorld?null:[model.aDelta,model.rFEarth,model.aDip],
       options.atmosphere,options.occlusionRadius,
       options.atmosphere==='temperature-lapse'?options.temperatureProfile:null,
@@ -352,7 +352,8 @@
       var guideProjection=groundGuides.create({model:model,geometry:geometry,
         atmosphere:traceKind,occlusionRadius:R,temperatureProfile:options.temperatureProfile,transitionProfile:options.transitionProfile,inverseProfile:options.inverseProfile,step:settings.step,
         metricGrid:physicalSurface,
-        maxDistance:Math.min(100000,model.rEarth*.1),
+        maxDistance:physicalSurface?composed.scene.metadata.metricGuideExtentMetres:
+          Math.min(100000,model.rEarth*.1),
         sampleGround:kind!=='vacuum'&&field?function(d){
           return preview?field.sample(d,0):field.exact(d,0);
         }:null});

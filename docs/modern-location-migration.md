@@ -1,6 +1,6 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-17, #40):** four **partial** geographic native scenarios
+**Status (2026-11-17, #41):** four **partial** geographic native scenarios
 (`pontchartrain`, `bedford`, `chicago`, `canigou`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
@@ -41,7 +41,15 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   verified optically projected metric rings. No new ray calculations, altered
   surface extent, horizon guesses or physical-scene geometry. Verify narrow
   Canigou FOV on both Globe and Flat, and the absent-grid state.
-- [ ] **#41+ — Grace, Tensas, Causeway, Soundly:** prioritize shared geometry
+- [x] **#41 — Adaptive metric ground-grid extent:** use the farthest authored
+  object position (relative to observer and camera translation) to choose a
+  bounded 10–500 km drawing extent, with a manual Display selection. Canigou
+  selects 300 km, distant Chicago 75 km, and no-object scenes keep the earlier
+  100 km default. Expand real optically projected rings/spokes rather than
+  creating decorative synthetic ground or changing object visibility; occluded
+  Globe points remain hidden. Existing experiments lacking this field restore
+  to Auto. Evidence: `tests/PhysicalAdaptiveGridExtent.test.js`.
+- [ ] **#42+ — Grace, Tensas, Causeway, Soundly:** prioritize shared geometry
   types and source checks rather than special physics per location.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines

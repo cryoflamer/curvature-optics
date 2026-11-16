@@ -13,7 +13,8 @@
   // Explicit metric landmarks, independent of R, h, camera, and horizon.
   // Enough near-observer detail without millions of distant grid elements.
   var RINGS=Object.freeze([100,250,500,1000,2000,3000,5000,7500,10000,
-    12500,15000,20000,30000,40000,50000,75000,100000]);
+    12500,15000,20000,30000,40000,50000,75000,100000,
+    125000,150000,200000,250000,300000,400000,500000]);
   function valid(k,h){
     if(!Number.isFinite(k)||k<0||!Number.isFinite(h)||h<0)
       throw RangeError('Finite nonnegative curvature and observer height required');
@@ -24,15 +25,46 @@
     p[2]-=eye;
     return p;
   }
+  // Modern view settings choose a drawing limit, not a horizon or an object
+  // visibility range. Missing settings retain the historical 100 km default
+  // for standalone adapters and Legacy preservation tests.
+  var EXTENT_CHOICES=Object.freeze([10000,20000,30000,50000,75000,100000,
+    150000,200000,250000,300000,400000,500000]);
+  function guideExtent(model){
+    var selected=model&&model.metricGridExtentKm;
+    if(selected===undefined)return 100000;
+    if(!Number.isFinite(selected)||selected<0||selected>500)
+      throw RangeError('Metric grid extent must be Auto or 1–500 km');
+    if(selected>0)return selected*1000;
+    var max=0;
+    for(var i=0;i<2;i++){
+      var count=model.NObjects&&model.NObjects[i]||0;
+      if(!count)continue;
+      var first=model.ObjDist[i],step=model.ObjDeltaDist[i];
+      if(!Number.isFinite(first)||!Number.isFinite(step))continue;
+      // The farthest authored group endpoint, including camera translation.
+      // Variation is a conservative envelope, not an optical visibility test.
+      var north=model.CameraNorth||0,east=model.CameraEast||0;
+      var lateral=(model.ObjSidePos&&model.ObjSidePos[i]||0);
+      var sideSwing=Math.abs(model.ObjSideVar&&model.ObjSideVar[i]||0);
+      var d0=Math.hypot(first-north,lateral-east)+sideSwing;
+      var d1=Math.hypot(first+(count-1)*step-north,lateral-east)+sideSwing;
+      max=Math.max(max,d0,d1);
+    }
+    if(!max)return 100000;
+    var needed=Math.min(500000,Math.max(10000,max*1.1));
+    return EXTENT_CHOICES.find(function(d){return d>=needed;})||500000;
+  }
   function metricGuides(options){
     options=options||{};
     var s=valid(options.curvature,options.observerHeight),eye=options.observerHeight;
     var limit=options.maxDistance===undefined?100000:options.maxDistance;
-    if(!Number.isFinite(limit)||!(limit>0)||limit>100000)
-      throw RangeError('Rendering extent must be in (0, 100000] metres');
+    if(!Number.isFinite(limit)||!(limit>0)||limit>500000)
+      throw RangeError('Rendering extent must be in (0, 500000] metres');
     var primitives=[],radii=RINGS.filter(function(r){return r<=limit;});
-    // Ensure a useful nearby guide when the requested extent is tiny.
-    if(!radii.length)radii.push(limit);
+    // Explicit manual extents are surface landmarks too, even when the
+    // selected distance lies between the standard ring radii (e.g. 25 km).
+    if(!radii.length||radii[radii.length-1]<limit)radii.push(limit);
     function at(r,a){return world(s,r*Math.sin(a),r*Math.cos(a),0,eye);}
     function add(points,type,kind,meta){
       primitives.push({type:type,mode:1,points:points,style:{stroke:options.stroke||'blue',alpha:0.7},
@@ -99,5 +131,6 @@
       xAxis:horizontal.map(function(v){return os*params.horizontalScale*v;}),
       yAxis:vertical.map(function(v){return os*params.verticalScale*v;})};
   }
-  return Object.freeze({metricGuides:metricGuides,placement:placement,RINGS:RINGS});
+  return Object.freeze({metricGuides:metricGuides,guideExtent:guideExtent,
+    placement:placement,RINGS:RINGS});
 }));

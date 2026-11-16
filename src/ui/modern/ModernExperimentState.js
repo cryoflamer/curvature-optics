@@ -44,7 +44,8 @@
       temperatureProfile:scene.temperatureProfile||{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
       transitionProfile:scene.transitionProfile||{source:'standard',weight:0},
       inverseProfile:scene.inverseProfile||{source:'temperature-lapse',weight:0},
-      showGrid:model.showGrid!==0,preset:scene.preset,resetPreset:scene.resetPreset,
+      showGrid:model.showGrid!==0,gridExtentKm:model.metricGridExtentKm||0,
+      preset:scene.preset,resetPreset:scene.resetPreset,
       title:model.DemoText||'',description:model.Description||''},
       compare:{A:compare.A,B:compare.B,preset:compare.preset,selected:ui.selected},
       display:{mode:ui.mode,eyeLevel:ui.eyeLevel,horizon:ui.horizon,
@@ -59,7 +60,7 @@
     shape(value,['version','scene','compare','display'],['cameraPositions','cameraSequence']);
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
-    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile','inverseProfile']);
+    shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile','inverseProfile','gridExtentKm']);
     shape(s.camera,CAMERA.concat(['viewcenterHorizon','deviceRatio']),CAMERA_POSITION);
     var camera={};
     var ranges={Height:[0.001,1e9],FocalLengthField:[1,100000],Pan:[-360,360],
@@ -154,7 +155,9 @@
       atmosphere:choice(s.atmosphere,ATMOSPHERE),occlusionRadius:num(s.occlusionRadius,1,1e16),
       visibility:visibility(s.visibility),temperatureProfile:temperatureProfile(s.temperatureProfile),
       transitionProfile:transitionProfile(s.transitionProfile),inverseProfile:inverseProfile(s.inverseProfile),
-      showGrid:bool(s.showGrid),preset:choice(s.preset,SCENE_PRESETS),
+      showGrid:bool(s.showGrid),
+      gridExtentKm:s.gridExtentKm===undefined?0:num(s.gridExtentKm,0,500),
+      preset:choice(s.preset,SCENE_PRESETS),
       resetPreset:choice(s.resetPreset,SCENE_PRESETS.filter(function(id){return id!=='custom';})),
       title:title(s.title,160),description:title(s.description,500)},
       compare:{A:compareA,B:compareB,preset:choice(c.preset,PAIR_PRESETS),

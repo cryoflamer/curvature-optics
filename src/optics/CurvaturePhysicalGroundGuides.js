@@ -25,8 +25,9 @@
     // Rendering extent, NOT a physical horizon. Flat surfaces have no finite
     // horizon in vacuum/standard; unbounded legacy grid geometry must never
     // trigger unbounded target shooting.
-    var guideExtent=Math.min(100000,options.maxDistance===undefined?100000:options.maxDistance);
-    if(!Number.isFinite(guideExtent)||guideExtent<=0)throw RangeError('Invalid ground guide rendering extent');
+    var guideExtent=options.maxDistance===undefined?100000:options.maxDistance;
+    if(!Number.isFinite(guideExtent)||guideExtent<=0||guideExtent>500000)
+      throw RangeError('Invalid ground guide rendering extent');
     var calls=0,clippedEdges=0,skippedEdges=0;
     var metricGrid=options.metricGrid===true,metricAngles=new Map();
     // Optional exact-ground lookup from the tower prism's shared RK4 cache.
@@ -182,8 +183,13 @@
             // exact flat endpoint. Otherwise a mere k=0 switch changes the
             // guide topology even when its projected rays have converged.
             // Preserve historical subdivisions for non-metric Legacy guides.
+            // Distant metric meridians are almost parallel on screen. Keep
+            // ground/ring landmark endpoints but avoid thousands of expensive
+            // long-range ray shoots for intermediate grid-only points.
+            var farGuide=p.metadata&&p.metadata.metricSurface&&
+              (p.metadata.radius>100000||p.metadata.fromMetres>=100000);
             var pieces=p.metadata&&p.metadata.metricSurface?
-              Math.max(1,Math.min(4,Math.ceil(length/3000))):
+              (farGuide?1:Math.max(1,Math.min(4,Math.ceil(length/3000)))):
               (globe?6:Math.max(1,Math.min(6,Math.ceil(length/3000))));
             var prev=null;
             for(var j=0;j<=pieces;j++){

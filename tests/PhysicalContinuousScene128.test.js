@@ -87,7 +87,7 @@ test('128: all metric grid geometry and styles converge at the flat endpoint',()
   assert.deepEqual(guide.map(p=>p.metadata.kind),guides(flat).map(p=>p.metadata.kind));
   assert.ok(guide.every(p=>p.style.stroke==='blue'));
   assert.deepEqual(guide.filter(p=>p.metadata.kind==='metric-ring').map(p=>p.metadata.radius),
-   world.RINGS);
+   world.RINGS.filter(radius=>radius<=100000));
  }
 });
 

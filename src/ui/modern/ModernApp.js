@@ -895,7 +895,7 @@
     DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
     Height:15,FocalLengthField:2000,Roll:0,Nick:0.0121,Pan:0.0464,
     CameraEast:0,CameraNorth:0,
-    viewcenterHorizon:3,showModel:1,showGrid:1,showData:false,
+    viewcenterHorizon:3,showModel:1,showGrid:1,metricGridExtentKm:0,showData:false,
     showTangent:false,showEyeLevel:false,deviceRatio:1.5,
     ObjType:[3,3],NObjects:[85,2],ObjDist:[50,25550],ObjDeltaDist:[297.55,373],
     ObjSideType:[0,0],ObjSidePos:[35,25.4],ObjSideVar:[0,0],
@@ -3902,7 +3902,7 @@
     Object.keys(scene.camera).forEach(function(key){model[key]=scene.camera[key];});
     Object.keys(scene.objects).forEach(function(key){model[key]=scene.objects[key].slice();});
     model.showModel=scene.surface.showModel;model.rEarth=scene.surface.rEarth;
-    model.showGrid=scene.showGrid?1:0;
+    model.showGrid=scene.showGrid?1:0;model.metricGridExtentKm=scene.gridExtentKm;
     model.DemoText=scene.title;model.Description=scene.description;
     state.atmosphere=scene.atmosphere;state.occlusionRadius=scene.occlusionRadius;
     state.visibility=Object.assign({},scene.visibility);
@@ -6050,6 +6050,7 @@
     syncVisibilityControls();
     syncTemperatureControls();
     var grid=el('ModernGrid');if(grid)grid.checked=model.showGrid!==0;
+    var gridExtent=newUiEl('ModernGridExtent');if(gridExtent)gridExtent.value=String(model.metricGridExtentKm||0);
     var eye=newUiEl('ModernCompareEyeLevel');if(eye)eye.checked=state.compareEyeLevel;
     var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
@@ -6362,6 +6363,11 @@
       state.atmosphere=this.value;markCustom();refreshLabels();redraw();
     });
     el('ModernGrid').addEventListener('change',function(){model.showGrid=this.checked?1:0;markCustom();redraw();});
+    var gridExtent=newUiEl('ModernGridExtent');if(gridExtent)gridExtent.addEventListener('change',function(){
+      var v=Number(this.value);
+      if(!Number.isFinite(v)||v<0||v>500){syncNumericInputs();return;}
+      model.metricGridExtentKm=v;markCustom();redraw();
+    });
     var curvature=root.CurvaturePhysicalCurvature;
     var slider=el('ModernCurvature');
     slider.value=String(curvature.modelStep(model));

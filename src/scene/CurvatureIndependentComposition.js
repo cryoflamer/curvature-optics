@@ -171,7 +171,7 @@
     if(physical&&!physicalWorld)throw Error('Physical world geometry required');
     var surface=physical?physicalWorld.metricGuides({curvature:physicalCurvature,
       observerHeight:model.Height,showGrid:model.showGrid,
-      maxDistance:100000,
+      maxDistance:physicalWorld.guideExtent(model),
       stroke:model.GlobeGridCol||model.FEGridCol}):
       globe?engine.globeSurfaceGuides(guideModel):engine.flatSurfaceGuides(model,
         Object.assign({segments:128},options));
@@ -201,6 +201,7 @@
       generator:'CurvatureGeometryEngine',composition:'optics-neutral-main',
       objectIndices:order,globe:!!globe,layerRanges:ranges,
       horizonGuideIsGeometric:!physical,physicalMetricWorld:physical,
+      metricGuideExtentMetres:physical?surface.metadata.renderExtentMetres:null,
       limitations:[physical?'Metric ground guide spacing is independent of radius/horizon; physical horizon is determined by the optical backend':'Surface grids and horizon lines are geometric reference guides, not refracted ground silhouettes',
         'Object visibility is delegated to the optical backend; there is no horizon painter mask']}),
       ranges:ranges,requiresHorizonMask:false};

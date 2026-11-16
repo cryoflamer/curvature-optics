@@ -148,7 +148,8 @@
     });
     model.DemoText=p.name;model.Description=p.description;
     model.showModel=1;model.rEarth=6371000;model.viewcenterHorizon=3;
-    model.showGrid=p.showGrid===false?0:1;model.showEyeLevel=false;model.showTangent=false;
+    model.showGrid=p.showGrid===false?0:1;model.metricGridExtentKm=0;
+    model.showEyeLevel=false;model.showTangent=false;
     return p;
   }
   return Object.freeze({PRESETS:PRESETS,CAMERA:CAMERA,OBJECT:OBJECT,

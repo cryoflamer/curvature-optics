@@ -18,7 +18,7 @@ const rings=x=>x.primitives.filter(p=>p.metadata.kind==='metric-ring');
 const spokes=x=>x.primitives.filter(p=>p.metadata.kind==='metric-spoke');
 
 test('126: every grid ring retains the same metric spacing at all radii and heights',()=>{
- const reference=world.RINGS.slice();
+ const reference=world.RINGS.filter(radius=>radius<=100000);
  for(const k of [0,1/R,1/(10*R),1/(6000370000),1/1e16])for(const eye of [1,7.03526,15,200]){
   const g=authored(k,eye),s=surface.createFromCurvature(k);
   assert.deepEqual(g.metadata.gridRadiiMetres,reference);

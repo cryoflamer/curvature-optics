@@ -1031,6 +1031,7 @@
         "tests/ModernCameraTelemetry.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernTargetDirection.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalCurvatureCamera127.test.js",
         "tests/PhysicalGroundGridOverlay.test.js"
@@ -1468,6 +1469,7 @@
         "src/scene/CurvatureIndependentComposition.js"
       ],
       "commonJsTestCallers": [
+        "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGridOverlay.test.js",
         "tests/PhysicalMetricWorld126.test.js"
@@ -1613,6 +1615,7 @@
         "src/optics/CurvaturePhysicalSceneOptics.js"
       ],
       "commonJsTestCallers": [
+        "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGridOverlay.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",
@@ -1662,6 +1665,7 @@
         "tests/OpticalShootingReduction121.test.js",
         "tests/OpticalTraceOptimization141248.test.js",
         "tests/OpticalWarmStarts123.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalAssemblyAndSolverAudit122.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",
@@ -2228,6 +2232,7 @@
       ],
       "commonJsTestCallers": [
         "tests/CurvatureFullSceneDecorations.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalGroundGridOverlay.test.js"
       ],
       "commonJsToolCallers": []
@@ -2267,6 +2272,7 @@
         "tests/OpticalShootingReduction121.test.js",
         "tests/OpticalTraceOptimization141248.test.js",
         "tests/OpticalWarmStarts123.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalAssemblyAndSolverAudit122.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",
@@ -2663,7 +2669,8 @@
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernSharedCompareControls.test.js",
-        "tests/OpticalRayHorizon.test.js"
+        "tests/OpticalRayHorizon.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2728,7 +2735,8 @@
         "tests/ModernSharedCompareControls.test.js",
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
-        "tests/OpticalRayHorizon.test.js"
+        "tests/OpticalRayHorizon.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2878,7 +2886,8 @@
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernSessionAutosave.test.js",
         "tests/ModernTargetIndicator.test.js",
-        "tests/ModernTemperatureGradient.test.js"
+        "tests/ModernTemperatureGradient.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js"
       ],
       "commonJsToolCallers": [
         "tools/audit-legacy-modern-boundary.js"
@@ -2986,7 +2995,8 @@
         "tests/ModernLocationEvidence.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernSceneControls.test.js",
-        "tests/ModernSharedCompareControls.test.js"
+        "tests/ModernSharedCompareControls.test.js",
+        "tests/PhysicalAdaptiveGridExtent.test.js"
       ],
       "commonJsToolCallers": []
     },
