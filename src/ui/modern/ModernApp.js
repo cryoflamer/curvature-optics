@@ -47,6 +47,7 @@
   var studioSwitchApi=root.CurvatureModernAnimationWorkspaceSwitch;
   var studioPersistenceApi=root.CurvatureModernAnimationWorkspacePersistence;
   var studioLibrary=root.CurvatureModernAnimationLibrary;
+  var studioLibraryActionsApi=root.CurvatureModernAnimationLibraryActions;
   var studioLibraryFiltersApi=root.CurvatureModernAnimationLibraryFilters;
   // One gesture controller and one camera for Scene and both Compare models.
   var cameraInteraction=root.CurvatureModernCameraInteraction?
@@ -1450,70 +1451,70 @@
   function studioLibraryNotice(message,error){
     studioLibraryMessage=message;studioLibraryError=!!error;renderStudioLibrary();
   }
-  function refreshStudioLibrary(){
-    if(!studioLibrary){
-      studioLibraryNotice('Animation Library module failed to load; check the browser console.',true);
-      return Promise.resolve([]);
-    }
-    if(!root.indexedDB){
-      studioLibraryNotice('Named animations require browser IndexedDB storage.',true);
-      return Promise.resolve([]);
-    }
-    return studioLibrary.list(root.indexedDB).then(function(entries){
-      studioLibraryEntries=entries;
-      if(studioLibraryPending){
-        var match=entries.find(function(e){return e.id===studioLibraryPending.id;});
-        if(match&&match.updatedAt===studioLibraryPending.revision){
-          studioLibraryActive=match;
-        }else{
-          studioLibraryActive=null;
-          studioLibraryMessage='Saved project changed or was removed in another tab. This workspace is preserved; use Duplicate.';
-          studioLibraryError=true;
-        }
-        if(match&&match.updatedAt===studioLibraryPending.revision)studioLibraryPending=null;
+  var studioLibraryActionController=null;
+  function studioLibraryActions(){
+    if(studioLibraryActionController)return studioLibraryActionController;
+    if(!studioLibraryActionsApi)return null;
+    studioLibraryActionController=studioLibraryActionsApi.create({
+      library:function(){return studioLibrary;},
+      indexedDB:function(){return root.indexedDB;},
+      crypto:function(){return root.crypto;},
+      busy:function(){return studioLibraryBusy;},
+      setBusy:function(value){studioLibraryBusy=value;},
+      entries:function(){return studioLibraryEntries;},
+      selected:function(){return studioLibrarySelected;},
+      select:function(id){studioLibrarySelected=id;},
+      render:renderStudioLibrary,notice:studioLibraryNotice,
+      download:downloadHistoryJson,
+      confirm:function(message){return typeof root.confirm!=='function'||root.confirm(message);},
+      fail:function(message){studioLibraryMessage=message;studioLibraryError=true;},
+      refreshState:applyStudioLibraryRefresh,
+      imported:function(result){
+        studioLibraryExpanded=true;
+        studioLibrarySelected=result.createdIds[0]||result.reusedIds[0]||studioLibrarySelected;
+        studioLibraryMessage='Imported '+result.created+' animations; '+result.reused+
+          ' already present (including repeated entries in the file). Working draft unchanged.';
+        studioLibraryError=false;
+      },
+      renamed:applyStudioLibraryRename,
+      saved:activateSavedStudioProject,
+      deleted:detachDeletedStudioProject
+    });
+    return studioLibraryActionController;
+  }
+  function applyStudioLibraryRefresh(entries){
+    studioLibraryEntries=entries;
+    if(studioLibraryPending){
+      var match=entries.find(function(e){return e.id===studioLibraryPending.id;});
+      if(match&&match.updatedAt===studioLibraryPending.revision){
+        studioLibraryActive=match;
+      }else{
+        studioLibraryActive=null;
+        studioLibraryMessage='Saved project changed or was removed in another tab. This workspace is preserved; use Duplicate.';
+        studioLibraryError=true;
       }
-      if(studioLibrarySelected&&!entries.some(function(e){return e.id===studioLibrarySelected;}))
-        studioLibrarySelected='';
-      if(studioLibraryRenamingId&&!entries.some(function(e){return e.id===studioLibraryRenamingId;}))
-        studioLibraryRenamingId='';
-      if(studioLibraryActive)studioLibrarySelected=studioLibraryActive.id;
-      renderStudioLibrary();return entries;
-    }).catch(function(error){studioLibraryNotice('Animation Library unavailable: '+error.message,true);return [];});
+      if(match&&match.updatedAt===studioLibraryPending.revision)studioLibraryPending=null;
+    }
+    if(studioLibrarySelected&&!entries.some(function(e){return e.id===studioLibrarySelected;}))
+      studioLibrarySelected='';
+    if(studioLibraryRenamingId&&!entries.some(function(e){return e.id===studioLibraryRenamingId;}))
+      studioLibraryRenamingId='';
+    if(studioLibraryActive)studioLibrarySelected=studioLibraryActive.id;
+  }
+  function refreshStudioLibrary(){
+    var actions=studioLibraryActions();
+    if(!actions){studioLibraryNotice('Animation Library actions module failed to load.',true);return Promise.resolve([]);}
+    return actions.refresh();
   }
   function exportNamedAnimations(all){
-    if(!studioLibrary||studioLibraryBusy)return;
-    try{
-      var entries=all?studioLibraryEntries:studioLibraryEntries.filter(function(entry){
-        return entry.id===studioLibrarySelected;
-      });
-      if(!entries.length)throw Error('Select a saved animation first');
-      downloadHistoryJson(studioLibrary.exportPortable(entries),
-        all?'curvature-animations.json':'curvature-animation.json');
-      studioLibraryNotice('Exported '+entries.length+' complete animation'+
-        (entries.length===1?'':'s')+' to portable JSON.',false);
-    }catch(error){studioLibraryNotice('Animation export failed: '+error.message,true);}
+    var actions=studioLibraryActions();
+    if(actions)actions.exportEntries(all);
+    else studioLibraryNotice('Animation Library actions module failed to load.',true);
   }
   function importNamedAnimations(file){
-    if(studioLibraryBusy||!studioLibrary||!file)return;
-    if(!root.indexedDB){studioLibraryNotice('Animation Library requires IndexedDB.',true);return;}
-    if(file.size>studioLibrary.MAX_PORTABLE_LENGTH){
-      studioLibraryNotice('Animation JSON file is too large.',true);return;
-    }
-    studioLibraryBusy=true;studioLibraryNotice('Checking animation JSON…',false);
-    Promise.resolve().then(function(){return file.text();}).then(function(contents){
-      var entries=studioLibrary.parsePortable(contents);
-      return studioLibrary.importEntries(root.indexedDB,entries,undefined,root.crypto);
-    }).then(function(result){
-      studioLibraryExpanded=true;
-      studioLibrarySelected=result.createdIds[0]||result.reusedIds[0]||studioLibrarySelected;
-      studioLibraryMessage='Imported '+result.created+' animations; '+result.reused+
-        ' already present (including repeated entries in the file). Working draft unchanged.';
-      studioLibraryError=false;
-      return refreshStudioLibrary();
-    }).catch(function(error){
-      studioLibraryMessage='Animation import failed: '+error.message;
-      studioLibraryError=true;
-    }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
+    var actions=studioLibraryActions();
+    if(actions)return actions.importFile(file);
+    studioLibraryNotice('Animation Library actions module failed to load.',true);
   }
   function bindStudioLibrary(){refreshStudioLibrary();}
   function studioLibraryThumbnail(project){
@@ -1532,53 +1533,48 @@
     return null;
   }
   function renameNamedAnimation(id,name){
-    if(studioLibraryBusy||!studioLibrary)return;
-    var current=studioLibraryEntries.find(function(entry){return entry.id===id;});
-    if(!current){studioLibraryNotice('Saved animation no longer exists.',true);return;}
-    studioLibraryBusy=true;renderStudioLibrary();
-    studioLibrary.rename(root.indexedDB,id,name,current.updatedAt).then(function(saved){
-      // Keep any unsaved physical edits to the current working draft. Rename
-      // updates metadata only; don't silently apply Save Changes.
-      if(studioLibraryActive&&studioLibraryActive.id===id){
-        var updateDraftName=studioDraft.name===studioLibraryActive.project.name;
-        studioLibraryActive=saved;
-        if(updateDraftName)studioDraft=studioApi.edit(studioDraft,'name',saved.project.name);
-        // Renaming changes the Library revision even when the draft has a
-        // different unsaved title; checkpoint the new base revision in both cases.
-        saveStudioDraft(false);
-        if(updateDraftName)renderAnimationStudio(studioHistoryEntries);
-      }else if(studioWorkspaces){
-        // Metadata rename of an inactive named project must not make its own
-        // local draft look like a conflicting edit from another browser tab.
-        var workspace=studioDraftAutosave.projectWorkspaceId(id);
-        var checkpoint=studioDraftAutosave.getWorkspace(studioWorkspaces,workspace);
-        if(checkpoint&&checkpoint.libraryRevision===current.updatedAt){
-          var changedName=checkpoint.draft.name===current.project.name;
-          var updated=studioDraftAutosave.checkpoint(Object.assign({},checkpoint,{
-            draft:changedName?studioApi.edit(checkpoint.draft,'name',saved.project.name):checkpoint.draft,
-            libraryRevision:saved.updatedAt
-          }),Math.max(Date.now(),checkpoint.savedAt+1));
-          var activeWorkspace=studioWorkspaceId;
-          studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,workspace,updated);
-          studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
-            studioWorkspaces,{activeId:activeWorkspace}));
-          studioDraftGeneration++;
-          try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
-            preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
-          catch(error){studioWorkspaceLocalSaved=false;
-            studioDraftStatus('Renamed workspace backup failed: '+error.message,true);}
-          if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
-          studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
-        }
+    var actions=studioLibraryActions();
+    if(actions)return actions.rename(id,name);
+    studioLibraryNotice('Animation Library actions module failed to load.',true);
+  }
+  function applyStudioLibraryRename(saved,current,id){
+    // Keep any unsaved physical edits to the current working draft. Rename
+    // updates metadata only; don't silently apply Save Changes.
+    if(studioLibraryActive&&studioLibraryActive.id===id){
+      var updateDraftName=studioDraft.name===studioLibraryActive.project.name;
+      studioLibraryActive=saved;
+      if(updateDraftName)studioDraft=studioApi.edit(studioDraft,'name',saved.project.name);
+      // Renaming changes the Library revision even when the draft has a
+      // different unsaved title; checkpoint the new base revision in both cases.
+      saveStudioDraft(false);
+      if(updateDraftName)renderAnimationStudio(studioHistoryEntries);
+    }else if(studioWorkspaces){
+      // Metadata rename of an inactive named project must not make its own
+      // local draft look like a conflicting edit from another browser tab.
+      var workspace=studioDraftAutosave.projectWorkspaceId(id);
+      var checkpoint=studioDraftAutosave.getWorkspace(studioWorkspaces,workspace);
+      if(checkpoint&&checkpoint.libraryRevision===current.updatedAt){
+        var changedName=checkpoint.draft.name===current.project.name;
+        var updated=studioDraftAutosave.checkpoint(Object.assign({},checkpoint,{
+          draft:changedName?studioApi.edit(checkpoint.draft,'name',saved.project.name):checkpoint.draft,
+          libraryRevision:saved.updatedAt
+        }),Math.max(Date.now(),checkpoint.savedAt+1));
+        var activeWorkspace=studioWorkspaceId;
+        studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,workspace,updated);
+        studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
+          studioWorkspaces,{activeId:activeWorkspace}));
+        studioDraftGeneration++;
+        try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+          preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
+        catch(error){studioWorkspaceLocalSaved=false;
+          studioDraftStatus('Renamed workspace backup failed: '+error.message,true);}
+        if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+        studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
       }
-      studioLibraryRenamingId='';studioLibrarySelected=id;
-      studioLibraryMessage='Renamed saved animation to '+saved.project.name;
-      studioLibraryError=false;
-      return refreshStudioLibrary();
-    }).catch(function(error){
-      studioLibraryMessage='Cannot rename animation: '+error.message;
-      studioLibraryError=true;
-    }).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
+    }
+    studioLibraryRenamingId='';studioLibrarySelected=id;
+    studioLibraryMessage='Renamed saved animation to '+saved.project.name;
+    studioLibraryError=false;
   }
   function studioWorkspaceEditedIds(){
     if(!studioWorkspaces||!studioApi)return [];
@@ -1624,39 +1620,31 @@
         project=studioApi.buildSaved(studioDraft,id);
       else project=studioApi.build(studioDraft,id);
     }catch(error){studioLibraryNotice('Cannot save animation: '+error.message,true);return Promise.resolve(false);}
-    var startGeneration=studioDraftGeneration;
-    var priorWorkspaceId=studioWorkspaceId;
-    var image=studioLibraryThumbnail(project);
-    studioLibraryBusy=true;studioLibraryNotice('Saving animation to library…',false);
-    // A named project is explicitly allowed to have the same animation as
-    // another named project. Save As is not a deduplication operation.
-    var operation=replace?
-      studioLibrary.update(root.indexedDB,project,quality,active.updatedAt,undefined,image):
-      studioLibrary.create(root.indexedDB,project,quality,undefined,image,true);
-    return operation.then(function(saved){
-      if(studioDraftGeneration!==startGeneration){
-        // A concurrent edit cannot be silently marked saved. The persistent
-        // library record exists, but the current editor remains a draft.
-        studioLibraryMessage='Project saved; newer editor changes remain in your draft.';
-      }
-      studioLibraryActive=saved;studioLibraryPending=null;
-      if(!replace&&studioEditHistory)studioEditHistory=studioApi.createEditHistory();
-      studioLibrarySelected=saved.id;
-      studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(saved.id);
-      // A new untitled draft was promoted to a named workspace. When Save As
-      // forks a named project, keep the original project's local workspace.
-      saveStudioDraft(false);
-      if(priorWorkspaceId!==studioWorkspaceId&&priorWorkspaceId&&
-         priorWorkspaceId.indexOf('draft_')===0)
-        dropStudioWorkspace(priorWorkspaceId);
-      studioLibraryExpanded=true;studioLibraryScroll=0;
-      studioLibraryMessage=(replace?'Saved changes to ':'Saved new animation: ')+saved.project.name;
-      studioLibraryError=false;
-      return refreshStudioLibrary().then(function(){return true;});
-    }).catch(function(error){
-      studioLibraryNotice('Animation was not saved: '+error.message,true);
-      return false;
-    }).then(function(saved){studioLibraryBusy=false;renderStudioLibrary();return saved;});
+    var actions=studioLibraryActions();
+    if(!actions){studioLibraryNotice('Animation Library actions module failed to load.',true);return Promise.resolve(false);}
+    return actions.save({replace:replace,project:project,quality:quality,
+      active:active,thumbnail:studioLibraryThumbnail(project),
+      startGeneration:studioDraftGeneration,priorWorkspaceId:studioWorkspaceId});
+  }
+  function activateSavedStudioProject(saved,request){
+    var replace=request.replace,priorWorkspaceId=request.priorWorkspaceId;
+    if(studioDraftGeneration!==request.startGeneration){
+      // A concurrent edit cannot be silently marked saved. The persistent
+      // library record exists, but the current editor remains a draft.
+      studioLibraryMessage='Project saved; newer editor changes remain in your draft.';
+    }
+    studioLibraryActive=saved;studioLibraryPending=null;
+    if(!replace&&studioEditHistory)studioEditHistory=studioApi.createEditHistory();
+    studioLibrarySelected=saved.id;
+    studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(saved.id);
+    // When Save As forks a named project, retain the old local workspace.
+    saveStudioDraft(false);
+    if(priorWorkspaceId!==studioWorkspaceId&&priorWorkspaceId&&
+       priorWorkspaceId.indexOf('draft_')===0)
+      dropStudioWorkspace(priorWorkspaceId);
+    studioLibraryExpanded=true;studioLibraryScroll=0;
+    studioLibraryMessage=(replace?'Saved changes to ':'Saved new animation: ')+saved.project.name;
+    studioLibraryError=false;
   }
   // Restore the saved Library revision without overwriting a retained stash.
   // Stage the entire collection in durable storage *before* changing the editor.
@@ -1854,42 +1842,37 @@
     studioLibraryNotice('Autosaved draft deleted. Named projects were not changed.',false);
   }
   function deleteNamedAnimation(id){
-    if(id)studioLibrarySelected=id;
-    if(!studioLibrarySelected||studioLibraryBusy||!studioLibrary)return;
-    var id=studioLibrarySelected,found=studioLibraryEntries.find(function(e){return e.id===id;});
-    if(typeof root.confirm==='function'&&!root.confirm('Delete saved animation "'+
-      (found?found.project.name:id)+'"? The current draft will remain available.'))return;
-    studioLibraryBusy=true;renderStudioLibrary();
-    studioLibrary.remove(root.indexedDB,id).then(function(removed){
-      if(removed){
-        var source=studioDraftAutosave.projectWorkspaceId(id);
-        var local=studioDraftAutosave.getWorkspace(studioWorkspaces,source);
-        if(local){
-          var detachedId=studioDraftAutosave.makeWorkspaceId(root.crypto);
-          if(source===studioWorkspaceId){
-            studioWorkspaceId=detachedId;
-            studioLibraryActive=null;studioLibraryPending=null;
-            saveStudioDraft(false);
-            dropStudioWorkspace(source);
-          }else{
-            var independent=studioDraftAutosave.checkpoint(Object.assign({},local,{
-              libraryId:null,libraryRevision:null
-            }),Math.max(Date.now(),local.savedAt+1));
-            studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,
-              detachedId,independent);
-            studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
-              studioWorkspaces,{activeId:studioWorkspaceId}));
-            dropStudioWorkspace(source);
-          }
+    var actions=studioLibraryActions();
+    if(actions)return actions.remove(id);
+    studioLibraryNotice('Animation Library actions module failed to load.',true);
+  }
+  function detachDeletedStudioProject(id,removed){
+    if(removed){
+      var source=studioDraftAutosave.projectWorkspaceId(id);
+      var local=studioDraftAutosave.getWorkspace(studioWorkspaces,source);
+      if(local){
+        var detachedId=studioDraftAutosave.makeWorkspaceId(root.crypto);
+        if(source===studioWorkspaceId){
+          studioWorkspaceId=detachedId;
+          studioLibraryActive=null;studioLibraryPending=null;
+          saveStudioDraft(false);
+          dropStudioWorkspace(source);
+        }else{
+          var independent=studioDraftAutosave.checkpoint(Object.assign({},local,{
+            libraryId:null,libraryRevision:null
+          }),Math.max(Date.now(),local.savedAt+1));
+          studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,
+            detachedId,independent);
+          studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
+            studioWorkspaces,{activeId:studioWorkspaceId}));
+          dropStudioWorkspace(source);
         }
       }
-      studioLibrarySelected='';
-      studioLibraryMessage=removed?'Saved animation deleted. Current draft was not deleted.':
-        'Animation was already removed.';
-      studioLibraryError=false;
-      return refreshStudioLibrary();
-    }).catch(function(error){studioLibraryMessage='Cannot delete animation: '+error.message;
-      studioLibraryError=true;}).then(function(){studioLibraryBusy=false;renderStudioLibrary();});
+    }
+    studioLibrarySelected='';
+    studioLibraryMessage=removed?'Saved animation deleted. Current draft was not deleted.':
+      'Animation was already removed.';
+    studioLibraryError=false;
   }
   function studioDraftRecord(){
     var stamp=Math.max(Date.now(),studioDraftSavedAt+1);

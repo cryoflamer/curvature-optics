@@ -196,3 +196,41 @@ node tools/check-refactor-closure.js
 
 The ordinary GitHub Actions Node and Chromium smoke jobs remain the integration
 checks for restoring and switching Animation workspaces in a real browser.
+
+## Animation Library actions boundary
+
+The named Animation Library is distinct from the crash-recovery Draft collection.
+`src/animation/ModernAnimationLibrary.js` continues to own the portable
+schema, records, IndexedDB transactions, duplicate matching, and revision
+checks. `src/animation/ModernAnimationLibraryActions.js` now coordinates the
+application's **list/refresh, export selected/all, validated JSON import,
+rename, Save Changes, Save As/Duplicate, and confirmed delete** operations.
+The coordinator owns busy-state completion and status/error propagation, not
+DOM rendering or the active editor's data. Its callbacks into `ModernApp.js`
+retain these invariants:
+
+- **Save Changes** uses the exact `updatedAt` revision of the opened Library
+  record. A rejected write never changes the active named revision.
+- **Save As** deliberately permits a duplicate animation; it promotes the
+  working draft to a new named project and preserves the old named workspace.
+- **Rename** is metadata-only. The active editor's unsaved title/physics edits
+  remain intact; a checkpoint tied to the old revision is rebased after an
+  accepted rename, including for inactive project workspaces.
+- **Delete** is confirmed before the record is removed. Detached saved-project
+  working edits remain recoverable as an independent local draft.
+- **Portable import/export** retain validation and size limits. Import adds
+  Library records without changing the live editor; export serializes selected
+  or all named records, not autosaved drafts.
+- Missing IndexedDB or a failed transaction produces an error message and
+  releases the busy flag without discarding unsaved editor work.
+
+This is a coordination refactor, not a Library schema migration. The new
+classic-browser script loads after `ModernAnimationLibrary.js` and before
+`ModernApp.js`. Verify with:
+
+```sh
+node --test tests/ModernAnimationLibraryActions.test.js \
+  tests/ModernAnimationLibrary.test.js \
+  tests/ModernAnimationWorkspaceConcurrency.test.js
+node tools/check-refactor-closure.js
+```

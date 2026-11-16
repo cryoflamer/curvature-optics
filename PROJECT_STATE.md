@@ -1,3 +1,14 @@
+> **Animation Library action boundary (2026-11-16):** Named-project
+> list/refresh, portable JSON import/export, optimistic-revision rename,
+> Save/Save As and confirmed deletion now run through
+> `src/animation/ModernAnimationLibraryActions.js`. The coordinator owns
+> Library transaction sequencing, busy/error completion, portable limits,
+> and download selection. `ModernApp.js` still owns editor project building,
+> thumbnail provenance, live draft revisions, workspace detachment and UI.
+> Conflicts or storage errors do not replace the editor; import never modifies
+> the active draft. V1/V2 JSON, IndexedDB schema, rendering and Legacy are unchanged.
+> See `docs/modern-animation-contract.md#animation-library-actions-boundary`.
+
 > **Animation Workspace durable persistence boundary (2026-11-16):** The
 > serialized IndexedDB write queue and atomic merge result handling were
 > extracted from `ModernApp.js` into

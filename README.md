@@ -1122,3 +1122,11 @@ claiming interpolation or export support. The checks share the existing
 controls in zero-count groups. Project v2 persistence and the guided creation wizard are now implemented;
 see [`docs/modern-animation-contract.md`](docs/modern-animation-contract.md)
 and [`docs/modern-animation-project-wizard.md`](docs/modern-animation-project-wizard.md).
+
+### Animation Library operation coordinator
+
+`src/animation/ModernAnimationLibraryActions.js` mediates named-project
+refresh, Save/Save As, rename, confirmed delete, and portable JSON import/export.
+Live editor and draft-workspace effects remain in `ModernApp.js`, while named
+record schema and IndexedDB revisions remain in `ModernAnimationLibrary.js`.
+See [the contract/boundary notes](docs/modern-animation-contract.md#animation-library-actions-boundary).

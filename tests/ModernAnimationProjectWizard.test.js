@@ -241,12 +241,16 @@ function switchHarness(libraryFails=false,draftFails=false){
   const source=fs.readFileSync(path.join(basePath,'src/ui/modern/ModernApp.js'),'utf8');
   function excerpt(start,end){const a=source.indexOf(start),b=source.indexOf(end,a);
     assert.ok(a>=0&&b>a,'Missing application integration function');return source.slice(a,b);}
-  const code=excerpt('  function saveNamedAnimation(replace){','  // Restore the saved Library revision')+'\n'+
+  const code=excerpt('  var studioLibraryActionController=null;','  function studioLibraryThumbnail(')+'\n'+
+    excerpt('  function saveNamedAnimation(replace){','  // Restore the saved Library revision')+'\n'+
     excerpt('  function requestStudioSwitch(kind,id){','  function deleteStudioWorkspace(id){');
   const vm=require('node:vm');const records=[],checkpoints=[],events=[];
   let drafts=0;
   const ctx={Promise,Map,Set,Object,Array,Number,RangeError,Error,Date,
     studioLibraryBusy:false,studioSwitchApi:workspaceSwitch,
+    studioLibraryActionsApi:require('../src/animation/ModernAnimationLibraryActions'),
+    studioEditHistory:null,studioLibraryRenamingId:'',
+    downloadHistoryJson(){},applyStudioLibraryRename(){},detachDeletedStudioProject(){},
     studioWorkspaceReady:true,studioWorkspaceId:'draft_old',
     studioDraft:studio.edit(studio.blank(),'name','Old work'),
     studioSelectedKey:null,studioPlaybackQuality:'auto',studioLibraryActive:null,
@@ -262,6 +266,7 @@ function switchHarness(libraryFails=false,draftFails=false){
     studioDraftAutosave:{makeWorkspaceId(){return 'draft_'+(++drafts);},
       projectWorkspaceId:id=>'project_'+id},
     studioLibrary:{makeId(){return 'wizard_saved';},
+      list(){return Promise.resolve(records.slice());},
       create(_db,project){if(libraryFails)return Promise.reject(Error('offline'));
         const record={id:project.id,project,quality:'auto',updatedAt:200};
         records.push(record);return Promise.resolve(record);}},

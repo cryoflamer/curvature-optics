@@ -252,10 +252,10 @@ test('HTML load order and application expose named project save/open actions sep
   assert.ok(html.indexOf('ModernAnimationProject.js')<html.indexOf('ModernAnimationLibrary.js'));
   assert.ok(html.indexOf('ModernAnimationLibrary.js')<html.indexOf('ModernApp.js'));
   assert.match(html,/id="ModernAnimationLibrary"/);
-  assert.match(app,/studioLibrary\.create\(/);
-  assert.match(app,/studioLibrary\.update\(/);
+  assert.match(app,/actions\.save\(/);
+  assert.match(html,/ModernAnimationLibraryActions\.js/);
   assert.match(app,/studioLibrary\.get\(/);
-  assert.match(app,/studioLibrary\.remove\(/);
+  assert.match(app,/actions\.remove\(/);
   assert.match(app,/studioLibraryActive\.updatedAt/);
   assert.match(ui,/New project/);
   assert.doesNotMatch(ui,/Save and continue|Discard and continue|Identical animation already saved/);
@@ -264,7 +264,8 @@ test('HTML load order and application expose named project save/open actions sep
   assert.doesNotMatch(ui,/Save as new/);
   assert.match(app,/function requestStudioSwitch\(kind,id\)/);
   assert.match(app,/function studioHasUnsavedWork\(\)/);
-  assert.match(app,/Animation Library module failed to load; check the browser console/);
+  const actions=fs.readFileSync(path.join(root,'src/animation/ModernAnimationLibraryActions.js'),'utf8');
+  assert.match(actions,/Animation Library module failed to load; check the browser console/);
 });
 
 test('classic-browser script loading has no CommonJS dependency and can save via IndexedDB',async()=>{
@@ -755,6 +756,8 @@ function projectLifecycleHarness(){
     getWorkspace:(_,id)=>checkpoints.get(id)||null};
   const ctx={Promise,Date,Object,semanticNaming:null,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
     studioDraftAutosave:autosave,studioSwitchApi:workspaceSwitch,
+    studioLibraryActionsApi:require('../src/animation/ModernAnimationLibraryActions'),
+    downloadHistoryJson(){},
     studioWorkspaceReady:true,studioWorkspaceId:'project_old',
     studioWorkspaces:{workspaces:[{id:'project_old',checkpoint:checkpoints.get('project_old')}]},
     studioLibraryActive:stored.get('old'),studioLibraryPending:null,
@@ -796,6 +799,7 @@ function projectLifecycleHarness(){
     newUiEl(){return null;},
     refreshStudioLibrary(){ctx.studioLibraryEntries=[...stored.values()];return Promise.resolve([]);},
     studioLibrary:{makeId(){return 'created-'+(++sequence);},
+      list(){return Promise.resolve([...stored.values()]);},
       create(db,p){if(rejectSave)return Promise.reject(Error('storage unavailable'));
         const saved={id:p.id,updatedAt:10,quality:'auto',project:p};stored.set(saved.id,saved);
         return Promise.resolve(saved);},
@@ -803,13 +807,17 @@ function projectLifecycleHarness(){
         const saved={id:p.id,updatedAt:20,quality:'auto',project:p};stored.set(saved.id,saved);
         return Promise.resolve(saved);},
       get(db,id){return Promise.resolve(stored.get(id));},
+      remove(db,id){return Promise.resolve(stored.delete(id));},
       rename(db,id,name){const old=stored.get(id);const saved={...old,updatedAt:old.updatedAt+1,
         project:{...old.project,name}};stored.set(id,saved);return Promise.resolve(saved);}}
   };
   vm.runInNewContext(
     excerpt('function studioHasUnsavedWork(){','function renderStudioLibrary(){')+'\n'+
+    excerpt('var studioLibraryActionController=null;','function studioLibraryThumbnail(')+'\n'+
     excerpt('function renameNamedAnimation(id,name){','function studioWorkspaceEditedIds(){')+'\n'+
-    excerpt('function studioWorkspaceDraftCards(){','function deleteNamedAnimation(id){'),ctx);
+    excerpt('function studioWorkspaceDraftCards(){','function deleteNamedAnimation(id){')+'\n'+
+    excerpt('function deleteNamedAnimation(id){','function detachDeletedStudioProject(id,removed){')+'\n'+
+    excerpt('function detachDeletedStudioProject(id,removed){','function studioDraftRecord(){'),ctx);
   const tick=async()=>{await new Promise(resolve=>setImmediate(resolve));};
   return {ctx,stored,events,tick,checkpoints,
     failSave(value){rejectSave=value;},failDraft(value){rejectDraft=value;}};
@@ -923,6 +931,18 @@ test('Save project reveals its card and failed save never does',async()=>{
   assert.equal(ctx.studioLibraryScroll,0);
   assert.equal(ctx.studioLibrarySelected,ctx.studioLibraryActive.id);
   assert.equal(stored.get(ctx.studioLibrarySelected).project.name,'New library animation');
+});
+
+test('deleting an open named project detaches its unsaved draft and preserves edits',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored,checkpoints}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Unsaved after delete'};
+  await ctx.deleteNamedAnimation('old');
+  assert.equal(stored.has('old'),false);
+  assert.equal(ctx.studioLibraryActive,null);
+  assert.match(ctx.studioWorkspaceId,/^draft_/);
+  assert.equal(checkpoints.get(ctx.studioWorkspaceId).draft.name,'Unsaved after delete');
+  assert.equal(checkpoints.has('project_old'),false);
+  assert.equal(ctx.studioLibraryBusy,false);
 });
 
 test('Save project and JSON backup controls are visually grouped, not a single export action',()=>{
