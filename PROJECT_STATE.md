@@ -1,3 +1,14 @@
+> **Modern location migration catalog and tracker (2026-11-16):** A read-only
+> `ModernLocationCatalog.js` now records six distinct geographic subjects and
+> nine authored Legacy demo scenarios, with stable IDs and explicit partial /
+> not-ported statuses. No unsupported native preset was enabled, and existing
+> Modern preset/experiment IDs and Legacy Demos remain unchanged. The active,
+> evidence-driven checkboxes are in `docs/modern-location-migration.md`; they
+> supersede the old archive-only product preference without lifting the Legacy
+> preservation or numerical/visual parity gates. The existing compatibility
+> audit covers all 80 source states, and 6 archived original-Canvas browser
+> frames are *Legacy-only* references. The 71 old transitions are unported.
+>
 > **Animation Studio refactor closure audit (2026-11-16):** Seven extracted
 > browser-global coordinators are now checked together by
 > `tests/ModernAnimationRefactorBoundary.test.js`: their load order and

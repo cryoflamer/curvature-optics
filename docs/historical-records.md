@@ -61,6 +61,15 @@ experiments. A Git format-patch does not create tags.
 
 ## Documentation policy going forward
 
+**Specific active-plan exception (2026-11-16):**
+[`modern-location-migration.md`](modern-location-migration.md) is a persistent,
+evidence-gated checklist for migrating named Legacy geographic scenarios to
+native Modern Scene/Compare. It is deliberately maintained across many commits
+rather than being a chronological compatpatch diary. Its existence does not
+revive archived migration logs or authorize removing the independent Legacy
+playback runtime. The documentation inventory cap permits this one additional
+focused guide.
+
 Update the current guides when implementation changes. Preserve focused
 numerical/physical evidence as necessary, and keep regression fixtures and
 tests independent of deleted patch journals. New one-off plans should not be

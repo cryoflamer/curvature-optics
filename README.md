@@ -5,6 +5,14 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 - **Demos** (Modern tab backed by `CurvatureDemosHost.html?embed=demos`) — nine original fast illustrated Legacy storyboards, running in their own isolated iframe. The historical `CurvatureApp.html?ui=legacy` page is retained for diagnostics and old saved links.
 - **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
+**Legacy locations → native Modern (active migration tracker):** All nine
+original demos remain available in the isolated Demos tab. Only the
+transmission-line arrangement (`pontchartrain`) is partly native in Scene;
+`single`/`rows` are samples. A read-only catalog tracks six geographic
+locations and nine scenarios without enabling unsupported shapes. To follow
+and check off individual migration gates, see the
+[Modern location migration checklist](docs/modern-location-migration.md).
+
 The former standalone WebGPU optics harness and Modern's optional CPU research panel were **removed from the active tree** in #140.12.74. Neither is required to run these applications. The **Check GPU** button only reports capabilities; it does **not** perform WebGPU optical calculations. See [research archive](docs/research-archive.md) for history and recovery.
 
 **Experimental Fast Preview:** In Modern → Scene/Compare → Display, choose
