@@ -2708,6 +2708,7 @@
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
+        "tests/ModernSceneControls.test.js",
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernSharedCompareControls.test.js",
         "tests/ModernTargetIndicator.test.js",
@@ -2738,7 +2739,8 @@
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentHistoryFilters.test.js",
-        "tests/ModernExperimentVisualHistory.test.js"
+        "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernSceneControls.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2854,6 +2856,7 @@
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",
+        "tests/ModernSceneControls.test.js",
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernSessionAutosave.test.js",
         "tests/ModernTargetIndicator.test.js",

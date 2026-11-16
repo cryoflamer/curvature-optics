@@ -1,3 +1,19 @@
+> **Modern preset navigation / protected return (#36, 2026-11-16):**
+> `Custom scene (edited)` is an active experiment label, not a reloadable preset.
+> Selecting a Scene preset or **Reset to preset** now saves the outgoing *full*
+> validated experiment as an idempotent, pinned `recovery` History checkpoint
+> **before** changing the live model. A failed History write or concurrent edit
+> cancels the switch. **Previous** restores the last saved outgoing experiment
+> using the existing History Restore path (which in turn protects the current
+> experiment); after a reload, protected entries remain accessible in History.
+> The Scene selector's transient DOM change no longer corrupts the archived
+> `scene.preset` value. Compare A/B is refreshed to correspond to the new
+> preset. No second archive, experiment-schema change, new preset ID, Legacy
+> physics change, or new filename version is introduced. Targeted regressions
+> are in `tests/ModernSceneControls.test.js`. Chicago geometry follows as #37;
+> subsequent location ports remain source-evidence gated. See
+> `docs/modern-experiment-history.md` and `docs/modern-location-migration.md`.
+>
 > **Modern location migration catalog and tracker (2026-11-16):** A read-only
 > `ModernLocationCatalog.js` now records six distinct geographic subjects and
 > nine authored Legacy demo scenarios, with stable IDs and explicit partial /

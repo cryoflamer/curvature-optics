@@ -90,7 +90,7 @@ test('140.12.88 Pontchartrain caption follows first group count without modifyin
   assert.equal(adapter.refreshDescription(m),'Illustrative near and distant rows for perspective study');
 });
 
-test('140.12.88 Scene and Compare caption updates on object edits and preset reset',()=>{
+test('140.12.88 Scene and Compare caption updates on object edits and preset reset',async()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   const caption=()=>r.nodes.get('ModernSceneDescription').textContent;
   assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
@@ -100,11 +100,11 @@ test('140.12.88 Scene and Compare caption updates on object edits and preset res
   assert.equal(m.Description,caption(),'canvas decorations and Compare copy read the same model description');
   r.fire('ModernObject1NObjects','change','0');
   assert.equal(caption(),'200 transmission towers across Lake Pontchartrain');
-  r.fire('ModernResetPreset','click');
+  await r.fire('ModernResetPreset','click');
   assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
 });
 
-test('Objects group summaries reflect validated edits and preset restoration without affecting Compare physics',()=>{
+test('Objects group summaries reflect validated edits and preset restoration without affecting Compare physics',async()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   const summary=i=>r.nodes.get('ModernObjectGroupSummary'+i).textContent;
   assert.equal(summary(0),'85 transmission towers');
@@ -122,7 +122,7 @@ test('Objects group summaries reflect validated edits and preset restoration wit
   r.fire('ModernObject0NObjects','change','201');
   assert.equal(m.NObjects[0],200,'invalid count cannot mutate the model');
   assert.equal(summary(0),'200 ships','invalid count cannot update the summary');
-  r.fire('ModernPreset','change','single');
+  await r.fire('ModernPreset','change','single');
   assert.equal(summary(0),'1 transmission tower');
   assert.equal(summary(1),'No objects');
   r.fire('ModernCompareTab','click');
@@ -178,7 +178,27 @@ function buildRuntime(){
   const modelCtx=vm.createContext({JsgVect3:vec});
   vm.runInContext(read('src/app/CurvatureModel.js'),modelCtx);
   const CurveAppClass=vm.runInContext('CurveAppClass',modelCtx);
+  const historyEntries=[];
+  const fingerprint=require('../src/ui/modern/ModernExperimentFingerprint');
+  const experimentState=require('../src/ui/modern/ModernExperimentState');
+  const compareState=require('../src/ui/modern/ModernCompareState');
+  const historyStore={failRecord:false,waitForRecord:null,open:async()=>{},
+    list:async()=>historyEntries.slice().reverse(),
+    get:async id=>historyEntries.find(e=>e.id===Number(id))||null,
+    record:async (snapshot,source)=>{
+      if(historyStore.waitForRecord)await historyStore.waitForRecord;
+      if(historyStore.failRecord)throw Error('History write failed');
+      const signature=fingerprint.exactSignature(snapshot);
+      const match=historyEntries.find(e=>e.signature===signature);
+      if(match){if(source!=='auto')match.pinned=true;return {created:false,entry:match};}
+      const entry={id:historyEntries.length+1,experiment:experimentState.validate(snapshot),
+        signature,source,pinned:source!=='auto',name:'Saved scene',thumbnail:null};
+      historyEntries.push(entry);return {created:true,entry};
+    }};
   const win={CurveAppClass,CurvatureModernSceneState:adapter,
+    CurvatureModernExperimentState:experimentState,CurvatureModernCompareState:compareState,
+    CurvatureModernExperimentFingerprint:fingerprint,
+    CurvatureModernExperimentHistory:{create:()=>historyStore},
     CurvaturePhysicalCurvature:curvature,
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opts){
       draws.push({height:m.Height,roll:m.Roll,viewAngle:m.ViewAngle,
@@ -201,12 +221,12 @@ function buildRuntime(){
   callbacks[0]();
   function fire(id,type,value){const n=node(id);if(value!==undefined)n.value=value;
     const cb=n.listeners[type];assert.equal(typeof cb,'function',id+': '+type);
-    cb.call(n);}
+    return cb.call(n);}
   function drain(){while(timers.size){const entries=[...timers];timers.clear();for(const [,cb] of entries)cb();}}
-  return {nodes,draws,timers,win,fire,drain};
+  return {nodes,draws,timers,win,historyEntries,historyStore,fire,drain};
 }
 
-test('131 Modern events change the shared model; presets/flat/atmosphere keep state in sync',()=>{
+test('131 Modern events change the shared model; presets/flat/atmosphere keep state in sync',async()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   assert.equal(r.draws.length,1);
   assert.deepEqual(r.draws[0].count,[85,2]);
@@ -226,23 +246,23 @@ test('131 Modern events change the shared model; presets/flat/atmosphere keep st
   assert.equal(r.draws.at(-1).atmosphere,'inverse-spherical');
   assert.equal(r.nodes.get('ModernOcclusionWrap').hidden,false);
   assert.equal(r.nodes.get('ModernPreset').value,'custom');
-  r.fire('ModernPreset','change','single');
+  await r.fire('ModernPreset','change','single');
   assert.deepEqual(Array.from(m.NObjects),[1,0]);
   assert.equal(m.showModel,1);
   assert.equal(m.Roll,0);
   assert.equal(r.nodes.get('ModernSceneTitle').textContent,'Single transmission tower · sample');
   assert.equal(r.nodes.get('ModernPreset').value,'single');
   r.fire('ModernObject0NObjects','change','3');
-  r.fire('ModernResetPreset','click');
+  await r.fire('ModernResetPreset','click');
   assert.equal(m.NObjects[0],1);
   assert.equal(r.nodes.get('ModernPreset').value,'single');
   assert.equal(r.win.CurvatureModernApp.getPreset(),'single');
   assert.equal(r.nodes.get('ModernStatus').classList!==undefined,true);
 });
 
-test('Bedford partial native preset works through actual Modern UI in Scene and Compare',()=>{
+test('Bedford partial native preset works through actual Modern UI in Scene and Compare',async()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
-  r.fire('ModernPreset','change','bedford');
+  await r.fire('ModernPreset','change','bedford');
   assert.equal(r.win.CurvatureModernApp.getPreset(),'bedford');
   assert.equal(m.DemoText,'Bedford Level · marker study');
   assert.deepEqual(Array.from(m.NObjects),[3,0]);
@@ -259,10 +279,10 @@ test('Bedford partial native preset works through actual Modern UI in Scene and 
   assert.deepEqual(Array.from(m.ObjDist),[124,0]);
   r.fire('ModernObject0ObjSideVar','change','0');
   assert.deepEqual(Array.from(m.ObjSideVar),[0,0]);
-  r.fire('ModernResetPreset','click');
+  await r.fire('ModernResetPreset','click');
   assert.deepEqual(Array.from(m.ObjSideVar),[18,0], 'reset restores authored lateral variation');
   assert.equal(r.win.CurvatureModernApp.getPreset(),'bedford');
-  r.fire('ModernPreset','change','single');
+  await r.fire('ModernPreset','change','single');
   assert.deepEqual(Array.from(m.ObjSideVar),[0,0], 'later presets must not inherit Bedford offsets');
 });
 
@@ -286,6 +306,95 @@ test('131 input debounce coalesces expensive optics and invalid entries never mu
   r.fire('ModernHeight','change','30');
   assert.equal(m.Height,30);
   assert.equal(r.draws.length,previous+1);
+});
+
+
+test('preset switch protects the outgoing edited experiment and Previous restores it through History',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  r.fire('ModernObject0NObjects','change','67');
+  r.fire('ModernHeight','change','27');
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  // Native <select> already holds the incoming choice before change fires.
+  await r.fire('ModernPreset','change','bedford');
+  assert.equal(r.historyEntries.length,1);
+  const old=r.historyEntries[0];
+  assert.equal(old.source,'recovery');assert.equal(old.pinned,true);
+  assert.equal(old.experiment.scene.preset,'custom');
+  assert.equal(old.experiment.scene.resetPreset,'pontchartrain');
+  assert.equal(old.experiment.scene.objects.NObjects[0],67);
+  assert.equal(old.experiment.scene.camera.Height,27);
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'bedford');
+  assert.equal(m.NObjects[0],3);
+  assert.equal(r.nodes.get('ModernPreviousExperiment').disabled,false);
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  assert.equal(r.nodes.get('ModernPreset').value,'custom');
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'pontchartrain');
+  assert.equal(m.NObjects[0],67);assert.equal(m.Height,27);
+  assert.equal(r.historyEntries.length,2);
+  assert.equal(r.historyEntries[1].experiment.scene.preset,'bedford');
+  assert.equal(r.historyEntries[1].pinned,true);
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'bedford');
+  assert.equal(m.NObjects[0],3);
+  assert.equal(r.historyEntries.length,2,'roundtrip must reuse protected points, not create duplicates');
+});
+
+test('preset navigation fails closed on failed History write and retains current model and selector',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  r.fire('ModernHeight','change','44');
+  const before=m.Height;r.historyStore.failRecord=true;
+  const ok=await r.fire('ModernPreset','change','bedford');
+  assert.equal(ok,false);
+  assert.equal(m.Height,before);assert.equal(m.DemoText,'Lake Pontchartrain Transmission Line');
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  assert.equal(r.nodes.get('ModernPreset').value,'custom');
+  assert.equal(r.nodes.get('ModernPreviousExperiment').disabled,true);
+  assert.match(r.nodes.get('ModernPresetSwitchStatus').textContent,/History write failed/);
+  assert.equal(r.historyEntries.length,0);
+  r.historyStore.failRecord=false;
+  assert.equal(await r.fire('ModernPreset','change','bedford'),true);
+  assert.equal(m.Height,4.04);
+});
+
+test('concurrent edits during async History write cannot be overwritten by a stale preset change',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  r.fire('ModernHeight','change','25');
+  let release;
+  r.historyStore.waitForRecord=new Promise(resolve=>{release=resolve;});
+  const pending=r.fire('ModernPreset','change','bedford');
+  assert.equal(r.nodes.get('ModernPreset').disabled,true);
+  assert.equal(r.nodes.get('ModernPreset').value,'custom');
+  r.fire('ModernHeight','change','41');
+  release();
+  assert.equal(await pending,false);
+  assert.equal(m.Height,41);
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  assert.equal(r.historyEntries.length,1);
+  assert.equal(r.historyEntries[0].experiment.scene.camera.Height,25);
+  r.historyStore.waitForRecord=null;
+  assert.equal(await r.fire('ModernPreset','change','bedford'),true);
+  assert.equal(r.historyEntries.length,2);
+  assert.equal(r.historyEntries[1].experiment.scene.camera.Height,41);
+});
+
+test('Reset to preset archives edits and preserves one History entry per distinct experiment',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  await r.fire('ModernPreset','change','bedford');
+  r.fire('ModernObject0ObjSideVar','change','0');
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  await r.fire('ModernResetPreset','click');
+  assert.deepEqual(Array.from(m.ObjSideVar),[18,0]);
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'bedford');
+  const edited=r.historyEntries.find(entry=>entry.experiment.scene.objects.ObjSideVar[0]===0);
+  assert.ok(edited,'Reset must preserve the edited scene');
+  const previousCount=r.historyEntries.length;
+  await r.fire('ModernResetPreset','click');
+  const firstIdenticalReset=r.historyEntries.length;
+  await r.fire('ModernResetPreset','click');
+  assert.equal(r.historyEntries.length,firstIdenticalReset,
+    'repeated unchanged Reset should reuse exact recovery checkpoint');
+  assert.ok(firstIdenticalReset<=previousCount+1);
 });
 
 test('131 sample presets produce physical scenes using the real shared renderer',()=>{

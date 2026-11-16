@@ -15,6 +15,23 @@ effect. This plan supersedes the earlier *archive-only product preference* in
 its Legacy-preservation and scientific-evidence gates. Migrated Modern scenes
 are adaptations, not claims of pixel-for-pixel or optical equivalence.
 
+## Delivery sequence after Bedford
+
+- [x] **#36 — Preset/experiment navigation:** preserve the outgoing full
+  experiment in protected History before a preset switch or Reset; expose
+  **Previous**, correctly round-trip the `custom` label, prevent stale
+  asynchronous changes and retain existing History/working-session storage.
+  Evidence: `tests/ModernSceneControls.test.js` and
+  `docs/modern-experiment-history.md`. No new Legacy scenario was ported.
+- [ ] **#37 — Chicago Skyline:** implement the shared type-4 city geometry,
+  editor/serialization support and partial source-backed Modern preset; verify
+  Scene, Compare and History without claiming Legacy visual parity.
+- [ ] **#38+ — Canigou, Grace, Tensas, Causeway, Soundly:** prioritize shared
+  geometry types and source checks rather than special physics per location.
+- [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
+  working-session recovery, source geometry tolerances and visual baselines
+  for every migrated scenario. No full migration parity is certified yet.
+
 ## Evidence and source of truth
 
 - Authored source: [`src/animation/CurvatureDemos.js`](../src/animation/CurvatureDemos.js).

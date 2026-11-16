@@ -10,7 +10,7 @@
     transitionProfile:{source:'standard',weight:0},
     inverseProfile:{source:'temperature-lapse',weight:0},
     showTemperatureProfile:false,temperaturePlacement:'outside-right',
-    preset:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
+    preset:'pontchartrain',scenePresetSelection:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
     geometryBackend:'canvas',opticalQuality:'accurate',previewDetail:'auto',opticalSample:null,compareEyeLevel:false,compareHorizon:true,horizonCache:{Scene:null,A:null,B:null},compareConfig:null,compareSelected:'A',compareCache:{A:null,B:null},compareFastCache:{A:null,B:null}};
@@ -933,8 +933,10 @@
     return experiments.capture(model,{
       atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
       visibility:state.visibility,temperatureProfile:state.temperatureProfile,
-      transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,preset:(el('ModernPreset')&&el('ModernPreset').value)||state.preset,
-      resetPreset:state.preset
+      transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,
+      // A native select changes value BEFORE its change handler runs. The DOM
+      // must not mislabel the outgoing experiment as the incoming preset.
+      preset:state.scenePresetSelection,resetPreset:state.preset
     },config,{mode:state.mode,eyeLevel:state.compareEyeLevel,
       horizon:state.compareHorizon,selected:state.compareSelected,
       gpuProbe:false,probeTargets:256,
@@ -1044,6 +1046,7 @@
   var experimentHistory=null,historyBaseline=null,historyTimer=null,historyEpoch=0;
   var savedHistorySignatures=null,snapshotSaveBusy=false;
   var historyLoadError=null,snapshotSaveError=null;
+  var presetSwitchBusy=false,previousExperimentHistoryId=null;
   // This is an in-memory index of persisted full-state signatures. Never query
   // IndexedDB or calculate optics while toggling the Save Snapshot affordance.
   function updateSnapshotSaveAction(){
@@ -3570,6 +3573,7 @@
   }
   var historyRestoreBusy=false;
   function restoreHistorySnapshot(id){
+    if(presetSwitchBusy)return Promise.reject(Error('Finish the pending preset change first'));
     if(historyRestoreBusy)return Promise.resolve();
     if(!id)return Promise.reject(RangeError('Select a history snapshot to restore'));
     historyRestoreBusy=true;
@@ -3587,6 +3591,7 @@
       return experimentHistory.record(current,'recovery',historyThumbnail(current)).then(function(backup){
         if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
         applyExperiment(target);syncNumericInputs();syncCompareEditor();
+        previousExperimentHistoryId=backup.entry.id;updatePresetNavigation();
         // Keep a visible route back to the existing Studio draft while the
         // user tweaks physical settings and saves a derived snapshot.
         if(historyOpenedFromPicker)animationReturnAfterRestore=true;
@@ -3906,7 +3911,7 @@
     state.inverseProfile=Object.assign({},scene.inverseProfile);
     state.showTemperatureProfile=data.display.showTemperatureProfile;
     state.temperaturePlacement=data.display.temperaturePlacement;
-    state.preset=scene.resetPreset;
+    state.preset=scene.resetPreset;state.scenePresetSelection=scene.preset;
     state.compareConfig=compareState.sharedVisibility({A:data.compare.A,B:data.compare.B,preset:data.compare.preset});
     state.compareSelected=data.compare.selected;
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
@@ -5975,6 +5980,7 @@
     redraw();
   }
   function markCustom(){
+    state.scenePresetSelection='custom';
     var preset=el('ModernPreset');if(preset)preset.value='custom';
   }
   function applyField(action,raw,label){
@@ -6122,21 +6128,77 @@
       })(fields[j]);
     }
   }
+  function updatePresetNavigation(message,error){
+    var select=el('ModernPreset'),reset=el('ModernResetPreset');
+    var previous=newUiEl('ModernPreviousExperiment');
+    if(select){select.disabled=presetSwitchBusy;select.value=state.scenePresetSelection;}
+    if(reset)reset.disabled=presetSwitchBusy;
+    if(previous)previous.disabled=presetSwitchBusy||!previousExperimentHistoryId;
+    if(message!==undefined)modernStatus(newUiEl('ModernPresetSwitchStatus'),message,error?'error':'info');
+  }
+  // The selector chooses a starting configuration; it is NOT a list of live
+  // workspaces. The single working session is backed up to protected History
+  // before applying another preset, including Reset to preset. A failed write
+  // leaves the entire current experiment unchanged.
   function selectPreset(id){
-    if(!adapter)return;
-    stopCameraTransition(false,'Transition interrupted by preset change',false);
+    updatePresetNavigation(); // Restore the outgoing selector before capturing.
+    if(presetSwitchBusy||historyRestoreBusy)return Promise.resolve(false);
+    if(!adapter||!adapter.PRESETS[id]){
+      updatePresetNavigation('Unknown scene preset; current experiment was kept.',true);
+      return Promise.resolve(false);
+    }
+    if(!persistence.ready||!experimentHistory||historyLoadError){
+      updatePresetNavigation('History is unavailable; current experiment was kept.',true);
+      return Promise.resolve(false);
+    }
+    var current,signature,thumbnail;
     try{
       cancelEdits();
-      adapter.applyPreset(model,id);
-      state.preset=id;state.atmosphere=adapter.PRESETS[id].atmosphere||'standard';state.occlusionRadius=6371000;
-      state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
-      state.transitionProfile={source:'standard',weight:0};
-      state.inverseProfile={source:'temperature-lapse',weight:0};
-      cameraPositions=[];cameraSequence=[];initialCamera=captureCameraPose();
-      renderCameraPositions();renderCameraSequenceKeyframes(-1);model.Update();syncNumericInputs();
-      var preset=el('ModernPreset');if(preset)preset.value=id;
-      redraw();
-    }catch(error){updateStatus(error.message,true);}
+      current=experimentSnapshot();
+      signature=historyFingerprint.exactSignature(current);
+      thumbnail=historyThumbnail(current);
+    }catch(error){updatePresetNavigation('Cannot preserve current experiment: '+error.message,true);
+      return Promise.resolve(false);}
+    presetSwitchBusy=true;updatePresetNavigation('Saving current experiment to History…');
+    cancelHistoryAuto();
+    return Promise.resolve().then(function(){
+      return experimentHistory.record(current,'recovery',thumbnail);
+    }).then(function(backup){
+      // Edits (including external scripts) may arrive during an IndexedDB
+      // transaction. Never overwrite newer work with an older checkpoint.
+      if(historyFingerprint.exactSignature(experimentSnapshot())!==signature)
+        throw Error('The experiment changed while saving. Select the preset again.');
+      stopCameraTransition(false,'Transition interrupted by preset change',false);
+      stopCameraKeyboard(true);abortCameraDrag();cancelPending();
+      try{
+        adapter.applyPreset(model,id);
+        state.preset=id;state.scenePresetSelection=id;
+        state.atmosphere=adapter.PRESETS[id].atmosphere||'standard';
+        state.occlusionRadius=6371000;state.visibility={enabled:false,rangeKm:60};
+        state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
+        state.transitionProfile={source:'standard',weight:0};
+        state.inverseProfile={source:'temperature-lapse',weight:0};
+        state.compareConfig=compareState.initial(model,state.atmosphere,state.occlusionRadius,
+          state.temperatureProfile,state.transitionProfile,state.inverseProfile);
+        cameraPositions=[];cameraSequence=[];initialCamera=captureCameraPose();
+        renderCameraPositions();renderCameraSequenceKeyframes(-1);model.Update();syncNumericInputs();
+        syncCompareEditor();resetHistoryBaseline();redraw();
+      }catch(error){
+        // Preserve the old experiment even if a future preset implementation
+        // throws after partially changing fields or UI state.
+        applyExperiment(current);syncNumericInputs();syncCompareEditor();
+        resetHistoryBaseline();redraw();throw error;
+      }
+      previousExperimentHistoryId=backup.entry.id;
+      updatePresetNavigation('Previous experiment protected in History. Use Previous or History to restore it.');
+      // A refresh failure must not report a failed switch after physics changed.
+      return refreshHistoryList().catch(function(error){
+        historyStatus('History refresh failed: '+error.message,true);
+      }).then(function(){return true;});
+    }).catch(function(error){
+      updatePresetNavigation('Preset not changed: '+error.message,true);
+      queueHistoryAuto();return false;
+    }).finally(function(){presetSwitchBusy=false;updatePresetNavigation();});
   }
   // Shared Scene/Compare tabs; only Surface and Atmosphere have model-specific panels.
   // Camera, Objects and Display keep the very same inputs and event handlers.
@@ -6314,9 +6376,17 @@
       curvature.resetEarth(model);markCustom();redraw();
     });
     var preset=el('ModernPreset');if(preset)preset.addEventListener('change',function(){
-      if(this.value!=='custom')selectPreset(this.value);
+      if(this.value!=='custom')return selectPreset(this.value);
+      else updatePresetNavigation();
     });
-    var reset=el('ModernResetPreset');if(reset)reset.addEventListener('click',function(){selectPreset(state.preset);});
+    var reset=el('ModernResetPreset');if(reset)reset.addEventListener('click',function(){return selectPreset(state.preset);});
+    var previous=newUiEl('ModernPreviousExperiment');if(previous)previous.addEventListener('click',function(){
+      if(presetSwitchBusy||!previousExperimentHistoryId)return;
+      return restoreHistorySnapshot(previousExperimentHistoryId).then(function(){
+        updatePresetNavigation('Previous experiment restored. Current state was protected in History.');
+      }).catch(function(error){updatePresetNavigation('Cannot restore previous experiment: '+error.message,true);});
+    });
+    updatePresetNavigation();
     el('ModernRender').addEventListener('click',redraw);
     bindCameraHud();
     bindTargetIndicator();
@@ -6393,6 +6463,7 @@
   root.CurvatureModernApp={getModel:function(){return model;},getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:function(){return animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;},
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
+    getPresetSelection:function(){return state.scenePresetSelection;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
     getCompareModels:function(){return state.comparePair;},
     getCompareLast:function(){return state.compareLast;},

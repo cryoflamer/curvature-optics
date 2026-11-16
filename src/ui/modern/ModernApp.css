@@ -57,10 +57,13 @@ button{cursor:pointer}
 .modern-help:hover:after,.modern-help:focus:after{content:attr(data-tip);position:absolute;z-index:40;top:calc(100% + 8px);left:-10px;width:min(270px,75vw);padding:10px 12px;border-radius:8px;background:#203550;color:#fff;font-size:12px;font-weight:400;line-height:1.5;white-space:normal;text-align:left;box-shadow:0 6px 22px #0d24454a;pointer-events:none}
 .modern-scene-bar{flex-wrap:wrap}
 .modern-scene-bar>div:first-child{flex:1 1 240px;min-width:0}
-.modern-scene-presets{display:flex;gap:8px;align-items:center;flex:0 1 auto}
+.modern-scene-presets{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;flex:0 1 auto;max-width:100%}
 .modern-scene-presets label{font-size:12px;color:#637b98}
 .modern-scene-presets select{height:36px;min-width:195px;max-width:260px;border:1px solid #cad7e6;border-radius:7px;background:white;color:#223b59;padding:5px 8px}
 .modern-scene-presets .modern-ghost-button{margin:0;height:36px}
+.modern-scene-presets .modern-ghost-button:disabled{opacity:.5;cursor:not-allowed}
+.modern-preset-switch-status{font-size:11px;color:#5b7690;flex-basis:100%;text-align:right;line-height:1.35}
+.modern-preset-switch-status.is-error{color:#a42c39}
 .modern-mode-pill{flex:0 0 auto}
 .modern-settings-panel .modern-note{margin-top:5px}
 @media(max-width:900px){.modern-workspace{grid-template-columns:1fr}.modern-sidebar{width:auto}.modern-settings-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.modern-scene-presets{order:3;flex-basis:100%}.modern-scene-presets select{flex:1;max-width:none}}

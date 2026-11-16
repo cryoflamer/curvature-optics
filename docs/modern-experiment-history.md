@@ -42,6 +42,38 @@ persistence is not a backup, and simultaneous tabs are last-writer-wins rather
 than merged automatically; keep manual/pinned History checkpoints for important
 results.
 
+## Scene preset navigation and protected return (#36)
+
+**Start from preset** is a *template chooser*, not a working-experiment list.
+`Custom scene (edited)` merely indicates local edits; it cannot be selected to
+reload a prior working state. A full experiment (camera, objects, atmosphere,
+Scene/Compare state, display, camera positions and sequence) is first captured
+using the app-owned preset selection, rather than the HTML selector value (which
+has already changed when its `change` callback runs). The existing History
+store writes it as a protected `recovery` snapshot. Only after the IndexedDB
+transaction succeeds does Modern replace the live Scene with the requested
+preset. History's exact-signature deduplication promotes an identical automatic
+entry instead of creating another snapshot. Repeated resets thus do not fill
+History with identical copies.
+
+The **Previous** button calls the same History Restore flow, which also
+preserves the outgoing current experiment as a protected recovery point. It
+can be used for back-and-forth comparisons in the current page session.
+The button's pointer is deliberately ephemeral: after refresh or in a new tab,
+open **History**, select the protected record, and choose **Restore experiment**.
+This reuses the existing History store and does not introduce an independent
+preset workspace database, another project format, or new URL parameters.
+
+While the protected write is pending, the selector, Reset and Previous controls
+are disabled. If the write fails, or the experiment is edited while it is
+pending, the new preset is *not* applied and the selector returns to its
+outgoing label. A successful switch resets the Scene's atmospheric inputs and
+Compare A/B starter configuration to match the chosen preset; it does not
+recreate Legacy's combined globe+flat view. The previous working-session
+checkpoint continues to be saved by the existing delayed localStorage/IDB
+mechanism; only deliberate preset/History navigation creates protected
+recovery entries.
+
 ## History Core and Visual History
 
 - **Save snapshot** is now immediately below the current Scene / Compare

@@ -207,7 +207,8 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
     ['ModernHistoryClose',{hidden:true}],
     ['ModernReturnToAnimation',{hidden:true}]]);
   const ctx={
-    Promise,JSON,Error,RangeError,historyRestoreBusy:false,
+    Promise,JSON,Error,RangeError,historyRestoreBusy:false,presetSwitchBusy:false,
+    previousExperimentHistoryId:null,updatePresetNavigation(){},
     historyOpenedFromPicker:true,historyFocusFromPickerId:'42',
     historyWizardReferenceChoosing:false,
     animationReturnAfterRestore:false,animationWorkspaceOpen:true,
@@ -215,7 +216,7 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
     historyFingerprint:{exactSignature:JSON.stringify},
     experiments:{validate:input=>input},
     experimentHistory:{get:async id=>id===42?{experiment:target}:null,
-      record:async()=>{recoveries++;return {created:true};}},
+      record:async()=>{recoveries++;return {created:true,entry:{id:17}};}},
     experimentSnapshot:()=>physics,historyThumbnail(){return null;},
     cancelEdits(){},stopCameraTransition(){},stopCameraKeyboard(){},
     abortCameraDrag(){},cancelPending(){},cancelHistoryAuto(){},

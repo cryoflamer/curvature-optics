@@ -17,6 +17,17 @@ tracks six geographic locations and nine authored scenarios; other unsupported
 geometry is not selectable. Track remaining numeric, visual and choreography
 gates in the [living Modern location migration checklist](docs/modern-location-migration.md).
 
+**Switching Modern scenes:** **Start from preset** loads Pontchartrain,
+Bedford or one of the two samples. It is a *starting configuration*, not a
+selector of saved workspaces. Each switch (including **Reset to preset**)
+first protects the complete outgoing experiment as a recovery point in
+**History**. **Previous** restores the most recently replaced experiment;
+History remains the durable way back after reloading. The disabled **Custom
+scene (edited)** option is a status label, not a saved scene. A failed History
+checkpoint cancels the switch rather than discarding the working experiment.
+No automatic History entry is created for each individual edit by this flow.
+See [History and preset navigation](docs/modern-experiment-history.md).
+
 The former standalone WebGPU optics harness and Modern's optional CPU research panel were **removed from the active tree** in #140.12.74. Neither is required to run these applications. The **Check GPU** button only reports capabilities; it does **not** perform WebGPU optical calculations. See [research archive](docs/research-archive.md) for history and recovery.
 
 **Experimental Fast Preview:** In Modern → Scene/Compare → Display, choose
