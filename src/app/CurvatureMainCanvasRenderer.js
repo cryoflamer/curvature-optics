@@ -167,7 +167,8 @@
         g.Canvas.width,g.Canvas.height,{mode:options.geometryBackend==='webgl2'?'gpu-painter':'painter'});
       // The physical texture must not contain screen-only captions or frames:
       // those belong above the animated atmospheric presentation layer.
-      if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera);
+      if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera,
+        {physicalGuides:opticalFrame.composition.scene.primitives});
     } finally {ctx.restore();}
     var finishedAt=now(),stats=opticalFrame.stats;
     // Keep the old non-overlapping stage meanings: frameMs includes screen LOD
@@ -177,6 +178,7 @@
     return {geometryBackend:painted.mode==='gpu-painter'?'WebGL2':'Canvas 2D',
       geometryFallback:painted.gpuFallback||null,
       decorationCamera:options.deferDecorations?camera:null,
+      decorationPhysicalGuides:options.deferDecorations?opticalFrame.composition.scene.primitives:null,
       interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,
       fullGuidePrimitives:drawSource.guidePrimitives,
       guideScreenLod:guideLod?guideLod.stats:null,
@@ -204,20 +206,21 @@
       fillTriangles:stats.fillTriangles,fillUnresolved:stats.fillUnresolved,
       fillUnresolvedReasons:stats.fillUnresolvedReasons,fillHidden:stats.fillHidden,
       fillSamples:stats.fillSamples,fillSubdivisions:stats.fillSubdivisions,
-      warning:'Physical optics in shared painter; metric ground guides (100 m to 100 km) projected through optical rays, horizon independent.'+
+      warning:'Physical optics in shared painter; metric ground guides (100 m to 100 km) projected through optical rays, horizon independent; view-aligned guides are annotations.'+
         ' Authored foundations are filled where ground-visible; mutual object occlusion is pending.'+
         (stats.budgetExceeded?' Numerical preview budget exceeded.':'')+
         ((stats.sampleStatuses.solver_failed||0)?' Some optical point solves failed.':'')+
         (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')+
         (stats.fillUnresolved?' '+stats.fillUnresolved+' unresolved fill triangles omitted.':'')};
   }
-  function drawPresentationDecorations(canvas,model,camera){
+  function drawPresentationDecorations(canvas,model,camera,physicalGuides){
     if(!decorations||!camera||!canvas)return;
     var ctx=canvas.getContext('2d');
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
        typeof ctx.restore!=='function')throw new TypeError('Canvas 2D context required');
     ctx.save();
-    try{ctx.setTransform(1,0,0,1,0,0);decorations.draw(canvas,model,camera);}
+    try{ctx.setTransform(1,0,0,1,0,0);decorations.draw(canvas,model,camera,
+      {physicalGuides:physicalGuides});}
     finally{ctx.restore();}
   }
   function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();}

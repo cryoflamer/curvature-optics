@@ -4107,7 +4107,7 @@
       // if capture failed, the original Canvas receives its captions again.
       if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
-          guideGraph.Canvas,model,result.decorationCamera);
+          guideGraph.Canvas,model,result.decorationCamera,result.decorationPhysicalGuides);
       state.last=result;
       updateGeometryBackendStatus(result);
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
@@ -4179,7 +4179,7 @@
       var guideGraph=atmosphericPresentation?atmosphericPresentation.capture(side,g):g;
       if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
-          guideGraph.Canvas,m,result.decorationCamera);
+          guideGraph.Canvas,m,result.decorationCamera,result.decorationPhysicalGuides);
       state.compareLast[side]=result;
       updateGeometryBackendStatus(result);
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);

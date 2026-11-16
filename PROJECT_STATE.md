@@ -2791,3 +2791,26 @@ shared styling and card-specific click isolation.
   is approximate and can leave unresolved rays; full-frame browser pixel
   accuracy and FPS have not been certified. RK4/physics, projects, and
   IndexedDB were unchanged.
+
+
+### Modern geographic migration #40 — Narrow-FOV metric grid and CI smoke repair
+
+- Chromium Chicago `test_chicago_preset_compare_and_history_return` now expects
+  the **Standard** atmosphere set intentionally by #38; previously it still
+  asserted `vacuum`, while the tested geometry and History return passed.
+- A presentation-only overlay renders seven camera-aligned ground spokes
+  using **existing optically transformed** zero-azimuth metric segments.
+  Its azimuth spacing adapts to the actual FOV, unlike the static 15-degree
+  world spokes; Scene and Compare use identical rules. Kilometre labels are
+  anchored to *visible* metric-ring points (not fixed pixels, geometric-horizon
+  formulas or invented target distances). Dense label collisions are omitted.
+- The physical world, RK4 shooting, shared optical cache, curvature, authored
+  object placement and original 100 km guide extent remain unchanged.
+  This makes reference marks legible near Canigou in narrow FOV, but does
+  **not** extend the optical ground grid to the mountain at 257 km.
+- Deferred screen decorations draw after atmospheric presentation on the
+  correct Scene/Compare canvas; these annotations are not part of an optical
+  export texture. Tests: `tests/PhysicalGroundGridOverlay.test.js`,
+  `tests/ModernAtmosphericPresentation13822.test.js` and browser smoke.
+- Browser CI must be confirmed on GitHub Actions (local browser access may
+  be restricted). #41 remains Grace shared geometry and scene migration.

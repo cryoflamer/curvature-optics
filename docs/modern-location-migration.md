@@ -1,6 +1,6 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-16, #39):** four **partial** geographic native scenarios
+**Status (2026-11-17, #40):** four **partial** geographic native scenarios
 (`pontchartrain`, `bedford`, `chicago`, `canigou`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
@@ -35,7 +35,13 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   lower-altitude Modern standard atmosphere (`canigou-low`) source-backed
   partial views at 257 km, preserving type-5 geometry and explicitly
   distinguishing Modern ray optics from the Legacy constant-k model.
-- [ ] **#40+ — Grace, Tensas, Causeway, Soundly:** prioritize shared geometry
+- [x] **#40 — Flat/Globe distance guide readability and Chicago CI:**
+  restore the Chromium Chicago smoke expectation to Standard atmosphere;
+  overlay camera-oriented, lightly styled ground spokes and km labels at
+  verified optically projected metric rings. No new ray calculations, altered
+  surface extent, horizon guesses or physical-scene geometry. Verify narrow
+  Canigou FOV on both Globe and Flat, and the absent-grid state.
+- [ ] **#41+ — Grace, Tensas, Causeway, Soundly:** prioritize shared geometry
   types and source checks rather than special physics per location.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines

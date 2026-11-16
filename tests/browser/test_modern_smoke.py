@@ -154,7 +154,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             types: window.CurvatureModernApp.getModel().ObjType,
             counts: window.CurvatureModernApp.getModel().NObjects,
             atmosphere: document.getElementById('ModernAtmosphere').value,
-        })'''), {'types': [4, 3], 'counts': [6, 0], 'atmosphere': 'vacuum'})
+        })'''), {'types': [4, 3], 'counts': [6, 0], 'atmosphere': 'standard'})
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
         self.page.locator('#ModernSceneTab').click()

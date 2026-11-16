@@ -1032,7 +1032,8 @@
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernTargetDirection.test.js",
         "tests/PhysicalContinuousScene128.test.js",
-        "tests/PhysicalCurvatureCamera127.test.js"
+        "tests/PhysicalCurvatureCamera127.test.js",
+        "tests/PhysicalGroundGridOverlay.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1468,6 +1469,7 @@
       ],
       "commonJsTestCallers": [
         "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalGroundGridOverlay.test.js",
         "tests/PhysicalMetricWorld126.test.js"
       ],
       "commonJsToolCallers": []
@@ -1612,6 +1614,7 @@
       ],
       "commonJsTestCallers": [
         "tests/PhysicalContinuousScene128.test.js",
+        "tests/PhysicalGroundGridOverlay.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",
         "tests/PhysicalGroundGuides110.test.js",
         "tests/PhysicalMetricWorld126.test.js",
@@ -2224,7 +2227,8 @@
         "src/diagnostics/CurvatureCompositionCapture.js"
       ],
       "commonJsTestCallers": [
-        "tests/CurvatureFullSceneDecorations.test.js"
+        "tests/CurvatureFullSceneDecorations.test.js",
+        "tests/PhysicalGroundGridOverlay.test.js"
       ],
       "commonJsToolCallers": []
     },
