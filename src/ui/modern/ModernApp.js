@@ -45,6 +45,7 @@
   var studioDraftAutosave=root.CurvatureModernAnimationDraftAutosave;
   var studioRecoveryApi=root.CurvatureModernAnimationWorkspaceRecovery;
   var studioSwitchApi=root.CurvatureModernAnimationWorkspaceSwitch;
+  var studioPersistenceApi=root.CurvatureModernAnimationWorkspacePersistence;
   var studioLibrary=root.CurvatureModernAnimationLibrary;
   var studioLibraryFiltersApi=root.CurvatureModernAnimationLibraryFilters;
   // One gesture controller and one camera for Scene and both Compare models.
@@ -575,7 +576,7 @@
   var studioLibraryQueryDraft='';
   var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
   var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
-  var studioDraftWriteQueue=Promise.resolve(),studioRestorePreviewPending=false;
+  var studioPersistenceCoordinator=null,studioRestorePreviewPending=false;
   var studioInitialPaintFrame=null,studioInitialPaintToken=0;
   var studioPreviewObservedWidths={A:0,B:0};
   var studioPreviewRenderer=null;
@@ -1906,51 +1907,32 @@
   function persistStudioWorkspace(){
     if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
     if(!studioWorkspaces||!studioDraftAutosave)return Promise.resolve(false);
-    var current=studioWorkspaces,atGeneration=studioDraftGeneration;
-    if(!root.indexedDB)return Promise.resolve(!!studioWorkspaceLocalSaved);
-    // A single IndexedDB readwrite transaction reconciles this tab's changes
-    // against the latest durable collection. Only changed workspace IDs are
-    // applied; unrelated drafts from other tabs are preserved atomically.
-    var attempt=studioDraftWriteQueue.catch(function(){return false;}).then(function(){
-      return studioDraftAutosave.writeCollectionMerged(root.indexedDB,current,
-        studioIndexedBaseline,root.crypto).then(function(result){
-        studioIndexedBaseline=result.collection;
-        studioDraftAutosave.pruneSessionLocals(preferencesStorage(),
-          result.collection,studioWorkspaceSessionId);
-        if(atGeneration===studioDraftGeneration){
-          studioWorkspaces=result.collection;
-          var activeConflict=result.conflicts.find(function(item){
-            return item.id===studioWorkspaceId;
-          });
-          if(activeConflict){
-            studioWorkspaceId=activeConflict.forkId;
-            studioLibraryActive=null;studioLibraryPending=null;
-            studioLibraryMessage='This workspace was changed in another tab. Your edits were '+
-              'preserved as a separate draft; save it as a new Library project.';
-            studioLibraryError=true;
-            studioDraftStatus(studioLibraryMessage,true);
-          }else if(result.protectedDeletes.length){
-            studioDraftStatus('A draft was changed in another tab and was not deleted.',true);
-          }
-          try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
-            preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
-          catch(error){studioWorkspaceLocalSaved=false;}
-          if(activeConflict)renderStudioLibrary();
-        }else{
-          // More edits arrived during the transaction. Do not swap the editor;
-          // merge independent remote drafts and schedule another checkpoint.
-          absorbLateStudioWorkspaces(result.collection);
-        }
-        return {ok:!result.conflicts.some(function(item){return item.id===current.activeId;}),
-          conflictCount:result.conflicts.length};
+    if(!studioPersistenceCoordinator){
+      if(!studioPersistenceApi){
+        studioDraftStatus('Animation workspace persistence module is missing.',true);
+        return Promise.resolve(false);
+      }
+      studioPersistenceCoordinator=studioPersistenceApi.create({
+        autosave:studioDraftAutosave,
+        getCollection:function(){return studioWorkspaces;},
+        setCollection:function(collection){studioWorkspaces=collection;},
+        getBaseline:function(){return studioIndexedBaseline;},
+        setBaseline:function(collection){studioIndexedBaseline=collection;},
+        getGeneration:function(){return studioDraftGeneration;},
+        workspaceId:function(){return studioWorkspaceId;},
+        indexedDB:function(){return root.indexedDB;},crypto:function(){return root.crypto;},
+        storage:preferencesStorage,sessionId:function(){return studioWorkspaceSessionId;},
+        localSaved:function(){return studioWorkspaceLocalSaved;},
+        setLocalSaved:function(saved){studioWorkspaceLocalSaved=saved;},
+        onFork:function(id,message){
+          studioWorkspaceId=id;studioLibraryActive=null;studioLibraryPending=null;
+          studioLibraryMessage=message;studioLibraryError=true;
+        },
+        status:studioDraftStatus,renderLibrary:renderStudioLibrary,
+        absorbLate:absorbLateStudioWorkspaces
       });
-    });
-    studioDraftWriteQueue=attempt;
-    return attempt.then(function(result){return result.ok;}).catch(function(error){
-      studioDraftStatus('IndexedDB backup failed: '+error.message+
-        (studioWorkspaceLocalSaved?' · local backup retained.':' · project switching blocked.'),true);
-      return !!studioWorkspaceLocalSaved;
-    });
+    }
+    return studioPersistenceCoordinator.persist();
   }
   function writeStudioDraftIndexedDB(){return persistStudioWorkspace();}
   function dropStudioWorkspace(id){

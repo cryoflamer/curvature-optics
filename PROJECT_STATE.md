@@ -1,3 +1,14 @@
+> **Animation Workspace durable persistence boundary (2026-11-16):** The
+> serialized IndexedDB write queue and atomic merge result handling were
+> extracted from `ModernApp.js` into
+> `src/animation/ModernAnimationWorkspacePersistence.js`. The new coordinator
+> advances the durable baseline only after success, forks same-workspace
+> concurrent edits, prevents stale deletes, retains per-tab local backups and
+> never replaces a newer active editor generation. `ModernApp.js` retains
+> editor checkpoint staging, UI presentation, and Library-specific actions.
+> Focused race/failure tests and the existing real IndexedDB emulation are
+> retained. No project schema, physics, storage key or UI behavior changes.
+
 > **Animation Workspace switching boundary (2026-11-16):** Destination validation,
 > outgoing draft checkpoint and durable-write barrier, generation guards around
 > async Library opens, and Wizard save completion were extracted to

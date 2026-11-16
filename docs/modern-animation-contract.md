@@ -146,11 +146,17 @@ experiment, History archive, or named Animation Library:
   a saved-project lookup, then request activation. Wizard creation follows the
   same checkpoint barrier and subsequently saves the named project. It calls
   back into the UI rather than accessing IndexedDB or the DOM directly.
+- `src/animation/ModernAnimationWorkspacePersistence.js` owns the **serialized
+  durable write queue** and its transaction reconciliation result handling:
+  atomic merge against the latest IndexedDB collection, baseline advancement,
+  pruning completed session backups, active-workspace conflict forking,
+  stale-delete warnings and local-backup fallback after a failed write. The
+  module reports conflicts to the UI but never edits DOM or Studio models.
 - `src/ui/modern/ModernApp.js` still owns the active Animation Studio editor,
-  selection, Library actions and UI, `restoreStudioDraft`, serialized writes,
-  concurrent-tab conflict and fork handling, and `saveStudioDraft`.
+  selection, Library actions/UI, `restoreStudioDraft`, staging of synchronous
+  checkpoints, and the state updates presented after a conflict fork.
 
-### Recovery and switching invariants
+### Recovery, switching and persistence invariants
 
 1. The local/session backup restores synchronously before the IndexedDB read.
 2. A remote read arriving after the current editor generation changed **never
@@ -163,11 +169,18 @@ experiment, History archive, or named Animation Library:
 5. A switch cannot replace the active editor until its outgoing checkpoint has
    been saved and the durable write succeeded. Edits racing with that write or
    a subsequent Library fetch cancel the switch rather than dropping work.
-6. An unedited scratch workspace can be discarded only after successful
+6. Writes are queued per page. A queued transaction takes a snapshot of the
+   outgoing collection but reads the baseline **after** previous writes settle.
+   A committed write cannot overwrite a newer editor generation; its remote
+   collection is absorbed into independent drafts and scheduled for another
+   checkpoint. A same-ID concurrent edit forks the local branch; a stale
+   deletion is rejected. Failed IndexedDB writes preserve tab-scoped backups
+   and prevent switching when no backup is available.
+7. An unedited scratch workspace can be discarded only after successful
    activation of another workspace. A saved-project lookup failure leaves the
    current editor intact; a Wizard save failure leaves the new draft available
    for a later explicit Save project.
-7. No Animation Project v1/v2 JSON, IndexedDB keys/versions, Scene/Compare state,
+8. No Animation Project v1/v2 JSON, IndexedDB keys/versions, Scene/Compare state,
    History entries, or optics/rendering behavior changes at this boundary.
 
 ### Checks
@@ -175,6 +188,7 @@ experiment, History archive, or named Animation Library:
 ```sh
 node --test tests/ModernAnimationWorkspaceRecovery.test.js \
   tests/ModernAnimationWorkspaceSwitch.test.js \
+  tests/ModernAnimationWorkspacePersistence.test.js \
   tests/ModernAnimationWorkspaceConcurrency.test.js \
   tests/ModernAnimationDraftAutosave.test.js
 node tools/check-refactor-closure.js

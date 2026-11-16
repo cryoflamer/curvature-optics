@@ -1055,6 +1055,18 @@ manifest content, optical renderers and Legacy are unchanged. Naming is a
 presentation/export concern; it does **not** infer physical visibility or
 silently change the user's saved experiments.
 
+### Animation Workspace persistence coordinator
+
+The Editor first checkpoints changes to a per-tab synchronous local backup.
+`ModernAnimationWorkspacePersistence.js` then serializes IndexedDB writes,
+atomically reconciles them against the newest durable workspace collection,
+and handles same-ID conflicts by retaining the other tab's version while
+forking this tab's edits into a new independent draft. A newer live editor is
+never replaced by an older write completion, and failures preserve local
+backups. Recovery, switching and persistence are separate modules; formats,
+physical calculations and Animation Library records are unchanged.
+See [`docs/modern-animation-contract.md`](docs/modern-animation-contract.md).
+
 ### Animation Library: Stash & restore and Discard changes
 
 When a named project is open and differs from its saved Library revision,

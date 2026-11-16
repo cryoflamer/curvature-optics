@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const autosave=require('../src/animation/ModernAnimationDraftAutosave');
+const persistence=require('../src/animation/ModernAnimationWorkspacePersistence');
 const studio=require('../src/animation/ModernAnimationStudio');
 const experiments=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
@@ -209,7 +210,7 @@ test('Animation Studio redirects a conflicting opened project into an independen
     studioWorkspaces:inEditor,studioIndexedBaseline:base,studioDraftGeneration:1,
     studioWorkspaceId:'project_alpha',studioLibraryActive:{id:'alpha'},
     studioLibraryPending:null,studioLibraryMessage:'',studioLibraryError:false,
-    studioDraftWriteQueue:Promise.resolve(),studioDraftSaveTimer:null,
+    studioPersistenceApi:persistence,studioPersistenceCoordinator:null,studioDraftSaveTimer:null,
     studioWorkspaceLocalSaved:true,studioWorkspaceSessionId:'tab_aaaaaaaa',
     preferencesStorage:()=>local,studioDraftStatus:(message,isError)=>notices.push([message,isError]),
     renderStudioLibrary(){notices.push(['render']);},
