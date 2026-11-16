@@ -1,3 +1,12 @@
+> **Animation Workspace recovery boundary (2026-11-16):** ModernApp's initial
+> local/session/IndexedDB recovery ordering and pagehide/beforeunload/visibility
+> flushing were extracted to `src/animation/ModernAnimationWorkspaceRecovery.js`.
+> The active editor, serialized atomic IndexedDB merge, same-ID conflict forks,
+> UI and physical model remain in their prior owners. Explicit generation checks
+> prevent delayed reads replacing active edits. Focused Node tests cover startup,
+> late reads, local/remote merge, and lifecycle events. No schema or UI changes.
+> See `docs/modern-animation-contract.md#animation-workspace-recovery-boundary`.
+
 > **Animation Studio timeline UX (2026-11-16):** Draft-only Undo/Redo now
 > covers keyframe insertion, removal, reorder, field changes and sequence
 > selection, with a bounded in-memory history (30 steps) and coalesced live

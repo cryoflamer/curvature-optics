@@ -60,6 +60,14 @@ archive actions; Animation Studio owns Snapshot Picker and the timeline.
 Neither UI module imports the other. See
 [Experiment History](docs/modern-experiment-history.md) for details.
 
+**Animation Workspace recovery boundary:** Startup/reload recovery and page
+lifecycle flush coordination now live in the standalone
+`ModernAnimationWorkspaceRecovery` module. `ModernApp.js` continues to own
+editor state, project switching, IndexedDB writes, and conflict handling;
+`ModernAnimationDraftAutosave` continues to define the persistent schema.
+This is a behavior-preserving extraction, not a storage migration. See
+[workspace recovery architecture](docs/modern-animation-contract.md#animation-workspace-recovery-boundary).
+
 ### Animation Project contracts — saved-schema foundation
 
 Modern Animation Library can now retain both **legacy v1 projects** and

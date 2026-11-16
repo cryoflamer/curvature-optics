@@ -145,10 +145,10 @@ test('Modern entrypoint wires draft recovery separately from physical session an
   assert.ok(html.indexOf('ModernAnimationDraftAutosave.js')<html.indexOf('ModernApp.js'));
   assert.match(html,/id="ModernAnimationDraftStatus"/);
   assert.match(app,/bindStudioDraftPersistence\(\)/);
-  assert.match(app,/studioDraftGeneration!==generation/);
+  assert.match(app,/getGeneration:function\(\)\{return studioDraftGeneration;\}/);
   assert.match(app,/studioPlayback\.seek\(saved\.positionMs,profileNow\(\)\)/);
   assert.match(app,/saveStudioDraft\(!!next\.playing\)/);
-  assert.match(app,/root\.addEventListener\('pagehide'/);
+  assert.match(fs.readFileSync(path.join(root,'src/animation/ModernAnimationWorkspaceRecovery.js'),'utf8'),/win\.addEventListener\('pagehide'/);
 });
 
 test('V2 working collection preserves multiple independent edited projects across reload',async()=>{

@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 98,
-      "uniqueScripts": 96,
+      "scriptTags": 99,
+      "uniqueScripts": 97,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -199,6 +199,7 @@
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationDraftAutosave.js",
+        "src/animation/ModernAnimationWorkspaceRecovery.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationLibraryFilters.js",
         "src/animation/ModernAnimationPreview.js",
@@ -359,6 +360,7 @@
       "src/animation/ModernAnimationStudio.js",
       "src/animation/ModernAnimationVideoCapabilities.js",
       "src/animation/ModernAnimationVideoPipeline.js",
+      "src/animation/ModernAnimationWorkspaceRecovery.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
       "src/camera/ModernCameraTelemetry.js",
@@ -427,7 +429,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 184,
+  "sourceJsCount": 185,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -593,6 +595,7 @@
         "tests/ModernAnimationProjectWizard.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
+        "tests/ModernAnimationWorkspaceRecovery.test.js",
         "tests/ModernCameraSpline.test.js"
       ],
       "commonJsToolCallers": []
@@ -774,6 +777,7 @@
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
+        "tests/ModernAnimationWorkspaceRecovery.test.js",
         "tests/ModernCameraSpline.test.js",
         "tests/ModernHistoryCleanup.test.js",
         "tests/ModernSemanticNaming.test.js"
@@ -836,6 +840,16 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationWebMMuxer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationWorkspaceRecovery.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationWorkspaceRecovery.test.js"
       ],
       "commonJsToolCallers": []
     },

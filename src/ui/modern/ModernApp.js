@@ -43,6 +43,7 @@
   var studioLastQualityFrame=null;
   var studioLastParity=null;
   var studioDraftAutosave=root.CurvatureModernAnimationDraftAutosave;
+  var studioRecoveryApi=root.CurvatureModernAnimationWorkspaceRecovery;
   var studioLibrary=root.CurvatureModernAnimationLibrary;
   var studioLibraryFiltersApi=root.CurvatureModernAnimationLibraryFilters;
   // One gesture controller and one camera for Scene and both Compare models.
@@ -2079,69 +2080,29 @@
   }
   function bindStudioDraftPersistence(){
     if(!studioDraftAutosave)return;
-    var local=studioDraftAutosave.combineCollections([
-      studioDraftAutosave.readCollectionLocal(preferencesStorage())
-    ].concat(studioDraftAutosave.readSessionLocals(preferencesStorage())));
-    var oldLocal=studioDraftAutosave.readLocal(preferencesStorage());
-    var freshPlaceholder=!local&&!oldLocal;
-    if(!local&&oldLocal){
-      try{local=studioDraftAutosave.migrate(oldLocal,root.crypto);}catch(error){
-        studioDraftStatus('Legacy draft migration failed: '+error.message,true);
-      }
-    }
-    if(!local){
-      try{
-        var draft=studioDraftAutosave.checkpoint({draft:studioDraft,selectedKey:null,
-          quality:'auto',prepared:false,positionMs:0},Date.now());
-        local=studioDraftAutosave.collection(studioDraftAutosave.makeWorkspaceId(root.crypto),
-          draft,Date.now());
-      }catch(error){studioDraftStatus('Cannot create first workspace: '+error.message,true);}
-    }
-    if(local){
-      try{restoreStudioCollection(local);
-        studioDraftStatus('Animation workspaces restored; playback paused.',false);
-      }catch(error){studioDraftStatus('Animation workspace recovery failed: '+error.message,true);}
-    }
-    var generation=studioDraftGeneration;
-    if(root.indexedDB)Promise.all([
-      studioDraftAutosave.readCollection(root.indexedDB),
-      studioDraftAutosave.read(root.indexedDB)
-    ]).then(function(records){
-      var remote=records[0];
-      if(!remote&&records[1])remote=studioDraftAutosave.migrate(records[1],root.crypto);
-      studioIndexedBaseline=remote;
-      if(remote)studioDraftAutosave.pruneSessionLocals(preferencesStorage(),
-        remote,studioWorkspaceSessionId);
-      if(studioDraftGeneration!==generation){
-        absorbLateStudioWorkspaces(remote);return; // never overwrite active edits
-      }
-      var best=freshPlaceholder&&remote?remote:
-        studioDraftAutosave.combineCollections([local,remote]);
-      if(best&&(freshPlaceholder&&remote||!local||
-         JSON.stringify(best)!==JSON.stringify(local))){
-        restoreStudioCollection(best);studioDraftCheckpoint=studioDraftAutosave.getWorkspace(best,best.activeId);
-        studioDraftStatus('Animation workspaces restored from IndexedDB.',false);
+    // Recovery owns startup ordering and page lifecycle subscriptions; the
+    // editor owns mutable state, UI restoration and serialized writes.
+    if(!studioRecoveryApi)throw Error('Animation workspace recovery module is missing');
+    studioRecoveryApi.create({
+      autosave:studioDraftAutosave,root:root,document:document,
+      sessionId:studioWorkspaceSessionId,
+      storage:preferencesStorage,
+      getDraft:function(){return studioDraft;},
+      getGeneration:function(){return studioDraftGeneration;},
+      restoreCollection:restoreStudioCollection,
+      setIndexedBaseline:function(collection){studioIndexedBaseline=collection;},
+      setCheckpoint:function(checkpoint){studioDraftCheckpoint=checkpoint;},
+      status:studioDraftStatus,
+      absorbLate:absorbLateStudioWorkspaces,
+      onRemoteRestored:function(){
         if(experimentHistory)refreshHistoryList().catch(function(){/* retain draft */});
         if(studioLibraryPending)refreshStudioLibrary();
         else renderStudioLibrary();
-      }
-      // Migrate or reconcile any local-only drafts without replacing a newer
-      // IndexedDB collection. The writer merges individual workspace changes.
-      if(best&&JSON.stringify(best)!==JSON.stringify(remote))persistStudioWorkspace();
-    }).catch(function(error){
-      if(!local)studioDraftStatus('Animation workspace recovery unavailable: '+error.message,true);
-    });
-    if(root.addEventListener){
-      root.addEventListener('pagehide',function(){
-        if(studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
-      });
-      root.addEventListener('beforeunload',function(){
-        if(studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
-      });
-    }
-    if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden&&studioDraftGeneration){saveStudioDraft(false);writeStudioDraftIndexedDB();}
-    });
+      },
+      persist:persistStudioWorkspace,
+      saveDraft:saveStudioDraft,
+      writeDraft:writeStudioDraftIndexedDB
+    }).bind();
   }
   // The old History shortlist is only consumed on explicit user action inside
   // Animation Studio. Missing IDs remain recoverable until explicitly dismissed.

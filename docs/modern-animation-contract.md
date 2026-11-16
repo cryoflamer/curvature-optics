@@ -125,3 +125,46 @@ implemented. Stabilization tests now cover first-keyframe thumbnail identity,
 portable/library duplicate detection and static Legacy/Modern dependency
 audits. Actual visual interaction and IndexedDB behavior still require
 acceptance testing in the target Opera/Chromium installation.
+
+
+## Animation Workspace recovery boundary
+
+Modern Animation has three distinct state owners. None is the physical Scene/Compare
+experiment, History archive, or named Animation Library:
+
+- `src/animation/ModernAnimationDraftAutosave.js` owns checkpoint/collection
+  formats, tab-scoped synchronous recovery keys, migration, tombstones and atomic
+  IndexedDB merging. It must not render the UI or manage browser lifecycle events.
+- `src/animation/ModernAnimationWorkspaceRecovery.js` owns **startup ordering**:
+  local and session-backup collection reads, legacy v1 migration, first-workspace
+  creation, async durable reconciliation, generation-guarded late reads and
+  `pagehide`/`beforeunload`/hidden-page flush notifications. It receives explicit
+  callbacks rather than borrowing the editor's mutable variables.
+- `src/ui/modern/ModernApp.js` still owns the active Animation Studio editor,
+  selection, Library actions and UI, `restoreStudioDraft`, serialized writes,
+  concurrent-tab conflict and fork handling, and `saveStudioDraft`.
+
+### Recovery invariants
+
+1. The local/session backup restores synchronously before the IndexedDB read.
+2. A remote read arriving after the current editor generation changed **never
+   replaces the active draft**. It is passed to `absorbLateStudioWorkspaces`.
+3. A fresh unsaved placeholder may be replaced by a durable collection. Other
+   local-only workspaces are merged and then committed with the existing
+   conflict-aware writer; recovery cannot simply overwrite IndexedDB.
+4. Lifecycle notifications flush only when the editor has changed, invoking
+   the same synchronous backup and durable-write entry points as before.
+5. No Animation Project v1/v2 JSON, IndexedDB keys/versions, Scene/Compare state,
+   History entries, or optics/rendering behavior changes at this boundary.
+
+### Checks
+
+```sh
+node --test tests/ModernAnimationWorkspaceRecovery.test.js \
+  tests/ModernAnimationWorkspaceConcurrency.test.js \
+  tests/ModernAnimationDraftAutosave.test.js
+node tools/check-refactor-closure.js
+```
+
+The ordinary GitHub Actions Node and Chromium smoke jobs remain the integration
+checks for restoring and switching Animation workspaces in a real browser.
