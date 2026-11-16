@@ -74,12 +74,12 @@ test('six locations group exactly eight geographic scenarios; the Curve lesson i
 test('only implemented native partial presets are selectable; saved experiment allowlist and DOM stay in sync', () => {
   const existing = Object.keys(scene.PRESETS);
   assert.deepEqual(catalog.NATIVE_PRESETS, existing);
-  assert.deepEqual(existing, ['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near']);
+  assert.deepEqual(existing, ['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'canigou', 'canigou-low']);
   const partial = catalog.SCENARIOS.filter(s => s.nativePresetId);
   assert.deepEqual(partial.map(s => [s.legacyDemo, s.nativePresetId, s.status]),
     [['TransLine', 'pontchartrain', 'partial'], ['Bedford', 'bedford', 'partial'],
-      ['Chicago', 'chicago', 'partial']]);
-  assert.equal(catalog.SCENARIOS.filter(s => s.status === 'not-ported').length, 6);
+      ['Chicago', 'chicago', 'partial'], ['Canigou', 'canigou', 'partial']]);
+  assert.equal(catalog.SCENARIOS.filter(s => s.status === 'not-ported').length, 5);
   for (const scenario of catalog.SCENARIOS) {
     assert.ok(['partial', 'not-ported'].includes(scenario.status));
     if (scenario.nativePresetId) assert.ok(existing.includes(scenario.nativePresetId));
@@ -90,10 +90,10 @@ test('only implemented native partial presets are selectable; saved experiment a
   const sceneSelect = html.match(/<select id="ModernPreset">([\s\S]*?)<\/select>/);
   assert.ok(sceneSelect);
   assert.deepEqual([...sceneSelect[1].matchAll(/<option value="([^"]+)"/g)].map(m => m[1]),
-    ['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'custom']);
+    ['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'canigou', 'canigou-low', 'custom']);
   assert.ok(options.includes('pontchartrain'));
   const serializer = read('src/ui/modern/ModernExperimentState.js');
-  assert.match(serializer, /SCENE_PRESETS=\['pontchartrain','single','rows','bedford','chicago','chicago-near','custom'\]/);
+  assert.match(serializer, /SCENE_PRESETS=\['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','custom'\]/);
 });
 
 test('browser loads the metadata exactly once before Scene adapter and ModernApp; not as an extra Legacy demo engine', () => {

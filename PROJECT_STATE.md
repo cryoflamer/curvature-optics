@@ -1,3 +1,16 @@
+> **Mount Canigou partial native views (#39, 2026-11-16):**
+> `canigou` (1000 m / 257 km, vacuum) adapts Legacy Canigou source state 2;
+> `canigou-low` (244 m / 257 km, Modern Standard atmosphere) keeps source
+> state-4 mountain geometry, but does NOT emulate its Legacy constant
+> refraction coefficient. Both use eye-level Modern camera aim, with explicit
+> Nick −1° / −0.5° to replace source curvature-dependent horizon centering. Both presets reuse the type-5 shared physical
+> Scene/Compare geometry, preserve all 40 source mountains, and round-trip
+> through existing History, schema-v1 JSON and experiment URLs. The
+> canonical catalog now marks Canigou **partial**. Legacy's narrated eight
+> states / seven transitions, original camera projection, inversion and
+> pixel/optical parity are NOT ported. Tests: `ModernCanigouPreset.test.js`,
+> `ModernSceneControls.test.js`; see `docs/modern-location-migration.md`.
+>
 > **Chicago distant camera and native mountain primitives (#38, 2026-11-16):**
 > `chicago` now opens with a demonstrated ~63 km line of sight from a 2 m
 > observer (standard atmosphere, narrow FOV); `chicago-near` retains the

@@ -1,8 +1,9 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-16, #38):** two **partial** geographic native scenarios
-(`bedford`, `chicago` plus the `chicago-near` camera reference) are available alongside `pontchartrain`; **no full Legacy scenario
-parity is certified**. This is a living delivery
+**Status (2026-11-16, #39):** four **partial** geographic native scenarios
+(`pontchartrain`, `bedford`, `chicago`, `canigou`) are available, with
+additional `chicago-near` and `canigou-low` source-view references; **no full
+Legacy scenario parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
 Modern Scene, Compare, History and Animation Studio**. Update checkboxes and
 attach test/visual evidence **in the same commit that completes an item**.
@@ -30,8 +31,12 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   preset from a 2 m observer and ~63 km line of sight with Standard atmosphere;
   retain source state 0 as `chicago-near`; port shared type-5 terrain silhouettes
   with source shape/color/mirror tests, without enabling Canigou or Grace.
-- [ ] **#39+ — Canigou, Grace, Tensas, Causeway, Soundly:** prioritize shared
-  geometry types and source checks rather than special physics per location.
+- [x] **#39 — Mount Canigou:** add high-altitude vacuum (`canigou`) and
+  lower-altitude Modern standard atmosphere (`canigou-low`) source-backed
+  partial views at 257 km, preserving type-5 geometry and explicitly
+  distinguishing Modern ray optics from the Legacy constant-k model.
+- [ ] **#40+ — Grace, Tensas, Causeway, Soundly:** prioritize shared geometry
+  types and source checks rather than special physics per location.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
   for every migrated scenario. No full migration parity is certified yet.
@@ -59,7 +64,10 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   arrangement, not all eight `TransLine` checkpoints or seven transitions.
   The `bedford` preset is a single **positive-range** partial adaptation of
   source state 3; `chicago` adapts opening-state geometry with a distant Modern
-  camera, and `chicago-near` preserves its original source camera. `single` and `rows` remain
+  camera, and `chicago-near` preserves its original source camera.
+  `canigou` maps to source state index 2 at 1000 m / 257 km with vacuum;
+  `canigou-low` uses source state index 4 at 244 m / 257 km with an explicitly
+  non-equivalent Modern Standard atmosphere. `single` and `rows` remain
   demonstration samples, **not locations**.
 - Object IDs are source-specific. Modern Scene geometry/validation currently
   supports `0–5`; Legacy `6` bridge/platform,
@@ -300,6 +308,42 @@ uses common ray visibility; this port is **not** a Canigou scene or a refraction
 parity claim. Separate native Canigou/Grace presets require additional source
 state, atmosphere, scene and browser evidence.
 
+### Mount Canigou partial views and atmosphere boundary (#39)
+
+Two selectable, resettable Modern Scene presets share the **exact authored
+mountain object banks** from `CurvatureDemos.js`: 40 type-5 mountains,
+starting at **257,000 m** with **60 m** bank spacing; lateral position type 2
+with amplitude **−5,620 m**, nominal mountain height **2,790 m** and cosine
+height variation **0.125** (source `ObjSizeType=3`). The original type-5
+silhouettes, six-index mirror cycle and world-space height-only transform were
+already verified in #38; #39 uses the same physical Scene and Compare renderer.
+
+| Modern preset | Authored Canigou state (0-based / URL pos) | Source camera | Physical atmosphere |
+| --- | --- | --- | --- |
+| `canigou` | **2 / `pos=3`** | 1000 m eye height, f=1000 mm, source Nick=0 → Modern Nick=−1° | **Vacuum** (`refractionCoeff=0` in Legacy) |
+| `canigou-low` | **4 / `pos=5`** | 244 m eye height, f=1000 mm, source Nick=0 → Modern Nick=−0.5° | **Modern Standard**, independent `n(h)` ray trace; **not** an implementation of Legacy `refractionCoeff=0.16761` |
+
+The Modern physical camera uses `viewcenterHorizon=3` (eye-level aim), instead
+of the original Legacy `viewcenterHorizon=0` (geometric horizon aim). To keep
+the 1000 mm telephoto FOV on the mountain, the Modern Nick is set to **−1°**
+at 1000 m and **−0.5°** at 244 m: these are explicit *camera* substitutions
+for Legacy's curvature-dependent horizon aim. Compare A/B keeps the same
+fixed camera for both surfaces. Source `showModel=1` globe, radius 6,371 km
+and visible grid remain. The second view
+is intentionally an **atmospheric study**, not an exact copy of the source
+constant-k image. In Compare, A and B are independent traced surfaces with the
+same selected atmosphere, unlike a Legacy composite overlay. Changes to
+surface/atmosphere continue to use general-purpose controls, not hard-coded
+Canigou visibility thresholds. The eight authored checkpoints, seven
+transitions, low-altitude inversion and documented Legacy horizon claims were
+**not** mechanically ported; Stage D stays unchecked pending browser visual
+baselines, optics evidence and full static state coverage.
+
+Regression evidence: `tests/ModernCanigouPreset.test.js` (source field parity,
+40 mountain objects, real physical renderer, Compare A/B, version-1 saved
+experiments / URL / JSON) and `tests/ModernSceneControls.test.js` (selector,
+History protected return, Reset, atmosphere propagation).
+
 ### Stage C — geometry families (proposed #35+)
 
 - [x] Implement object type **4**: Chicago skyline and indexed variation.
@@ -334,8 +378,9 @@ catalog entry. Do not tick it until the acceptance gates below are met.
 - [ ] `pontchartrain-soundly` — `Soundly` (18 states); requires type 8; preserve
   its embedded escaped apostrophe during source extraction.
 - [ ] `chicago-skyline` — `Chicago` (6 states); type 4 supported, distant and source-camera partial presets; full six-state/overlay acceptance pending.
-- [ ] `canigou-mountain` — `Canigou` (8 states); type 5 now exists, but
-  atmosphere mapping, camera validation and visual/ray baselines remain.
+- [ ] `canigou-mountain` — `Canigou` (8 states); two source-backed partial
+  camera/atmosphere views now exist (#39); visual/ray baselines, remaining
+  source states and Legacy refraction parity are still pending.
 
 ### Stage E — choreography and end-to-end verification (later)
 

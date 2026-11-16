@@ -21,6 +21,7 @@
   function subject(experiment){
     var scene=experiment&&experiment.scene||{},title=trim(scene.title,44);
     if(/pontchartrain/i.test(title)||scene.preset==='pontchartrain')return 'Pontchartrain';
+    if(/canigou/i.test(title)||scene.preset==='canigou'||scene.preset==='canigou-low')return 'Canigou';
     if(title&&title!=='Scene')return title;
     return 'Curvature';
   }

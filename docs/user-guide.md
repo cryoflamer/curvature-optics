@@ -48,6 +48,18 @@ Use **Scene** to display one configured physical model. The left settings tabs i
 - **Geometry renderer** offers **Canvas 2D · reference** and **WebGL2 · experimental**. WebGL2 affects drawing of projected geometry; it is **not** the retired WebGPU optical ray solver. **Check GPU** reports capabilities only.
 - **Atmospheric Turbulence** creates an optional screen-space animated shimmer; it is a visual approximation, not meteorological inference.
 
+**Mount Canigou (partial):** choose **Mount Canigou · 257 km / 1000 m**
+for the high-observer vacuum ray study, or **Mount Canigou · 257 km / 244 m +
+atmosphere** to study a lower observer with Modern Standard atmosphere. Both
+presets place the 40 authored terrain silhouettes at source distances, but aim
+the fixed Modern camera down toward the horizon (−1° / −0.5°). The lower
+view's Standard profile is **not** the historical Legacy constant-k refraction
+model. In Compare, Globe and Flat have independent optical traces at the same
+camera orientation. Use **Previous** or **History** to return to your previous
+experiment; use **Reset to preset** to restore this view's parameters. The
+original eight-step narrated sequence is still in **Demos → Canigou**, not in
+these physical presets.
+
 **Camera zoom:** hold **Shift** and scroll the mouse wheel over the Scene image or either Compare image. Wheel up increases the focal length (narrows FOV), wheel down decreases it, by about 10% per normal notch. The zoom stays centred on the image; ordinary wheel scrolling without Shift remains page scrolling. The **Camera → Focal length** and **Field of view** controls update together. Compare always zooms A and B in lockstep; camera changes are included in saved experiments and copied URLs. Rapid wheel events are coalesced before a Physical redraw; visible image updates may therefore lag slightly behind the input field. The camera respects the model's 0.1°–160° FOV limits.
 
 ### Compare A/B

@@ -14,7 +14,7 @@
   var OBJECT=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
   var ATMOSPHERE=['vacuum','standard','temperature-lapse','profile-transition','inverse-temperature','inverse-spherical','exponential-occlusion'];
-  var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','custom'];
+  var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   var TEMPERATURE_PLACEMENTS=['outside-right','outside-left','inside-right','inside-left'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}

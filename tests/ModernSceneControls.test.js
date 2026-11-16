@@ -53,7 +53,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
 
 test('131 presets reset every relevant object group field without duplicating Legacy state',()=>{
   const m=model();
-  for(const id of ['pontchartrain','single','rows','bedford','chicago','chicago-near']){
+  for(const id of ['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low']){
     const p=adapter.applyPreset(m,id);m.Update();
     assert.equal(m.DemoText,p.name);
     assert.equal(m.Description,p.description);
@@ -62,7 +62,7 @@ test('131 presets reset every relevant object group field without duplicating Le
     assert.equal(m.rEarth,6371000);
     assert.equal(m.NObjects[0],p.objects.NObjects[0]);
     assert.equal(m.NObjects[1],p.objects.NObjects[1]);
-    assert.deepEqual(Array.from(m.ObjSideType),id.startsWith('chicago')?[2,0]:[0,0]);
+    assert.deepEqual(Array.from(m.ObjSideType),id.startsWith('chicago')||id.startsWith('canigou')?[2,0]:[0,0]);
   }
   adapter.setObject(m,1,'ObjSideVar',350);
   adapter.setObject(m,0,'ObjSizeVar',0.8);
@@ -317,6 +317,45 @@ test('Chicago partial preset survives UI edit, Compare, protected History return
   assert.equal(r.win.CurvatureModernApp.getPreset(),'chicago');
 });
 
+test('Canigou partial presets switch through the real Modern UI, preserve edits and restore atmospheric study',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  assert.equal(await r.fire('ModernPreset','change','canigou'),true);
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'canigou');
+  assert.deepEqual(Array.from(m.ObjType),[5,3]);
+  assert.deepEqual(Array.from(m.NObjects),[40,0]);
+  assert.equal(m.Height,1000);
+  assert.equal(m.ObjDist[0],257000);
+  assert.equal(m.ObjSideVar[0],-5620);
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
+  assert.equal(r.draws.at(-1).atmosphere,'vacuum');
+  assert.equal(r.nodes.get('ModernObjectGroupSummary0').textContent,'40 mountains');
+  r.fire('ModernCompareTab','click');
+  assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
+  r.fire('ModernObject0ObjSizeVar','change','0');
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  assert.equal(await r.fire('ModernPreset','change','canigou-low'),true);
+  assert.equal(m.Height,244);
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'standard');
+  assert.equal(r.win.CurvatureModernApp.getCompareConfig().A.atmosphere,'standard');
+  assert.equal(r.win.CurvatureModernApp.getCompareConfig().B.atmosphere,'standard');
+  assert.deepEqual(Array.from(m.ObjSizeVar),[.125,0]);
+  assert.equal(r.historyEntries.some(e=>e.pinned&&e.experiment.scene.preset==='custom'&&
+    e.experiment.scene.resetPreset==='canigou'&&e.experiment.scene.objects.ObjSizeVar[0]===0),true);
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(m.Height,1000);
+  assert.equal(m.ObjSizeVar[0],0);
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'custom');
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'canigou');
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(m.Height,244);
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'canigou-low');
+  r.fire('ModernObject0ObjSideVar','change','0');
+  await r.fire('ModernResetPreset','click');
+  assert.equal(m.ObjSideVar[0],-5620);
+  assert.equal(m.Height,244);
+  assert.equal(r.win.CurvatureModernApp.getPresetSelection(),'canigou-low');
+});
+
 test('131 input debounce coalesces expensive optics and invalid entries never mutate model',()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   r.fire('ModernHeight','input','24');
@@ -442,9 +481,9 @@ test('131 sample presets produce physical scenes using the real shared renderer'
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
   const m=model();
-  for(const id of ['single','rows','bedford','chicago','chicago-near']){
+  for(const id of ['single','rows','bedford','chicago','chicago-near','canigou','canigou-low']){
     adapter.applyPreset(m,id);m.Update();
-    const output=renderer.renderPhysical(graph,m,{atmosphere:['bedford','chicago-near'].includes(id)?'vacuum':'standard',
+    const output=renderer.renderPhysical(graph,m,{atmosphere:['bedford','chicago-near','canigou'].includes(id)?'vacuum':'standard',
       occlusionRadius:6371000,interactive:false});
     assert.equal(output.mode,'physical-scene');
     assert.ok(output.drawn>0,id+' draws visible physical geometry');

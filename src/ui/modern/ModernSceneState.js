@@ -60,7 +60,32 @@
       objects:{NObjects:[6,0],ObjType:[4,3],ObjDist:[3400,0],ObjDeltaDist:[200,100],
         ObjSideType:[2,0],ObjSidePos:[1040,0],ObjSideVar:[-30.5,0],
         ObjSizeType:[3,0],ObjSize:[442,10],ObjSizeVar:[.381,0]},
-      showGrid:true,atmosphere:'vacuum'}
+      showGrid:true,atmosphere:'vacuum'},
+    // Source Canigou state index 2 (?demo=Canigou&pos=3): the distant
+    // 257 km mountain study from an observer at 1000 m, after the zoom.
+    // Legacy k=0 is represented by vacuum. Modern Compare fixes its camera
+    // to eye-level aim; a -1 degree Nick instead of source Nick=0 aims the
+    // narrow FOV toward the globe's geometric horizon at 1000 m. This is
+    // a camera adaptation, not an optics/geometry correction.
+    canigou:{name:'Mount Canigou · distant mountain study',
+      description:'Legacy Canigou state 3 terrain at 257 km / 1000 m; Modern camera tilted toward horizon (Nick -1°). Vacuum; not animation parity.',
+      camera:{Height:1000,FocalLengthField:1000,Pan:0,Nick:-1,Roll:0},
+      objects:{NObjects:[40,0],ObjType:[5,3],ObjDist:[257000,0],ObjDeltaDist:[60,100],
+        ObjSideType:[2,0],ObjSidePos:[0,0],ObjSideVar:[-5620,0],
+        ObjSizeType:[3,0],ObjSize:[2790,10],ObjSizeVar:[.125,0]},
+      showGrid:true,atmosphere:'vacuum'},
+    // Source Canigou state index 4 (?demo=Canigou&pos=5) has the same
+    // 257 km mountains at 244 m with nonzero LEGACY k=0.16761. Modern
+    // 'standard' is an independently traced n(h), not that constant-k
+    // model; this is an intentionally approximate physical comparison. The
+    // -0.5 degree Modern Nick similarly substitutes for source horizon aim.
+    'canigou-low':{name:'Mount Canigou · low-observer refraction study',
+      description:'Canigou at 257 km / 244 m, horizon-aimed Modern camera (Nick -0.5°). Modern standard differs from Legacy constant-k refraction.',
+      camera:{Height:244,FocalLengthField:1000,Pan:0,Nick:-.5,Roll:0},
+      objects:{NObjects:[40,0],ObjType:[5,3],ObjDist:[257000,0],ObjDeltaDist:[60,100],
+        ObjSideType:[2,0],ObjSidePos:[0,0],ObjSideVar:[-5620,0],
+        ObjSizeType:[3,0],ObjSize:[2790,10],ObjSizeVar:[.125,0]},
+      showGrid:true,atmosphere:'standard'}
   });
   function finiteNumber(raw,min,max,integer){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
