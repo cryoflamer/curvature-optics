@@ -52,7 +52,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
 
 test('131 presets reset every relevant object group field without duplicating Legacy state',()=>{
   const m=model();
-  for(const id of ['pontchartrain','single','rows']){
+  for(const id of ['pontchartrain','single','rows','bedford']){
     const p=adapter.applyPreset(m,id);m.Update();
     assert.equal(m.DemoText,p.name);
     assert.equal(m.Description,p.description);
@@ -240,6 +240,32 @@ test('131 Modern events change the shared model; presets/flat/atmosphere keep st
   assert.equal(r.nodes.get('ModernStatus').classList!==undefined,true);
 });
 
+test('Bedford partial native preset works through actual Modern UI in Scene and Compare',()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  r.fire('ModernPreset','change','bedford');
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'bedford');
+  assert.equal(m.DemoText,'Bedford Level · marker study');
+  assert.deepEqual(Array.from(m.NObjects),[3,0]);
+  assert.deepEqual(Array.from(m.ObjDist),[124,0]);
+  assert.deepEqual(Array.from(m.ObjSideVar),[18,0]);
+  assert.equal(m.Height,4.04);
+  assert.equal(m.FocalLengthField,5000);
+  assert.equal(m.showGrid,0);
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
+  assert.equal(r.draws.at(-1).atmosphere,'vacuum');
+  assert.match(r.nodes.get('ModernSceneDescription').textContent,/not the original globe\/flat overlay/);
+  r.fire('ModernCompareTab','click');
+  assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
+  assert.deepEqual(Array.from(m.ObjDist),[124,0]);
+  r.fire('ModernObject0ObjSideVar','change','0');
+  assert.deepEqual(Array.from(m.ObjSideVar),[0,0]);
+  r.fire('ModernResetPreset','click');
+  assert.deepEqual(Array.from(m.ObjSideVar),[18,0], 'reset restores authored lateral variation');
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'bedford');
+  r.fire('ModernPreset','change','single');
+  assert.deepEqual(Array.from(m.ObjSideVar),[0,0], 'later presets must not inherit Bedford offsets');
+});
+
 test('131 input debounce coalesces expensive optics and invalid entries never mutate model',()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   r.fire('ModernHeight','input','24');
@@ -276,9 +302,9 @@ test('131 sample presets produce physical scenes using the real shared renderer'
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
   const m=model();
-  for(const id of ['single','rows']){
+  for(const id of ['single','rows','bedford']){
     adapter.applyPreset(m,id);m.Update();
-    const output=renderer.renderPhysical(graph,m,{atmosphere:'standard',
+    const output=renderer.renderPhysical(graph,m,{atmosphere:id==='bedford'?'vacuum':'standard',
       occlusionRadius:6371000,interactive:false});
     assert.equal(output.mode,'physical-scene');
     assert.ok(output.drawn>0,id+' draws visible physical geometry');

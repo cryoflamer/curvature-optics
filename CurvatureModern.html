@@ -50,8 +50,8 @@
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/renderers/CurvatureAtmosphericVisibility.js?v=140.12.91"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js?v=camera-position"></script>
-<script src="src/ui/modern/ModernLocationCatalog.js"></script>
-<script src="src/ui/modern/ModernSceneState.js"></script>
+<script src="src/ui/modern/ModernLocationCatalog.js?bedford-native=1"></script>
+<script src="src/ui/modern/ModernSceneState.js?bedford-native=1"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
 <script src="src/ui/modern/ModernCameraNavigation.js"></script>
 <script src="src/ui/modern/ModernApplicationPreferences.js?hud-appearance=1&amp;target-indicator=1"></script>
@@ -70,7 +70,7 @@
 <script src="src/ui/modern/ModernAtmosphericShimmer.js?v=140.1"></script>
 <script src="src/ui/modern/ModernCompareModel.js?v=camera-position"></script>
 <script src="src/ui/modern/ModernCompareState.js?v=140.12.97"></script>
-<script src="src/ui/modern/ModernExperimentState.js?v=camera-position"></script>
+<script src="src/ui/modern/ModernExperimentState.js?v=camera-position&amp;bedford-native=1"></script>
 <script src="src/ui/modern/ModernExperimentLibrary.js"></script>
 <script src="src/ui/modern/ModernExperimentFingerprint.js"></script>
 <script src="src/ui/modern/ModernExperimentThumbnail.js"></script>
@@ -859,6 +859,7 @@
           <select id="ModernPreset"><option value="pontchartrain">Lake Pontchartrain · towers</option>
             <option value="single">Single tower · sample</option>
             <option value="rows">Two tower rows · sample</option>
+            <option value="bedford">Bedford Level · marker study (partial)</option>
             <option value="custom" disabled>Custom scene (edited)</option>
           </select>
           <button type="button" class="modern-ghost-button" id="ModernResetPreset" title="Restore the chosen preset's initial scene parameters">Reset</button>
@@ -868,7 +869,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" class="modern-status-message" role="status" aria-live="polite">Preparing physical scene…</span></div>

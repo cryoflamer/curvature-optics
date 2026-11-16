@@ -1,7 +1,8 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-16, #34):** source-state evidence and view policies added; **no new
-geographic Scene/Compare preset has been enabled**. This is a living delivery
+**Status (2026-11-16, #35):** one **partial** geographic native preset
+(`bedford`) is available alongside `pontchartrain`; **no full Legacy scenario
+parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
 Modern Scene, Compare, History and Animation Studio**. Update checkboxes and
 attach test/visual evidence **in the same commit that completes an item**.
@@ -35,7 +36,9 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   This is a selected **numeric-source** fixture, not copied runtime scenes.
 - The existing `pontchartrain` Modern preset is one native transmission-tower
   arrangement, not all eight `TransLine` checkpoints or seven transitions.
-  `single` and `rows` are demonstration samples, **not locations**.
+  The new `bedford` preset is a single **positive-range** partial adaptation of
+  source state 3, not all seven Bedford states. `single` and `rows` remain
+  demonstration samples, **not locations**.
 - Object IDs are source-specific. Modern Scene geometry/validation currently
   supports `0–3`; Legacy `4` city, `5` mountain, `6` bridge/platform,
   `7` Tensas bridge and `8` Soundly Causeway require explicit ports. Legacy
@@ -67,7 +70,7 @@ source by `tests/ModernLocationCatalog.test.js`.
 - [ ] Establish per-scenario numeric geometry/camera checks and native
   Scene/Compare visual baselines, with tolerances chosen **before** comparison.
 
-### Stage B — low-dependency scenes (proposed #34)
+### Stage B — low-dependency scenes (#34–35)
 
 - [x] Document `Curve` globe/flat/`showModel=3` teaching semantics and decide
   on native educational presentation; do not treat Compare A/B as identical.
@@ -76,9 +79,15 @@ source by `tests/ModernLocationCatalog.test.js`.
   states (including optional tower-21 diagnostics); quantify optics mismatch.
 - [x] Define Bedford negative-range semantics (`ObjDist=-8600 m` in initial
   state), `showModel=3` and model-specific geometry. Do not clamp silently.
-  Decision and limitations below; native rendering remains blocked.
-- [ ] Enable eligible native static scenarios only after the scenario
-  acceptance gates below pass. Preserve existing presets and saved URLs.
+  Decision and limitations below; the **signed-range prelude and combined
+  Legacy projection** remain blocked.
+- [x] Enable a **clearly marked partial** Bedford native study from original
+  state index 3, with positive ranges, independently validated type-0 geometry,
+  reset/Scene/Compare checks and snapshot/URL roundtrip. Evidence:
+  `tests/ModernBedfordPreset.test.js`, `tests/ModernSceneControls.test.js`.
+  **This does not satisfy the full scenario acceptance gate in Stage D.**
+- [ ] Finish scenario acceptance gates before marking complete. Preserve
+  existing presets and saved URLs.
 
 ## Source-state evidence and Stage B decisions (#34)
 
@@ -176,9 +185,41 @@ observer telescope), and Modern's existing type-0 generator is not a proof
 that the combined projection is equivalent. Modern validates `ObjDist >= 0`
 and accepts only `showModel` 1 or 2; the source initial state must therefore
 remain **unsupported** as a native state, **never silently clamped or split**.
-A future native positive-range Bedford adaptation can be scoped to the later
-states, but it must explicitly disclose the omitted prelude, combined view
+A partial native positive-range Bedford adaptation is now scoped to source
+state index 3; it explicitly discloses the omitted prelude, combined view
 and refraction differences. Native Stage D completion remains blocked.
+
+### Bedford positive-range native study (#35; partial only)
+
+The `bedford` option in Modern Scene is a **runnable native physical scene**, not
+an iframe or a reconstructed Legacy animation. Its parameters are copied from
+`Demos.AddState` source index **3** (`?demo=Bedford&pos=4`): observer height
+**4.04 m**, focal field **5000**, Pan/Nick/Roll **0**, three type-0 markers at
+**124, 4954, 9784 m**, lateral center **9.23 m**, deterministic source
+`ObjSideVar=18 m` (near/middle/far lateral coordinates **0.23, 9.23, 18.23 m**),
+size **4.04 m**, no grid. The second object bank stays disabled. Source
+geometry parameters are verified against the authored state with **1e-8 m**
+numeric tolerance in `ModernBedfordPreset.test.js`, using the real geometry
+generator, not a hardcoded rendered drawing.
+
+The original state has `refractionCoeff=0`. The native adaptation defaults to
+**vacuum** for a directly interpretable non-refracting baseline; this is **not**
+claimed to reproduce the original Legacy optical/painter implementation.
+Modern renders one globe Scene; Compare A and B use their **independent surface
+and atmosphere settings** (select the globe/flat vacuum pair manually when
+needed), rather than the shared single-Canvas `showModel=3` composite. The
+Legacy eye-level overlay and narrative timing are not imported. The negative
+`ObjDist=-8600 m` start, states 0–2 and 4–6, the source's original composite
+projection and seven-state choreography all remain available only in Demos.
+
+Native `bedford` is explicitly marked **partial** in the selector, catalog and
+caption. The actual source initial state remains rejected by Modern's unsigned
+distance validator; no value is silently clamped or reflected. Existing
+`pontchartrain`, `single`, `rows`, and `custom` IDs retain their semantics.
+New regression coverage checks real Scene/Compare paths, deterministic
+geometry and the version-1 experiment serializer. Browser pixel comparison
+and complete History/Animation Studio acceptance remain separate Stage D/E
+work: **do not check Bedford Stage D yet**.
 
 ### Gate for #35 and later
 
@@ -187,9 +228,10 @@ and refraction differences. Native Stage D completion remains blocked.
 2. Compare source 0/4/7 TransLine physical rays with specified *actual*
    Legacy/Modern atmosphere settings. Separate numeric image-space errors
    from differences introduced by intentionally non-equivalent models.
-3. For Bedford prelude, decide whether to implement signed coordinates in
-   the generic Modern state/URL schema **and** physical renderer, or explicitly
-   archive that authored step. Never widen one validator alone.
+3. For the Bedford signed-range prelude, decide whether to implement signed
+   coordinates in both the generic Modern state/URL schema **and** physical
+   renderer, or explicitly archive that original step. The positive-range
+   `bedford` study does **not** resolve this. Never widen one validator alone.
 4. Build and test new geometry types 4–8 individually. Do not enable a native
    scenario until its acceptance gates (including rendering and persistence)
    pass, or mark a *partial* adaptation clearly without calling Stage D done.

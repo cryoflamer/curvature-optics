@@ -53,7 +53,7 @@
       stateCount: 9, animationCount: 8, objectTypes: [5, 6], status: 'not-ported', nativePresetId: null},
     {id: 'bedford-level-experiment', name: 'Bedford Level Experiment',
       category: 'geographic', locationId: 'bedford-level', legacyDemo: 'Bedford',
-      stateCount: 7, animationCount: 6, objectTypes: [0], status: 'not-ported', nativePresetId: null},
+      stateCount: 7, animationCount: 6, objectTypes: [0], status: 'partial', nativePresetId: 'bedford'},
     {id: 'tensas-bayou-bridge', name: 'Little Tensas Bayou Bridge',
       category: 'geographic', locationId: 'little-tensas-bayou', legacyDemo: 'Tensas',
       stateCount: 6, animationCount: 5, objectTypes: [7], status: 'not-ported', nativePresetId: null},
@@ -68,9 +68,9 @@
       stateCount: 8, animationCount: 7, objectTypes: [5], status: 'not-ported', nativePresetId: null}
   ]);
 
-  // Only these already-implemented Scene presets may be selected. 'single'
+  // Only supported partial native Scene presets may be selected. 'single'
   // and 'rows' are illustrative samples, not authored geographic locations.
-  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows']);
+  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford']);
 
   function location(id) { return LOCATIONS.find(function(item) { return item.id === id; }) || null; }
   function scenario(id) { return SCENARIOS.find(function(item) { return item.id === id; }) || null; }

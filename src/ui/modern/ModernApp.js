@@ -6128,7 +6128,7 @@
     try{
       cancelEdits();
       adapter.applyPreset(model,id);
-      state.preset=id;state.atmosphere='standard';state.occlusionRadius=6371000;
+      state.preset=id;state.atmosphere=adapter.PRESETS[id].atmosphere||'standard';state.occlusionRadius=6371000;
       state.temperatureProfile={temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5};
       state.transitionProfile={source:'standard',weight:0};
       state.inverseProfile={source:'temperature-lapse',weight:0};

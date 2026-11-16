@@ -31,7 +31,16 @@
       description:'Illustrative near and distant rows for perspective study',
       camera:{Height:15,FocalLengthField:650,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[18,8],ObjType:[3,3],ObjDist:[1200,12000],ObjDeltaDist:[450,1000],
-        ObjSidePos:[-200,400],ObjSize:[45,65]}}
+        ObjSidePos:[-200,400],ObjSize:[45,65]}},
+    // Deliberately partial: source Bedford state index 3 (?demo=Bedford&pos=4)
+    // has positive distances and existing type-0 geometry. The Legacy composite
+    // showModel=3 and its original refraction/presentation are NOT ported.
+    bedford:{name:'Bedford Level · marker study',
+      description:'Starts from Legacy Bedford state 4 (three markers, 124–9784 m). Native globe only; not the original globe/flat overlay.',
+      camera:{Height:4.04,FocalLengthField:5000,Pan:0,Nick:0,Roll:0},
+      objects:{NObjects:[3,0],ObjType:[0,3],ObjDist:[124,0],ObjDeltaDist:[4830,100],
+        ObjSidePos:[9.23,0],ObjSideVar:[18,0],ObjSize:[4.04,10]},
+      showGrid:false,atmosphere:'vacuum'}
   });
   function finiteNumber(raw,min,max,integer){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
@@ -84,16 +93,17 @@
     var p=PRESETS[id];if(!p)throw RangeError('Unknown Scene preset: '+id);
     Object.keys(p.camera).forEach(function(k){setCamera(model,k,p.camera[k]);});
     model.CameraEast=0;model.CameraNorth=0;
-    Object.keys(p.objects).forEach(function(k){
-      p.objects[k].forEach(function(v,i){setObject(model,i,k,v);});
-    });
-    // Reset varying-object shapes as well: no stale variations from prior edits.
+    // Clear variations *before* applying the preset, so a source-backed
+    // variation (Bedford's lateral spacing) is not silently overwritten.
     ['ObjSideVar','ObjSizeVar','ObjSideType','ObjSizeType'].forEach(function(k){
       [0,1].forEach(function(i){setObject(model,i,k,0);});
     });
+    Object.keys(p.objects).forEach(function(k){
+      p.objects[k].forEach(function(v,i){setObject(model,i,k,v);});
+    });
     model.DemoText=p.name;model.Description=p.description;
     model.showModel=1;model.rEarth=6371000;model.viewcenterHorizon=3;
-    model.showGrid=1;model.showEyeLevel=false;model.showTangent=false;
+    model.showGrid=p.showGrid===false?0:1;model.showEyeLevel=false;model.showTangent=false;
     return p;
   }
   return Object.freeze({PRESETS:PRESETS,CAMERA:CAMERA,OBJECT:OBJECT,

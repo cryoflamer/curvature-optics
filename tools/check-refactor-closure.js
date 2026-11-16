@@ -31,6 +31,7 @@ const tests = [
   'tests/ModernAnimationRefactorBoundary.test.js',
   'tests/ModernLocationCatalog.test.js',
   'tests/ModernLocationEvidence.test.js',
+  'tests/ModernBedfordPreset.test.js',
   'tests/ModernWebGPURetirement141253.test.js',
   'tests/ResearchArchive141274.test.js',
   'tests/CurvaturePhysicsRegression.test.js',

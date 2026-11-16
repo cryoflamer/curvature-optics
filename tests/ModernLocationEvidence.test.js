@@ -135,7 +135,8 @@ test('Bedford initial signed distances are three distinct markers; no clamping o
   const model = {ObjDist: [124, 0]};
   assert.throws(() => scene.setObject(model, 0, 'ObjDist', -8600), /Expected/);
   assert.deepEqual(model.ObjDist, [124, 0], 'modern validator must reject, not clamp, signed range');
-  assert.equal(catalog.scenario('bedford-level-experiment').nativePresetId, null);
+  assert.equal(catalog.scenario('bedford-level-experiment').nativePresetId, 'bedford');
+  assert.equal(catalog.scenario('bedford-level-experiment').status, 'partial');
   assert.match(read('docs/modern-location-migration.md'), /signed-distance prelude/);
 });
 

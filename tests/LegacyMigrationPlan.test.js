@@ -36,7 +36,7 @@ test('Legacy and Modern state formats and routes remain distinct while retiremen
   assert.match(legacyState, /DataX\.FromStream/);
   assert.match(legacyState, /GetUrlStr\( 'demo' \)/);
   assert.match(modernState, /PARAM='experiment'/);
-  assert.match(modernState, /SCENE_PRESETS=\['pontchartrain','single','rows','custom'\]/);
+  assert.match(modernState, /SCENE_PRESETS=\['pontchartrain','single','rows','bedford','custom'\]/);
   assert.equal(route.isModern('?state=legacy'), false);
   assert.equal(route.isModern('?ui=modern'), true);
   assert.equal(route.target({pathname:'/CurvatureApp.html',search:'?ui=modern&experiment=x',hash:'#App'}),

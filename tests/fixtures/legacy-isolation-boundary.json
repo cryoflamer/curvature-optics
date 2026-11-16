@@ -1442,6 +1442,7 @@
         "tests/CurvatureTowerPlacement.test.js",
         "tests/CurvatureTowerSequence.test.js",
         "tests/CurvatureTowerType1.test.js",
+        "tests/ModernBedfordPreset.test.js",
         "tests/ModernLocationEvidence.test.js",
         "tests/ModernTargetDirection.test.js",
         "tests/OpticalTowerSilhouette106.test.js",
@@ -2638,6 +2639,7 @@
       "commonJsTestCallers": [
         "tests/ModernAngularGuide.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernBedfordPreset.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraTelemetry.test.js",
@@ -2689,6 +2691,7 @@
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernBedfordPreset.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js",
@@ -2837,6 +2840,7 @@
         "tests/ModernAnimationWizardReuse.test.js",
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/ModernBedfordPreset.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCameraSequence.test.js",
@@ -2889,6 +2893,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernBedfordPreset.test.js",
         "tests/ModernLocationCatalog.test.js",
         "tests/ModernLocationEvidence.test.js"
       ],
@@ -2948,6 +2953,7 @@
         "tests/CurvatureCameraTranslation.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernAtmosphericPresentation13822.test.js",
+        "tests/ModernBedfordPreset.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernInverseRenderScheduling.test.js",

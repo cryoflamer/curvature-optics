@@ -71,14 +71,14 @@ test('six locations group exactly eight geographic scenarios; the Curve lesson i
   assert.throws(() => { catalog.LOCATIONS[0].scenarioIds.push('bogus'); }, TypeError);
 });
 
-test('only already-implemented native presets are selectable; saved experiment allowlist and DOM remain unchanged', () => {
+test('only implemented native partial presets are selectable; saved experiment allowlist and DOM stay in sync', () => {
   const existing = Object.keys(scene.PRESETS);
   assert.deepEqual(catalog.NATIVE_PRESETS, existing);
-  assert.deepEqual(existing, ['pontchartrain', 'single', 'rows']);
+  assert.deepEqual(existing, ['pontchartrain', 'single', 'rows', 'bedford']);
   const partial = catalog.SCENARIOS.filter(s => s.nativePresetId);
   assert.deepEqual(partial.map(s => [s.legacyDemo, s.nativePresetId, s.status]),
-    [['TransLine', 'pontchartrain', 'partial']]);
-  assert.equal(catalog.SCENARIOS.filter(s => s.status === 'not-ported').length, 8);
+    [['TransLine', 'pontchartrain', 'partial'], ['Bedford', 'bedford', 'partial']]);
+  assert.equal(catalog.SCENARIOS.filter(s => s.status === 'not-ported').length, 7);
   for (const scenario of catalog.SCENARIOS) {
     assert.ok(['partial', 'not-ported'].includes(scenario.status));
     if (scenario.nativePresetId) assert.ok(existing.includes(scenario.nativePresetId));
@@ -89,10 +89,10 @@ test('only already-implemented native presets are selectable; saved experiment a
   const sceneSelect = html.match(/<select id="ModernPreset">([\s\S]*?)<\/select>/);
   assert.ok(sceneSelect);
   assert.deepEqual([...sceneSelect[1].matchAll(/<option value="([^"]+)"/g)].map(m => m[1]),
-    ['pontchartrain', 'single', 'rows', 'custom']);
+    ['pontchartrain', 'single', 'rows', 'bedford', 'custom']);
   assert.ok(options.includes('pontchartrain'));
   const serializer = read('src/ui/modern/ModernExperimentState.js');
-  assert.match(serializer, /SCENE_PRESETS=\['pontchartrain','single','rows','custom'\]/);
+  assert.match(serializer, /SCENE_PRESETS=\['pontchartrain','single','rows','bedford','custom'\]/);
 });
 
 test('browser loads the metadata exactly once before Scene adapter and ModernApp; not as an extra Legacy demo engine', () => {

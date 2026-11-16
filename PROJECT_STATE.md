@@ -10,8 +10,14 @@
 > frames are *Legacy-only* references. The 71 old transitions are unported.
 > #34 adds 27 explicitly indexed opening/middle/final source-backed camera and
 > object-layout summaries (`tools/audit-modern-location-evidence.js`) and
-> numeric checks of the partial Pontchartrain preset; educational `Curve` and
-> signed-range Bedford view policies are recorded without enabling new presets.
+> numeric checks of the partial Pontchartrain preset and the `Curve` /
+> signed-range Bedford presentation policies. #35 enables a **partial** native
+> `bedford` Scene option based on Legacy state index 3 (URL `pos=4`), using the
+> supported type-0 geometry with its 18 m lateral variation, a vacuum baseline,
+> version-1 experiment persistence and distinct physical A/B views. The
+> signed-distance prelude, original `showModel=3` overlay, remaining Bedford
+> checkpoints and animation are **not** ported. Stage D remains open; see
+> `tests/ModernBedfordPreset.test.js` and the active checklist.
 >
 > **Animation Studio refactor closure audit (2026-11-16):** Seven extracted
 > browser-global coordinators are now checked together by
