@@ -3597,9 +3597,6 @@
       });
     }).finally(function(){historyRestoreBusy=false;});
   }
-  function handleHistoryRestore(id){
-    return restoreHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
-  }
   function downloadHistoryJson(contents,filename){
     var address=URL.createObjectURL(new Blob([contents],{type:'application/json'}));
     try{

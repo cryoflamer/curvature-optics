@@ -60,16 +60,20 @@ archive actions; Animation Studio owns Snapshot Picker and the timeline.
 Neither UI module imports the other. See
 [Experiment History](docs/modern-experiment-history.md) for details.
 
-**Animation Workspace lifecycle boundaries:** Startup/reload recovery and page
-lifecycle flush coordination live in `ModernAnimationWorkspaceRecovery`.
-`ModernAnimationWorkspaceSwitch` sequences switching to another draft, opening a
-saved Library project, and creating a Wizard project: the outgoing editor must
-first be checkpointed and persisted, then its generation must still match
-before the new project becomes active. `ModernApp.js` retains editor/Preview
-state, Library actions, serialized IndexedDB writes and conflict handling;
-`ModernAnimationDraftAutosave` retains the persistent schema. Neither
-extraction migrates storage or changes physics. See
-[workspace lifecycle architecture](docs/modern-animation-contract.md#animation-workspace-recovery-boundary).
+**Animation Workspace and Studio boundaries:** Startup/reload recovery runs
+through `ModernAnimationWorkspaceRecovery`; `ModernAnimationWorkspaceSwitch`
+checkpoints and persists the outgoing draft before activation, while
+`ModernAnimationWorkspacePersistence` serializes durable IndexedDB writes and
+handles cross-tab conflict results. Named-project transactions are coordinated
+by `ModernAnimationLibraryActions`; draft selection and Undo/Redo by
+`ModernAnimationStudioEditing`; first/paused Preview painting by
+`ModernAnimationPreviewLifecycle`; and Play/Pause/Seek/Stop by
+`ModernAnimationPlaybackControls`. `ModernAnimationDraftAutosave` retains the
+storage schema, and `ModernApp.js` remains responsible for live editor state,
+DOM, physical rendering, navigation, and user-facing status. This is a
+coordination refactor, **not** a format or physics migration. The
+[Animation architecture closure](docs/modern-animation-contract.md#animation-refactor-closure-audit)
+lists remaining responsibilities and explicit reasons not to split further yet.
 
 ### Animation Project contracts — saved-schema foundation
 

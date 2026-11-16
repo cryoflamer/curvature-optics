@@ -325,3 +325,61 @@ node --test tests/ModernAnimationPlaybackControls.test.js \
   tests/ModernAnimationInitialFrame.test.js
 node tools/check-refactor-closure.js
 ```
+
+## Animation refactor closure audit
+
+The seven opt-in, classic-script coordinators extracted from `ModernApp.js`
+are now a bounded architecture rather than a reason to keep adding modules:
+
+| Owner | Responsibility | Explicitly remains outside |
+| --- | --- | --- |
+| `ModernAnimationWorkspaceRecovery` | Local/session/IndexedDB startup reconciliation and page lifecycle flushes | Active editor, storage schema |
+| `ModernAnimationWorkspaceSwitch` | Outgoing write barrier and generation-checked activation | Actual activation/UI |
+| `ModernAnimationWorkspacePersistence` | Serialized atomic write reconciliation, conflicts, backup fallback | Checkpoint construction and editor state |
+| `ModernAnimationLibraryActions` | Named-project list/import/export/save/rename/delete sequencing | Named Library record schema, active draft |
+| `ModernAnimationPreviewLifecycle` | Pending first/paused-frame RAF, layout retries and resize tracking | Optical renderer and view messages |
+| `ModernAnimationStudioEditing` | Draft edits, keyframe selection, bounded Undo/Redo | DOM focus, native keyboard shortcuts and persistence |
+| `ModernAnimationPlaybackControls` | Play/Pause/Stop/Seek and live playback RAF lifecycle | Player math, optical renderer and preview UI |
+
+The browser still loads these as **seven separate scripts before**
+`ModernApp.js`. Each exports a `CurvatureModernAnimation*` global and has a
+`create()` API. Do not silently bundle them, reorder them after the app, or
+copy their lifecycle logic back into a large UI callback.
+
+### Findings and cleanup decision
+
+- `ModernApp.js` decreased from **6593 lines before recovery extraction**
+  to **6432 lines** at this audit. Raw line count is not an architectural
+  correctness metric: its remaining work includes Scene/Compare physical
+  renderer dispatch, Camera/History interactions, input/DOM composition,
+  and integration of the active Animation draft with UI and renderer.
+- Its private `handleHistoryRestore()` error wrapper had no callers. The
+  live `ModernHistoryRestore` click already calls the guarded `handle()`
+  helper, which catches async restore errors and displays History status.
+  The wrapper was removed; the real Restore success/failure tests remain.
+- A static one-occurrence scan of top-level named function declarations found
+  no other plainly orphaned declarations. This is **not** complete dead-code
+  analysis (dynamic use, closures, object properties and comments complicate
+  reachability); deletion beyond this one proven wrapper is deliberately
+  deferred until call sites and browser behavior can be demonstrated.
+- **Do not split `ModernApp.js` again just to shrink the file.** A next
+  extraction needs a specific fault or measurable maintainability benefit,
+  a named owner, a bounded interface, and end-to-end regressions. High-risk
+  boundaries are History restore/navigation, the optical render dispatch,
+  DOM focus handling, and cross-tab writes; do not mix those in one patch.
+
+### Refactor acceptance gate
+
+```sh
+node --test tests/ModernAnimationRefactorBoundary.test.js \
+  tests/ModernHistoryPickerNavigation.test.js \
+  tests/ModernExperimentHistory.test.js
+node tools/check-refactor-closure.js
+```
+
+The architecture test checks the script load order, exported factories, and
+actual `ModernApp.js` bindings; it also guards the single Restore path and
+flags plainly unreferenced top-level named functions. GitHub Actions continues
+to cover the full Node suite and real Chromium smoke tests after push.
+Static checks do not certify Opera interactivity, visual pixel parity or a
+race-free browser implementation.

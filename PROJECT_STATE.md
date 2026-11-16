@@ -1,3 +1,17 @@
+> **Animation Studio refactor closure audit (2026-11-16):** Seven extracted
+> browser-global coordinators are now checked together by
+> `tests/ModernAnimationRefactorBoundary.test.js`: their load order and
+> application binding are explicit, before `ModernApp.js` bootstraps.
+> One unreachable History Restore error-wrapper was removed; its actual
+> guarded click handler and failure behavior remain covered by existing
+> integration tests. A narrow static orphan-function check was added to the
+> architecture gate; it is *not* a complete JavaScript reachability proof.
+> `ModernApp.js` still owns UI/DOM, physical rendering, mutable editor state,
+> and integrations with History, Camera, Scene and Compare. No further split
+> is justified solely by file length. No physics, storage, project schema,
+> Legacy, or exported browser API changed. Details:
+> `docs/modern-animation-contract.md#animation-refactor-closure-audit`.
+
 > **Animation Playback control boundary (2026-11-16):**
 > `src/animation/ModernAnimationPlaybackControls.js` coordinates one active
 > RAF tick, Play/Pause/Stop/Seek, tab-visibility pause and natural completion.

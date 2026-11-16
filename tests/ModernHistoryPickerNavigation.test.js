@@ -196,7 +196,7 @@ test('UI contract keeps Return to Animation near Save after an explicit Restore'
 test('Explicit Restore after Picker navigation switches to physical workspace and offers return without rewriting Studio draft',async()=>{
   const source=read('src/ui/modern/ModernApp.js');
   const a=source.indexOf('  var historyRestoreBusy=false;');
-  const b=source.indexOf('  function handleHistoryRestore(id){',a);
+  const b=source.indexOf('  function downloadHistoryJson(contents,filename){',a);
   assert.ok(a>=0&&b>a);
   const draft={frames:[{key:'existing',sourceSnapshotId:5,travelMs:2000}]};
   const original=JSON.stringify(draft);

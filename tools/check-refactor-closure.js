@@ -28,6 +28,7 @@ const tests = [
   'tests/ModernUiBootstrap.test.js',
   'tests/ModernPrimaryEntry.test.js',
   'tests/ModernPhysicalCompare.test.js',
+  'tests/ModernAnimationRefactorBoundary.test.js',
   'tests/ModernWebGPURetirement141253.test.js',
   'tests/ResearchArchive141274.test.js',
   'tests/CurvaturePhysicsRegression.test.js',
