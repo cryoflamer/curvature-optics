@@ -1,0 +1,1138 @@
+{
+  "schemaVersion": 1,
+  "source": "src/animation/CurvatureDemos.js",
+  "policy": "source-derived geometry and camera summaries only; no Modern import, optical parity or browser pixel certification",
+  "scenarios": [
+    {
+      "scenarioId": "earth-curvature-lesson",
+      "legacyDemo": "Curve",
+      "totalStates": 12,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Curve&pos=1",
+          "camera": {
+            "Height": 2,
+            "FocalLengthField": 33.9,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Curve&pos=8",
+          "camera": {
+            "Height": 100000,
+            "FocalLengthField": 33.9,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 11,
+          "legacyQuery": "?demo=Curve&pos=12",
+          "camera": {
+            "Height": 500,
+            "FocalLengthField": 33.9,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "pontchartrain-causeway",
+      "legacyDemo": "Causeway",
+      "totalStates": 6,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Causeway&pos=1",
+          "camera": {
+            "Height": 100,
+            "FocalLengthField": 33.9,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 6,
+              "count": 41,
+              "startMetres": 0,
+              "spacingMetres": 967.5,
+              "lastMetres": 38700,
+              "behindObserver": 0,
+              "sideMetres": 45,
+              "sideVariation": 30,
+              "sideVariationType": 1,
+              "sizeMetres": 5,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Causeway&pos=3",
+          "camera": {
+            "Height": 100,
+            "FocalLengthField": 33.9,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 6,
+              "count": 41,
+              "startMetres": 0,
+              "spacingMetres": 967.5,
+              "lastMetres": 38700,
+              "behindObserver": 0,
+              "sideMetres": 45,
+              "sideVariation": 30,
+              "sideVariationType": 1,
+              "sizeMetres": 5,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Causeway&pos=6",
+          "camera": {
+            "Height": 2.5,
+            "FocalLengthField": 2000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 6,
+              "count": 41,
+              "startMetres": 0,
+              "spacingMetres": 967.5,
+              "lastMetres": 38700,
+              "behindObserver": 0,
+              "sideMetres": 25,
+              "sideVariation": 30,
+              "sideVariationType": 1,
+              "sizeMetres": 5,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "pontchartrain-transmission-line",
+      "legacyDemo": "TransLine",
+      "totalStates": 8,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=TransLine&pos=1",
+          "camera": {
+            "Height": 100,
+            "FocalLengthField": 100,
+            "Pan": -10,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 3,
+              "count": 85,
+              "startMetres": 50,
+              "spacingMetres": 297.55,
+              "lastMetres": 25044.2,
+              "behindObserver": 0,
+              "sideMetres": -500,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 23,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            },
+            {
+              "group": 1,
+              "type": 3,
+              "count": 2,
+              "startMetres": 25550,
+              "spacingMetres": 373,
+              "lastMetres": 25923,
+              "behindObserver": 0,
+              "sideMetres": -509.6,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 64,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 2,
+            "authoredCoefficient": null
+          }
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=TransLine&pos=5",
+          "camera": {
+            "Height": 15,
+            "FocalLengthField": 2000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 3,
+              "count": 85,
+              "startMetres": 50,
+              "spacingMetres": 297.55,
+              "lastMetres": 25044.2,
+              "behindObserver": 0,
+              "sideMetres": 35,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 23,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            },
+            {
+              "group": 1,
+              "type": 3,
+              "count": 2,
+              "startMetres": 25550,
+              "spacingMetres": 373,
+              "lastMetres": 25923,
+              "behindObserver": 0,
+              "sideMetres": 25.4,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 64,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 2,
+            "authoredCoefficient": null
+          }
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=TransLine&pos=8",
+          "camera": {
+            "Height": 15,
+            "FocalLengthField": 3500,
+            "Pan": 0.2,
+            "Nick": 0.052,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 3,
+              "count": 85,
+              "startMetres": 50,
+              "spacingMetres": 297.55,
+              "lastMetres": 25044.2,
+              "behindObserver": 0,
+              "sideMetres": 32,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 23,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            },
+            {
+              "group": 1,
+              "type": 3,
+              "count": 2,
+              "startMetres": 25550,
+              "spacingMetres": 373,
+              "lastMetres": 25923,
+              "behindObserver": 0,
+              "sideMetres": 22.4,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 64,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "anacapa-grace-platform",
+      "legacyDemo": "Grace",
+      "totalStates": 9,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Grace&pos=1",
+          "camera": {
+            "Height": 72,
+            "FocalLengthField": 2000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 2,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 6,
+              "count": 2,
+              "startMetres": 25000,
+              "spacingMetres": 20,
+              "lastMetres": 25020,
+              "behindObserver": 0,
+              "sideMetres": 0,
+              "sideVariation": 12,
+              "sideVariationType": 0,
+              "sizeMetres": 37.2,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            },
+            {
+              "group": 1,
+              "type": 5,
+              "count": 2,
+              "startMetres": 25000,
+              "spacingMetres": 0,
+              "lastMetres": 25000,
+              "behindObserver": 0,
+              "sideMetres": 14.6,
+              "sideVariation": -331,
+              "sideVariationType": 0,
+              "sizeMetres": 75,
+              "sizeVariation": 0.0375,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0.27266
+          }
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Grace&pos=6",
+          "camera": {
+            "Height": 72,
+            "FocalLengthField": 2000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 2,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 6,
+              "count": 2,
+              "startMetres": 28000,
+              "spacingMetres": 20,
+              "lastMetres": 28020,
+              "behindObserver": 0,
+              "sideMetres": 97.5,
+              "sideVariation": 12,
+              "sideVariationType": 0,
+              "sizeMetres": 37.2,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            },
+            {
+              "group": 1,
+              "type": 5,
+              "count": 11,
+              "startMetres": 50100,
+              "spacingMetres": 22.7,
+              "lastMetres": 50327,
+              "behindObserver": 0,
+              "sideMetres": 34.7,
+              "sideVariation": -523,
+              "sideVariationType": 0,
+              "sizeMetres": 75,
+              "sizeVariation": 0.234,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0.27266
+          }
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Grace&pos=9",
+          "camera": {
+            "Height": 72,
+            "FocalLengthField": 2000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 6,
+              "count": 2,
+              "startMetres": 28000,
+              "spacingMetres": 20,
+              "lastMetres": 28020,
+              "behindObserver": 0,
+              "sideMetres": 97.5,
+              "sideVariation": 12,
+              "sideVariationType": 0,
+              "sizeMetres": 37.2,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            },
+            {
+              "group": 1,
+              "type": 5,
+              "count": 11,
+              "startMetres": 50100,
+              "spacingMetres": 22.7,
+              "lastMetres": 50327,
+              "behindObserver": 0,
+              "sideMetres": 34.7,
+              "sideVariation": -523,
+              "sideVariationType": 0,
+              "sizeMetres": 75,
+              "sizeVariation": 0.234,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 2,
+            "authoredCoefficient": 0.16974
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "bedford-level-experiment",
+      "legacyDemo": "Bedford",
+      "totalStates": 7,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Bedford&pos=1",
+          "camera": {
+            "Height": 7,
+            "FocalLengthField": 800,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 3,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 0,
+              "count": 3,
+              "startMetres": -8600,
+              "spacingMetres": 4830,
+              "lastMetres": 1060,
+              "behindObserver": 2,
+              "sideMetres": 0,
+              "sideVariation": 18,
+              "sideVariationType": 0,
+              "sizeMetres": 4.04,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Bedford&pos=4",
+          "camera": {
+            "Height": 4.04,
+            "FocalLengthField": 5000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 3,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 0,
+              "count": 3,
+              "startMetres": 124,
+              "spacingMetres": 4830,
+              "lastMetres": 9784,
+              "behindObserver": 0,
+              "sideMetres": 9.23,
+              "sideVariation": 18,
+              "sideVariationType": 0,
+              "sizeMetres": 4.04,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Bedford&pos=7",
+          "camera": {
+            "Height": 4.04,
+            "FocalLengthField": 5000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 3,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 0,
+              "count": 49,
+              "startMetres": 124,
+              "spacingMetres": 201.25,
+              "lastMetres": 9784,
+              "behindObserver": 0,
+              "sideMetres": 5.63,
+              "sideVariation": 1.25,
+              "sideVariationType": 0,
+              "sizeMetres": 4.04,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "tensas-bayou-bridge",
+      "legacyDemo": "Tensas",
+      "totalStates": 6,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Tensas&pos=1",
+          "camera": {
+            "Height": 18300,
+            "FocalLengthField": 33.9,
+            "Pan": 0,
+            "Nick": -66.2,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 7,
+              "count": 87,
+              "startMetres": 0,
+              "spacingMetres": 150,
+              "lastMetres": 12900,
+              "behindObserver": 0,
+              "sideMetres": 0,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 1,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Tensas&pos=4",
+          "camera": {
+            "Height": 10.8,
+            "FocalLengthField": 3000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 7,
+              "count": 87,
+              "startMetres": 0,
+              "spacingMetres": 150,
+              "lastMetres": 12900,
+              "behindObserver": 0,
+              "sideMetres": -2,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 1,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Tensas&pos=6",
+          "camera": {
+            "Height": 1.5,
+            "FocalLengthField": 3000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 7,
+              "count": 87,
+              "startMetres": 0,
+              "spacingMetres": 150,
+              "lastMetres": 12900,
+              "behindObserver": 0,
+              "sideMetres": -2,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 1,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 2,
+            "authoredCoefficient": 0.16974
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "pontchartrain-soundly",
+      "legacyDemo": "Soundly",
+      "totalStates": 18,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Soundly&pos=1",
+          "camera": {
+            "Height": 200,
+            "FocalLengthField": 38,
+            "Pan": 65,
+            "Nick": -0.85,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 8,
+              "count": 128,
+              "startMetres": 0,
+              "spacingMetres": 300,
+              "lastMetres": 38100,
+              "behindObserver": 0,
+              "sideMetres": 2850,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 1,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 9,
+          "legacyQuery": "?demo=Soundly&pos=10",
+          "camera": {
+            "Height": 8,
+            "FocalLengthField": 2000,
+            "Pan": 0.5,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 8,
+              "count": 128,
+              "startMetres": 0,
+              "spacingMetres": 300,
+              "lastMetres": 38100,
+              "behindObserver": 0,
+              "sideMetres": 100,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 1,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 17,
+          "legacyQuery": "?demo=Soundly&pos=18",
+          "camera": {
+            "Height": 10.8,
+            "FocalLengthField": 2200,
+            "Pan": 0.45,
+            "Nick": -0.03,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 8,
+              "count": 128,
+              "startMetres": 496,
+              "spacingMetres": 300,
+              "lastMetres": 38596,
+              "behindObserver": 0,
+              "sideMetres": 55.5,
+              "sideVariation": 0,
+              "sideVariationType": 0,
+              "sizeMetres": 1,
+              "sizeVariation": 0,
+              "sizeVariationType": 0
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "chicago-skyline",
+      "legacyDemo": "Chicago",
+      "totalStates": 6,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Chicago&pos=1",
+          "camera": {
+            "Height": 2,
+            "FocalLengthField": 34,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 4,
+              "count": 6,
+              "startMetres": 3400,
+              "spacingMetres": 200,
+              "lastMetres": 4400,
+              "behindObserver": 0,
+              "sideMetres": 1040,
+              "sideVariation": -30.5,
+              "sideVariationType": 2,
+              "sizeMetres": 442,
+              "sizeVariation": 0.381,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Chicago&pos=3",
+          "camera": {
+            "Height": 2,
+            "FocalLengthField": 800,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 4,
+              "count": 6,
+              "startMetres": 91100,
+              "spacingMetres": 200,
+              "lastMetres": 92100,
+              "behindObserver": 0,
+              "sideMetres": 1040,
+              "sideVariation": -30.5,
+              "sideVariationType": 2,
+              "sizeMetres": 442,
+              "sizeVariation": 0.381,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Chicago&pos=6",
+          "camera": {
+            "Height": 660,
+            "FocalLengthField": 800,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 2,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 4,
+              "count": 6,
+              "startMetres": 91100,
+              "spacingMetres": 200,
+              "lastMetres": 92100,
+              "behindObserver": 0,
+              "sideMetres": 1040,
+              "sideVariation": -30.5,
+              "sideVariationType": 2,
+              "sizeMetres": 442,
+              "sizeVariation": 0.381,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "canigou-mountain",
+      "legacyDemo": "Canigou",
+      "totalStates": 8,
+      "samples": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Canigou&pos=1",
+          "camera": {
+            "Height": 244,
+            "FocalLengthField": 34,
+            "Pan": 0,
+            "Nick": 7.36,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 5,
+              "count": 40,
+              "startMetres": 7230,
+              "spacingMetres": 60,
+              "lastMetres": 9570,
+              "behindObserver": 0,
+              "sideMetres": 0,
+              "sideVariation": -5620,
+              "sideVariationType": 2,
+              "sizeMetres": 2790,
+              "sizeVariation": 0.125,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Canigou&pos=4",
+          "camera": {
+            "Height": 244,
+            "FocalLengthField": 1000,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 1,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 5,
+              "count": 40,
+              "startMetres": 257000,
+              "spacingMetres": 60,
+              "lastMetres": 259340,
+              "behindObserver": 0,
+              "sideMetres": 0,
+              "sideVariation": -5620,
+              "sideVariationType": 2,
+              "sizeMetres": 2790,
+              "sizeVariation": 0.125,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0
+          }
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Canigou&pos=8",
+          "camera": {
+            "Height": 244,
+            "FocalLengthField": 350,
+            "Pan": 0,
+            "Nick": 0,
+            "Roll": 0,
+            "viewcenterHorizon": 0,
+            "deviceRatio": 1.5
+          },
+          "surface": {
+            "showModel": 3,
+            "rEarth": 6371000
+          },
+          "banks": [
+            {
+              "group": 0,
+              "type": 5,
+              "count": 40,
+              "startMetres": 257000,
+              "spacingMetres": 60,
+              "lastMetres": 259340,
+              "behindObserver": 0,
+              "sideMetres": 6490,
+              "sideVariation": -5620,
+              "sideVariationType": 2,
+              "sizeMetres": 2790,
+              "sizeVariation": 0.125,
+              "sizeVariationType": 3
+            }
+          ],
+          "refraction": {
+            "syncMode": 1,
+            "authoredCoefficient": 0.267083
+          }
+        }
+      ]
+    }
+  ]
+}

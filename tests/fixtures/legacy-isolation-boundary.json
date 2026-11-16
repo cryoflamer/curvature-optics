@@ -1442,6 +1442,7 @@
         "tests/CurvatureTowerPlacement.test.js",
         "tests/CurvatureTowerSequence.test.js",
         "tests/CurvatureTowerType1.test.js",
+        "tests/ModernLocationEvidence.test.js",
         "tests/ModernTargetDirection.test.js",
         "tests/OpticalTowerSilhouette106.test.js",
         "tests/PhysicalContinuousScene128.test.js",
@@ -2888,9 +2889,12 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernLocationCatalog.test.js"
+        "tests/ModernLocationCatalog.test.js",
+        "tests/ModernLocationEvidence.test.js"
       ],
-      "commonJsToolCallers": []
+      "commonJsToolCallers": [
+        "tools/audit-modern-location-evidence.js"
+      ]
     },
     "src/ui/modern/ModernPerformanceReport.js": {
       "directHtmlLoads": [
@@ -2948,6 +2952,7 @@
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernLocationCatalog.test.js",
+        "tests/ModernLocationEvidence.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js"
       ],

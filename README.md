@@ -11,7 +11,9 @@ transmission-line arrangement (`pontchartrain`) is partly native in Scene;
 `single`/`rows` are samples. A read-only catalog tracks six geographic
 locations and nine scenarios without enabling unsupported shapes. To follow
 and check off individual migration gates, see the
-[Modern location migration checklist](docs/modern-location-migration.md).
+[Modern location migration checklist](docs/modern-location-migration.md). Curated source-state numeric baselines (27 samples),
+Curve/Bedford view decisions and the Pontchartrain geometry comparison are
+recorded there; no new native geographic scenario has been activated.
 
 The former standalone WebGPU optics harness and Modern's optional CPU research panel were **removed from the active tree** in #140.12.74. Neither is required to run these applications. The **Check GPU** button only reports capabilities; it does **not** perform WebGPU optical calculations. See [research archive](docs/research-archive.md) for history and recovery.
 

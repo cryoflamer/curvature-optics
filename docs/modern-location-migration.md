@@ -1,6 +1,6 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-16):** catalog and source inventory established; **no new
+**Status (2026-11-16, #34):** source-state evidence and view policies added; **no new
 geographic Scene/Compare preset has been enabled**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
 Modern Scene, Compare, History and Animation Studio**. Update checkboxes and
@@ -28,6 +28,11 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   zero-based; legacy URL `pos` is one-based). Six actual original-Canvas
   [Opera reference PNGs](legacy-visual-validation.md) are frozen. They are
   **Legacy** evidence, not native Modern comparison renders.
+- The curated [source-state numeric evidence](../tests/fixtures/modern-location-evidence.json)
+  pins 27 opening/middle/final samples across all nine scenarios. Recreate or check
+  it without evaluating Legacy code using
+  `node tools/audit-modern-location-evidence.js --write` / `--check`.
+  This is a selected **numeric-source** fixture, not copied runtime scenes.
 - The existing `pontchartrain` Modern preset is one native transmission-tower
   arrangement, not all eight `TransLine` checkpoints or seven transitions.
   `single` and `rows` are demonstration samples, **not locations**.
@@ -55,21 +60,139 @@ source by `tests/ModernLocationCatalog.test.js`.
   current HTML selection: **unsupported scenarios are not selectable**.
 - [x] Reuse existing all-state compatibility report and six original-Canvas
   browser fixtures; do not clone 80 states into a second source of truth.
-- [ ] Select and lock representative first/middle/final **source states for
-  each remaining scenario**, with explicit source indices and provenance.
+- [x] Select and lock representative first/middle/final **source states for
+  each remaining scenario**, with explicit source indices and provenance. Evidence:
+  `tools/audit-modern-location-evidence.js`, `tests/fixtures/modern-location-evidence.json`,
+  `tests/ModernLocationEvidence.test.js` (27 source-backed summaries).
 - [ ] Establish per-scenario numeric geometry/camera checks and native
   Scene/Compare visual baselines, with tolerances chosen **before** comparison.
 
 ### Stage B — low-dependency scenes (proposed #34)
 
-- [ ] Document `Curve` globe/flat/`showModel=3` teaching semantics and decide
+- [x] Document `Curve` globe/flat/`showModel=3` teaching semantics and decide
   on native educational presentation; do not treat Compare A/B as identical.
+  Decision and limitations below; this does **not** deliver a Curve preset.
 - [ ] Validate TransLine camera/object placement against several archived
   states (including optional tower-21 diagnostics); quantify optics mismatch.
-- [ ] Define Bedford negative-range semantics (`ObjDist=-8600 m` in initial
+- [x] Define Bedford negative-range semantics (`ObjDist=-8600 m` in initial
   state), `showModel=3` and model-specific geometry. Do not clamp silently.
+  Decision and limitations below; native rendering remains blocked.
 - [ ] Enable eligible native static scenarios only after the scenario
   acceptance gates below pass. Preserve existing presets and saved URLs.
+
+## Source-state evidence and Stage B decisions (#34)
+
+The selected evidence includes exactly **three zero-based indices per demo**,
+opening/middle/final. They are parsed from authored `Demos.AddState` strings;
+Legacy URL `pos` is one-based. The summaries pin numeric camera fields,
+active group type/count/position/size/variation, surface and explicitly authored
+refraction controls. They **do not** copy the 80 complete states, synthesize
+missing defaults, or create runnable Modern experiments.
+
+| Authored demo | Source indices (0-based) | Legacy URL `pos` | Important decision |
+| --- | --- | --- | --- |
+| `Curve` | 0, 7, 11 | 1, 8, 12 | Empty object banks; at 7 the two models share a Legacy view |
+| `Causeway` | 0, 2, 5 | 1, 3, 6 | Type 6 bridge unavailable |
+| `TransLine` | 0, 4, 7 | 1, 5, 8 | State 4 shares both tower banks with Modern `pontchartrain` |
+| `Grace` | 0, 5, 8 | 1, 6, 9 | Type 5/6; state 0 has two active mountain objects with zero spacing |
+| `Bedford` | 0, 3, 6 | 1, 4, 7 | Signed-distance prelude and combined globe/flat view |
+| `Tensas` | 0, 3, 5 | 1, 4, 6 | Type 7 geometry needed |
+| `Soundly` | 0, 9, 17 | 1, 10, 18 | Type 8; original escaped apostrophe preserved by parser |
+| `Chicago` | 0, 2, 5 | 1, 3, 6 | Type 4 skyline needed |
+| `Canigou` | 0, 3, 7 | 1, 4, 8 | Type 5 terrain plus atmosphere review |
+
+### `Curve`: educational presentation, not a fictitious location
+
+The lesson has **12 authored states**, and **no active geometry objects**. Its
+central variable is observer height: 2 m initially, 100 km in the middle, up
+to 35,786 km at state 10, then a return to 500 m. The original `showModel`
+values are **1 = globe, 2 = flat, 3 = both in one Legacy view**; states **2,
+7 and 8** use `3`. The author also varies the eye-level/tangent/data overlays,
+field of view and tilt. Legacy `showModel=3` is not a request to open the native
+A/B Compare: Compare renders **two independent physical scenes**, potentially
+with different atmosphere and projection and no shared original overlay.
+
+**Decision:** a future native `Curve` implementation needs a dedicated,
+explicitly labeled educational presentation with synchronized globe/flat
+surfaces and a common eye-level/horizon reference. An **Overlay-equivalent teaching view**
+requires a deliberate renderer/projection and annotation design; two ordinary
+Compare panes would be a *non-equivalent adaptation* and must be labeled so.
+Until then, leave the full 12-state lesson and its choreography in Legacy Demos.
+No placeholder objects or silently substituted images are acceptable.
+
+### `TransLine`: where the existing Modern preset does and does not match
+
+Legacy state **4** (`?demo=TransLine&pos=5`) and Modern `pontchartrain` have
+**exactly matching authored numeric object parameters** in both banks:
+
+| Bank | Type | Count | First distance | Spacing | Last distance | Lateral offset | Object size |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3 | 85 | 50 m | 297.55 m | 25,044.2 m | 35 m | 23 m |
+| 1 | 3 | 2 | 25,550 m | 373 m | 25,923 m | 25.4 m | 64 m |
+
+The 21st tower in bank 0 (one-based sequence index) is at **6,001 m**. Both
+banks' side/size variation controls are zero. A regression test checks actual
+`ModernSceneState.applyPreset` output and independently generated
+`CurvatureGeometryEngine.objectSequence` world-space coordinates against the
+source sequence, using **absolute tolerance 1e-8 m**. This verifies the
+**parametric longitudinal/lateral placement**, not the original Canvas
+projection, silhouette/ray visibility or rendered pixels.
+
+Camera **does not match**: source 4 has `Pan = 0`, `Nick = 0`,
+`viewcenterHorizon = 0`; current Modern preset has **Pan = 0.0464°**,
+**Nick = 0.0121°**, `viewcenterHorizon = 3`. Height **15 m** and focal input
+**2,000** match. Treat the small orientation offsets as a deliberate current
+Modern framing, **not a silently imported Legacy state**.
+
+Legacy's original-model headless numeric fixture for state 4 reports
+`refractionSync = 2`, resolved effective-radius coefficient
+**k = 0.1704565179870846**, effective radius **7,680,127.851 m** and
+horizon arc **15,179.047 m**. For state 7, explicitly authored **k = 0**,
+so its effective radius is **6,371,000 m**. Modern starts with physical
+atmosphere `standard` and independent ray tracing rather than a single
+Legacy effective-radius geometry. **These numbers quantify Legacy's own
+optical approximation, not the difference between Legacy and Modern rays.**
+No same-camera/same-atmosphere cross-render ray comparison or Modern pixel
+baseline exists yet. Therefore the Stage B TransLine comparison checkbox
+and its Stage D acceptance checkbox **stay unchecked**.
+
+### `Bedford`: signed-distance prelude is not a bad positive-range value
+
+Legacy state **0** defines three active type-0 markers at
+`ObjDist[0] = -8600 m`, `ObjDeltaDist[0] = 4830 m`. The longitudinal positions
+by the authored sequence formula `start + i × spacing` are **−8600, −3770,
++1060 m**. Two positions are **negative along the authored observer-relative
+axis**, as part of the initial zoomed-out explanatory prelude. This is not an
+8.6 km absolute distance to be replaced by zero, nor three markers in front
+of the observer. State 3 moves them to **124, 4954, 9784 m**; final state 6
+uses **49** positions beginning at 124 m with 201.25 m spacing, ending at
+**9784 m**. The exact Legacy camera-facing and clipped visibility of markers
+behind the observer still needs a browser/geometry comparison; sign alone
+establishes longitudinal positions, **not** optical visibility.
+
+All seven Bedford states use the single-frame Legacy `showModel=3` composite.
+Legacy type 0 has position-dependent shapes (bridge/bar, middle marker,
+observer telescope), and Modern's existing type-0 generator is not a proof
+that the combined projection is equivalent. Modern validates `ObjDist >= 0`
+and accepts only `showModel` 1 or 2; the source initial state must therefore
+remain **unsupported** as a native state, **never silently clamped or split**.
+A future native positive-range Bedford adaptation can be scoped to the later
+states, but it must explicitly disclose the omitted prelude, combined view
+and refraction differences. Native Stage D completion remains blocked.
+
+### Gate for #35 and later
+
+1. Define the viewport, DPR, projection and observer/camera match **before**
+   recording Modern Scene and both Compare A/B pixel/shape evidence.
+2. Compare source 0/4/7 TransLine physical rays with specified *actual*
+   Legacy/Modern atmosphere settings. Separate numeric image-space errors
+   from differences introduced by intentionally non-equivalent models.
+3. For Bedford prelude, decide whether to implement signed coordinates in
+   the generic Modern state/URL schema **and** physical renderer, or explicitly
+   archive that authored step. Never widen one validator alone.
+4. Build and test new geometry types 4–8 individually. Do not enable a native
+   scenario until its acceptance gates (including rendering and persistence)
+   pass, or mark a *partial* adaptation clearly without calling Stage D done.
 
 ### Stage C — geometry families (proposed #35+)
 

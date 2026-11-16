@@ -8,6 +8,10 @@
 > preservation or numerical/visual parity gates. The existing compatibility
 > audit covers all 80 source states, and 6 archived original-Canvas browser
 > frames are *Legacy-only* references. The 71 old transitions are unported.
+> #34 adds 27 explicitly indexed opening/middle/final source-backed camera and
+> object-layout summaries (`tools/audit-modern-location-evidence.js`) and
+> numeric checks of the partial Pontchartrain preset; educational `Curve` and
+> signed-range Bedford view policies are recorded without enabling new presets.
 >
 > **Animation Studio refactor closure audit (2026-11-16):** Seven extracted
 > browser-global coordinators are now checked together by
