@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const library=require('../src/animation/ModernAnimationLibrary');
+const workspaceSwitch=require('../src/animation/ModernAnimationWorkspaceSwitch');
 const studio=require('../src/animation/ModernAnimationStudio');
 const animation=require('../src/animation/ModernAnimationProject');
 const contracts=require('../src/animation/ModernAnimationContract');
@@ -753,7 +754,8 @@ function projectLifecycleHarness(){
     makeWorkspaceId:()=> 'draft_'+(++sequence),
     getWorkspace:(_,id)=>checkpoints.get(id)||null};
   const ctx={Promise,Date,Object,semanticNaming:null,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
-    studioDraftAutosave:autosave,studioWorkspaceReady:true,studioWorkspaceId:'project_old',
+    studioDraftAutosave:autosave,studioSwitchApi:workspaceSwitch,
+    studioWorkspaceReady:true,studioWorkspaceId:'project_old',
     studioWorkspaces:{workspaces:[{id:'project_old',checkpoint:checkpoints.get('project_old')}]},
     studioLibraryActive:stored.get('old'),studioLibraryPending:null,
     studioLibrarySelected:'old',studioLibraryEntries:[...stored.values()],
@@ -1111,7 +1113,7 @@ test('Stash and discard actions are wired to safe durable restore before editor 
   assert.match(app,/stashRestore:function\(\)\{return restoreSavedAnimation\(true\);\}/);
   assert.match(app,/discardChanges:function\(\)\{return restoreSavedAnimation\(false\);\}/);
   const start=app.indexOf('  function restoreSavedAnimation(stash){');
-  const end=app.indexOf('  // Switching workspaces',start);
+  const end=app.indexOf('  function requestStudioSwitch(kind,id){',start);
   assert.ok(start>=0&&end>start);
   const flow=app.slice(start,end);
   assert.ok(flow.indexOf('persistStudioWorkspace().then')<flow.indexOf("performStudioSwitch('restore',record)"),

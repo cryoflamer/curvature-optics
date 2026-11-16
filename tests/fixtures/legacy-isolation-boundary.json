@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 99,
-      "uniqueScripts": 97,
+      "scriptTags": 100,
+      "uniqueScripts": 98,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -200,6 +200,7 @@
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationWorkspaceRecovery.js",
+        "src/animation/ModernAnimationWorkspaceSwitch.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationLibraryFilters.js",
         "src/animation/ModernAnimationPreview.js",
@@ -361,6 +362,7 @@
       "src/animation/ModernAnimationVideoCapabilities.js",
       "src/animation/ModernAnimationVideoPipeline.js",
       "src/animation/ModernAnimationWorkspaceRecovery.js",
+      "src/animation/ModernAnimationWorkspaceSwitch.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
       "src/camera/ModernCameraTelemetry.js",
@@ -429,7 +431,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 185,
+  "sourceJsCount": 186,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -850,6 +852,18 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationWorkspaceRecovery.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationWorkspaceSwitch.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationProjectWizard.test.js",
+        "tests/ModernAnimationWorkspaceSwitch.test.js"
       ],
       "commonJsToolCallers": []
     },

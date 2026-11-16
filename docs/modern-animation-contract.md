@@ -140,11 +140,17 @@ experiment, History archive, or named Animation Library:
   creation, async durable reconciliation, generation-guarded late reads and
   `pagehide`/`beforeunload`/hidden-page flush notifications. It receives explicit
   callbacks rather than borrowing the editor's mutable variables.
+- `src/animation/ModernAnimationWorkspaceSwitch.js` owns **outgoing switch
+  sequencing**: validate the destination, synchronously checkpoint the outgoing
+  editor, await its durable write, recheck the edit generation before and after
+  a saved-project lookup, then request activation. Wizard creation follows the
+  same checkpoint barrier and subsequently saves the named project. It calls
+  back into the UI rather than accessing IndexedDB or the DOM directly.
 - `src/ui/modern/ModernApp.js` still owns the active Animation Studio editor,
   selection, Library actions and UI, `restoreStudioDraft`, serialized writes,
   concurrent-tab conflict and fork handling, and `saveStudioDraft`.
 
-### Recovery invariants
+### Recovery and switching invariants
 
 1. The local/session backup restores synchronously before the IndexedDB read.
 2. A remote read arriving after the current editor generation changed **never
@@ -154,13 +160,21 @@ experiment, History archive, or named Animation Library:
    conflict-aware writer; recovery cannot simply overwrite IndexedDB.
 4. Lifecycle notifications flush only when the editor has changed, invoking
    the same synchronous backup and durable-write entry points as before.
-5. No Animation Project v1/v2 JSON, IndexedDB keys/versions, Scene/Compare state,
+5. A switch cannot replace the active editor until its outgoing checkpoint has
+   been saved and the durable write succeeded. Edits racing with that write or
+   a subsequent Library fetch cancel the switch rather than dropping work.
+6. An unedited scratch workspace can be discarded only after successful
+   activation of another workspace. A saved-project lookup failure leaves the
+   current editor intact; a Wizard save failure leaves the new draft available
+   for a later explicit Save project.
+7. No Animation Project v1/v2 JSON, IndexedDB keys/versions, Scene/Compare state,
    History entries, or optics/rendering behavior changes at this boundary.
 
 ### Checks
 
 ```sh
 node --test tests/ModernAnimationWorkspaceRecovery.test.js \
+  tests/ModernAnimationWorkspaceSwitch.test.js \
   tests/ModernAnimationWorkspaceConcurrency.test.js \
   tests/ModernAnimationDraftAutosave.test.js
 node tools/check-refactor-closure.js

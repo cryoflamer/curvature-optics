@@ -1,5 +1,6 @@
 'use strict';
 const {test}=require('node:test');
+const workspaceSwitch=require('../src/animation/ModernAnimationWorkspaceSwitch');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -197,7 +198,8 @@ test('Browser wiring loads wizard before ModernApp and contains a dedicated host
   assert.ok(html.indexOf('ModernAnimationProjectWizard.js')<html.indexOf('ModernApp.js'));
   assert.ok(html.indexOf('ModernAnimationProjectWizardUI.js')<html.indexOf('ModernApp.js'));
   assert.match(app,/newProject:function\(\)\{openStudioWizard\(\);\}/);
-  assert.match(app,/if\(next==='wizard'\)wizardSwitched=true/);
+  assert.match(fs.readFileSync(path.join(basePath,'src/animation/ModernAnimationWorkspaceSwitch.js'),'utf8'),
+    /if\(next==='wizard'\)wizardSwitched=true/);
   assert.match(app,/saveNamedAnimation\(false\)/);
   const css=fs.readFileSync(path.join(basePath,'src/ui/modern/ModernApp.css'),'utf8');
   assert.match(css,/\.modern-project-wizard-picker\{[^}]*overflow:visible/s);
@@ -244,7 +246,8 @@ function switchHarness(libraryFails=false,draftFails=false){
   const vm=require('node:vm');const records=[],checkpoints=[],events=[];
   let drafts=0;
   const ctx={Promise,Map,Set,Object,Array,Number,RangeError,Error,Date,
-    studioLibraryBusy:false,studioWorkspaceReady:true,studioWorkspaceId:'draft_old',
+    studioLibraryBusy:false,studioSwitchApi:workspaceSwitch,
+    studioWorkspaceReady:true,studioWorkspaceId:'draft_old',
     studioDraft:studio.edit(studio.blank(),'name','Old work'),
     studioSelectedKey:null,studioPlaybackQuality:'auto',studioLibraryActive:null,
     studioLibraryPending:null,studioLibrarySelected:'',studioLibraryEntries:[],

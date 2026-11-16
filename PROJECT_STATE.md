@@ -1,3 +1,12 @@
+> **Animation Workspace switching boundary (2026-11-16):** Destination validation,
+> outgoing draft checkpoint and durable-write barrier, generation guards around
+> async Library opens, and Wizard save completion were extracted to
+> `src/animation/ModernAnimationWorkspaceSwitch.js`. `ModernApp.js` still owns
+> live editor/preview state, IndexedDB persistence, conflict forks, named Library
+> actions and rendering. The existing draft/saved-project/wizard integration tests
+> are preserved, with focused pure coordinator race/failure tests added.
+> No project schema, storage key, physical algorithm or UI change.
+
 > **Animation Workspace recovery boundary (2026-11-16):** ModernApp's initial
 > local/session/IndexedDB recovery ordering and pagehide/beforeunload/visibility
 > flushing were extracted to `src/animation/ModernAnimationWorkspaceRecovery.js`.

@@ -332,7 +332,7 @@ test('Discard restores saved project without deleting unrelated drafts or creati
 test('Stash/Discard app flow commits backups before switching, rejects failed writes and stale revisions',async()=>{
   const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   const start=source.indexOf('  function restoreSavedAnimation(stash){');
-  const end=source.indexOf('  // Switching workspaces',start);
+  const end=source.indexOf('  function requestStudioSwitch(kind,id){',start);
   assert.ok(start>=0&&end>start);
   const code=source.slice(start,end);
   const initial=physicalDraft();

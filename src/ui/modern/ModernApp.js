@@ -44,6 +44,7 @@
   var studioLastParity=null;
   var studioDraftAutosave=root.CurvatureModernAnimationDraftAutosave;
   var studioRecoveryApi=root.CurvatureModernAnimationWorkspaceRecovery;
+  var studioSwitchApi=root.CurvatureModernAnimationWorkspaceSwitch;
   var studioLibrary=root.CurvatureModernAnimationLibrary;
   var studioLibraryFiltersApi=root.CurvatureModernAnimationLibraryFilters;
   // One gesture controller and one camera for Scene and both Compare models.
@@ -1738,57 +1739,36 @@
       return false;
     }).then(function(ok){studioLibraryBusy=false;renderStudioLibrary();return ok;});
   }
-  // Switching workspaces saves the current local/IndexedDB checkpoint before
-  // changing the editor. It never requires a Save/Discard decision: every
-  // workspace retains its own draft until the user explicitly deletes it.
+  // Durable checkpoint-and-open sequencing is independent of UI/physics.
+  // The application retains ownership of the live editor and preview state.
   function requestStudioSwitch(kind,id){
-    if(studioLibraryBusy||!studioApi||!studioWorkspaceReady)return;
-    if(kind==='open'&&(!id||!studioLibraryEntries.some(function(e){return e.id===id;})))return;
-    if(kind==='draft'&&(!id||!studioWorkspaces||
-       !studioWorkspaces.workspaces.some(function(e){return e.id===id;})))return;
-    if((kind==='open'&&studioWorkspaceId===studioDraftAutosave.projectWorkspaceId(id))||
-       (kind==='draft'&&studioWorkspaceId===id))return;
-    studioLibraryBusy=true;renderStudioLibrary();
-    var startGeneration=studioDraftGeneration;
-    var formerId=studioWorkspaceId,dropEmpty=formerId&&formerId.indexOf('draft_')===0&&
-      !studioHasUnsavedWork();
-    if(!saveStudioDraft(false)){
-      studioLibraryBusy=false;
-      studioLibraryNotice('Cannot switch: current working draft failed validation or storage.',true);
+    if(!studioSwitchApi){
+      studioLibraryNotice('Animation workspace switch module failed to load.',true);
       return;
     }
-    var wizardSwitched=false;
-    persistStudioWorkspace().then(function(ok){
-      if(!ok)throw Error('Current draft could not be stored; switching was cancelled to protect your work');
-      if(studioDraftGeneration!==startGeneration+1)
-        throw Error('The draft changed while switching; please try again');
-      function finish(next,value){
-        performStudioSwitch(next,value);
-        if(next==='wizard')wizardSwitched=true;
-        // A pristine, unedited scratch draft has nothing to recover.
-        if(dropEmpty&&formerId!==studioWorkspaceId)dropStudioWorkspace(formerId);
-      }
-      if(kind==='open')return studioLibrary.get(root.indexedDB,id).then(function(record){
-        if(studioDraftGeneration!==startGeneration+1)
-          throw Error('The draft changed while opening; please try again');
-        if(!record)throw Error('Saved animation no longer exists');
-        finish('open',record);
-      });
-      finish(kind,id);
-    }).catch(function(error){
-      studioLibraryMessage='Cannot switch project: '+error.message;
-      studioLibraryError=true;
-    }).then(function(){
-      studioLibraryBusy=false;
-      if(wizardSwitched){
-        studioWizard=null;studioWizardError='';renderStudioWizard();
-        return saveNamedAnimation(false).then(function(saved){
-          if(!saved)studioLibraryNotice(
-            'Library save failed. The new project remains open in the working draft; use Save project to retry.',true);
-        });
-      }
-      renderStudioLibrary();renderStudioWizard();
-    });
+    return studioSwitchApi.create({
+      busy:function(){return studioLibraryBusy;},
+      ready:function(){return studioWorkspaceReady;},
+      hasStudio:function(){return !!studioApi;},
+      hasProject:function(id){return studioLibraryEntries.some(function(e){return e.id===id;});},
+      hasDraft:function(id){return !!studioWorkspaces&&studioWorkspaces.workspaces.some(function(e){return e.id===id;});},
+      workspaceId:function(){return studioWorkspaceId;},
+      projectWorkspaceId:studioDraftAutosave.projectWorkspaceId,
+      generation:function(){return studioDraftGeneration;},
+      hasUnsavedWork:studioHasUnsavedWork,
+      setBusy:function(value){studioLibraryBusy=value;},
+      renderLibrary:renderStudioLibrary,
+      renderWizard:renderStudioWizard,
+      saveDraft:saveStudioDraft,
+      persist:persistStudioWorkspace,
+      fetchProject:function(id){return studioLibrary.get(root.indexedDB,id);},
+      activate:performStudioSwitch,
+      dropWorkspace:dropStudioWorkspace,
+      notice:studioLibraryNotice,
+      fail:function(message){studioLibraryMessage=message;studioLibraryError=true;},
+      resetWizard:function(){studioWizard=null;studioWizardError='';renderStudioWizard();},
+      saveNamed:function(){return saveNamedAnimation(false);}
+    }).request(kind,id);
   }
   function performStudioSwitch(kind,value){
     studioDiagnosticTransition=null;
