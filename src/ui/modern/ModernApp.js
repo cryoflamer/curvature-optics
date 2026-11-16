@@ -31,6 +31,7 @@
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
+  var fastCapabilities=root.CurvatureOpticalFastRayField;
   var studioFrameExportApi=root.CurvatureModernAnimationFrameExport;
   var studioBackgroundExportApi=root.CurvatureModernAnimationBackgroundExport;
   var studioFrameExportTask=null;
@@ -108,10 +109,7 @@
   var cameraTransition=null;
   var AUTO_WHEEL_IDLE_MS=220;
   function qualifiedFastProfile(atmosphere){
-    // These profiles are implemented by OpticalFastRayField (analytic or
-    // adaptive). Do not silently render Standard for a different atmosphere.
-    return ['vacuum','standard','temperature-lapse','profile-transition',
-      'inverse-temperature','inverse-spherical','exponential-occlusion'].includes(atmosphere);
+    return !!fastCapabilities&&fastCapabilities.supportsAtmosphere(atmosphere);
   }
   function autoPreviewSupported(){
     if(state.mode==='demos'||state.demosActive)return false;

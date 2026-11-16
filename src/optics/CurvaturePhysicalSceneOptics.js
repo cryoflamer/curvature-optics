@@ -259,7 +259,7 @@
       });});
       var field,fieldStats=null,span=null;
       if(preview&&kind!=='vacuum'){
-        if(!fastFields||typeof fastFields.create!=='function')
+        if(!fastFields||typeof fastFields.createPreview!=='function')
           throw Error('Fast Preview module is unavailable');
         // Forward the same named profile/options as Accurate. In particular,
         // temperature-lapse takes the *direct* temperature settings, while
@@ -271,16 +271,10 @@
           traceKind==='inverse-temperature'?{inverseProfile:options.inverseProfile,
             temperatureProfile:options.temperatureProfile,occlusionRadius:R}:
           {occlusionRadius:R};
-        // Keep the previously qualified constant-gradient and exact analytic
-        // branches unchanged. Other built-in profiles opt into the adaptive
-        // shallow-ray surrogate (8 intervals, 2 passes), never hidden RK4.
-        var legacyFast=traceKind==='standard'||
-          (geometry==='flat'&&(traceKind==='exponential-occlusion'||
-            (traceKind==='inverse-temperature'&&options.inverseProfile&&
-              options.inverseProfile.weight===1)));
-        var fastFactory=legacyFast?fastFields.create:fastFields.createAdaptive;
-        if(typeof fastFactory!=='function')throw Error('Adaptive Fast Preview module is unavailable');
-        var previewField=fastFactory({geometry:geometry,radius:model.rEarth,
+        // Selection between the original analytic/local field and adaptive
+        // curvature approximation belongs to OpticalFastRayField. All UI
+        // paths use this same authority; profile options remain unmodified.
+        var previewField=fastFields.createPreview({geometry:geometry,radius:model.rEarth,
           observerHeight:model.Height,atmosphere:traceKind,profileOptions:fastProfileOptions,
           // Narrow preview contact uncertainty helps retain foundation fills;
           // this is NOT a certified ground-contact error bound.

@@ -99,6 +99,7 @@ function harness(options={}){
     CurvatureModernCameraPerspectiveWarp:options.perspective?require('../src/ui/modern/ModernCameraPerspectiveWarp'):null,
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
+    CurvatureOpticalFastRayField:require('../src/optics/OpticalFastRayField'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){draws.push({g,m,opt,
       camera:{Pan:m.Pan,Nick:m.Nick,Height:m.Height,CameraEast:m.CameraEast,CameraNorth:m.CameraNorth}});

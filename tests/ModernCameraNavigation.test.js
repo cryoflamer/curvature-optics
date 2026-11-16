@@ -138,6 +138,7 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     CurvatureModernCompareState:compare,CurvatureModernCompareModel:compareModel,
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
+    CurvatureOpticalFastRayField:require('../src/optics/OpticalFastRayField'),
     CurvatureOpticalPreviewLod:require('../src/optics/OpticalPreviewLod'),
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){renders.push({...pose,East:m.CameraEast,North:m.CameraNorth,Height:m.Height,Pan:m.Pan,
       quality:opt.opticalQuality,stride:opt.previewLod.stride});

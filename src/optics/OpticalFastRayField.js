@@ -14,6 +14,51 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(tracer){
   'use strict';
   var HALF_PI=Math.PI/2;
+  // The preview field is the single authority for built-in Fast eligibility.
+  // A named profile may still reject an individual scene or ray at runtime.
+  var FAST_ATMOSPHERES=Object.freeze(['vacuum','standard','temperature-lapse',
+    'profile-transition','inverse-temperature','exponential-occlusion',
+    'inverse-spherical']);
+  function supportsAtmosphere(name){return FAST_ATMOSPHERES.includes(name);}
+  function previewMethod(options){
+    options=options||{};
+    if(!supportsAtmosphere(options.atmosphere))return 'unsupported';
+    return options.atmosphere==='standard'||
+      (options.geometry==='flat'&&(options.atmosphere==='exponential-occlusion'||
+        (options.atmosphere==='inverse-temperature'&&options.profileOptions&&
+          options.profileOptions.inverseProfile&&
+          options.profileOptions.inverseProfile.weight===1)))?'legacy':'adaptive';
+  }
+  // Cheap qualification for UI/animation. The legacy Standard Globe branch
+  // requires positive conformal curvature; its rejection must not be hidden
+  // by the adaptive surrogate or by an unrelated earlier frame's failure.
+  function inspectPreview(options){
+    options=options||{};
+    var method=previewMethod(options);
+    if(method==='unsupported')return {supported:false,method:method,
+      reason:'Atmosphere is not supported by Fast Preview'};
+    if(!['flat','globe'].includes(options.geometry))return {supported:false,method:method,
+      reason:'Fast Preview requires Globe or Flat geometry'};
+    if(!(options.radius>0)||!Number.isFinite(options.radius)||
+      !(options.observerHeight>=0)||!Number.isFinite(options.observerHeight))
+      return {supported:false,method:method,reason:'Invalid Fast Preview radius or observer height'};
+    if(options.profile!==undefined)return {supported:false,method:method,
+      reason:'Custom optical profiles are not supported by Fast Preview'};
+    if(method==='legacy'&&options.atmosphere==='standard'&&options.geometry==='globe'){
+      // The legacy constructor is inexpensive and applies its actual
+      // near-observer gradient criterion, including the physical options.
+      try{
+        var field=create(options);
+        if(field.mode==='unsupported')return {supported:false,method:method,
+          reason:'Standard Globe local-gradient approximation is unavailable at this curvature'};
+      }catch(error){return {supported:false,method:method,reason:String(error.message||error)};}
+    }
+    return {supported:true,method:method,reason:null};
+  }
+  function createPreview(options){
+    return (previewMethod(options)==='legacy'?create:createAdaptive)(options);
+  }
+
   // Only the immutable atmospheric-gradient lookup is shared across frames.
   // Field-specific paths, counters and sampled rays remain independent. Keep
   // the cache bounded: UI interactions may generate many distinct gradients.
@@ -155,8 +200,7 @@
         (geometry==='globe'&&Math.abs(options.curvature*radius-1)>1e-9)))
       throw RangeError('Fast-field curvature contradicts geometry/radius');
     if(typeof atmosphere!=='string')throw RangeError('Fast field requires an explicit atmosphere');
-    var supported=['vacuum','standard','temperature-lapse','profile-transition',
-      'inverse-temperature','exponential-occlusion','inverse-spherical'].indexOf(atmosphere)!==-1;
+    var supported=supportsAtmosphere(atmosphere);
     var mode=supported?'adaptive-conformal-curvature':'unsupported';
     var segments=8,passes=2,tableSize=256,tableTop=50000,scale=4,
       // Log-spaced heights resolve metre-scale near-ground gradient changes.
@@ -267,5 +311,7 @@
       solves:counters.samples,hits:0,exactSolveMs:0},counters);}
     return {sample:sample,stats:stats,mode:mode};
   }
-  return {create:create,createAdaptive:createAdaptive};
+  return {create:create,createAdaptive:createAdaptive,
+    supportsAtmosphere:supportsAtmosphere,previewMethod:previewMethod,
+    inspectPreview:inspectPreview,createPreview:createPreview};
 }));

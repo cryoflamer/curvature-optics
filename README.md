@@ -618,6 +618,16 @@ changing Optics clears cached runtime rejections. Diagnostics distinguish
 **requested** and **effective** quality, explain why Fast was not used, and
 count actual runtime fallbacks;
 other optical failures remain visible rather than being hidden by retries.
+
+**Fast capability ownership:** `src/optics/OpticalFastRayField.js` now owns
+`supportsAtmosphere()` (all seven built-in profiles), `previewMethod()`
+(legacy analytic/local vs adaptive), `inspectPreview()` (cheap scene eligibility
+and explicit rejection reasons), and `createPreview()` (the production factory).
+Scene/Compare and Animation use that authority rather than maintaining separate
+profile allowlists. A qualified named profile is **not** a guarantee that every
+ray is reliable: out-of-scope samples still report unsupported/indeterminate,
+while Animation retains its explicit Accurate retry for supported capability
+rejections. Accurate rendering and background exports are unchanged.
 The final Flat frame is still sampled at its exact animation time. The current frame displays
 its sampled time, calculation time, quality per viewport and whether the
 Eye level and Traced horizon overlays were drawn or were unavailable.

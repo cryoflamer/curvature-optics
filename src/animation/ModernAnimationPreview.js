@@ -20,16 +20,10 @@
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
-  // Keep the Animation choice aligned with the named profiles already
-  // supported by the production Scene/Compare Fast field. The physical scene
-  // adapter selects the legacy analytic/local field or createAdaptive() using
-  // each sample's actual geometry and atmospheric parameters. This is only an
-  // eligibility check: individual samples may still require Accurate fallback.
-  var FAST_ATMOSPHERES=['vacuum','standard','temperature-lapse',
-    'profile-transition','inverse-temperature','exponential-occlusion',
-    'inverse-spherical'];
+  // Named atmosphere eligibility is shared with Scene/Compare and the
+  // production optical adapter. Per-scene and per-ray limits remain separate.
   function fastEligible(spec){
-    return !!spec&&FAST_ATMOSPHERES.includes(spec.atmosphere);
+    return !!spec&&!!fastField&&fastField.supportsAtmosphere(spec.atmosphere);
   }
   function opticalQuality(spec,choice,animationMode){
     if(!['auto','fast','accurate'].includes(choice))throw RangeError('Invalid animation optics choice');
@@ -114,12 +108,18 @@
       // standard local-gradient approximation. Probe that cheap qualification
       // before constructing and painting the (much more costly) scene.
       if(config.quality!=='fast'||config.model.showModel!==1||
-        config.spec.atmosphere!=='standard'||!fastQualifier||
-        typeof fastQualifier.create!=='function')return true;
-      var field=fastQualifier.create({geometry:'globe',radius:config.model.rEarth,
+        config.spec.atmosphere!=='standard'||!fastQualifier)return true;
+      if(typeof fastQualifier.inspectPreview==='function'){
+        return fastQualifier.inspectPreview({geometry:'globe',radius:config.model.rEarth,
+          observerHeight:config.model.Height,atmosphere:'standard',
+          profileOptions:{occlusionRadius:config.spec.occlusionRadius}}).supported;
+      }
+      // Compatibility with injected legacy test doubles; production always
+      // uses the shared inspector above.
+      if(typeof fastQualifier.create!=='function')return true;
+      return fastQualifier.create({geometry:'globe',radius:config.model.rEarth,
         observerHeight:config.model.Height,atmosphere:'standard',
-        profileOptions:{occlusionRadius:config.spec.occlusionRadius}});
-      return field.mode!=='unsupported';
+        profileOptions:{occlusionRadius:config.spec.occlusionRadius}}).mode!=='unsupported';
     }
     function isFastUnsupported(error){
       return error instanceof RangeError &&

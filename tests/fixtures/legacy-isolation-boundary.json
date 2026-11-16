@@ -674,7 +674,8 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernAnimationPlayback.test.js"
+        "tests/ModernAnimationPlayback.test.js",
+        "tests/OpticalFastCapabilities.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1580,7 +1581,10 @@
         "src/optics/CurvaturePhysicalSceneOptics.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
         "tests/OpticalAdaptiveFastRayField.test.js",
+        "tests/OpticalFastCapabilities.test.js",
         "tests/OpticalFastRayField.test.js"
       ],
       "commonJsToolCallers": [
