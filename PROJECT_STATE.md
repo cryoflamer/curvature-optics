@@ -1,3 +1,13 @@
+> **Animation Studio editor state boundary (2026-11-16):** Draft edit
+> recording, live input grouping, Undo/Redo restoration, selected-frame
+> fallback after deletion and Studio selection checkpoints are coordinated by
+> `src/animation/ModernAnimationStudioEditing.js`. The application supplies
+> live workspace state and retains actual UI rendering, focused controls,
+> preview invalidation and local checkpoints. A subsequent workspace cannot
+> reuse an old draft/history closure; undo/redo never touches History records.
+> No project or IndexedDB schema, optics, or Legacy changes. See
+> `docs/modern-animation-contract.md#animation-studio-editor-state-boundary`.
+
 > **Animation Preview lifecycle boundary (2026-11-16):** The delayed
 > first/paused-frame scheduler, RAF generation invalidation, post-layout
 > retries and ResizeObserver width tracking have been extracted from

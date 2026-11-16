@@ -267,3 +267,31 @@ node tools/check-refactor-closure.js
 
 The Chromium smoke job on GitHub Actions remains the browser integration gate;
 Node tests alone do not establish visual frame equivalence.
+
+## Animation Studio editor state boundary
+
+`src/animation/ModernAnimationStudioEditing.js` coordinates the Studio draft
+edit history and selection transitions. `commit()` records a meaningful edit,
+ends a live text-edit group on change, normalizes selection to a surviving
+keyframe, checkpoints the working draft, and rerenders. The final `change`
+after a successful `input` does not trigger a second save or rerender.
+`live()` records coalesced text input without replacing the focused DOM control;
+`step()` restores draft and selection using the same bounded Undo/Redo history.
+`remove()` records the deleted keyframe with the **original selection** so
+Undo restores both the frame and the user's prior selection.
+
+`ModernApp.js` retains browser key bindings and native input Undo priority,
+DOM focus/scroll, Preview invalidation, message display and actual local/durable
+persistence. State is read live from the currently active workspace, never
+cached in a closure that can outlive project switching. Named Library records,
+History snapshots, JSON schemas, interpolation math, optics and Legacy are
+unchanged.
+
+Run focused regression checks:
+
+```sh
+node --test tests/ModernAnimationStudioEditing.test.js \
+  tests/ModernAnimationStudio.test.js \
+  tests/ModernAnimationDraftAutosave.test.js
+node tools/check-refactor-closure.js
+```

@@ -26,6 +26,7 @@
   var historyFiltersApi=root.CurvatureModernExperimentHistoryFilters;
   var sessionAutosave=root.CurvatureModernSessionAutosave;
   var studioApi=root.CurvatureModernAnimationStudio;
+  var studioEditingApi=root.CurvatureModernAnimationStudioEditing;
   var studioContractApi=root.CurvatureModernAnimationContract;
   var studioUI=root.CurvatureModernAnimationStudioUI;
   var studioProjects=root.CurvatureModernAnimationProject;
@@ -3024,28 +3025,6 @@
     if(oldPickerList)studioPickerScroll=oldPickerList.scrollTop;
     var oldStrip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(oldStrip&&!resetFilmstrip)studioFilmstripScroll=oldStrip.scrollLeft;
-    function update(next,options){
-      options=options||{};
-      var before=studioDraft;
-      next=applySuggestedStudioName(next);
-      var recorded=!studioEditHistory||studioApi.recordEdit(studioEditHistory,before,next,
-        options.beforeSelectedKey===undefined?studioSelectedKey:options.beforeSelectedKey,
-        options.group);
-      if(options.endGroup&&studioEditHistory)studioApi.endEditGroup(studioEditHistory);
-      // The DOM input handler already saved this exact value. Do not replace
-      // the focused form on blur (or swallow a click on Undo/Redo).
-      if(!recorded&&options.endGroup)return;
-      studioDiagnosticTransition=null;
-      studioDraft=next;
-      stopStudioPlayback(true);studioPrepared=null;
-      if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
-        studioSelectedKey=next.frames.length?next.frames[0].key:null;
-      saveStudioDraft(false);
-      var status=newUiEl('ModernAnimationStudioMessage');
-      if(status){status.textContent='';status.classList.remove('is-error');
-        if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
-      renderAnimationStudio(entries);
-    }
     function syncStudioHistoryButtons(){
       // Live input does not rebuild the form; keep both the upper toolbar and
       // selected-frame Undo/Redo controls in sync with the shared history.
@@ -3084,19 +3063,32 @@
         if(host.__studioHistoryAction)host.__studioHistoryAction(direction);
       });
     }
-    function restoreEditHistory(direction){
-      if(!studioEditHistory)return;
-      var previous=studioApi.stepEditHistory(studioEditHistory,studioDraft,studioSelectedKey,direction);
-      if(!previous)return;
-      studioDraft=previous.draft;
-      studioSelectedKey=previous.selectedKey;
-      studioDiagnosticTransition=null;
-      stopStudioPlayback(true);studioPrepared=null;
-      if(!studioDraft.frames.some(function(f){return f.key===studioSelectedKey;}))
-        studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
-      saveStudioDraft(false);
-      renderAnimationStudio(entries);
-    }
+    var studioEditing=studioEditingApi.create({
+      studio:studioApi,
+      read:function(){return {draft:studioDraft,selectedKey:studioSelectedKey,
+        history:studioEditHistory};},
+      write:function(changes){
+        if(Object.prototype.hasOwnProperty.call(changes,'draft'))studioDraft=changes.draft;
+        if(Object.prototype.hasOwnProperty.call(changes,'selectedKey'))
+          studioSelectedKey=changes.selectedKey;
+        if(Object.prototype.hasOwnProperty.call(changes,'diagnosticTransition'))
+          studioDiagnosticTransition=changes.diagnosticTransition;
+      },
+      suggestName:applySuggestedStudioName,
+      invalidate:function(){stopStudioPlayback(true);studioPrepared=null;},
+      checkpoint:function(){saveStudioDraft(false);},
+      clearStatus:function(){
+        var status=newUiEl('ModernAnimationStudioMessage');
+        if(status){status.textContent='';status.classList.remove('is-error');
+          if(root.CurvatureModernStatusMessage)
+            root.CurvatureModernStatusMessage.decorate(status,'info');}
+      },
+      render:function(){renderAnimationStudio(entries);},
+      refreshControls:syncStudioHistoryButtons,
+      refreshLibrary:renderStudioLibrary
+    });
+    function update(next,options){return studioEditing.commit(next,options);}
+    function restoreEditHistory(direction){return studioEditing.step(direction);}
     function report(error){
       var status=newUiEl('ModernAnimationStudioMessage');
       if(status){status.textContent=error.message;status.classList.add('is-error');
@@ -3134,48 +3126,28 @@
       });},
       liveEdit:function(field,value){
         try{
-          var next=studioApi.edit(studioDraft,field,value);
-          if(studioEditHistory)studioApi.recordEdit(studioEditHistory,studioDraft,next,
-            studioSelectedKey,'project:'+field);
-          studioDraft=next;
-          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
-          syncStudioHistoryButtons();renderStudioLibrary();
+          studioEditing.live(studioApi.edit(studioDraft,field,value),'project:'+field);
         }catch(error){/* Temporary invalid text is reported by the committed change event. */}
       },
       liveFrame:function(key,field,value){
         try{
-          var next=studioApi.editFrame(studioDraft,key,field,value);
-          if(studioEditHistory)studioApi.recordEdit(studioEditHistory,studioDraft,next,
-            studioSelectedKey,'frame:'+key+':'+field);
-          studioDraft=next;
-          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
-          syncStudioHistoryButtons();renderStudioLibrary();
+          studioEditing.live(studioApi.editFrame(studioDraft,key,field,value),
+            'frame:'+key+':'+field);
         }catch(error){/* Do not persist incomplete or invalid intermediate numbers. */}
       },
       select:function(key){
-        studioDiagnosticTransition=null;studioSelectedKey=key;saveStudioDraft(false);renderAnimationStudio(entries);
+        studioEditing.select(key);
         var active=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-active');
         if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
       },
       focusTransition:function(index){
-        if(!Number.isInteger(index)||index<0||index+1>=studioDraft.frames.length)return;
-        studioDiagnosticTransition=index;
-        studioSelectedKey=studioDraft.frames[index+1].key;
-        renderAnimationStudio(entries);
+        if(!studioEditing.focusTransition(index))return;
         var chosen=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-transition-to');
         if(chosen&&typeof chosen.scrollIntoView==='function')
           chosen.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
       },
       move:function(key,step){safe(function(){update(studioApi.move(studioDraft,key,step));});},
-      remove:function(key){safe(function(){
-        var index=studioDraft.frames.findIndex(function(f){return f.key===key;});
-        if(index<0)return;
-        var selectedBefore=studioSelectedKey;
-        var next=studioApi.remove(studioDraft,key);
-        if(studioSelectedKey===key)
-          studioSelectedKey=next.frames.length?next.frames[Math.min(index,next.frames.length-1)].key:null;
-        update(next,{beforeSelectedKey:selectedBefore});
-      });},
+      remove:function(key){safe(function(){studioEditing.remove(key);});},
       undo:function(){safe(function(){restoreEditHistory('undo');});},
       redo:function(){safe(function(){restoreEditHistory('redo');});},
       prepare:function(){

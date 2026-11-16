@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 103,
-      "uniqueScripts": 101,
+      "scriptTags": 104,
+      "uniqueScripts": 102,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -196,6 +196,7 @@
         "src/animation/ModernAnimationProject.js",
         "src/animation/ModernAnimationSequences.js",
         "src/animation/ModernAnimationProjectWizard.js",
+        "src/animation/ModernAnimationStudioEditing.js",
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationDraftAutosave.js",
@@ -364,6 +365,7 @@
       "src/animation/ModernAnimationQualityAudit.js",
       "src/animation/ModernAnimationSequences.js",
       "src/animation/ModernAnimationStudio.js",
+      "src/animation/ModernAnimationStudioEditing.js",
       "src/animation/ModernAnimationVideoCapabilities.js",
       "src/animation/ModernAnimationVideoPipeline.js",
       "src/animation/ModernAnimationWorkspacePersistence.js",
@@ -437,7 +439,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 189,
+  "sourceJsCount": 190,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -806,11 +808,23 @@
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAnimationStudio.test.js",
+        "tests/ModernAnimationStudioEditing.test.js",
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAnimationWorkspaceRecovery.test.js",
         "tests/ModernCameraSpline.test.js",
         "tests/ModernHistoryCleanup.test.js",
         "tests/ModernSemanticNaming.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationStudioEditing.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationStudio.test.js",
+        "tests/ModernAnimationStudioEditing.test.js"
       ],
       "commonJsToolCallers": []
     },

@@ -1131,6 +1131,16 @@ Live editor and draft-workspace effects remain in `ModernApp.js`, while named
 record schema and IndexedDB revisions remain in `ModernAnimationLibrary.js`.
 See [the contract/boundary notes](docs/modern-animation-contract.md#animation-library-actions-boundary).
 
+### Animation Studio editor state coordinator
+
+`src/animation/ModernAnimationStudioEditing.js` coordinates committed and live
+edits, bounded/coalesced Undo/Redo, selected-frame deletion, and selection
+checkpoints. It always reads the current draft/history via `ModernApp.js`
+callbacks so switching workspaces cannot resurrect an earlier editor. The
+application continues to own DOM focus, live rendering, Preview invalidation
+and local autosave. Formats, History records and physical rendering are unchanged.
+See [the editor state boundary](docs/modern-animation-contract.md#animation-studio-editor-state-boundary).
+
 ### Animation Preview lifecycle coordinator
 
 `src/animation/ModernAnimationPreviewLifecycle.js` schedules the first physical

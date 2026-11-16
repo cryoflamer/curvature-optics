@@ -7,6 +7,7 @@ const codec=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 const sequence=require('../src/camera/ModernCameraSequence');
 const studio=require('../src/animation/ModernAnimationStudio');
+const editing=require('../src/animation/ModernAnimationStudioEditing');
 const contracts=require('../src/animation/ModernAnimationContract');
 const animation=require('../src/animation/ModernAnimationProject');
 const editor=require('../src/ui/modern/ModernAnimationStudioUI');
@@ -426,7 +427,7 @@ test('App timeline actions undo/redo through autosaved drafts without touching H
     }};
   const doc={listeners:{},body:{tagName:'BODY'},documentElement:{tagName:'HTML'},
     addEventListener(type,fn){this.listeners[type]=fn;}};
-  const ctx={studioApi:studio,studioDraft:initial,studioSelectedKey:'history-1',
+  const ctx={studioApi:studio,studioEditingApi:editing,studioDraft:initial,studioSelectedKey:'history-1',
     studioEditHistory:studio.createEditHistory(),studioPickerOpen:false,
     studioPickerChecked:{},studioPickerShowIncompatible:false,studioPickerScroll:0,
     studioFilmstripScroll:0,studioDiagnosticTransition:null,
@@ -740,7 +741,7 @@ test('Live Picker actions filter independently, keep hidden selections and inser
     studioEditHistory:null,studioPrepared:null,studioPlayback:null,
     studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
     studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
-    studioDraft:{frames:[]},studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
+    studioDraft:{frames:[]},studioEditingApi:editing,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
       picker={shown,actions,options};}},
     studioApi:{inspect(){return {};},findSequences(){return [];},activeFrames(){return [];},
       insertSnapshots(draft,ids){return {...draft,frames:draft.frames.concat(ids.map(id=>({
@@ -939,7 +940,7 @@ test('Locked v2 Picker filters by contract, protects hidden selections and block
     studioEditHistory:null,studioPrepared:null,studioPlayback:null,
     studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
     studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
-    studioDraft:draft,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
+    studioDraft:draft,studioEditingApi:editing,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
       picker={shown,actions,options};}},studioApi:studio,
     newUiEl(id){if(id==='ModernAnimationStudio')return host;
       if(id==='ModernAnimationSnapshotPicker')return {querySelector(){return null;}};
