@@ -295,3 +295,33 @@ node --test tests/ModernAnimationStudioEditing.test.js \
   tests/ModernAnimationDraftAutosave.test.js
 node tools/check-refactor-closure.js
 ```
+
+## Animation Playback control boundary
+
+`src/animation/ModernAnimationPlaybackControls.js` coordinates Play, Pause,
+Stop, Seek, the single active `requestAnimationFrame` tick and tab visibility
+pausing. It reads the **currently active** playback clock on every operation,
+never a captured project/player; cancelled callbacks have a generation guard.
+Changing camera interpolation cancels the prior tick before swapping clocks
+and schedules at most one new tick, preserving elapsed playback position.
+Natural completion saves the paused position and explicitly reports finish;
+Stop resets the playhead and requests a first-frame repaint without navigating
+away from the editor. Seek renders the exact selected position, while the
+on-screen clock distinguishes its value from the last physically painted frame.
+
+`ModernApp.js` continues to own the actual camera/physical renderer, DOM
+controls and status text, animation project construction, draft autosave,
+Preview layout/resize lifecycle and initial frame painting. The deterministic
+`ModernAnimationPlayback.js` interpolation and clock model is unchanged; Scene
+and Compare never receive a playback sample. No storage, JSON, optics or Legacy
+contract changed.
+
+Check this boundary with:
+
+```sh
+node --test tests/ModernAnimationPlaybackControls.test.js \
+  tests/ModernAnimationPlayback.test.js \
+  tests/ModernAnimationSplinePreview.test.js \
+  tests/ModernAnimationInitialFrame.test.js
+node tools/check-refactor-closure.js
+```

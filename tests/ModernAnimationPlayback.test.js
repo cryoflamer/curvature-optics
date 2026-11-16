@@ -7,6 +7,7 @@ const experiment=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 const project=require('../src/animation/ModernAnimationProject');
 const playback=require('../src/animation/ModernAnimationPlayback');
+const playbackControls=require('../src/animation/ModernAnimationPlaybackControls');
 const preview=require('../src/animation/ModernAnimationPreview');
 function snapshot(mode='scene'){
   const m={Height:10,FocalLengthField:1000,Pan:0,Nick:0,Roll:0,
@@ -268,7 +269,7 @@ test('Animation uses distinct parser-time Canvas graphs, not live Scene/Compare 
   assert.match(app,/studioPlaybackApi\.describeSample\(studioPrepared,sampled\)/);
   assert.match(html,/id="ModernAnimationPlaybackParameter"/);
   assert.match(app,/studioPreviewRenderer\.render\(sampled,'A',graphs\.A,renderOptions\)/);
-  assert.doesNotMatch(app.slice(app.indexOf('function renderStudioPlaybackSample('),app.indexOf('function studioPlaybackTick(')),
+  assert.doesNotMatch(app.slice(app.indexOf('function renderStudioPlaybackSample('),app.indexOf('function syncStudioQualitySummary(')),
     /applyExperiment\(|redraw\(|scheduleExperimentSave\(|queueHistoryAuto\(/);
 });
 
@@ -352,7 +353,9 @@ test('Playback quality and rendered frame time are displayed distinctly from the
   assert.match(html,/id="ModernAnimationPlaybackDiagnostics"/);
   assert.match(app,/var renderedAt=studioPlayback.status\(\).positionMs/);
   assert.match(app,/studioPlaybackRenderedAt=renderedAt/);
-  assert.match(app,/image at /);
+  assert.equal(playbackControls.describe({positionMs:2000,durationMs:4000,playing:false},1000).time,
+    '2.0 / 4.0 s (image at 1.0s)');
+  assert.match(app,/studioPlaybackControlsApi.describe\(studioPlayback.status\(\),studioPlaybackRenderedAt\)/);
   assert.match(app,/studioPrepared.mode/);
 });
 

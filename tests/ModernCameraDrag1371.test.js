@@ -116,6 +116,8 @@ function harness(options={}){
       if(options.deferredWheel&&delay===90)zoomTimers.set(id,fn);else fn();
       return id;},clearTimeout(id){zoomTimers.delete(id);},console};
   window.window=window;
+  window.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),ctx);
   const app=window.CurvatureModernApp;
   for(const name of ['A','B']){

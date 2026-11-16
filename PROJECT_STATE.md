@@ -1,3 +1,13 @@
+> **Animation Playback control boundary (2026-11-16):**
+> `src/animation/ModernAnimationPlaybackControls.js` coordinates one active
+> RAF tick, Play/Pause/Stop/Seek, tab-visibility pause and natural completion.
+> Every operation uses the active clock supplied by `ModernApp.js`; cancelled
+> callbacks cannot revive an old workspace. Interpolation switches retain
+> position and cancel the previous tick. The application retains optical
+> rendering, DOM, draft persistence and paused-frame Preview lifecycle.
+> Physics, JSON/IndexedDB, deterministic interpolation and Legacy are unchanged.
+> See `docs/modern-animation-contract.md#animation-playback-control-boundary`.
+
 > **Animation Studio editor state boundary (2026-11-16):** Draft edit
 > recording, live input grouping, Undo/Redo restoration, selected-frame
 > fallback after deletion and Studio selection checkpoints are coordinated by

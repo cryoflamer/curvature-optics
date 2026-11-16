@@ -76,6 +76,8 @@ test('Modern standalone runtime binds working scene controls and does not instan
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 2;},clearTimeout(){},console};
   ctx.window.window=ctx.window;
+  ctx.window.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx,{filename:'ModernApp.js'});
   assert.equal(calls.includes('graph'),true);
   // The explicit xOnLoad callback, not the old legacy animation/bootstrap.

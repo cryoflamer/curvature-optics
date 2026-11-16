@@ -115,6 +115,8 @@ test('133: real compare UI reuses independent optical caches and updates only se
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
   ctx.window.window=ctx.window;
+  ctx.window.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx);
   const app=ctx.window.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},

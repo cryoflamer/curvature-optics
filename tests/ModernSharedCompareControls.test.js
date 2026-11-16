@@ -71,6 +71,8 @@ function boot(){
   window.window=window;
   const document={getElementById(id){return nodes.get(id)||null;},
     querySelector(){return null;},createElement(){return {setAttribute(){},addEventListener(){}};}};
+  window.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),{
     window,document,console,requestAnimationFrame(fn){fn();return 1},
     cancelAnimationFrame(){},setTimeout(fn){const id=++nextTimer;timers.set(id,fn);return id},

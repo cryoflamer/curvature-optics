@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 104,
-      "uniqueScripts": 102,
+      "scriptTags": 105,
+      "uniqueScripts": 103,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -199,6 +199,7 @@
         "src/animation/ModernAnimationStudioEditing.js",
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
+        "src/animation/ModernAnimationPlaybackControls.js",
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationWorkspaceRecovery.js",
         "src/animation/ModernAnimationWorkspaceSwitch.js",
@@ -358,6 +359,7 @@
       "src/animation/ModernAnimationLibraryActions.js",
       "src/animation/ModernAnimationLibraryFilters.js",
       "src/animation/ModernAnimationPlayback.js",
+      "src/animation/ModernAnimationPlaybackControls.js",
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationPreviewLifecycle.js",
       "src/animation/ModernAnimationProject.js",
@@ -439,7 +441,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 190,
+  "sourceJsCount": 191,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -690,6 +692,31 @@
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationSplinePreview.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationPlaybackControls.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationInitialFrame.test.js",
+        "tests/ModernAnimationPlayback.test.js",
+        "tests/ModernAnimationPlaybackControls.test.js",
+        "tests/ModernAnimationSplinePreview.test.js",
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCameraNavigation.test.js",
+        "tests/ModernExperimentHistory.test.js",
+        "tests/ModernExperimentState.test.js",
+        "tests/ModernFastPreview.test.js",
+        "tests/ModernIndependentCompare.test.js",
+        "tests/ModernInverseRenderScheduling.test.js",
+        "tests/ModernPhysicalCompare.test.js",
+        "tests/ModernSceneControls.test.js",
+        "tests/ModernSharedCompareControls.test.js",
+        "tests/ModernUiBootstrap.test.js"
       ],
       "commonJsToolCallers": []
     },

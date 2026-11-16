@@ -75,6 +75,8 @@ function boot(){
     cancelAnimationFrame(id){frameTasks.delete(id);},
     setTimeout(){return 777;},clearTimeout(){}};
   window.window=window;
+  window.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),context);
   const app=window.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},

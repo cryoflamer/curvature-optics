@@ -179,6 +179,8 @@ test('Modern Display optical selector routes Scene and Compare to an explicit qu
     createElement(){return {setAttribute(){},addEventListener(){}};}
   },requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
   setTimeout(fn){fn();return 1;},clearTimeout(){},console};
+  win.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(source('src/ui/modern/ModernApp.js'),context);
   const app=win.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},

@@ -8,6 +8,7 @@ const codec=require('../src/ui/modern/ModernExperimentState');
 const compare=require('../src/ui/modern/ModernCompareState');
 const studio=require('../src/animation/ModernAnimationStudio');
 const playback=require('../src/animation/ModernAnimationPlayback');
+const controls=require('../src/animation/ModernAnimationPlaybackControls');
 
 const root=path.resolve(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
@@ -50,7 +51,8 @@ function harness(mode='camera'){
   const context=vm.createContext({
     newUiEl:id=>elements[id]||null,
     studioDraft:draft,studioPrepared:prepared,studioPlayback:playback.create(prepared),
-    studioPlaybackFrame:null,studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
+    studioPlaybackControls:null,studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
+    studioPlaybackControlsApi:controls,
     studioApi:studio,studioPlaybackApi:playback,studioRestorePreviewPending:false,
     studioEditHistory:null,
     studioPlaybackQuality:'auto',animationWorkspaceOpen:true,
@@ -73,12 +75,15 @@ function harness(mode='camera'){
     stopStudioPlayback(){},scheduleStudioInitialPaint(){},
     studioPreviewRenderer:null
   });
+  const controlFrom=app.indexOf('  function ensureStudioPlaybackControls(){');
+  const controlTo=app.indexOf('  function stopStudioPlayback(clear){',controlFrom);
   const syncFrom=app.indexOf('  function syncStudioPlaybackControls(){');
   const syncTo=app.indexOf('  function previewGraphsReady(){',syncFrom);
   const from=app.indexOf('  function setStudioPreviewInterpolation(value){');
   const to=app.indexOf('  function animationPickerEntries(',from);
-  assert.ok(syncFrom>0&&syncTo>syncFrom&&from>syncTo&&to>from);
-  vm.runInContext(app.slice(syncFrom,syncTo)+app.slice(from,to)+
+  assert.ok(controlFrom>0&&controlTo>controlFrom&&syncFrom>controlTo&&
+    syncTo>syncFrom&&from>syncTo&&to>from);
+  vm.runInContext(app.slice(controlFrom,controlTo)+app.slice(syncFrom,syncTo)+app.slice(from,to)+
     '\nthis.sync=syncStudioPlaybackControls;this.bind=bindStudioPlayback;',
     context,{filename:'ModernApp.js:spline-preview'});
   context.bind();context.sync();

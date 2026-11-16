@@ -166,6 +166,8 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     cancelAnimationFrame(id){frames.delete(id);},
     setTimeout(fn){const id=++seq;timers.set(id,fn);return id;},
     clearTimeout(id){timers.delete(id);}};
+  win.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),context);
   const app=win.CurvatureModernApp;
   for(const name of ['A','B'])app.registerCompareGraph(name,{

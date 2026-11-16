@@ -31,6 +31,7 @@
   var studioUI=root.CurvatureModernAnimationStudioUI;
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
+  var studioPlaybackControlsApi=root.CurvatureModernAnimationPlaybackControls;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
   var studioPreviewLifecycleApi=root.CurvatureModernAnimationPreviewLifecycle;
   var fastCapabilities=root.CurvatureOpticalFastRayField;
@@ -557,7 +558,7 @@
   var studioPreviewNavigation=studioUI&&studioUI.createPreviewNavigation?
     studioUI.createPreviewNavigation(root,document):null;
   var studioPlayback=null;
-  var studioPlaybackFrame=null;
+  var studioPlaybackControls=null;
   var studioPlaybackLastPaint=-Infinity;
   var studioPlaybackRenderedAt=null;
   var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
@@ -2052,13 +2053,40 @@
   }
   // The old History shortlist is only consumed on explicit user action inside
   // Animation Studio. Missing IDs remain recoverable until explicitly dismissed.
+  function ensureStudioPlaybackControls(){
+    if(!studioPlaybackControls){
+      if(!studioPlaybackControlsApi)throw Error('Animation playback controls module is missing');
+      studioPlaybackControls=studioPlaybackControlsApi.create({
+        player:function(){return studioPlayback;},
+        mode:function(){return studioPrepared&&studioPrepared.mode;},
+        now:profileNow,
+        open:function(){return animationWorkspaceOpen;},
+        pending:function(){return studioRestorePreviewPending;},
+        requestFrame:function(fn){return requestAnimationFrame(fn);},
+        cancelFrame:function(frame){cancelAnimationFrame(frame);},
+        cancelInitial:cancelStudioInitialPaint,
+        render:renderStudioPlaybackSample,
+        sync:syncStudioPlaybackControls,
+        save:saveStudioDraft,
+        scheduleInitial:scheduleStudioInitialPaint,
+        invalidatePaint:function(){studioPlaybackLastPaint=-Infinity;},
+        announce:function(text,kind){
+          var status=newUiEl('ModernAnimationPlaybackStatus');
+          if(!status)return;
+          status.textContent=text;
+          if(root.CurvatureModernStatusMessage)
+            root.CurvatureModernStatusMessage.decorate(status,kind||'info');
+        }
+      });
+    }
+    return studioPlaybackControls;
+  }
   function stopStudioPlayback(clear){
     if(clear){
       if(studioPreviewNavigation)studioPreviewNavigation.cancel();
       cancelStudioInitialPaint();
     }
-    if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
-    if(studioPlayback)studioPlayback.pause(profileNow());
+    ensureStudioPlaybackControls().halt();
     if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
       studioLastQualityFrame=null;studioLastParity=null;
       studioCameraHudLast={A:null,B:null,isCompare:false};
@@ -2082,13 +2110,11 @@
     syncStudioHudAppearance();
     syncStudioFrameExportControls();
     if(!ready)return;
-    var info=studioPlayback.status();
+    var info=studioPlaybackControlsApi.describe(studioPlayback.status(),studioPlaybackRenderedAt);
     var seek=newUiEl('ModernAnimationPlaybackSeek');
-    if(seek)seek.value=String(info.durationMs?Math.round(1000*info.positionMs/info.durationMs):0);
+    if(seek)seek.value=info.seek;
     var clock=newUiEl('ModernAnimationPlaybackTime');
-    if(clock)clock.textContent=(info.positionMs/1000).toFixed(1)+' / '+(info.durationMs/1000).toFixed(1)+' s'+
-      (studioPlaybackRenderedAt!==null&&Math.abs(info.positionMs-studioPlaybackRenderedAt)>500?
-        ' (image at '+(studioPlaybackRenderedAt/1000).toFixed(1)+'s)':'');
+    if(clock)clock.textContent=info.time;
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
     var pause=newUiEl('ModernAnimationPlaybackPause');if(pause)pause.disabled=!info.playing;
   }
@@ -2283,29 +2309,6 @@
     studioPlaybackRenderedAt=renderedAt;
     studioPlaybackLastPaint=profileNow();
     studioFrameLoading(false,'');
-  }
-  function studioPlaybackTick(now){
-    studioPlaybackFrame=null;
-    if(!studioPlayback||!animationWorkspaceOpen)return;
-    try{
-      var before=studioPlayback.status();
-      if(!before.playing)return;
-      var next=studioPlayback.tick(Number.isFinite(now)?now:profileNow());
-      renderStudioPlaybackSample(!next.playing);
-      syncStudioPlaybackControls();
-      if(next.playing)studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
-      saveStudioDraft(!!next.playing);
-      if(!next.playing){
-        var status=newUiEl('ModernAnimationPlaybackStatus');
-        if(status){status.textContent='Animation finished · live Scene / Compare unchanged.';
-          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'success');}
-      }
-    }catch(error){
-      stopStudioPlayback(false);
-      var status=newUiEl('ModernAnimationPlaybackStatus');
-      if(status){status.textContent='Playback failed: '+error.message;
-        if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'error');}
-    }
   }
   function syncStudioQualitySummary(){
     var node=newUiEl('ModernAnimationQualitySummary');
@@ -2815,7 +2818,7 @@
     updatedPlayback.seek(previous.positionMs,now);
     if(wasPlaying&&previous.positionMs<previous.durationMs)updatedPlayback.start(now);
     cancelStudioInitialPaint();
-    if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
+    ensureStudioPlaybackControls().cancel();
     if(studioEditHistory)studioApi.recordEdit(studioEditHistory,studioDraft,updatedDraft,studioSelectedKey);
     studioDraft=updatedDraft;studioPrepared=updatedProject;studioPlayback=updatedPlayback;
     studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
@@ -2826,8 +2829,7 @@
     syncStudioPlaybackControls();
     if(animationWorkspaceOpen&&!document.hidden)renderStudioPlaybackSample(true);
     else studioRestorePreviewPending=true;
-    if(updatedPlayback.status().playing)
-      studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
+    if(updatedPlayback.status().playing)ensureStudioPlaybackControls().schedule();
     var status=newUiEl('ModernAnimationPlaybackStatus');
     if(status){status.textContent='Camera interpolation: '+(value==='spline'?'Smooth · Spline':'Linear')+
       ' · keyframes and timeline preserved.';
@@ -2868,35 +2870,14 @@
       stopStudioPlayback(false);
       playbackNotice('Playback failed: '+error.message,'error');
     }}
-    play.addEventListener('click',function(){safely(function(){
-      if(!studioPlayback)throw Error('Prepare a compatible animation project first');
-      cancelStudioInitialPaint();
-      studioPlayback.start(profileNow());
-      playbackNotice((studioPrepared.mode==='camera'?'Camera':'Physical')+
-        ' animation playing in an independent optical viewport.','info');
-      renderStudioPlaybackSample(true);syncStudioPlaybackControls();
-      saveStudioDraft(false);
-      if(studioPlaybackFrame===null)studioPlaybackFrame=requestAnimationFrame(studioPlaybackTick);
-    });});
+    var controls=ensureStudioPlaybackControls();
+    play.addEventListener('click',function(){safely(function(){controls.play();});});
     var pause=newUiEl('ModernAnimationPlaybackPause');
-    if(pause)pause.addEventListener('click',function(){safely(function(){
-      stopStudioPlayback(false);saveStudioDraft(false);
-      playbackNotice('Paused.','info');
-    });});
+    if(pause)pause.addEventListener('click',function(){safely(function(){controls.pause();});});
     var stop=newUiEl('ModernAnimationPlaybackStop');
-    if(stop)stop.addEventListener('click',function(){safely(function(){
-      stopStudioPlayback(false);if(studioPlayback)studioPlayback.stop();
-      saveStudioDraft(false);syncStudioPlaybackControls();
-      scheduleStudioInitialPaint('first');
-    });});
+    if(stop)stop.addEventListener('click',function(){safely(function(){controls.stop();});});
     var seek=newUiEl('ModernAnimationPlaybackSeek');
-    if(seek)seek.addEventListener('input',function(){safely(function(){
-      if(!studioPlayback)return;
-      studioPlayback.seek(studioPlayback.status().durationMs*Number(seek.value)/1000,profileNow());
-      cancelStudioInitialPaint();saveStudioDraft(false);
-      studioPlaybackLastPaint=-Infinity;
-      renderStudioPlaybackSample(true);syncStudioPlaybackControls();
-    });});
+    if(seek)seek.addEventListener('input',function(){safely(function(){controls.seek(seek.value);});});
     var retry=newUiEl('ModernAnimationPlaybackRetry');
     if(retry)retry.addEventListener('click',function(){
       if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
@@ -2908,12 +2889,7 @@
     bindStudioVideoExport();
     observeStudioPreviewSize();
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden&&studioPlayback){stopStudioPlayback(false);saveStudioDraft(false);
-        var status=newUiEl('ModernAnimationPlaybackStatus');
-        if(status)status.textContent='Paused while the tab is hidden.';
-      }else if(studioPlayback&&animationWorkspaceOpen&&studioRestorePreviewPending){
-        scheduleStudioInitialPaint('visible');
-      }
+      controls.visibility(document.hidden);
     });
   }
   function animationPickerAllEntries(entries){

@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const lifecycle=require('../src/animation/ModernAnimationPreviewLifecycle');
+const playbackControls=require('../src/animation/ModernAnimationPlaybackControls');
 
 const root=path.resolve(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
@@ -122,11 +123,14 @@ test('resize observer requests paused-frame repaint only on actual visible width
 test('Prepare, restoration, Stop, Seek and workspace entry are connected to frame rendering',()=>{
   assert.match(app,/if\(studioPlayback\)\{[\s\S]{0,165}scheduleStudioInitialPaint\('prepared'\)/);
   assert.match(app,/if\(studioPlayback&&animationWorkspaceOpen\)scheduleStudioInitialPaint\('restored'\)/);
-  assert.match(app,/studioPlayback\.stop\(\);[\s\S]{0,110}scheduleStudioInitialPaint\('first'\)/);
+  assert.match(app,/controls.stop\(\)/);
+  assert.match(playbackControls.create.toString(),/player.stop\(\)/);
   assert.match(app,/studioPlayback\.seek\(saved\.positionMs,profileNow\(\)\)/);
   assert.match(app,/animationWorkspaceOpen=true;syncWorkspaceVisibility\(\);\s*if\(studioPlayback\)scheduleStudioInitialPaint\('opened'\)/);
-  assert.match(app,/studioPlayback\.seek\(studioPlayback\.status\(\).durationMs\*Number\(seek\.value\)\/1000,profileNow\(\)\)/);
-  assert.match(app,/renderStudioPlaybackSample\(true\);syncStudioPlaybackControls\(\)/);
+  assert.match(app,/controls.seek\(seek.value\)/);
+  assert.match(playbackControls.create.toString(),/player.seek\(player.status\(\).durationMs\*Number\(raw\)\/1000,options.now\(\)\)/);
+  assert.match(app,/render:renderStudioPlaybackSample/);
+  assert.match(app,/sync:syncStudioPlaybackControls/);
   assert.match(html,/id="ModernAnimationFrameLoadingA"/);
   assert.match(html,/id="ModernAnimationFrameLoadingB"/);
   assert.match(html,/id="ModernAnimationPlaybackRetry"/);

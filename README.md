@@ -1150,3 +1150,12 @@ on actual viewport resize. Renderer, Studio state, UI messages, explicit
 Preview scroll/navigation and failure handling remain owned by `ModernApp.js`.
 The preview data and physical algorithms are unchanged. See the
 [Animation Preview lifecycle boundary](docs/modern-animation-contract.md#animation-preview-lifecycle-boundary).
+
+### Animation Playback control coordinator
+
+`src/animation/ModernAnimationPlaybackControls.js` owns Play/Pause/Stop/Seek,
+RAF scheduling, completion/error handling and visibility pausing, reading the
+active player on every callback. Cancelled ticks cannot restart an obsolete
+project. `ModernApp.js` still paints all physical frames, updates DOM, saves
+working drafts and manages the paused Preview layout lifecycle. No schemas,
+physics or Legacy code changed. See the [playback control boundary](docs/modern-animation-contract.md#animation-playback-control-boundary).

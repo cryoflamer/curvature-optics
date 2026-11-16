@@ -195,6 +195,8 @@ function buildRuntime(){
     setTimeout(fn){const id=++sequence;timers.set(id,fn);return id;},
     clearTimeout(id){timers.delete(id);},console};
   win.window=win;
+  win.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),sandbox);
   callbacks[0]();
   function fire(id,type,value){const n=node(id);if(value!==undefined)n.value=value;

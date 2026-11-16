@@ -283,6 +283,8 @@ test('Live Modern integration saves and restores a full experiment and protects 
   const ctx={window:rootWindow,document,URL,URLSearchParams,
     requestAnimationFrame(fn){return setTimeout(()=>fn(Date.now()),0);},
     cancelAnimationFrame(id){clearTimeout(id);},setTimeout,clearTimeout,console};
+  rootWindow.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8'),ctx);
   const app=rootWindow.CurvatureModernApp;
   for(const side of ['A','B']){

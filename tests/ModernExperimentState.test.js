@@ -156,6 +156,8 @@ function boot(href,saved){
   const ctx={window:root,document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
     URL,URLSearchParams,requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
+  root.CurvatureModernAnimationPlaybackControls=
+    require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx);
   const app=root.CurvatureModernApp;
   for(const side of ['A','B'])app.registerCompareGraph(side,{UpdateCanvasSize(){},
