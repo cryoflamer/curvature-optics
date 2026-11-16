@@ -100,7 +100,7 @@
       var s=e.scene;
       a=physics(s,{kind:s.surface.showModel===2?'flat':'globe',radiusKm:s.surface.rEarth/1000});
     }
-    var camera=e.scene.camera,objects=e.scene.objects,names=['Bedford marker','measuring rod','ship','transmission tower'];
+    var camera=e.scene.camera,objects=e.scene.objects,names=['Bedford marker','measuring rod','ship','transmission tower','city skyline'];
     var groups=[];
     for(var i=0;i<2;i++){
       var count=objects.NObjects[i];

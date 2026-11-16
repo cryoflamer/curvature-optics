@@ -26,7 +26,8 @@ for(const type of [1,2])for(const hidden of [false,true]){
  assert.deepEqual(actual,legacy(type,hidden),`type ${type} hidden ${hidden}`);
  assert.equal(actual.length,type===1?8:6);
 }
-assert.throws(()=>engine.localObject(4,0,false),/not been independently ported/);
+assert.throws(()=>engine.localObject(4,0,false),/drawn sequence index/);
+assert.throws(()=>engine.localObject(5,0,false),/not been independently ported/);
 const params={geometryRadius:6371000,height:3,objectSize:30,longitude:.01,latitude:0,verticalScale:1,horizontalScale:1,globe:true};
 const scene=engine.createPlacedObjectScene(params,2,0,false);
 assert.equal(scene.primitives.length,6);

@@ -11,7 +11,7 @@
   var CAMERA={Height:[0.001,1e9],FocalLengthField:[1,100000],ViewAngleField:[0.1,160],
     Pan:[-360,360],Nick:[-90,90],Roll:[-180,180],
     CameraEast:[-1e7,1e7],CameraNorth:[-1e7,1e7]};
-  var OBJECT={NObjects:[0,200,true],ObjType:[0,3,true],ObjDist:[0,1e7],
+  var OBJECT={NObjects:[0,200,true],ObjType:[0,4,true],ObjDist:[0,1e7],
     ObjDeltaDist:[0.001,1e7],ObjSidePos:[-1e7,1e7],ObjSideVar:[-1e7,1e7],
     ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4],
     ObjSideType:[0,4,true],ObjSizeType:[0,4,true]};
@@ -40,7 +40,17 @@
       camera:{Height:4.04,FocalLengthField:5000,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[3,0],ObjType:[0,3],ObjDist:[124,0],ObjDeltaDist:[4830,100],
         ObjSidePos:[9.23,0],ObjSideVar:[18,0],ObjSize:[4.04,10]},
-      showGrid:false,atmosphere:'vacuum'}
+      showGrid:false,atmosphere:'vacuum'},
+    // Partial adaptation of Chicago state 0 (Legacy ?demo=Chicago&pos=1).
+    // The original showModel=3 overlay and all following animation steps
+    // remain in Legacy; the native physical Scene uses one globe surface.
+    chicago:{name:'Chicago Skyline · near-shore study',
+      description:'Legacy Chicago state 1: skyline at 3.4 km. Native globe only; no combined globe/flat overlay.',
+      camera:{Height:2,FocalLengthField:34,Pan:0,Nick:0,Roll:0},
+      objects:{NObjects:[6,0],ObjType:[4,3],ObjDist:[3400,0],ObjDeltaDist:[200,100],
+        ObjSideType:[2,0],ObjSidePos:[1040,0],ObjSideVar:[-30.5,0],
+        ObjSizeType:[3,0],ObjSize:[442,10],ObjSizeVar:[.381,0]},
+      showGrid:true,atmosphere:'vacuum'}
   });
   function finiteNumber(raw,min,max,integer){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
@@ -81,9 +91,9 @@
   // Do not overwrite arbitrary user/imported descriptions.
   function refreshDescription(model){
     if(!model||model.DemoText!==PRESETS.pontchartrain.name||
-        !/^(?:\d+ transmission towers|\d+ (?:ships|measuring rods|Bedford markers)) across Lake Pontchartrain$/.test(model.Description||''))
+        !/^(?:\d+ transmission towers|\d+ (?:ships|measuring rods|Bedford markers|city skylines)) across Lake Pontchartrain$/.test(model.Description||''))
       return model&&model.Description;
-    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers'};
+    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers',4:'city skylines'};
     var kind=types[model.ObjType&&model.ObjType[0]];
     if(kind&&model.NObjects&&Number.isInteger(model.NObjects[0]))
       model.Description=model.NObjects[0]+' '+kind+' across Lake Pontchartrain';

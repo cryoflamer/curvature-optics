@@ -1,6 +1,5 @@
-/* Pure, opt-in world-space geometry for both transmission tower variants.
+/* Pure, opt-in world-space geometry for independently ported object types.
  * No GraphX3DX, DOM, canvas or legacy command recording is used here.
- * Non-tower object types remain on the legacy path until independently ported.
  */
 (function(root,factory){
   var api=factory(root.CurvatureSceneContract || (typeof require==='function'?require('../scene/CurvatureSceneContract'):null),
@@ -131,6 +130,80 @@
     return [rect(-.025,0,.025,1,hidden?'#ff4':'yellow'),
       poly(circle(0,1,.06),hidden?'#f44':'red')];
   }
+  // Three independent, authored skyline silhouettes from Legacy DrawShape
+  // (ObjType 4). The drawn index determines both the bank (mod 3) and the
+  // horizontal mirror (first half of each six-object cycle). The mirror is
+  // applied to the whole local x axis, not to world east/north coordinates.
+  function localCity(drawn,hidden){
+    if(!Number.isInteger(drawn)||drawn<0)
+      throw new RangeError('City skyline requires a nonnegative drawn index');
+    var primitives=[],fill;
+    function color(normal,occluded){fill=hidden?occluded:normal;}
+    function polygon(xs,ys,mode){
+      primitives.push({type:'polygon',points:xs.map(function(x,i){return [x,ys[i]];}),
+        mode:mode,style:{fill:fill}});
+    }
+    function rect(x1,y1,x2,y2){
+      polygon([x1,x2,x2,x1,x1],[y1,y1,y2,y2,y1],3);
+    }
+    function line(x1,y1,x2,y2){
+      primitives.push({type:'line',points:[[x1,y1],[x2,y2]]});
+    }
+    var kind=drawn%3;
+    if(kind===0){
+      color('#eca992','#ecc3b4');rect(-1.5,0,-1.2,.4);
+      color('#ffeacc','#fff4e5');rect(-1.45,.4,-1.25,.7);rect(-1.4,.7,-1.3,.75);
+      line(-1.5,.3,-1.2,.3);line(-1.45,.6,-1.25,.6);
+      color('#586a78','#7d868d');rect(-.7,0,-.4,.5);rect(-.65,.5,-.45,.8);
+      rect(-.6,0,-.5,1);line(-.56,1,-.56,1.2);line(-.53,1,-.53,1.1);
+      color('#f4caa9','#f4e3d5');
+      polygon([-.05,-.05,0,0,.1,.2,.2,.25,.25,-.05],
+        [0,.45,.5,.6,.75,.6,.5,.45,0,0],3);
+      line(0,0,0,.5);line(.2,0,.2,.5);
+      color('#ec7266','#f3b0a9');rect(.4,0,.6,.9);
+      color('#586a78','#7d868d');
+      polygon([1.1,1.2,1.35,1.45,1.1],[0,.8,.8,0,0],3);
+      line(1.4,0,1.3,.8);line(1.25,.8,1.25,1);line(1.3,.8,1.3,1);
+    }else if(kind===1){
+      color('#fbd9c6','#fbebe2');rect(-1.7,0,-1.5,.5);
+      color('#fbebe2','#fbf5f1');
+      polygon([-1.68,-1.68,-1.6,-1.52,-1.52,-1.68],[.5,.6,.7,.6,.5,.5],3);
+      line(-1.68,.6,-1.52,.6);
+      color('#6d6870','#9a939e');rect(-1.1,0,-.9,.55);
+      color('#dfbb97','#dfcfbf');rect(-1,0,-.8,.45);rect(-1.05,.55,-.95,.6);
+      color('#b7997c','#cdbdad');rect(-.3,0,.2,.4);
+      color('#ffeac6','#fff5e5');rect(-.25,.3,.15,.35);
+      color('#f3dca7','#f3e5c5');rect(.6,0,1,.4);
+      color('#c19f89','#e2bfa9');
+      polygon([.7,.7,.8,.9,.9,.7],[0,.5,.7,.5,0,0],3);
+      color('#4b5866','#7b8591');rect(1.6,0,1.9,.6);
+      color('#012a46','#3b5465');rect(1.7,0,1.8,.65);
+    }else{
+      color('#eacfae','#eaddce');rect(-2,0,-1.8,.4);
+      color('#525462','#8a8c98');rect(-1.8,0,-1.7,.4);
+      color('#b59776','#dac2a8');rect(-1.4,0,-1,.3);
+      color('#9c504d','#c18d8b');rect(-1.35,.3,-1.05,.35);
+      color('#46352d','#827067');rect(-.7,0,-.5,.3);
+      color('#e5c9a5','#efe2d1');polygon([-.7,-.6,-.5],[.2,.3,.2],1);
+      color('#f5d9b4','#f5e9d9');rect(-.3,0,.1,.2);
+      color('#39596b','#738c9a');
+      polygon([.3,.4,.5,.4,.3],[.4,.6,.4,.2,.4],3);
+      color('#878b8e','#a9aeb1');
+      polygon([.3,.3,.4,.5,.5,.3],[0,.4,.2,.4,0,0],3);
+      line(.4,0,.4,.2);
+      color('#f5d9b4','#f5e9d9');rect(.6,0,.8,.2);
+      color('#dccace','#f0dde1');rect(.9,0,1.2,.5);
+      color('#d3b79e','#e3d7cc');rect(1,0,1.15,.6);
+      color('#a17268','#c7a8a2');
+      polygon([1.4,1.4,1.5,1.6,1.7,1.8,1.9,2,2,1.4],
+        [0,.15,.2,.15,.2,.15,.2,.15,0,0],3);
+      line(1.6,0,1.6,.15);line(1.8,0,1.8,.15);
+    }
+    if(drawn%6<=2)primitives.forEach(function(p){
+      p.points.forEach(function(point){point[0]=point[0]===0?0:-point[0];});
+    });
+    return primitives;
+  }
   function localObject(objType,objIx,hidden,options){
     if(objType===0){
       if(!options||!Number.isInteger(options.drawn)||!Number.isInteger(options.total))
@@ -138,6 +211,11 @@
       return localBedford(options.drawn,options.total,!!hidden,options);
     }
     if(objType===3)return localTower(objIx,hidden);
+    if(objType===4){
+      if(!options||!Number.isInteger(options.drawn))
+        throw new TypeError('City skyline requires the drawn sequence index');
+      return localCity(options.drawn,!!hidden);
+    }
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
     throw new RangeError('Object type has not been independently ported');
@@ -216,7 +294,7 @@
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
     var objType=model.ObjType[objIx];
-    if(![0,1,2,3].includes(objType))throw new RangeError('Object type has not been independently ported');
+    if(![0,1,2,3,4].includes(objType))throw new RangeError('Object type has not been independently ported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -247,7 +325,8 @@
       else if(sizeType<0||sizeType>4)throw new RangeError('Unsupported size variation');
       size=(size+1-Math.abs(variation))/2;
       if(size<0)size=-size;
-      var sizeHor=size;
+      // Legacy type-4 skyline varies height only; width stays fixed.
+      var sizeHor=objType===4?1:size;
       if(objType===2){sizeHor=.25*size+.75;size=.5*size+.5;}
       var side=model.ObjSidePos[objIx]/r,sideVar=model.ObjSideVar[objIx]/r/2;
       var sideType=model.ObjSideType[objIx];

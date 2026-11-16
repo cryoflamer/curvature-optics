@@ -87,13 +87,13 @@ test('TransLine shared parameter names are not an optics or geometry parity clai
   assert.equal(auditState(extractDemoStates('TransLine')[4]).geometryParity, 'not-established');
 });
 
-test('Legacy showModel=3 and unsupported shape IDs are explicit blockers', () => {
+test('Legacy showModel=3 and not-yet-ported shape IDs are explicit blockers', () => {
   const base = structuredClone(extractDemoStates('TransLine')[4]);
   assert.equal(auditState(base).structuralStatus, 'review-only');
   base.showModel = 3;
   assert.deepEqual(auditState(base).blockers.map(b => b.field), ['showModel']);
   base.showModel = 1;
-  base.ObjType = [4, 3];
+  base.ObjType = [5, 3];
   assert.deepEqual(auditState(base).blockers.map(b => b.field), ['ObjType']);
   base.ObjType = [3, 3];
   base.showGrid = 3;

@@ -1,3 +1,15 @@
+> **Chicago Skyline partial Modern Scene (#37, 2026-11-16):**
+> The shared physical geometry engine now supports authored Legacy object
+> **type 4**: three filled/stroked city silhouettes, index-dependent mirroring,
+> both palettes and height-only cosine variation. A `chicago` near-shore preset
+> adapts state index 0 (`?demo=Chicago&pos=1`) with six buildings, source
+> placement/camera/object settings and a vacuum globe. Scene and independent
+> Compare A/B use the same object bank; type-4 validation, Objects editor and
+> version-1 experiment serialization/History are supported. No Legacy model,
+> combined `showModel=3` view, later Chicago states or animation transitions
+> changed. This is NOT complete static/pixel/optical parity; see
+> `tests/ModernChicagoPreset.test.js` and `docs/modern-location-migration.md`.
+>
 > **Modern preset navigation / protected return (#36, 2026-11-16):**
 > `Custom scene (edited)` is an active experiment label, not a reloadable preset.
 > Selecting a Scene preset or **Reset to preset** now saves the outgoing *full*

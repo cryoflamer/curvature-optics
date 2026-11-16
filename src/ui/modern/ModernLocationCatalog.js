@@ -62,7 +62,7 @@
       stateCount: 18, animationCount: 17, objectTypes: [8], status: 'not-ported', nativePresetId: null},
     {id: 'chicago-skyline', name: 'Chicago Skyline',
       category: 'geographic', locationId: 'chicago-lake-michigan', legacyDemo: 'Chicago',
-      stateCount: 6, animationCount: 5, objectTypes: [4], status: 'not-ported', nativePresetId: null},
+      stateCount: 6, animationCount: 5, objectTypes: [4], status: 'partial', nativePresetId: 'chicago'},
     {id: 'canigou-mountain', name: 'Mount Canigou',
       category: 'geographic', locationId: 'canigou', legacyDemo: 'Canigou',
       stateCount: 8, animationCount: 7, objectTypes: [5], status: 'not-ported', nativePresetId: null}
@@ -70,7 +70,7 @@
 
   // Only supported partial native Scene presets may be selected. 'single'
   // and 'rows' are illustrative samples, not authored geographic locations.
-  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford']);
+  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago']);
 
   function location(id) { return LOCATIONS.find(function(item) { return item.id === id; }) || null; }
   function scenario(id) { return SCENARIOS.find(function(item) { return item.id === id; }) || null; }
