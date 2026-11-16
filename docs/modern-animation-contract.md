@@ -234,3 +234,36 @@ node --test tests/ModernAnimationLibraryActions.test.js \
   tests/ModernAnimationWorkspaceConcurrency.test.js
 node tools/check-refactor-closure.js
 ```
+
+## Animation Preview lifecycle boundary
+
+`src/animation/ModernAnimationPreviewLifecycle.js` owns **only the timing and
+cancellation of the first/paused Animation Preview physical frame**, separate
+from the Animation Studio editor and the playback/optical pipeline. It holds
+one pending `requestAnimationFrame` handle, a generation token, bounded retries
+for initially hidden GraphX3DX canvas layout and measured viewport widths.
+When an old callback runs after a Prepare, Stop, Seek or workspace change, its
+generation guard prevents it from painting into the newer preview. Hidden
+workspaces preserve the repaint request without painting; paused-frame resizes
+schedule a fresh image only when the visible canvas width changed.
+
+`src/ui/modern/ModernApp.js` retains the live playback position, physical
+renderer invocation, frame/HUD overlays, loading/error/ready messages and the
+explicit Preview-navigation gesture. The coordinator calls back into these
+existing operations; a restore cannot scroll to playback, but an explicit
+Preview click can do so **only after a successful rendered frame**. On a renderer
+exception it leaves the frame retryable and sends the pending navigation to
+the error message instead of a stale canvas. The renderer, data schemas,
+IndexedDB, interpolation math, Scene/Compare and Legacy stay unchanged.
+
+Run the focused tests and architecture gate:
+
+```sh
+node --test tests/ModernAnimationInitialFrame.test.js \
+  tests/ModernAnimationStudio.test.js \
+  tests/ModernAnimationSplinePreview.test.js
+node tools/check-refactor-closure.js
+```
+
+The Chromium smoke job on GitHub Actions remains the browser integration gate;
+Node tests alone do not establish visual frame equivalence.

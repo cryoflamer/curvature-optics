@@ -1,3 +1,15 @@
+> **Animation Preview lifecycle boundary (2026-11-16):** The delayed
+> first/paused-frame scheduler, RAF generation invalidation, post-layout
+> retries and ResizeObserver width tracking have been extracted from
+> `ModernApp.js` into `src/animation/ModernAnimationPreviewLifecycle.js`.
+> `ModernApp.js` retains the actual physical renderer, playback clock, editor
+> generation, loading/error/ready messages, and one-shot Preview navigation.
+> A newer Prepare, stop, seek or project switch invalidates queued paints;
+> hidden workspaces do not paint; failed frames remain retryable. Existing
+> `ModernAnimationInitialFrame` and regression tests exercise the real
+> coordinator. No optics, UI state format, project JSON or Legacy changes.
+> See `docs/modern-animation-contract.md#animation-preview-lifecycle-boundary`.
+
 > **Animation Library action boundary (2026-11-16):** Named-project
 > list/refresh, portable JSON import/export, optimistic-revision rename,
 > Save/Save As and confirmed deletion now run through

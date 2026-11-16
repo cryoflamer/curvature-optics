@@ -4,28 +4,30 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
+const lifecycle=require('../src/animation/ModernAnimationPreviewLifecycle');
 
 const root=path.resolve(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
 
-// Run the actual startup/resize coordinator with a deterministic paint clock.
-// It must not depend on the full physical renderer or the live Scene state.
+// Run ModernApp's real lifecycle wiring over the extracted coordinator with
+// a deterministic RAF clock, no physical renderer and no Scene dependency.
 function harness(){
   const begin=app.indexOf('  function cancelStudioInitialPaint(){');
-  const end=app.indexOf('  function renderStudioPlaybackSample(force){');
+  const end=app.indexOf('  function syncStudioCameraHud(',begin);
   assert.ok(begin>0&&end>begin);
   const queue=new Map(),elements=new Map(),paints=[],navigation=[];
   let id=0,position=0,fail=false,modeOpen=true,width=640,visible=true,pending=false;
+  let observerCallback=null;
   const node=name=>{
     if(!elements.has(name))elements.set(name,{hidden:name!=='ModernAnimationStudioMessage',textContent:'',
       classList:{add(){}},getBoundingClientRect(){return {width};}});
     return elements.get(name);
   };
   const context={
-    studioInitialPaintFrame:null,studioInitialPaintToken:0,studioRestorePreviewPending:false,
+    studioPreviewLifecycleApi:lifecycle,
+    studioPreviewLifecycle:null,studioRestorePreviewPending:false,
     studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
-    studioPreviewObservedWidths:{A:0,B:0},
     studioPreviewNavigation:{start(){pending=true;},cancel(){pending=false;},
       finish(target){if(!pending)return false;pending=false;navigation.push(target);return true;},
       isPending(){return pending;}},
@@ -41,14 +43,17 @@ function harness(){
       paints.push(position);context.studioPlaybackRenderedAt=position;
     },
     syncStudioPlaybackControls(){},
-    ResizeObserver:null,
-    root:{addEventListener(){}}
+    root:{ResizeObserver:class{
+      constructor(fn){observerCallback=fn;}
+      observe(){}
+    },addEventListener(){}}
   };
   Object.defineProperty(context,'animationWorkspaceOpen',{get(){return modeOpen;}});
   vm.runInNewContext(app.slice(begin,end),context,{filename:'preview-lifecycle.js'});
   function frame(){const batch=[...queue.values()];queue.clear();batch.forEach(cb=>cb());}
   function flush(){for(let i=0;i<3;i++)frame();}
   return {ctx:context,node,paints,navigation,frame,flush,queued:()=>queue.size,
+    resized:()=>observerCallback(),
     setPosition(ms){position=ms;},setWidth(value){width=value;},
     setVisible(value){visible=value;},setOpen(value){modeOpen=value;},
     setFail(value){fail=value;}};
@@ -108,12 +113,10 @@ test('missing layout width is retried; failed painting remains explicit and retr
 
 test('resize observer requests paused-frame repaint only on actual visible width changes',()=>{
   const h=harness();
-  let observerCallback=null;
-  h.ctx.root.ResizeObserver=class{constructor(fn){observerCallback=fn;}observe(){} };
   h.ctx.observeStudioPreviewSize();
-  observerCallback();h.flush();assert.deepEqual(h.paints,[0]);
-  observerCallback();h.flush();assert.deepEqual(h.paints,[0]);
-  h.setWidth(400);observerCallback();h.flush();assert.deepEqual(h.paints,[0,0]);
+  h.resized();h.flush();assert.deepEqual(h.paints,[0]);
+  h.resized();h.flush();assert.deepEqual(h.paints,[0]);
+  h.setWidth(400);h.resized();h.flush();assert.deepEqual(h.paints,[0,0]);
 });
 
 test('Prepare, restoration, Stop, Seek and workspace entry are connected to frame rendering',()=>{
@@ -127,4 +130,42 @@ test('Prepare, restoration, Stop, Seek and workspace entry are connected to fram
   assert.match(html,/id="ModernAnimationFrameLoadingA"/);
   assert.match(html,/id="ModernAnimationFrameLoadingB"/);
   assert.match(html,/id="ModernAnimationPlaybackRetry"/);
+});
+
+
+test('new preview lifecycle loads as a classic script before ModernApp',()=>{
+  const filename='src/animation/ModernAnimationPreviewLifecycle.js';
+  assert.ok(html.indexOf(filename)>html.indexOf('src/animation/ModernAnimationPreview.js'));
+  assert.ok(html.indexOf(filename)<html.indexOf('src/ui/modern/ModernApp.js'));
+  const context=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root,filename),'utf8'),context);
+  assert.equal(typeof context.CurvatureModernAnimationPreviewLifecycle.create,'function');
+  assert.equal(vm.runInContext('typeof require',context),'undefined');
+  assert.match(app,/studioPreviewLifecycleApi\.create\(/);
+  assert.match(app,/studioPreviewLifecycle\.hasFrame\(\)/);
+});
+
+test('clearing a prepared preview cancels delayed RAF callbacks after a new generation',()=>{
+  const h=harness();h.setPosition(500);
+  h.ctx.scheduleStudioInitialPaint('prepared');
+  h.frame();
+  h.ctx.cancelStudioInitialPaint();
+  assert.equal(h.queued(),0);
+  h.flush();assert.deepEqual(h.paints,[]);
+  assert.equal(h.ctx.studioPreviewLifecycle.hasFrame(),false);
+  h.ctx.scheduleStudioInitialPaint('retry');
+  h.flush();assert.deepEqual(h.paints,[500]);
+});
+
+test('scheduling a hidden preview invalidates a pending visible paint',()=>{
+  const h=harness();h.ctx.scheduleStudioInitialPaint('prepared');
+  h.setOpen(false);h.ctx.scheduleStudioInitialPaint('restored');
+  h.flush();assert.deepEqual(h.paints,[]);
+  assert.equal(h.ctx.studioRestorePreviewPending,true);
+  h.setOpen(true);h.ctx.scheduleStudioInitialPaint('opened');
+  h.flush();assert.deepEqual(h.paints,[0]);
+});
+
+test('invalid lifecycle dependencies fail explicitly instead of silently skipping frames',()=>{
+  assert.throws(()=>lifecycle.create({}),/frame scheduling/);
 });

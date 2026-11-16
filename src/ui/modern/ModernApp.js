@@ -31,6 +31,7 @@
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
+  var studioPreviewLifecycleApi=root.CurvatureModernAnimationPreviewLifecycle;
   var fastCapabilities=root.CurvatureOpticalFastRayField;
   var studioFrameExportApi=root.CurvatureModernAnimationFrameExport;
   var studioBackgroundExportApi=root.CurvatureModernAnimationBackgroundExport;
@@ -578,8 +579,7 @@
   var studioDraftSavedAt=0,studioDraftLastPositionSave=0,studioDraftGeneration=0;
   var studioDraftCheckpoint=null,studioDraftSaveTimer=null;
   var studioPersistenceCoordinator=null,studioRestorePreviewPending=false;
-  var studioInitialPaintFrame=null,studioInitialPaintToken=0;
-  var studioPreviewObservedWidths={A:0,B:0};
+  var studioPreviewLifecycle=null;
   var studioPreviewRenderer=null;
   var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
@@ -2104,98 +2104,85 @@
     });
     return true;
   }
-  // GraphX3DX starts in a hidden bootstrap container and its canvas can be
-  // resized/cleared when the independent viewport first becomes visible.
-  // Paint AFTER layout, not during draft recovery or while the panel is hidden.
-  // A later restore/prepare/seek invalidates pending callbacks by generation.
+  // The preview lifecycle owns stale-frame invalidation, layout waits and
+  // paused-frame resize scheduling; the application owns renderer and notices.
   function cancelStudioInitialPaint(){
-    studioInitialPaintToken++;
-    if(studioInitialPaintFrame!==null){cancelAnimationFrame(studioInitialPaintFrame);
-      studioInitialPaintFrame=null;}
+    if(studioPreviewLifecycle)studioPreviewLifecycle.cancel();
   }
   function studioFrameLoading(loading,message){
     // Never leave the previous frame's coordinates visible over a loading notice.
     if(loading&&typeof studioCameraHud!=='undefined'&&studioCameraHud)
       studioCameraHud.hideAll();
-    if(loading&&typeof studioTargetIndicator!=='undefined'&&studioTargetIndicator)studioTargetIndicator.hideAll();
+    if(loading&&typeof studioTargetIndicator!=='undefined'&&studioTargetIndicator)
+      studioTargetIndicator.hideAll();
     ['A','B'].forEach(function(side){
       var notice=newUiEl('ModernAnimationFrameLoading'+side);
       if(notice){notice.hidden=!loading;if(loading)notice.textContent=message;}
     });
   }
   function scheduleStudioInitialPaint(reason){
-    if(!studioPlayback||!studioPrepared)return;
-    studioRestorePreviewPending=true;
-    cancelStudioInitialPaint();
-    if(!animationWorkspaceOpen||document.hidden)return;
-    var token=studioInitialPaintToken,attempts=0;
-    var position=studioPlayback.status().positionMs;
-    studioFrameLoading(true,'Rendering physical frame at '+(position/1000).toFixed(2)+' s…');
-    var status=newUiEl('ModernAnimationPlaybackStatus');
-    if(status){status.textContent=(reason==='restored'?'Restored project · ':'')+
-      'Rendering the '+(position===0?'first':'saved')+' frame (playback paused)…';
-      if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
-    // Two layout frames allow the hidden workspace and its parser-created
-    // GraphX3DX canvas to acquire final dimensions before pixel painting.
-    function next(){studioInitialPaintFrame=requestAnimationFrame(paint);}
-    function paint(){
-      studioInitialPaintFrame=null;
-      if(token!==studioInitialPaintToken||!studioPlayback||!studioPrepared||
-         !animationWorkspaceOpen||document.hidden)return;
-      var host=newUiEl('ModernAnimationCanvasA');
-      if(host&&typeof host.getBoundingClientRect==='function'&&
-         host.getBoundingClientRect().width<2&&attempts++<12){next();return;}
-      try{
+    if(studioPreviewLifecycle)studioPreviewLifecycle.schedule(reason);
+  }
+  function observeStudioPreviewSize(){
+    if(studioPreviewLifecycle)studioPreviewLifecycle.observe();
+  }
+  if(studioPreviewLifecycleApi){
+    studioPreviewLifecycle=studioPreviewLifecycleApi.create({
+      requestFrame:function(fn){return requestAnimationFrame(fn);},
+      cancelFrame:function(id){cancelAnimationFrame(id);},
+      ready:function(){return !!(studioPlayback&&studioPrepared);},
+      open:function(){return animationWorkspaceOpen;},
+      visible:function(){return animationWorkspaceOpen&&!document.hidden;},
+      playing:function(){return studioPlayback.status().playing;},
+      position:function(){return studioPlayback.status().positionMs;},
+      markPending:function(value){studioRestorePreviewPending=value;},
+      host:function(side){return newUiEl('ModernAnimationCanvas'+side);},
+      width:function(side){
+        var host=newUiEl('ModernAnimationCanvas'+side);
+        return host&&typeof host.getBoundingClientRect==='function'?
+          host.getBoundingClientRect().width:null;
+      },
+      resizeObserver:root.ResizeObserver,
+      listenResize:root.addEventListener?function(fn){root.addEventListener('resize',fn);}:null,
+      begin:function(reason,position){
+        studioFrameLoading(true,'Rendering physical frame at '+(position/1000).toFixed(2)+' s…');
+        var status=newUiEl('ModernAnimationPlaybackStatus');
+        if(status){status.textContent=(reason==='restored'?'Restored project · ':'')+
+          'Rendering the '+(position===0?'first':'saved')+' frame (playback paused)…';
+          if(root.CurvatureModernStatusMessage)
+            root.CurvatureModernStatusMessage.decorate(status,'info');}
+      },
+      render:function(){
         studioPlaybackLastPaint=-Infinity;
         renderStudioPlaybackSample(true);
-        studioRestorePreviewPending=false;
+      },
+      complete:function(){
         studioFrameLoading(false,'');
         syncStudioPlaybackControls();
-        // Scroll only when the requested first physical frame is actually ready.
         if(studioPreviewNavigation)
           studioPreviewNavigation.finish(newUiEl('ModernAnimationPlaybackStage'));
         var ready=newUiEl('ModernAnimationPlaybackStatus');
         if(ready){ready.textContent='Frame at '+(studioPlaybackRenderedAt/1000).toFixed(2)+
           ' s ready · playback paused.';
-          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(ready,'success');}
-      }catch(error){
+          if(root.CurvatureModernStatusMessage)
+            root.CurvatureModernStatusMessage.decorate(ready,'success');}
+      },
+      failed:function(error){
         studioFrameLoading(true,'Physical frame unavailable · use Retry frame');
         var failed=newUiEl('ModernAnimationPlaybackStatus');
         if(failed){failed.textContent='Unable to render frame: '+error.message+' · Retry frame is available.';
-          if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(failed,'error');}
+          if(root.CurvatureModernStatusMessage)
+            root.CurvatureModernStatusMessage.decorate(failed,'error');}
         if(studioPreviewNavigation&&studioPreviewNavigation.isPending()){
           var message=newUiEl('ModernAnimationStudioMessage');
           if(message){message.textContent='Preview frame failed: '+error.message+
             '. Use Retry frame in Playback.';message.classList.add('is-error');
-            if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(message,'error');}
+            if(root.CurvatureModernStatusMessage)
+              root.CurvatureModernStatusMessage.decorate(message,'error');}
           studioPreviewNavigation.finish(message);
         }
       }
-    }
-    studioInitialPaintFrame=requestAnimationFrame(function(){
-      if(token===studioInitialPaintToken)next();
     });
-  }
-  function observeStudioPreviewSize(){
-    function resized(){
-      if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen||
-         studioPlayback.status().playing)return;
-      var changed=false;
-      ['A','B'].forEach(function(side){
-        var host=newUiEl('ModernAnimationCanvas'+side);
-        if(!host||typeof host.getBoundingClientRect!=='function')return;
-        var width=Math.round(host.getBoundingClientRect().width);
-        if(width>1&&studioPreviewObservedWidths[side]!==width){
-          studioPreviewObservedWidths[side]=width;changed=true;
-        }
-      });
-      if(changed)scheduleStudioInitialPaint('resized');
-    }
-    if(typeof root.ResizeObserver==='function'){
-      var observer=new root.ResizeObserver(resized);
-      ['A','B'].forEach(function(side){var host=newUiEl('ModernAnimationCanvas'+side);
-        if(host)observer.observe(host);});
-    }else if(root.addEventListener)root.addEventListener('resize',resized);
   }
   function syncStudioCameraHud(sampleA,sampleB,graphs,isCompare){
     studioCameraHudLast={A:sampleA,B:sampleB,isCompare:isCompare};
@@ -3413,7 +3400,8 @@
     var strip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(strip)strip.scrollLeft=studioFilmstripScroll;
     if(studioRestorePreviewPending&&studioPlayback&&animationWorkspaceOpen&&
-       studioInitialPaintFrame===null&&studioPlaybackRenderedAt===null){
+       studioPreviewLifecycle&&!studioPreviewLifecycle.hasFrame()&&
+       studioPlaybackRenderedAt===null){
       scheduleStudioInitialPaint('restored');
     }
   }

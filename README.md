@@ -1130,3 +1130,13 @@ refresh, Save/Save As, rename, confirmed delete, and portable JSON import/export
 Live editor and draft-workspace effects remain in `ModernApp.js`, while named
 record schema and IndexedDB revisions remain in `ModernAnimationLibrary.js`.
 See [the contract/boundary notes](docs/modern-animation-contract.md#animation-library-actions-boundary).
+
+### Animation Preview lifecycle coordinator
+
+`src/animation/ModernAnimationPreviewLifecycle.js` schedules the first physical
+Preview frame after layout, cancels stale queued paints on editor/playback
+changes, retries briefly until the canvas has width and repaints paused frames
+on actual viewport resize. Renderer, Studio state, UI messages, explicit
+Preview scroll/navigation and failure handling remain owned by `ModernApp.js`.
+The preview data and physical algorithms are unchanged. See the
+[Animation Preview lifecycle boundary](docs/modern-animation-contract.md#animation-preview-lifecycle-boundary).

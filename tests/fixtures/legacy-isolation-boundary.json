@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 102,
-      "uniqueScripts": 100,
+      "scriptTags": 103,
+      "uniqueScripts": 101,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -206,6 +206,7 @@
         "src/animation/ModernAnimationLibraryFilters.js",
         "src/animation/ModernAnimationLibraryActions.js",
         "src/animation/ModernAnimationPreview.js",
+        "src/animation/ModernAnimationPreviewLifecycle.js",
         "src/animation/ModernAnimationQualityAudit.js",
         "src/animation/ModernAnimationCanvasHud.js",
         "src/animation/ModernAnimationFrameExport.js",
@@ -357,6 +358,7 @@
       "src/animation/ModernAnimationLibraryFilters.js",
       "src/animation/ModernAnimationPlayback.js",
       "src/animation/ModernAnimationPreview.js",
+      "src/animation/ModernAnimationPreviewLifecycle.js",
       "src/animation/ModernAnimationProject.js",
       "src/animation/ModernAnimationProjectWizard.js",
       "src/animation/ModernAnimationQualityAudit.js",
@@ -435,7 +437,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 188,
+  "sourceJsCount": 189,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -697,6 +699,16 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationPlayback.test.js",
         "tests/OpticalFastCapabilities.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationPreviewLifecycle.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationInitialFrame.test.js"
       ],
       "commonJsToolCallers": []
     },
