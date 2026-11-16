@@ -808,8 +808,10 @@ controls, but no longer duplicates frame deletion. The editor toolbar now has **
 in-memory history covering frame insertion, removal, reorder (buttons and drag),
 frame timing/easing/name edits and project metadata or sequence changes.
 Continuous input in the same field is one step, not one per keystroke. Ctrl+Z,
-Ctrl+Y and Ctrl+Shift+Z work while focused on non-text Studio controls; focused
-inputs retain their native undo behavior. Undo restores the previous draft and
+Ctrl+Y and Ctrl+Shift+Z work with the Animation workspace open, including after
+frame reordering has returned focus to the page; focused text inputs retain
+native undo. Undo/Redo are also next to the selected frame's move arrows, so
+long timelines need no scroll to reach them. Undo restores the previous draft and
 keyframe selection; new edits clear Redo. History resets when switching to
 another project, loading a saved revision or promoting a draft to a new library
 record; it is not persisted across F5. Old History shortlists can be migrated

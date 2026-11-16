@@ -329,17 +329,20 @@ test('Studio Undo/Redo controls support full draft history and disabled states',
     {canUndo:true,canRedo:false,selectedKey:'history-1'});
   const undo=collect(host,n=>n.textContent==='Undo'&&n.tagName==='button');
   const redo=collect(host,n=>n.textContent==='Redo'&&n.tagName==='button');
-  assert.equal(undo.length,1);assert.equal(undo[0].disabled,false);
-  assert.equal(redo.length,1);assert.equal(redo[0].disabled,true);
-  undo[0].listeners.click();assert.deepEqual(calls,['undo']);
+  assert.equal(undo.length,2,'Undo is in the top toolbar and next to the move arrows');
+  assert.equal(redo.length,2,'Redo is in the top toolbar and next to the move arrows');
+  assert.ok(undo.every(b=>b.disabled===false));
+  assert.ok(redo.every(b=>b.disabled===true));
+  undo[1].listeners.click();assert.deepEqual(calls,['undo'],
+    'inline Undo uses the same timeline history');
   assert.equal(collect(host,n=>n.className==='modern-studio-undo-removal').length,0,
     'old one-shot removal banner is retired');
   host.children=[];
   editor.render(doc,host,draft,studio.inspect(draft),actions,false,
     {canUndo:false,canRedo:true,selectedKey:'history-1'});
-  assert.equal(collect(host,n=>n.textContent==='Undo'&&n.tagName==='button')[0].disabled,true);
-  const redoActive=collect(host,n=>n.textContent==='Redo'&&n.tagName==='button')[0];
-  assert.equal(redoActive.disabled,false);redoActive.listeners.click();
+  assert.ok(collect(host,n=>n.textContent==='Undo'&&n.tagName==='button').every(b=>b.disabled));
+  const redoActive=collect(host,n=>n.textContent==='Redo'&&n.tagName==='button');
+  assert.ok(redoActive.every(b=>!b.disabled));redoActive[1].listeners.click();
   assert.deepEqual(calls,['undo','redo']);
 });
 
@@ -414,8 +417,15 @@ test('App timeline actions undo/redo through autosaved drafts without touching H
   const entries=[entry(1,a),entry(2,b),entry(3,c)];
   const initial=studio.history([1,2],entries);
   let actions,autosaves=0;
+  const undoButtons=[{disabled:true},{disabled:true}],redoButtons=[{disabled:true},{disabled:true}];
   const host={__studioHistoryKeysBound:false,listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},
-    querySelector(){return null;},querySelectorAll(){return [];}};
+    contains(target){return target&&target.insideStudio===true;},
+    querySelector(){return null;},querySelectorAll(selector){
+      return selector==='.modern-studio-edit-undo'?undoButtons:
+        selector==='.modern-studio-edit-redo'?redoButtons:[];
+    }};
+  const doc={listeners:{},body:{tagName:'BODY'},documentElement:{tagName:'HTML'},
+    addEventListener(type,fn){this.listeners[type]=fn;}};
   const ctx={studioApi:studio,studioDraft:initial,studioSelectedKey:'history-1',
     studioEditHistory:studio.createEditHistory(),studioPickerOpen:false,
     studioPickerChecked:{},studioPickerShowIncompatible:false,studioPickerScroll:0,
@@ -429,7 +439,7 @@ test('App timeline actions undo/redo through autosaved drafts without touching H
     syncLegacyHistorySelection(){},animationPickerPruneSelection(){},
     animationPickerSelectedEntries(){return [];},renderStudioLibrary(){},
     stopStudioPlayback(){},saveStudioDraft(){autosaves++;return true;},
-    applySuggestedStudioName(v){return v;},root:{},document:{},
+    applySuggestedStudioName(v){return v;},root:{},document:doc,animationWorkspaceOpen:true,
     Promise,Map,Set,Array,Object,String,Number,Date,RangeError,Error};
   vm.runInNewContext(render,ctx);
   ctx.renderAnimationStudio(entries);
@@ -447,20 +457,34 @@ test('App timeline actions undo/redo through autosaved drafts without touching H
   assert.equal(ctx.studioDraft.frames[1].holdMs,0);
   assert.equal(ctx.studioSelectedKey,'history-1');
   actions.redo();assert.equal(ctx.studioDraft.frames[1].holdMs,1500);
-  // Shortcuts work from non-editable Studio controls, not native text inputs.
+  // A clicked move arrow is removed when Studio rerenders. The browser
+  // then focuses document.body, so the host-only key listener from #20
+  // never received Ctrl+Z. The document listener must handle this case.
   let prevented=0;
-  host.listeners.keydown({ctrlKey:true,key:'z',target:{tagName:'BUTTON'},
+  assert.equal(typeof doc.listeners.keydown,'function');
+  doc.listeners.keydown({ctrlKey:true,key:'z',target:doc.body,
     preventDefault(){prevented++;}});
   assert.equal(ctx.studioDraft.frames[1].holdMs,0);
-  host.listeners.keydown({ctrlKey:true,key:'y',target:{tagName:'INPUT'},
+  doc.listeners.keydown({ctrlKey:true,key:'y',target:{tagName:'INPUT',insideStudio:true},
     preventDefault(){prevented++;}});
-  assert.equal(prevented,1);
-  host.listeners.keydown({ctrlKey:true,shiftKey:true,key:'z',target:{tagName:'BUTTON'},
+  assert.equal(prevented,1,'native text undo is not intercepted');
+  doc.listeners.keydown({ctrlKey:true,key:'z',target:{tagName:'BUTTON',insideStudio:false},
     preventDefault(){prevented++;}});
+  assert.equal(prevented,1,'other UI areas are not intercepted');
+  doc.listeners.keydown({ctrlKey:true,shiftKey:true,key:'z',
+    target:{tagName:'BUTTON',insideStudio:true},preventDefault(){prevented++;}});
   assert.equal(ctx.studioDraft.frames[1].holdMs,1500);
   assert.equal(prevented,2);
+  ctx.animationWorkspaceOpen=false;
+  doc.listeners.keydown({ctrlKey:true,key:'z',target:doc.body,
+    preventDefault(){prevented++;}});
+  assert.equal(prevented,2,'shortcuts are inactive in Scene/Compare');
+  ctx.animationWorkspaceOpen=true;
   const editsBefore=ctx.studioEditHistory.past.length;
   for(const text of ['Camera A','Camera An','Camera Animation'])actions.liveEdit('name',text);
+  assert.ok(undoButtons.every(button=>button.disabled===false),
+    'top and inline Undo buttons update during live input without a rerender');
+  assert.ok(redoButtons.every(button=>button.disabled===true));
   assert.equal(ctx.studioEditHistory.past.length,editsBefore+1,
     'many valid live inputs coalesce to one app-level undo entry');
   const inputSaves=autosaves;

@@ -3154,21 +3154,35 @@
       renderAnimationStudio(entries);
     }
     function syncStudioHistoryButtons(){
-      var undo=host.querySelector&&host.querySelector('.modern-studio-edit-undo');
-      var redo=host.querySelector&&host.querySelector('.modern-studio-edit-redo');
-      if(undo)undo.disabled=!studioEditHistory||!studioEditHistory.past.length;
-      if(redo)redo.disabled=!studioEditHistory||!studioEditHistory.future.length;
+      // Live input does not rebuild the form; keep both the upper toolbar and
+      // selected-frame Undo/Redo controls in sync with the shared history.
+      if(!host.querySelectorAll)return;
+      Array.prototype.forEach.call(host.querySelectorAll('.modern-studio-edit-undo'),function(button){
+        button.disabled=!studioEditHistory||!studioEditHistory.past.length;
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('.modern-studio-edit-redo'),function(button){
+        button.disabled=!studioEditHistory||!studioEditHistory.future.length;
+      });
     }
-    // Do not hijack native text-field undo; keyboard shortcuts only work when
-    // focus is on a non-editable part of the Studio panel.
+    // The Studio replaces its controls when a frame is moved. The clicked
+    // button then loses focus (often to document.body), so a shortcut bound
+    // only to the Studio host never fires after the very edit it must undo.
+    // Listen at document level, but only for the visible Animation workspace
+    // and when focus is inside Studio or has fallen back to the page body.
+    // Native undo in editable controls must retain its normal behavior.
     host.__studioHistoryAction=restoreEditHistory;
-    if(host.addEventListener&&!host.__studioHistoryKeysBound){
-      host.__studioHistoryKeysBound=true;
-      host.addEventListener('keydown',function(event){
+    var shortcutRoot=document&&typeof document.addEventListener==='function'?document:host;
+    if(shortcutRoot.addEventListener&&!shortcutRoot.__studioHistoryKeysBound){
+      shortcutRoot.__studioHistoryKeysBound=true;
+      shortcutRoot.addEventListener('keydown',function(event){
+        if(typeof animationWorkspaceOpen!=='undefined'&&!animationWorkspaceOpen)return;
         if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
         var target=event.target,tag=String(target&&target.tagName||'').toLowerCase();
         if(['input','textarea','select'].includes(tag)||target&&
           (target.isContentEditable||target.closest&&target.closest('[contenteditable]')))return;
+        if(shortcutRoot===document&&target&&target!==document.body&&
+          target!==document.documentElement&&
+          (!host.contains||!host.contains(target)))return;
         var key=String(event.key||'').toLowerCase();
         var direction=key==='z'?(event.shiftKey?'redo':'undo'):
           key==='y'&&!event.shiftKey?'redo':null;

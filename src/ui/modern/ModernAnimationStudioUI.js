@@ -1067,6 +1067,14 @@
       earlier.disabled=index===0;controls.appendChild(earlier);
       var later=button(doc,'↓','Move animation frame '+(index+1)+' later',function(){actions.move(selected.key,1);});
       later.disabled=index===draft.frames.length-1;controls.appendChild(later);
+      // Keep Undo/Redo near the reordering controls as well as in the toolbar
+      // above the long keyframe strip. Both locations use one shared history.
+      var undoHere=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
+      undoHere.className+=' modern-studio-edit-undo';
+      undoHere.disabled=!options.canUndo;controls.appendChild(undoHere);
+      var redoHere=button(doc,'Redo','Redo the last undone animation draft edit',function(){if(actions.redo)actions.redo();});
+      redoHere.className+=' modern-studio-edit-redo';
+      redoHere.disabled=!options.canRedo;controls.appendChild(redoHere);
       header.appendChild(controls);panel.appendChild(header);
       panel.appendChild(el(doc,'small','modern-studio-frame-source',
         selected.sourceSnapshotId===null?'Self-contained animation keyframe':
