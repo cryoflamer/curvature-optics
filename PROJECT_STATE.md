@@ -1,7 +1,20 @@
+> **Chicago distant camera and native mountain primitives (#38, 2026-11-16):**
+> `chicago` now opens with a demonstrated ~63 km line of sight from a 2 m
+> observer (standard atmosphere, narrow FOV); `chicago-near` retains the
+> authored original 3.4 km camera with vacuum atmosphere for source comparison.
+> Both are resettable Modern presets, and share unchanged state-0 object
+> geometry. Legacy type-5 mountains now use independent world-space geometry
+> with all three source silhouettes, bank-dependent variants, alternating
+> mirror cycles, visible/hidden colors and height-only variation. Modern
+> Objects/Scene/Compare/schema-v1 support type 5, while Canigou/Grace
+> scenarios, Legacy composite views, animations and optical parity remain
+> unported. See `tests/ModernMountainGeometry.test.js` and
+> `docs/modern-location-migration.md`.
+>
 > **Chicago Skyline partial Modern Scene (#37, 2026-11-16):**
 > The shared physical geometry engine now supports authored Legacy object
 > **type 4**: three filled/stroked city silhouettes, index-dependent mirroring,
-> both palettes and height-only cosine variation. A `chicago` near-shore preset
+> both palettes and height-only cosine variation. A `chicago-near` near-shore source preset
 > adapts state index 0 (`?demo=Chicago&pos=1`) with six buildings, source
 > placement/camera/object settings and a vacuum globe. Scene and independent
 > Compare A/B use the same object bank; type-4 validation, Objects editor and

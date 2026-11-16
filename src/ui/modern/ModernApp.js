@@ -6068,7 +6068,7 @@
   function updateObjectGroupSummaries(){
     var names={0:['Bedford marker','Bedford markers'],1:['measuring rod','measuring rods'],
       2:['ship','ships'],3:['transmission tower','transmission towers'],
-      4:['city skyline','city skylines']};
+      4:['city skyline','city skylines'],5:['mountain','mountains']};
     for(var i=0;i<2;i++){
       var count=Number(model.NObjects[i]);
       var types=names[model.ObjType[i]]||['object','objects'];
@@ -6096,7 +6096,7 @@
       ['ObjSizeVar','Size amplitude (fraction)','number',-10000,10000,'any']
     ];
     var typeOptions=[['3','Transmission tower'],['2','Ship'],['1','Measuring rod'],['0','Bedford marker'],
-      ['4','City skyline']];
+      ['4','City skyline'],['5','Mountain']];
     var variationOptions=[['0','Linear'],['1','Alternating'],['2','Random'],['3','Cosine'],['4','Sine']];
     function field(row){
       var key=row[0],id='ModernObject'+i+key;
@@ -6277,7 +6277,7 @@
     ModernModelVisibilityRange:'Shared Compare haze visibility range, applied equally to A and B.'
   };
   var objectHelp={
-    NObjects:'Number of objects in this group.',ObjType:'Selects the actual 3D object shape, not just its appearance: tower, ship, measuring rod, Bedford marker or city skyline.',
+    NObjects:'Number of objects in this group.',ObjType:'Selects the actual 3D object shape, not just its appearance: tower, ship, measuring rod, Bedford marker, city skyline or mountain.',
     ObjDist:'Along-surface distance to the first object in metres.',
     ObjDeltaDist:'Along-surface separation of consecutive objects in metres.',
     ObjSidePos:'Lateral offset from the observation axis, in metres.',

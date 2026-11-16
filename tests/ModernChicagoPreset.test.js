@@ -57,11 +57,11 @@ test('type-4 skyline reproduces all three authored palettes, both hidden palette
   }
   assert.throws(()=>geometry.localObject(4,0,false),/drawn sequence index/);
   assert.throws(()=>geometry.localObject(4,0,false,{drawn:-1}),/nonnegative/);
-  assert.throws(()=>geometry.localObject(5,0,false,{drawn:0}),/not been independently ported/);
+  assert.throws(()=>geometry.localObject(6,0,false,{drawn:0}),/not been independently ported/);
 });
 
-test('Chicago native partial preset retains every authored state-0 numeric object field, with explicit physics adaptations',()=>{
-  const m=model();const p=adapter.applyPreset(m,'chicago');m.Update();
+test('Chicago source camera remains a separate near-shore reference with authored state-0 fields',()=>{
+  const m=model();const p=adapter.applyPreset(m,'chicago-near');m.Update();
   const original=authored[0];
   for(const field of ['Height','FocalLengthField','Pan','Nick','Roll'])
     near(m[field],original[field]);
@@ -92,6 +92,34 @@ test('Chicago native partial preset retains every authored state-0 numeric objec
       assert.ok(entry.scene.primitives.some(p=>p.type==='polygon'&&p.mode===3));
     });
   }
+});
+
+test('Chicago default starts from the verified distant camera while keeping source shapes and a reversible near view',()=>{
+  const m=model();const preset=adapter.applyPreset(m,'chicago');m.Update();
+  assert.equal(preset.atmosphere,'standard');
+  assert.match(m.DemoText,/distant-shore/);
+  near(m.Height,2);near(m.CameraNorth,-60000);near(m.CameraEast,-2170.9508443);
+  near(m.Pan,3.023361537686);near(m.Nick,-.16397488782);
+  assert.ok(m.FocalLengthField>900&&m.FocalLengthField<950);
+  assert.deepEqual(Array.from(m.ObjType),[4,3]);
+  assert.deepEqual(Array.from(m.ObjDist),[3400,0]);
+  const remote=experiment.capture(m,{atmosphere:'standard',occlusionRadius:6371000,
+    preset:'chicago',resetPreset:'chicago'},compareState.preset('globe-flat-vacuum'),
+    {mode:'scene',selected:'A',eyeLevel:false,horizon:true});
+  assert.deepEqual(experiment.decode(experiment.encode(remote)),remote);
+  const nearPreset=adapter.applyPreset(m,'chicago-near');m.Update();
+  assert.equal(nearPreset.atmosphere,'vacuum');
+  near(m.CameraEast,0);near(m.CameraNorth,0);near(m.FocalLengthField,34);
+  const original=authored[0];
+  for(const field of ['Height','Pan','Nick','FocalLengthField'])near(m[field],original[field]);
+  const nearSnapshot=experiment.capture(m,{atmosphere:'vacuum',occlusionRadius:6371000,
+    preset:'chicago-near',resetPreset:'chicago-near'},compareState.preset('globe-flat-vacuum'),
+    {mode:'scene',selected:'A',eyeLevel:false,horizon:true});
+  assert.equal(nearSnapshot.scene.preset,'chicago-near');
+  assert.deepEqual(experiment.validate(nearSnapshot),nearSnapshot);
+  assert.deepEqual(experiment.decode(experiment.encode(nearSnapshot)),nearSnapshot);
+  adapter.applyPreset(m,'chicago');m.Update();
+  near(m.CameraNorth,-60000);
 });
 
 test('Chicago stays independently renderable by Scene/Compare A/B and preserves schema-v1 URL/JSON/history payloads',()=>{

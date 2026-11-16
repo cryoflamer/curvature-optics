@@ -1,7 +1,7 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-16, #37):** two **partial** geographic native presets
-(`bedford`, `chicago`) are available alongside `pontchartrain`; **no full Legacy scenario
+**Status (2026-11-16, #38):** two **partial** geographic native scenarios
+(`bedford`, `chicago` plus the `chicago-near` camera reference) are available alongside `pontchartrain`; **no full Legacy scenario
 parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
 Modern Scene, Compare, History and Animation Studio**. Update checkboxes and
@@ -26,7 +26,11 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
 - [x] **#37 — Chicago Skyline:** implement the shared type-4 city geometry,
   editor/serialization support and partial source-backed Modern preset; verify
   Scene, Compare and History without claiming Legacy visual parity.
-- [ ] **#38+ — Canigou, Grace, Tensas, Causeway, Soundly:** prioritize shared
+- [x] **#38 — Chicago distance and mountain geometry:** start the main Chicago
+  preset from a 2 m observer and ~63 km line of sight with Standard atmosphere;
+  retain source state 0 as `chicago-near`; port shared type-5 terrain silhouettes
+  with source shape/color/mirror tests, without enabling Canigou or Grace.
+- [ ] **#39+ — Canigou, Grace, Tensas, Causeway, Soundly:** prioritize shared
   geometry types and source checks rather than special physics per location.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
@@ -54,10 +58,11 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
 - The existing `pontchartrain` Modern preset is one native transmission-tower
   arrangement, not all eight `TransLine` checkpoints or seven transitions.
   The `bedford` preset is a single **positive-range** partial adaptation of
-  source state 3; `chicago` adapts opening state 0 only. `single` and `rows` remain
+  source state 3; `chicago` adapts opening-state geometry with a distant Modern
+  camera, and `chicago-near` preserves its original source camera. `single` and `rows` remain
   demonstration samples, **not locations**.
 - Object IDs are source-specific. Modern Scene geometry/validation currently
-  supports `0–4`; Legacy `5` mountain, `6` bridge/platform,
+  supports `0–5`; Legacy `6` bridge/platform,
   `7` Tensas bridge and `8` Soundly Causeway require explicit ports. Legacy
   type `9` exists but is **unused** in the nine authored demos.
 
@@ -253,9 +258,9 @@ work: **do not check Bedford Stage D yet**.
    scenario until its acceptance gates (including rendering and persistence)
    pass, or mark a *partial* adaptation clearly without calling Stage D done.
 
-### Chicago partial native preset (#37)
+### Chicago partial native presets and camera choice (#37–38)
 
-`chicago` uses source `Chicago` state index 0 (`?demo=Chicago&pos=1`):
+`chicago-near` uses source `Chicago` state index 0 (`?demo=Chicago&pos=1`):
 observer 2 m, focal field 34, six silhouettes starting 3,400 m at 200 m
 spacing, side-offset random amplitude −30.5 m, size cosine amplitude 0.381,
 and 442 m nominal height. The three Legacy type-4 building groups and their
@@ -263,8 +268,16 @@ six-step mirror cycle are now independent world-space primitives in the shared
 physical Scene/Compare renderer. Horizontal size does **not** follow height
 variation; it is fixed as in Legacy `DrawShapeVariants` for type 4.
 
-The single-surface Modern scene deliberately selects **globe + vacuum** for
-Legacy's zero `refractionCoeff`. It does not recreate `showModel=3` (both
+The source-state reference `chicago-near` deliberately selects **globe + vacuum**
+for Legacy's zero `refractionCoeff`. The main `chicago` preset keeps exactly
+those object parameters but opens at a user-verified distant position:
+**Height 2 m, CameraNorth −60,000 m, CameraEast −2,170.95 m, Pan 3.023°, Nick
+−0.164°, focal field 925.60 mm (about 2.7° FOV)** with **Standard atmosphere**.
+The objects still start at 3.4 km from the origin; the observer is displaced
+south of that origin, so the line of sight is about **63 km**, not a modified
+Legacy `ObjDist`. This camera is a Modern demonstration choice, not another
+source-authored state; the original position remains available as a selectable
+resettable preset and both IDs are allowed in schema-v1 saved experiments. It does not recreate `showModel=3` (both
 surfaces in one view), the Legacy 1.5 device ratio, eye-level overlay,
 original camera projection, or the five authored animation transitions.
 Modern Compare continues to show two **independent** optical renders.
@@ -273,10 +286,25 @@ Stage D stays unchecked until static/browser parity and state coverage are
 established. Chicago in Modern is a partial physics study, not a claim of
 pixel or refraction parity with Legacy.
 
+### Mountain type-5 geometry proof (#38)
+
+The physical geometry engine now reproduces all three mountain silhouettes
+from the *actual* Legacy `DrawShape` function, including both object-bank
+variant selection (`(drawn + objIx) % 3`), the mirror cycle (`drawn % 6 > 2`),
+filled polygons and detail strokes, and both visible/hidden palettes. In the
+Legacy `DrawShapeVariants` transform, mountains retain width **1** while the
+size variation controls their height; Modern follows the same convention.
+`tests/ModernMountainGeometry.test.js` checks direct source parity across the
+cycle and world-space Scene/Compare/experiment codec invariants. Physics still
+uses common ray visibility; this port is **not** a Canigou scene or a refraction
+parity claim. Separate native Canigou/Grace presets require additional source
+state, atmosphere, scene and browser evidence.
+
 ### Stage C — geometry families (proposed #35+)
 
 - [x] Implement object type **4**: Chicago skyline and indexed variation.
-- [ ] Implement object type **5**: mountain/terrain silhouettes and variants.
+- [x] Implement object type **5**: mountain/terrain silhouettes and variants
+  (bank-shifted three palettes, six-step mirroring, fixed width under height variation).
 - [ ] Implement object type **6**: Causeway bridge / Grace platform.
 - [ ] Implement object type **7**: Tensas-specific bridge geometry.
 - [ ] Implement object type **8**: Soundly Causeway geometry.
@@ -305,9 +333,9 @@ catalog entry. Do not tick it until the acceptance gates below are met.
 - [ ] `tensas-bayou-bridge` — `Tensas` (6 states); requires type 7.
 - [ ] `pontchartrain-soundly` — `Soundly` (18 states); requires type 8; preserve
   its embedded escaped apostrophe during source extraction.
-- [ ] `chicago-skyline` — `Chicago` (6 states); type 4 supported, one partial physical preset; full six-state/overlay acceptance pending.
-- [ ] `canigou-mountain` — `Canigou` (8 states); requires type 5 and explicit
-  refractive model comparison.
+- [ ] `chicago-skyline` — `Chicago` (6 states); type 4 supported, distant and source-camera partial presets; full six-state/overlay acceptance pending.
+- [ ] `canigou-mountain` — `Canigou` (8 states); type 5 now exists, but
+  atmosphere mapping, camera validation and visual/ray baselines remain.
 
 ### Stage E — choreography and end-to-end verification (later)
 

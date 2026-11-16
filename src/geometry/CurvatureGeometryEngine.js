@@ -204,6 +204,53 @@
     });
     return primitives;
   }
+  // Authored Legacy type-5 mountain silhouettes. DrawShape selects its
+  // variant with (drawn + bank) % 3, and mirrors the local horizontal axis
+  // for the second half of each six-object cycle. The outlines/details are
+  // reproduced as value-only primitives; physical visibility is not decided
+  // here and remains the responsibility of the common ray solver.
+  function localMountain(drawn,bank,hidden){
+    if(!Number.isInteger(drawn)||drawn<0)
+      throw new RangeError('Mountain requires a nonnegative drawn sequence index');
+    if(bank!==0&&bank!==1)throw new RangeError('Mountain bank must be 0 or 1');
+    var primitives=[],fill;
+    function color(normal,occluded){fill=hidden?occluded:normal;}
+    function polygon(xs,ys,mode){
+      primitives.push({type:'polygon',points:xs.map(function(x,i){return [x,ys[i]];}),
+        mode:mode,style:{fill:fill}});
+    }
+    function line(x1,y1,x2,y2){
+      primitives.push({type:'line',points:[[x1,y1],[x2,y2]]});
+    }
+    var kind=(drawn%3+bank)%3;
+    if(kind===0){
+      color('#dbe2ed','#e9f0fc');
+      polygon([-1.3,-.8,-.6,-.3,-.1,.1,.2,.4,.5,.6,1.3,-1.3],
+        [0,.6,.6,1,.9,.7,.7,.9,.8,.85,0,0],3);
+      polygon([-.3,0,.3,.5,.8],[.1,.2,.5,.5,.4],1);
+      polygon([-.6,-.3,.1],[.6,.4,.3],1);
+      polygon([-.2,-.1,.1],[.5,.6,.7],1);
+      polygon([.1,.2,.4,.5],[.5,.6,.7,.8],1);
+    }else if(kind===1){
+      color('#92aace','#c4d2e8');
+      polygon([-1.3,-.8,-.7,-.2,.1,.2,.5,.6,.7,1.3,-1.3],
+        [0,.5,.5,1,.8,.7,.7,.6,.6,0,0],3);
+      polygon([-.7,-.6,-.3],[.5,.5,.2],1);
+      line(.2,.7,.7,.2);line(.6,.6,1.1,.1);
+    }else{
+      color('#abacb1','#c8c9cf');
+      polygon([-1.3,-.7,-.6,-.3,-.3,-.2,-.1,.1,.3,.5,.6,.8,1,1.1,1.3,-1.3],
+        [0,.6,.6,.8,.9,1,1,.8,.5,.4,.5,.5,.4,.2,0,0],3);
+      polygon([-1,-.6,-.4,-.2,0],[.1,.4,.5,.5,.3],1);
+      polygon([-.6,-.5,-.4],[.6,.6,.5],1);
+      polygon([-.2,-.1,0],[1,.8,.4],1);
+      polygon([0,.3,.6,.8,.9],[.1,.2,.5,.4,.3],1);
+    }
+    if(drawn%6>2)primitives.forEach(function(p){
+      p.points.forEach(function(point){point[0]=point[0]===0?0:-point[0];});
+    });
+    return primitives;
+  }
   function localObject(objType,objIx,hidden,options){
     if(objType===0){
       if(!options||!Number.isInteger(options.drawn)||!Number.isInteger(options.total))
@@ -215,6 +262,11 @@
       if(!options||!Number.isInteger(options.drawn))
         throw new TypeError('City skyline requires the drawn sequence index');
       return localCity(options.drawn,!!hidden);
+    }
+    if(objType===5){
+      if(!options||!Number.isInteger(options.drawn))
+        throw new TypeError('Mountain requires the drawn sequence index');
+      return localMountain(options.drawn,objIx,!!hidden);
     }
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
@@ -294,7 +346,7 @@
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
     var objType=model.ObjType[objIx];
-    if(![0,1,2,3,4].includes(objType))throw new RangeError('Object type has not been independently ported');
+    if(![0,1,2,3,4,5].includes(objType))throw new RangeError('Object type has not been independently ported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -326,7 +378,7 @@
       size=(size+1-Math.abs(variation))/2;
       if(size<0)size=-size;
       // Legacy type-4 skyline varies height only; width stays fixed.
-      var sizeHor=objType===4?1:size;
+      var sizeHor=(objType===4||objType===5)?1:size;
       if(objType===2){sizeHor=.25*size+.75;size=.5*size+.5;}
       var side=model.ObjSidePos[objIx]/r,sideVar=model.ObjSideVar[objIx]/r/2;
       var sideType=model.ObjSideType[objIx];

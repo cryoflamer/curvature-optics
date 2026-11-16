@@ -37,7 +37,7 @@
 
   // Counts and active object types are pinned to the authored CurvatureDemos.js
   // states; see tests/ModernLocationCatalog.test.js for source-derived checks.
-  // 'partial' means one native Scene preset exists, NOT scene/animation parity.
+  // 'partial' means at least one native Scene preset exists, NOT scene/animation parity.
   var SCENARIOS = freezeEntries([
     {id: 'earth-curvature-lesson', name: 'Where is the Curve?',
       category: 'educational', locationId: null, legacyDemo: 'Curve',
@@ -70,7 +70,8 @@
 
   // Only supported partial native Scene presets may be selected. 'single'
   // and 'rows' are illustrative samples, not authored geographic locations.
-  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago']);
+  // Chicago offers two camera views of the SAME partial source scenario.
+  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near']);
 
   function location(id) { return LOCATIONS.find(function(item) { return item.id === id; }) || null; }
   function scenario(id) { return SCENARIOS.find(function(item) { return item.id === id; }) || null; }

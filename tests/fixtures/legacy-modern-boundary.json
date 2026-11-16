@@ -4170,6 +4170,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4192,17 +4193,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4229,6 +4221,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4251,17 +4244,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4288,6 +4272,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4310,17 +4295,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4347,6 +4323,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4369,17 +4346,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4406,6 +4374,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4428,17 +4397,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4465,6 +4425,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4487,17 +4448,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4524,6 +4476,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4546,17 +4499,8 @@
             "tempGradient",
             "temperatureC"
           ],
-          "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            }
-          ],
-          "structuralStatus": "blocked",
+          "blockers": [],
+          "structuralStatus": "review-only",
           "conversionStatus": "not-supported"
         },
         {
@@ -4583,6 +4527,7 @@
             "ObjSize",
             "ObjSizeType",
             "ObjSizeVar",
+            "ObjType",
             "Pan",
             "Roll",
             "deviceRatio",
@@ -4605,14 +4550,6 @@
             "temperatureC"
           ],
           "blockers": [
-            {
-              "code": "modern-schema-rejected",
-              "field": "ObjType",
-              "value": [
-                5,
-                3
-              ]
-            },
             {
               "code": "modern-schema-rejected",
               "field": "showModel",

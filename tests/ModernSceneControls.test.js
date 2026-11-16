@@ -43,7 +43,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
   assert.equal(m.ObjDist[1],before);
   assert.throws(()=>adapter.setObject(m,1,'NObjects','1.5'),/integer/);
   adapter.setObject(m,1,'ObjType',4);assert.equal(m.ObjType[1],4);
-  assert.throws(()=>adapter.setObject(m,1,'ObjType',5),/Expected/);
+  assert.throws(()=>adapter.setObject(m,1,'ObjType',6),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'Height',''),/required/);
   assert.throws(()=>adapter.setRadiusKm(m,0),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'foo',1),/Unknown/);
@@ -53,7 +53,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
 
 test('131 presets reset every relevant object group field without duplicating Legacy state',()=>{
   const m=model();
-  for(const id of ['pontchartrain','single','rows','bedford','chicago']){
+  for(const id of ['pontchartrain','single','rows','bedford','chicago','chicago-near']){
     const p=adapter.applyPreset(m,id);m.Update();
     assert.equal(m.DemoText,p.name);
     assert.equal(m.Description,p.description);
@@ -62,7 +62,7 @@ test('131 presets reset every relevant object group field without duplicating Le
     assert.equal(m.rEarth,6371000);
     assert.equal(m.NObjects[0],p.objects.NObjects[0]);
     assert.equal(m.NObjects[1],p.objects.NObjects[1]);
-    assert.deepEqual(Array.from(m.ObjSideType),id==='chicago'?[2,0]:[0,0]);
+    assert.deepEqual(Array.from(m.ObjSideType),id.startsWith('chicago')?[2,0]:[0,0]);
   }
   adapter.setObject(m,1,'ObjSideVar',350);
   adapter.setObject(m,0,'ObjSizeVar',0.8);
@@ -291,13 +291,15 @@ test('Chicago partial preset survives UI edit, Compare, protected History return
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   assert.equal(await r.fire('ModernPreset','change','chicago'),true);
   assert.equal(r.win.CurvatureModernApp.getPreset(),'chicago');
-  assert.equal(m.DemoText,'Chicago Skyline · near-shore study');
+  assert.equal(m.DemoText,'Chicago Skyline · distant-shore study');
   assert.deepEqual(Array.from(m.ObjType),[4,3]);
   assert.deepEqual(Array.from(m.NObjects),[6,0]);
   assert.deepEqual(Array.from(m.ObjSizeVar),[.381,0]);
   assert.equal(r.nodes.get('ModernObjectGroupSummary0').textContent,'6 city skylines');
-  assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
-  assert.equal(r.draws.at(-1).atmosphere,'vacuum');
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'standard');
+  assert.equal(r.draws.at(-1).atmosphere,'standard');
+  assert.equal(m.Height,2);
+  assert.equal(m.CameraNorth,-60000);
   r.fire('ModernCompareTab','click');
   assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
   r.fire('ModernObject0ObjSizeVar','change','0');
@@ -440,15 +442,15 @@ test('131 sample presets produce physical scenes using the real shared renderer'
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
   const m=model();
-  for(const id of ['single','rows','bedford','chicago']){
+  for(const id of ['single','rows','bedford','chicago','chicago-near']){
     adapter.applyPreset(m,id);m.Update();
-    const output=renderer.renderPhysical(graph,m,{atmosphere:['bedford','chicago'].includes(id)?'vacuum':'standard',
+    const output=renderer.renderPhysical(graph,m,{atmosphere:['bedford','chicago-near'].includes(id)?'vacuum':'standard',
       occlusionRadius:6371000,interactive:false});
     assert.equal(output.mode,'physical-scene');
     assert.ok(output.drawn>0,id+' draws visible physical geometry');
     assert.ok(Number.isFinite(output.drawn));
     assert.ok(Number.isFinite(output.unresolved));
-    if(id==='chicago')assert.ok(output.fillTriangles>0,'Chicago buildings must create actual optical fills');
+    if(id.startsWith('chicago'))assert.ok(output.fillTriangles>0,'Chicago buildings must create actual optical fills');
   }
 });
 
