@@ -12,6 +12,7 @@ browser-artifacts/ for the CI artifact uploader.
 from __future__ import annotations
 
 import http.server
+import json
 import os
 from pathlib import Path
 import threading
@@ -64,24 +65,62 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.on('pageerror', lambda exc: self.console.append('PAGE ERROR: ' + str(exc)))
         self.page.on('console', lambda msg: self.console.append(f'console.{msg.type}: {msg.text}'))
         self.page.on('requestfailed', lambda req: self.console.append('REQUEST FAILED: ' + req.url))
+        self.page.on('response', lambda response: self.console.append(
+            f'HTTP {response.status}: {response.url}') if response.status >= 400 else None)
+
+    def _failed(self):
+        # unittest's _Outcome has no `success` property in Python 3.13.
+        # Inspect the result's accumulated (test, traceback) pairs instead.
+        result = getattr(getattr(self, '_outcome', None), 'result', None)
+        if result is None:
+            return False
+        return any(test is self for test, _ in result.failures + result.errors)
+
+    def _save_diagnostics(self):
+        ARTIFACTS.mkdir(parents=True, exist_ok=True)
+        name = self.id().rsplit('.', 1)[-1]
+        (ARTIFACTS / f'{name}.log').write_text('\n'.join(self.console), encoding='utf-8')
+        try:
+            self.page.screenshot(path=str(ARTIFACTS / f'{name}.png'), full_page=True, timeout=5000)
+        except Exception as exc:
+            (ARTIFACTS / f'{name}-screenshot-error.txt').write_text(str(exc), encoding='utf-8')
+        try:
+            (ARTIFACTS / f'{name}.html').write_text(self.page.content(), encoding='utf-8')
+        except Exception as exc:
+            (ARTIFACTS / f'{name}-dom-error.txt').write_text(str(exc), encoding='utf-8')
+        try:
+            state = self.page.evaluate('''() => ({
+                url: location.href,
+                readyState: document.readyState,
+                appLoaded: !!window.CurvatureModernApp,
+                studioUiLoaded: !!window.CurvatureModernAnimationStudioUI,
+                studioApiLoaded: !!window.CurvatureModernAnimationStudio,
+                workspaceMode: window.CurvatureModernApp?.getWorkspaceMode?.() ?? null,
+                animationTabPressed: document.querySelector('#ModernAnimationTab')?.getAttribute('aria-pressed'),
+                animationWorkspaceHidden: document.querySelector('#ModernAnimationWorkspace')?.hidden ?? null,
+                libraryHtml: document.querySelector('#ModernAnimationLibrary')?.innerHTML ?? null,
+                scripts: [...document.scripts].map(s => s.src),
+            })''')
+            (ARTIFACTS / f'{name}-state.json').write_text(
+                json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
+        except Exception as exc:
+            (ARTIFACTS / f'{name}-state-error.txt').write_text(str(exc), encoding='utf-8')
 
     def tearDown(self):
-        failed = self._outcome is not None and not self._outcome.success
-        if failed:
-            ARTIFACTS.mkdir(parents=True, exist_ok=True)
-            name = self.id().rsplit('.', 1)[-1]
-            (ARTIFACTS / f'{name}.log').write_text('\n'.join(self.console), encoding='utf-8')
+        failed = self._failed()
+        try:
+            if failed:
+                self._save_diagnostics()
+        finally:
             try:
-                self.page.screenshot(path=str(ARTIFACTS / f'{name}.png'), full_page=True, timeout=5000)
-            except Exception as exc:
-                (ARTIFACTS / f'{name}-screenshot-error.txt').write_text(str(exc), encoding='utf-8')
-            try:
-                self.context.tracing.stop(path=str(ARTIFACTS / f'{name}-trace.zip'))
-            except Exception:
-                pass
-        else:
-            self.context.tracing.stop()
-        self.context.close()
+                if failed:
+                    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+                    name = self.id().rsplit('.', 1)[-1]
+                    self.context.tracing.stop(path=str(ARTIFACTS / f'{name}-trace.zip'))
+                else:
+                    self.context.tracing.stop()
+            finally:
+                self.context.close()
 
     def open_modern(self):
         response = self.page.goto(self.base_url, wait_until='load', timeout=30000)
@@ -92,7 +131,10 @@ class ModernBrowserSmoke(unittest.TestCase):
     def open_animation(self):
         self.page.locator('#ModernAnimationTab').click()
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
-        expect(self.page.locator('#ModernAnimationLibrary').get_by_role('button', name='New project')).to_be_visible()
+        # Library buttons set aria-label to their *description*, not their
+        # visible caption. get_by_role(name='New project') cannot match one.
+        # Match the visible text and wait for the asynchronous library render.
+        expect(self.page.locator('#ModernAnimationLibrary').get_by_text('New project', exact=True)).to_be_visible(timeout=15000)
 
     def test_navigation_and_studio_bootstrap(self):
         self.open_modern()
@@ -104,7 +146,7 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_wizard_can_be_opened_and_cancelled(self):
         self.open_modern()
         self.open_animation()
-        self.page.locator('#ModernAnimationLibrary').get_by_role('button', name='New project').click()
+        self.page.locator('#ModernAnimationLibrary').get_by_text('New project', exact=True).click()
         wizard = self.page.locator('#ModernAnimationProjectWizard')
         expect(wizard).to_be_visible()
         expect(wizard).to_contain_text('Step 1 of 5')
@@ -130,7 +172,7 @@ class ModernBrowserSmoke(unittest.TestCase):
     def create_camera_project(self, name):
         """Create a real v2 project through the five-step wizard."""
         library = self.page.locator('#ModernAnimationLibrary')
-        library.get_by_role('button', name='New project').click()
+        library.get_by_text('New project', exact=True).click()
         wizard = self.page.locator('#ModernAnimationProjectWizard')
         wizard.get_by_role('button', name='Next').click()  # Camera Motion (default)
         wizard.get_by_role('button', name='Use current Scene/Compare as reference').click()

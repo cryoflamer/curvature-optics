@@ -65,5 +65,5 @@ jobs:
         with:
           name: chromium-smoke-failure-${{ github.run_attempt }}
           path: browser-artifacts/
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 7

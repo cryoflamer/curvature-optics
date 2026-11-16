@@ -72,9 +72,10 @@ prevent Node results from being reported:
 
 The browser job uses fresh isolated browser contexts, so it does not touch a
 user's local History, Animation Library, IndexedDB or real saved projects.
-Failures save a screenshot, browser console/page errors and a Playwright trace
-in `browser-artifacts/`, uploaded as a short-lived workflow artifact **only on
-failure**. Traces can contain application state; review them before sharing.
+Failures save a screenshot, rendered DOM, browser readiness state, console/page
+errors and a Playwright trace in `browser-artifacts/`, uploaded as a short-lived
+workflow artifact **only on failure**. The CI upload fails explicitly if the
+expected diagnostics are missing. Traces can contain application state; review them before sharing.
 
 No npm package, webpack build, publishing token or hosted web service is
 required. To run the browser smoke locally (optional):
