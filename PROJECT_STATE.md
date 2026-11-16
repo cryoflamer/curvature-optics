@@ -1,3 +1,12 @@
+> **Animation Studio timeline UX (2026-11-16):** Draft-only Undo/Redo now
+> covers keyframe insertion, removal, reorder, field changes and sequence
+> selection, with a bounded in-memory history (30 steps) and coalesced live
+> typing. History is reset on workspace changes and is never applied to
+> another project's draft. Editor-scoped Ctrl/Cmd+Z and redo shortcuts do not
+> override native text-field editing. Unsaved projects expose only Save project;
+> Duplicate remains available for opened saved projects. No changes to
+> playback math, physics, IndexedDB schema, project JSON or History records.
+
 > **Animation workspace concurrent recovery (2026-11-16):** Synchronous
 > workspace backups are now scoped per browser tab; initial recovery merges
 > unrelated tab backups and preserves divergent same-ID unsent drafts as

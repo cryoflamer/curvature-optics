@@ -543,7 +543,7 @@
   var studioDraft=studioApi?studioApi.blank():null;
   var studioSelectedKey=null;
   var studioDiagnosticTransition=null;
-  var studioRemovedFrameUndo=null; // One-step, in-memory undo scoped to the exact draft.
+  var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
   var studioPrepared=null;
   // A one-shot navigation request belongs to the explicit Preview click, not
@@ -1637,6 +1637,7 @@
         studioLibraryMessage='Project saved; newer editor changes remain in your draft.';
       }
       studioLibraryActive=saved;studioLibraryPending=null;
+      if(!replace&&studioEditHistory)studioEditHistory=studioApi.createEditHistory();
       studioLibrarySelected=saved.id;
       studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(saved.id);
       // A new untitled draft was promoted to a named workspace. When Save As
@@ -1794,7 +1795,7 @@
     studioFilmstripScroll=0;studioPickerOpen=false;studioPickerScroll=0;
     studioPickerShowIncompatible=false;
     studioPickerChecked=Object.create(null);studioDragSession=null;
-    studioRemovedFrameUndo=null;studioRestorePreviewPending=false;
+    studioEditHistory=studioApi.createEditHistory();studioRestorePreviewPending=false;
     if(kind==='wizard'){
       studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
       studioDraft=studioApi.fromProject(value);
@@ -2019,6 +2020,7 @@
     if(!record||!studioDraftAutosave||!studioApi)return;
     var saved=studioDraftAutosave.normalize(record);
     studioDraft=saved.draft;studioSelectedKey=saved.selectedKey;
+    if(studioEditHistory)studioEditHistory=studioApi.createEditHistory();
     studioPlaybackQuality=saved.quality;studioDraftSavedAt=saved.savedAt;
     studioLibraryActive=null;
     studioLibraryPending=saved.libraryId?{id:saved.libraryId,revision:saved.libraryRevision}:null;
@@ -2920,6 +2922,7 @@
     if(wasPlaying&&previous.positionMs<previous.durationMs)updatedPlayback.start(now);
     cancelStudioInitialPaint();
     if(studioPlaybackFrame!==null){cancelAnimationFrame(studioPlaybackFrame);studioPlaybackFrame=null;}
+    if(studioEditHistory)studioApi.recordEdit(studioEditHistory,studioDraft,updatedDraft,studioSelectedKey);
     studioDraft=updatedDraft;studioPrepared=updatedProject;studioPlayback=updatedPlayback;
     studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
     saveStudioDraft(false);renderStudioLibrary();
@@ -3096,12 +3099,13 @@
     if(!available.length)throw RangeError('No saved selection snapshots are available in History');
     // insertSnapshots copies owned experiments and skips already imported IDs.
     // It must not silently replace the existing Animation Studio timeline.
+    var beforeDraft=studioDraft,beforeSelected=studioSelectedKey;
     var next=studioApi.insertSnapshots(studioDraft,available,studioHistoryEntries,
       studioDraft.frames.length);
     studioDraft=applySuggestedStudioName(next);
     if(!saveStudioDraft(false)||!studioWorkspaceLocalSaved)
       throw Error('Could not reliably save the Animation draft locally. The saved selection was kept.');
-    studioRemovedFrameUndo=null;
+    if(studioEditHistory)studioApi.recordEdit(studioEditHistory,beforeDraft,studioDraft,beforeSelected);
     stopStudioPlayback(true);studioPrepared=null;
     historyStoryboardQueue=historyStoryboardQueue.filter(function(id){return !found.has(id);});
     saveApplicationPreferences();
@@ -3127,10 +3131,19 @@
     if(oldPickerList)studioPickerScroll=oldPickerList.scrollTop;
     var oldStrip=host.querySelector&&host.querySelector('.modern-studio-filmstrip');
     if(oldStrip&&!resetFilmstrip)studioFilmstripScroll=oldStrip.scrollLeft;
-    function update(next,removedFrameUndo){
+    function update(next,options){
+      options=options||{};
+      var before=studioDraft;
+      next=applySuggestedStudioName(next);
+      var recorded=!studioEditHistory||studioApi.recordEdit(studioEditHistory,before,next,
+        options.beforeSelectedKey===undefined?studioSelectedKey:options.beforeSelectedKey,
+        options.group);
+      if(options.endGroup&&studioEditHistory)studioApi.endEditGroup(studioEditHistory);
+      // The DOM input handler already saved this exact value. Do not replace
+      // the focused form on blur (or swallow a click on Undo/Redo).
+      if(!recorded&&options.endGroup)return;
       studioDiagnosticTransition=null;
-      studioDraft=applySuggestedStudioName(next);
-      studioRemovedFrameUndo=removedFrameUndo||null;
+      studioDraft=next;
       stopStudioPlayback(true);studioPrepared=null;
       if(!next.frames.some(function(f){return f.key===studioSelectedKey;}))
         studioSelectedKey=next.frames.length?next.frames[0].key:null;
@@ -3138,6 +3151,43 @@
       var status=newUiEl('ModernAnimationStudioMessage');
       if(status){status.textContent='';status.classList.remove('is-error');
         if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
+      renderAnimationStudio(entries);
+    }
+    function syncStudioHistoryButtons(){
+      var undo=host.querySelector&&host.querySelector('.modern-studio-edit-undo');
+      var redo=host.querySelector&&host.querySelector('.modern-studio-edit-redo');
+      if(undo)undo.disabled=!studioEditHistory||!studioEditHistory.past.length;
+      if(redo)redo.disabled=!studioEditHistory||!studioEditHistory.future.length;
+    }
+    // Do not hijack native text-field undo; keyboard shortcuts only work when
+    // focus is on a non-editable part of the Studio panel.
+    host.__studioHistoryAction=restoreEditHistory;
+    if(host.addEventListener&&!host.__studioHistoryKeysBound){
+      host.__studioHistoryKeysBound=true;
+      host.addEventListener('keydown',function(event){
+        if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
+        var target=event.target,tag=String(target&&target.tagName||'').toLowerCase();
+        if(['input','textarea','select'].includes(tag)||target&&
+          (target.isContentEditable||target.closest&&target.closest('[contenteditable]')))return;
+        var key=String(event.key||'').toLowerCase();
+        var direction=key==='z'?(event.shiftKey?'redo':'undo'):
+          key==='y'&&!event.shiftKey?'redo':null;
+        if(!direction)return;
+        if(event.preventDefault)event.preventDefault();
+        if(host.__studioHistoryAction)host.__studioHistoryAction(direction);
+      });
+    }
+    function restoreEditHistory(direction){
+      if(!studioEditHistory)return;
+      var previous=studioApi.stepEditHistory(studioEditHistory,studioDraft,studioSelectedKey,direction);
+      if(!previous)return;
+      studioDraft=previous.draft;
+      studioSelectedKey=previous.selectedKey;
+      studioDiagnosticTransition=null;
+      stopStudioPlayback(true);studioPrepared=null;
+      if(!studioDraft.frames.some(function(f){return f.key===studioSelectedKey;}))
+        studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
+      saveStudioDraft(false);
       renderAnimationStudio(entries);
     }
     function report(error){
@@ -3157,27 +3207,42 @@
           'Replace all '+studioDraft.frames.length+' keyframes with Camera Animation? '+
           'This replaces the current working timeline. Save it separately first if needed.')))
           return;
+        var previousSelection=studioSelectedKey;
         studioSelectedKey=null;studioFilmstripScroll=0;
-        update(replacement);
+        update(replacement,{beforeSelectedKey:previousSelection});
       });},
-      edit:function(field,value){safe(function(){update(studioApi.edit(studioDraft,field,value));});},
+      edit:function(field,value){safe(function(){
+        update(studioApi.edit(studioDraft,field,value),{group:'project:'+field,endGroup:true});
+      });},
       selectSequence:function(id){safe(function(){
         var next=studioApi.selectSequence(studioDraft,id);
+        var previousSelection=studioSelectedKey;
         studioSelectedKey=studioApi.activeFrames(next)[0].key;
-        update(next);
+        update(next,{beforeSelectedKey:previousSelection});
       });},
       clearSequence:function(){safe(function(){update(studioApi.clearSequence(studioDraft));});},
       frame:function(key,field,value){safe(function(){
-        update(studioApi.editFrame(studioDraft,key,field,value));
+        update(studioApi.editFrame(studioDraft,key,field,value),
+          {group:'frame:'+key+':'+field,endGroup:true});
       });},
       liveEdit:function(field,value){
-        try{studioDraft=studioApi.edit(studioDraft,field,value);
-          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);renderStudioLibrary();
+        try{
+          var next=studioApi.edit(studioDraft,field,value);
+          if(studioEditHistory)studioApi.recordEdit(studioEditHistory,studioDraft,next,
+            studioSelectedKey,'project:'+field);
+          studioDraft=next;
+          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
+          syncStudioHistoryButtons();renderStudioLibrary();
         }catch(error){/* Temporary invalid text is reported by the committed change event. */}
       },
       liveFrame:function(key,field,value){
-        try{studioDraft=studioApi.editFrame(studioDraft,key,field,value);
-          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);renderStudioLibrary();
+        try{
+          var next=studioApi.editFrame(studioDraft,key,field,value);
+          if(studioEditHistory)studioApi.recordEdit(studioEditHistory,studioDraft,next,
+            studioSelectedKey,'frame:'+key+':'+field);
+          studioDraft=next;
+          stopStudioPlayback(true);studioPrepared=null;saveStudioDraft(false);
+          syncStudioHistoryButtons();renderStudioLibrary();
         }catch(error){/* Do not persist incomplete or invalid intermediate numbers. */}
       },
       select:function(key){
@@ -3198,21 +3263,14 @@
       remove:function(key){safe(function(){
         var index=studioDraft.frames.findIndex(function(f){return f.key===key;});
         if(index<0)return;
-        var before=studioDraft,selectedBefore=studioSelectedKey;
+        var selectedBefore=studioSelectedKey;
         var next=studioApi.remove(studioDraft,key);
         if(studioSelectedKey===key)
           studioSelectedKey=next.frames.length?next.frames[Math.min(index,next.frames.length-1)].key:null;
-        update(next,{before:before,after:next,selectedKey:selectedBefore,
-          frameName:before.frames[index].name,
-          activeId:studioLibraryActive&&studioLibraryActive.id});
+        update(next,{beforeSelectedKey:selectedBefore});
       });},
-      undoRemove:function(){safe(function(){
-        var undo=studioRemovedFrameUndo;
-        if(!undo||undo.after!==studioDraft||
-          undo.activeId!==(studioLibraryActive&&studioLibraryActive.id))return;
-        studioSelectedKey=undo.selectedKey;
-        update(undo.before);
-      });},
+      undo:function(){safe(function(){restoreEditHistory('undo');});},
+      redo:function(){safe(function(){restoreEditHistory('redo');});},
       prepare:function(){
         try{
           stopStudioPlayback(true);
@@ -3277,6 +3335,7 @@
         if(!studioDragSession)return;
         var drag=studioDragSession;studioDragSession=null;
         safe(function(){
+          var selectedBefore=studioSelectedKey;
           var next=drag.kind==='frame'?studioApi.reorder(studioDraft,drag.key,index):
             studioApi.insertSnapshots(studioDraft,drag.ids,entries,index);
           if(drag.kind==='snapshots'){
@@ -3286,11 +3345,12 @@
               !studioDraft.frames.some(function(old){return old.key===f.key;});});
             if(added)studioSelectedKey=added.key;
           }else studioSelectedKey=drag.key;
-          update(next);
+          update(next,{beforeSelectedKey:selectedBefore});
         });
       },
       dragEnd:function(){studioDragSession=null;},
       insertChecked:function(index){safe(function(){
+        var selectedBefore=studioSelectedKey;
         var ids=animationPickerSelectedEntries(entries)
           .map(function(e){return e.id;});
         if(!ids.length)throw RangeError('Check snapshots in the picker first');
@@ -3303,14 +3363,13 @@
         var added=next.frames.find(function(f){return ids.includes(f.sourceSnapshotId)&&
           !studioDraft.frames.some(function(old){return old.key===f.key;});});
         if(added)studioSelectedKey=added.key;
-        update(next);
+        update(next,{beforeSelectedKey:selectedBefore});
       });}
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
-      undoRemoval:studioRemovedFrameUndo&&studioRemovedFrameUndo.after===studioDraft&&
-        studioRemovedFrameUndo.activeId===(studioLibraryActive&&studioLibraryActive.id)?
-        studioRemovedFrameUndo.frameName:null,
+      canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
+      canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,
       pickerSelectedCount:animationPickerSelectedEntries(entries).length});
     var picker=newUiEl('ModernAnimationSnapshotPicker');
     if(picker&&studioUI.renderPicker){

@@ -320,24 +320,157 @@ test('Keyframe card × removes its own frame without selecting, dragging or touc
     'old removal button in selected-frame toolbar was retired');
 });
 
-test('One-step removal undo is visible only when requested and restores through its action',()=>{
+test('Studio Undo/Redo controls support full draft history and disabled states',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=45;
   const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
   const {doc,host}=mockDom(),calls=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{
-    undoRemove:()=>calls.push('undo')},false,{undoRemoval:'First & last',selectedKey:'history-1'});
-  const banner=collect(host,n=>n.className==='modern-studio-undo-removal');
-  assert.equal(banner.length,1);
-  assert.match(banner[0].children[0].textContent,/First & last/);
-  banner[0].children[1].listeners.click();
-  assert.deepEqual(calls,['undo']);
+  const actions={undo:()=>calls.push('undo'),redo:()=>calls.push('redo')};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,
+    {canUndo:true,canRedo:false,selectedKey:'history-1'});
+  const undo=collect(host,n=>n.textContent==='Undo'&&n.tagName==='button');
+  const redo=collect(host,n=>n.textContent==='Redo'&&n.tagName==='button');
+  assert.equal(undo.length,1);assert.equal(undo[0].disabled,false);
+  assert.equal(redo.length,1);assert.equal(redo[0].disabled,true);
+  undo[0].listeners.click();assert.deepEqual(calls,['undo']);
+  assert.equal(collect(host,n=>n.className==='modern-studio-undo-removal').length,0,
+    'old one-shot removal banner is retired');
   host.children=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{},false,{});
-  assert.equal(collect(host,n=>n.className==='modern-studio-undo-removal').length,0);
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,
+    {canUndo:false,canRedo:true,selectedKey:'history-1'});
+  assert.equal(collect(host,n=>n.textContent==='Undo'&&n.tagName==='button')[0].disabled,true);
+  const redoActive=collect(host,n=>n.textContent==='Redo'&&n.tagName==='button')[0];
+  assert.equal(redoActive.disabled,false);redoActive.listeners.click();
+  assert.deepEqual(calls,['undo','redo']);
+});
+
+test('Bounded edit history undoes and redoes reorders, frame edits, insertion and removal',()=>{
+  const a=experiment(),b=clone(a),c=clone(a);b.scene.camera.Height=45;c.scene.camera.Height=80;
+  const entries=[entry(1,a),entry(2,b),entry(3,c)];
+  let draft=studio.history([1,2],entries),selection='history-1';
+  const initial=draft,hist=studio.createEditHistory(3);
+  function change(next,selected,group){
+    studio.recordEdit(hist,draft,next,selection,group);
+    draft=next;selection=selected===undefined?selection:selected;
+  }
+  change(studio.editFrame(draft,'history-2','holdMs','1.5'));
+  change(studio.reorder(draft,'history-1',2),'history-1');
+  change(studio.insertSnapshots(draft,[3],entries,draft.frames.length),'history-3');
+  change(studio.remove(draft,'history-2'),'history-3');
+  assert.equal(hist.past.length,3,'history is bounded');
+  assert.deepEqual(draft.frames.map(f=>f.key),['history-1','history-3']);
+  for(const expected of [['history-2','history-1','history-3'],
+    ['history-2','history-1'],['history-1','history-2']]){
+    const previous=studio.stepEditHistory(hist,draft,selection,'undo');
+    draft=previous.draft;selection=previous.selectedKey;
+    assert.deepEqual(draft.frames.map(f=>f.key),expected);
+  }
+  assert.equal(studio.stepEditHistory(hist,draft,selection,'undo'),null);
+  assert.equal(draft.frames[1].holdMs,1500,'first edit was trimmed, not lost from current state');
+  for(const expected of [['history-2','history-1'],
+    ['history-2','history-1','history-3'],['history-1','history-3']]){
+    const next=studio.stepEditHistory(hist,draft,selection,'redo');
+    draft=next.draft;selection=next.selectedKey;
+    assert.deepEqual(draft.frames.map(f=>f.key),expected);
+  }
+  assert.equal(studio.stepEditHistory(hist,draft,selection,'redo'),null);
+  assert.deepEqual(initial.frames.map(f=>f.key),['history-1','history-2'],
+    'history never mutates the original draft');
+});
+
+test('Live field input groups into one undo step, no-ops preserve redo, new edits clear redo',()=>{
+  let draft=studio.blank();const hist=studio.createEditHistory(20);
+  for(const text of ['A','An','Ani','Animation']){
+    const next=studio.edit(draft,'name',text);
+    studio.recordEdit(hist,draft,next,null,'project:name');draft=next;
+  }
+  assert.equal(hist.past.length,1);
+  const unchanged=studio.edit(draft,'name','Animation');
+  assert.equal(studio.recordEdit(hist,draft,unchanged,null,'project:name'),false);
+  studio.endEditGroup(hist);
+  const full=draft;
+  const back=studio.stepEditHistory(hist,draft,null,'undo');draft=back.draft;
+  assert.equal(draft.name,'Animation study');
+  assert.equal(hist.future.length,1);
+  const noOp=studio.edit(draft,'description',draft.description);
+  assert.equal(studio.recordEdit(hist,draft,noOp,null),false);
+  assert.equal(hist.future.length,1,'no-op must not invalidate redo');
+  const forward=studio.stepEditHistory(hist,draft,null,'redo');
+  assert.equal(forward.draft.name,full.name);
+  draft=forward.draft;
+  const changed=studio.edit(draft,'description','A real change');
+  studio.recordEdit(hist,draft,changed,null);
+  assert.equal(hist.future.length,0);
+  const earlier=studio.stepEditHistory(hist,changed,null,'undo');
+  assert.equal(earlier.draft.description,'');
+});
+
+test('App timeline actions undo/redo through autosaved drafts without touching History or sibling workspaces',()=>{
+  const vm=require('node:vm');
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(app,/undo\.after!==studioDraft/);
-  assert.match(app,/studioSelectedKey=undo\.selectedKey/);
-  assert.match(app,/studioApi\.remove\(studioDraft,key\)/);
+  const render=app.slice(app.indexOf('  function renderAnimationStudio(entries){'),
+    app.indexOf('  var historyMetadataEditingId=null;'));
+  const a=experiment(),b=clone(a),c=clone(a);
+  b.scene.camera.Height=40;c.scene.camera.Height=75;
+  const entries=[entry(1,a),entry(2,b),entry(3,c)];
+  const initial=studio.history([1,2],entries);
+  let actions,autosaves=0;
+  const host={__studioHistoryKeysBound:false,listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},
+    querySelector(){return null;},querySelectorAll(){return [];}};
+  const ctx={studioApi:studio,studioDraft:initial,studioSelectedKey:'history-1',
+    studioEditHistory:studio.createEditHistory(),studioPickerOpen:false,
+    studioPickerChecked:{},studioPickerShowIncompatible:false,studioPickerScroll:0,
+    studioFilmstripScroll:0,studioDiagnosticTransition:null,
+    studioPrepared:null,studioPlayback:null,studioRestorePreviewPending:false,
+    studioLibraryActive:{id:'other_project'},studioHistoryEntries:entries,
+    studioUI:{render(doc,host,draft,result,callbacks,prepared,options){
+      actions=callbacks;assert.equal(options.canUndo,ctx.studioEditHistory.past.length>0);
+    }},
+    newUiEl(id){return id==='ModernAnimationStudio'?host:null;},
+    syncLegacyHistorySelection(){},animationPickerPruneSelection(){},
+    animationPickerSelectedEntries(){return [];},renderStudioLibrary(){},
+    stopStudioPlayback(){},saveStudioDraft(){autosaves++;return true;},
+    applySuggestedStudioName(v){return v;},root:{},document:{},
+    Promise,Map,Set,Array,Object,String,Number,Date,RangeError,Error};
+  vm.runInNewContext(render,ctx);
+  ctx.renderAnimationStudio(entries);
+  actions.frame('history-2','holdMs','1.5');
+  assert.equal(ctx.studioDraft.frames[1].holdMs,1500);
+  actions.move('history-1',1);
+  assert.deepEqual(Array.from(ctx.studioDraft.frames,f=>f.key),['history-2','history-1']);
+  actions.remove('history-2');
+  assert.deepEqual(Array.from(ctx.studioDraft.frames,f=>f.key),['history-1']);
+  actions.undo();
+  assert.deepEqual(Array.from(ctx.studioDraft.frames,f=>f.key),['history-2','history-1']);
+  actions.undo();
+  assert.deepEqual(Array.from(ctx.studioDraft.frames,f=>f.key),['history-1','history-2']);
+  actions.undo();
+  assert.equal(ctx.studioDraft.frames[1].holdMs,0);
+  assert.equal(ctx.studioSelectedKey,'history-1');
+  actions.redo();assert.equal(ctx.studioDraft.frames[1].holdMs,1500);
+  // Shortcuts work from non-editable Studio controls, not native text inputs.
+  let prevented=0;
+  host.listeners.keydown({ctrlKey:true,key:'z',target:{tagName:'BUTTON'},
+    preventDefault(){prevented++;}});
+  assert.equal(ctx.studioDraft.frames[1].holdMs,0);
+  host.listeners.keydown({ctrlKey:true,key:'y',target:{tagName:'INPUT'},
+    preventDefault(){prevented++;}});
+  assert.equal(prevented,1);
+  host.listeners.keydown({ctrlKey:true,shiftKey:true,key:'z',target:{tagName:'BUTTON'},
+    preventDefault(){prevented++;}});
+  assert.equal(ctx.studioDraft.frames[1].holdMs,1500);
+  assert.equal(prevented,2);
+  const editsBefore=ctx.studioEditHistory.past.length;
+  for(const text of ['Camera A','Camera An','Camera Animation'])actions.liveEdit('name',text);
+  assert.equal(ctx.studioEditHistory.past.length,editsBefore+1,
+    'many valid live inputs coalesce to one app-level undo entry');
+  const inputSaves=autosaves;
+  actions.edit('name','Camera Animation');
+  assert.equal(autosaves,inputSaves,'blur does not save or rebuild a second time');
+  actions.undo();assert.equal(ctx.studioDraft.name,initial.name);
+  actions.redo();assert.equal(ctx.studioDraft.name,'Camera Animation');
+  assert.ok(autosaves>=6,'undo and redo checkpoint the working draft');
+  assert.equal(ctx.studioLibraryActive.id,'other_project');
+  assert.deepEqual(initial.frames.map(f=>f.key),['history-1','history-2']);
 });
 
 test('Studio uses one History picker and never exposes a second staged gallery or destructive load',()=>{
@@ -580,7 +713,7 @@ test('Live Picker actions filter independently, keep hidden selections and inser
     studioPickerQueryDraft:'',studioPickerAdvancedOpen:true,studioPickerOpen:true,
     studioPickerShowIncompatible:false,studioPickerChecked:Object.create(null),studioPickerScroll:0,studioFilmstripScroll:0,
     studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
-    studioRemovedFrameUndo:null,studioPrepared:null,studioPlayback:null,
+    studioEditHistory:null,studioPrepared:null,studioPlayback:null,
     studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
     studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
     studioDraft:{frames:[]},studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
@@ -779,7 +912,7 @@ test('Locked v2 Picker filters by contract, protects hidden selections and block
     studioPickerShowIncompatible:false,
     studioPickerChecked:{2:true,3:true,4:true},studioPickerScroll:0,studioFilmstripScroll:0,
     studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
-    studioRemovedFrameUndo:null,studioPrepared:null,studioPlayback:null,
+    studioEditHistory:null,studioPrepared:null,studioPlayback:null,
     studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
     studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
     studioDraft:draft,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){

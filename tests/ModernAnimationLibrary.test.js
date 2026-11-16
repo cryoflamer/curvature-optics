@@ -260,7 +260,7 @@ test('HTML load order and application expose named project save/open actions sep
   assert.doesNotMatch(ui,/Save and continue|Discard and continue|Identical animation already saved/);
   assert.match(ui,/Open draft/);
   assert.match(ui,/Duplicate/);
-  assert.match(ui,/Save as new/);
+  assert.doesNotMatch(ui,/Save as new/);
   assert.match(app,/function requestStudioSwitch\(kind,id\)/);
   assert.match(app,/function studioHasUnsavedWork\(\)/);
   assert.match(app,/Animation Library module failed to load; check the browser console/);
@@ -491,6 +491,9 @@ test('Animation Library gallery shows cards, genuine images, rename and direct o
   assert.deepEqual(calls.at(-1),['rename','animation_a','New title']);
   host.children=[];ui.renderLibrary(doc,host,entries,{selectedId:'animation_a',
     activeId:'animation_a',dirty:false,expanded:true},actions);
+  assert.equal(nodes().find(n=>n.textContent==='Save as new'),undefined);
+  assert.ok(nodes().find(n=>n.textContent==='Duplicate'),
+    'saved project has an explicit independent copy action');
   assert.equal(nodes().find(n=>n.textContent==='Stash & restore').disabled,true);
   assert.equal(nodes().find(n=>n.textContent==='Discard changes').disabled,true);
   host.children=[];ui.renderLibrary(doc,host,entries,{selectedId:'',expanded:false},actions);
@@ -702,9 +705,11 @@ test('project lifecycle has independent draft controls and no conflicting confir
     {id:'draft_two',name:'Current work',frames:1,active:true}
   ]},actions);
   const button=label=>nodes().find(n=>n.tagName==='button'&&n.textContent===label);
-  for(const [label,event] of [['New project','new'],['Save project','save'],['Save as new','saveAs']]){
+  for(const [label,event] of [['New project','new'],['Save project','save']]){
     button(label).listeners.click();assert.equal(calls.at(-1),event);
   }
+  assert.equal(button('Save as new'),undefined,'unsaved drafts have a single save action');
+  assert.equal(button('Duplicate'),undefined,'only saved projects can be duplicated');
   button('Open draft').listeners.click();assert.deepEqual(calls.at(-1),['openDraft','draft_one']);
   const draftDelete=nodes().find(n=>n.className.includes('modern-animation-workspace-delete'));
   assert.equal(draftDelete.textContent,'','shared History-style × is rendered by CSS');
@@ -732,7 +737,8 @@ function projectLifecycleHarness(){
   stored.set('other',{id:'other',updatedAt:2,quality:'fast',
     project:{id:'other',name:'Other work',frames:[{key:'a'},{key:'b'}]}});
   let rejectSave=false,rejectDraft=false,sequence=0;
-  const studioApi={blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
+  const studioApi={createEditHistory(){return {past:[],future:[]};},
+    blank(){return {name:'Animation study',description:'',mode:'auto',target:'auto',
     source:'none',frames:[],cameraHudAppearance:null};},
     edit(draft,key,value){return {...draft,[key]:value};},build(draft,id){
     if(draft.frames.length<2)throw Error('not enough frames');
@@ -757,7 +763,7 @@ function projectLifecycleHarness(){
     studioDraftGeneration:0,studioSelectedKey:'a',studioFilmstripScroll:0,
     studioLibraryRenamingId:'',studioPickerOpen:false,studioPickerSearch:'',
     studioPickerScroll:0,studioPickerChecked:{},studioDragSession:null,
-    studioRemovedFrameUndo:null,studioRestorePreviewPending:false,
+    studioEditHistory:null,studioRestorePreviewPending:false,
     studioPrepared:null,studioPlayback:null,
     studioPlaybackApi:null,animationWorkspaceOpen:false,experimentHistory:null,
     studioHistoryEntries:[],studioLibraryDirty(){return ctx.studioDraft.name!==

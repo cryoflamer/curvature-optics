@@ -39,6 +39,46 @@
     frames:draft.frames.map(function(frame){
       return Object.assign({},frame);
     })};}
+  // An in-memory, bounded timeline of immutable Studio drafts. Experiments are
+  // already owned snapshots; their unchanged payloads are shared by reference
+  // between immutable edits rather than copied into every history entry.
+  function createEditHistory(limit){
+    return {past:[],future:[],group:null,limit:Math.max(1,Math.min(50,limit||30))};
+  }
+  function sameDraft(a,b){
+    if(a===b)return true;
+    if(!a||!b||a.frames.length!==b.frames.length)return false;
+    for(var key of ['name','description','mode','target','source','interpolation','contract','cameraHudAppearance'])
+      if(a[key]!==b[key])return false;
+    var left=a.activeFrameKeys||[],right=b.activeFrameKeys||[];
+    if(left.length!==right.length||left.some(function(key,i){return key!==right[i];}))return false;
+    for(var i=0;i<a.frames.length;i++){
+      var x=a.frames[i],y=b.frames[i];
+      for(var field of ['key','sourceSnapshotId','name','travelMs','holdMs','easing','experiment'])
+        if(x[field]!==y[field])return false;
+    }
+    return true;
+  }
+  function recordEdit(history,before,after,selectedKey,group){
+    if(sameDraft(before,after))return false;
+    if(!group||history.group!==group||!history.past.length){
+      history.past.push({draft:before,selectedKey:selectedKey});
+      if(history.past.length>history.limit)history.past.shift();
+    }
+    history.future.length=0;
+    history.group=group||null;
+    return true;
+  }
+  function endEditGroup(history){history.group=null;}
+  function stepEditHistory(history,draft,selectedKey,direction){
+    var source=direction==='undo'?history.past:history.future;
+    var destination=direction==='undo'?history.future:history.past;
+    if(!source.length)return null;
+    destination.push({draft:draft,selectedKey:selectedKey});
+    if(destination.length>history.limit)destination.shift();
+    history.group=null;
+    return source.pop();
+  }
   function history(ids,entries,previous){
     if(!Array.isArray(ids)||ids.length>MAX_FRAMES)throw RangeError('Too many selected snapshots');
     var found=new Map(entries.map(function(entry){return [entry.id,entry];}));
@@ -309,6 +349,8 @@
     }catch(_error){return 'Animation study';}
   }
   return Object.freeze({suggestName:suggestName,blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
+    createEditHistory:createEditHistory,recordEdit:recordEdit,endEditGroup:endEditGroup,
+    stepEditHistory:stepEditHistory,
     edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
     activeFrames:activeFrames,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});

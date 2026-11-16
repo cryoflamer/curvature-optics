@@ -52,6 +52,7 @@ function harness(mode='camera'){
     studioDraft:draft,studioPrepared:prepared,studioPlayback:playback.create(prepared),
     studioPlaybackFrame:null,studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
     studioApi:studio,studioPlaybackApi:playback,studioRestorePreviewPending:false,
+    studioEditHistory:null,
     studioPlaybackQuality:'auto',animationWorkspaceOpen:true,
     profileNow:()=>now,document:{hidden:false,addEventListener(){}},
     root:{},

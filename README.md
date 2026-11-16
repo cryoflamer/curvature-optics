@@ -650,7 +650,7 @@ editing a keyframe invalidates the previous preview until Preview is clicked aga
 expands the library, selects the card, and returns the horizontal gallery to its
 start. When a saved record is open, the action becomes **Save changes**; **Duplicate**
 creates and opens an independent record with a new ID, leaving the original unchanged.
-For an unsaved draft, the same action is labeled **Save as new**. An explicit **Open** button on each card opens
+For an unsaved draft, only **Save project** is shown; no redundant Save as new action. An explicit **Open** button on each card opens
 that project for editing (restoring its own autosaved edits). A single click selects
 it only for **Export selected** in the distinct **JSON backup** controls; JSON
 backup does not render a video. Videos and PNG frames are exported from the
@@ -686,7 +686,7 @@ saved-project cards**. Each card shows the project name, Camera or Physical
 animation type, animated variable, keyframe count, total duration, updated
 date, a short description and a first-frame physics summary. Use **Open**, **Rename**, or **Delete** directly from a card; a single click
 selects a card for JSON backup without replacing the draft (double-click still opens).
-**Save project**, **Save changes**, and **Duplicate** (or **Save as new** for drafts) remain explicit actions above
+**Save project**, **Save changes**, and **Duplicate** (for saved projects only) remain explicit actions above
 the gallery. A successful save automatically expands the gallery, selects the new
 record and scrolls it into view. A saved project with unsaved draft edits is
 clearly identified.
@@ -707,7 +707,7 @@ new HTML entrypoint, or Legacy change.
 
 ### Animation Library duplicate review (nonblocking)
 
-**Save project**, **Save as new**, and **Duplicate** deliberately create a named record even when its
+**Save project** and **Duplicate** deliberately create a named record even when its
 physics/timing exactly match another saved project. They no longer open a second
 warning or interrupt switching. **Save changes** still revision-checks the
 opened project. The optional **Find duplicates** command groups existing
@@ -804,10 +804,16 @@ The Animation Studio keyframe timeline has an `×` action in the upper-right
 corner of **each** frame card. It removes that frame from the current editable
 draft without changing its source snapshot in History, and without selecting
 or dragging the card. The selection panel retains frame timing and move
-controls, but no longer duplicates frame deletion. Immediately after removal,
-**Undo** restores the previous draft, including its frame settings and
-selection; undo is one step, lasts until the next draft edit, and is not stored
-across a reload. Old History shortlists can be migrated once from Animation, not edited in History. Adding from the picker preserves existing
+controls, but no longer duplicates frame deletion. The editor toolbar now has **Undo** and **Redo** for a bounded 30-step,
+in-memory history covering frame insertion, removal, reorder (buttons and drag),
+frame timing/easing/name edits and project metadata or sequence changes.
+Continuous input in the same field is one step, not one per keystroke. Ctrl+Z,
+Ctrl+Y and Ctrl+Shift+Z work while focused on non-text Studio controls; focused
+inputs retain their native undo behavior. Undo restores the previous draft and
+keyframe selection; new edits clear Redo. History resets when switching to
+another project, loading a saved revision or promoting a draft to a new library
+record; it is not persisted across F5. Old History shortlists can be migrated
+once from Animation, not edited in History. Adding from the picker preserves existing
 frames; deleting a History record remains a separate, confirmed operation.
 
 ### Animation Studio HUD integration compatibility

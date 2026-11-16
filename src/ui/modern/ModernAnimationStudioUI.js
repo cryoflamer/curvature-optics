@@ -232,10 +232,9 @@
     action(projectActions,options.activeId?'Save changes':'Save project',
       options.activeId?'Update the opened project in Animation Library':'Add this draft to Animation Library',
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
-    action(projectActions,options.activeId?'Duplicate':'Save as new',
-      options.activeId?'Create and open an independent copy with a new project ID; keep the original unchanged':
-        'Save this draft as an independent project with a new ID',actions.saveAs,
-      options.busy||!options.canSave);
+    if(options.activeId)action(projectActions,'Duplicate',
+      'Create and open an independent copy with a new project ID; keep the original unchanged',
+      actions.saveAs,options.busy||!options.canSave);
     if(options.activeId){
       action(projectActions,'Stash & restore',
         'Keep the current working changes as a separate draft and reload the saved Library version',
@@ -915,6 +914,12 @@
       'Edit keyframes below. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
+    var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
+    undo.className+=' modern-studio-edit-undo';undo.disabled=!options.canUndo;
+    toolbar.appendChild(undo);
+    var redo=button(doc,'Redo','Redo the last undone animation draft edit',function(){if(actions.redo)actions.redo();});
+    redo.className+=' modern-studio-edit-redo';redo.disabled=!options.canRedo;
+    toolbar.appendChild(redo);
     toolbar.appendChild(button(doc,'Choose from History','Open saved experiments to select animation keyframes',actions.choose));
     if(!draft.contract)toolbar.appendChild(button(doc,'Replace with Camera Animation…',
       'Replace ALL current keyframes with the Camera Animation after confirmation',actions.importCamera));
@@ -1051,15 +1056,6 @@
     });
     filmstrip.appendChild(dropSlot(doc,draft.frames.length,actions,options.pickerSelectedCount||0));
     host.appendChild(filmstrip);
-    if(options.undoRemoval){
-      var undoBar=el(doc,'div','modern-studio-undo-removal');
-      undoBar.setAttribute('role','status');
-      undoBar.appendChild(el(doc,'span','',
-        'Removed keyframe “'+options.undoRemoval+'” from this animation.'));
-      undoBar.appendChild(button(doc,'Undo','Restore the last removed animation keyframe',
-        function(){if(actions.undoRemove)actions.undoRemove();}));
-      host.appendChild(undoBar);
-    }
     if(selected){
       var index=draft.frames.indexOf(selected);
       var panel=el(doc,'section','modern-studio-selected-frame');
