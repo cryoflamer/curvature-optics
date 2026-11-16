@@ -170,6 +170,11 @@ node --test tests/DocumentationConsolidation141275.test.js
 
 This is an automated regression gate, **not** a substitute for checking animation, camera interaction, and appearance in the target browser. See [development](docs/development.md) for deeper checks and browser smoke tests.
 
+On GitHub, `.github/workflows/ci.yml` separately runs the full Node regressions,
+Legacy/refactor closure and real Chromium UI smoke tests on pushes and pull
+requests. Browser failures upload a screenshot, console log and Playwright
+trace. [CI setup and optional local commands](docs/development.md#github-actions-ci).
+
 ## Baselines and scope
 
 `optics-baseline-2026-11` is the historical CPU-optics baseline. The research archive is intended to be preserved as `optics-research-archive-2026-11`, an **annotated Git tag on the commit immediately before #140.12.74**; verify that it exists in **your** clone. A format-patch cannot create Git tags. Archived Legacy browser PNGs are **observations of Legacy output**, not measurements of physical correctness or proof of Modern pixel parity.

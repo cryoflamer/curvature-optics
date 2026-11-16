@@ -53,6 +53,44 @@ node --test tests/*.test.js
 
 **Different evidence levels:** a selected Node suite checks only its covered invariants; PNG hash/pixel validation authenticates stored browser observations; actual browser runs check layout/interactions on **that** machine. Never report a full suite, browser smoke test, WGSL compilation or numerical tolerance gate as passed unless it was actually performed.
 
+## GitHub Actions CI
+
+`.github/workflows/ci.yml` runs automatically on **push**, **pull request** and
+**workflow_dispatch**. Each job is independent, so a browser failure does not
+prevent Node results from being reported:
+
+- **Node regressions**: Node 22, `node --test --test-concurrency=2 tests/*.test.js`
+  (the complete repository regression set; resource-intensive).
+- **Architecture and Legacy preservation**: `node tools/check-refactor-closure.js`
+  and the standard-library Python Legacy PNG/hash validator. The canonical
+  `tests/fixtures/legacy-browser-references.zip` must be present in Git.
+- **Chromium UI smoke**: Python 3.13 and Playwright 1.57.0 with its own Chromium
+  installation. The test runner starts a loopback HTTP server automatically;
+  it opens the real static Modern page, navigates UI modes, opens/cancels the
+  wizard, checks draft recovery across F5, creates a v2 project, and exercises
+  Undo/Redo after focus leaves the frame editor.
+
+The browser job uses fresh isolated browser contexts, so it does not touch a
+user's local History, Animation Library, IndexedDB or real saved projects.
+Failures save a screenshot, browser console/page errors and a Playwright trace
+in `browser-artifacts/`, uploaded as a short-lived workflow artifact **only on
+failure**. Traces can contain application state; review them before sharing.
+
+No npm package, webpack build, publishing token or hosted web service is
+required. To run the browser smoke locally (optional):
+
+```sh
+python -m pip install playwright==1.57.0
+python -m playwright install chromium
+python -m unittest discover -s tests/browser -p 'test_*.py' -v
+```
+
+The GitHub job installs OS-level Chromium dependencies via
+`python -m playwright install --with-deps chromium`. Check the workflow's
+**Actions** tab after the first push; a written workflow is not evidence that
+GitHub's runner actually passed. A successful Chromium smoke test also does
+**not** validate Opera-specific behavior, real GPU output or pixel parity.
+
 ## Manual browser acceptance before claiming release readiness
 
 1. **Legacy:** open `CurvatureApp.html?ui=legacy`, run several demos (including TransLine and Bedford); pause/resume, step in both directions, test `?demo=TransLine&pos=5`, and try existing saved-state controls. Inspect the console.

@@ -2,3 +2,6 @@
 .idea
 chatgpt-packs
 *.iml
+# Playwright diagnostics are uploaded only on CI failures.
+browser-artifacts/
+__pycache__/
