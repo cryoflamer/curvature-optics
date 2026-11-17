@@ -27,7 +27,8 @@
     return !!spec&&!!fastField&&fastField.supportsAtmosphere(spec.atmosphere);
   }
   function opticalQuality(spec,choice,animationMode){
-    if(!['auto','fast','accurate'].includes(choice))throw RangeError('Invalid animation optics choice');
+    if(!['auto','fast','accurate','effective-radius'].includes(choice))throw RangeError('Invalid animation optics choice');
+    if(choice==='effective-radius')return 'effective-radius';
     if(choice==='accurate'||(choice==='auto'&&animationMode==='physical'))return 'accurate';
     return fastEligible(spec)?'fast':'accurate';
   }
@@ -152,7 +153,7 @@
         occlusionRadius:spec.occlusionRadius,visibility:spec.visibility,
         temperatureProfile:spec.temperatureProfile,transitionProfile:spec.transitionProfile,
         inverseProfile:spec.inverseProfile,interactive:false,geometryBackend:'canvas',
-        opticalQuality:quality,previewLod:{stride:quality==='fast'?detailStride:1},
+        opticalQuality:quality,previewLod:{stride:quality==='fast'||quality==='effective-radius'?detailStride:1},
         cacheSession:sessions[side]||undefined}};
     }
     function guides(config,side,graph){
@@ -166,7 +167,8 @@
           'drawn':'outside view';
       }
       if(display.horizon){
-        if(config.quality!=='accurate')traced='disabled in Fast Preview';
+        if(config.quality!=='accurate')traced=config.quality==='fast'?
+          'disabled in Fast Preview':'disabled in Effective Radius Preview';
         else if(!detector||typeof detector.diagnose!=='function')traced='tracer unavailable';
         else{
           var params=horizonOptions(config.model,config.spec),key=JSON.stringify(params);

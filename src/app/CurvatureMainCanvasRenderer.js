@@ -15,13 +15,15 @@
     root.CurvatureScreenSpaceGuides||(typeof require==='function'?require('../renderers/CurvatureScreenSpaceGuides'):null),
     root.CurvaturePhysicalCamera||(typeof require==='function'?require('./CurvaturePhysicalCamera'):null),
     root.CurvatureAtmosphericVisibility||(typeof require==='function'?require('../renderers/CurvatureAtmosphericVisibility'):null),
-    root.CurvatureCameraTranslation||(typeof require==='function'?require('../geometry/CurvatureCameraTranslation'):null));
+    root.CurvatureCameraTranslation||(typeof require==='function'?require('../geometry/CurvatureCameraTranslation'):null),
+    root.CurvatureOpticalEffectiveRadiusPreview||(typeof require==='function'?require('../optics/OpticalEffectiveRadiusPreview'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility,cameraTranslation){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility,cameraTranslation,effectiveRadius){
   'use strict';
   var opticalSession=optical.create();
   var fastOpticalSession=optical.create();
+  var effectiveRadiusSession=effectiveRadius&&effectiveRadius.create();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
   // During high-frequency camera interaction, only the presentation of dense
   // Globe ground guides is sampled by WHOLE source curves. Never sample
@@ -133,8 +135,9 @@
     var composedAt=now();
     // Explicit cold optical benchmark: discard only the camera-independent
     // ray/composition cache for THIS viewport. No physical parameters change.
-    var session=options.cacheSession||
-      (options.opticalQuality==='fast'?fastOpticalSession:opticalSession);
+    var session=options.opticalQuality==='effective-radius'?effectiveRadiusSession:
+      options.cacheSession||(options.opticalQuality==='fast'?fastOpticalSession:opticalSession);
+    if(!session)throw Error('Effective Radius Preview module is unavailable');
     if(options.forceColdOptics){
       if(!session||typeof session.clearCache!=='function')
         throw new TypeError('Cold optical sampling requires a clearable session');
@@ -197,6 +200,8 @@
       physicalMetricWorld:stats.physicalMetricWorld,
       primitiveCount:drawComposition.scene.primitives.length,
       previewLod:stats.previewLod,
+      refractionK:stats.refractionK===undefined?null:stats.refractionK,
+      effectiveRadiusMeters:stats.effectiveRadius===undefined?null:stats.effectiveRadius,
       layerCounts:painted.layerCounts,fieldStats:stats.fieldStats,fieldPrism:stats.fieldPrism,
       opticalStages:stats.opticalStages,opticalWork:stats.opticalWork,
       unresolvedReasons:stats.unresolvedReasons,sampleStatuses:stats.sampleStatuses,
@@ -227,7 +232,8 @@
        captionMode:options&&options.captionMode,includeGeometrySummary:!!(options&&options.includeGeometrySummary)});}
     finally{ctx.restore();}
   }
-  function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();}
+  function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();
+    effectiveRadiusSession=effectiveRadius&&effectiveRadius.create();}
   return {geometryAuditRevision:'140.12.37.2',
     render:render,renderPhysical:renderPhysical,drawPresentationDecorations:drawPresentationDecorations,
     resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,

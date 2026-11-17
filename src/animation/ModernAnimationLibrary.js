@@ -25,7 +25,7 @@
     return id;
   }
   function quality(value){
-    if(!['auto','accurate','fast'].includes(value))throw RangeError('Invalid animation library optics');
+    if(!['auto','accurate','fast','effective-radius'].includes(value))throw RangeError('Invalid animation library optics');
     return value;
   }
   function stamp(value){

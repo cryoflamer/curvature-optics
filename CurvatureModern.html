@@ -45,6 +45,7 @@
 <script src="src/optics/CurvaturePhysicalGroundGuides.js?v=adaptive-grid-42"></script>
 <script src="src/optics/CurvaturePhysicalPolygonFills.js?v=140.12.37.2"></script>
 <script src="src/optics/CurvaturePhysicalSceneOptics.js?v=adaptive-fast-profiles&amp;adaptive-grid-41=1&amp;extended-grid-42=1"></script>
+<script src="src/optics/OpticalEffectiveRadiusPreview.js"></script>
 <script src="src/app/CurvatureModel.js"></script>
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
@@ -242,13 +243,14 @@
           <option value="spline">Smooth · Spline</option>
         </select>
         <label for="ModernAnimationPlaybackOptics">Optics</label>
-        <select id="ModernAnimationPlaybackOptics" title="Physical animation defaults to Accurate RK4; Fast is approximate and is available only for qualified atmospheric profiles">
+        <select id="ModernAnimationPlaybackOptics" title="Physical animation defaults to Accurate RK4; Fast and Effective Radius are approximate. Effective Radius supports Vacuum, Standard, Temperature lapse (Globe) or Vacuum (Flat).">
           <option value="auto">Auto · Accurate physical / Fast camera</option>
           <option value="accurate">Accurate RK4 · all frames</option>
           <option value="fast">Fast if supported · approximate</option>
+          <option value="effective-radius">Effective Radius · experimental geometry</option>
         </select>
         <label for="ModernAnimationPlaybackDetail">Scene detail</label>
-        <select id="ModernAnimationPlaybackDetail" title="Fast Preview object detail; Full never thins authored objects. Balanced and Performance thin supported repeating object groups only. Accurate RK4 always uses full geometry.">
+        <select id="ModernAnimationPlaybackDetail" title="Fast/Effective Radius object detail; Full draws every object. Balanced and Performance thin supported repeating tower groups only. Accurate RK4 always uses full geometry.">
           <option value="full">Full · all modeled objects</option>
           <option value="balanced">Balanced · moderate simplification</option>
           <option value="performance" selected>Performance · faster Preview</option>

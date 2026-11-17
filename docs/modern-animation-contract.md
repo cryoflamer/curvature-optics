@@ -383,3 +383,85 @@ flags plainly unreferenced top-level named functions. GitHub Actions continues
 to cover the full Node suite and real Chromium smoke tests after push.
 Static checks do not certify Opera interactivity, visual pixel parity or a
 race-free browser implementation.
+
+
+---
+
+# Experimental Effective Radius Preview (Animation Studio)
+
+## Purpose
+
+An explicitly selected alternative to **Fast** and **Accurate RK4** for camera
+playback. It is an approximation, not a physics-engine replacement or a
+pixel-parity guarantee. The new implementation lives entirely in Modern;
+no Legacy animation, renderer, or effective-disk model is called.
+
+Choose **Animation Studio → Playback → Optics → Effective Radius**. Existing
+Auto, Fast and Accurate selections are unchanged. The preference is saved
+along with a named Animation Library entry; it is not stored in the underlying
+Experiment physics or camera keyframes. `Scene detail` still applies the shared
+object thinning policy: Full keeps all objects, but Soundly's bridge parts are
+not a recognized repeating tower bank and remain **128/128** in every detail
+preset.
+
+## Model
+
+For a locally constant vertical refractive-index gradient at observer height,
+
+```
+k = -R * (dn/dh) / n
+R_effective = R / (1 - k)
+```
+
+Distance `d` remains the authored *true-Earth* surface-arc distance. Each
+world-space point is mapped to its distance, height and azimuth using Modern's
+existing physical coordinate transform. A straight line from the observer to
+that point on the effective sphere produces the preview direction. A target
+is clipped if it lies past the geometric tangent distance on that sphere.
+This is not a substitute for a full ray integration, and physical objects and
+cameras are not moved to a new actual Earth model.
+
+`vacuum` uses `k=0` and `R_effective=R`. On Globe, `standard` and
+`temperature-lapse` derive the local `n` and `dn/dh` from the **same Modern
+atmospheric profiles** used by Accurate. Unsupported atmospheres, strongly
+anomalous local gradients and refracted Flat scenes are rejected explicitly
+instead of silently reverting to RK4, Fast, or vacuum. Flat Vacuum uses direct
+straight lines.
+
+## Geometry and constraints
+
+The preview projects the authored objects without recursive adaptive
+optical tessellation. Each outline edge checks its midpoint and bisects
+mixed visible/hidden intervals. Filled polygons are triangulated once and
+clipped at the approximate horizon; far-to-near object order and fill-before-
+outline are preserved. The existing Physical painter performs final Canvas
+projection, clipping and styling. Source scenes, keyframes, Accurate/RK4,
+normal Fast, project JSON and export physics are not mutated.
+
+**Limitations:** vertex clipping and a single interior test are intentionally
+cheaper and less rigorous than the adaptive visibility/ground-contact
+algorithm. Small horizon gaps, missed interior visibility islands, changes to
+silhouette detail, and differences near the geometric horizon are possible.
+This approximation does not reproduce variable-height refraction, ducting,
+mirages or multiple rays. The painter still does not implement mutual 3D
+mesh occlusion. Use Accurate to inspect ambiguous horizon and fine-structure
+features. This is an experimental playback mode, not a new physical model for
+saved experiments.
+
+## How to evaluate Soundly
+
+1. Import the existing Soundly Causeway JSON into Animation Studio.
+2. Compare **Fast** and **Effective Radius**, both with `Scene detail: Full`,
+   at the same playback positions; keep Canvas resolution identical.
+3. Inspect the low observer-height near-horizon interval and the final four
+   reference camera views. Look for gaps, false bridge fills and misplaced
+   support outlines. Compare important still frames with Accurate RK4.
+4. Read `frame N ms` in Playback diagnostics, and the frame profiler p50/p95.
+   The status also shows local `k` for Effective Radius. Warm up both modes
+   before judging performance. Node synthetic-Canvas measurements are not
+   proof of browser FPS, and the 20–30 FPS target is not yet validated.
+
+The first patch intentionally changes **only** Animation Playback. Do not
+activate this approximation in Scene/Compare or export automatically. Browser
+visual validation is required before considering any default change or
+additional Legacy-demo migration.
