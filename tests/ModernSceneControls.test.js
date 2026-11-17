@@ -503,3 +503,24 @@ test('140.2: Display selects experimental GPU for redraw and returns to Canvas o
   r.fire('ModernGeometryBackend','change','canvas');
   assert.equal(r.draws.at(-1).geometryBackend,'canvas');
 });
+
+
+test('Causeway preset retains source bridge geometry through UI Compare, History and Reset',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  assert.equal(await r.fire('ModernPreset','change','causeway'),true);
+  assert.deepEqual(Array.from(m.ObjType),[6,3]);
+  assert.deepEqual(Array.from(m.NObjects),[41,0]);
+  assert.deepEqual(Array.from(m.ObjSideType),[1,0]);
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
+  r.fire('ModernCompareTab','click');
+  assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
+  r.fire('ModernObject0ObjSidePos','change','80');
+  await r.fire('ModernPreset','change','grace');
+  assert.ok(r.historyEntries.some(e=>e.pinned&&
+    e.experiment.scene.resetPreset==='causeway'&&e.experiment.scene.objects.ObjSidePos[0]===80));
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(m.ObjSidePos[0],80);
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'causeway');
+  await r.fire('ModernResetPreset','click');
+  assert.deepEqual(Array.from(m.ObjSidePos),[45,0]);
+});

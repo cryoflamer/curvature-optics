@@ -98,6 +98,16 @@
         ObjDeltaDist:[20,22.7],ObjSideType:[0,0],ObjSidePos:[97.5,34.7],
         ObjSideVar:[12,-523],ObjSizeType:[0,3],ObjSize:[37.2,75],
         ObjSizeVar:[0,.234]},
+      showGrid:true,atmosphere:'vacuum'},
+    // Legacy Causeway state 5: two rows of 41 supports over 38.7 km.
+    // Source showModel=3 is a composite overlay: Modern Compare remains
+    // independent A/B with a fixed eye-level camera (not legacy horizon aim).
+    causeway:{name:'Lake Pontchartrain Causeway · bridge horizon study',
+      description:'Legacy Causeway state 5 geometry: two 39 km bridge rows, 100 m observer and vacuum. Native Compare A/B; no original combined globe/flat overlay.',
+      camera:{Height:100,FocalLengthField:2000,Pan:0,Nick:0,Roll:0},
+      objects:{NObjects:[41,0],ObjType:[6,3],ObjDist:[0,0],ObjDeltaDist:[967.5,100],
+        ObjSideType:[1,0],ObjSidePos:[45,0],ObjSideVar:[30,0],
+        ObjSizeType:[0,0],ObjSize:[5,10],ObjSizeVar:[0,0]},
       showGrid:true,atmosphere:'vacuum'}
   });
   function finiteNumber(raw,min,max,integer){

@@ -1,3 +1,18 @@
+> **Lake Pontchartrain Causeway partial native Scene (#43, 2026-11-17):**
+> Added `causeway` as a source-backed Modern preset from authored Causeway
+> state index 4 (`?demo=Causeway&pos=5`): two rows of 41 bridge supports,
+> 967.5 m spacing, near distance 0 m, 5 m support height, camera 100 m and
+> 2000 mm, with source zero-refraction represented by vacuum. The existing
+> type-6 world-space geometry creates 40 road polygons per row with no
+> cross-column connections. Scene/Compare are independently ray-traced on
+> Globe/Flat; Modern uses a shared eye-level camera rather than replicating
+> Legacy's combined `showModel=3` overlay. The preset participates in the
+> existing History/Previous/Reset, JSON and URL mechanisms. No new object
+> type, ray solver, persistence format or Legacy behavior was changed.
+> Full visual/animation and all-six-state parity remain unverified. See
+> `tests/ModernCausewayPreset.test.js` and
+> `docs/modern-location-migration.md`. Next: independent type-7 Tensas.
+>
 > **Platform Grace and long-distance metric grid (#42, 2026-11-17):**
 > `grace` is now a **partial** native Modern preset based on authored Legacy
 > Grace state index 7: two 28 km type-6 platform supports + a world-space

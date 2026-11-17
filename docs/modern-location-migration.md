@@ -1,7 +1,7 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-17, #42):** five **partial** geographic native scenarios
-(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`) are available, with
+**Status (2026-11-17, #43):** six **partial** geographic native scenarios
+(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`, `causeway`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
@@ -58,8 +58,11 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   Evidence: `tests/ModernGracePreset.test.js`,
   `tests/PhysicalLongRangeGrid.test.js`,
   `tests/PhysicalScreenSpaceGuideLod119.test.js`. This is not full Grace parity.
-- [ ] **#43+ — Tensas, Causeway, Soundly:** prioritize shared geometry
-  types and source checks rather than special physics per location.
+- [x] **#43 — Lake Pontchartrain Causeway:** partial native source-state 5 bridge
+  with 41 supports in each of two rows, 967.5 m intervals, 100 m observer,
+  vacuum, and independently rendered Globe/Flat. See `tests/ModernCausewayPreset.test.js`.
+- [ ] **#44+ — Tensas and Soundly:** port source-backed types 7 and 8 without
+  changing the shared optical physics.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
   for every migrated scenario. No full migration parity is certified yet.
@@ -399,13 +402,26 @@ prevent an opaque band. The farthest available visible ring, physical horizon
 and all scene-object primitives are preserved. The rendering limit is not a
 physical horizon and does not alter object visibility or field queries.
 
+### Causeway source-backed Modern view (#43)
+
+The `causeway` preset comes from Legacy Causeway **state index 4** (URL
+`?demo=Causeway&pos=5`). Geometry, observer height (100 m), focal length
+(2000 mm), and zero refraction are original; the two 41-support rows begin
+at 0 m and continue at 967.5 m intervals to 38.7 km. The existing type-6
+physical geometry constructs 80 deck polygons, 40 for each column, with no
+cross-column connections. Modern uses a separate Globe and Flat Compare,
+not the original `showModel=3` overlay; Modern eye-level camera aim does not
+reproduce source `viewcenterHorizon=2` semantics. Remaining five source
+states, original choreography, browser visual/pixel parity and final camera
+acceptance are not certified. No new optics or persistence schema was added.
+
 ### Stage C — geometry families (proposed #35+)
 
 - [x] Implement object type **4**: Chicago skyline and indexed variation.
 - [x] Implement object type **5**: mountain/terrain silhouettes and variants
   (bank-shifted three palettes, six-step mirroring, fixed width under height variation).
 - [x] Implement object type **6**: shared bridge support/road geometry,
-  now exercised by Grace; Causeway requires an independent preset review.
+  exercised by Grace and the partial Causeway source-state view.
 - [ ] Implement object type **7**: Tensas-specific bridge geometry.
 - [ ] Implement object type **8**: Soundly Causeway geometry.
 - [ ] Review type **9** only for full Legacy object-catalog parity; it is
@@ -423,7 +439,8 @@ catalog entry. Do not tick it until the acceptance gates below are met.
 
 - [ ] `earth-curvature-lesson` — `Curve` (12 states); educational, not a
   geographic location; explicitly address globe/flat comparisons.
-- [ ] `pontchartrain-causeway` — `Causeway` (6 states); type 6 exists, but source-backed preset, camera, and scene parity remain open.
+- [ ] `pontchartrain-causeway` — `Causeway` (6 states); partial state-4
+  source-backed preset available (#43), but six-state/overlay and animation parity remain open.
 - [ ] `pontchartrain-transmission-line` — `TransLine` (8 states); the current
   `pontchartrain` preset is **partial**, not validated across Legacy states.
 - [ ] `anacapa-grace-platform` — `Grace` (9 states); partial `grace` state-7
