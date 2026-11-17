@@ -6,17 +6,18 @@
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
   var horizon=root.CurvatureRayHorizon,physicalCamera=root.CurvaturePhysicalCamera;
-  var fastField=root.CurvatureOpticalFastRayField;
+  var fastField=root.CurvatureOpticalFastRayField,previewLod=root.CurvatureOpticalPreviewLod;
   if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
     horizon=require('../optics/OpticalRayHorizon');
     physicalCamera=require('../app/CurvaturePhysicalCamera');
     fastField=require('../optics/OpticalFastRayField');
+    previewLod=require('../optics/OpticalPreviewLod');
   }
-  var api=factory(experiment,horizon,physicalCamera,fastField);
+  var api=factory(experiment,horizon,physicalCamera,fastField,previewLod);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera,fastField){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera,fastField,previewLod){
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
@@ -141,13 +142,17 @@
       model.Update();
       var geometry=model.showModel===2?'flat':'globe';
       var requested=options.quality||'auto',mode=options.animationMode||'camera';
+      // Scene detail is a preview preference, not part of an experiment or
+      // animation project. A missing choice preserves the old Fast stride=4.
+      var detail=options.sceneDetail===undefined?'performance':options.sceneDetail;
+      var detailStride=previewLod.sceneDetailStride(detail);
       var quality=opticalQuality(Object.assign({},spec,{surface:geometry}),requested,mode);
       return {model:model,spec:spec,display:validated.display,quality:quality,
         requestedQuality:requested,options:{atmosphere:spec.atmosphere,
         occlusionRadius:spec.occlusionRadius,visibility:spec.visibility,
         temperatureProfile:spec.temperatureProfile,transitionProfile:spec.transitionProfile,
         inverseProfile:spec.inverseProfile,interactive:false,geometryBackend:'canvas',
-        opticalQuality:quality,previewLod:{stride:quality==='fast'?4:1},
+        opticalQuality:quality,previewLod:{stride:quality==='fast'?detailStride:1},
         cacheSession:sessions[side]||undefined}};
     }
     function guides(config,side,graph){

@@ -1,3 +1,16 @@
+> **Animation Studio Preview geometry detail (#51, 2026-11-17):**
+> Playback now offers `Full` / `Balanced` / `Performance` Scene detail,
+> independent of optics quality. The shared Fast-only OpticalPreviewLod maps
+> these to fixed strides 1/2/4 for supported repeating tower banks; all other
+> object types are retained without invented mesh simplification. Full removes
+> artificial object thinning even when Fast is selected; Accurate RK4 remains
+> full-resolution. Browser preferences persist independently of Animation
+> project JSON / History, and the existing deterministic Accurate PNG/video
+> export path is unchanged. Default Performance preserves earlier Fast stride 4.
+> Preview diagnostics show requested level and actual selected/original counts;
+> test coverage includes cross-mode semantics, preference roundtrip and UI
+> changes. Actual Opera frame timing and motion LOD stability remain to verify.
+>
 > **Legacy storyboard readiness inventory (#46, 2026-11-17):**
 > Source-only, repeatable `tools/audit-modern-demo-readiness.js --check`
 > now enumerates nine demos, 80 authored states, 71 adjacent transitions,

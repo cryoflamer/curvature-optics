@@ -48,6 +48,16 @@ previews; invalid or unsupported custom profiles still fail explicitly instead
 of silently substituting Standard or RK4. During manual Accurate drag, the
 older cheap raster compositor is retained. See [limits and tests](docs/fast-optical-preview.md).
 
+**Animation Studio Preview geometry detail:** Under **Animation → Playback**,
+**Scene detail** is independent of **Optics**. `Full` submits every modeled
+object to Fast optics; `Balanced` and `Performance` use the existing shared
+Fast-only LOD for supported repeating towers (currently fixed strides 2 and 4).
+Other shapes remain complete until safe dedicated LOD rules exist. `Accurate
+RK4` always uses full object detail, and PNG/video export stays on its existing
+Accurate path. The selector is a browser-local preference, not part of the
+animation project JSON; performance remains the backwards-compatible default.
+See [Animation performance & pixel parity](docs/modern-animation-quality-audit.md).
+
 **Compact Modern Display:** Under **Scene/Compare → Display**, the optical ray
 field, Fast Preview detail, geometry backend and reference overlays remain
 immediately available. Use the adjacent keyboard-focusable **?** hints for

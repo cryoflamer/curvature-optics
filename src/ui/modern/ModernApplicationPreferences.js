@@ -12,6 +12,7 @@
   var LEGACY_NAVIGATION_KEY='curvature-modern-camera-navigation-v1';
   var QUALITIES=['accurate','fast','auto'];
   var DETAILS=['auto','1','2','4','8','16','32'];
+  var STUDIO_DETAILS=['full','balanced','performance'];
   var BACKENDS=['canvas','webgl2'];
   var HISTORY_SIZES=['small','medium','large'];
   var HISTORY_MODES=['all','scene','compare'];
@@ -89,6 +90,7 @@
     return Object.freeze({
       opticalQuality:from(QUALITIES,data.opticalQuality,'accurate'),
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
+      studioPlaybackDetail:from(STUDIO_DETAILS,data.studioPlaybackDetail,'performance'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
       cameraHudVisible:data.cameraHudVisible!==false,
       cameraHudAppearance:hudAppearance(data.cameraHudAppearance),
@@ -129,7 +131,8 @@
     var data=normalize(value);
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
-      previewDetail:data.previewDetail,geometryBackend:data.geometryBackend,
+      previewDetail:data.previewDetail,studioPlaybackDetail:data.studioPlaybackDetail,
+      geometryBackend:data.geometryBackend,
       cameraHudVisible:data.cameraHudVisible,cameraHudAppearance:data.cameraHudAppearance,
       targetIndicatorVisible:data.targetIndicatorVisible,studioTargetVisible:data.studioTargetVisible,
       targetIndicatorSelection:data.targetIndicatorSelection,

@@ -5,6 +5,25 @@ Animation and Scene/Compare already produce identical pixels. It adds no optical
 approximations, does not rewrite Legacy, and never rescales source images to make
 an apparent match.
 
+## Preview scene detail
+
+**Playback → Scene detail** is a browser-local display preference, separate from
+**Optics** and from the animation project's JSON. `Full`, `Balanced`, and
+`Performance` map to the shared Fast Preview object LOD strides 1, 2, and 4;
+`Performance` is the backwards-compatible default. The chosen stride stays
+fixed as the camera moves, rather than fluctuating with frame time. The
+on-screen diagnostics report the actual selected/original object counts for
+Fast frames (if supplied by the renderer). `Accurate RK4` ignores thinning and
+always uses the modeled geometry regardless of the selected preference.
+
+Currently the shared LOD algorithm only skips **supported repeating tower banks**.
+Other objects (including silhouettes or profiles) are retained in full under
+all three choices; `Balanced` is not yet a general mesh simplifier. `Full`
+means *no artificial skipping*, not guaranteed visibility through the horizon.
+The rendered output may still be limited by occlusion, view angle, and optics.
+This selector affects only live Playback Preview; deterministic PNG/video
+exports continue using their existing Accurate full-geometry path.
+
 ## In Opera
 
 1. Open a saved **Animation** project and Prepare. In **Optics**, prefer **Accurate RK4**.

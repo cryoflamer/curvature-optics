@@ -451,7 +451,7 @@ test('Playback status reports the actual rendered quality and fallback count',()
   assert.match(app,/Effective:/);
   assert.match(app,/studioPreviewRenderer\.resetFastFailures\(\)/);
   assert.match(app,/b&&b\.fallback&&a\.quality==='fast'/);
-  assert.match(app,/quality:'accurate',animationMode:studioPrepared\.mode/);
+  assert.match(app,/quality:'accurate',sceneDetail:studioPlaybackDetail,animationMode:studioPrepared\.mode/);
 });
 
 test('Globe to Flat reaches the terminal frame after a fast rejection without clock mutation',()=>{

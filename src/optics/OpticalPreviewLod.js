@@ -11,6 +11,16 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var STRIDES=[1,2,4,8,16,32];
+  // Stable animation-preview presets use the existing shared Fast-only LOD.
+  // Only recognized repeating tower banks are thinned. Unsupported geometry
+  // remains whole until it has an explicit, visually safe LOD implementation.
+  var SCENE_DETAIL_STRIDES=Object.freeze({full:1,balanced:2,performance:4});
+  function sceneDetailStride(detail){
+    if(!Object.prototype.hasOwnProperty.call(SCENE_DETAIL_STRIDES,detail))
+      throw RangeError('Invalid animation Scene detail');
+    return SCENE_DETAIL_STRIDES[detail];
+  }
+
   function validateStride(stride){
     if(!STRIDES.includes(stride))throw RangeError('Invalid Fast Preview object stride');
     return stride;
@@ -86,7 +96,7 @@
       }
     });
   }
-  return Object.freeze({thin:thin,validateStride:validateStride,
+  return Object.freeze({thin:thin,validateStride:validateStride,sceneDetailStride:sceneDetailStride,
     createController:createController,createFramePacer:createFramePacer,
     strides:STRIDES.slice()});
 }));

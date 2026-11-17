@@ -802,7 +802,7 @@ test('display and navigation preferences are immediately saved and restored inde
   nodes.get('ModernCameraMoveSpeed').value='100';nodes.get('ModernCameraMoveSpeed').dispatch('change');
   const saved=h.storage.get(preferences.STORAGE_KEY);
   assert.deepEqual(JSON.parse(saved),{
-    version:1,opticalQuality:'auto',previewDetail:'8',geometryBackend:'webgl2',cameraHudVisible:true,
+    version:1,opticalQuality:'auto',previewDetail:'8',studioPlaybackDetail:'performance',geometryBackend:'webgl2',cameraHudVisible:true,
     cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
     historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyStoryboardQueue:[],

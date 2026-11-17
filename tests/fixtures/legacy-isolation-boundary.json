@@ -729,6 +729,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationPlayback.test.js",
+        "tests/ModernAnimationSceneDetail.test.js",
         "tests/OpticalFastCapabilities.test.js"
       ],
       "commonJsToolCallers": []
@@ -1732,9 +1733,11 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationPreview.js",
         "src/optics/CurvaturePhysicalSceneOptics.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationSceneDetail.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernFastPreview.test.js",
         "tests/OpticalPreviewLod.test.js"
@@ -2546,6 +2549,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationSceneDetail.test.js",
         "tests/ModernApplicationPreferences.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernExperimentHistory.test.js",
@@ -2714,6 +2718,7 @@
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationProjectWizard.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
+        "tests/ModernAnimationSceneDetail.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
@@ -2875,6 +2880,7 @@
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationProjectWizard.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
+        "tests/ModernAnimationSceneDetail.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationSplinePreview.test.js",

@@ -562,6 +562,7 @@
   var studioPlaybackLastPaint=-Infinity;
   var studioPlaybackRenderedAt=null;
   var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
+  var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
@@ -631,6 +632,7 @@
     var remembered=applicationPreferences.read(preferencesStorage());
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
+    studioPlaybackDetail=remembered.studioPlaybackDetail;
     state.geometryBackend=remembered.geometryBackend;
     cameraHudVisible=remembered.cameraHudVisible;
     cameraHudAppearance=remembered.cameraHudAppearance;
@@ -670,6 +672,7 @@
     try{
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
+        studioPlaybackDetail:studioPlaybackDetail,
         geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
         cameraHudAppearance:cameraHudAppearance,
         targetIndicatorVisible:targetIndicatorVisible,studioTargetVisible:studioTargetVisible,
@@ -842,6 +845,7 @@
       var defaults=applicationPreferences.defaults();
       state.opticalQuality=defaults.opticalQuality;
       state.previewDetail=defaults.previewDetail;
+      studioPlaybackDetail=defaults.studioPlaybackDetail;
       state.geometryBackend=defaults.geometryBackend;
       cameraHudVisible=defaults.cameraHudVisible;
       cameraHudAppearance=defaults.cameraHudAppearance;
@@ -878,6 +882,7 @@
       if(state.compareConfig)syncCompareEditor();
       if(typeof document.querySelector==='function')activateSettings('Camera',false,false);
       [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
+        ['ModernAnimationPlaybackDetail',studioPlaybackDetail],
         ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
         ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
       ].forEach(function(entry){var node=geometryUi(entry[0]);if(node)node.value=String(entry[1]);});
@@ -885,6 +890,13 @@
       stopAutoCameraPreview();
       if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
       updateGeometryBackendStatus(null);updateOpticalQualityStatus();updatePreviewDetailStatus();redraw();
+      if(animationWorkspaceOpen&&studioPlayback){
+        stopStudioPlayback(false);
+        studioPlaybackLastPaint=-Infinity;
+        try{renderStudioPlaybackSample(true);}
+        catch(error){modernStatus(newUiEl('ModernAnimationPlaybackStatus'),
+          'Scene detail refresh failed: '+error.message,'error');}
+      }
       if(studioPickerOpen)renderAnimationStudio(studioHistoryEntries);
       preferencesStatus(cleared?'Application preferences reset to defaults.':
         'Defaults restored for this session; browser storage is unavailable.',!cleared);
@@ -2253,14 +2265,15 @@
     var label=newUiEl('ModernAnimationPlaybackLabelA');
     if(label)label.textContent=isCompare?'Model A':'Scene';
     var graphs=root.CurvatureModernAnimationGraphs;
-    var renderOptions={quality:studioPlaybackQuality,animationMode:studioPrepared.mode};
+    var renderOptions={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
+      animationMode:studioPrepared.mode};
     var begun=profileNow();
     var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
     var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
     // When Model B discovers an unsupported fast configuration, repaint A
     // in Accurate too: a Compare frame must not silently mix approximations.
     if(b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
-      {quality:'accurate',animationMode:studioPrepared.mode});
+      {quality:'accurate',sceneDetail:studioPlaybackDetail,animationMode:studioPrepared.mode});
     syncStudioCameraHud(a,b,graphs,isCompare);
     var spent=profileNow()-begun; // includes any Accurate redraw after a B fallback
     var fast=a.quality==='fast'&&(!b||b.quality==='fast');
@@ -2293,6 +2306,12 @@
           ' · horizon '+(overlays.horizon||'unknown');
       }
       var drawn=a.result||{};
+      var detailLabel={full:'Full',balanced:'Balanced',performance:'Performance'}[studioPlaybackDetail];
+      function lodReport(view,side){
+        var lod=view&&view.result&&view.result.previewLod;
+        return lod?side+' objects '+lod.selected+'/'+lod.original:'';
+      }
+      var lodCounts=[lodReport(a,isCompare?'A':'Scene'),lodReport(b,'B')].filter(Boolean);
       var fallbacks=Math.max(a.fallbackCount||0,b&&b.fallbackCount||0);
       var fallbackReasons=[a.fallback,b&&b.fallback].filter(Boolean);
       var requestedLabel={auto:'Auto',fast:'Fast if supported',accurate:'Accurate RK4'}[studioPlaybackQuality];
@@ -2300,7 +2319,9 @@
         (b&&b.quality!==a.quality?'Mixed quality':'Accurate RK4');
       var fallbackNote=fallbackReasons.length?' · Fast unavailable: '+
         Array.from(new Set(fallbackReasons)).join(' / '):'';
-      diagnostic.textContent='Requested optics: '+requestedLabel+' · Effective: '+effectiveLabel+' · Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
+      diagnostic.textContent='Requested optics: '+requestedLabel+' · Effective: '+effectiveLabel+
+        ' · Scene detail: '+detailLabel+(fast?' (Fast)':' (Accurate uses full geometry)')+
+        (lodCounts.length?' · '+lodCounts.join(' · '):'')+' · Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
         (studioPlayback.status().durationMs/1000).toFixed(2)+'s · frame '+
         Math.round(spent)+' ms · '+describe(a,isCompare?'A':'Scene')+
         (isCompare?' · '+describe(b,'B'):'')+
@@ -2854,6 +2875,17 @@
         playbackNotice('Camera interpolation: '+error.message,'error');
       }
     });
+    var detail=newUiEl('ModernAnimationPlaybackDetail');
+    if(detail){detail.value=studioPlaybackDetail;detail.addEventListener('change',function(){
+      studioPlaybackDetail=['full','balanced','performance'].includes(detail.value)?
+        detail.value:'performance';
+      saveApplicationPreferences();
+      if(!studioPlayback)return;
+      stopStudioPlayback(false);
+      studioPlaybackLastPaint=-Infinity;
+      try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
+      catch(error){playbackNotice('Scene detail: '+error.message,'error');}
+    });}
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
       studioPlaybackQuality=['auto','fast','accurate'].includes(optics.value)?optics.value:'auto';
