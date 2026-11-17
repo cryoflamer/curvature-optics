@@ -2110,6 +2110,10 @@
       if(studioTargetIndicator)studioTargetIndicator.hideAll();}
     syncStudioPlaybackControls();
   }
+  function syncCanvasDirectDiagnostics(){
+    var controls=newUiEl('ModernCanvasDirectDiagnostics');
+    if(controls)controls.hidden=studioPlaybackQuality!=='canvas-direct';
+  }
   function syncStudioPlaybackControls(){
     var stage=newUiEl('ModernAnimationPlaybackStage');
     if(!stage)return;
@@ -2131,21 +2135,7 @@
     if(seek)seek.value=info.seek;
     var clock=newUiEl('ModernAnimationPlaybackTime');
     if(clock)clock.textContent=info.time;
-    var directDiagnostics=newUiEl('ModernCanvasDirectDiagnostics');
-    function syncCanvasDirectDiagnostics(){
-      if(directDiagnostics)directDiagnostics.hidden=studioPlaybackQuality!=='canvas-direct';
-    }
     syncCanvasDirectDiagnostics();
-    ['ModernCanvasDirectFills','ModernCanvasDirectStrokes','ModernCanvasDirectMask'].forEach(function(id){
-      var checkbox=newUiEl(id);
-      if(checkbox)checkbox.addEventListener('change',function(){
-        if(!studioPlayback||studioPlaybackQuality!=='canvas-direct')return;
-        stopStudioPlayback(false);
-        studioPlaybackLastPaint=-Infinity;
-        try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
-        catch(error){playbackNotice('Canvas Direct diagnostics: '+error.message,'error');}
-      });
-    });
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
     var pause=newUiEl('ModernAnimationPlaybackPause');if(pause)pause.disabled=!info.playing;
   }
@@ -2937,6 +2927,19 @@
       try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
       catch(error){playbackNotice('Playback optics: '+error.message,'error');}
     });}
+    // Bind once at startup, never in syncStudioPlaybackControls(): that function
+    // runs on every animation frame. Rebinding here would accumulate thousands
+    // of change listeners and make a single paused checkbox click hang the UI.
+    ['ModernCanvasDirectFills','ModernCanvasDirectStrokes','ModernCanvasDirectMask'].forEach(function(id){
+      var checkbox=newUiEl(id);
+      if(checkbox)checkbox.addEventListener('change',function(){
+        if(!studioPlayback||studioPlaybackQuality!=='canvas-direct')return;
+        stopStudioPlayback(false);
+        studioPlaybackLastPaint=-Infinity;
+        try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
+        catch(error){playbackNotice('Canvas Direct diagnostics: '+error.message,'error');}
+      });
+    });
     var play=newUiEl('ModernAnimationPlaybackPlay');
     if(!play)return;
     function safely(fn){try{fn();}catch(error){

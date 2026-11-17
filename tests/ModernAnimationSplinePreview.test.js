@@ -77,7 +77,7 @@ function harness(mode='camera'){
   });
   const controlFrom=app.indexOf('  function ensureStudioPlaybackControls(){');
   const controlTo=app.indexOf('  function stopStudioPlayback(clear){',controlFrom);
-  const syncFrom=app.indexOf('  function syncStudioPlaybackControls(){');
+  const syncFrom=app.indexOf('  function syncCanvasDirectDiagnostics(){');
   const syncTo=app.indexOf('  function previewGraphsReady(){',syncFrom);
   const from=app.indexOf('  function setStudioPreviewInterpolation(value){');
   const to=app.indexOf('  function animationPickerEntries(',from);
