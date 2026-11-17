@@ -26,7 +26,7 @@
     // horizon in vacuum/standard; unbounded legacy grid geometry must never
     // trigger unbounded target shooting.
     var guideExtent=options.maxDistance===undefined?100000:options.maxDistance;
-    if(!Number.isFinite(guideExtent)||guideExtent<=0||guideExtent>500000)
+    if(!Number.isFinite(guideExtent)||guideExtent<=0||guideExtent>1000000)
       throw RangeError('Invalid ground guide rendering extent');
     var calls=0,clippedEdges=0,skippedEdges=0;
     var metricGrid=options.metricGrid===true,metricAngles=new Map();

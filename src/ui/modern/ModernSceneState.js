@@ -11,7 +11,7 @@
   var CAMERA={Height:[0.001,1e9],FocalLengthField:[1,100000],ViewAngleField:[0.1,160],
     Pan:[-360,360],Nick:[-90,90],Roll:[-180,180],
     CameraEast:[-1e7,1e7],CameraNorth:[-1e7,1e7]};
-  var OBJECT={NObjects:[0,200,true],ObjType:[0,5,true],ObjDist:[0,1e7],
+  var OBJECT={NObjects:[0,200,true],ObjType:[0,6,true],ObjDist:[0,1e7],
     ObjDeltaDist:[0.001,1e7],ObjSidePos:[-1e7,1e7],ObjSideVar:[-1e7,1e7],
     ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4],
     ObjSideType:[0,4,true],ObjSizeType:[0,4,true]};
@@ -85,7 +85,20 @@
       objects:{NObjects:[40,0],ObjType:[5,3],ObjDist:[257000,0],ObjDeltaDist:[60,100],
         ObjSideType:[2,0],ObjSidePos:[0,0],ObjSideVar:[-5620,0],
         ObjSizeType:[3,0],ObjSize:[2790,10],ObjSizeVar:[.125,0]},
-      showGrid:true,atmosphere:'standard'}
+      showGrid:true,atmosphere:'standard'},
+    // Legacy Grace state index 7 (?demo=Grace&pos=8) has a zero
+    // refraction coefficient, a globe and two 28-km platforms plus
+    // 11 mountain segments on Anacapa at 50.1 km. The Modern eye-level
+    // camera aims at both silhouettes; it does not reimplement source
+    // horizon-centering or its preceding zero-interval preview states.
+    grace:{name:'Anacapa Island / Platform Grace · distant study',
+      description:'Legacy Grace state 8 geometry: platforms at 28 km and Anacapa at 50.1 km. Native globe/vacuum and adapted eye-level camera; no Legacy composite overlay.',
+      camera:{Height:72,FocalLengthField:2000,Pan:0,Nick:-.21,Roll:0},
+      objects:{NObjects:[2,11],ObjType:[6,5],ObjDist:[28000,50100],
+        ObjDeltaDist:[20,22.7],ObjSideType:[0,0],ObjSidePos:[97.5,34.7],
+        ObjSideVar:[12,-523],ObjSizeType:[0,3],ObjSize:[37.2,75],
+        ObjSizeVar:[0,.234]},
+      showGrid:true,atmosphere:'vacuum'}
   });
   function finiteNumber(raw,min,max,integer){
     if(typeof raw==='string'&&raw.trim()==='')throw RangeError('A number is required');
@@ -128,7 +141,7 @@
     if(!model||model.DemoText!==PRESETS.pontchartrain.name||
         !/^(?:\d+ transmission towers|\d+ (?:ships|measuring rods|Bedford markers|city skylines)) across Lake Pontchartrain$/.test(model.Description||''))
       return model&&model.Description;
-    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers',4:'city skylines',5:'mountains'};
+    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers',4:'city skylines',5:'mountains',6:'bridges'};
     var kind=types[model.ObjType&&model.ObjType[0]];
     if(kind&&model.NObjects&&Number.isInteger(model.NObjects[0]))
       model.Description=model.NObjects[0]+' '+kind+' across Lake Pontchartrain';

@@ -129,3 +129,16 @@ test('119: real Globe/Standard tower scene retains every physical tower, fill an
  assert.ok(selected.stats.maxSampledPixelDeviation<=.5);
  frames.fromComposition(selected.composition,camera,1600,900);
 });
+test('distant optically projected rings closer than 10 px are thinned without changing objects or final extent ring',()=>{
+  const ring=(radius,y)=>line([-2,10,y],[2,10,y],0,
+    {physicalGround:true,kind:'metric-ring',angle:radius,radius});
+  const object=line([0,10,1],[1,10,1],3,{kind:'physical-object-stroke'});
+  const input=composition([ring(100000,0),ring(125000,.025),ring(1000000,.05),object],3);
+  const out=lod.simplify(input,camera,1600,900);
+  assert.equal(out.stats.thinnedRings,1);
+  const radii=out.composition.scene.primitives.filter(p=>p.metadata.kind==='metric-ring')
+    .map(p=>p.metadata.radius);
+  assert.deepEqual(radii,[100000,1000000]);
+  assert.ok(out.composition.scene.primitives.some(p=>p.metadata.kind==='physical-object-stroke'));
+  assert.equal(input.scene.primitives.length,4);
+});

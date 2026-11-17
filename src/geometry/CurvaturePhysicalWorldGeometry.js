@@ -14,7 +14,7 @@
   // Enough near-observer detail without millions of distant grid elements.
   var RINGS=Object.freeze([100,250,500,1000,2000,3000,5000,7500,10000,
     12500,15000,20000,30000,40000,50000,75000,100000,
-    125000,150000,200000,250000,300000,400000,500000]);
+    125000,150000,200000,250000,300000,400000,500000,600000,750000,1000000]);
   function valid(k,h){
     if(!Number.isFinite(k)||k<0||!Number.isFinite(h)||h<0)
       throw RangeError('Finite nonnegative curvature and observer height required');
@@ -29,12 +29,12 @@
   // visibility range. Missing settings retain the historical 100 km default
   // for standalone adapters and Legacy preservation tests.
   var EXTENT_CHOICES=Object.freeze([10000,20000,30000,50000,75000,100000,
-    150000,200000,250000,300000,400000,500000]);
+    150000,200000,250000,300000,400000,500000,600000,750000,1000000]);
   function guideExtent(model){
     var selected=model&&model.metricGridExtentKm;
     if(selected===undefined)return 100000;
-    if(!Number.isFinite(selected)||selected<0||selected>500)
-      throw RangeError('Metric grid extent must be Auto or 1–500 km');
+    if(!Number.isFinite(selected)||selected<0||selected>1000)
+      throw RangeError('Metric grid extent must be Auto or 1–1000 km');
     if(selected>0)return selected*1000;
     var max=0;
     for(var i=0;i<2;i++){
@@ -52,15 +52,15 @@
       max=Math.max(max,d0,d1);
     }
     if(!max)return 100000;
-    var needed=Math.min(500000,Math.max(10000,max*1.1));
-    return EXTENT_CHOICES.find(function(d){return d>=needed;})||500000;
+    var needed=Math.min(1000000,Math.max(10000,max*1.1));
+    return EXTENT_CHOICES.find(function(d){return d>=needed;})||1000000;
   }
   function metricGuides(options){
     options=options||{};
     var s=valid(options.curvature,options.observerHeight),eye=options.observerHeight;
     var limit=options.maxDistance===undefined?100000:options.maxDistance;
-    if(!Number.isFinite(limit)||!(limit>0)||limit>500000)
-      throw RangeError('Rendering extent must be in (0, 500000] metres');
+    if(!Number.isFinite(limit)||!(limit>0)||limit>1000000)
+      throw RangeError('Rendering extent must be in (0, 1000000] metres');
     var primitives=[],radii=RINGS.filter(function(r){return r<=limit;});
     // Explicit manual extents are surface landmarks too, even when the
     // selected distance lies between the standard ring radii (e.g. 25 km).

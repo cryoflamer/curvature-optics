@@ -43,7 +43,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
   assert.equal(m.ObjDist[1],before);
   assert.throws(()=>adapter.setObject(m,1,'NObjects','1.5'),/integer/);
   adapter.setObject(m,1,'ObjType',4);assert.equal(m.ObjType[1],4);
-  assert.throws(()=>adapter.setObject(m,1,'ObjType',6),/Expected/);
+  assert.throws(()=>adapter.setObject(m,1,'ObjType',7),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'Height',''),/required/);
   assert.throws(()=>adapter.setRadiusKm(m,0),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'foo',1),/Unknown/);

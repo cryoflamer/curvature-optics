@@ -60,7 +60,7 @@
     if(m.showModel!==1&&m.showModel!==2)
       return {supported:false,reason:'Independent supports Globe or Flat separately; Both uses Legacy.'};
     for(var i=0;i<2;i++){
-      if(m.NObjects[i]>0&&![0,1,2,3,4,5].includes(m.ObjType[i]))
+      if(m.NObjects[i]>0&&![0,1,2,3,4,5,6].includes(m.ObjType[i]))
         return {supported:false,reason:'Unsupported object group '+(i+1)+' uses Legacy.'};
     }
     return {supported:true,reason:''};

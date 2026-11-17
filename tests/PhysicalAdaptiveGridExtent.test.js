@@ -42,8 +42,8 @@ test('Adaptive ground grid uses scene distance for Canigou and Chicago, while re
   assert.equal(world.guideExtent(m),75000);
   adapter.applyPreset(m,'chicago-near');
   assert.equal(world.guideExtent(m),10000);
-  assert.throws(()=>world.guideExtent({...m,metricGridExtentKm:501}),/500/);
-  assert.throws(()=>world.metricGuides({curvature:0,observerHeight:2,showGrid:1,maxDistance:500001}),/extent/);
+  assert.throws(()=>world.guideExtent({...m,metricGridExtentKm:1001}),/1000/);
+  assert.throws(()=>world.metricGuides({curvature:0,observerHeight:2,showGrid:1,maxDistance:1000001}),/extent/);
   const manual=world.metricGuides({curvature:0,observerHeight:2,showGrid:1,maxDistance:25000});
   assert.ok(manual.metadata.gridRadiiMetres.includes(25000),
     'nonstandard manual ranges should include their exact limiting circle');

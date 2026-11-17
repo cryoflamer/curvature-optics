@@ -147,5 +147,6 @@ test('source-only Grace zero spacing is retained as an explicit blocker instead 
   const bank = evidence.activeBank(grace, 1);
   assert.equal(bank.lastMetres, bank.startMetres);
   assert.throws(() => scene.setObject({ObjDeltaDist: [20, 20]}, 1, 'ObjDeltaDist', 0), /Expected/);
-  assert.equal(catalog.scenario('anacapa-grace-platform').status, 'not-ported');
+  assert.equal(catalog.scenario('anacapa-grace-platform').status, 'partial',
+    'later Grace state is ported, but zero-spacing early states remain blocked');
 });

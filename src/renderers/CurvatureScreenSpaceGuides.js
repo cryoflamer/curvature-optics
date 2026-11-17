@@ -80,7 +80,10 @@
     if(!composition||!composition.scene||!Array.isArray(composition.ranges))throw TypeError('Scene composition required');
     var project=projector(camera,width,height),source=composition.scene.primitives,
       groups=groupsFor(composition),primitives=[],ranges=[],seen=0,reduced=0,
-      culled=0,unsafe=0,maxSampledError=0,keptCurves=0;
+      culled=0,unsafe=0,maxSampledError=0,keptCurves=0,thinnedRings=0,ringY=[];
+    var farthestRing=source.reduce(function(max,p){return p.metadata&&
+      p.metadata.kind==='metric-ring'&&p.metadata.physicalGround?
+      Math.max(max,p.metadata.radius||0):max;},0);
     function append(p){primitives.push(Object.assign({},p,{commandIndex:primitives.length}));}
     composition.ranges.forEach(function(r){
       var start=primitives.length;
@@ -95,6 +98,25 @@
           var points=[source[g.start].points[0]];
           for(var k=g.start;k<g.end;k++)points.push(source[k].points[1]);
           var screen=points.map(project),p=source[g.start],edge=0;
+          // Physically projected distant rings can collapse into the same
+          // screen row. This is only a paint-time selection: neither ground
+          // distances nor ray results are changed. Keep important extent
+          // landmark and all foreground/horizon/object strokes untouched.
+          if(p.metadata&&p.metadata.kind==='metric-ring'&&
+              p.metadata.radius>=100000&&
+              p.metadata.radius!==farthestRing){
+            var inFrame=screen.filter(function(q){return q.pixel&&
+              q.pixel[0]>=0&&q.pixel[0]<=width&&
+              q.pixel[1]>=0&&q.pixel[1]<=height;});
+            if(inFrame.length){
+              var ys=inFrame.map(function(q){return q.pixel[1];}),
+                ymin=Math.min.apply(null,ys),ymax=Math.max.apply(null,ys);
+              if(ymax-ymin<12&&ringY.some(function(y){return Math.abs(y-(ymin+ymax)/2)<10;})){
+                thinnedRings++;culled+=count;return;
+              }
+              if(ymax-ymin<12)ringY.push((ymin+ymax)/2);
+            }
+          }
           // Every safe run is a continuous polyline strictly in front of the
           // near plane. Unsafe edges are never approximated; edges strictly
           // behind the near plane cannot contribute to the painted image.
@@ -137,6 +159,7 @@
       stats:{inputGroundSegments:seen,removedBySimplification:reduced,
         removedOffscreen:culled,unsafeNearPlane:unsafe,keptCurves:keptCurves,
         outputPrimitives:primitives.length,tolerancePixels:tolerance,
+        thinnedRings:thinnedRings,
         maxSampledPixelDeviation:maxSampledError}};
   }
   return {simplify:simplify};

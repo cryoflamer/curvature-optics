@@ -50,7 +50,7 @@ test('mountain local geometry matches actual Legacy DrawShape for both banks, co
   assert.throws(()=>engine.localObject(5,0,false),/drawn sequence index/);
   assert.throws(()=>engine.localObject(5,1,false,{drawn:-1}),/nonnegative/);
   assert.throws(()=>engine.localObject(5,2,false,{drawn:0}),/bank must be/);
-  assert.throws(()=>engine.localObject(6,0,false,{drawn:0}),/not been independently ported/);
+  assert.throws(()=>engine.localObject(7,0,false,{drawn:0}),/not been independently ported/);
 });
 
 test('mountain sequence retains independent height variation, constant width and source variant identity',()=>{
@@ -87,8 +87,8 @@ test('mountain sequence retains independent height variation, constant width and
   assert.deepEqual(codec.validate(snapshot),snapshot);
   assert.deepEqual(codec.decode(codec.encode(snapshot)),snapshot);
   assert.deepEqual(codec.readUrl(new URL(codec.urlWithExperiment('https://example.org/',snapshot)).search),snapshot);
-  assert.equal(adapter.OBJECT.ObjType[1],5);
-  assert.throws(()=>adapter.setObject(m,0,'ObjType',6),/Expected/);
+  assert.equal(adapter.OBJECT.ObjType[1],6);
+  assert.throws(()=>adapter.setObject(m,0,'ObjType',7),/Expected/);
 });
 
 test('type-5 mountains pass the production physical Canvas renderer and produce filled polygons on both surfaces',()=>{
@@ -116,7 +116,7 @@ test('type-5 mountains pass the production physical Canvas renderer and produce 
     assert.ok(output.fillTriangles>0,'mountains must have real optical filled faces');
     assert.equal(output.unresolved,0);
   }
-  m.ObjType[0]=6;
+  m.ObjType[0]=7;
   assert.throws(()=>renderer.renderPhysical(graph,m,{atmosphere:'standard',occlusionRadius:6371000}),
     /Unsupported object group/);
 });

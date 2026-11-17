@@ -50,7 +50,7 @@
       stateCount: 8, animationCount: 7, objectTypes: [3], status: 'partial', nativePresetId: 'pontchartrain'},
     {id: 'anacapa-grace-platform', name: 'Anacapa Island / Platform Grace',
       category: 'geographic', locationId: 'anacapa-grace', legacyDemo: 'Grace',
-      stateCount: 9, animationCount: 8, objectTypes: [5, 6], status: 'not-ported', nativePresetId: null},
+      stateCount: 9, animationCount: 8, objectTypes: [5, 6], status: 'partial', nativePresetId: 'grace'},
     {id: 'bedford-level-experiment', name: 'Bedford Level Experiment',
       category: 'geographic', locationId: 'bedford-level', legacyDemo: 'Bedford',
       stateCount: 7, animationCount: 6, objectTypes: [0], status: 'partial', nativePresetId: 'bedford'},
@@ -71,7 +71,7 @@
   // Only supported partial native Scene presets may be selected. 'single'
   // and 'rows' are illustrative samples, not authored geographic locations.
   // Chicago and Canigou each offer two views of the SAME partial source scenario.
-  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'canigou', 'canigou-low']);
+  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'canigou', 'canigou-low', 'grace']);
 
   function location(id) { return LOCATIONS.find(function(item) { return item.id === id; }) || null; }
   function scenario(id) { return SCENARIOS.find(function(item) { return item.id === id; }) || null; }

@@ -251,6 +251,32 @@
     });
     return primitives;
   }
+  // Legacy DrawShape type 6: two supports, transverse deck and parapet.
+  // The road between neighbouring supports is constructed in world space by
+  // createObjectSequenceScene, because it connects two different placements.
+  function localBridge(hidden){
+    function rect(x1,y1,x2,y2,fill){
+      return {type:'polygon',points:[[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]],
+        mode:3,style:{fill:fill}};
+    }
+    return [rect(-.8,0,-.55,.55,hidden?'#d2d2cf':'#adadab'),
+      rect(.55,0,.8,.55,hidden?'#d2d2cf':'#adadab'),
+      rect(-1,.55,1,.7,hidden?'#b9b19e':'#8c8678'),
+      {type:'polygon',points:[[-1,1],[-1,.9],[-.95,.9],[-.95,.7],
+        [.95,.7],[.95,.9],[1,.9],[1,1],[-1,1]],mode:3,
+        style:{fill:hidden?'#858b85':'#565a56'}}];
+  }
+  function bridgeRoad(previous,current,hidden){
+    // Road top is at the local y=1 in both neighbouring placed planes.
+    // Legacy DrawShape's LastRoadP11/P12 track the preceding support;
+    // a separate column (side variation = two rows) never crosses to another.
+    var old=towerPlacement(previous),next=towerPlacement(current);
+    function point(plane,x){return [0,1,2].map(function(i){return plane.origin[i]+
+      x*plane.xAxis[i]+plane.yAxis[i];});}
+    return {type:'polygon',mode:3,points:[point(old,-1),point(old,1),
+      point(next,1),point(next,-1)],style:{fill:hidden?'#e8e4dc':'#cdcac3'},
+      metadata:{kind:'bridge-road',physicalObject:true}};
+  }
   function localObject(objType,objIx,hidden,options){
     if(objType===0){
       if(!options||!Number.isInteger(options.drawn)||!Number.isInteger(options.total))
@@ -268,6 +294,7 @@
         throw new TypeError('Mountain requires the drawn sequence index');
       return localMountain(options.drawn,objIx,!!hidden);
     }
+    if(objType===6)return localBridge(!!hidden);
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
     throw new RangeError('Object type has not been independently ported');
@@ -346,7 +373,7 @@
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
     var objType=model.ObjType[objIx];
-    if(![0,1,2,3,4,5].includes(objType))throw new RangeError('Object type has not been independently ported');
+    if(![0,1,2,3,4,5,6].includes(objType))throw new RangeError('Object type has not been independently ported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -420,7 +447,24 @@
     // Preserve each placed object's identity through the optics-neutral scene.
     // All of its authored primitives share one depth/order key; grouping by
     // polygon alone would paint the whole bank's strokes over nearer fills.
+    var previousByColumn=new Map();
     entries.forEach(function(entry,placedIndex){
+      var column=entry.scene.metadata.column||0;
+      if(model.ObjType[objIx]===6&&model.ObjSideType[objIx]!==2){
+        // The authored bridge explicitly suppresses the deck for pseudo-
+        // random lateral placement (ObjSideType 2).
+        var previous=previousByColumn.get(column);
+        if(previous){
+          // A physical bridge is connected geometry, not a screen-space
+          // overlay. Preserve the source LastRoad endpoints independently
+          // for each column; never bridge between two different rows.
+          var road=bridgeRoad(previous.params,entry.params,entry.hidden);
+          road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
+            objectBank:objIx,column:column});
+          primitives.push(road);
+        }
+        previousByColumn.set(column,entry);
+      }
       entry.scene.primitives.forEach(function(p){
         primitives.push(Object.assign({},p,{metadata:Object.assign({},p.metadata,{
           placedObjectIndex:placedIndex,objectBank:objIx})}));

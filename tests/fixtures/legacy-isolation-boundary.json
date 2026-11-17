@@ -997,6 +997,7 @@
         "tests/CurvaturePhysicalTowerCanvas107.test.js",
         "tests/ModernAtmosphericPresentation13822.test.js",
         "tests/ModernCanigouPreset.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernUiBootstrap.test.js",
@@ -1449,6 +1450,7 @@
         "tests/ModernBedfordPreset.test.js",
         "tests/ModernCanigouPreset.test.js",
         "tests/ModernChicagoPreset.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernLocationEvidence.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernTargetDirection.test.js",
@@ -1472,6 +1474,7 @@
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGridOverlay.test.js",
+        "tests/PhysicalLongRangeGrid.test.js",
         "tests/PhysicalMetricWorld126.test.js"
       ],
       "commonJsToolCallers": []
@@ -1620,6 +1623,7 @@
         "tests/PhysicalGroundGridOverlay.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",
         "tests/PhysicalGroundGuides110.test.js",
+        "tests/PhysicalLongRangeGrid.test.js",
         "tests/PhysicalMetricWorld126.test.js",
         "tests/SharedSceneCache113.test.js"
       ],
@@ -2664,13 +2668,15 @@
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernFastPreview.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernSharedCompareControls.test.js",
         "tests/OpticalRayHorizon.test.js",
-        "tests/PhysicalAdaptiveGridExtent.test.js"
+        "tests/PhysicalAdaptiveGridExtent.test.js",
+        "tests/PhysicalLongRangeGrid.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2723,6 +2729,7 @@
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernHistoryCleanup.test.js",
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernIndependentCompare.test.js",
@@ -2736,7 +2743,8 @@
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
         "tests/OpticalRayHorizon.test.js",
-        "tests/PhysicalAdaptiveGridExtent.test.js"
+        "tests/PhysicalAdaptiveGridExtent.test.js",
+        "tests/PhysicalLongRangeGrid.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2877,6 +2885,7 @@
         "tests/ModernExperimentLibrary.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernHistoryCleanup.test.js",
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernInverseTemperature97.test.js",
@@ -2887,7 +2896,8 @@
         "tests/ModernSessionAutosave.test.js",
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
-        "tests/PhysicalAdaptiveGridExtent.test.js"
+        "tests/PhysicalAdaptiveGridExtent.test.js",
+        "tests/PhysicalLongRangeGrid.test.js"
       ],
       "commonJsToolCallers": [
         "tools/audit-legacy-modern-boundary.js"
@@ -2926,6 +2936,7 @@
         "tests/ModernBedfordPreset.test.js",
         "tests/ModernCanigouPreset.test.js",
         "tests/ModernChicagoPreset.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernLocationCatalog.test.js",
         "tests/ModernLocationEvidence.test.js"
       ],
@@ -2990,13 +3001,15 @@
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCanigouPreset.test.js",
         "tests/ModernChicagoPreset.test.js",
+        "tests/ModernGracePreset.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernLocationCatalog.test.js",
         "tests/ModernLocationEvidence.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js",
-        "tests/PhysicalAdaptiveGridExtent.test.js"
+        "tests/PhysicalAdaptiveGridExtent.test.js",
+        "tests/PhysicalLongRangeGrid.test.js"
       ],
       "commonJsToolCallers": []
     },

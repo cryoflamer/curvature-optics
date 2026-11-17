@@ -1,7 +1,7 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-17, #41):** four **partial** geographic native scenarios
-(`pontchartrain`, `bedford`, `chicago`, `canigou`) are available, with
+**Status (2026-11-17, #42):** five **partial** geographic native scenarios
+(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
@@ -49,7 +49,16 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   creating decorative synthetic ground or changing object visibility; occluded
   Globe points remain hidden. Existing experiments lacking this field restore
   to Auto. Evidence: `tests/PhysicalAdaptiveGridExtent.test.js`.
-- [ ] **#42+ — Grace, Tensas, Causeway, Soundly:** prioritize shared geometry
+- [x] **#42 — Platform Grace and long-distance display:** native partial
+  `grace` from Legacy state index 7 (the 28 km platform + 50.1 km island
+  vacuum/globe geometry), shared type-6 pillars, parapet and connected deck,
+  source-backed fields and independent modern camera. Extend metric ground-grid
+  Auto/Manual rendering to a bounded 1000 km, with manual 750/1000 km choices;
+  thin overlapping far rings by screen separation *after* optical shooting.
+  Evidence: `tests/ModernGracePreset.test.js`,
+  `tests/PhysicalLongRangeGrid.test.js`,
+  `tests/PhysicalScreenSpaceGuideLod119.test.js`. This is not full Grace parity.
+- [ ] **#43+ — Tensas, Causeway, Soundly:** prioritize shared geometry
   types and source checks rather than special physics per location.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
@@ -84,8 +93,8 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   non-equivalent Modern Standard atmosphere. `single` and `rows` remain
   demonstration samples, **not locations**.
 - Object IDs are source-specific. Modern Scene geometry/validation currently
-  supports `0–5`; Legacy `6` bridge/platform,
-  `7` Tensas bridge and `8` Soundly Causeway require explicit ports. Legacy
+  supports `0–6`; Legacy `7` Tensas bridge and `8` Soundly Causeway
+  require explicit ports. Legacy
   type `9` exists but is **unused** in the nine authored demos.
 
 **Count policy:** eight geographic demos across six geographic subjects,
@@ -145,7 +154,7 @@ missing defaults, or create runnable Modern experiments.
 | Authored demo | Source indices (0-based) | Legacy URL `pos` | Important decision |
 | --- | --- | --- | --- |
 | `Curve` | 0, 7, 11 | 1, 8, 12 | Empty object banks; at 7 the two models share a Legacy view |
-| `Causeway` | 0, 2, 5 | 1, 3, 6 | Type 6 bridge unavailable |
+| `Causeway` | 0, 2, 5 | 1, 3, 6 | Type 6 bridge now supported; source camera and scenario still require validation |
 | `TransLine` | 0, 4, 7 | 1, 5, 8 | State 4 shares both tower banks with Modern `pontchartrain` |
 | `Grace` | 0, 5, 8 | 1, 6, 9 | Type 5/6; state 0 has two active mountain objects with zero spacing |
 | `Bedford` | 0, 3, 6 | 1, 4, 7 | Signed-distance prelude and combined globe/flat view |
@@ -358,12 +367,45 @@ Regression evidence: `tests/ModernCanigouPreset.test.js` (source field parity,
 experiments / URL / JSON) and `tests/ModernSceneControls.test.js` (selector,
 History protected return, Reset, atmosphere propagation).
 
+### Grace partial Modern source view (#42)
+
+`grace` is derived from the authored **Legacy Grace state index 7**
+(`?demo=Grace&pos=8`): eye height 72 m, focal field 2000 mm,
+2 type-6 platforms (28,000 m start, 20 m spacing, 37.2 m height),
+and 11 type-5 Anacapa mountains (50,100 m start, 22.7 m spacing,
+75 m height), with all source side/size variations. Source `showModel=1`
+and `refractionCoeff=0` make **Modern Globe + Vacuum** a defensible
+baseline without fitting a new atmospheric profile. Modern Nick −0.21°
+aims the shared Eye-level camera at both far subjects, instead of claiming
+the source's curvature-dependent `viewcenterHorizon=0` can be carried over.
+
+Type 6 is now supported by Modern Objects, scene-graph/physical renderer,
+Compare, History and schema-v1 JSON/URL. Source-local pillars and parapet
+preserve their authored vertices and colors. The deck joining adjacent
+platform supports uses world-space placed endpoints and independent columns;
+it is a native geometry adaptation of the Legacy `LastRoadP11/P12` continuity,
+not a separate optical rule. The original opening Grace states still contain
+**zero mountain spacing**: Modern deliberately refuses coincident multi-object
+steps, so these particular states remain in Legacy. There is no claim of pixel
+parity, source constant-k mapping, nine-state completion, road z-buffer
+occlusion, or authored animation parity. Browser visual acceptance remains open.
+
+The physical grid's rendering limit now reaches **1000 km**. Auto still derives
+its extent from source object positions (Grace defaults to 75 km, Canigou to
+300 km), while manual Display offers 750 and 1000 km. All far-distance sample
+points remain physically ray-projected; after projection the screen-space guide
+simplifier can omit nearly coincident distant rings (10 backing pixels) to
+prevent an opaque band. The farthest available visible ring, physical horizon
+and all scene-object primitives are preserved. The rendering limit is not a
+physical horizon and does not alter object visibility or field queries.
+
 ### Stage C — geometry families (proposed #35+)
 
 - [x] Implement object type **4**: Chicago skyline and indexed variation.
 - [x] Implement object type **5**: mountain/terrain silhouettes and variants
   (bank-shifted three palettes, six-step mirroring, fixed width under height variation).
-- [ ] Implement object type **6**: Causeway bridge / Grace platform.
+- [x] Implement object type **6**: shared bridge support/road geometry,
+  now exercised by Grace; Causeway requires an independent preset review.
 - [ ] Implement object type **7**: Tensas-specific bridge geometry.
 - [ ] Implement object type **8**: Soundly Causeway geometry.
 - [ ] Review type **9** only for full Legacy object-catalog parity; it is
@@ -381,11 +423,12 @@ catalog entry. Do not tick it until the acceptance gates below are met.
 
 - [ ] `earth-curvature-lesson` — `Curve` (12 states); educational, not a
   geographic location; explicitly address globe/flat comparisons.
-- [ ] `pontchartrain-causeway` — `Causeway` (6 states); requires type 6.
+- [ ] `pontchartrain-causeway` — `Causeway` (6 states); type 6 exists, but source-backed preset, camera, and scene parity remain open.
 - [ ] `pontchartrain-transmission-line` — `TransLine` (8 states); the current
   `pontchartrain` preset is **partial**, not validated across Legacy states.
-- [ ] `anacapa-grace-platform` — `Grace` (9 states); requires types 5 and 6,
-  and interpretation of a zero Legacy object interval.
+- [ ] `anacapa-grace-platform` — `Grace` (9 states); partial `grace` state-7
+  physical preset with types 5/6, but zero-interval early states and
+  nine-state/animation visual parity remain open.
 - [ ] `bedford-level-experiment` — `Bedford` (7 states); type 0 exists, but
   negative starting distance and combined globe/flat view need decisions.
 - [ ] `tensas-bayou-bridge` — `Tensas` (6 states); requires type 7.

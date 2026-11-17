@@ -1,3 +1,18 @@
+> **Platform Grace and long-distance metric grid (#42, 2026-11-17):**
+> `grace` is now a **partial** native Modern preset based on authored Legacy
+> Grace state index 7: two 28 km type-6 platform supports + a world-space
+> road segment, and eleven type-5 Anacapa silhouettes at ~50.1 km. The source
+> vacuum/globe physics is preserved; Modern Nick −0.21° is an explicit camera
+> adaptation. Object type 6 now validates and renders through the common
+> Scene/Compare/History/schema-v1 path; Legacy's zero-interval opening states,
+> narrated transitions and constant-k parity remain unported. Metric grid
+> extends to a bounded 1000 km with 750/1000 km manual options and a
+> camera-dependent 10 px thinning of optically projected distant ring strokes.
+> No altered ray optics, surface visibility or invented horizon. See
+> `tests/ModernGracePreset.test.js`, `tests/PhysicalLongRangeGrid.test.js`,
+> `tests/PhysicalScreenSpaceGuideLod119.test.js` and
+> `docs/modern-location-migration.md`. Full Chromium visual check pending.
+>
 > **Mount Canigou partial native views (#39, 2026-11-16):**
 > `canigou` (1000 m / 257 km, vacuum) adapts Legacy Canigou source state 2;
 > `canigou-low` (244 m / 257 km, Modern Standard atmosphere) keeps source

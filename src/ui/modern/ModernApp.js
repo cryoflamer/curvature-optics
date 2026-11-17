@@ -6097,7 +6097,7 @@
       ['ObjSizeVar','Size amplitude (fraction)','number',-10000,10000,'any']
     ];
     var typeOptions=[['3','Transmission tower'],['2','Ship'],['1','Measuring rod'],['0','Bedford marker'],
-      ['4','City skyline'],['5','Mountain']];
+      ['4','City skyline'],['5','Mountain'],['6','Bridge / platform']];
     var variationOptions=[['0','Linear'],['1','Alternating'],['2','Random'],['3','Cosine'],['4','Sine']];
     function field(row){
       var key=row[0],id='ModernObject'+i+key;
@@ -6365,7 +6365,7 @@
     el('ModernGrid').addEventListener('change',function(){model.showGrid=this.checked?1:0;markCustom();redraw();});
     var gridExtent=newUiEl('ModernGridExtent');if(gridExtent)gridExtent.addEventListener('change',function(){
       var v=Number(this.value);
-      if(!Number.isFinite(v)||v<0||v>500){syncNumericInputs();return;}
+      if(!Number.isFinite(v)||v<0||v>1000){syncNumericInputs();return;}
       model.metricGridExtentKm=v;markCustom();redraw();
     });
     var curvature=root.CurvaturePhysicalCurvature;

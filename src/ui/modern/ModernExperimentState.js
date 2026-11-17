@@ -14,7 +14,7 @@
   var OBJECT=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
   var ATMOSPHERE=['vacuum','standard','temperature-lapse','profile-transition','inverse-temperature','inverse-spherical','exponential-occlusion'];
-  var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','custom'];
+  var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','grace','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   var TEMPERATURE_PLACEMENTS=['outside-right','outside-left','inside-right','inside-left'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}
@@ -102,7 +102,7 @@
       cameraSequence=sequence.validate(value.cameraSequence.keyframes);
     }
     shape(s.objects,OBJECT);
-    var objectLimits={NObjects:[0,200,true],ObjType:[0,5,true],ObjDist:[0,1e7],
+    var objectLimits={NObjects:[0,200,true],ObjType:[0,6,true],ObjDist:[0,1e7],
       ObjDeltaDist:[0.001,1e7],ObjSideType:[0,4,true],ObjSidePos:[-1e7,1e7],
       ObjSideVar:[-1e7,1e7],ObjSizeType:[0,4,true],ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4]};
     var objects={};OBJECT.forEach(function(k){
@@ -156,7 +156,7 @@
       visibility:visibility(s.visibility),temperatureProfile:temperatureProfile(s.temperatureProfile),
       transitionProfile:transitionProfile(s.transitionProfile),inverseProfile:inverseProfile(s.inverseProfile),
       showGrid:bool(s.showGrid),
-      gridExtentKm:s.gridExtentKm===undefined?0:num(s.gridExtentKm,0,500),
+      gridExtentKm:s.gridExtentKm===undefined?0:num(s.gridExtentKm,0,1000),
       preset:choice(s.preset,SCENE_PRESETS),
       resetPreset:choice(s.resetPreset,SCENE_PRESETS.filter(function(id){return id!=='custom';})),
       title:title(s.title,160),description:title(s.description,500)},
