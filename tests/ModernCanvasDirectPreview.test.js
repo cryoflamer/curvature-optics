@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const direct=require('../src/renderers/CurvatureCanvasDirectPreview');
+const geometry=require('../src/geometry/CurvatureGeometryEngine');
 const renderer=require('../src/app/CurvatureMainCanvasRenderer');
 const preview=require('../src/animation/ModernAnimationPreview');
 const experiment=require('../src/ui/modern/ModernExperimentState');
@@ -21,9 +22,10 @@ function model(){
 }
 function graph(){
   let filled=0,stroked=0,paths=0;
+  const fillColors=[];
   const ctx={save(){},restore(){},setTransform(){},fillRect(){},clearRect(){},
     beginPath(){paths++;},moveTo(){},lineTo(){},closePath(){},
-    fill(){filled++;},stroke(){stroked++;}};
+    fill(){filled++;fillColors.push(this.fillStyle);},stroke(){stroked++;}};
   const g={Canvas:{width:800,height:500,getContext(){return ctx;}},Camera:{},
     ContextScale:1,WinTrans:{ScaleX:500,ScaleY:-500,OffsetX:400,OffsetY:250},
     AutoScalePix:false,MinLineWidth:1,ScalePixInt:false,DevicePixelRatio:1,
@@ -32,7 +34,7 @@ function graph(){
     SetCamera(p){this.Camera={CamPos:p.CamPos,CamUp:p.CamUp,CamViewCenter:p.CamViewCenter,
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
-  return {g,stats:()=>({filled,stroked,paths})};
+  return {g,stats:()=>({filled,stroked,paths,fillColors})};
 }
 function soundly(){const m=model();state.applyPreset(m,'soundly');m.Height=8.55;
   m.FocalLengthField=2038;m.Pan=.49;m.Nick=-.006;
@@ -47,6 +49,30 @@ test('geometric preview uses the same k profile as Effective Radius, but never m
   assert.equal(g.Height,m.Height);
   assert.equal(JSON.stringify(m),before);
   assert.ok(direct.geometricModel(m,{geometry:'globe',effectiveRadius:R}).rDisk>0);
+});
+test('Soundly lamp shafts keep their authored fill in both directions and hidden styles',()=>{
+  for(const type of [8,9]){
+    for(const hidden of [false,true]){
+      const source=geometry.localObject(type,0,hidden,{drawn:type===8?39:88,total:128,variation:0,sidePos:0});
+      const shafts=source.filter(p=>p.type==='polygon'&&p.mode===2);
+      assert.equal(shafts.length,3,'legacy Soundly has three fill-only lamp pieces');
+      assert.ok(shafts.every(p=>p.style&&p.style.fill===(hidden?'#bbbbbb':'#aaaaaa')),
+        'mode 2 must preserve the actual background fill, not fall back to white');
+      assert.ok(shafts.every(p=>p.style.stroke===undefined),
+        'mode 2 lamps have no invented outline');
+      const lattice=source.filter(p=>p.type==='polygon'&&p.mode===1);
+      assert.ok(lattice.length>0&&lattice.every(p=>p.style.stroke==='black'),
+        'mode 1 uses the authored stroke colour');
+    }
+  }
+});
+test('Canvas Direct paints Soundly fill-only lamp shafts with their authored colour',()=>{
+  const g=graph(),m=soundly();
+  const result=renderer.renderPhysical(g.g,m,
+    {atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true});
+  assert.equal(result.opticalQuality,'canvas-direct');
+  assert.ok(g.stats().fillColors.includes('#aaaaaa'),
+    'lamp shafts must be visible against the white background');
 });
 test('real Soundly source renders all 128 object packages with native polygon fills and one mask',()=>{
   const m=soundly(),g=graph(),before=JSON.stringify(Array.from(m.ObjDist));

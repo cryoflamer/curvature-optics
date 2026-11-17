@@ -113,7 +113,15 @@
         var start=clock(),style=p.style||{},mode=p.type==='line'?1:(p.mode==null?1:p.mode);
         var sourcePoints=p.points,local=role!=='objects';
         var pts=sourcePoints.map(function(point){return cameraPoint(point,local);});
-        var polygon=p.type==='polygon',fillPoints=polygon&&(mode&2)?nearPolygon(pts):null;
+        var polygon=p.type==='polygon';
+        // Many authored rectangles explicitly repeat their first vertex.
+        // Canvas closePath() supplies that edge already; retaining the extra
+        // endpoint creates a zero-length stroke at every repeated corner.
+        if(polygon&&pts.length>1){
+          var first=pts[0],last=pts[pts.length-1];
+          if(first.x===last.x&&first.y===last.y&&first.z===last.z)pts.pop();
+        }
+        var fillPoints=polygon&&(mode&2)?nearPolygon(pts):null;
         var fillPixels=fillPoints&&fillPoints.length>=3?fillPoints.map(screen):null;
         // Object outlines retain their original edges; near-plane closing
         // edges created for a filled polygon are never invented as strokes.
@@ -124,7 +132,11 @@
             if(a.z<=c.near&&b.z<=c.near)continue;
             if(a.z<=c.near){var t=(c.near-a.z)/(b.z-a.z);a={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:c.near};}
             if(b.z<=c.near){var t2=(c.near-b.z)/(a.z-b.z);b={x:b.x+(a.x-b.x)*t2,y:b.y+(a.y-b.y)*t2,z:c.near};}
-            lines.push([screen(a),screen(b)]);
+            var ap=screen(a),bp=screen(b);
+            // A clipped segment can collapse to the same canvas pixel;
+            // avoid a degenerate path (and isolated cap-shaped speckles).
+            if(Math.abs(ap[0]-bp[0])+Math.abs(ap[1]-bp[1])>1e-5)
+              lines.push([ap,bp]);
           }
         }
         projectionMs+=clock()-start;

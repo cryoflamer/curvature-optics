@@ -30,8 +30,14 @@ function sourceLocal(type,drawn,hidden,variation,sidePos){
     PolygonOnPlane(xs,ys,mode){let points,m;
       if(mode===undefined){points=xs.map(v=>v.slice());m=ys;}
       else {points=xs.map((x,i)=>[x,ys[i]]);m=mode;}
-      const p={type:'polygon',points,mode:m};if(m===3)p.style={fill};
-      if(alpha!==1){p.style=p.style||{};p.style.alpha=alpha;}out.push(p);
+      const p={type:'polygon',points,mode:m},style={};
+      // Capture the actual Legacy paint modes, not only the mode-3 fill:
+      // mode 2 uses its active background colour without an outline.
+      if(m&2)style.fill=fill;
+      if(m&1)style.stroke=stroke;
+      if(alpha!==1)style.alpha=alpha;
+      if(Object.keys(style).length)p.style=style;
+      out.push(p);
     },
     RectOnPlane(x1,y1,x2,y2,mode){this.PolygonOnPlane([x1,x2,x2,x1,x1],[y1,y1,y2,y2,y1],mode);},
     LineOnPlane(x1,y1,x2,y2){out.push({type:'line',points:[[x1,y1],[x2,y2]],style:{stroke}});},

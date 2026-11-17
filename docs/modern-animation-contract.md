@@ -515,3 +515,20 @@ Playback diagnostics provide total frame milliseconds; the frame profiler
 collects cold/warm time and Canvas Direct sample counts. Node/Skia benchmarks
 are diagnostic only and do not establish browser FPS. The target remains
 ≤50 ms/frame, ideally ≤33 ms, on the user's actual browser, not a guarantee.
+
+### Canvas Direct: Soundly paint-mode and degenerate-edge correction
+
+Soundly's authored Canvas primitives include fill-only rectangles (`mode=2`),
+not just filled-and-outlined polygons (`mode=3`). The independent Soundly
+geometry recorder must preserve the active fill colour for **both** modes;
+otherwise lamp shafts disappear against the white background while their
+fixtures remain visible as apparently floating squares. Outline-only
+polygons (`mode=1`) retain their active stroke colour. This correction belongs
+in `CurvatureGeometryEngine`, so it is shared by independent Modern renderers.
+
+Canvas Direct also omits a repeated closing endpoint from authored polygons
+(the Canvas path already closes them) and skips zero-length projected strokes.
+Neither change thins bridge objects, changes the geometric horizon mask, or
+adds adaptive optics to playback. Review the 26–32 s Soundly transitions and
+low-eye viewpoints in a browser: the remaining depth ambiguity is still the
+known whole-object Legacy painter approximation, not a physical depth test.

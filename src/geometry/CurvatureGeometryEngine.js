@@ -383,9 +383,14 @@
         var points,m;
         if(mode===undefined){points=xs.map(function(v){return v.slice();});m=ys;}
         else {points=xs.map(function(x,i){return [x,ys[i]];});m=mode;}
-        var prim={type:'polygon',points:points,mode:m};
-        if(m===3)prim.style={fill:fill};
-        if(alpha!==1){prim.style=prim.style||{};prim.style.alpha=alpha;}
+        var prim={type:'polygon',points:points,mode:m},style={};
+        // Legacy mode 2 is a filled polygon without an outline. Losing its
+        // colour makes slender lamp posts white against the sky, leaving
+        // their darker fixtures apparently floating in mid-air.
+        if(m&2)style.fill=fill;
+        if(m&1)style.stroke=stroke;
+        if(alpha!==1)style.alpha=alpha;
+        if(Object.keys(style).length)prim.style=style;
         primitives.push(prim);
       },
       RectOnPlane:function(x1,y1,x2,y2,mode){
