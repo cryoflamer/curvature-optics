@@ -17,6 +17,7 @@
   var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','grace','causeway','tensas','soundly','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   var TEMPERATURE_PLACEMENTS=['outside-right','outside-left','inside-right','inside-left'];
+  var CAPTION_MODES=['off','title','title-description'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}
   function shape(value,keys,optional){
     if(!object(value)||Object.keys(value).some(function(k){return !keys.includes(k)&&!(optional||[]).includes(k);}))
@@ -51,7 +52,8 @@
       display:{mode:ui.mode,eyeLevel:ui.eyeLevel,horizon:ui.horizon,
         gpuProbe:ui.gpuProbe===true,probeTargets:ui.probeTargets||256,
         showTemperatureProfile:ui.showTemperatureProfile===true,
-        temperaturePlacement:ui.temperaturePlacement||'outside-right'}};
+        temperaturePlacement:ui.temperaturePlacement||'outside-right',
+        captionMode:ui.captionMode||'off'}};
     if(ui.cameraPositions&&ui.cameraPositions.length)snapshot.cameraPositions=ui.cameraPositions;
     if(ui.cameraSequence&&ui.cameraSequence.length)snapshot.cameraSequence={keyframes:ui.cameraSequence};
     return validate(snapshot);
@@ -148,7 +150,7 @@
     compareB.visibility=Object.assign({},compareA.visibility);
     var d=value.display;
     // Probe fields are optional for links saved before the GPU Compare experiment.
-    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets','showTemperatureProfile','temperaturePlacement'].includes(k);})||
+    if(!object(d)||Object.keys(d).some(function(k){return !['mode','eyeLevel','horizon','gpuProbe','probeTargets','showTemperatureProfile','temperaturePlacement','captionMode'].includes(k);})||
       !['mode','eyeLevel','horizon'].every(function(k){return Object.prototype.hasOwnProperty.call(d,k);}))
       throw RangeError('Invalid experiment display fields');
     var result={version:VERSION,scene:{camera:camera,objects:objects,surface:surface,
@@ -167,7 +169,8 @@
         probeTargets:d.probeTargets===undefined?256:choice(d.probeTargets,[128,256,512,1024]),
         showTemperatureProfile:d.showTemperatureProfile===undefined?false:bool(d.showTemperatureProfile),
         temperaturePlacement:d.temperaturePlacement===undefined?'outside-right':
-          choice(d.temperaturePlacement,TEMPERATURE_PLACEMENTS)}};
+          choice(d.temperaturePlacement,TEMPERATURE_PLACEMENTS),
+        captionMode:d.captionMode===undefined?'off':choice(d.captionMode,CAPTION_MODES)}};
     if(value.cameraPositions!==undefined&&cameraPositions.length)result.cameraPositions=cameraPositions;
     if(cameraSequence&&cameraSequence.length)result.cameraSequence={keyframes:cameraSequence};
     return result;

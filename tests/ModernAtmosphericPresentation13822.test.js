@@ -92,16 +92,16 @@ test('138.2.2: no repeated feedback; shader uses smooth bounded displacement',()
 });
 test('47: Modern Scene/Compare suppress captions with and without separate atmospheric presentation',()=>{
   const m=makeModel(),source=makeCanvas(),g=makeGraph(source);
-  renderer.renderPhysical(g,m,{...opts,showCaptions:false});
+  renderer.renderPhysical(g,m,{...opts,showCaptions:false,captionMode:'off'});
   assert.deepEqual(source.ops.filter(op=>op[0]==='text'),[]);
   source.ops.length=0;
-  const deferred=renderer.renderPhysical(g,m,{...opts,deferDecorations:true,showCaptions:false});
-  renderer.drawPresentationDecorations(g.Canvas,m,deferred.decorationCamera,undefined,{showCaptions:false});
+  const deferred=renderer.renderPhysical(g,m,{...opts,deferDecorations:true,showCaptions:false,captionMode:'off'});
+  renderer.drawPresentationDecorations(g.Canvas,m,deferred.decorationCamera,undefined,{showCaptions:false,captionMode:'off'});
   assert.deepEqual(source.ops.filter(op=>op[0]==='text'),[]);
   assert.equal(m.DemoText,'Sharp title');assert.equal(m.Description,'Sharp description');
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(app,/deferDecorations:separateDecorations,showCaptions:false/);
-  assert.match(app,/geometryBackend:state\.geometryBackend,showCaptions:false/);
-  assert.equal((app.match(/\{showCaptions:false\}\);/g)||[]).length,2,
-    'both Scene and Compare atmospheric passes must omit captions');
+  assert.match(app,/deferDecorations:separateDecorations,showCaptions:state\.captionMode!==\'off\',captionMode:state\.captionMode,geometryBackend:state\.geometryBackend/);
+  assert.match(app,/geometryBackend:state\.geometryBackend,showCaptions:state\.captionMode!==\'off\',captionMode:state\.captionMode/);
+  assert.equal((app.match(/captionMode:state\.captionMode/g)||[]).length>=4,true,
+    'Scene and Compare rendering plus deferred decorations must pass the shared caption mode');
 });

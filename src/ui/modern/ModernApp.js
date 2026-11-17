@@ -9,7 +9,7 @@
     temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
     transitionProfile:{source:'standard',weight:0},
     inverseProfile:{source:'temperature-lapse',weight:0},
-    showTemperatureProfile:false,temperaturePlacement:'outside-right',
+    showTemperatureProfile:false,temperaturePlacement:'outside-right',captionMode:'off',
     preset:'pontchartrain',scenePresetSelection:'pontchartrain',timer:null,frame:null,last:null,editTimeouts:{},
     curvatureCommitTimer:null,curvaturePending:false,
     compareGraphs:{A:null,B:null},comparePair:null,compareLast:{A:null,B:null},
@@ -942,6 +942,7 @@
       gpuProbe:false,probeTargets:256,
       showTemperatureProfile:state.showTemperatureProfile,
       temperaturePlacement:state.temperaturePlacement,
+      captionMode:state.captionMode,
       cameraPositions:cameraPositions,cameraSequence:cameraSequence}); // Keep legacy schema; never re-enable retired WebGPU.
   }
   function localSession(){
@@ -3911,6 +3912,7 @@
     state.inverseProfile=Object.assign({},scene.inverseProfile);
     state.showTemperatureProfile=data.display.showTemperatureProfile;
     state.temperaturePlacement=data.display.temperaturePlacement;
+    state.captionMode=data.display.captionMode||'off';
     state.preset=scene.resetPreset;state.scenePresetSelection=scene.preset;
     state.compareConfig=compareState.sharedVisibility({A:data.compare.A,B:data.compare.B,preset:data.compare.preset});
     state.compareSelected=data.compare.selected;
@@ -4096,7 +4098,7 @@
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
         visibility:state.visibility,temperatureProfile:state.temperatureProfile,
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
-        deferDecorations:separateDecorations,showCaptions:false,geometryBackend:state.geometryBackend,
+        deferDecorations:separateDecorations,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,geometryBackend:state.geometryBackend,
         opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('Scene')},
         forceColdOptics:state.opticalSample==='cold'
@@ -4108,7 +4110,7 @@
       if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
           guideGraph.Canvas,model,result.decorationCamera,result.decorationPhysicalGuides,
-          {showCaptions:false});
+          {showCaptions:state.captionMode!=='off',captionMode:state.captionMode});
       state.last=result;
       updateGeometryBackendStatus(result);
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
@@ -4159,7 +4161,7 @@
         temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,
         transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
         inverseProfile:spec?spec.inverseProfile:state.inverseProfile,interactive:false,
-        geometryBackend:state.geometryBackend,showCaptions:false,
+        geometryBackend:state.geometryBackend,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,
         opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('compare')},
         forceColdOptics:state.opticalSample==='cold'};
@@ -4182,7 +4184,7 @@
       if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
           guideGraph.Canvas,m,result.decorationCamera,result.decorationPhysicalGuides,
-          {showCaptions:false});
+          {showCaptions:state.captionMode!=='off',captionMode:state.captionMode});
       state.compareLast[side]=result;
       updateGeometryBackendStatus(result);
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
@@ -4501,6 +4503,7 @@
       }
     });
     var show=newUiEl('ModernShowTemperatureProfile');if(show)show.checked=state.showTemperatureProfile;
+    var captionMode=newUiEl('ModernSceneCaptionMode');if(captionMode)captionMode.value=state.captionMode;
     var select=newUiEl('ModernTemperaturePlacement');if(select)select.value=state.temperaturePlacement;
     var wrap=newUiEl('ModernTemperaturePlacementWrap');if(wrap)wrap.hidden=!state.showTemperatureProfile;
     var resize=!!syncTemperatureColumn('Scene',state.atmosphere,state.temperatureProfile,false,state.transitionProfile,state.inverseProfile,state.occlusionRadius);
@@ -4640,6 +4643,11 @@
       state.temperaturePlacement=select.value;
       if(syncTemperatureControls())redraw();
       else scheduleExperimentSave();
+    });
+    var captionMode=newUiEl('ModernSceneCaptionMode');
+    if(captionMode)captionMode.addEventListener('change',function(){
+      state.captionMode=captionMode.value;
+      redraw();
     });
   }
   function syncCompareEditor(){
@@ -6056,6 +6064,7 @@
     var gridExtent=newUiEl('ModernGridExtent');if(gridExtent)gridExtent.value=String(model.metricGridExtentKm||0);
     var eye=newUiEl('ModernCompareEyeLevel');if(eye)eye.checked=state.compareEyeLevel;
     var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
+    var captionMode=newUiEl('ModernSceneCaptionMode');if(captionMode)captionMode.value=state.captionMode;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
     if(adapter&&adapter.refreshDescription)adapter.refreshDescription(model);
     var description=el('ModernSceneDescription');if(description)description.textContent=model.Description||'Custom physical scene';

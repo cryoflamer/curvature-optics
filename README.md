@@ -223,6 +223,8 @@ In Modern, the **Demos** tab embeds all nine original Legacy animation families.
 
 ### Temperature gradient in Modern (#140.12.94)
 
+In **Display → Viewport overlays**, **Canvas captions** now controls whether the working Scene/Compare image shows no captions, the title only, or the title plus wrapped description. The default is **Off** so working images stay clean after #47; the selection is saved in experiment URLs/JSON and restored from History.
+
 In **Scene/Compare → Atmosphere**, select **Temperature gradient · hydrostatic** to control surface temperature (°C), local surface lapse rate (K/km) and pressure (hPa). In Compare, A and B have **independent** temperature atmospheres; atmospheric extinction/haze remains shared. **Display → Show temperature column (0–2 km)** overlays a switchable color column on each temperature-model image. It is a visual altitude legend, not a change to rays or a pixel-aligned height map. The settings and toggle are saved in experiment URLs/JSON. Existing fixed Standard and Legacy optics are unchanged. Read [the model's physics, validity domain and caveats](docs/temperature-gradient-modern.md) before interpreting inversion experiments.
 
 ## #140.12.97 — Inverse temperature atmosphere (Modern)

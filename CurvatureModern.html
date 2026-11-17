@@ -724,6 +724,11 @@
             <label class="modern-check" for="ModernTargetIndicatorToggle"><input type="checkbox" id="ModernTargetIndicatorToggle" checked> Target direction</label>
             <button type="button" class="modern-help" aria-label="Help: target direction" data-tip="Geometric direction to an off-screen target centre. Independent of Camera HUD; does not establish optical visibility, refraction or occlusion.">?</button>
           </div>
+          <div class="modern-field modern-display-caption-selection">
+            <div class="modern-display-label"><label for="ModernSceneCaptionMode">Canvas captions</label>
+              <button type="button" class="modern-help" aria-label="Help: canvas captions" data-tip="Optional title and description rendered directly on the Scene or Compare image. Off keeps the working image clean. Title + description wraps long text to fit narrow Compare viewports.">?</button></div>
+            <select id="ModernSceneCaptionMode"><option value="off" selected>Off</option><option value="title">Title only</option><option value="title-description">Title + description</option></select>
+          </div>
           <div class="modern-field modern-display-target-selection">
             <label for="ModernTargetIndicatorSelection">Target</label>
             <select id="ModernTargetIndicatorSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select>

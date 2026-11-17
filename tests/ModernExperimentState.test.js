@@ -22,7 +22,7 @@ function experiment(){
   const physics=compare.preset('flat-inverse');
   return codec.capture(m,{atmosphere:'standard',occlusionRadius:6371000,
     preset:'custom',resetPreset:'pontchartrain'},physics,
-    {mode:'compare',eyeLevel:true,horizon:true,selected:'B'});
+    {mode:'compare',eyeLevel:true,horizon:true,selected:'B',captionMode:'off'});
 }
 test('134: versioned experiment encodes and decodes all shared Scene and independent Compare inputs',()=>{
   const e=experiment();
@@ -178,7 +178,7 @@ test('140.12.9: GPU Compare mode and target count survive share URL and old link
   delete legacy.display.gpuProbe;
   delete legacy.display.probeTargets;
   assert.deepEqual(codec.validate(legacy).display,{mode:'compare',eyeLevel:true,horizon:true,
-    gpuProbe:false,probeTargets:256,showTemperatureProfile:false,temperaturePlacement:'outside-right'});
+    gpuProbe:false,probeTargets:256,showTemperatureProfile:false,temperaturePlacement:'outside-right',captionMode:'off'});
   for(const invalid of [0,64,2048,'1024',null]){
     const candidate=JSON.parse(JSON.stringify(e));candidate.display.probeTargets=invalid;
     assert.throws(()=>codec.validate(candidate));
@@ -229,4 +229,17 @@ test('Compare haze edits synchronize A/B without changing independent optics or 
   assert.deepEqual(saved.compare.B.visibility,{enabled:true,rangeKm:27});
   const restored=codec.decode(codec.encode(saved));
   assert.deepEqual(restored,saved);
+});
+
+test('Canvas caption mode survives URLs and defaults old links to off',()=>{
+  const e=experiment();
+  e.display.captionMode='title-description';
+  const decoded=codec.decode(codec.encode(e));
+  assert.equal(decoded.display.captionMode,'title-description');
+  const legacy=experiment();
+  delete legacy.display.captionMode;
+  assert.equal(codec.validate(legacy).display.captionMode,'off');
+  const titleOnly=experiment();
+  titleOnly.display.captionMode='title';
+  assert.equal(codec.validate(titleOnly).display.captionMode,'title');
 });

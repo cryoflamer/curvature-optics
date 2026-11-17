@@ -38,26 +38,84 @@
   }
   return {size:function(v){return scale(v,1);},pad:function(v){return scale(v);},contextScale:k};
  }
- function demoBounds(canvas,model,camera){
-  var text=typeof model.DemoText==='string'?model.DemoText:'',description=typeof model.Description==='string'?model.Description:'';
-  if(!text)return [];
-  var ctx=canvas.getContext('2d'),s=scales(camera),centerX=canvas.width/2,rects=[];
-  // GraphX3DX uses middle-baseline text with 10-pixel padding and a top
-  // alignment: centerY = viewY + textHeight/2 + verticalPadding.
-  function item(value,fontSize,logicalY){
-   var size=s.size(fontSize),pad=s.pad(10),cy=logicalY+size/2+pad;
+ function demoBounds(canvas,model,camera,options){
+  options=options||{};
+  var captionMode=options.captionMode||'title-description';
+  var text=typeof model.DemoText==='string'?model.DemoText.trim():'',description=typeof model.Description==='string'?model.Description.trim():'';
+  if(captionMode==='off'||!text)return [];
+  var ctx=canvas.getContext('2d'),s=scales(camera),centerX=canvas.width/2,items=[];
+  var outerPad=s.pad(10),lineGap=s.pad(5),sectionGap=s.pad(8),maxWidth=Math.max(40,canvas.width-outerPad*2),
+    minHeight=outerPad*2+s.size(20)+s.size(16)+sectionGap+lineGap*2,
+    maxHeight=Math.max(canvas.height*.9,minHeight);
+  function metrics(value,size){
    if(typeof ctx.save==='function')ctx.save();
    ctx.font=size+'px Arial';
    var width=typeof ctx.measureText==='function'?ctx.measureText(value).width:size*value.length*.65;
    if(typeof ctx.restore==='function')ctx.restore();
-   rects.push({x:Math.max(0,Math.floor(centerX-width/2-2)),
-     y:Math.max(0,Math.floor(cy-size/2-3)),
-     width:Math.ceil(width+4),height:Math.ceil(size+6),kind:fontSize===20?'demo-title':'demo-description',
-     text:value,fontSize:size,baselineY:cy});
+   return width;
   }
-  item(text,20,0);
-  if(description)item(description,16,s.pad(30));
-  return rects;
+  function wrapWord(word,size){
+   if(metrics(word,size)<=maxWidth)return [word];
+   var parts=[],rest=word;
+   while(rest.length){
+    var take='';
+    for(var i=1;i<=rest.length;i++){
+     var probe=rest.slice(0,i);
+     if(metrics(probe,size)>maxWidth){take=rest.slice(0,Math.max(1,i-1));break;}
+    }
+    if(!take)take=rest;
+    parts.push(take);rest=rest.slice(take.length);
+   }
+   return parts;
+  }
+  function wrapText(value,size,maxLines){
+   var words=value.split(/\s+/).filter(Boolean),lines=[];
+   if(!words.length)return lines;
+   var current='';
+   function pushCurrent(){if(current){lines.push(current);current='';}}
+   words.forEach(function(word){
+    wrapWord(word,size).forEach(function(part){
+     var candidate=current?current+' '+part:part;
+     if(current&&metrics(candidate,size)>maxWidth){pushCurrent();current=part;}
+     else current=candidate;
+    });
+   });
+   pushCurrent();
+   if(maxLines>0&&lines.length>maxLines){
+    lines=lines.slice(0,maxLines);
+    var last=lines[maxLines-1];
+    while(last&&metrics(last+'…',size)>maxWidth)last=last.slice(0,-1).trimEnd();
+    lines[maxLines-1]=(last||'').replace(/[\s.]+$/,'')+'…';
+   }
+   return lines;
+  }
+  function addBlock(kind,value,fontSize,maxLines){
+   var size=s.size(fontSize),lines=wrapText(value,size,maxLines),lineHeight=size+lineGap;
+   lines.forEach(function(line){items.push({kind:kind,text:line,fontSize:size,lineHeight:lineHeight,width:metrics(line,size)});});
+  }
+  addBlock('demo-title',text,20,2);
+  if(captionMode==='title-description'&&description)addBlock('demo-description',description,16,3);
+  var cursor=outerPad;
+  items.forEach(function(item,index){
+   if(index>0&&item.kind==='demo-description'&&items[index-1].kind!=='demo-description')cursor+=sectionGap;
+   item.baselineY=cursor+item.fontSize/2;
+   item.x=Math.max(0,Math.floor(centerX-item.width/2-4));
+   item.y=Math.max(0,Math.floor(cursor-3));
+   item.width=Math.ceil(item.width+8);
+   item.height=Math.ceil(item.fontSize+6);
+   cursor+=item.lineHeight;
+  });
+  while(items.length&&cursor>maxHeight){
+   var removed=items.pop();
+   cursor-=removed.lineHeight;
+   if(items.length){
+    var last=items[items.length-1],label=last.text.replace(/[\s…]+$/,'')+'…';
+    while(label&&metrics(label,last.fontSize)>maxWidth)label=label.slice(0,-2).trimEnd()+'…';
+    last.text=label||'…';last.width=Math.ceil(metrics(last.text,last.fontSize)+8);
+    last.x=Math.max(0,Math.floor(centerX-(last.width-8)/2-4));
+   }
+  }
+  return items;
  }
  // Camera-oriented supplementary guides are a PRESENTATION overlay. Reuse
  // already traced metric ground samples; neither ray shooting nor surface
@@ -151,7 +209,8 @@
      {kind:'camera-frame',x:canvas.width-half,y:0,width:half,height:canvas.height});
   }
   var metricOverlay=metricGridOverlay(canvas,model,camera,options.physicalGuides);
-  var captions=options.showCaptions===false?[]:demoBounds(canvas,model,camera);
+  var captionMode=options.captionMode||(options.showCaptions===false?'off':'title-description');
+  var captions=captionMode==='off'?[]:demoBounds(canvas,model,camera,{captionMode:captionMode});
   if(captions.length){
    ctx.save();ctx.fillStyle='black';ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=1;
    captions.forEach(function(item){ctx.font=item.fontSize+'px Arial';ctx.fillText(item.text,canvas.width/2,item.baselineY);});

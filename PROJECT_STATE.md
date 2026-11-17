@@ -2909,6 +2909,10 @@ shared styling and card-specific click isolation.
   the 100 km default. A full browser/pixel/FPS check remains for Opera and
   GitHub Actions. The next scenario geometry is Grace (#42).
 
+### Modern #48 — Configurable wrapped canvas captions
+
+The Modern working viewport now keeps the #47 clean-image default (`Off`) while restoring an explicit **Canvas captions** control in Display → Viewport overlays. Supported modes are `off`, `title`, and `title-description`. Long titles/descriptions are wrapped to the available viewport width and ellipsized vertically when needed, so narrow Compare panels no longer let caption text overflow outside the image. The setting is carried in Modern experiment URLs/JSON/History as `display.captionMode`; pre-#48 links migrate to `off`.
+
 ### Modern #47 — Working-view captions were de-duplicated
 
 - Scene and Compare now suppress duplicate title/description text on the physical
