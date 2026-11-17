@@ -129,7 +129,7 @@ function auditState(state) {
   if (!types.length || types.some(t => !Number.isInteger(t))) {
     blockers.push({code: 'invalid-legacy-object-types', field: 'ObjType'});
   }
-  // The allowed Modern values 0..3 are *only* schema-compatible. The original
+  // The allowed Modern values 0..9 are *only* schema-compatible. The original
   // shapes and rays must still be independently compared before migration.
   return {
     mapped, unmapped, blockers,

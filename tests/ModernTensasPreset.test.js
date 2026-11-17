@@ -50,7 +50,7 @@ test('Tensas local pillars and elevated crossover match untouched Legacy DrawSha
 
     }
   assert.throws(()=>geo.localObject(7,0,false),/drawn sequence/);
-  assert.throws(()=>geo.localObject(8,0,false,{drawn:0}),/not been independently ported/);
+  assert.throws(()=>geo.localObject(10,0,false,{drawn:0}),/not been independently ported/);
 });
 test('Tensas source state 4 is preserved as partial Modern vacuum preset',()=>{
   const m=model(),legacy=states[3],p=scene.applyPreset(m,'tensas');m.Update();

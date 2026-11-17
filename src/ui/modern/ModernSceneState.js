@@ -11,7 +11,7 @@
   var CAMERA={Height:[0.001,1e9],FocalLengthField:[1,100000],ViewAngleField:[0.1,160],
     Pan:[-360,360],Nick:[-90,90],Roll:[-180,180],
     CameraEast:[-1e7,1e7],CameraNorth:[-1e7,1e7]};
-  var OBJECT={NObjects:[0,200,true],ObjType:[0,7,true],ObjDist:[0,1e7],
+  var OBJECT={NObjects:[0,200,true],ObjType:[0,9,true],ObjDist:[0,1e7],
     ObjDeltaDist:[0.001,1e7],ObjSidePos:[-1e7,1e7],ObjSideVar:[-1e7,1e7],
     ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4],
     ObjSideType:[0,4,true],ObjSizeType:[0,4,true]};
@@ -118,6 +118,17 @@
       objects:{NObjects:[87,0],ObjType:[7,3],ObjDist:[0,0],ObjDeltaDist:[150,100],
         ObjSideType:[0,0],ObjSidePos:[-2,0],ObjSideVar:[0,0],
         ObjSizeType:[0,0],ObjSize:[1,10],ObjSizeVar:[0,0]},
+      showGrid:true,atmosphere:'vacuum'},
+    // Soundly source state index 12 (?demo=Soundly&pos=13): 128 supports
+    // across 38.1 km, including ship passages and the special raised spans.
+    // Modern uses the same shared physical Globe/Flat ray tracer and
+    // independent panels; the 18-state Legacy animation is not reproduced.
+    soundly:{name:'Soundly Causeway · bridge observations',
+      description:'Legacy Soundly state 13 geometry: 128 segments at 300 m spacing, 10.8 m observer, zero refraction (vacuum). Physical Globe/Flat Compare; no narrated Legacy parity.',
+      camera:{Height:10.8,FocalLengthField:2200,Pan:0.45,Nick:-0.03,Roll:0},
+      objects:{NObjects:[128,0],ObjType:[8,3],ObjDist:[496,0],ObjDeltaDist:[300,100],
+        ObjSideType:[0,0],ObjSidePos:[55.5,0],ObjSideVar:[0,0],
+        ObjSizeType:[0,0],ObjSize:[1,10],ObjSizeVar:[0,0]},
       showGrid:true,atmosphere:'vacuum'}
   });
   function finiteNumber(raw,min,max,integer){
@@ -161,7 +172,7 @@
     if(!model||model.DemoText!==PRESETS.pontchartrain.name||
         !/^(?:\d+ transmission towers|\d+ (?:ships|measuring rods|Bedford markers|city skylines)) across Lake Pontchartrain$/.test(model.Description||''))
       return model&&model.Description;
-    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers',4:'city skylines',5:'mountains',6:'bridges'};
+    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers',4:'city skylines',5:'mountains',6:'bridges',7:'Tensas segments',8:'Soundly sections',9:'Soundly sections'};
     var kind=types[model.ObjType&&model.ObjType[0]];
     if(kind&&model.NObjects&&Number.isInteger(model.NObjects[0]))
       model.Description=model.NObjects[0]+' '+kind+' across Lake Pontchartrain';

@@ -1,7 +1,7 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-17, #44):** seven **partial** geographic native scenarios
-(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`, `causeway`, `tensas`) are available, with
+**Status (2026-11-17, #45):** eight **partial** geographic native scenarios
+(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`, `causeway`, `tensas`, `soundly`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
@@ -68,7 +68,14 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   Legacy DrawShape for source sequence indices, palettes and height variation;
   independently rendered Globe/Flat are not narrated Legacy parity.
   Evidence: `tests/ModernTensasPreset.test.js`, `tests/ModernSceneControls.test.js`.
-- [ ] **#45+ — Soundly:** port source-backed types 8/9 without changing the shared optics.
+- [x] **#45 — Soundly Causeway:** partial source state 13 native `soundly` preset
+  with 128 source type-8 supports at 300 m spacing and 10.8 m observer.
+  Independent type-8/type-9 local profiles retain authored ship passages,
+  ramps, signs, towers, and reversal; world-space decks join both roads
+  independently on Globe and Flat. The shared physical optics is unchanged.
+  The full 18-state narrated demonstration, atmospheric variants and
+  source-camera pixel parity remain unported. Evidence:
+  `tests/ModernSoundlyPreset.test.js`.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
   for every migrated scenario. No full migration parity is certified yet.
@@ -428,9 +435,9 @@ acceptance are not certified. No new optics or persistence schema was added.
 - [x] Implement object type **6**: shared bridge support/road geometry,
   exercised by Grace and the partial Causeway source-state view.
 - [ ] Implement object type **7**: Tensas-specific bridge geometry.
-- [ ] Implement object type **8**: Soundly Causeway geometry.
-- [ ] Review type **9** only for full Legacy object-catalog parity; it is
-  not a blocker for the nine authored demonstrations.
+- [x] Implement object type **8**: Soundly Causeway geometry (partial native #45).
+- [x] Review and port object type **9** for the reverse Soundly bridge profile;
+  no separate authored scenario preset requires type 9.
 - [ ] Extend native validators and Objects editor for each supported type
   **only together with its physical Scene and Compare rendering tests**.
 - [ ] Define the atmosphere mapping per scenario: Legacy `refractionCoeff`,
@@ -455,8 +462,10 @@ catalog entry. Do not tick it until the acceptance gates below are met.
   negative starting distance and combined globe/flat view need decisions.
 - [ ] `tensas-bayou-bridge` — `Tensas` (6 states); partial source state 4
   uses type 7, but six-state and narrated animation parity remain open.
-- [ ] `pontchartrain-soundly` — `Soundly` (18 states); requires type 8; preserve
-  its embedded escaped apostrophe during source extraction.
+- [ ] `pontchartrain-soundly` — `Soundly` (18 states); partial native source
+  state 13 uses type 8 with type 9 also available for reverse-order views.
+  Full 18-state visual and narrated acceptance remains open; preserve its
+  escaped apostrophe in source extraction.
 - [ ] `chicago-skyline` — `Chicago` (6 states); type 4 supported, distant and source-camera partial presets; full six-state/overlay acceptance pending.
 - [ ] `canigou-mountain` — `Canigou` (8 states); two source-backed partial
   camera/atmosphere views now exist (#39); visual/ray baselines, remaining

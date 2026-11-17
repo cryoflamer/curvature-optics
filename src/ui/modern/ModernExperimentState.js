@@ -14,7 +14,7 @@
   var OBJECT=['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
   var ATMOSPHERE=['vacuum','standard','temperature-lapse','profile-transition','inverse-temperature','inverse-spherical','exponential-occlusion'];
-  var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','grace','causeway','tensas','custom'];
+  var SCENE_PRESETS=['pontchartrain','single','rows','bedford','chicago','chicago-near','canigou','canigou-low','grace','causeway','tensas','soundly','custom'];
   var PAIR_PRESETS=['globe-flat-vacuum','standard-vacuum','standard-inverse','flat-inverse','custom'];
   var TEMPERATURE_PLACEMENTS=['outside-right','outside-left','inside-right','inside-left'];
   function object(value){return value!==null&&typeof value==='object'&&!Array.isArray(value);}
@@ -102,7 +102,7 @@
       cameraSequence=sequence.validate(value.cameraSequence.keyframes);
     }
     shape(s.objects,OBJECT);
-    var objectLimits={NObjects:[0,200,true],ObjType:[0,7,true],ObjDist:[0,1e7],
+    var objectLimits={NObjects:[0,200,true],ObjType:[0,9,true],ObjDist:[0,1e7],
       ObjDeltaDist:[0.001,1e7],ObjSideType:[0,4,true],ObjSidePos:[-1e7,1e7],
       ObjSideVar:[-1e7,1e7],ObjSizeType:[0,4,true],ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4]};
     var objects={};OBJECT.forEach(function(k){

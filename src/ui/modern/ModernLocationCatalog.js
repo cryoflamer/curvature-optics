@@ -59,7 +59,7 @@
       stateCount: 6, animationCount: 5, objectTypes: [7], status: 'partial', nativePresetId: 'tensas'},
     {id: 'pontchartrain-soundly', name: 'Soundly Causeway Observations',
       category: 'geographic', locationId: 'lake-pontchartrain', legacyDemo: 'Soundly',
-      stateCount: 18, animationCount: 17, objectTypes: [8], status: 'not-ported', nativePresetId: null},
+      stateCount: 18, animationCount: 17, objectTypes: [8], status: 'partial', nativePresetId: 'soundly'},
     {id: 'chicago-skyline', name: 'Chicago Skyline',
       category: 'geographic', locationId: 'chicago-lake-michigan', legacyDemo: 'Chicago',
       stateCount: 6, animationCount: 5, objectTypes: [4], status: 'partial', nativePresetId: 'chicago'},
@@ -71,7 +71,7 @@
   // Only supported partial native Scene presets may be selected. 'single'
   // and 'rows' are illustrative samples, not authored geographic locations.
   // Chicago and Canigou each offer two views of the SAME partial source scenario.
-  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'canigou', 'canigou-low', 'grace', 'causeway', 'tensas']);
+  var NATIVE_PRESETS = Object.freeze(['pontchartrain', 'single', 'rows', 'bedford', 'chicago', 'chicago-near', 'canigou', 'canigou-low', 'grace', 'causeway', 'tensas', 'soundly']);
 
   function location(id) { return LOCATIONS.find(function(item) { return item.id === id; }) || null; }
   function scenario(id) { return SCENARIOS.find(function(item) { return item.id === id; }) || null; }

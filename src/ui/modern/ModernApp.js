@@ -6070,7 +6070,8 @@
     var names={0:['Bedford marker','Bedford markers'],1:['measuring rod','measuring rods'],
       2:['ship','ships'],3:['transmission tower','transmission towers'],
       4:['city skyline','city skylines'],5:['mountain','mountains'],
-      6:['bridge support','bridge supports'],7:['Tensas segment','Tensas segments']};
+      6:['bridge support','bridge supports'],7:['Tensas segment','Tensas segments'],8:['Soundly south section','Soundly south sections'],
+      9:['Soundly north section','Soundly north sections']};
     for(var i=0;i<2;i++){
       var count=Number(model.NObjects[i]);
       var types=names[model.ObjType[i]]||['object','objects'];
@@ -6098,7 +6099,7 @@
       ['ObjSizeVar','Size amplitude (fraction)','number',-10000,10000,'any']
     ];
     var typeOptions=[['3','Transmission tower'],['2','Ship'],['1','Measuring rod'],['0','Bedford marker'],
-      ['4','City skyline'],['5','Mountain'],['6','Bridge / platform'],['7','Tensas Bayou bridge']];
+      ['4','City skyline'],['5','Mountain'],['6','Bridge / platform'],['7','Tensas Bayou bridge'],['8','Soundly bridge (south)'],['9','Soundly bridge (north)']];
     var variationOptions=[['0','Linear'],['1','Alternating'],['2','Random'],['3','Cosine'],['4','Sine']];
     function field(row){
       var key=row[0],id='ModernObject'+i+key;

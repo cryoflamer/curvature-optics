@@ -29,6 +29,6 @@ const ship=model(2);ship.ObjSizeVar[0]=.6;
 const rod=engine.objectSequence(m,0,false),boats=engine.objectSequence(ship,0,false);
 assert.ok(rod.some((e,i)=>Math.abs(e.params.verticalScale-boats[i].params.verticalScale)>1e-8));
 assert.ok(boats.some(e=>Math.abs(e.params.verticalScale-e.params.horizontalScale)>1e-8));
-assert.throws(()=>engine.objectSequence(model(9),0,false),/not been independently ported/);
+assert.throws(()=>engine.objectSequence(model(10),0,false),/not been independently ported/);
 assert.throws(()=>engine.towerSequence(model(1),0,false),/Only transmission towers/);
 console.log('CurvatureObjectSequence: passed');

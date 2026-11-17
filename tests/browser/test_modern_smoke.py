@@ -198,6 +198,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(preset).to_have_value('pontchartrain', timeout=30000)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_soundly_preset_compare_and_history_return(self):
+        self.open_modern()
+        preset = self.page.locator('#ModernPreset')
+        preset.select_option('soundly')
+        expect(preset).to_have_value('soundly', timeout=30000)
+        expect(self.page.locator('#ModernSceneTitle')).to_contain_text('Soundly Causeway')
+        self.assertEqual(self.page.evaluate("""() => ({
+            types: window.CurvatureModernApp.getModel().ObjType,
+            counts: window.CurvatureModernApp.getModel().NObjects,
+            atmosphere: document.getElementById('ModernAtmosphere').value,
+        })"""), {'types': [8, 3], 'counts': [128, 0], 'atmosphere': 'vacuum'})
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('pontchartrain', timeout=30000)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_wizard_can_be_opened_and_cancelled(self):
         self.open_modern()
         self.open_animation()

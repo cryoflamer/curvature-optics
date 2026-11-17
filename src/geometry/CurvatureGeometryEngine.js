@@ -365,6 +365,411 @@
       point(next,1),point(next,-1)],style:{fill:hidden?'#e8e4dc':'#cdcac3'},
       metadata:{kind:'bridge-road',physicalObject:true}};
   }
+  // Independent, stateless local transcription of source Soundly DrawShape.
+  // This local geometry recorder does not call Legacy, Canvas, or GraphX3DX;
+  // continuous road meshes are joined separately in physical world space.
+  function localSoundly(drawn,total,variation,sidePos,objType,hidden){
+    if(![8,9].includes(objType)||!Number.isInteger(drawn)||drawn<0||
+       !Number.isInteger(total)||total<1||drawn>=total||
+       !Number.isFinite(variation)||!Number.isFinite(sidePos))
+      throw new RangeError('Soundly requires valid drawn index, count and variation');
+    var primitives=[],fill=null,stroke='black',alpha=1;
+    var g={Poly:[],
+      SetBgColor:function(c){fill=c;},SetColor:function(c){stroke=c;},
+      SetAreaAttr:function(c){fill=c;},SetAlpha:function(a){alpha=a;},
+      NewPoly:function(){this.Poly=[];},
+      AddPointToPoly:function(x,y){this.Poly.push([x,y]);},
+      PolygonOnPlane:function(xs,ys,mode){
+        var points,m;
+        if(mode===undefined){points=xs.map(function(v){return v.slice();});m=ys;}
+        else {points=xs.map(function(x,i){return [x,ys[i]];});m=mode;}
+        var prim={type:'polygon',points:points,mode:m};
+        if(m===3)prim.style={fill:fill};
+        if(alpha!==1){prim.style=prim.style||{};prim.style.alpha=alpha;}
+        primitives.push(prim);
+      },
+      RectOnPlane:function(x1,y1,x2,y2,mode){
+        this.PolygonOnPlane([x1,x2,x2,x1,x1],[y1,y1,y2,y2,y1],mode);
+      },
+      LineOnPlane:function(x1,y1,x2,y2){
+        primitives.push({type:'line',points:[[x1,y1],[x2,y2]],style:{stroke:stroke}});
+      },
+      GetTransPointOnPlane:function(x,y,p){p[0]=x;p[1]=y;p[2]=0;}
+    };
+    var JsgVect3={Null:function(){return [0,0,0];},Copy:function(p){return p.slice();}};
+    var objIx=0;
+    var m={NObjectsDrawn:[drawn],NObjects:[total],ObjSizeVar:[variation],
+      ObjSidePos:[sidePos],LastPosValid:[false],isHiddenObj:[!!hidden]};
+    function setBgColor(normal,behind){g.SetBgColor(hidden?behind:normal);}
+    // Soundly demo: Causew-S and Causew-N
+
+    var p1 = JsgVect3.Null();
+    var p2 = JsgVect3.Null();
+    var nDraw = m.NObjectsDrawn[objIx];
+    if (objType == 9) {
+      // draw backward
+      nDraw = m.NObjects[objIx] - 1 - nDraw;
+    }
+    var roadH = 5 * (m.ObjSizeVar[objIx] + 1);
+    var roadP = 17;
+    var roadW = 5;
+    var roadN = 0; // narrowing of east road
+
+    // draw roads
+    var roadS = 1;
+    if (m.ObjSidePos[objIx] < 0) roadS = -1;
+
+    // compute ship passages
+    if (nDraw == 106 || nDraw == 107 || nDraw == 64 || nDraw == 63 || nDraw == 21 || nDraw == 20) {
+      roadH += 2.5;
+    }
+    if (nDraw == 86 || nDraw == 87 || nDraw == 41 || nDraw == 42) {
+      roadH += 12;
+    }
+
+    // compute narrowing of roads
+    if (nDraw >= 121) {
+      roadN = 18 * (nDraw - 121) / 7
+    }
+    if (nDraw <= 7) {
+      roadN = 18 * (7-nDraw) / 7;
+    }
+    var underH = roadH - 3;
+    var underL = 24.1;
+    var underR = 26.8;
+/*
+    function DrawUnderPassageRamp( lastP ) {
+      if (!m.LastPosValid[objIx]) return;
+      var rp1 = JsgVect3.Null();
+      var rp2 = JsgVect3.Null();
+      g.GetTransPointOnPlane( -roadP-underL, underH, rp1 );
+      g.GetTransPointOnPlane( -roadP-(underL-5), underH, rp2 );
+      g.SaveTrans3D( true );
+      g.NewPoly3D();
+      g.AddPointToPoly3D( lastP );
+      g.AddPointToPoly3D( JsgVect3.Add( lastP, [5,0,0] ) );
+      g.AddPointToPoly3D( rp2 );
+      g.AddPointToPoly3D( rp1 );
+      setBgColor( '#999ba2', '#adb1bc' );
+      g.DrawPoly3D( 7 );
+      g.RestoreTrans3D();
+    }
+*/
+    function DrawTower( base, center, height, basew, topw, nbars ) {
+      g.SetAlpha( 0.3 );
+      setBgColor( '#888888', '#aaaaaa' );
+      g.PolygonOnPlane(
+        [ center-basew/2, center+basew/2, center+topw/2, center-topw/2, center-basew/2 ],
+        [ base, base, base+height, base+height, base ], 3 );
+      g.NewPoly();
+      var dh = height / nbars;
+      var hlimit = height + dh/2;
+      var slope = (topw-basew) / 2 / height;
+      var s = 1;
+      for (var hoff = 0; hoff < hlimit; hoff += dh) {
+        g.AddPointToPoly( center+s*(hoff*slope+basew/2), hoff+base );
+        s *= -1;
+      }
+      g.PolygonOnPlane( g.Poly, 1 );
+      g.NewPoly();
+      var s = -1;
+      for (var hoff = 0; hoff < hlimit; hoff += dh) {
+        g.AddPointToPoly( center+s*(hoff*slope+basew/2), hoff+base );
+        s *= -1;
+      }
+      g.PolygonOnPlane( g.Poly, 1 );
+      g.SetAlpha( 1 );
+    }
+
+    // World-space road connectors are created after object placement.
+    var roadCorrLeftH = 4, w = roadN;
+
+    // draw under passage
+    if (nDraw == 79) {
+
+      // pillows
+      setBgColor( '#adadab', '#d2d2cf' );
+      g.RectOnPlane( -roadP-(underL-1.3), 0, -roadP-(underL-2.7), underH, 3 );
+      g.RectOnPlane( -roadP-(underL-7.3), 0, -roadP-(underL-8.7), underH, 3 );
+      g.RectOnPlane( -roadP+(underR-1.3), 0, -roadP+(underR-2.7), underH, 3 );
+      g.RectOnPlane( -roadP+(underR-7.3), 0, -roadP+(underR-8.7), underH, 3 );
+
+      /*
+      // box left
+      setBgColor( '#8c8678', '#b9b19e' );
+      g.RectOnPlane( -roadP-underL, underH-2.4, -roadP+underR, underH-1.2, 3 );
+      */
+
+      // hut
+      setBgColor( '#565a56', '#858b85' );
+      g.PolygonOnPlane(
+        [ -roadP-underL, -roadP-underL, -roadP-(underL-1.3), -roadP-(underL-1.3), -roadP+(underR-1.3), -roadP+(underR-1.3), -roadP+underR, -roadP+underR, -roadP+(underR-0.4), -roadP+(underR-0.4), -roadP-(underL-0.4), -roadP-(underL-0.4), -roadP-underL ],
+        [  underH+0.8,  underH-0.2,  underH-0.2,  underH-1.2,  underH-1.2,  underH-0.2,  underH-0.2,  underH+0.8,  underH+0.8,  underH+0.0,  underH+0.0,  underH+0.8,  underH+0.8 ], 3 );
+
+      // base
+      setBgColor( '#888888', '#aaaaaa' );
+      g.SetAlpha(0.5);
+      g.RectOnPlane( -roadP-roadW-13.5, underH, -roadP-roadW, underH+4, 3 );
+      g.RectOnPlane( -roadP+roadW, underH, -roadP+roadW+18.6, underH+4, 3 );
+
+      // towers
+      var towerOffset = 5.5;
+      var c = -roadP - roadW - towerOffset;
+      var th = 21.4;
+      var bh = underH + 3.2; // 8;
+      DrawTower( bh, c, th, 3.8, 3.8, 5 );
+      g.RectOnPlane( c-2.4, underH+4, c+2.4, underH+8, 3 );
+
+      var c = -roadP + roadW + towerOffset;
+      var th = 14.3;
+      DrawTower( bh, c, th, 3.8, 3.8, 5 );
+      g.RectOnPlane( c-2.4, underH+4, c+2.4, underH+8, 3 );
+
+      // boxes
+      setBgColor( '#8c8678', '#b9b19e' );
+      var c = -roadP - roadW - towerOffset;
+      g.RectOnPlane( c-1.8, underH+4, c+1.8, underH+7.6, 3 );
+      /*
+      var c = -roadP - roadW - 3.6;
+      g.PolygonOnPlane( [ c-3.2, c-3.2, c, c, c-1.6, c-3.2 ], [ underH+6.7, underH+4, underH+4, underH+6.7, underH+6.9, underH+6.7 ], 3 );
+      */
+      var c = -roadP + roadW + towerOffset;
+      g.RectOnPlane( c-1.8, underH+4, c+1.8, underH+7.6, 3 );
+      setBgColor( '#cccccc', '#dddddd' );
+      /*
+      var c = -roadP + roadW +4.3;
+      g.PolygonOnPlane( [ c, c, c+5.3, c+5.3, c+2.65, c ], [ underH+7.2, underH+4, underH+4, underH+7.2, underH+7.5, underH+7.2 ], 3 );
+      */
+
+    }
+
+    // draw hump stuff
+    if (nDraw == 41) {
+
+      // control buildings
+      setBgColor( '#8c8678', '#b9b19e' );
+      var x = roadP - roadW;
+      var z = roadH;
+      g.PolygonOnPlane(
+        [ x-2.26, x-2.26, x, x, x-2.51, x-2.51, x-2.01, x-7.28, x-6.78, x-6.78, x-2.26 ],
+        [ z-5.52,      0, 0, z,      z, z+2.51, z+5.52, z+5.52, z+2.51, z-4.27, z-5.52 ], 3 );
+      setBgColor( '#adadab', '#d2d2cf' );
+      g.RectOnPlane( x-8.79, z+2, x-2.25, z+2.5, 3 );
+      g.RectOnPlane( x-8.28, z, x-7.28, z+2, 3 );
+      // radar
+      g.RectOnPlane( x-5.27, z+5.52, x-4.77, z+9.29, 3 );
+      g.RectOnPlane( x-6.90, z+8.54, x-3.12, z+9.04, 3 );
+      // window
+      setBgColor( '#444444', '#666666' );
+      g.PolygonOnPlane(
+        [ x-6.53, x-2.76, x-2.51, x-6.78, x-6.53 ],
+        [ z+3.51, z+3.51, z+4.77, z+4.77, z+3.51 ], 3 );
+      // building west
+      var x = -roadP - roadW;
+      setBgColor( '#8c8678', '#b9b19e' );
+      g.PolygonOnPlane(
+        [ x-2.26, x-2.26, x, x, x-2.51, x-2.51, x-6.78, x-6.78, x-2.26 ],
+        [ z-5.52,      0, 0, z,      z, z+7.03, z+7.03, z-4.27, z-5.52 ], 3 );
+      DrawTower( z, x-3.94, 7.53, 6.28, 6.28, 2 );
+
+      // bridge
+      setBgColor( '#adadab', '#d2d2cf' );
+      g.RectOnPlane( -roadP+roadW, roadH-1.13, roadP-roadW, roadH, 3 );
+
+      // left pillow
+      setBgColor( '#8c8678', '#b9b19e' );
+      var x = -roadP + roadW;
+      g.RectOnPlane( x, 0, x+1.76, z, 3 );
+
+      // tower oeast
+      var towerOffset = 1.9;
+      var c = +roadP + roadW + towerOffset;
+      var th = 10;
+      DrawTower( roadH, c, th, 3.8, 3.8, 3 );
+      g.RectOnPlane( roadP + roadW, roadH-4, roadP + roadW + 4, roadH, 3 );
+
+      // needle tower
+      var towerOffset = 1.25;
+      var c = +roadP - roadW - towerOffset;
+      var th = 14;
+      DrawTower( roadH, c, th, 1.5, 0, 6 );
+
+    }
+
+    // draw ship gide
+    if (nDraw == 41 || nDraw == 42 || nDraw == 86 || nDraw == 87) {
+      setBgColor( '#8c8678', '#b9b19e' );
+      g.SetAlpha( 0.7 );
+      g.RectOnPlane( -roadP-roadW-35, 0, +roadP+roadW+35, 3.4, 3 );
+      g.SetAlpha( 1 );
+      g.RectOnPlane( -roadP-roadW-41.7, 0, -roadP-roadW-35, 2.7, 3 );
+      g.RectOnPlane( +roadP+roadW+35, 0, +roadP+roadW+41.7, 2.7, 3 );
+    }
+
+    // draw pilows
+    w = roadN;
+    var hCorrLeft = 0;
+    if (nDraw == 79) hCorrLeft = roadCorrLeftH;  // under passage bridge correction
+    var roadHC = roadH + hCorrLeft;
+    setBgColor( '#adadab', '#d2d2cf' );
+    g.RectOnPlane( -roadP-(roadW-1.3), 0, -roadP-(roadW-2.7), roadHC-2.4, 3 );
+    g.RectOnPlane( -roadP+(roadW-2.7), 0, -roadP+(roadW-1.3), roadHC-2.4, 3 );
+    g.RectOnPlane( +roadP-w-(roadW-1.3), 0, +roadP-w-(roadW-2.7), roadH-2.4, 3 );
+    g.RectOnPlane( +roadP-w+(roadW-2.7), 0, +roadP-w+(roadW-1.3), roadH-2.4, 3 );
+    setBgColor( '#8c8678', '#b9b19e' );
+    g.RectOnPlane( -roadP-roadW, roadHC-2.4, -roadP+roadW, roadHC-1.2, 3 );
+    g.RectOnPlane( +roadP-w-roadW, roadH-2.4, +roadP-w+roadW, roadH-1.2, 3 );
+    setBgColor( '#565a56', '#858b85' );
+    g.PolygonOnPlane(
+      [ -roadP-roadW, -roadP-roadW, -roadP-(roadW-1.3), -roadP-(roadW-1.3), -roadP+(roadW-1.3), -roadP+(roadW-1.3), -roadP+roadW, -roadP+roadW, -roadP+(roadW-0.4), -roadP+(roadW-0.4), -roadP-(roadW-0.4), -roadP-(roadW-0.4), -roadP-roadW ],
+      [  roadHC+0.8,  roadHC-0.2,  roadHC-0.2,  roadHC-1.2,  roadHC-1.2,  roadHC-0.2,  roadHC-0.2,  roadHC+0.8,  roadHC+0.8,  roadHC+0.0,  roadHC+0.0,  roadHC+0.8,  roadHC+0.8 ], 3 );
+    g.PolygonOnPlane(
+      [ +roadP-w-roadW, +roadP-w-roadW, +roadP-w-(roadW-1.3), +roadP-w-(roadW-1.3), +roadP-w+(roadW-1.3), +roadP-w+(roadW-1.3), +roadP-w+roadW, +roadP-w+roadW, +roadP-w+(roadW-0.4), +roadP-w+(roadW-0.4), +roadP-w-(roadW-0.4), +roadP-w-(roadW-0.4), +roadP-w-roadW ],
+      [  roadH+0.8,  roadH-0.2,  roadH-0.2,  roadH-1.2,  roadH-1.2,  roadH-0.2,  roadH-0.2,  roadH+0.8,  roadH+0.8,  roadH+0.0,  roadH+0.0,  roadH+0.8,  roadH+0.8 ], 3 );
+
+    // draw big transmission towers
+    if (nDraw == 84) {
+      var c = +roadP - roadW - 6.7;
+      DrawTower( roadH, c, 32, 7.7, 4.8, 5 );
+
+      setBgColor( '#8c8678', '#b9b19e' );
+      g.RectOnPlane( -roadP+roadW+2.2, roadH, -roadP+roadW+6.8, roadH+3.8, 3 );
+    }
+
+    // double towers from north view
+    if (nDraw == 39 && objType == 9) {
+      // DrawTower( base, center, height, basew, topw, nbars );
+      DrawTower( roadH, -6.25, 9.5, 1.79, 1.79, 5 );
+      DrawTower( roadH,  6.25, 9.5, 1.79, 1.79, 5 );
+    }
+
+    // draw bridges
+    if (nDraw == 18 || nDraw == 39 || nDraw == 44 || nDraw == 61 || nDraw == 84 || nDraw == 89 || nDraw == 110) {
+      setBgColor( '#565a56', '#858b85' );
+      g.RectOnPlane( -roadP+roadW, roadH-0.2, roadP-roadW, roadH+0.8, 3 );
+
+      setBgColor( '#adadab', '#d2d2cf' );
+      g.RectOnPlane( -roadP+roadW, roadH-1.4, roadP-roadW, roadH-0.2, 3 );
+
+      g.RectOnPlane( -roadP+(roadW+0.1), roadH-2.8, -roadP+(roadW+1.0), roadH-1.4, 3 );
+      g.RectOnPlane( +roadP-(roadW+0.1), roadH-2.8, +roadP-(roadW+1.0), roadH-1.4, 3 );
+
+      setBgColor( '#8c8678', '#b9b19e' );
+      g.RectOnPlane( -roadP+(roadW+0.2), 0, -roadP+(roadW+0.9), roadH-2.8, 3 );
+      g.RectOnPlane( +roadP-(roadW+0.2), 0, +roadP-(roadW+0.9), roadH-2.8, 3 );
+
+      // signs
+      if (objType == 8) {
+        if (nDraw != 89 && nDraw != 44) {
+          setBgColor( '#cccccc', '#dddddd' );
+          g.RectOnPlane( -roadP+(roadW+1.0+7.5), roadH+1.8, -roadP+(roadW+1.0), roadH+1.8+2.2, 3 );
+        }
+        if (nDraw != 84 && nDraw != 39) {
+          setBgColor( '#444444', '#666666' );
+          g.RectOnPlane( +roadP-(roadW+1.0+7.5), roadH+1.8, +roadP-(roadW+1.0), roadH+1.8+2.2, 3 );
+        }
+        setBgColor( '#666666', '#888888' );
+        if (nDraw != 89 && nDraw != 44) {
+          g.LineOnPlane( -roadP+(roadW+1.0+7.5), roadH+0.9, -roadP+(roadW+1.0+7.5), roadH+1.8 );
+          g.LineOnPlane( -roadP+(roadW+1.0+5  ), roadH+0.9, -roadP+(roadW+1.0+5  ), roadH+1.8 );
+          g.LineOnPlane( -roadP+(roadW+1.0+2.5), roadH+0.9, -roadP+(roadW+1.0+2.5), roadH+1.8 );
+          g.LineOnPlane( -roadP+(roadW+1.0    ), roadH+0.9, -roadP+(roadW+1.0    ), roadH+1.8 );
+        }
+        if (nDraw != 84 && nDraw != 39) {
+          g.LineOnPlane( +roadP-(roadW+1.0+7.5), roadH+0.9, +roadP-(roadW+1.0+7.5), roadH+1.8 );
+          g.LineOnPlane( +roadP-(roadW+1.0+5  ), roadH+0.9, +roadP-(roadW+1.0+5  ), roadH+1.8 );
+          g.LineOnPlane( +roadP-(roadW+1.0+2.5), roadH+0.9, +roadP-(roadW+1.0+2.5), roadH+1.8 );
+          g.LineOnPlane( +roadP-(roadW+1.0    ), roadH+0.9, +roadP-(roadW+1.0    ), roadH+1.8 );
+        }
+      } else {
+        if (nDraw != 89 && nDraw != 44) {
+          setBgColor( '#444444', '#666666' );
+          g.RectOnPlane( -roadP+(roadW+1.0+7.5), roadH+1.8, -roadP+(roadW+1.0), roadH+1.8+2.2, 3 );
+        }
+        if (nDraw != 84 && nDraw != 39) {
+          setBgColor( '#cccccc', '#dddddd' );
+          g.RectOnPlane( +roadP-(roadW+1.0+7.5), roadH+1.8, +roadP-(roadW+1.0), roadH+1.8+2.2, 3 );
+        }
+        setBgColor( '#666666', '#888888' );
+        if (nDraw != 89 && nDraw != 44) {
+          g.LineOnPlane( -roadP+(roadW+1.0+7.5), roadH+0.9, -roadP+(roadW+1.0+7.5), roadH+1.8 );
+          g.LineOnPlane( -roadP+(roadW+1.0+5  ), roadH+0.9, -roadP+(roadW+1.0+5  ), roadH+1.8 );
+          g.LineOnPlane( -roadP+(roadW+1.0+2.5), roadH+0.9, -roadP+(roadW+1.0+2.5), roadH+1.8 );
+          g.LineOnPlane( -roadP+(roadW+1.0    ), roadH+0.9, -roadP+(roadW+1.0    ), roadH+1.8 );
+        }
+        if (nDraw != 84 && nDraw != 39) {
+          g.LineOnPlane( +roadP-(roadW+1.0+7.5), roadH+0.9, +roadP-(roadW+1.0+7.5), roadH+1.8 );
+          g.LineOnPlane( +roadP-(roadW+1.0+5  ), roadH+0.9, +roadP-(roadW+1.0+5  ), roadH+1.8 );
+          g.LineOnPlane( +roadP-(roadW+1.0+2.5), roadH+0.9, +roadP-(roadW+1.0+2.5), roadH+1.8 );
+          g.LineOnPlane( +roadP-(roadW+1.0    ), roadH+0.9, +roadP-(roadW+1.0    ), roadH+1.8 );
+        }
+      }
+
+      // lights
+      setBgColor( '#aaaaaa', '#bbbbbb' );
+      g.RectOnPlane( -roadP-roadW-0.14, roadH, -roadP-roadW+0.14, roadH+18.0, 2 );
+      g.RectOnPlane( -roadP-roadW+0.14, roadH+17.3, -roadP-roadW+1.14, roadH+17.7, 2 );
+      g.SetAreaAttr( '#eeeeee', '#aaaaaa', 1 );
+      g.RectOnPlane( -roadP-roadW+0.63, roadH+16.8, -roadP-roadW+1.13, roadH+17.3, 3 );
+
+      setBgColor( '#aaaaaa', '#bbbbbb' );
+      g.RectOnPlane( -0.07, roadH, 0.07, roadH+9.5, 2 );
+      g.SetAreaAttr( '#eeeeee', '#aaaaaa', 1 );
+      g.RectOnPlane( -0.35, roadH+9.05, 0.35, roadH+9.4, 3 );
+      g.SetColor( 'black' );
+    }
+
+    // double towers from south view
+    if (nDraw == 39 && objType == 8) {
+      // DrawTower( base, center, height, basew, topw, nbars );
+      DrawTower( roadH, -6.25, 9.5, 1.79, 1.79, 5 );
+      DrawTower( roadH,  6.25, 9.5, 1.79, 1.79, 5 );
+    }
+
+    // draw huts
+    function isHatPos( n ) {
+      var hatPos = [ 6, 12, 18, 25, 32, 39, 44, 49, 55, 61, 67, 73, 84, 89, 96, 103, 110, 116, 122 ];
+      for (var i = 0; i < hatPos.length; i++) {
+        if (n == hatPos[i]) return true;
+      }
+      return false;
+    }
+    if (isHatPos( nDraw )) {
+      setBgColor( '#888888', '#aaaaaa' );
+      g.RectOnPlane( -roadP-roadW-13.5, roadH-0.5, -roadP-roadW, roadH, 3 );
+      setBgColor( '#8c8678', '#b9b19e' );
+      g.RectOnPlane( -roadP-roadW-12.9, roadH-1, -roadP-roadW-9.1, roadH-0.5, 3 );
+
+      setBgColor( '#cccccc', '#dddddd' );
+      var c = -roadP - roadW - 9.1 - 1.9;
+      var b = roadH;
+      g.PolygonOnPlane( [ c-2, c-2, c+2, c+2, c, c-2 ], [ b+2.7, b, b, b+2.7, b+3, b+2.7 ], 3 );
+
+      g.RectOnPlane( c-1.5, 0, c-0.7, b-1, 3 );
+      g.RectOnPlane( c+0.7, 0, c+1.5, b-1, 3 );
+
+    }
+    return primitives;
+  }
+  function soundlyRoadEnd(entry,side){
+    var n=entry.scene.metadata.soundlyDrawn,h=5*(entry.variation+1),narrow=0;
+    if([106,107,64,63,21,20].includes(n))h+=2.5;
+    if([86,87,41,42].includes(n))h+=12;
+    if(n>=121)narrow=18*(n-121)/7;
+    if(n<=7)narrow=18*(7-n)/7;
+    if(n===79&&side<0)h+=4;
+    return {x:side*17-(side>0?narrow:0),h:h};
+  }
+  function soundlyRoad(previous,current,side,hidden){
+    var old=towerPlacement(previous.params),next=towerPlacement(current.params);
+    function pt(plane,x,h){return [0,1,2].map(function(i){return plane.origin[i]+
+      x*plane.xAxis[i]+h*plane.yAxis[i];});}
+    var a=soundlyRoadEnd(previous,side),b=soundlyRoadEnd(current,side),w=4.6;
+    return {type:'polygon',mode:3,points:[pt(old,a.x-w,a.h),
+      pt(old,a.x+w,a.h),pt(next,b.x+w,b.h),pt(next,b.x-w,b.h)],
+      style:{fill:hidden?'#adb1bc':'#999ba2'},
+      metadata:{kind:'soundly-road',side:side,physicalObject:true}};
+  }
   function localObject(objType,objIx,hidden,options){
     if(objType===0){
       if(!options||!Number.isInteger(options.drawn)||!Number.isInteger(options.total))
@@ -387,6 +792,13 @@
       if(!options||!Number.isInteger(options.drawn))
         throw new TypeError('Tensas requires the drawn sequence index');
       return localTensas(options.drawn,options.variation===undefined?0:options.variation,!!hidden);
+    }
+    if(objType===8||objType===9){
+      if(!options||!Number.isInteger(options.drawn)||!Number.isInteger(options.total))
+        throw new TypeError('Soundly requires drawn index and total');
+      return localSoundly(options.drawn,options.total,
+        options.variation===undefined?0:options.variation,
+        options.sidePos===undefined?0:options.sidePos,objType,!!hidden);
     }
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
@@ -466,7 +878,7 @@
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
     var objType=model.ObjType[objIx];
-    if(![0,1,2,3,4,5,6,7].includes(objType))throw new RangeError('Object type has not been independently ported');
+    if(![0,1,2,3,4,5,6,7,8,9].includes(objType))throw new RangeError('Object type has not been independently ported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -499,7 +911,7 @@
       if(size<0)size=-size;
       // Legacy type-4 skyline varies height only; width stays fixed.
       var sizeHor=(objType===4||objType===5||objType===6)?1:size;
-      if(objType===7){size=1;sizeHor=1;}
+      if(objType===7||objType===8||objType===9){size=1;sizeHor=1;}
       if(objType===2){sizeHor=.25*size+.75;size=.5*size+.5;}
       var side=model.ObjSidePos[objIx]/r,sideVar=model.ObjSideVar[objIx]/r/2;
       var sideType=model.ObjSideType[objIx];
@@ -524,7 +936,8 @@
         var legacyDrawn=drawn+(globe?n-max:0);
         var metadata={objectIndex:objIx,sequenceIndex:drawn,drawn:legacyDrawn,
           total:n,column:sideType===1?col+1:0,longitude:lng,latitude:lat,hidden:hidden,
-          variation:model.ObjSizeVar[objIx]};
+          variation:model.ObjSizeVar[objIx],sidePos:model.ObjSidePos[objIx],
+          soundlyDrawn:objType===9?n-1-legacyDrawn:legacyDrawn};
         var scene=createPlacedObjectScene(params,objType,objIx,hidden,metadata);
         entries.push({params:params,scene:scene,hidden:hidden,variation:model.ObjSizeVar[objIx]});
       });
@@ -557,6 +970,17 @@
           road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
             objectBank:objIx,column:column});
           primitives.push(road);
+        }
+        previousByColumn.set(column,entry);
+      }
+      if(model.ObjType[objIx]===8||model.ObjType[objIx]===9){
+        var previousSoundly=previousByColumn.get(column);
+        if(previousSoundly&&model.ObjSideType[objIx]!==2){
+          [-1,1].forEach(function(side){
+            var road=soundlyRoad(previousSoundly,entry,side,entry.hidden);
+            road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
+              objectBank:objIx,column:column});primitives.push(road);
+          });
         }
         previousByColumn.set(column,entry);
       }

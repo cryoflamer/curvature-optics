@@ -43,7 +43,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
   assert.equal(m.ObjDist[1],before);
   assert.throws(()=>adapter.setObject(m,1,'NObjects','1.5'),/integer/);
   adapter.setObject(m,1,'ObjType',4);assert.equal(m.ObjType[1],4);
-  assert.throws(()=>adapter.setObject(m,1,'ObjType',8),/Expected/);
+  assert.throws(()=>adapter.setObject(m,1,'ObjType',10),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'Height',''),/required/);
   assert.throws(()=>adapter.setRadiusKm(m,0),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'foo',1),/Unknown/);
@@ -370,7 +370,7 @@ test('131 input debounce coalesces expensive optics and invalid entries never mu
   assert.equal(m.Height,26);
   assert.equal(r.draws.length,previous);
   assert.match(r.nodes.get('ModernStatus').textContent,/Invalid/);
-  r.fire('ModernObject0ObjType','change','9');
+  r.fire('ModernObject0ObjType','change','10');
   assert.equal(m.ObjType[0],3);
   assert.equal(r.draws.length,previous);
   r.fire('ModernHeight','change','30');
@@ -543,4 +543,24 @@ test('Tensas preset survives Compare editing, History return and Reset',async()=
   assert.equal(r.win.CurvatureModernApp.getPreset(),'tensas');
   await r.fire('ModernResetPreset','click');
   assert.deepEqual(Array.from(m.ObjSidePos),[-2,0]);
+});
+
+
+test('Soundly preset survives Compare edits, protected History return and Reset',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  assert.equal(await r.fire('ModernPreset','change','soundly'),true);
+  assert.deepEqual(Array.from(m.ObjType),[8,3]);
+  assert.deepEqual(Array.from(m.NObjects),[128,0]);
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
+  r.fire('ModernCompareTab','click');
+  assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
+  r.fire('ModernObject0ObjSidePos','change','66');
+  await r.fire('ModernPreset','change','tensas');
+  assert.ok(r.historyEntries.some(e=>e.pinned&&
+    e.experiment.scene.resetPreset==='soundly'&&e.experiment.scene.objects.ObjSidePos[0]===66));
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(m.ObjSidePos[0],66);
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'soundly');
+  await r.fire('ModernResetPreset','click');
+  assert.deepEqual(Array.from(m.ObjSidePos),[55.5,0]);
 });

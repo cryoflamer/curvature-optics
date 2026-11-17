@@ -1,3 +1,16 @@
+> **Soundly Causeway partial native Scene (#45, 2026-11-17):**
+> Ported a source-backed `soundly` preset from Legacy Soundly state index 12
+> (`?demo=Soundly&pos=13`): 128 supports at 300 m intervals, 496 m start,
+> 10.8 m observer, 2200 mm focal length and source zero refraction (vacuum).
+> Independently supported geometry types 8/9 reproduce local authored bridge
+> structures including elevated passages, narrowing, signage and towers;
+> source indices are reversed for type 9. Two longitudinal road meshes are
+> joined independently in the same physical surface geometry for Globe/Flat.
+> The shared ray optics, persistence format and isolated Legacy renderer remain
+> unchanged. Source DrawShape comparisons, Scene/Compare placement and JSON/URL
+> checks are in `tests/ModernSoundlyPreset.test.js`. Original 18-state narrated
+> transition choreography and visual parity are not certified.
+>
 > **Little Tensas Bayou partial native Scene (#44, 2026-11-17):**
 > Introduced source-backed `tensas` from Legacy state index 3
 > (`?demo=Tensas&pos=4`), preserving 87 supports at 150 m spacing,

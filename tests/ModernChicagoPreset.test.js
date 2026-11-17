@@ -57,7 +57,7 @@ test('type-4 skyline reproduces all three authored palettes, both hidden palette
   }
   assert.throws(()=>geometry.localObject(4,0,false),/drawn sequence index/);
   assert.throws(()=>geometry.localObject(4,0,false,{drawn:-1}),/nonnegative/);
-  assert.throws(()=>geometry.localObject(8,0,false,{drawn:0}),/not been independently ported/);
+  assert.throws(()=>geometry.localObject(10,0,false,{drawn:0}),/not been independently ported/);
 });
 
 test('Chicago source camera remains a separate near-shore reference with authored state-0 fields',()=>{

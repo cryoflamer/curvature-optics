@@ -74,7 +74,7 @@ test('Legacy bridge local pillars and parapet match DrawShape for both palettes'
       isHiddenObj:[hidden,false],Col:1});
     assert.deepEqual(geometry.localObject(6,0,hidden),JSON.parse(JSON.stringify(out)));
   }
-  assert.throws(()=>geometry.localObject(8,0,false),/not been independently ported/);
+  assert.throws(()=>geometry.localObject(10,0,false),/not been independently ported/);
 });
 test('Grace decks connect adjacent physical supports on both surfaces, but never different banks',()=>{
   const m=model();scene.applyPreset(m,'grace');m.Update();
