@@ -170,3 +170,22 @@ test('browser script order and Modern-only isolation of Canvas Direct',()=>{
   vm.runInContext(code,browser);
   assert.equal(typeof browser.CurvatureCanvasDirectPreview.create,'function');
 });
+
+test('Canvas Direct diagnostics independently toggle fills, outlines and horizon mask',()=>{
+  const m=soundly();
+  const all=graph(),fillOff=graph(),strokeOff=graph(),maskOff=graph();
+  const opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const base=renderer.renderPhysical(all.g,m,opts);
+  const noFills=renderer.renderPhysical(fillOff.g,m,{...opts,canvasDirectDiagnostics:{fills:false}});
+  const noStrokes=renderer.renderPhysical(strokeOff.g,m,{...opts,canvasDirectDiagnostics:{strokes:false}});
+  const noMask=renderer.renderPhysical(maskOff.g,m,{...opts,canvasDirectDiagnostics:{horizonMask:false}});
+  assert.ok(base.directStats.fillCalls>0&&base.directStats.strokeCalls>0);
+  assert.equal(base.directStats.horizonMasks,1);
+  assert.equal(noFills.directStats.fillCalls,1,'mask remains visible with object fills disabled');
+  assert.ok(noFills.directStats.strokeCalls>0);
+  assert.equal(noStrokes.directStats.strokeCalls,0);
+  assert.ok(noStrokes.directStats.fillCalls>0);
+  assert.equal(noMask.directStats.horizonMasks,0);
+  assert.equal(noMask.directStats.fillCalls,base.directStats.fillCalls-1);
+  assert.equal(noMask.previewLod.original,128);
+});

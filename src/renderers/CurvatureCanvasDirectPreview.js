@@ -107,6 +107,11 @@
         }
         return result;
       }
+      // Diagnostics affect only Canvas Direct presentation; no scene state is changed.
+      var diagnostic=options.canvasDirectDiagnostics||{};
+      var drawFills=diagnostic.fills!==false;
+      var drawStrokes=diagnostic.strokes!==false;
+      var drawMask=diagnostic.horizonMask!==false;
       var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0;
       var projectionMs=0,canvasMs=0;
       function drawPrimitive(p,role,far){
@@ -121,12 +126,12 @@
           var first=pts[0],last=pts[pts.length-1];
           if(first.x===last.x&&first.y===last.y&&first.z===last.z)pts.pop();
         }
-        var fillPoints=polygon&&(mode&2)?nearPolygon(pts):null;
+        var fillPoints=(drawFills||role==='occlusion')&&polygon&&(mode&2)?nearPolygon(pts):null;
         var fillPixels=fillPoints&&fillPoints.length>=3?fillPoints.map(screen):null;
         // Object outlines retain their original edges; near-plane closing
         // edges created for a filled polygon are never invented as strokes.
         var lines=[];
-        if(mode&1){var count=polygon?pts.length:pts.length-1;
+        if(drawStrokes&&(mode&1)){var count=polygon?pts.length:pts.length-1;
           for(var j=0;j<count;j++){
             var a=pts[j],b=pts[(j+1)%pts.length];
             if(a.z<=c.near&&b.z<=c.near)continue;
@@ -185,7 +190,7 @@
       ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
       ctx.lineJoin='round';ctx.lineCap='butt';
       layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
-      if(globe&&layers.some(function(layer){return layer.far.length;}))mask();
+      if(drawMask&&globe&&layers.some(function(layer){return layer.far.length;}))mask();
       // Metric guide rings replace the very dense legacy latitude/longitude
       // grid in this *preview only*. They are not physical surfaces or masks.
       // A handful of 1/2/3/5/10 km circles preserves distance context and
@@ -210,6 +215,7 @@
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
         fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,geometryReused:source.reused,
+        diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask},
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},
         limitations:['Legacy-style whole-object horizon masking, not physical visibility',

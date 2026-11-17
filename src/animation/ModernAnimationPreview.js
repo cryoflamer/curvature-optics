@@ -153,7 +153,8 @@
         occlusionRadius:spec.occlusionRadius,visibility:spec.visibility,
         temperatureProfile:spec.temperatureProfile,transitionProfile:spec.transitionProfile,
         inverseProfile:spec.inverseProfile,interactive:false,geometryBackend:'canvas',
-        opticalQuality:quality,previewLod:{stride:quality==='fast'||quality==='effective-radius'?detailStride:1},
+        opticalQuality:quality,canvasDirectDiagnostics:options.canvasDirectDiagnostics,
+        previewLod:{stride:quality==='fast'||quality==='effective-radius'?detailStride:1},
         cacheSession:sessions[side]||undefined}};
     }
     function guides(config,side,graph){

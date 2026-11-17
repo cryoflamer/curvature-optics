@@ -2131,6 +2131,21 @@
     if(seek)seek.value=info.seek;
     var clock=newUiEl('ModernAnimationPlaybackTime');
     if(clock)clock.textContent=info.time;
+    var directDiagnostics=newUiEl('ModernCanvasDirectDiagnostics');
+    function syncCanvasDirectDiagnostics(){
+      if(directDiagnostics)directDiagnostics.hidden=studioPlaybackQuality!=='canvas-direct';
+    }
+    syncCanvasDirectDiagnostics();
+    ['ModernCanvasDirectFills','ModernCanvasDirectStrokes','ModernCanvasDirectMask'].forEach(function(id){
+      var checkbox=newUiEl(id);
+      if(checkbox)checkbox.addEventListener('change',function(){
+        if(!studioPlayback||studioPlaybackQuality!=='canvas-direct')return;
+        stopStudioPlayback(false);
+        studioPlaybackLastPaint=-Infinity;
+        try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
+        catch(error){playbackNotice('Canvas Direct diagnostics: '+error.message,'error');}
+      });
+    });
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
     var pause=newUiEl('ModernAnimationPlaybackPause');if(pause)pause.disabled=!info.playing;
   }
@@ -2265,8 +2280,15 @@
     var label=newUiEl('ModernAnimationPlaybackLabelA');
     if(label)label.textContent=isCompare?'Model A':'Scene';
     var graphs=root.CurvatureModernAnimationGraphs;
+    var diagnosticChecks={fills:'ModernCanvasDirectFills',strokes:'ModernCanvasDirectStrokes',
+      horizonMask:'ModernCanvasDirectMask'};
+    var canvasDirectDiagnostics={};
+    Object.keys(diagnosticChecks).forEach(function(key){
+      var checkbox=newUiEl(diagnosticChecks[key]);
+      canvasDirectDiagnostics[key]=!checkbox||checkbox.checked;
+    });
     var renderOptions={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
-      animationMode:studioPrepared.mode};
+      canvasDirectDiagnostics:canvasDirectDiagnostics,animationMode:studioPrepared.mode};
     var begun=profileNow();
     var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
     var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
@@ -2908,6 +2930,7 @@
       if(studioPreviewRenderer&&typeof studioPreviewRenderer.resetFastFailures==='function')
         studioPreviewRenderer.resetFastFailures();
       saveStudioDraft(false);renderStudioLibrary();
+      syncCanvasDirectDiagnostics();
       if(!studioPlayback)return;
       stopStudioPlayback(false);
       studioPlaybackLastPaint=-Infinity;

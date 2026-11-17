@@ -257,6 +257,15 @@
           <option value="balanced">Balanced · moderate simplification</option>
           <option value="performance" selected>Performance · faster Preview</option>
         </select>
+        <details id="ModernCanvasDirectDiagnostics" class="modern-camera-hud-settings" hidden>
+          <summary>Canvas Direct diagnostics</summary>
+          <div class="modern-camera-hud-settings-body">
+            <label><input type="checkbox" id="ModernCanvasDirectFills" checked> Fills</label>
+            <label><input type="checkbox" id="ModernCanvasDirectStrokes" checked> Outlines</label>
+            <label><input type="checkbox" id="ModernCanvasDirectMask" checked> Horizon mask</label>
+            <small>Temporary display-only switches; compare the same paused Soundly frame. All on restores normal Canvas Direct.</small>
+          </div>
+        </details>
         <label class="modern-camera-hud-toggle" for="ModernAnimationPlaybackCameraHud"><input type="checkbox" id="ModernAnimationPlaybackCameraHud" checked> Camera HUD</label>
         <label class="modern-camera-hud-toggle" for="ModernAnimationTargetToggle"><input type="checkbox" id="ModernAnimationTargetToggle" checked> Target direction</label>
         <label for="ModernAnimationTargetSelection">Target <select id="ModernAnimationTargetSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select></label>
