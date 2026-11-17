@@ -169,7 +169,8 @@
       // those belong above the animated atmospheric presentation layer.
       if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera,
         {physicalGuides:opticalFrame.composition.scene.primitives,
-         showCaptions:options.showCaptions!==false,captionMode:options.captionMode});
+         showCaptions:options.showCaptions!==false,captionMode:options.captionMode,
+         includeGeometrySummary:options.includeGeometrySummary===true});
     } finally {ctx.restore();}
     var finishedAt=now(),stats=opticalFrame.stats;
     // Keep the old non-overlapping stage meanings: frameMs includes screen LOD
@@ -222,7 +223,8 @@
        typeof ctx.restore!=='function')throw new TypeError('Canvas 2D context required');
     ctx.save();
     try{ctx.setTransform(1,0,0,1,0,0);decorations.draw(canvas,model,camera,
-      {physicalGuides:physicalGuides,showCaptions:!(options&&options.showCaptions===false),captionMode:options&&options.captionMode});}
+      {physicalGuides:physicalGuides,showCaptions:!(options&&options.showCaptions===false),
+       captionMode:options&&options.captionMode,includeGeometrySummary:!!(options&&options.includeGeometrySummary)});}
     finally{ctx.restore();}
   }
   function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();}

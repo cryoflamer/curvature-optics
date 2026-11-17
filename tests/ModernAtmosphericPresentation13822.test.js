@@ -100,8 +100,27 @@ test('47: Modern Scene/Compare suppress captions with and without separate atmos
   assert.deepEqual(source.ops.filter(op=>op[0]==='text'),[]);
   assert.equal(m.DemoText,'Sharp title');assert.equal(m.Description,'Sharp description');
   const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(app,/deferDecorations:separateDecorations,showCaptions:state\.captionMode!==\'off\',captionMode:state\.captionMode,geometryBackend:state\.geometryBackend/);
-  assert.match(app,/geometryBackend:state\.geometryBackend,showCaptions:state\.captionMode!==\'off\',captionMode:state\.captionMode/);
+  assert.match(app,/deferDecorations:separateDecorations,showCaptions:state\.captionMode!==\'off\',captionMode:state\.captionMode,\s*includeGeometrySummary:true,geometryBackend:state\.geometryBackend/);
+  assert.match(app,/geometryBackend:state\.geometryBackend,showCaptions:state\.captionMode!==\'off\',captionMode:state\.captionMode,\s*includeGeometrySummary:true/);
   assert.equal((app.match(/captionMode:state\.captionMode/g)||[]).length>=4,true,
     'Scene and Compare rendering plus deferred decorations must pass the shared caption mode');
+});
+
+test('50: configured geometry summaries render on Scene and Compare, but remain absent from ordinary exports',()=>{
+  const m=makeModel();m.NObjects[0]=4;m.ObjType[0]=3;
+  m.ObjSideType[0]=0;m.ObjDeltaDist[0]=300;m.NObjects[1]=0;
+  const graph=makeGraph(makeCanvas());
+  const normal=renderer.renderPhysical(graph,m,{...opts,captionMode:'title-description'});
+  assert.equal(normal.mode,'physical-scene');
+  assert.equal(graph.Canvas.ops.some(op=>op[0]==='text'&&/4 transmission towers/.test(op[1])),false,
+    'non-Modern renderers preserve authored captions only');
+  graph.Canvas.ops.length=0;
+  renderer.renderPhysical(graph,m,{...opts,captionMode:'title-description',includeGeometrySummary:true});
+  assert.equal(graph.Canvas.ops.some(op=>op[0]==='text'&&/4 transmission towers/.test(op[1])),true);
+  graph.Canvas.ops.length=0;
+  const deferred=renderer.renderPhysical(graph,m,{...opts,deferDecorations:true,captionMode:'title-description',includeGeometrySummary:true});
+  renderer.drawPresentationDecorations(graph.Canvas,m,deferred.decorationCamera,undefined,
+    {captionMode:'title-description',includeGeometrySummary:true});
+  assert.equal(graph.Canvas.ops.some(op=>op[0]==='text'&&/4 transmission towers/.test(op[1])),true,
+    'deferred atmospheric presentation retains the same current geometry');
 });

@@ -2915,6 +2915,19 @@ shared styling and card-specific click isolation.
 - Removed the Pontchartrain-specific `refreshDescription` mutation: changing object-bank count/type, camera or physics no longer rewrites an authored caption. Scene and Compare keep the same model description; user-imported and previously saved descriptions are left untouched until explicit preset reset.
 - The existing `Off / Title only / Title + description` Canvas options and experiment storage are unchanged. The HUD/editor remain the place for live physical values; caption tests cover every preset and Scene/Compare edits.
 
+### Modern #50 — Live geometry summaries for working canvas captions
+
+In Scene and Compare, `Title + description` also displays a *derived* geometry
+summary: configured object counts for both banks (including two-column
+placement), meaningful bank extents and, where authored, connecting bridge-road
+spans. Type-4 repeats count skyline *sections*, not individual buildings;
+no ray/triangle or visible-object counts are implied. The summary always
+reads current `NObjects`, `ObjType`, `ObjSideType` and `ObjDeltaDist`, so edits
+and History/JSON/URL restoration have no second caption state to synchronize.
+The authored `DemoText` and `Description` are unchanged; `Off` and `Title only`
+omit this summary, and non-Modern exports/diagnostics retain their own
+caption behavior. Physics, perspective, optical profiles and Legacy unchanged.
+
 ### Modern #48 — Configurable wrapped canvas captions
 
 The Modern working viewport now keeps the #47 clean-image default (`Off`) while restoring an explicit **Canvas captions** control in Display → Viewport overlays. Supported modes are `off`, `title`, and `title-description`. Long titles/descriptions are wrapped to the available viewport width and ellipsized vertically when needed, so narrow Compare panels no longer let caption text overflow outside the image. The setting is carried in Modern experiment URLs/JSON/History as `display.captionMode`; pre-#48 links migrate to `off`.

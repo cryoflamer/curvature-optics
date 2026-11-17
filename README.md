@@ -223,6 +223,8 @@ In Modern, the **Demos** tab embeds all nine original Legacy animation families.
 
 ### Temperature gradient in Modern (#140.12.94)
 
+In **Title + description** mode, the Modern working Canvas also adds a live **geometry summary** derived from both configured object groups: actual object/row counts, their along-route extent and applicable bridge road spans. The author-written title/description remain unchanged; observer height, camera and atmospheric settings stay in the HUD. This geometry line is calculated at render time (and after History/JSON/URL restore), not persisted as stale description text. The legacy and animation export caption paths are unchanged.
+
 In **Display → Viewport overlays**, **Canvas captions** now controls whether the working Scene/Compare image shows no captions, the title only, or the title plus wrapped description. The default is **Off** so working images stay clean after #47; the selection is saved in experiment URLs/JSON and restored from History.
 
 Preset captions describe the **subject and question of a scene**, not its original camera pose, atmosphere, object count or Globe/Flat selection. These live settings are available in the Camera HUD and editor. Editing the scene does not rewrite its authored description; older saved experiments retain their own text as-is. Resetting to a preset selects the new neutral caption without altering its physical starting values.

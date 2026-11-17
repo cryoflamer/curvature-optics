@@ -38,10 +38,54 @@
   }
   return {size:function(v){return scale(v,1);},pad:function(v){return scale(v);},contextScale:k};
  }
+ // A factual summary of the configured object geometry, independent of
+ // observer/camera and optical profile. It is derived on every paint: never
+ // copy it into authored Description or persist a second, stale value.
+ function geometrySummary(model){
+  if(!model||!Array.isArray(model.NObjects)||!Array.isArray(model.ObjType))return '';
+  var names={
+   0:['Bedford marker','Bedford markers'],1:['measuring rod','measuring rods'],
+   2:['ship','ships'],3:['transmission tower','transmission towers'],
+   // Type 4 is a repeated skyline SHAPE, not an individually counted building.
+   4:['skyline section','skyline sections'],
+   5:['mountain silhouette','mountain silhouettes'],
+   6:['bridge support','bridge supports'],
+   7:['Tensas bridge support','Tensas bridge supports'],
+   8:['Soundly bridge support','Soundly bridge supports'],
+   9:['Soundly bridge support','Soundly bridge supports']};
+  function distance(metres){
+   if(metres>=1000)return (metres/1000).toFixed(metres>=10000?1:2).replace(/0+$/,'').replace(/\.$/,'')+' km';
+   return Number(metres.toFixed(2))+' m';
+  }
+  var groups=[];
+  for(var i=0;i<2;i++){
+   var n=model.NObjects[i],type=model.ObjType[i],label=names[type];
+   if(!Number.isInteger(n)||n<=0||!label)continue;
+   var columns=model.ObjSideType&&model.ObjSideType[i]===1?2:1;
+   var count=n*columns,span=Number(model.ObjDeltaDist&&model.ObjDeltaDist[i])*(n-1);
+   var summary=count+' '+label[count===1?0:1];
+   if(columns===2)summary+=' (2 rows of '+n+')';
+   if(n>1&&Number.isFinite(span)&&span>=0)summary+=' · '+distance(span)+' extent';
+   // A roadway is an authored part of the bridge mesh. Count deck strips,
+   // not triangles, rays or screen pixels. Randomly scattered supports do
+   // not get a connecting road for type 6 / Soundly types 8 and 9.
+   var continuous=!(model.ObjSideType&&model.ObjSideType[i]===2);
+   var decks=type===6?(continuous?(n-1)*columns:0):
+     type===7?2*(n-1)*columns:
+     (type===8||type===9)?(continuous?2*(n-1)*columns:0):0;
+   if(decks>0)summary+=' · '+decks+' road '+(decks===1?'span':'spans');
+   groups.push({summary:summary,type:type,count:count,columns:columns,configured:n});
+  }
+  if(!groups.length)return 'No scene objects configured';
+  // Preserve the bank split explicitly; two banks can have different
+  // spacing, offsets and counts even when they share the same object type.
+  return groups.map(function(group,i){return (groups.length>1?'Group '+(i+1)+': ':'')+group.summary;}).join(' · ');
+ }
  function demoBounds(canvas,model,camera,options){
   options=options||{};
   var captionMode=options.captionMode||'title-description';
   var text=typeof model.DemoText==='string'?model.DemoText.trim():'',description=typeof model.Description==='string'?model.Description.trim():'';
+  var geometry=options.includeGeometrySummary===true?geometrySummary(model):'';
   if(captionMode==='off'||!text)return [];
   var ctx=canvas.getContext('2d'),s=scales(camera),centerX=canvas.width/2,items=[];
   var outerPad=s.pad(10),lineGap=s.pad(5),sectionGap=s.pad(8),maxWidth=Math.max(40,canvas.width-outerPad*2),
@@ -95,9 +139,10 @@
   }
   addBlock('demo-title',text,20,2);
   if(captionMode==='title-description'&&description)addBlock('demo-description',description,16,3);
+  if(captionMode==='title-description'&&geometry)addBlock('demo-geometry',geometry,15,3);
   var cursor=outerPad;
   items.forEach(function(item,index){
-   if(index>0&&item.kind==='demo-description'&&items[index-1].kind!=='demo-description')cursor+=sectionGap;
+   if(index>0&&item.kind!==items[index-1].kind)cursor+=sectionGap;
    item.baselineY=cursor+item.fontSize/2;
    item.x=Math.max(0,Math.floor(centerX-item.width/2-4));
    item.y=Math.max(0,Math.floor(cursor-3));
@@ -210,7 +255,8 @@
   }
   var metricOverlay=metricGridOverlay(canvas,model,camera,options.physicalGuides);
   var captionMode=options.captionMode||(options.showCaptions===false?'off':'title-description');
-  var captions=captionMode==='off'?[]:demoBounds(canvas,model,camera,{captionMode:captionMode});
+  var captions=captionMode==='off'?[]:demoBounds(canvas,model,camera,{captionMode:captionMode,
+   includeGeometrySummary:options.includeGeometrySummary===true});
   if(captions.length){
    ctx.save();ctx.fillStyle='black';ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=1;
    captions.forEach(function(item){ctx.font=item.fontSize+'px Arial';ctx.fillText(item.text,canvas.width/2,item.baselineY);});
@@ -221,5 +267,5 @@
    limitations:['Canvas font rasterization can vary by browser and device',
     'Camera frame and demo text are presentation, not surface geometry']};
  }
- return {framePrimitive:framePrimitive,demoBounds:demoBounds,metricGridOverlay:metricGridOverlay,draw:draw};
+ return {framePrimitive:framePrimitive,demoBounds:demoBounds,geometrySummary:geometrySummary,metricGridOverlay:metricGridOverlay,draw:draw};
 }));

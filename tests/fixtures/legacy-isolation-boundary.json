@@ -3013,6 +3013,7 @@
       "commonJsTestCallers": [
         "tests/AtmosphericVisibility.test.js",
         "tests/CurvatureCameraTranslation.test.js",
+        "tests/CurvatureFullSceneDecorations.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernAtmosphericPresentation13822.test.js",
         "tests/ModernBedfordPreset.test.js",

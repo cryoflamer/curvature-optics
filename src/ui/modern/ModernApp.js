@@ -4098,7 +4098,8 @@
         atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
         visibility:state.visibility,temperatureProfile:state.temperatureProfile,
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
-        deferDecorations:separateDecorations,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,geometryBackend:state.geometryBackend,
+        deferDecorations:separateDecorations,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,
+        includeGeometrySummary:true,geometryBackend:state.geometryBackend,
         opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('Scene')},
         forceColdOptics:state.opticalSample==='cold'
@@ -4110,7 +4111,7 @@
       if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
           guideGraph.Canvas,model,result.decorationCamera,result.decorationPhysicalGuides,
-          {showCaptions:state.captionMode!=='off',captionMode:state.captionMode});
+          {showCaptions:state.captionMode!=='off',captionMode:state.captionMode,includeGeometrySummary:true});
       state.last=result;
       updateGeometryBackendStatus(result);
       var sceneOptions={atmosphere:state.atmosphere,occlusionRadius:state.occlusionRadius,
@@ -4162,6 +4163,7 @@
         transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
         inverseProfile:spec?spec.inverseProfile:state.inverseProfile,interactive:false,
         geometryBackend:state.geometryBackend,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,
+        includeGeometrySummary:true,
         opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('compare')},
         forceColdOptics:state.opticalSample==='cold'};
@@ -4184,7 +4186,7 @@
       if(separateDecorations&&root.CurvatureMainCanvasRenderer.drawPresentationDecorations)
         root.CurvatureMainCanvasRenderer.drawPresentationDecorations(
           guideGraph.Canvas,m,result.decorationCamera,result.decorationPhysicalGuides,
-          {showCaptions:state.captionMode!=='off',captionMode:state.captionMode});
+          {showCaptions:state.captionMode!=='off',captionMode:state.captionMode,includeGeometrySummary:true});
       state.compareLast[side]=result;
       updateGeometryBackendStatus(result);
       if(state.compareEyeLevel&&guideGraph&&guideGraph.Canvas)drawCompareEyeLevel(guideGraph,m);
