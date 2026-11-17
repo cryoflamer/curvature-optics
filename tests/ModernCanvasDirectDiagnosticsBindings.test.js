@@ -6,6 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
 const controlsApi=require('../src/animation/ModernAnimationPlaybackControls');
+const experimentApi=require('../src/animation/ModernAnimationPlaybackExperiment');
 
 // Run the actual application sync and binding functions against DOM-like nodes.
 // In the regression, every playback tick called sync(), which attached three
@@ -38,6 +39,7 @@ function harness(){
     studioPlaybackQuality:'canvas-direct',studioPlaybackLastPaint:42,
     studioPlaybackFps:'auto',studioPlaybackFpsMeter:controlsApi.createPreviewFpsMeter(),
     studioPlaybackProfileEnabled:false,studioPlaybackProfiler:null,
+    studioPlaybackExperiment:experimentApi.create(),
     studioPlaybackRenderedAt:28100,profileNow:()=>1000,
     studioPlaybackControlsApi:{describe:()=>({seek:'475',time:'28.1 / 59.1 s',playing:false})},
     ensureStudioPlaybackControls:()=>controls,
@@ -132,7 +134,7 @@ test('Preview FPS changes once after thousands of syncs and never restart the an
 test('profiling checkbox is bound once and does not mutate rendering preferences',()=>{
   const h=harness(),box=h.node('ModernAnimationPlaybackProfileEnabled');
   let enabled=false,resets=0;
-  h.context.studioPlaybackProfiler={setEnabled(value){enabled=value;resets++;}};
+  h.context.studioPlaybackProfiler={setEnabled(value){enabled=value;resets++;},reset(){}};
   for(let i=0;i<2500;i++)h.context.sync();
   assert.equal(box.count('change'),1);
   assert.equal(h.context.studioPlaybackProfileEnabled,false);
@@ -145,4 +147,30 @@ test('profiling checkbox is bound once and does not mutate rendering preferences
   box.checked=false;box.emit('change');
   assert.equal(enabled,false);assert.equal(resets,2);
   assert.equal(h.stats.stop,0);
+});
+
+
+test('Playback experiment changes are one-shot and isolated from FPS and preferences',()=>{
+  const h=harness(),mode=h.node('ModernAnimationPlaybackExperiment');
+  for(let i=0;i<2500;i++)h.context.sync();
+  assert.equal(mode.count('change'),1);
+  assert.equal(mode.disabled,true,'experiment disabled before opt-in');
+  const profile=h.node('ModernAnimationPlaybackProfileEnabled');
+  h.context.studioPlaybackProfiler={setEnabled(){},reset(){}};
+  profile.checked=true;profile.emit('change');
+  h.context.sync();
+  assert.equal(mode.disabled,false);
+  mode.value='compute';mode.emit('change');
+  assert.equal(h.context.studioPlaybackExperiment.mode(),'compute');
+  assert.equal(h.stats.render,0,'Compute only should not repaint a paused preview');
+  assert.equal(h.stats.preferences,0);assert.equal(h.stats.save,0);
+  mode.value='replay';mode.emit('change');
+  assert.equal(h.context.studioPlaybackExperiment.mode(),'replay');
+  mode.value='normal';mode.emit('change');
+  assert.equal(h.context.studioPlaybackExperiment.mode(),'normal');
+  assert.equal(h.stats.render,1,'returning to Normal restores paused pixels once');
+  assert.equal(mode.count('change'),1,'no event handler accumulation');
+  profile.checked=false;profile.emit('change');
+  assert.equal(h.context.studioPlaybackExperiment.mode(),'normal');
+  assert.equal(mode.disabled,true);
 });

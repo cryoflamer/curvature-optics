@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 109,
-      "uniqueScripts": 107,
+      "scriptTags": 110,
+      "uniqueScripts": 108,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -204,6 +204,7 @@
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationPlaybackControls.js",
         "src/animation/ModernAnimationPlaybackProfiler.js",
+        "src/animation/ModernAnimationPlaybackExperiment.js",
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationWorkspaceRecovery.js",
         "src/animation/ModernAnimationWorkspaceSwitch.js",
@@ -364,6 +365,7 @@
       "src/animation/ModernAnimationLibraryFilters.js",
       "src/animation/ModernAnimationPlayback.js",
       "src/animation/ModernAnimationPlaybackControls.js",
+      "src/animation/ModernAnimationPlaybackExperiment.js",
       "src/animation/ModernAnimationPlaybackProfiler.js",
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationPreviewLifecycle.js",
@@ -449,7 +451,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 195,
+  "sourceJsCount": 196,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -713,6 +715,7 @@
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationPlaybackControls.test.js",
+        "tests/ModernAnimationPlaybackExperiment.test.js",
         "tests/ModernAnimationPlaybackProfiler.test.js",
         "tests/ModernAnimationPreviewFps.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
@@ -733,12 +736,24 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/animation/ModernAnimationPlaybackExperiment.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationPlaybackExperiment.test.js",
+        "tests/ModernCanvasDirectDiagnosticsBindings.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/animation/ModernAnimationPlaybackProfiler.js": {
       "directHtmlLoads": [
         "modern"
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationPlaybackExperiment.test.js",
         "tests/ModernAnimationPlaybackProfiler.test.js"
       ],
       "commonJsToolCallers": []

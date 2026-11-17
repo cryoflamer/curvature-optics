@@ -32,12 +32,13 @@
     options=options||{};
     var capacity=options.capacity||120,refreshMs=options.refreshMs||1000;
     if(!Number.isInteger(capacity)||capacity<2||!(refreshMs>0))throw RangeError('Invalid profiler window');
-    var enabled=false,rows=[],lastTick=null,lastPaint=null,lastReport=null;
-    function reset(){rows=[];lastTick=null;lastPaint=null;lastReport=null;}
+    var enabled=false,rows=[],lastTick=null,lastPaint=null,lastWork=null,lastReport=null;
+    function reset(){rows=[];lastTick=null;lastPaint=null;lastWork=null;lastReport=null;}
     function setEnabled(value){enabled=!!value;reset();}
     function snapshot(){
       var painted=rows.filter(function(row){return row.painted;});
-      function phase(key){return stats(painted,key);}
+      var processed=rows.filter(function(row){return row.processed;});
+      function phase(key){return stats(processed,key);}
       function directSide(side){
         var timing=painted.map(function(row){return row[side];}).filter(Boolean);
         if(!timing.length)return null;
@@ -46,8 +47,11 @@
           projection:stats(timing,'projectionMs'),canvas:stats(timing,'canvasMs'),
           rest:stats(timing,'remainderMs')};
       }
-      return {ticks:rows.length,paints:painted.length,skipped:rows.length-painted.length,
-        gap:stats(rows,'gapMs'),paintGap:phase('paintGapMs'),loop:stats(rows,'loopMs'),
+      return {ticks:rows.length,paints:painted.length,samples:processed.length,
+        mode:processed.length?processed[0].mode:'normal',
+        skipped:rows.length-processed.length,
+        gap:stats(rows,'gapMs'),paintGap:stats(painted,'paintGapMs'),
+        workGap:phase('workGapMs'),loop:stats(rows,'loopMs'),
         clock:phase('clockMs'),prepare:phase('prepareMs'),renderer:phase('rendererMs'),
         post:phase('postMs'),sync:phase('syncMs'),other:phase('otherMs'),
         A:directSide('A'),B:directSide('B')};
@@ -58,17 +62,21 @@
       if(!Number.isFinite(now))return null;
       if(lastTick!==null&&now<=lastTick)reset();
       var painted=!!(row.preview&&row.preview.painted);
-      var entry={painted:painted,
+      var processed=painted||!!(row.preview&&row.preview.sampled);
+      var entry={painted:painted,processed:processed,
+        mode:row.preview&&row.preview.mode||'normal',
         gapMs:lastTick===null?null:now-lastTick,
         paintGapMs:painted&&lastPaint!==null?now-lastPaint:null,
+        workGapMs:processed&&lastWork!==null?now-lastWork:null,
         loopMs:row.loopMs,clockMs:row.clockMs,syncMs:row.syncMs,
         otherMs:row.otherMs};
-      if(painted){
+      if(processed){
         entry.prepareMs=row.preview.prepareMs;
         entry.rendererMs=row.preview.rendererMs;
         entry.postMs=row.preview.postMs;
         entry.A=direct(row,'A');entry.B=direct(row,'B');
-        lastPaint=now;
+        if(painted)lastPaint=now;
+        lastWork=now;
       }
       lastTick=now;
       rows.push(entry);
@@ -84,14 +92,22 @@
       report:function(){return format(snapshot());}});
   }
   function format(report){
-    if(!report.paints)return 'Measuring… play the animation to collect painted frames.';
+    if(!report.samples)return 'Measuring… play the animation to collect frames or samples.';
     function ms(pair){return pair.p50===null?'—':pair.p50.toFixed(1)+' / '+pair.p95.toFixed(1);}
+    var mode=report.mode||'normal';
+    var countLabel=mode==='compute'?' sampled':mode==='replay'?' replayed':' painted';
+    var gapLabel=mode==='compute'?'Sample-to-sample gap':
+      mode==='replay'?'Replay-to-replay gap':'Paint-to-paint gap';
     var lines=[
-      'Recent: '+report.paints+' painted / '+report.ticks+' RAF ticks ('+report.skipped+' skipped)',
+      'Mode: '+(mode==='compute'?'Compute only · no Canvas drawing':
+        mode==='replay'?'Canvas replay · fixed sample':'Normal · animated Canvas'),
+      'Recent: '+report.samples+countLabel+' / '+report.ticks+' RAF ticks ('+report.skipped+' skipped)',
       'p50 / p95 in ms · gaps are wall-clock intervals, not render time',
-      'Paint-to-paint gap: '+ms(report.paintGap)+' · RAF tick gap: '+ms(report.gap),
+      gapLabel+': '+ms(mode==='normal'?report.paintGap:report.workGap)+
+        ' · RAF tick gap: '+ms(report.gap),
       'RAF callback CPU (all ticks): '+ms(report.loop),
-      'Painted frame stages (not including browser compositing):',
+      (mode==='compute'?'Sample stages (no Canvas or compositor work):':
+        'Painted frame stages (not including browser compositing):'),
       '  Clock advance: '+ms(report.clock),
       '  Sample + prepare: '+ms(report.prepare),
       '  Renderer A/B: '+ms(report.renderer),
@@ -107,6 +123,8 @@
         '  Remaining renderer work: '+ms(d.rest));
     });
     lines.push('Individual p95 stages need not sum to total p95. Canvas 2D timing excludes deferred GPU/compositor work.');
+    if(mode==='compute')lines.push('Canvas remains unchanged; Actual FPS counts paints only.');
+    if(mode==='replay')lines.push('Playback clock advances; renderer redraws the same sampled camera/scene each tick.');
     return lines.join('\n');
   }
   return Object.freeze({create:create,format:format});

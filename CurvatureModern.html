@@ -92,6 +92,7 @@
 <script src="src/animation/ModernAnimationPlayback.js"></script>
 <script src="src/animation/ModernAnimationPlaybackControls.js"></script>
 <script src="src/animation/ModernAnimationPlaybackProfiler.js"></script>
+<script src="src/animation/ModernAnimationPlaybackExperiment.js"></script>
 <script src="src/animation/ModernAnimationDraftAutosave.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1&amp;stash-restore=1"></script>
 <script src="src/animation/ModernAnimationWorkspaceRecovery.js"></script>
 <script src="src/animation/ModernAnimationWorkspaceSwitch.js"></script>
@@ -280,6 +281,13 @@
           <summary>Playback profiler</summary>
           <div class="modern-camera-hud-settings-body modern-animation-profiler-body">
             <label><input type="checkbox" id="ModernAnimationPlaybackProfileEnabled"> Measure live Playback (opt-in)</label>
+            <label for="ModernAnimationPlaybackExperiment">Playback experiment (Canvas Direct)</label>
+            <select id="ModernAnimationPlaybackExperiment" disabled title="Only active with Measure live Playback and Canvas Direct. Diagnostic modes do not affect PNG/video export or project state.">
+              <option value="normal" selected>Normal · animated Canvas</option>
+              <option value="compute">Compute only · no Canvas drawing</option>
+              <option value="replay">Canvas replay · fixed camera frame</option>
+            </select>
+            <small id="ModernAnimationPlaybackExperimentNote">Compare modes at the same Soundly segment. Compute only leaves the last pixels on screen; Canvas replay redraws one fixed sample without advancing its camera.</small>
             <output id="ModernAnimationPlaybackProfileReport" class="modern-animation-profiler-report" aria-live="off">Enable profiling, then Play the animation.</output>
             <small>Recent main-thread p50 / p95 timings. Paint gaps include browser scheduling; Canvas 2D timings exclude deferred compositing. Profiling itself adds some overhead.</small>
           </div>

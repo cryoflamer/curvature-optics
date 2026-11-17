@@ -33,6 +33,7 @@
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPlaybackControlsApi=root.CurvatureModernAnimationPlaybackControls;
   var studioPlaybackProfilerApi=root.CurvatureModernAnimationPlaybackProfiler;
+  var studioPlaybackExperimentApi=root.CurvatureModernAnimationPlaybackExperiment;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
   var studioPreviewLifecycleApi=root.CurvatureModernAnimationPreviewLifecycle;
   var fastCapabilities=root.CurvatureOpticalFastRayField;
@@ -568,6 +569,7 @@
   var studioPlaybackFpsMeter=studioPlaybackControlsApi.createPreviewFpsMeter();
   var studioPlaybackProfileEnabled=false;
   var studioPlaybackProfiler=studioPlaybackProfilerApi?studioPlaybackProfilerApi.create():null;
+  var studioPlaybackExperiment=studioPlaybackExperimentApi?studioPlaybackExperimentApi.create():null;
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
@@ -2099,7 +2101,8 @@
         sync:syncStudioPlaybackControls,
         save:saveStudioDraft,
         scheduleInitial:scheduleStudioInitialPaint,
-        invalidatePaint:function(){studioPlaybackLastPaint=-Infinity;studioPlaybackFpsMeter.reset();},
+        invalidatePaint:function(){studioPlaybackLastPaint=-Infinity;studioPlaybackFpsMeter.reset();
+          if(studioPlaybackExperiment)studioPlaybackExperiment.clear();},
         announce:function(text,kind){
           var status=newUiEl('ModernAnimationPlaybackStatus');
           if(!status)return;
@@ -2118,7 +2121,9 @@
       cancelStudioInitialPaint();
     }
     ensureStudioPlaybackControls().halt();
-    if(clear){studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
+    if(clear){
+      if(studioPlaybackExperiment)studioPlaybackExperiment.setMode('normal');
+      studioPlayback=null;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
       studioLastQualityFrame=null;studioLastParity=null;
       studioCameraHudLast={A:null,B:null,isCompare:false};
       if(studioCameraHud)studioCameraHud.hideAll();
@@ -2150,10 +2155,18 @@
     if(seek)seek.value=info.seek;
     var clock=newUiEl('ModernAnimationPlaybackTime');
     if(clock)clock.textContent=info.time;
+    var probe=newUiEl('ModernAnimationPlaybackExperiment');
+    if(probe){
+      probe.disabled=!studioPlaybackProfileEnabled||!studioPlaybackProfiler||
+        studioPlaybackQuality!=='canvas-direct';
+      probe.value=studioPlaybackExperiment?studioPlaybackExperiment.mode():'normal';
+    }
     var actualFps=newUiEl('ModernAnimationPlaybackActualFps');
     if(actualFps){
       var measured=info.playing?studioPlaybackFpsMeter.fps(profileNow()):null;
-      actualFps.textContent='Actual: '+(measured===null?'—':measured.toFixed(1))+' FPS';
+      actualFps.textContent='Actual: '+(measured===null?'—':measured.toFixed(1))+
+        ' FPS'+(studioPlaybackExperiment&&studioPlaybackExperiment.mode()==='compute'?
+          ' (no paints)':'');
     }
     syncCanvasDirectDiagnostics();
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
@@ -2273,13 +2286,33 @@
     var profiling=studioPlaybackProfileEnabled&&!!studioPlaybackProfiler;
     if(!studioPlaybackControlsApi.previewFrameAllowed(
       studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force))return;
+    // These modes are intentionally limited to opted-in Canvas Direct Playback.
+    // Normal and Compute sample the advancing clock; Replay pins one sampled
+    // camera/scene for a real redraw on every RAF (not a bitmap blit).
+    var probeMode=profiling&&studioPlayback.status().playing&&
+      studioPlaybackQuality==='canvas-direct'&&
+      studioPlaybackExperiment?studioPlaybackExperiment.mode():'normal';
+    var renderedAt=studioPlayback.status().positionMs;
+    var plan=probeMode==='normal'?
+      {mode:'normal',paint:true,sample:studioPlayback.sample(),timeMs:renderedAt}:
+      studioPlaybackExperiment.plan(function(){return studioPlayback.sample();},renderedAt);
+    var sampled=plan.sample;
+    if(!plan.paint){
+      // No graph setup, renderer, Canvas calls, audit or HUD updates. The
+      // timeline/clock still advance and Playback controls still synchronize.
+      studioPlaybackNextDue=studioPlaybackControlsApi.nextPreviewDue(
+        studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force);
+      studioPlaybackLastPaint=now;
+      studioPlaybackFpsMeter.reset();
+      return {painted:false,sampled:true,mode:'compute',
+        prepareMs:profileNow()-now,rendererMs:null,postMs:null};
+    }
     if(!studioPreviewApi||!attachStudioPreviewGraphs())
       throw Error('Independent optical preview graphs are unavailable');
     if(!studioPreviewRenderer)studioPreviewRenderer=studioPreviewApi.create({
       Model:root.CurveAppClass,renderer:root.CurvatureMainCanvasRenderer,
       optics:root.CurvaturePhysicalSceneOptics});
-    var renderedAt=studioPlayback.status().positionMs;
-    var sampled=studioPlayback.sample();
+    renderedAt=plan.timeMs;
     var parameter=newUiEl('ModernAnimationPlaybackParameter');
     if(parameter){
       parameter.hidden=studioPrepared.mode!=='physical';
@@ -2390,7 +2423,7 @@
       function directTiming(view){
         return view&&view.quality==='canvas-direct'&&view.result&&view.result.timings||null;
       }
-      return {painted:true,prepareMs:begun-now,rendererMs:rendererEnd-begun,
+      return {painted:true,mode:plan.mode,prepareMs:begun-now,rendererMs:rendererEnd-begun,
         postMs:profileNow()-rendererEnd,A:directTiming(a),B:directTiming(b)};
     }
   }
@@ -2939,10 +2972,32 @@
     if(profileToggle)profileToggle.addEventListener('change',function(){
       studioPlaybackProfileEnabled=!!profileToggle.checked;
       if(studioPlaybackProfiler)studioPlaybackProfiler.setEnabled(studioPlaybackProfileEnabled);
+      if(!studioPlaybackProfileEnabled&&studioPlaybackExperiment)
+        studioPlaybackExperiment.setMode('normal');
+      studioPlaybackLastPaint=-Infinity;studioPlaybackFpsMeter.reset();
+      syncStudioPlaybackControls();
       var report=newUiEl('ModernAnimationPlaybackProfileReport');
       if(report)report.textContent=studioPlaybackProfileEnabled?
         'Measuring… Play the animation to collect painted frames.':
         'Enable profiling, then Play the animation.';
+    });
+    var probeSelect=newUiEl('ModernAnimationPlaybackExperiment');
+    if(probeSelect)probeSelect.addEventListener('change',function(){
+      if(!studioPlaybackExperiment)return;
+      var requested=probeSelect.value;
+      if(!studioPlaybackProfileEnabled||studioPlaybackQuality!=='canvas-direct')
+        requested='normal';
+      studioPlaybackExperiment.setMode(requested);
+      studioPlaybackLastPaint=-Infinity;studioPlaybackNextDue=-Infinity;
+      studioPlaybackFpsMeter.reset();
+      if(studioPlaybackProfiler)studioPlaybackProfiler.reset();
+      var report=newUiEl('ModernAnimationPlaybackProfileReport');
+      if(report)report.textContent='Measuring… Play the animation to collect '+
+        (requested==='compute'?'sampled ticks.':requested==='replay'?'replayed frames.':'painted frames.');
+      syncStudioPlaybackControls();
+      // A paused switch back to Normal must replace stale frozen pixels.
+      if(studioPlayback&&!studioPlayback.status().playing&&requested==='normal')
+        renderStudioPlaybackSample(true);
     });
     var fpsControl=newUiEl('ModernAnimationPlaybackFps');
     if(fpsControl){
@@ -2971,6 +3026,9 @@
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
       studioPlaybackQuality=['auto','fast','accurate','effective-radius','canvas-direct'].includes(optics.value)?optics.value:'auto';
+      if(studioPlaybackExperiment)studioPlaybackExperiment.setMode('normal');
+      if(studioPlaybackProfiler)studioPlaybackProfiler.reset();
+      studioPlaybackFpsMeter.reset();
       // Explicit quality changes must allow a fresh Fast probe at the current
       // physical state; a previous runtime rejection is not a permanent ban.
       if(studioPreviewRenderer&&typeof studioPreviewRenderer.resetFastFailures==='function')
@@ -3005,6 +3063,7 @@
     var controls=ensureStudioPlaybackControls();
     play.addEventListener('click',function(){safely(function(){
       studioPlaybackFpsMeter.reset();
+      if(studioPlaybackExperiment)studioPlaybackExperiment.clear();
       if(studioPlaybackProfileEnabled&&studioPlaybackProfiler){
         studioPlaybackProfiler.reset();
         var profileOutput=newUiEl('ModernAnimationPlaybackProfileReport');

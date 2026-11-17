@@ -829,7 +829,20 @@ only while Play is running. Its recent p50/p95 numbers separate browser RAF
 and paint-to-paint gaps from measured main-thread callback time, sample and
 preview preparation, renderer, HUD/quality-audit/diagnostics, Playback UI sync,
 and scheduling/autosave. Canvas Direct also shows its existing geometry,
-projection/clipping and Canvas 2D call timings. Enable it, reproduce the slow
+projection/clipping and Canvas 2D call timings. The opt-in **Playback experiment**
+selector is available only when the profiler is enabled and Canvas Direct is
+selected. **Normal** moves and paints the camera; **Compute only** advances the
+playhead and samples its camera/scene without setting up graphs or drawing
+Canvas (the prior image stays visible); **Canvas replay** paints the same
+captured camera/scene on successive RAF callbacks while the timeline still
+advances. Switching experiment modes clears the measurement window; Play, Seek
+and workspace changes invalidate frozen samples. The Actual FPS indicator
+counts real paints only, so Compute only reports sample-to-sample gaps in the
+profiler instead. Diagnostic modes are temporary, never saved in JSON or export,
+and must not be interpreted as browser compositor timings. To isolate the
+slow Soundly segment, compare the three modes at the same Preview FPS and
+viewport size; changing FPS/scene complexity between runs makes the results
+harder to interpret. Enable it, reproduce the slow
 Soundly segment, and compare **paint-to-paint gap** with **RAF callback CPU**;
 these are deliberately distinct measurements. Canvas 2D call time is not GPU
 rasterization/compositing time, and separate p95 values are not additive.

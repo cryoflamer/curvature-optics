@@ -30,6 +30,7 @@ function rendererHarness(target='60'){
     studioPlaybackRenderedAt:null,
     studioPlaybackFpsMeter:meter,studioPlaybackControlsApi:controls,
     studioPlaybackProfileEnabled:false,studioPlaybackProfiler:null,
+    studioPlaybackExperiment:null,
     studioPlaybackQuality:'canvas-direct',studioPlaybackDetail:'full',
     studioPreviewApi:{create:()=>fakeRenderer},studioPreviewRenderer:null,
     studioQualityAudit:null,studioLastParity:null,studioLastQualityFrame:null,
