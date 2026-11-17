@@ -18,6 +18,43 @@
           ' (image at '+(renderedAt/1000).toFixed(1)+'s)':''),
       playing:!!status.playing};
   }
+  // Pace preview paints by their START times and a phase-preserving deadline.
+  // From render completion, a 14 ms painter on 60 Hz drops to 30 FPS; from
+  // last start alone, a 60 FPS target on 144 Hz can be stuck near 48 FPS.
+  function previewFrameAllowed(targetFps,lastStart,nextDue,now,force){
+    if(force||targetFps==='auto'||!Number.isFinite(lastStart)||
+      !Number.isFinite(nextDue))return true;
+    if(![10,15,30,60].includes(Number(targetFps)))throw RangeError('Invalid preview FPS');
+    // RAF timestamps have small scheduling jitter around refresh boundaries.
+    return now>=nextDue-1;
+  }
+  function nextPreviewDue(targetFps,lastStart,previousDue,now,force){
+    if(targetFps==='auto')return now;
+    var fps=Number(targetFps);
+    if(![10,15,30,60].includes(fps))throw RangeError('Invalid preview FPS');
+    var interval=1000/fps;
+    // Forced redraws and frames delayed by more than one interval start a new
+    // cadence; never produce a burst of obsolete catch-up frames.
+    if(force||!Number.isFinite(lastStart)||!Number.isFinite(previousDue)||
+      now-previousDue>interval)return now+interval;
+    return previousDue+interval;
+  }
+  function createPreviewFpsMeter(){
+    var starts=[];
+    function reset(){starts=[];}
+    function record(now){
+      if(!Number.isFinite(now))return;
+      if(starts.length&&now<=starts[starts.length-1])reset();
+      starts.push(now);
+      while(starts.length>2&&now-starts[0]>1000)starts.shift();
+    }
+    function fps(now){
+      if(starts.length<4||now-starts[starts.length-1]>500)return null;
+      var elapsed=starts[starts.length-1]-starts[0];
+      return elapsed>0?1000*(starts.length-1)/elapsed:null;
+    }
+    return Object.freeze({record:record,fps:fps,reset:reset});
+  }
   function create(options){
     if(!options||typeof options.player!=='function'||
        typeof options.now!=='function'||typeof options.open!=='function'||
@@ -104,5 +141,7 @@
       play:play,pause:pause,stop:stop,seek:seek,visibility:visibility,
       hasFrame:function(){return frame!==null;}});
   }
-  return Object.freeze({create:create,describe:describe});
+  return Object.freeze({create:create,describe:describe,
+    previewFrameAllowed:previewFrameAllowed,nextPreviewDue:nextPreviewDue,
+    createPreviewFpsMeter:createPreviewFpsMeter});
 }));

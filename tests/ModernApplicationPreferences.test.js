@@ -11,16 +11,16 @@ function storage(values={}){
 }
 test('application preference defaults, allowed values and individual invalid fields are validated',()=>{
   const defaults=preferences.defaults();
-  assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',studioPlaybackDetail:'performance',geometryBackend:'canvas',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
+  assert.deepEqual(defaults,{opticalQuality:'accurate',previewDetail:'auto',studioPlaybackDetail:'performance',studioPlaybackFps:'auto',geometryBackend:'canvas',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,studioPickerFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:10,turnRate:1,wheelStep:'auto'},workspace:workspaceDefaults});
-  assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',studioPlaybackDetail:'balanced',geometryBackend:'webgl2',
+  assert.deepEqual(preferences.normalize({opticalQuality:'auto',previewDetail:'32',studioPlaybackDetail:'balanced',studioPlaybackFps:'30',geometryBackend:'webgl2',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,studioPickerFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10}}),
-  {opticalQuality:'auto',previewDetail:'32',studioPlaybackDetail:'balanced',geometryBackend:'webgl2',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
+  {opticalQuality:'auto',previewDetail:'32',studioPlaybackDetail:'balanced',studioPlaybackFps:'30',geometryBackend:'webgl2',cameraHudVisible:true,cameraHudAppearance:{opacity:90,position:'top-left',size:100},targetIndicatorVisible:true,studioTargetVisible:true,targetIndicatorSelection:'scene',
     displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},historyGallerySize:'small',historyPinnedCollapsed:false,historyPanelOpen:false,historyFilters:historyFilterDefaults,studioPickerFilters:historyFilterDefaults,historyStoryboardQueue:[],
     navigation:{speed:100,turnRate:.05,wheelStep:10},workspace:workspaceDefaults});
-  const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',studioPlaybackDetail:'invalid',geometryBackend:'webgpu',
+  const invalid=preferences.normalize({opticalQuality:'unsafe',previewDetail:'3',studioPlaybackDetail:'invalid',studioPlaybackFps:'120',geometryBackend:'webgpu',
     navigation:{speed:Infinity,turnRate:-1,wheelStep:'bad'}});
   assert.deepEqual(invalid,defaults);
   assert.equal(Object.isFrozen(invalid.navigation),true);

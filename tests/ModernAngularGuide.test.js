@@ -58,6 +58,7 @@ function compareFixture(nick,angleDegrees){
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0]});}
   FakeModel.prototype.Update=function(){};
   const browser={CurveAppClass:FakeModel,CurvatureModernSceneState:null,
+    CurvatureModernAnimationPlaybackControls:require('../src/animation/ModernAnimationPlaybackControls'),
     CurvatureModernCompareModel:compare132,CurvatureModernCompareState:compare133,
     CurvatureRayHorizon:{diagnose(){return {status:'resolved',angleDegrees,
       dipDegrees:-angleDegrees,tangentDistance:14000,

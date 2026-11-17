@@ -559,10 +559,12 @@
     studioUI.createPreviewNavigation(root,document):null;
   var studioPlayback=null;
   var studioPlaybackControls=null;
-  var studioPlaybackLastPaint=-Infinity;
+  var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
   var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
+  var studioPlaybackFps='auto'; // Browser-local preview pacing, not export FPS.
+  var studioPlaybackFpsMeter=studioPlaybackControlsApi.createPreviewFpsMeter();
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
@@ -584,7 +586,6 @@
   var studioPersistenceCoordinator=null,studioRestorePreviewPending=false;
   var studioPreviewLifecycle=null;
   var studioPreviewRenderer=null;
-  var STUDIO_PREVIEW_MIN_INTERVAL_MS=120;
   var studioPickerOpen=false;
   var studioPickerShowIncompatible=false;
   var studioPickerFilters=historyFiltersApi?historyFiltersApi.normalize():
@@ -633,6 +634,7 @@
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
     studioPlaybackDetail=remembered.studioPlaybackDetail;
+    studioPlaybackFps=remembered.studioPlaybackFps;
     state.geometryBackend=remembered.geometryBackend;
     cameraHudVisible=remembered.cameraHudVisible;
     cameraHudAppearance=remembered.cameraHudAppearance;
@@ -672,7 +674,7 @@
     try{
       if(!applicationPreferences.write(preferencesStorage(),{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
-        studioPlaybackDetail:studioPlaybackDetail,
+        studioPlaybackDetail:studioPlaybackDetail,studioPlaybackFps:studioPlaybackFps,
         geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
         cameraHudAppearance:cameraHudAppearance,
         targetIndicatorVisible:targetIndicatorVisible,studioTargetVisible:studioTargetVisible,
@@ -846,6 +848,8 @@
       state.opticalQuality=defaults.opticalQuality;
       state.previewDetail=defaults.previewDetail;
       studioPlaybackDetail=defaults.studioPlaybackDetail;
+      studioPlaybackFps=defaults.studioPlaybackFps;
+      studioPlaybackFpsMeter.reset();
       state.geometryBackend=defaults.geometryBackend;
       cameraHudVisible=defaults.cameraHudVisible;
       cameraHudAppearance=defaults.cameraHudAppearance;
@@ -883,6 +887,7 @@
       if(typeof document.querySelector==='function')activateSettings('Camera',false,false);
       [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
         ['ModernAnimationPlaybackDetail',studioPlaybackDetail],
+        ['ModernAnimationPlaybackFps',studioPlaybackFps],
         ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
         ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
       ].forEach(function(entry){var node=geometryUi(entry[0]);if(node)node.value=String(entry[1]);});
@@ -2085,7 +2090,7 @@
         sync:syncStudioPlaybackControls,
         save:saveStudioDraft,
         scheduleInitial:scheduleStudioInitialPaint,
-        invalidatePaint:function(){studioPlaybackLastPaint=-Infinity;},
+        invalidatePaint:function(){studioPlaybackLastPaint=-Infinity;studioPlaybackFpsMeter.reset();},
         announce:function(text,kind){
           var status=newUiEl('ModernAnimationPlaybackStatus');
           if(!status)return;
@@ -2098,6 +2103,7 @@
     return studioPlaybackControls;
   }
   function stopStudioPlayback(clear){
+    studioPlaybackFpsMeter.reset();
     if(clear){
       if(studioPreviewNavigation)studioPreviewNavigation.cancel();
       cancelStudioInitialPaint();
@@ -2135,6 +2141,11 @@
     if(seek)seek.value=info.seek;
     var clock=newUiEl('ModernAnimationPlaybackTime');
     if(clock)clock.textContent=info.time;
+    var actualFps=newUiEl('ModernAnimationPlaybackActualFps');
+    if(actualFps){
+      var measured=info.playing?studioPlaybackFpsMeter.fps(profileNow()):null;
+      actualFps.textContent='Actual: '+(measured===null?'—':measured.toFixed(1))+' FPS';
+    }
     syncCanvasDirectDiagnostics();
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
     var pause=newUiEl('ModernAnimationPlaybackPause');if(pause)pause.disabled=!info.playing;
@@ -2250,7 +2261,8 @@
   function renderStudioPlaybackSample(force){
     if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen)return;
     var now=profileNow();
-    if(!force&&now-studioPlaybackLastPaint<STUDIO_PREVIEW_MIN_INTERVAL_MS)return;
+    if(!studioPlaybackControlsApi.previewFrameAllowed(
+      studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force))return;
     if(!studioPreviewApi||!attachStudioPreviewGraphs())
       throw Error('Independent optical preview graphs are unavailable');
     if(!studioPreviewRenderer)studioPreviewRenderer=studioPreviewApi.create({
@@ -2357,7 +2369,11 @@
     // This timestamp always corresponds to the pixels just drawn. The
     // playback clock may advance during synchronous Accurate rendering.
     studioPlaybackRenderedAt=renderedAt;
-    studioPlaybackLastPaint=profileNow();
+    studioPlaybackNextDue=studioPlaybackControlsApi.nextPreviewDue(
+      studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force);
+    studioPlaybackLastPaint=now;
+    if(studioPlayback.status().playing)studioPlaybackFpsMeter.record(now);
+    else studioPlaybackFpsMeter.reset();
     studioFrameLoading(false,'');
   }
   function syncStudioQualitySummary(){
@@ -2901,6 +2917,19 @@
         playbackNotice('Camera interpolation: '+error.message,'error');
       }
     });
+    var fpsControl=newUiEl('ModernAnimationPlaybackFps');
+    if(fpsControl){
+      fpsControl.value=studioPlaybackFps;
+      fpsControl.addEventListener('change',function(){
+        studioPlaybackFps=['auto','10','15','30','60'].includes(fpsControl.value)?
+          fpsControl.value:'auto';
+        fpsControl.value=studioPlaybackFps;
+        studioPlaybackLastPaint=-Infinity;
+        studioPlaybackFpsMeter.reset();
+        saveApplicationPreferences();
+        syncStudioPlaybackControls();
+      });
+    }
     var detail=newUiEl('ModernAnimationPlaybackDetail');
     if(detail){detail.value=studioPlaybackDetail;detail.addEventListener('change',function(){
       studioPlaybackDetail=['full','balanced','performance'].includes(detail.value)?
@@ -2947,7 +2976,9 @@
       playbackNotice('Playback failed: '+error.message,'error');
     }}
     var controls=ensureStudioPlaybackControls();
-    play.addEventListener('click',function(){safely(function(){controls.play();});});
+    play.addEventListener('click',function(){safely(function(){
+      studioPlaybackFpsMeter.reset();controls.play();
+    });});
     var pause=newUiEl('ModernAnimationPlaybackPause');
     if(pause)pause.addEventListener('click',function(){safely(function(){controls.pause();});});
     var stop=newUiEl('ModernAnimationPlaybackStop');

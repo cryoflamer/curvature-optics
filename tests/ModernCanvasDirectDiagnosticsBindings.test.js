@@ -5,12 +5,13 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+const controlsApi=require('../src/animation/ModernAnimationPlaybackControls');
 
 // Run the actual application sync and binding functions against DOM-like nodes.
 // In the regression, every playback tick called sync(), which attached three
 // more change handlers. A click after a long animation invoked all of them.
 function harness(){
-  const elements=new Map(),stats={render:0,stop:0,save:0},calls=[];
+  const elements=new Map(),stats={render:0,stop:0,save:0,preferences:0},calls=[];
   function node(id){
     if(!elements.has(id))elements.set(id,{
       id,hidden:false,disabled:false,checked:true,value:'',textContent:'',
@@ -35,11 +36,12 @@ function harness(){
     newUiEl:node,studioPrepared:prepared,studioPlayback:playback,
     studioDraft:{interpolation:'spline'},studioPlaybackDetail:'full',
     studioPlaybackQuality:'canvas-direct',studioPlaybackLastPaint:42,
-    studioPlaybackRenderedAt:28100,
+    studioPlaybackFps:'auto',studioPlaybackFpsMeter:controlsApi.createPreviewFpsMeter(),
+    studioPlaybackRenderedAt:28100,profileNow:()=>1000,
     studioPlaybackControlsApi:{describe:()=>({seek:'475',time:'28.1 / 59.1 s',playing:false})},
     ensureStudioPlaybackControls:()=>controls,
     syncStudioHudAppearance(){},syncStudioFrameExportControls(){},
-    saveApplicationPreferences(){},saveStudioDraft(){stats.save++;},renderStudioLibrary(){},
+    saveApplicationPreferences(){stats.preferences++;},saveStudioDraft(){stats.save++;},renderStudioLibrary(){},
     renderStudioPlaybackSample(force){assert.equal(force,true);stats.render++;calls.push('render');},
     stopStudioPlayback(clear){assert.equal(clear,false);stats.stop++;calls.push('stop');context.sync();},
     bindStudioQualityAudit(){},bindStudioCameraHud(){},bindStudioTargetIndicator(){},
@@ -105,4 +107,23 @@ test('diagnostics do not start playback or repaint without an active preview',()
   assert.equal(h.stats.render,0);
   for(let i=0;i<50;i++)h.context.sync();
   for(const id of diagnostics)assert.equal(h.node(id).count('change'),1,id);
+});
+
+test('Preview FPS changes once after thousands of syncs and never restart the animation',()=>{
+  const h=harness(),fps=h.node('ModernAnimationPlaybackFps');
+  for(let i=0;i<2500;i++)h.context.sync();
+  assert.equal(fps.count('change'),1,'FPS listener is bound once at startup');
+  assert.equal(fps.value,'auto');
+  assert.equal(h.node('ModernAnimationPlaybackActualFps').textContent,'Actual: — FPS');
+  fps.value='30';fps.emit('change');
+  assert.equal(h.context.studioPlaybackFps,'30');
+  assert.equal(h.context.studioPlaybackLastPaint,-Infinity);
+  assert.equal(h.stats.preferences,1,'local preview preference is saved');
+  assert.equal(h.stats.stop,0,'FPS switching must not pause playback');
+  assert.equal(h.stats.render,0,'FPS switching must not force a paused redraw');
+  assert.equal(h.stats.save,0,'FPS selection must not alter the project draft');
+  fps.value='invalid';fps.emit('change');
+  assert.equal(fps.value,'auto','unknown values are rejected');
+  assert.equal(h.stats.preferences,2);
+  assert.equal(fps.count('change'),1);
 });

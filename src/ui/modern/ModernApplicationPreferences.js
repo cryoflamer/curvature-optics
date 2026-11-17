@@ -13,6 +13,7 @@
   var QUALITIES=['accurate','fast','auto'];
   var DETAILS=['auto','1','2','4','8','16','32'];
   var STUDIO_DETAILS=['full','balanced','performance'];
+  var STUDIO_FPS=['auto','10','15','30','60'];
   var BACKENDS=['canvas','webgl2'];
   var HISTORY_SIZES=['small','medium','large'];
   var HISTORY_MODES=['all','scene','compare'];
@@ -91,6 +92,7 @@
       opticalQuality:from(QUALITIES,data.opticalQuality,'accurate'),
       previewDetail:from(DETAILS,data.previewDetail,'auto'),
       studioPlaybackDetail:from(STUDIO_DETAILS,data.studioPlaybackDetail,'performance'),
+      studioPlaybackFps:from(STUDIO_FPS,data.studioPlaybackFps,'auto'),
       geometryBackend:from(BACKENDS,data.geometryBackend,'canvas'),
       cameraHudVisible:data.cameraHudVisible!==false,
       cameraHudAppearance:hudAppearance(data.cameraHudAppearance),
@@ -132,6 +134,7 @@
     if(!storage||typeof storage.setItem!=='function')return false;
     storage.setItem(STORAGE_KEY,JSON.stringify({version:1,opticalQuality:data.opticalQuality,
       previewDetail:data.previewDetail,studioPlaybackDetail:data.studioPlaybackDetail,
+      studioPlaybackFps:data.studioPlaybackFps,
       geometryBackend:data.geometryBackend,
       cameraHudVisible:data.cameraHudVisible,cameraHudAppearance:data.cameraHudAppearance,
       targetIndicatorVisible:data.targetIndicatorVisible,studioTargetVisible:data.studioTargetVisible,

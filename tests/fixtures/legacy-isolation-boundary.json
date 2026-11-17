@@ -707,13 +707,16 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAngularGuide.test.js",
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationPlaybackControls.test.js",
+        "tests/ModernAnimationPreviewFps.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
+        "tests/ModernCanvasDirectDiagnosticsBindings.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentState.test.js",
         "tests/ModernFastPreview.test.js",
@@ -722,7 +725,8 @@
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js",
-        "tests/ModernUiBootstrap.test.js"
+        "tests/ModernUiBootstrap.test.js",
+        "tests/OpticalRayHorizon.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2599,6 +2603,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationPreviewFps.test.js",
         "tests/ModernAnimationSceneDetail.test.js",
         "tests/ModernApplicationPreferences.test.js",
         "tests/ModernCameraNavigation.test.js",

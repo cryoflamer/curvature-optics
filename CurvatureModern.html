@@ -251,6 +251,15 @@
           <option value="effective-radius">Effective Radius · experimental geometry</option>
           <option value="canvas-direct">Canvas Direct · experimental painter</option>
         </select>
+        <label for="ModernAnimationPlaybackFps">Preview FPS</label>
+        <select id="ModernAnimationPlaybackFps" title="Target FPS for live Play only. Auto paints on each available browser animation frame; slower optics may not reach the target. PNG/video export FPS is independent.">
+          <option value="auto" selected>Auto · display refresh</option>
+          <option value="10">10 FPS</option>
+          <option value="15">15 FPS</option>
+          <option value="30">30 FPS</option>
+          <option value="60">60 FPS</option>
+        </select>
+        <output id="ModernAnimationPlaybackActualFps" title="Measured rate of completed preview paints while playing, not monitor refresh or export frame rate">Actual: — FPS</output>
         <label for="ModernAnimationPlaybackDetail">Scene detail</label>
         <select id="ModernAnimationPlaybackDetail" title="Fast/Effective Radius object detail; Full draws every object. Balanced and Performance thin supported repeating tower groups only. Canvas Direct keeps all authored objects and uses simplified metric guides. Accurate RK4 always uses full geometry.">
           <option value="full">Full · all modeled objects</option>

@@ -106,6 +106,7 @@ test('133.2: Compare horizon is cached independently per side and never recomput
     moveTo(){},lineTo(){},stroke(){drawCalls.push('stroke');},fillText(t){drawCalls.push(t);}};
   const canvas={width:600,height:400,getContext(){return graphics;}};
   const browser={CurveAppClass:FakeModel,CurvatureModernSceneState:null,
+    CurvatureModernAnimationPlaybackControls:require('../src/animation/ModernAnimationPlaybackControls'),
     CurvatureModernCompareModel:compare132,CurvatureModernCompareState:compare133,
     CurvatureRayHorizon:{diagnose(o){paths.push(o);return o.geometry==='globe'?{
       status:'resolved',angleDegrees:-.12,dipDegrees:.12,tangentDistance:14000,

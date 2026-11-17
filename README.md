@@ -807,6 +807,23 @@ If the library reports unavailable storage, inspect the browser console before
 changing IndexedDB settings or deleting saved data.
 
 
+### Animation Studio live preview FPS
+
+**Animation Studio → Playback → Preview FPS** offers **Auto**, **10**, **15**,
+**30** and **60 FPS**. Auto requests a new paint on every available browser
+`requestAnimationFrame` tick; numbered settings are *upper limits*, not guaranteed
+rates. The **Actual FPS** counter reports completed preview paints over a recent
+window and shows a dash while paused. These controls affect neither physical
+sampling nor the playhead clock; if the painter is too slow, playback skips
+intermediate visual frames instead of stretching the animation duration.
+
+Frame scheduling uses paint-start timestamps and a phase-preserving deadline,
+so a fast Canvas Direct render can reach display refresh speed without the old
+120 ms cap. The selected cap is a **browser-local application preference**,
+not a project keyframe or Library property. PNG/video export has its **own**
+independent fixed FPS selection. Actual Opera frame rate and presentation
+smoothness still require a browser check.
+
 ### Animation performance and pixel parity
 
 After #140.12.120.6 the Animation Studio has a collapsible **Performance & pixel parity**
