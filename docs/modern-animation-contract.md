@@ -465,3 +465,53 @@ The first patch intentionally changes **only** Animation Playback. Do not
 activate this approximation in Scene/Compare or export automatically. Browser
 visual validation is required before considering any default change or
 additional Legacy-demo migration.
+
+# Experimental Canvas Direct Preview (Animation Studio)
+
+Choose **Playback → Optics → Canvas Direct** to test the Legacy-style fast
+painter while retaining the same Modern animation project. This is a distinct,
+explicitly selected approximation; Auto, Fast, Effective Radius and Accurate
+RK4 are not changed. The choice is stored as an Animation Library preview
+preference, never in a project's camera keyframes or physical scene.
+
+Canvas Direct shares the **local effective-radius coefficient** and atmosphere
+eligibility of Effective Radius. For Vacuum, `k=0` and `R_eff=R`. For Standard
+and Temperature lapse on Globe, it uses the local gradient at the current eye
+height. It rejects other profiles and refracted Flat scenes. A moving camera's
+`CameraEast`/`CameraNorth` is handled by rotating/recentring the effective
+sphere around the observer; this is not a translation of the 2D image.
+
+Instead of creating physical-ray samples, tessellated fill triangles, validated
+SceneFrame objects, and then painting the result, the new Modern-only renderer:
+
+- Authors object polygons through `CurvatureGeometryEngine` and caches their
+  source geometry independent of camera height, Pan/Nick/Roll and East/North.
+  The cache is per viewport and invalidated by geometry, curvature or object
+  definition changes. Continuous Soundly road strips are **not decimated**.
+- Projects the cached vertices through an observer-local camera matrix. It
+  near-plane-clips polygons and original stroke edges independently, then
+  emits native Canvas paths with source fill/stroke styles. No ear clipping,
+  optical shooting, 12-iteration horizon bisection, SceneFrame, or WebGL.
+- Preserves the original Legacy *conceptual* order: far object packages,
+  opaque white geometric horizon disk, optional sparse metric distance rings,
+  near object packages. Object-package horizon classification is an
+  approximation, not physical visibility or a mutual depth buffer.
+- Uses just five 1/2/3/5/10 km reference rings (up to the geometric horizon)
+  rather than a high-resolution latitude/longitude grid in this experimental
+  preview; the underlying experiment and all other render modes are unchanged.
+
+**Important limitations:** painter masking can differ from exact refraction,
+especially for oblique roads, low horizons, moving-camera transitions, and
+occlusion among close structures. Hidden support segments may be different
+from Accurate. The approximation must not replace scientific rendering or
+frame/video export automatically. Scene detail `Full/Balanced/Performance`
+does not drop the joined Soundly bridge packages in Canvas Direct.
+
+**Soundly acceptance:** compare the exact same time/frame, backing-store size
+and camera in Effective Radius and Canvas Direct, including heights 3 m and
+8–11 m, plus the four photo reference frames. Check that the continuous
+bridge deck, foreground supports and horizon mask stay coherent while moving.
+Playback diagnostics provide total frame milliseconds; the frame profiler
+collects cold/warm time and Canvas Direct sample counts. Node/Skia benchmarks
+are diagnostic only and do not establish browser FPS. The target remains
+≤50 ms/frame, ideally ≤33 ms, on the user's actual browser, not a guarantee.

@@ -2278,6 +2278,7 @@
     var spent=profileNow()-begun; // includes any Accurate redraw after a B fallback
     var fast=a.quality==='fast'&&(!b||b.quality==='fast');
     var effectiveRadiusMode=a.quality==='effective-radius'&&(!b||b.quality==='effective-radius');
+    var canvasDirectMode=a.quality==='canvas-direct'&&(!b||b.quality==='canvas-direct');
     var auditQuality=b&&b.quality!==a.quality?'mixed':a.quality;
     if(studioQualityAudit){
       studioQualityAudit.record({timeMs:renderedAt,frameMs:spent,quality:auditQuality,
@@ -2296,7 +2297,8 @@
       syncStudioQualitySummary();
     }
     var qualityNode=newUiEl('ModernAnimationPlaybackQuality');
-    if(qualityNode)qualityNode.textContent=effectiveRadiusMode?'Effective Radius · experimental':
+    if(qualityNode)qualityNode.textContent=canvasDirectMode?'Canvas Direct · experimental':
+      effectiveRadiusMode?'Effective Radius · experimental':
       fast?'Fast Preview · approximate':'Accurate RK4 optics'+(b&&b.quality!==a.quality?' / mixed quality':'');
     var diagnostic=newUiEl('ModernAnimationPlaybackDiagnostics');
     if(diagnostic){
@@ -2316,22 +2318,28 @@
       var fallbacks=Math.max(a.fallbackCount||0,b&&b.fallbackCount||0);
       var fallbackReasons=[a.fallback,b&&b.fallback].filter(Boolean);
       var requestedLabel={auto:'Auto',fast:'Fast if supported',accurate:'Accurate RK4',
-        'effective-radius':'Effective Radius'}[studioPlaybackQuality];
-      var effectiveLabel=effectiveRadiusMode?'Effective Radius (experimental)':
+        'effective-radius':'Effective Radius','canvas-direct':'Canvas Direct'}[studioPlaybackQuality];
+      var effectiveLabel=canvasDirectMode?'Canvas Direct (experimental)':
+        effectiveRadiusMode?'Effective Radius (experimental)':
         fast?'Fast Preview (approximate)':
         (b&&b.quality!==a.quality?'Mixed quality':'Accurate RK4');
       var fallbackNote=fallbackReasons.length?' · Fast unavailable: '+
         Array.from(new Set(fallbackReasons)).join(' / '):'';
+      var directTimes=canvasDirectMode&&drawn.timings?
+        ' · mesh '+Math.round(drawn.timings.geometryMs||0)+' ms'+
+        ' · projection '+Math.round(drawn.timings.projectionMs||0)+' ms'+
+        ' · Canvas '+Math.round(drawn.timings.canvasMs||0)+' ms'+
+        ' · mesh reused '+(drawn.cacheReused?'yes':'no'):'';
       diagnostic.textContent='Requested optics: '+requestedLabel+' · Effective: '+effectiveLabel+
-        ' · Scene detail: '+detailLabel+(fast?' (Fast)':effectiveRadiusMode?' (Effective Radius)':' (Accurate uses full geometry)')+
+        ' · Scene detail: '+detailLabel+(fast?' (Fast)':effectiveRadiusMode?' (Effective Radius)':canvasDirectMode?' (Canvas Direct)':' (Accurate uses full geometry)')+
         (lodCounts.length?' · '+lodCounts.join(' · '):'')+' · Rendered t='+(renderedAt/1000).toFixed(2)+'s / '+
         (studioPlayback.status().durationMs/1000).toFixed(2)+'s · frame '+
         Math.round(spent)+' ms · '+describe(a,isCompare?'A':'Scene')+
         (isCompare?' · '+describe(b,'B'):'')+
         (Number.isFinite(drawn.drawn)?' · '+drawn.drawn+' visible segments':'')+
-        (effectiveRadiusMode&&Number.isFinite(drawn.refractionK)?
+        ((effectiveRadiusMode||canvasDirectMode)&&Number.isFinite(drawn.refractionK)?
           ' · local k='+drawn.refractionK.toFixed(4):'')+
-        fallbackNote+' · Fast runtime fallback(s): '+fallbacks+
+        directTimes+fallbackNote+' · Fast runtime fallback(s): '+fallbacks+
         (spent>500?' · slow calculation: playback may skip intermediate frames':'');
     }
     // This timestamp always corresponds to the pixels just drawn. The
@@ -2347,6 +2355,7 @@
     function time(value){return value===null?'n/a':value.toFixed(1)+' ms';}
     node.textContent=summary.count+' sampled frames · total p50 '+time(f.p50)+
       ' / p95 '+time(f.p95)+' · Fast '+summary.fastFrames+' / Effective Radius '+summary.effectiveRadiusFrames+
+      ' / Canvas Direct '+summary.canvasDirectFrames+
       ' / Accurate '+summary.accurateFrames+' / Mixed '+summary.mixedFrames+
       ' · A optics cold p95 '+time(summary.A.cold.p95)+
       ', warm p95 '+time(summary.A.warm.p95)+
@@ -2893,7 +2902,7 @@
     });}
     var optics=newUiEl('ModernAnimationPlaybackOptics');
     if(optics){optics.value=studioPlaybackQuality;optics.addEventListener('change',function(){
-      studioPlaybackQuality=['auto','fast','accurate','effective-radius'].includes(optics.value)?optics.value:'auto';
+      studioPlaybackQuality=['auto','fast','accurate','effective-radius','canvas-direct'].includes(optics.value)?optics.value:'auto';
       // Explicit quality changes must allow a fresh Fast probe at the current
       // physical state; a previous runtime rejection is not a permanent ban.
       if(studioPreviewRenderer&&typeof studioPreviewRenderer.resetFastFailures==='function')

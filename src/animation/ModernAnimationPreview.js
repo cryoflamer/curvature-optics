@@ -27,8 +27,8 @@
     return !!spec&&!!fastField&&fastField.supportsAtmosphere(spec.atmosphere);
   }
   function opticalQuality(spec,choice,animationMode){
-    if(!['auto','fast','accurate','effective-radius'].includes(choice))throw RangeError('Invalid animation optics choice');
-    if(choice==='effective-radius')return 'effective-radius';
+    if(!['auto','fast','accurate','effective-radius','canvas-direct'].includes(choice))throw RangeError('Invalid animation optics choice');
+    if(choice==='effective-radius'||choice==='canvas-direct')return choice;
     if(choice==='accurate'||(choice==='auto'&&animationMode==='physical'))return 'accurate';
     return fastEligible(spec)?'fast':'accurate';
   }
@@ -168,7 +168,8 @@
       }
       if(display.horizon){
         if(config.quality!=='accurate')traced=config.quality==='fast'?
-          'disabled in Fast Preview':'disabled in Effective Radius Preview';
+          'disabled in Fast Preview':config.quality==='effective-radius'?
+          'disabled in Effective Radius Preview':'disabled in Canvas Direct Preview';
         else if(!detector||typeof detector.diagnose!=='function')traced='tracer unavailable';
         else{
           var params=horizonOptions(config.model,config.spec),key=JSON.stringify(params);

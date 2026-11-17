@@ -105,7 +105,7 @@
     function record(input){
       if(!input||!Number.isFinite(input.timeMs)||input.timeMs<0||
         !Number.isFinite(input.frameMs)||input.frameMs<0||
-        !['fast','accurate','effective-radius','mixed'].includes(input.quality))throw RangeError('Invalid animation frame audit');
+        !['fast','accurate','effective-radius','canvas-direct','mixed'].includes(input.quality))throw RangeError('Invalid animation frame audit');
       function side(value){
         if(!value)return null;
         var timings=value.timings||{};
@@ -145,6 +145,7 @@
         B:aggregate(rows.map(function(r){return r.B;})),
         fastFrames:rows.filter(function(r){return r.quality==='fast';}).length,
         effectiveRadiusFrames:rows.filter(function(r){return r.quality==='effective-radius';}).length,
+        canvasDirectFrames:rows.filter(function(r){return r.quality==='canvas-direct';}).length,
         accurateFrames:rows.filter(function(r){return r.quality==='accurate';}).length,
         mixedFrames:rows.filter(function(r){return r.quality==='mixed';}).length};},
       snapshot:function(){return rows.map(function(r){return JSON.parse(JSON.stringify(r));});}});

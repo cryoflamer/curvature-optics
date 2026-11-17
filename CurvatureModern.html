@@ -50,6 +50,7 @@
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/renderers/CurvatureAtmosphericVisibility.js?v=140.12.91"></script>
+<script src="src/renderers/CurvatureCanvasDirectPreview.js"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;tensas-44=1&amp;soundly-45=1-captions-48"></script>
 <script src="src/ui/modern/ModernLocationCatalog.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1"></script>
 <script src="src/ui/modern/ModernSceneState.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1&amp;semantic-captions=49"></script>
@@ -243,14 +244,15 @@
           <option value="spline">Smooth · Spline</option>
         </select>
         <label for="ModernAnimationPlaybackOptics">Optics</label>
-        <select id="ModernAnimationPlaybackOptics" title="Physical animation defaults to Accurate RK4; Fast and Effective Radius are approximate. Effective Radius supports Vacuum, Standard, Temperature lapse (Globe) or Vacuum (Flat).">
+        <select id="ModernAnimationPlaybackOptics" title="Physical animation defaults to Accurate RK4; Fast, Effective Radius and Canvas Direct are approximate. Effective Radius / Canvas Direct support Vacuum, Standard, Temperature lapse (Globe) or Vacuum (Flat).">
           <option value="auto">Auto · Accurate physical / Fast camera</option>
           <option value="accurate">Accurate RK4 · all frames</option>
           <option value="fast">Fast if supported · approximate</option>
           <option value="effective-radius">Effective Radius · experimental geometry</option>
+          <option value="canvas-direct">Canvas Direct · experimental painter</option>
         </select>
         <label for="ModernAnimationPlaybackDetail">Scene detail</label>
-        <select id="ModernAnimationPlaybackDetail" title="Fast/Effective Radius object detail; Full draws every object. Balanced and Performance thin supported repeating tower groups only. Accurate RK4 always uses full geometry.">
+        <select id="ModernAnimationPlaybackDetail" title="Fast/Effective Radius object detail; Full draws every object. Balanced and Performance thin supported repeating tower groups only. Canvas Direct keeps all authored objects and uses simplified metric guides. Accurate RK4 always uses full geometry.">
           <option value="full">Full · all modeled objects</option>
           <option value="balanced">Balanced · moderate simplification</option>
           <option value="performance" selected>Performance · faster Preview</option>

@@ -16,14 +16,16 @@
     root.CurvaturePhysicalCamera||(typeof require==='function'?require('./CurvaturePhysicalCamera'):null),
     root.CurvatureAtmosphericVisibility||(typeof require==='function'?require('../renderers/CurvatureAtmosphericVisibility'):null),
     root.CurvatureCameraTranslation||(typeof require==='function'?require('../geometry/CurvatureCameraTranslation'):null),
-    root.CurvatureOpticalEffectiveRadiusPreview||(typeof require==='function'?require('../optics/OpticalEffectiveRadiusPreview'):null));
+    root.CurvatureOpticalEffectiveRadiusPreview||(typeof require==='function'?require('../optics/OpticalEffectiveRadiusPreview'):null),
+    root.CurvatureCanvasDirectPreview||(typeof require==='function'?require('../renderers/CurvatureCanvasDirectPreview'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureMainCanvasRenderer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility,cameraTranslation,effectiveRadius){
+}(typeof globalThis!=='undefined'?globalThis:this,function(composition,frames,renderer,perspective,projection,decorations,optical,contract,screenGuides,physicalCamera,visibility,cameraTranslation,effectiveRadius,directCanvas){
   'use strict';
   var opticalSession=optical.create();
   var fastOpticalSession=optical.create();
   var effectiveRadiusSession=effectiveRadius&&effectiveRadius.create();
+  var directSessions=new WeakMap();
   function now(){return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}
   // During high-frequency camera interaction, only the presentation of dense
   // Globe ground guides is sampled by WHOLE source curves. Never sample
@@ -121,6 +123,39 @@
     var frameStart=now(),camera=configureCamera(g,m,true),ctx=g.Canvas.getContext('2d');
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
        typeof ctx.restore!=='function')throw TypeError('Canvas 2D context required');
+    if(options.opticalQuality==='canvas-direct'){
+      if(!directCanvas)throw Error('Canvas Direct Preview module is unavailable');
+      var directSession=directSessions.get(g.Canvas);
+      if(!directSession){directSession=directCanvas.create();directSessions.set(g.Canvas,directSession);}
+      if(options.forceColdOptics)directSession.clearCache();
+      var directStart=now(),direct;
+      ctx.save();
+      try{
+        ctx.setTransform(1,0,0,1,0,0);
+        direct=directSession.paint(g.Canvas,camera,m,options);
+        if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera,
+          {showCaptions:options.showCaptions!==false,captionMode:options.captionMode,
+           includeGeometrySummary:options.includeGeometrySummary===true});
+      }finally{ctx.restore();}
+      var directEnd=now(),dt=direct.timings;
+      return {mode:'physical-scene',geometryBackend:'Canvas Direct 2D',
+        opticalQuality:'canvas-direct',previewLod:{original:direct.sourceObjects,
+          selected:direct.sourceObjects,skipped:0,stride:1},
+        drawn:direct.visibleSegments,primitiveCount:direct.primitivesProjected,
+        refractionK:direct.refractionK,effectiveRadiusMeters:direct.effectiveRadius,
+        cacheReused:direct.geometryReused,fillTriangles:0,fastRuntimeFallbacks:0,
+        timings:{totalMs:directEnd-frameStart,composeMs:directStart-frameStart,
+          opticsMs:dt.geometryMs+dt.setupMs,frameMs:dt.projectionMs,
+          projectionMs:dt.projectionMs,canvasMs:dt.canvasMs,
+          paintMs:dt.projectionMs+dt.canvasMs,decorationsMs:directEnd-directStart-dt.totalMs,
+          geometryMs:dt.geometryMs,strokeCalls:direct.strokeCalls},
+        directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
+          horizonMasks:direct.horizonMasks,geometryReused:direct.geometryReused},
+        decorationCamera:options.deferDecorations?camera:null,
+        decorationPhysicalGuides:options.deferDecorations?[]:null,
+        warning:'Experimental Canvas Direct: straight rays and local effective radius;'+
+          ' approximate Legacy-style horizon mask without physical depth testing.'};
+    }
     // The optical backend transforms the SAME independently authored scene;
     // the exact same frame/painter handles camera, styles and all guides.
     var globe=m.showModel===1;
@@ -233,7 +268,8 @@
     finally{ctx.restore();}
   }
   function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();
-    effectiveRadiusSession=effectiveRadius&&effectiveRadius.create();}
+    effectiveRadiusSession=effectiveRadius&&effectiveRadius.create();
+    directSessions=new WeakMap();}
   return {geometryAuditRevision:'140.12.37.2',
     render:render,renderPhysical:renderPhysical,drawPresentationDecorations:drawPresentationDecorations,
     resetPhysicalSession:resetPhysicalSession,previewComposition:previewComposition,support:support,
