@@ -1,6 +1,6 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-17, #45):** eight **partial** geographic native scenarios
+**Status (2026-11-17, #46):** eight **partial** geographic native scenarios
 (`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`, `causeway`, `tensas`, `soundly`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
@@ -76,6 +76,14 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   The full 18-state narrated demonstration, atmospheric variants and
   source-camera pixel parity remain unported. Evidence:
   `tests/ModernSoundlyPreset.test.js`.
+- [x] **#46 — Source-backed storyboard readiness audit:** freeze and
+  automatically check all **80** Legacy states, **71** adjacent transitions,
+  **10** native preset references to **9** distinct Legacy states and source
+  control/helper inventories. Exactly **28** states are schema-blocked; zero
+  state/transition full-parity certifications exist. See
+  the **Native Modern storyboard readiness** section below,
+  `tools/audit-modern-demo-readiness.js` and
+  `tests/ModernDemoReadiness.test.js`. This is a plan, not an animation port.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
   for every migrated scenario. No full migration parity is certified yet.
@@ -108,9 +116,10 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   `canigou-low` uses source state index 4 at 244 m / 257 km with an explicitly
   non-equivalent Modern Standard atmosphere. `single` and `rows` remain
   demonstration samples, **not locations**.
-- Object IDs are source-specific. Modern Scene geometry/validation currently
-  supports `0–7`; Legacy `8/9` Soundly Causeway requires explicit ports. Legacy
-  type `9` exists but is **unused** in the nine authored demos.
+- Object IDs are source-specific. Modern Scene geometry/validation now
+  supports `0–9`; `8/9` are implemented for Soundly. Type `9` is **not active**
+  in the nine authored saved-state demos, though the geometry is tested against
+  Legacy. Supporting the integer type is not proof of animation/optical parity.
 
 **Count policy:** eight geographic demos across six geographic subjects,
 plus the non-geographic `Curve` lesson; **80 states and 71 transitions** in
@@ -427,19 +436,20 @@ reproduce source `viewcenterHorizon=2` semantics. Remaining five source
 states, original choreography, browser visual/pixel parity and final camera
 acceptance are not certified. No new optics or persistence schema was added.
 
-### Stage C — geometry families (proposed #35+)
+### Stage C — geometry families (#37–45)
 
 - [x] Implement object type **4**: Chicago skyline and indexed variation.
 - [x] Implement object type **5**: mountain/terrain silhouettes and variants
   (bank-shifted three palettes, six-step mirroring, fixed width under height variation).
 - [x] Implement object type **6**: shared bridge support/road geometry,
   exercised by Grace and the partial Causeway source-state view.
-- [ ] Implement object type **7**: Tensas-specific bridge geometry.
+- [x] Implement object type **7**: Tensas-specific bridge geometry.
 - [x] Implement object type **8**: Soundly Causeway geometry (partial native #45).
 - [x] Review and port object type **9** for the reverse Soundly bridge profile;
   no separate authored scenario preset requires type 9.
-- [ ] Extend native validators and Objects editor for each supported type
-  **only together with its physical Scene and Compare rendering tests**.
+- [x] Extend native validators and Objects editor for currently supported types
+  **together with their physical Scene and Compare rendering tests**. This is
+  type support, not static-scenario acceptance.
 - [ ] Define the atmosphere mapping per scenario: Legacy `refractionCoeff`,
   `refractionSync` and `tempGradient` are not interchangeable with Modern
   physical ray profiles. Document approximations; never silently clamp.
@@ -473,8 +483,9 @@ catalog entry. Do not tick it until the acceptance gates below are met.
 
 ### Stage E — choreography and end-to-end verification (later)
 
-- [ ] Record a separate mapping plan for Legacy `Tval`, `Tpan`, `Ttxt`, `Tpse`
-  timing, concurrent actions, captions and easing versus Modern keyframes.
+- [x] Record a **read-only mapping/decision plan** for Legacy `Tval`, `Tpan`,
+  `Ttxt`, `Tpse`, timing, concurrent actions, captions and easing versus Modern
+  keyframes: `modern-demo-readiness.md`. No timeline translator is enabled.
 - [ ] Port and test the **71 authored transitions** where they make sense
   in Modern; record intentionally non-equivalent or archived behaviors. A
   static scene or imported state does not count as an animation port.
@@ -527,3 +538,105 @@ Do **not** mark a scenario complete just because it is present in the catalog.
 5. The earlier [historical migration plan](legacy-migration-plan.md) and
    [compatibility audit](legacy-modern-compatibility.md) remain reference
    records. **Legacy retirement is not an objective of this checklist.**
+
+---
+
+## Native Modern storyboard readiness — source-backed audit
+
+**Status (2026-11-17):** #46 inventory and decision plan; **no new scene or
+Legacy-to-Modern animation converter was enabled**. The separate Legacy Demos
+iframe remains authoritative for its fast, narrated storyboards.
+
+### Reproducible evidence
+
+- Authored source: [`CurvatureDemos.js`](../src/animation/CurvatureDemos.js).
+- Deterministic, read-only generator:
+  `node tools/audit-modern-demo-readiness.js --check` (or `--write` after an
+  intentional source/preset change). Output:
+  [`modern-demo-readiness.json`](../tests/fixtures/modern-demo-readiness.json).
+- Coverage/anchor tests: [`ModernDemoReadiness.test.js`](../tests/ModernDemoReadiness.test.js).
+- Independent existing source-schema check:
+  [`legacy-modern-boundary.json`](../tests/fixtures/legacy-modern-boundary.json).
+  The new report does **not** turn reviewable fields into convertible states.
+
+The report covers **9 demonstrations, 80 saved states and 71 ordered adjacent
+transitions**. Eight geographic demos have **partial** native scene presets;
+`Curve` has no native lesson preset. Ten Modern presets map to **nine distinct
+Legacy source-state indices** (Chicago has two views of one source state).
+**Zero** source states are certified for *complete* native visual/optical parity
+and **zero** of the 71 authored transitions are certified as imported into
+Animation Studio. **28/80** states are flagged as structurally blocked by the
+existing Modern schema audit; the other 52 are *review-only*, not approved
+imports. Geometry-matching source anchors are not complete-scene migrations.
+
+### Per-demonstration inventory and source anchors
+
+Source indices below are **zero-based**; the old `?demo=...&pos=` URLs use
+**one-based** `pos`. All counts and anchors are checked against the actual
+source and `ModernSceneState.PRESETS` by the generator.
+
+| Legacy demo | States | Transitions | Native geometry anchor(s) | Important open boundary |
+| --- | ---: | ---: | --- | --- |
+| Curve | 12 | 11 | none | Non-geographic lesson, combined Globe/Flat view and narrated overlay |
+| Causeway | 6 | 5 | `causeway` ← 4 | Four combined-view states; narrator and shared overlay |
+| TransLine | 8 | 7 | `pontchartrain` ← 4 | Legacy refraction synchronization, per-step camera/object changes |
+| Grace | 9 | 8 | `grace` ← 7 | Five early states have zero object spacing; nonzero Legacy refraction coefficients |
+| Bedford | 7 | 6 | `bedford` ← 3 | Every state uses combined view; state 0 has signed object distance |
+| Tensas | 6 | 5 | `tensas` ← 3 | Legacy refraction settings in later states and narrated geometry/camera changes |
+| Soundly | 18 | 17 | `soundly` ← 12 | Long mixed camera/object timeline; source type 9 is supported, but not active in saved demo states |
+| Chicago | 6 | 5 | `chicago`, `chicago-near` ← 0 | Every state uses combined view; distant Modern camera is intentionally adapted |
+| Canigou | 8 | 7 | `canigou` ← 2; `canigou-low` ← 4 | Nonzero Legacy effective-radius refraction in later steps; Modern `standard` is different |
+
+For each of the 80 original states, the fixture records the original URL,
+active geometry types, schema status, distinct source-geometry references and
+flags for signed distance, zero spacing, combined view and Legacy refraction.
+For each of 71 transitions it records **adjacent source indices**, changed
+fields *between snapshots*, literal `Tval`/`ValueRef` targets and observable
+`Ttxt`, `Tpan`, `Tpse` and parallel-action markers. This is intentionally a
+**static index**, not an interpreter for the Legacy task engine: the list of
+literal controls may be incomplete if the source uses a new helper or dynamic
+action. Review original actions before attempting translation.
+
+### Native Animation Studio capability vs Legacy choreography
+
+| Legacy behavior | Modern capability | Migration decision / gate |
+| --- | --- | --- |
+| Camera poses and sweeps (`Height`, `Pan`, `Nick`, focal length) | Camera keyframes with linear/spline pose interpolation | **Candidate for explicit adaptation** after selecting a bounded transition and checking easing, duration and intermediate ray images |
+| Single curvature or temperature-gradient parameter change | One-channel physical keyframes | **Conditional**: Modern curvature or physical `n(h)` must not be identified with Legacy effective-radius `refractionCoeff` |
+| Changes to object banks, overlay toggles, or multiple physical/camera fields | Experimental keyframes store complete experiment snapshots | **Static frame candidates only**. Capturing two snapshots does not prove interpolation or narrated choreography |
+| `Ttxt`, `Tpse`, serial/parallel task trees, `Tpan` helper | Animation Studio project/Preview/export infrastructure | **Not a direct mapping**. Captions, holds, overlapping actions and source easing need an explicit storyboard contract and tests |
+| `showModel=3`, curvature-dependent horizon-centering, Legacy `?demo=` links | Separate physical Scene and independently rendered Compare A/B | **Not equivalent**. Preserve the original composite view and old routes in Legacy until any independently specified teaching replacement exists |
+| Legacy coefficient/sync modes and additional diagnostics | Modern named atmospheric profiles, physical CPU ray tracing | **Not interchangeable**. Specify observable-based acceptance tolerances before deciding any optical equivalence |
+
+The only currently verified output of the new audit is **source inventory and
+exact preset object-bank anchoring** (including the four variation fields that
+`applyPreset` explicitly clears to zero when absent). It neither constructs
+Modern experiments for the remaining states nor replays any transitions.
+
+### Ordered delivery plan after #46
+
+1. **#47 — One bounded storyboard prototype.** Choose *one* existing source
+   transition with a simple camera/physical change and review its real `TaskList`.
+   Specify expected intermediate poses, timings, holds, narration and Scene vs
+   Compare behavior before choosing Camera/Physical/Experimental project mode.
+   Keep original Legacy playback as the reference. Do not bulk-convert.
+2. **#48 — Static reference comparisons.** Select an explicit first/middle/final
+   subset of already ported scenes; capture native Scene and Compare images at a
+   fixed viewport/DPR, compare source geometry and independently computed
+   optical observables. Record tolerance, model/profile and provenance; do not
+   compare unlike Legacy and Modern refraction as if they were identical.
+3. **#49+ — Incremental demonstration sequences.** For each of the eight
+   geographic scenarios, decide per transition: camera channel, physical
+   channel, complete-frame cut, custom narration/parallel timeline, or
+   intentionally Legacy-only. Add only evidence-backed native projects; keep
+   unfinished state and progress visible in this inventory.
+4. **Educational Curve and final acceptance.** Independently design combined
+   Globe/Flat instructional semantics, or explicitly retain that lesson in
+   Legacy. Recheck working-session recovery, History, Animation Preview/export,
+   the two physics panels and routing at each native release. Leave all
+   Stage D/Stage E parity checkboxes **unchecked** until those tests exist.
+
+**Scope guard:** This sequence does not authorize removal or retargeting of
+`CurvatureApp.html`, Demos iframe, scientific oracles, original browser PNG
+references, `?demo=`/`?pos=`/`?state=` links, or the CPU ray solver. Source
+state geometry compatibility and browser-image parity are separate evidence.

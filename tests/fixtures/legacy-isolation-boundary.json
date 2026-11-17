@@ -2951,6 +2951,7 @@
         "tests/ModernBedfordPreset.test.js",
         "tests/ModernCanigouPreset.test.js",
         "tests/ModernChicagoPreset.test.js",
+        "tests/ModernDemoReadiness.test.js",
         "tests/ModernGracePreset.test.js",
         "tests/ModernLocationCatalog.test.js",
         "tests/ModernLocationEvidence.test.js",
@@ -2958,6 +2959,7 @@
         "tests/ModernTensasPreset.test.js"
       ],
       "commonJsToolCallers": [
+        "tools/audit-modern-demo-readiness.js",
         "tools/audit-modern-location-evidence.js"
       ]
     },
@@ -3031,7 +3033,9 @@
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalLongRangeGrid.test.js"
       ],
-      "commonJsToolCallers": []
+      "commonJsToolCallers": [
+        "tools/audit-modern-demo-readiness.js"
+      ]
     },
     "src/ui/modern/ModernSemanticNaming.js": {
       "directHtmlLoads": [

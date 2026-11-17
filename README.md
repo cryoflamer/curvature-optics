@@ -6,19 +6,19 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 - **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
 **Legacy locations → native Modern (active migration tracker):** All nine
-original demos remain available in the isolated Demos tab. Scene now offers
-**two partial geographic adaptations**: `pontchartrain` (transmission towers)
-and **`bedford`** (three positive-range Bedford markers from authored Legacy
-state 4). The Bedford option uses the native physical renderer and has its own
-source-validated offsets; it is **not** the original single-Canvas globe/flat
-overlay or the full seven-state demo. For an independent flat comparison, use
-Compare's globe/flat vacuum pair. `single`/`rows` remain samples. The catalog
-tracks six geographic locations and nine authored scenarios; other unsupported
-geometry is not selectable. Track remaining numeric, visual and choreography
-gates in the [living Modern location migration checklist](docs/modern-location-migration.md).
+original demonstrations remain in the isolated Demos tab. Eight geographic
+scenarios now have **partial native adaptations**: Pontchartrain Transmission
+Line, Bedford, Chicago (near and distant), Canigou (two views), Grace,
+Pontchartrain Causeway, Tensas and Soundly. `single`/`rows` remain samples.
+Object geometry types `0–9` are supported, but **none** of the complete Legacy
+storyboards, composite overlays or narrated transitions is certified as
+reproduced. The read-only [storyboard readiness audit](docs/modern-location-migration.md)
+accounts for all **80 source states / 71 transitions** and their native preset
+anchors; the [location checklist](docs/modern-location-migration.md) tracks
+numerical, visual, animation and browser acceptance gates.
 
-**Switching Modern scenes:** **Start from preset** loads Pontchartrain,
-Bedford or one of the two samples. It is a *starting configuration*, not a
+**Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one
+of the two illustrative samples. It is a *starting configuration*, not a
 selector of saved workspaces. Each switch (including **Reset to preset**)
 first protects the complete outgoing experiment as a recovery point in
 **History**. **Previous** restores the most recently replaced experiment;

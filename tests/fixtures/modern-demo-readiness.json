@@ -1,0 +1,2827 @@
+{
+  "schemaVersion": 1,
+  "source": "src/animation/CurvatureDemos.js",
+  "policy": "read-only source audit; no Legacy execution, automatic conversion, physical/pixel parity, native animation certification or Legacy retirement",
+  "summary": {
+    "demos": 9,
+    "geographicScenarios": 8,
+    "states": 80,
+    "transitions": 71,
+    "partialNativeScenarios": 8,
+    "nativePresetReferences": 10,
+    "distinctSourceStatesWithPresetReferences": 9,
+    "schemaBlockedStates": 28,
+    "certifiedNativeStates": 0,
+    "certifiedNativeTransitions": 0
+  },
+  "demos": [
+    {
+      "scenarioId": "earth-curvature-lesson",
+      "demo": "Curve",
+      "category": "educational",
+      "locationId": null,
+      "sourceStates": 12,
+      "sourceTransitions": 11,
+      "nativeStatus": "not-ported",
+      "nativeAnchors": [],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Curve&pos=1",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Curve&pos=2",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Curve&pos=3",
+          "activeObjectTypes": [],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Curve&pos=4",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Curve&pos=5",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Curve&pos=6",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Curve&pos=7",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Curve&pos=8",
+          "activeObjectTypes": [],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Curve&pos=9",
+          "activeObjectTypes": [],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 9,
+          "legacyQuery": "?demo=Curve&pos=10",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 10,
+          "legacyQuery": "?demo=Curve&pos=11",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 11,
+          "legacyQuery": "?demo=Curve&pos=12",
+          "activeObjectTypes": [],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Curve&pos=1",
+          "legacyTo": "?demo=Curve&pos=2",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Curve&pos=2",
+          "legacyTo": "?demo=Curve&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "showEyeLevel",
+            "showModel"
+          ],
+          "sourceControlTargets": [
+            "showEyeLevel",
+            "showModel"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Curve&pos=3",
+          "legacyTo": "?demo=Curve&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "showModel",
+            "showTangent"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "showModel",
+            "showTangent"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Curve&pos=4",
+          "legacyTo": "?demo=Curve&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Curve&pos=5",
+          "legacyTo": "?demo=Curve&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 5,
+          "toIndex": 6,
+          "legacyFrom": "?demo=Curve&pos=6",
+          "legacyTo": "?demo=Curve&pos=7",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 6,
+          "toIndex": 7,
+          "legacyFrom": "?demo=Curve&pos=7",
+          "legacyTo": "?demo=Curve&pos=8",
+          "changedSnapshotFields": [
+            "Description",
+            "showModel"
+          ],
+          "sourceControlTargets": [
+            "showModel"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 7,
+          "toIndex": 8,
+          "legacyFrom": "?demo=Curve&pos=8",
+          "legacyTo": "?demo=Curve&pos=9",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "Nick"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "Nick"
+          ],
+          "helpers": [
+            "caption",
+            "pause",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 8,
+          "toIndex": 9,
+          "legacyFrom": "?demo=Curve&pos=9",
+          "legacyTo": "?demo=Curve&pos=10",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Nick",
+            "showEyeLevel",
+            "showModel"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Nick",
+            "showEyeLevel",
+            "showModel"
+          ],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 9,
+          "toIndex": 10,
+          "legacyFrom": "?demo=Curve&pos=10",
+          "legacyTo": "?demo=Curve&pos=11",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "showTangent"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "showTangent"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 10,
+          "toIndex": 11,
+          "legacyFrom": "?demo=Curve&pos=11",
+          "legacyTo": "?demo=Curve&pos=12",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "pontchartrain-causeway",
+      "demo": "Causeway",
+      "category": "geographic",
+      "locationId": "lake-pontchartrain",
+      "sourceStates": 6,
+      "sourceTransitions": 5,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "causeway",
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Causeway&pos=5",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Causeway&pos=1",
+          "activeObjectTypes": [
+            6
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Causeway&pos=2",
+          "activeObjectTypes": [
+            6
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Causeway&pos=3",
+          "activeObjectTypes": [
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Causeway&pos=4",
+          "activeObjectTypes": [
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Causeway&pos=5",
+          "activeObjectTypes": [
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [
+            "causeway"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Causeway&pos=6",
+          "activeObjectTypes": [
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Causeway&pos=1",
+          "legacyTo": "?demo=Causeway&pos=2",
+          "changedSnapshotFields": [
+            "Description"
+          ],
+          "sourceControlTargets": [],
+          "helpers": [
+            "caption",
+            "camera-pan-sweep"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Causeway&pos=2",
+          "legacyTo": "?demo=Causeway&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "showEyeLevel",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "sourceControlTargets": [
+            "Description",
+            "showEyeLevel",
+            "showGrid",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Causeway&pos=3",
+          "legacyTo": "?demo=Causeway&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Causeway&pos=4",
+          "legacyTo": "?demo=Causeway&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Causeway&pos=5",
+          "legacyTo": "?demo=Causeway&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "ObjSidePos"
+          ],
+          "sourceControlTargets": [
+            "Description",
+            "Height",
+            "ObjSidePos[0]"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "pontchartrain-transmission-line",
+      "demo": "TransLine",
+      "category": "geographic",
+      "locationId": "lake-pontchartrain",
+      "sourceStates": 8,
+      "sourceTransitions": 7,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "pontchartrain",
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=TransLine&pos=5",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [
+            "Pan",
+            "Nick"
+          ],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=TransLine&pos=1",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-refraction-coefficient-unspecified",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=TransLine&pos=2",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-refraction-coefficient-unspecified",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=TransLine&pos=3",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-refraction-coefficient-unspecified",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=TransLine&pos=4",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-refraction-coefficient-unspecified",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=TransLine&pos=5",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-refraction-coefficient-unspecified",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [
+            "pontchartrain"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=TransLine&pos=6",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat",
+            "legacy-refraction-coefficient-unspecified",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=TransLine&pos=7",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=TransLine&pos=8",
+          "activeObjectTypes": [
+            3
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=TransLine&pos=1",
+          "legacyTo": "?demo=TransLine&pos=2",
+          "changedSnapshotFields": [
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "ObjSidePos[0]",
+            "ObjSidePos[1]",
+            "Pan"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=TransLine&pos=2",
+          "legacyTo": "?demo=TransLine&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=TransLine&pos=3",
+          "legacyTo": "?demo=TransLine&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "ObjSidePos[0]",
+            "ObjSidePos[1]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=TransLine&pos=4",
+          "legacyTo": "?demo=TransLine&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "showGrid"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "showGrid"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=TransLine&pos=5",
+          "legacyTo": "?demo=TransLine&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "showModel"
+          ],
+          "sourceControlTargets": [
+            "showModel"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 5,
+          "toIndex": 6,
+          "legacyFrom": "?demo=TransLine&pos=6",
+          "legacyTo": "?demo=TransLine&pos=7",
+          "changedSnapshotFields": [
+            "Description",
+            "pressure",
+            "refractionCoeff",
+            "refractionSync",
+            "showModel",
+            "tempGradient",
+            "temperatureC"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff",
+            "showModel"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 6,
+          "toIndex": 7,
+          "legacyFrom": "?demo=TransLine&pos=7",
+          "legacyTo": "?demo=TransLine&pos=8",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Nick",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Nick",
+            "ObjSidePos[0]",
+            "ObjSidePos[1]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "anacapa-grace-platform",
+      "demo": "Grace",
+      "category": "geographic",
+      "locationId": "anacapa-grace",
+      "sourceStates": 9,
+      "sourceTransitions": 8,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "grace",
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Grace&pos=8",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [
+            "Nick"
+          ],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Grace&pos=1",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "zero-object-spacing",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Grace&pos=2",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "zero-object-spacing",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Grace&pos=3",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "zero-object-spacing",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Grace&pos=4",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "zero-object-spacing",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Grace&pos=5",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "zero-object-spacing",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Grace&pos=6",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Grace&pos=7",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Grace&pos=8",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [
+            "grace"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Grace&pos=9",
+          "activeObjectTypes": [
+            5,
+            6
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat",
+            "legacy-nonzero-refraction-coefficient",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Grace&pos=1",
+          "legacyTo": "?demo=Grace&pos=2",
+          "changedSnapshotFields": [
+            "Description"
+          ],
+          "sourceControlTargets": [],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Grace&pos=2",
+          "legacyTo": "?demo=Grace&pos=3",
+          "changedSnapshotFields": [
+            "Description"
+          ],
+          "sourceControlTargets": [],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Grace&pos=3",
+          "legacyTo": "?demo=Grace&pos=4",
+          "changedSnapshotFields": [
+            "Description"
+          ],
+          "sourceControlTargets": [],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Grace&pos=4",
+          "legacyTo": "?demo=Grace&pos=5",
+          "changedSnapshotFields": [
+            "Description"
+          ],
+          "sourceControlTargets": [],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Grace&pos=5",
+          "legacyTo": "?demo=Grace&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "NObjects",
+            "ObjDeltaDist",
+            "ObjDist",
+            "ObjSidePos",
+            "ObjSideVar",
+            "ObjSizeType",
+            "ObjSizeVar"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "NObjects[1]",
+            "ObjDeltaDist[1]",
+            "ObjDist[0]",
+            "ObjDist[1]",
+            "ObjSidePos[0]",
+            "ObjSidePos[1]",
+            "ObjSideVar[1]",
+            "ObjSizeType[1]",
+            "ObjSizeVar[1]"
+          ],
+          "helpers": [
+            "caption",
+            "pause",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 5,
+          "toIndex": 6,
+          "legacyFrom": "?demo=Grace&pos=6",
+          "legacyTo": "?demo=Grace&pos=7",
+          "changedSnapshotFields": [
+            "Description",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "sourceControlTargets": [
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 6,
+          "toIndex": 7,
+          "legacyFrom": "?demo=Grace&pos=7",
+          "legacyTo": "?demo=Grace&pos=8",
+          "changedSnapshotFields": [
+            "refractionCoeff"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 7,
+          "toIndex": 8,
+          "legacyFrom": "?demo=Grace&pos=8",
+          "legacyTo": "?demo=Grace&pos=9",
+          "changedSnapshotFields": [
+            "Description",
+            "refractionCoeff",
+            "refractionSync",
+            "showEyeLevel",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff",
+            "refractionSync",
+            "showEyeLevel",
+            "showModel",
+            "viewcenterHorizon"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "bedford-level-experiment",
+      "demo": "Bedford",
+      "category": "geographic",
+      "locationId": "bedford-level",
+      "sourceStates": 7,
+      "sourceTransitions": 6,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "bedford",
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Bedford&pos=4",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Bedford&pos=1",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat",
+            "signed-object-range"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Bedford&pos=2",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Bedford&pos=3",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Bedford&pos=4",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [
+            "bedford"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Bedford&pos=5",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Bedford&pos=6",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Bedford&pos=7",
+          "activeObjectTypes": [
+            0
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Bedford&pos=1",
+          "legacyTo": "?demo=Bedford&pos=2",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "ObjDist",
+            "ObjSidePos"
+          ],
+          "sourceControlTargets": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "ObjDist[0]",
+            "ObjSidePos[0]"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Bedford&pos=2",
+          "legacyTo": "?demo=Bedford&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Bedford&pos=3",
+          "legacyTo": "?demo=Bedford&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "showEyeLevel"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "showEyeLevel"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Bedford&pos=4",
+          "legacyTo": "?demo=Bedford&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "refractionCoeff"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Bedford&pos=5",
+          "legacyTo": "?demo=Bedford&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "refractionCoeff",
+            "showGrid"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff",
+            "showGrid"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 5,
+          "toIndex": 6,
+          "legacyFrom": "?demo=Bedford&pos=6",
+          "legacyTo": "?demo=Bedford&pos=7",
+          "changedSnapshotFields": [
+            "Description",
+            "NObjects",
+            "ObjDeltaDist",
+            "ObjSidePos",
+            "ObjSideVar"
+          ],
+          "sourceControlTargets": [
+            "NObjects[0]",
+            "ObjDeltaDist[0]",
+            "ObjSidePos[0]",
+            "ObjSideVar[0]"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "tensas-bayou-bridge",
+      "demo": "Tensas",
+      "category": "geographic",
+      "locationId": "little-tensas-bayou",
+      "sourceStates": 6,
+      "sourceTransitions": 5,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "tensas",
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Tensas&pos=4",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Tensas&pos=1",
+          "activeObjectTypes": [
+            7
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Tensas&pos=2",
+          "activeObjectTypes": [
+            7
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Tensas&pos=3",
+          "activeObjectTypes": [
+            7
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Tensas&pos=4",
+          "activeObjectTypes": [
+            7
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [
+            "tensas"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Tensas&pos=5",
+          "activeObjectTypes": [
+            7
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Tensas&pos=6",
+          "activeObjectTypes": [
+            7
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient",
+            "legacy-refraction-sync-mode"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Tensas&pos=1",
+          "legacyTo": "?demo=Tensas&pos=2",
+          "changedSnapshotFields": [
+            "FocalLengthField",
+            "Height",
+            "Nick"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Nick"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Tensas&pos=2",
+          "legacyTo": "?demo=Tensas&pos=3",
+          "changedSnapshotFields": [
+            "FocalLengthField",
+            "Height",
+            "Nick"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Nick"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Tensas&pos=3",
+          "legacyTo": "?demo=Tensas&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "ObjSidePos"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "ObjSidePos[0]"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Tensas&pos=4",
+          "legacyTo": "?demo=Tensas&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "refractionCoeff",
+            "refractionSync"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff",
+            "refractionSync"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Tensas&pos=5",
+          "legacyTo": "?demo=Tensas&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "pontchartrain-soundly",
+      "demo": "Soundly",
+      "category": "geographic",
+      "locationId": "lake-pontchartrain",
+      "sourceStates": 18,
+      "sourceTransitions": 17,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "soundly",
+          "sourceIndex": 12,
+          "legacyQuery": "?demo=Soundly&pos=13",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Soundly&pos=1",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Soundly&pos=2",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Soundly&pos=3",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Soundly&pos=4",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Soundly&pos=5",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Soundly&pos=6",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Soundly&pos=7",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Soundly&pos=8",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 8,
+          "legacyQuery": "?demo=Soundly&pos=9",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 9,
+          "legacyQuery": "?demo=Soundly&pos=10",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 10,
+          "legacyQuery": "?demo=Soundly&pos=11",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 11,
+          "legacyQuery": "?demo=Soundly&pos=12",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 12,
+          "legacyQuery": "?demo=Soundly&pos=13",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [
+            "soundly"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 13,
+          "legacyQuery": "?demo=Soundly&pos=14",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 14,
+          "legacyQuery": "?demo=Soundly&pos=15",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 15,
+          "legacyQuery": "?demo=Soundly&pos=16",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 16,
+          "legacyQuery": "?demo=Soundly&pos=17",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 17,
+          "legacyQuery": "?demo=Soundly&pos=18",
+          "activeObjectTypes": [
+            8
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Soundly&pos=1",
+          "legacyTo": "?demo=Soundly&pos=2",
+          "changedSnapshotFields": [
+            "FocalLengthField",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Pan"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Soundly&pos=2",
+          "legacyTo": "?demo=Soundly&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Soundly&pos=3",
+          "legacyTo": "?demo=Soundly&pos=4",
+          "changedSnapshotFields": [
+            "ObjDist",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "Nick",
+            "ObjDist[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Soundly&pos=4",
+          "legacyTo": "?demo=Soundly&pos=5",
+          "changedSnapshotFields": [
+            "Height",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "Nick",
+            "ObjDist[0]",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Soundly&pos=5",
+          "legacyTo": "?demo=Soundly&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 5,
+          "toIndex": 6,
+          "legacyFrom": "?demo=Soundly&pos=6",
+          "legacyTo": "?demo=Soundly&pos=7",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 6,
+          "toIndex": 7,
+          "legacyFrom": "?demo=Soundly&pos=7",
+          "legacyTo": "?demo=Soundly&pos=8",
+          "changedSnapshotFields": [
+            "Height",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 7,
+          "toIndex": 8,
+          "legacyFrom": "?demo=Soundly&pos=8",
+          "legacyTo": "?demo=Soundly&pos=9",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 8,
+          "toIndex": 9,
+          "legacyFrom": "?demo=Soundly&pos=9",
+          "legacyTo": "?demo=Soundly&pos=10",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 9,
+          "toIndex": 10,
+          "legacyFrom": "?demo=Soundly&pos=10",
+          "legacyTo": "?demo=Soundly&pos=11",
+          "changedSnapshotFields": [
+            "FocalLengthField",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 10,
+          "toIndex": 11,
+          "legacyFrom": "?demo=Soundly&pos=11",
+          "legacyTo": "?demo=Soundly&pos=12",
+          "changedSnapshotFields": [
+            "Height",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "Nick",
+            "ObjDist[0]",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 11,
+          "toIndex": 12,
+          "legacyFrom": "?demo=Soundly&pos=12",
+          "legacyTo": "?demo=Soundly&pos=13",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 12,
+          "toIndex": 13,
+          "legacyFrom": "?demo=Soundly&pos=13",
+          "legacyTo": "?demo=Soundly&pos=14",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjDist[0]",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "pause",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 13,
+          "toIndex": 14,
+          "legacyFrom": "?demo=Soundly&pos=14",
+          "legacyTo": "?demo=Soundly&pos=15",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 14,
+          "toIndex": 15,
+          "legacyFrom": "?demo=Soundly&pos=15",
+          "legacyTo": "?demo=Soundly&pos=16",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 15,
+          "toIndex": 16,
+          "legacyFrom": "?demo=Soundly&pos=16",
+          "legacyTo": "?demo=Soundly&pos=17",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 16,
+          "toIndex": 17,
+          "legacyFrom": "?demo=Soundly&pos=17",
+          "legacyTo": "?demo=Soundly&pos=18",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjDist",
+            "ObjSidePos",
+            "Pan"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "Height",
+            "Nick",
+            "ObjDist[0]",
+            "ObjSidePos[0]",
+            "Pan"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "chicago-skyline",
+      "demo": "Chicago",
+      "category": "geographic",
+      "locationId": "chicago-lake-michigan",
+      "sourceStates": 6,
+      "sourceTransitions": 5,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "chicago",
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Chicago&pos=1",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [
+            "FocalLengthField",
+            "Pan",
+            "Nick",
+            "CameraEast (Modern translation)",
+            "CameraNorth (Modern translation)"
+          ],
+          "modernAtmosphere": "standard",
+          "opticsAndViewParity": "not-certified"
+        },
+        {
+          "presetId": "chicago-near",
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Chicago&pos=1",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Chicago&pos=1",
+          "activeObjectTypes": [
+            4
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [
+            "chicago",
+            "chicago-near"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Chicago&pos=2",
+          "activeObjectTypes": [
+            4
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Chicago&pos=3",
+          "activeObjectTypes": [
+            4
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Chicago&pos=4",
+          "activeObjectTypes": [
+            4
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Chicago&pos=5",
+          "activeObjectTypes": [
+            4
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Chicago&pos=6",
+          "activeObjectTypes": [
+            4
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Chicago&pos=1",
+          "legacyTo": "?demo=Chicago&pos=2",
+          "changedSnapshotFields": [
+            "Description",
+            "ObjDist",
+            "showEyeLevel"
+          ],
+          "sourceControlTargets": [
+            "ObjDist[0]",
+            "showEyeLevel"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Chicago&pos=2",
+          "legacyTo": "?demo=Chicago&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "showEyeLevel"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "showEyeLevel"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Chicago&pos=3",
+          "legacyTo": "?demo=Chicago&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Chicago&pos=4",
+          "legacyTo": "?demo=Chicago&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "refractionCoeff"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "refractionCoeff"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Chicago&pos=5",
+          "legacyTo": "?demo=Chicago&pos=6",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "refractionCoeff"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "refractionCoeff"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    },
+    {
+      "scenarioId": "canigou-mountain",
+      "demo": "Canigou",
+      "category": "geographic",
+      "locationId": "canigou",
+      "sourceStates": 8,
+      "sourceTransitions": 7,
+      "nativeStatus": "partial",
+      "nativeAnchors": [
+        {
+          "presetId": "canigou",
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Canigou&pos=3",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [
+            "Nick"
+          ],
+          "modernAtmosphere": "vacuum",
+          "opticsAndViewParity": "not-certified"
+        },
+        {
+          "presetId": "canigou-low",
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Canigou&pos=5",
+          "sourceObjectFieldsMatch": true,
+          "adaptedCameraFields": [
+            "Nick"
+          ],
+          "modernAtmosphere": "standard",
+          "opticsAndViewParity": "not-certified"
+        }
+      ],
+      "states": [
+        {
+          "sourceIndex": 0,
+          "legacyQuery": "?demo=Canigou&pos=1",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 1,
+          "legacyQuery": "?demo=Canigou&pos=2",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 2,
+          "legacyQuery": "?demo=Canigou&pos=3",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [
+            "canigou"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 3,
+          "legacyQuery": "?demo=Canigou&pos=4",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 4,
+          "legacyQuery": "?demo=Canigou&pos=5",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [
+            "canigou-low"
+          ],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 5,
+          "legacyQuery": "?demo=Canigou&pos=6",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 6,
+          "legacyQuery": "?demo=Canigou&pos=7",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "review-only",
+          "schemaBlockerCodes": [],
+          "migrationFlags": [
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        },
+        {
+          "sourceIndex": 7,
+          "legacyQuery": "?demo=Canigou&pos=8",
+          "activeObjectTypes": [
+            5
+          ],
+          "structuralStatus": "blocked",
+          "schemaBlockerCodes": [
+            "modern-schema-rejected"
+          ],
+          "migrationFlags": [
+            "legacy-combined-globe-flat",
+            "legacy-nonzero-refraction-coefficient"
+          ],
+          "nativePresetReferences": [],
+          "nativeVisualAndOpticalParity": "not-certified"
+        }
+      ],
+      "transitions": [
+        {
+          "fromIndex": 0,
+          "toIndex": 1,
+          "legacyFrom": "?demo=Canigou&pos=1",
+          "legacyTo": "?demo=Canigou&pos=2",
+          "changedSnapshotFields": [
+            "Description",
+            "Height",
+            "Nick",
+            "ObjDist",
+            "showData"
+          ],
+          "sourceControlTargets": [
+            "Height",
+            "Nick",
+            "ObjDist[0]",
+            "showData"
+          ],
+          "helpers": [
+            "caption",
+            "pause",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 1,
+          "toIndex": 2,
+          "legacyFrom": "?demo=Canigou&pos=2",
+          "legacyTo": "?demo=Canigou&pos=3",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "showData"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "showData"
+          ],
+          "helpers": [
+            "caption"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 2,
+          "toIndex": 3,
+          "legacyFrom": "?demo=Canigou&pos=3",
+          "legacyTo": "?demo=Canigou&pos=4",
+          "changedSnapshotFields": [
+            "Description",
+            "Height"
+          ],
+          "sourceControlTargets": [
+            "Height"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 3,
+          "toIndex": 4,
+          "legacyFrom": "?demo=Canigou&pos=4",
+          "legacyTo": "?demo=Canigou&pos=5",
+          "changedSnapshotFields": [
+            "Description",
+            "refractionCoeff",
+            "showData",
+            "showEyeLevel"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff",
+            "showData",
+            "showEyeLevel"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 4,
+          "toIndex": 5,
+          "legacyFrom": "?demo=Canigou&pos=5",
+          "legacyTo": "?demo=Canigou&pos=6",
+          "changedSnapshotFields": [
+            "Description"
+          ],
+          "sourceControlTargets": [],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 5,
+          "toIndex": 6,
+          "legacyFrom": "?demo=Canigou&pos=6",
+          "legacyTo": "?demo=Canigou&pos=7",
+          "changedSnapshotFields": [
+            "Description",
+            "refractionCoeff",
+            "tempGradient"
+          ],
+          "sourceControlTargets": [
+            "refractionCoeff"
+          ],
+          "helpers": [
+            "caption",
+            "pause"
+          ],
+          "modernStudioParity": "not-certified"
+        },
+        {
+          "fromIndex": 6,
+          "toIndex": 7,
+          "legacyFrom": "?demo=Canigou&pos=7",
+          "legacyTo": "?demo=Canigou&pos=8",
+          "changedSnapshotFields": [
+            "Description",
+            "FocalLengthField",
+            "ObjSidePos",
+            "showModel"
+          ],
+          "sourceControlTargets": [
+            "FocalLengthField",
+            "ObjSidePos[0]",
+            "showModel"
+          ],
+          "helpers": [
+            "caption",
+            "parallel-actions"
+          ],
+          "modernStudioParity": "not-certified"
+        }
+      ]
+    }
+  ]
+}

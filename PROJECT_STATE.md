@@ -1,3 +1,16 @@
+> **Legacy storyboard readiness inventory (#46, 2026-11-17):**
+> Source-only, repeatable `tools/audit-modern-demo-readiness.js --check`
+> now enumerates nine demos, 80 authored states, 71 adjacent transitions,
+> 10 Modern preset references to nine distinct Legacy states and the 28
+> structurally schema-blocked states. All eight geographic demos remain
+> *partial*; zero original states and transitions have complete native
+> visual/optical/choreography parity certification. The fixture
+> `tests/fixtures/modern-demo-readiness.json` and
+> `tests/ModernDemoReadiness.test.js` pin source indices, source/control-helper
+> evidence and the no-conversion policy. See `docs/modern-location-migration.md`
+> for bounded Animation Studio storyboard prototype and scene-reference gates.
+> No renderer, experiment codec, Legacy runtime or Demos routing changed.
+>
 > **Soundly Causeway partial native Scene (#45, 2026-11-17):**
 > Ported a source-backed `soundly` preset from Legacy Soundly state index 12
 > (`?demo=Soundly&pos=13`): 128 supports at 300 m intervals, 496 m start,
