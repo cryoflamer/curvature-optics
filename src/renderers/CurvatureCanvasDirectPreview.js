@@ -20,6 +20,53 @@
   function unit(v){var n=Math.hypot(v[0],v[1],v[2]);if(!(n>0))throw RangeError('Degenerate camera');return v.map(function(x){return x/n;});}
   function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
   function subtract(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+  // GraphX3DX clipped its 2D paths to the viewport before asking Canvas to
+  // paint them. The direct painter must do the same: a horizon disk straddling
+  // the camera's near plane can otherwise project vertices to ~10^12 pixels.
+  // Browsers need not rasterize such enormous paths consistently.
+  function clipScreenPolygon(points,width,height){
+    var xmin=-2,ymin=-2,xmax=width+2,ymax=height+2;
+    var outside=false;
+    for(var i=0;i<points.length;i++){
+      var p=points[i];
+      if(p[0]<xmin||p[0]>xmax||p[1]<ymin||p[1]>ymax){outside=true;break;}
+    }
+    if(!outside)return points;
+    var poly=points;
+    function boundary(axis,limit,keepGreater){
+      if(!poly.length)return;
+      var next=[],prev=poly[poly.length-1];
+      var prevIn=keepGreater?prev[axis]>=limit:prev[axis]<=limit;
+      for(var j=0;j<poly.length;j++){
+        var cur=poly[j],curIn=keepGreater?cur[axis]>=limit:cur[axis]<=limit;
+        if(curIn!==prevIn){
+          var t=(limit-prev[axis])/(cur[axis]-prev[axis]);
+          next.push([prev[0]+t*(cur[0]-prev[0]),prev[1]+t*(cur[1]-prev[1])]);
+        }
+        if(curIn)next.push(cur);
+        prev=cur;prevIn=curIn;
+      }
+      poly=next;
+    }
+    boundary(0,xmin,true);boundary(0,xmax,false);
+    boundary(1,ymin,true);boundary(1,ymax,false);
+    return poly.length>=3?poly:null;
+  }
+  function clipScreenSegment(a,b,width,height){
+    var xmin=-2,ymin=-2,xmax=width+2,ymax=height+2;
+    if(a[0]>=xmin&&a[0]<=xmax&&b[0]>=xmin&&b[0]<=xmax&&
+       a[1]>=ymin&&a[1]<=ymax&&b[1]>=ymin&&b[1]<=ymax)return [a,b];
+    var dx=b[0]-a[0],dy=b[1]-a[1],t0=0,t1=1;
+    var p=[-dx,dx,-dy,dy],q=[a[0]-xmin,xmax-a[0],a[1]-ymin,ymax-a[1]];
+    for(var i=0;i<4;i++){
+      if(p[i]===0){if(q[i]<0)return null;continue;}
+      var t=q[i]/p[i];
+      if(p[i]<0)t0=Math.max(t0,t);
+      else t1=Math.min(t1,t);
+      if(t0>t1)return null;
+    }
+    return [[a[0]+t0*dx,a[1]+t0*dy],[a[0]+t1*dx,a[1]+t1*dy]];
+  }
   function cameraProjection(camera,width,height){
     var back=unit(subtract(camera.pos,camera.center)),right=unit(cross(unit(camera.up),back)),up=unit(cross(back,right));
     var distance=Math.hypot.apply(null,subtract(camera.center,camera.pos));
@@ -127,7 +174,8 @@
           if(first.x===last.x&&first.y===last.y&&first.z===last.z)pts.pop();
         }
         var fillPoints=(drawFills||role==='occlusion')&&polygon&&(mode&2)?nearPolygon(pts):null;
-        var fillPixels=fillPoints&&fillPoints.length>=3?fillPoints.map(screen):null;
+        var fillPixels=fillPoints&&fillPoints.length>=3?
+          clipScreenPolygon(fillPoints.map(screen),canvas.width,canvas.height):null;
         // Object outlines retain their original edges; near-plane closing
         // edges created for a filled polygon are never invented as strokes.
         var lines=[];
@@ -140,8 +188,11 @@
             var ap=screen(a),bp=screen(b);
             // A clipped segment can collapse to the same canvas pixel;
             // avoid a degenerate path (and isolated cap-shaped speckles).
-            if(Math.abs(ap[0]-bp[0])+Math.abs(ap[1]-bp[1])>1e-5)
-              lines.push([ap,bp]);
+            if(Math.abs(ap[0]-bp[0])+Math.abs(ap[1]-bp[1])>1e-5){
+              var clipped=clipScreenSegment(ap,bp,canvas.width,canvas.height);
+              if(clipped&&Math.abs(clipped[0][0]-clipped[1][0])+
+                 Math.abs(clipped[0][1]-clipped[1][1])>1e-5)lines.push(clipped);
+            }
           }
         }
         projectionMs+=clock()-start;

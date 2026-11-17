@@ -20,12 +20,16 @@ function model(){
   vm.runInContext(fs.readFileSync('src/app/CurvatureModel.js','utf8'),ctx);
   return vm.runInContext('new CurveAppClass()',ctx);
 }
-function graph(){
-  let filled=0,stroked=0,paths=0;
-  const fillColors=[];
+function graph(trackPaths=false){
+  let filled=0,stroked=0,paths=0,activePath=[];
+  const fillColors=[],paintedPaths=[];
   const ctx={save(){},restore(){},setTransform(){},fillRect(){},clearRect(){},
-    beginPath(){paths++;},moveTo(){},lineTo(){},closePath(){},
-    fill(){filled++;fillColors.push(this.fillStyle);},stroke(){stroked++;}};
+    beginPath(){paths++;if(trackPaths)activePath=[];},
+    moveTo(x,y){if(trackPaths)activePath.push([x,y]);},
+    lineTo(x,y){if(trackPaths)activePath.push([x,y]);},closePath(){},
+    fill(){filled++;fillColors.push(this.fillStyle);
+      if(trackPaths)paintedPaths.push({color:this.fillStyle,points:activePath.slice()});},
+    stroke(){stroked++;}};
   const g={Canvas:{width:800,height:500,getContext(){return ctx;}},Camera:{},
     ContextScale:1,WinTrans:{ScaleX:500,ScaleY:-500,OffsetX:400,OffsetY:250},
     AutoScalePix:false,MinLineWidth:1,ScalePixInt:false,DevicePixelRatio:1,
@@ -34,7 +38,7 @@ function graph(){
     SetCamera(p){this.Camera={CamPos:p.CamPos,CamUp:p.CamUp,CamViewCenter:p.CamViewCenter,
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
-  return {g,stats:()=>({filled,stroked,paths,fillColors})};
+  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths})};
 }
 function soundly(){const m=model();state.applyPreset(m,'soundly');m.Height=8.55;
   m.FocalLengthField=2038;m.Pan=.49;m.Nick=-.006;
@@ -128,7 +132,10 @@ test('all-near supports do not trigger a false white horizon mask',()=>{
   m.CameraEast=0;m.CameraNorth=0;m.Update();
   const r=draw(m);
   assert.equal(r.directStats.horizonMasks,0);
-  assert.ok(r.directStats.strokeCalls>0);
+  assert.equal(r.previewLod.original,1);
+  // The camera looks almost horizontally from 200 m at an object only 1 km
+  // away: its geometry is outside the viewport and must not be painted.
+  assert.equal(r.directStats.strokeCalls,0);
 });
 test('non-vacuum Globe and Flat Vacuum work; refracted Flat and unsupported profiles reject',()=>{
   const m=soundly();
@@ -188,4 +195,33 @@ test('Canvas Direct diagnostics independently toggle fills, outlines and horizon
   assert.equal(noMask.directStats.horizonMasks,0);
   assert.equal(noMask.directStats.fillCalls,base.directStats.fillCalls-1);
   assert.equal(noMask.previewLod.original,128);
+});
+
+test('Soundly moving-camera horizon mask is clipped to the Canvas viewport',()=>{
+  const m=soundly();m.Height=9.41;m.CameraEast=-22.2;m.CameraNorth=247;
+  m.Pan=.47;m.Nick=-.015;m.FocalLengthField=2098;m.Update();
+  const g=graph(true),opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',
+    deferDecorations:true,canvasDirectDiagnostics:{strokes:false}};
+  const r=renderer.renderPhysical(g.g,m,opts);
+  assert.equal(r.directStats.horizonMasks,1);
+  const paths=g.stats().paintedPaths;
+  const masks=paths.filter(p=>p.color==='white');
+  assert.equal(masks.length,1,'horizon disk is the only opaque white path');
+  const w=g.g.Canvas.width,h=g.g.Canvas.height,margin=2.001;
+  for(const path of paths){
+    for(const [x,y] of path.points){
+      assert.ok(Number.isFinite(x)&&Number.isFinite(y),'finite Canvas coordinates');
+      assert.ok(x>=-margin&&x<=w+margin&&y>=-margin&&y<=h+margin,
+        'no path may submit off-viewport or enormous coordinates to Canvas');
+    }
+  }
+  const disk=masks[0].points;
+  assert.ok(disk.length>=4,'clipped disk retains an opaque horizon region');
+  assert.ok(Math.max(...disk.map(p=>p[0]))-Math.min(...disk.map(p=>p[0]))>w-6,
+    'the disk still masks the full width below the horizon');
+  const unmasked=graph(true);
+  const off=renderer.renderPhysical(unmasked.g,m,{...opts,
+    canvasDirectDiagnostics:{strokes:false,horizonMask:false}});
+  assert.equal(off.directStats.horizonMasks,0);
+  assert.equal(unmasked.stats().paintedPaths.filter(p=>p.color==='white').length,0);
 });
