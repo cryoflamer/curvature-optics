@@ -37,6 +37,7 @@ function harness(){
     studioDraft:{interpolation:'spline'},studioPlaybackDetail:'full',
     studioPlaybackQuality:'canvas-direct',studioPlaybackLastPaint:42,
     studioPlaybackFps:'auto',studioPlaybackFpsMeter:controlsApi.createPreviewFpsMeter(),
+    studioPlaybackProfileEnabled:false,studioPlaybackProfiler:null,
     studioPlaybackRenderedAt:28100,profileNow:()=>1000,
     studioPlaybackControlsApi:{describe:()=>({seek:'475',time:'28.1 / 59.1 s',playing:false})},
     ensureStudioPlaybackControls:()=>controls,
@@ -126,4 +127,22 @@ test('Preview FPS changes once after thousands of syncs and never restart the an
   assert.equal(fps.value,'auto','unknown values are rejected');
   assert.equal(h.stats.preferences,2);
   assert.equal(fps.count('change'),1);
+});
+
+test('profiling checkbox is bound once and does not mutate rendering preferences',()=>{
+  const h=harness(),box=h.node('ModernAnimationPlaybackProfileEnabled');
+  let enabled=false,resets=0;
+  h.context.studioPlaybackProfiler={setEnabled(value){enabled=value;resets++;}};
+  for(let i=0;i<2500;i++)h.context.sync();
+  assert.equal(box.count('change'),1);
+  assert.equal(h.context.studioPlaybackProfileEnabled,false);
+  box.checked=true;box.emit('change');
+  assert.equal(enabled,true);
+  assert.equal(h.context.studioPlaybackProfileEnabled,true);
+  assert.match(h.node('ModernAnimationPlaybackProfileReport').textContent,/Measuring/);
+  assert.equal(h.stats.render,0);assert.equal(h.stats.save,0);
+  assert.equal(h.stats.preferences,0,'diagnostics are not project or browser preferences');
+  box.checked=false;box.emit('change');
+  assert.equal(enabled,false);assert.equal(resets,2);
+  assert.equal(h.stats.stop,0);
 });

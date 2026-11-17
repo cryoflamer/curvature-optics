@@ -32,6 +32,7 @@
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPlaybackControlsApi=root.CurvatureModernAnimationPlaybackControls;
+  var studioPlaybackProfilerApi=root.CurvatureModernAnimationPlaybackProfiler;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
   var studioPreviewLifecycleApi=root.CurvatureModernAnimationPreviewLifecycle;
   var fastCapabilities=root.CurvatureOpticalFastRayField;
@@ -565,6 +566,8 @@
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
   var studioPlaybackFps='auto'; // Browser-local preview pacing, not export FPS.
   var studioPlaybackFpsMeter=studioPlaybackControlsApi.createPreviewFpsMeter();
+  var studioPlaybackProfileEnabled=false;
+  var studioPlaybackProfiler=studioPlaybackProfilerApi?studioPlaybackProfilerApi.create():null;
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
@@ -2087,6 +2090,12 @@
         cancelFrame:function(frame){cancelAnimationFrame(frame);},
         cancelInitial:cancelStudioInitialPaint,
         render:renderStudioPlaybackSample,
+        profiler:{enabled:function(){return studioPlaybackProfileEnabled&&!!studioPlaybackProfiler;},
+          record:function(sample){
+            var report=studioPlaybackProfiler.record(sample);
+            var node=report&&newUiEl('ModernAnimationPlaybackProfileReport');
+            if(node)node.textContent=report;
+          }},
         sync:syncStudioPlaybackControls,
         save:saveStudioDraft,
         scheduleInitial:scheduleStudioInitialPaint,
@@ -2261,6 +2270,7 @@
   function renderStudioPlaybackSample(force){
     if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen)return;
     var now=profileNow();
+    var profiling=studioPlaybackProfileEnabled&&!!studioPlaybackProfiler;
     if(!studioPlaybackControlsApi.previewFrameAllowed(
       studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force))return;
     if(!studioPreviewApi||!attachStudioPreviewGraphs())
@@ -2298,6 +2308,7 @@
     // in Accurate too: a Compare frame must not silently mix approximations.
     if(b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
       {quality:'accurate',sceneDetail:studioPlaybackDetail,animationMode:studioPrepared.mode});
+    var rendererEnd=profiling?profileNow():0;
     syncStudioCameraHud(a,b,graphs,isCompare);
     var spent=profileNow()-begun; // includes any Accurate redraw after a B fallback
     var fast=a.quality==='fast'&&(!b||b.quality==='fast');
@@ -2375,6 +2386,13 @@
     if(studioPlayback.status().playing)studioPlaybackFpsMeter.record(now);
     else studioPlaybackFpsMeter.reset();
     studioFrameLoading(false,'');
+    if(profiling){
+      function directTiming(view){
+        return view&&view.quality==='canvas-direct'&&view.result&&view.result.timings||null;
+      }
+      return {painted:true,prepareMs:begun-now,rendererMs:rendererEnd-begun,
+        postMs:profileNow()-rendererEnd,A:directTiming(a),B:directTiming(b)};
+    }
   }
   function syncStudioQualitySummary(){
     var node=newUiEl('ModernAnimationQualitySummary');
@@ -2917,6 +2935,15 @@
         playbackNotice('Camera interpolation: '+error.message,'error');
       }
     });
+    var profileToggle=newUiEl('ModernAnimationPlaybackProfileEnabled');
+    if(profileToggle)profileToggle.addEventListener('change',function(){
+      studioPlaybackProfileEnabled=!!profileToggle.checked;
+      if(studioPlaybackProfiler)studioPlaybackProfiler.setEnabled(studioPlaybackProfileEnabled);
+      var report=newUiEl('ModernAnimationPlaybackProfileReport');
+      if(report)report.textContent=studioPlaybackProfileEnabled?
+        'Measuring… Play the animation to collect painted frames.':
+        'Enable profiling, then Play the animation.';
+    });
     var fpsControl=newUiEl('ModernAnimationPlaybackFps');
     if(fpsControl){
       fpsControl.value=studioPlaybackFps;
@@ -2977,7 +3004,13 @@
     }}
     var controls=ensureStudioPlaybackControls();
     play.addEventListener('click',function(){safely(function(){
-      studioPlaybackFpsMeter.reset();controls.play();
+      studioPlaybackFpsMeter.reset();
+      if(studioPlaybackProfileEnabled&&studioPlaybackProfiler){
+        studioPlaybackProfiler.reset();
+        var profileOutput=newUiEl('ModernAnimationPlaybackProfileReport');
+        if(profileOutput)profileOutput.textContent='Measuring… collecting painted frames.';
+      }
+      controls.play();
     });});
     var pause=newUiEl('ModernAnimationPlaybackPause');
     if(pause)pause.addEventListener('click',function(){safely(function(){controls.pause();});});

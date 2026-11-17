@@ -824,6 +824,18 @@ not a project keyframe or Library property. PNG/video export has its **own**
 independent fixed FPS selection. Actual Opera frame rate and presentation
 smoothness still require a browser check.
 
+The **Playback profiler** disclosure (off by default) enables live measurements
+only while Play is running. Its recent p50/p95 numbers separate browser RAF
+and paint-to-paint gaps from measured main-thread callback time, sample and
+preview preparation, renderer, HUD/quality-audit/diagnostics, Playback UI sync,
+and scheduling/autosave. Canvas Direct also shows its existing geometry,
+projection/clipping and Canvas 2D call timings. Enable it, reproduce the slow
+Soundly segment, and compare **paint-to-paint gap** with **RAF callback CPU**;
+these are deliberately distinct measurements. Canvas 2D call time is not GPU
+rasterization/compositing time, and separate p95 values are not additive.
+The profiler never changes optics, frame cap or export; turning it off clears
+its rolling measurements. Browser measurements remain necessary for conclusions.
+
 ### Animation performance and pixel parity
 
 After #140.12.120.6 the Animation Studio has a collapsible **Performance & pixel parity**

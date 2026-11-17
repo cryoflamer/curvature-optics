@@ -88,9 +88,14 @@
       if(!player||!options.open())return;
       try{
         if(!player.status().playing)return;
+        var profiling=!!(options.profiler&&options.profiler.enabled());
+        var began=profiling?options.now():0;
         var next=player.tick(Number.isFinite(timestamp)?timestamp:options.now());
-        options.render(!next.playing);
+        var clockEnd=profiling?options.now():0;
+        var rendered=options.render(!next.playing);
+        var renderEnd=profiling?options.now():0;
         options.sync();
+        var syncEnd=profiling?options.now():0;
         // A render may replace the active player or stop playback. Never
         // schedule a frame for a clock that no longer owns this tick.
         if(player!==options.player()||
@@ -98,6 +103,9 @@
         if(next.playing)schedule();
         options.save(!!next.playing);
         if(!next.playing)options.announce('Animation finished · live Scene / Compare unchanged.','success');
+        if(profiling)options.profiler.record({atMs:began,clockMs:clockEnd-began,
+          syncMs:syncEnd-renderEnd,otherMs:options.now()-syncEnd,
+          loopMs:options.now()-began,preview:rendered});
       }catch(error){
         halt();options.sync();
         options.announce('Playback failed: '+error.message,'error');

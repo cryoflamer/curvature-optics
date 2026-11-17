@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 108,
-      "uniqueScripts": 106,
+      "scriptTags": 109,
+      "uniqueScripts": 107,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -203,6 +203,7 @@
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationPlaybackControls.js",
+        "src/animation/ModernAnimationPlaybackProfiler.js",
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationWorkspaceRecovery.js",
         "src/animation/ModernAnimationWorkspaceSwitch.js",
@@ -363,6 +364,7 @@
       "src/animation/ModernAnimationLibraryFilters.js",
       "src/animation/ModernAnimationPlayback.js",
       "src/animation/ModernAnimationPlaybackControls.js",
+      "src/animation/ModernAnimationPlaybackProfiler.js",
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationPreviewLifecycle.js",
       "src/animation/ModernAnimationProject.js",
@@ -447,7 +449,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 194,
+  "sourceJsCount": 195,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -711,6 +713,7 @@
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationPlaybackControls.test.js",
+        "tests/ModernAnimationPlaybackProfiler.test.js",
         "tests/ModernAnimationPreviewFps.test.js",
         "tests/ModernAnimationSplinePreview.test.js",
         "tests/ModernAtmosphericControls1383.test.js",
@@ -727,6 +730,16 @@
         "tests/ModernSharedCompareControls.test.js",
         "tests/ModernUiBootstrap.test.js",
         "tests/OpticalRayHorizon.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationPlaybackProfiler.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationPlaybackProfiler.test.js"
       ],
       "commonJsToolCallers": []
     },

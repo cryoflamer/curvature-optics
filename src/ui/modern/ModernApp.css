@@ -215,6 +215,12 @@ button{cursor:pointer}
 .modern-camera-hud-settings-body input[type=range]{width:100%;accent-color:#236ab4}
 .modern-camera-hud-settings-body small{font-size:11px;color:#60768f;line-height:1.4}
 .modern-camera-hud-settings:not([open]) .modern-camera-hud-settings-body{display:none}
+.modern-animation-profiler-body{width:min(525px,calc(100vw - 32px));max-height:70vh;overflow:auto}
+.modern-camera-hud-settings-body .modern-animation-profiler-report{float:none;display:block;
+  white-space:pre-wrap;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:#23415f;background:#f2f7fc;border:1px solid #d7e5f1;border-radius:5px;
+  padding:9px;font-variant-numeric:tabular-nums}
+
 @media(max-width:550px){.modern-camera-telemetry{font-size:10px;padding:5px 7px}}
 
 /* Independent off-screen target direction, anchored away from HUD corners.

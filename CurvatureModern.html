@@ -91,6 +91,7 @@
 <script src="src/animation/ModernAnimationStudio.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1"></script>
 <script src="src/animation/ModernAnimationPlayback.js"></script>
 <script src="src/animation/ModernAnimationPlaybackControls.js"></script>
+<script src="src/animation/ModernAnimationPlaybackProfiler.js"></script>
 <script src="src/animation/ModernAnimationDraftAutosave.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1&amp;stash-restore=1"></script>
 <script src="src/animation/ModernAnimationWorkspaceRecovery.js"></script>
 <script src="src/animation/ModernAnimationWorkspaceSwitch.js"></script>
@@ -273,6 +274,14 @@
             <label><input type="checkbox" id="ModernCanvasDirectStrokes" checked> Outlines</label>
             <label><input type="checkbox" id="ModernCanvasDirectMask" checked> Horizon mask</label>
             <small>Temporary display-only switches; compare the same paused Soundly frame. All on restores normal Canvas Direct.</small>
+          </div>
+        </details>
+        <details id="ModernAnimationPlaybackProfiler" class="modern-camera-hud-settings">
+          <summary>Playback profiler</summary>
+          <div class="modern-camera-hud-settings-body modern-animation-profiler-body">
+            <label><input type="checkbox" id="ModernAnimationPlaybackProfileEnabled"> Measure live Playback (opt-in)</label>
+            <output id="ModernAnimationPlaybackProfileReport" class="modern-animation-profiler-report" aria-live="off">Enable profiling, then Play the animation.</output>
+            <small>Recent main-thread p50 / p95 timings. Paint gaps include browser scheduling; Canvas 2D timings exclude deferred compositing. Profiling itself adds some overhead.</small>
           </div>
         </details>
         <label class="modern-camera-hud-toggle" for="ModernAnimationPlaybackCameraHud"><input type="checkbox" id="ModernAnimationPlaybackCameraHud" checked> Camera HUD</label>
