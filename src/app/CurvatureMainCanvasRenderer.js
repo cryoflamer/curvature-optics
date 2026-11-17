@@ -168,7 +168,8 @@
       // The physical texture must not contain screen-only captions or frames:
       // those belong above the animated atmospheric presentation layer.
       if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera,
-        {physicalGuides:opticalFrame.composition.scene.primitives});
+        {physicalGuides:opticalFrame.composition.scene.primitives,
+         showCaptions:options.showCaptions!==false});
     } finally {ctx.restore();}
     var finishedAt=now(),stats=opticalFrame.stats;
     // Keep the old non-overlapping stage meanings: frameMs includes screen LOD
@@ -214,14 +215,14 @@
         (stats.unresolved?' '+stats.unresolved+' uncertain outline leaves.':'')+
         (stats.fillUnresolved?' '+stats.fillUnresolved+' unresolved fill triangles omitted.':'')};
   }
-  function drawPresentationDecorations(canvas,model,camera,physicalGuides){
+  function drawPresentationDecorations(canvas,model,camera,physicalGuides,options){
     if(!decorations||!camera||!canvas)return;
     var ctx=canvas.getContext('2d');
     if(!ctx||typeof ctx.save!=='function'||typeof ctx.setTransform!=='function'||
        typeof ctx.restore!=='function')throw new TypeError('Canvas 2D context required');
     ctx.save();
     try{ctx.setTransform(1,0,0,1,0,0);decorations.draw(canvas,model,camera,
-      {physicalGuides:physicalGuides});}
+      {physicalGuides:physicalGuides,showCaptions:!(options&&options.showCaptions===false)});}
     finally{ctx.restore();}
   }
   function resetPhysicalSession(){opticalSession=optical.create();fastOpticalSession=optical.create();}

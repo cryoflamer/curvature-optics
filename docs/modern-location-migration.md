@@ -84,6 +84,14 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   the **Native Modern storyboard readiness** section below,
   `tools/audit-modern-demo-readiness.js` and
   `tests/ModernDemoReadiness.test.js`. This is a plan, not an animation port.
+- [x] **#47 — Modern workspace caption de-duplication:** Scene and Compare
+  omit the authored title and description from their physical canvases because
+  the Modern header already displays both. Scene metadata, History, JSON/URL,
+  animation previews and diagnostic/full-composition captures retain authored
+  text; underlying optics, frame, guides and Legacy are unaffected.
+  `showCaptions` remains enabled by default for other renderer consumers.
+  Evidence: `tests/CurvatureFullSceneDecorations.test.js` and
+  `tests/ModernAtmosphericPresentation13822.test.js`.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
   for every migrated scenario. No full migration parity is certified yet.
@@ -613,19 +621,19 @@ exact preset object-bank anchoring** (including the four variation fields that
 `applyPreset` explicitly clears to zero when absent). It neither constructs
 Modern experiments for the remaining states nor replays any transitions.
 
-### Ordered delivery plan after #46
+### Ordered delivery plan after #47
 
-1. **#47 — One bounded storyboard prototype.** Choose *one* existing source
+1. **#48 — One bounded storyboard prototype.** Choose *one* existing source
    transition with a simple camera/physical change and review its real `TaskList`.
    Specify expected intermediate poses, timings, holds, narration and Scene vs
    Compare behavior before choosing Camera/Physical/Experimental project mode.
    Keep original Legacy playback as the reference. Do not bulk-convert.
-2. **#48 — Static reference comparisons.** Select an explicit first/middle/final
+2. **#49 — Static reference comparisons.** Select an explicit first/middle/final
    subset of already ported scenes; capture native Scene and Compare images at a
    fixed viewport/DPR, compare source geometry and independently computed
    optical observables. Record tolerance, model/profile and provenance; do not
    compare unlike Legacy and Modern refraction as if they were identical.
-3. **#49+ — Incremental demonstration sequences.** For each of the eight
+3. **#50+ — Incremental demonstration sequences.** For each of the eight
    geographic scenarios, decide per transition: camera channel, physical
    channel, complete-frame cut, custom narration/parallel timeline, or
    intentionally Legacy-only. Add only evidence-backed native projects; keep

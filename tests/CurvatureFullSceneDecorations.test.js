@@ -41,3 +41,12 @@ test('caption boxes retain independent reference layout and do not mutate the mo
  assert.equal(items[0].fontSize,20);assert.equal(items[1].fontSize,16);
  assert.deepEqual(m,model);
 });
+test('Modern workspace can omit canvas captions without changing authored descriptions or frame',()=>{
+ const m={...model},c=canvas();
+ const result=overlays.draw(c,m,camera,{showCaptions:false});
+ assert.equal(result.captionCount,0);
+ assert.equal(result.frameSegments,4);
+ assert.equal(result.excludedRects.some(x=>/^demo-/.test(x.kind)),false);
+ assert.deepEqual(c.ops.filter(x=>x[0]==='text'),[]);
+ assert.deepEqual(m,model,'scene title and description are retained for UI, history and exports');
+});

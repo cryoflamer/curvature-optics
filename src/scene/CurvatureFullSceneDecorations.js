@@ -151,7 +151,7 @@
      {kind:'camera-frame',x:canvas.width-half,y:0,width:half,height:canvas.height});
   }
   var metricOverlay=metricGridOverlay(canvas,model,camera,options.physicalGuides);
-  var captions=demoBounds(canvas,model,camera);
+  var captions=options.showCaptions===false?[]:demoBounds(canvas,model,camera);
   if(captions.length){
    ctx.save();ctx.fillStyle='black';ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=1;
    captions.forEach(function(item){ctx.font=item.fontSize+'px Arial';ctx.fillText(item.text,canvas.width/2,item.baselineY);});

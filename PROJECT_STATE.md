@@ -2908,3 +2908,15 @@ shared styling and card-specific click isolation.
   and backward-compatible serialization; existing geometry/ring tests keep
   the 100 km default. A full browser/pixel/FPS check remains for Opera and
   GitHub Actions. The next scenario geometry is Grace (#42).
+
+### Modern #47 — Working-view captions were de-duplicated
+
+- Scene and Compare now suppress duplicate title/description text on the physical
+  canvas while retaining the scene header, title/description experiment fields,
+  History, and serialization. The presentation renderer accepts an opt-out
+  `showCaptions:false`; its default remains unchanged for exports, Animation
+  Studio and independent composition diagnostics. Both direct Canvas and
+  deferred atmospheric presentation paths use the opt-out.
+- Regression: `tests/CurvatureFullSceneDecorations.test.js` and
+  `tests/ModernAtmosphericPresentation13822.test.js`. Next: one bounded
+  storyboard prototype (#48) based on the #46 source audit.
