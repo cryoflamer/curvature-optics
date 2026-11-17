@@ -2909,6 +2909,12 @@ shared styling and card-specific click isolation.
   the 100 km default. A full browser/pixel/FPS check remains for Opera and
   GitHub Actions. The next scenario geometry is Grace (#42).
 
+### Modern #49 — Parameter-independent preset captions
+
+- The twelve built-in Modern presets now supply authored descriptions of their scene and research purpose, without frozen camera heights, atmospheric profiles, distances, object counts, or claims of Legacy-renderer parity. The original starting parameters and Legacy source-state mappings remain in their explicit preset definitions and migration audit; neither rays nor geometry were changed.
+- Removed the Pontchartrain-specific `refreshDescription` mutation: changing object-bank count/type, camera or physics no longer rewrites an authored caption. Scene and Compare keep the same model description; user-imported and previously saved descriptions are left untouched until explicit preset reset.
+- The existing `Off / Title only / Title + description` Canvas options and experiment storage are unchanged. The HUD/editor remain the place for live physical values; caption tests cover every preset and Scene/Compare edits.
+
 ### Modern #48 — Configurable wrapped canvas captions
 
 The Modern working viewport now keeps the #47 clean-image default (`Off`) while restoring an explicit **Canvas captions** control in Display → Viewport overlays. Supported modes are `off`, `title`, and `title-description`. Long titles/descriptions are wrapped to the available viewport width and ellipsized vertically when needed, so narrow Compare panels no longer let caption text overflow outside the image. The setting is carried in Modern experiment URLs/JSON/History as `display.captionMode`; pre-#48 links migrate to `off`.

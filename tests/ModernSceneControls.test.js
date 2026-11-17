@@ -73,36 +73,45 @@ test('131 presets reset every relevant object group field without duplicating Le
   assert.throws(()=>adapter.applyPreset(m,'missing'),/Unknown/);
 });
 
-test('140.12.88 Pontchartrain caption follows first group count without modifying unrelated captions',()=>{
+test('Preset captions are authored descriptions, not live parameter readouts',()=>{
   const m=model();
-  adapter.applyPreset(m,'pontchartrain');
-  assert.equal(adapter.refreshDescription(m),'85 transmission towers across Lake Pontchartrain');
-  adapter.setObject(m,0,'NObjects',200);
-  assert.equal(adapter.refreshDescription(m),'200 transmission towers across Lake Pontchartrain');
-  adapter.setObject(m,1,'NObjects',0);
-  assert.equal(adapter.refreshDescription(m),'200 transmission towers across Lake Pontchartrain');
-  adapter.setObject(m,0,'ObjType',2);
-  assert.equal(adapter.refreshDescription(m),'200 ships across Lake Pontchartrain');
-  m.Description='Custom annotated scene';
-  adapter.setObject(m,0,'NObjects',12);
-  assert.equal(adapter.refreshDescription(m),'Custom annotated scene');
-  adapter.applyPreset(m,'rows');
-  adapter.setObject(m,0,'NObjects',44);
-  assert.equal(adapter.refreshDescription(m),'Illustrative near and distant rows for perspective study');
+  for(const [id,p] of Object.entries(adapter.PRESETS)){
+    adapter.applyPreset(m,id);m.Update();
+    assert.equal(m.Description,p.description,id);
+    assert.equal(typeof p.description,'string');
+    assert.ok(p.description.length>12);
+    assert.doesNotMatch(p.description,/\d|\b(?:vacuum|standard atmosphere|observer height|focal length|\bNick\b|\bPan\b|\bGlobe\b|\bFlat\b|\bLegacy state)\b/i,
+      id+' should not include mutable physical parameters or original Legacy state numbers');
+    adapter.setCamera(m,'Height',25);
+    adapter.setCamera(m,'Pan',1.25);
+    adapter.setObject(m,0,'NObjects',Math.min(200,m.NObjects[0]+1));
+    adapter.setObject(m,0,'ObjType',2);
+    assert.equal(m.Description,p.description,'changing inputs does not mutate the authored '+id+' description');
+  }
+  m.Description='My own saved note: 10.8 m and vacuum.';
+  adapter.setObject(m,0,'NObjects',6);
+  assert.equal(m.Description,'My own saved note: 10.8 m and vacuum.',
+    'user-provided or old saved descriptions remain untouched');
 });
 
-test('140.12.88 Scene and Compare caption updates on object edits and preset reset',async()=>{
+test('Scene and Compare keep the authored caption when object or camera settings change',async()=>{
   const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
   const caption=()=>r.nodes.get('ModernSceneDescription').textContent;
-  assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
+  const expected=adapter.PRESETS.pontchartrain.description;
+  assert.equal(caption(),expected);
   r.fire('ModernObject0NObjects','change','200');
   assert.equal(m.NObjects[0],200);
-  assert.equal(caption(),'200 transmission towers across Lake Pontchartrain');
-  assert.equal(m.Description,caption(),'canvas decorations and Compare copy read the same model description');
-  r.fire('ModernObject1NObjects','change','0');
-  assert.equal(caption(),'200 transmission towers across Lake Pontchartrain');
+  assert.equal(caption(),expected);
+  assert.equal(m.Description,expected);
+  r.fire('ModernObject0ObjType','change','2');
+  assert.equal(caption(),expected);
+  r.fire('ModernCompareTab','click');
+  assert.equal(caption(),expected,'Compare shares the authored caption');
+  r.fire('ModernHeight','change','25');
+  assert.equal(caption(),expected);
   await r.fire('ModernResetPreset','click');
-  assert.equal(caption(),'85 transmission towers across Lake Pontchartrain');
+  assert.equal(caption(),expected);
+  assert.equal(m.NObjects[0],85);
 });
 
 test('Objects group summaries reflect validated edits and preset restoration without affecting Compare physics',async()=>{
@@ -274,7 +283,7 @@ test('Bedford partial native preset works through actual Modern UI in Scene and 
   assert.equal(m.showGrid,0);
   assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
   assert.equal(r.draws.at(-1).atmosphere,'vacuum');
-  assert.match(r.nodes.get('ModernSceneDescription').textContent,/not the original globe\/flat overlay/);
+  assert.equal(r.nodes.get('ModernSceneDescription').textContent,adapter.PRESETS.bedford.description);
   r.fire('ModernCompareTab','click');
   assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
   assert.deepEqual(Array.from(m.ObjDist),[124,0]);

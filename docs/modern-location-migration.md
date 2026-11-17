@@ -621,19 +621,19 @@ exact preset object-bank anchoring** (including the four variation fields that
 `applyPreset` explicitly clears to zero when absent). It neither constructs
 Modern experiments for the remaining states nor replays any transitions.
 
-### Ordered delivery plan after #47
+### Ordered delivery plan (after caption work #47–49)
 
-1. **#48 — One bounded storyboard prototype.** Choose *one* existing source
+1. **#50 — One bounded storyboard prototype.** Choose *one* existing source
    transition with a simple camera/physical change and review its real `TaskList`.
    Specify expected intermediate poses, timings, holds, narration and Scene vs
    Compare behavior before choosing Camera/Physical/Experimental project mode.
    Keep original Legacy playback as the reference. Do not bulk-convert.
-2. **#49 — Static reference comparisons.** Select an explicit first/middle/final
+2. **#51 — Static reference comparisons.** Select an explicit first/middle/final
    subset of already ported scenes; capture native Scene and Compare images at a
    fixed viewport/DPR, compare source geometry and independently computed
    optical observables. Record tolerance, model/profile and provenance; do not
    compare unlike Legacy and Modern refraction as if they were identical.
-3. **#50+ — Incremental demonstration sequences.** For each of the eight
+3. **#52+ — Incremental demonstration sequences.** For each of the eight
    geographic scenarios, decide per transition: camera channel, physical
    channel, complete-frame cut, custom narration/parallel timeline, or
    intentionally Legacy-only. Add only evidence-backed native projects; keep

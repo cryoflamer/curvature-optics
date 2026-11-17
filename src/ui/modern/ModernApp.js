@@ -892,7 +892,7 @@
   }
   var model=new root.CurveAppClass();
   Object.assign(model,{
-    DemoText:'Lake Pontchartrain Transmission Line',Description:'85 transmission towers across Lake Pontchartrain',
+    DemoText:'Lake Pontchartrain Transmission Line',Description:'Transmission-line perspective and horizon visibility across Lake Pontchartrain.',
     Height:15,FocalLengthField:2000,Roll:0,Nick:0.0121,Pan:0.0464,
     CameraEast:0,CameraNorth:0,
     viewcenterHorizon:3,showModel:1,showGrid:1,metricGridExtentKm:0,showData:false,
@@ -5800,7 +5800,6 @@
     if(activeCameraPointer&&!liveMotion)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
-    if(adapter&&adapter.refreshDescription)adapter.refreshDescription(model);
     var liveDescription=el('ModernSceneDescription');
     if(liveDescription)liveDescription.textContent=model.Description||'Custom physical scene';
     model.Update();refreshLabels();
@@ -6066,7 +6065,6 @@
     var horizon=newUiEl('ModernCompareHorizon');if(horizon)horizon.checked=state.compareHorizon;
     var captionMode=newUiEl('ModernSceneCaptionMode');if(captionMode)captionMode.value=state.captionMode;
     var title=el('ModernSceneTitle');if(title)title.textContent=model.DemoText||'Custom physical scene';
-    if(adapter&&adapter.refreshDescription)adapter.refreshDescription(model);
     var description=el('ModernSceneDescription');if(description)description.textContent=model.Description||'Custom physical scene';
     for(var i=0;i<2;i++){
       Object.keys(adapter?adapter.OBJECT:{}).forEach(function(key){

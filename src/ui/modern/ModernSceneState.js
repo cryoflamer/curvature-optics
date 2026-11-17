@@ -18,17 +18,17 @@
   // Named demonstrators, not claims to copy all original legacy animation steps.
   var PRESETS=Object.freeze({
     pontchartrain:{name:'Lake Pontchartrain Transmission Line',
-      description:'85 transmission towers across Lake Pontchartrain',
+      description:'Transmission-line perspective and horizon visibility across Lake Pontchartrain.',
       camera:{Height:15,FocalLengthField:2000,Pan:0.0464,Nick:0.0121,Roll:0},
       objects:{NObjects:[85,2],ObjType:[3,3],ObjDist:[50,25550],ObjDeltaDist:[297.55,373],
         ObjSidePos:[35,25.4],ObjSize:[23,64]}},
     single:{name:'Single transmission tower · sample',
-      description:'Illustrative single tower, 2 km from the observer',
+      description:'A transmission tower used to explore perspective and apparent size.',
       camera:{Height:15,FocalLengthField:1300,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[1,0],ObjType:[3,3],ObjDist:[2000,25000],ObjDeltaDist:[300,300],
         ObjSidePos:[0,0],ObjSize:[65,65]}},
     rows:{name:'Two tower rows · sample',
-      description:'Illustrative near and distant rows for perspective study',
+      description:'Tower arrangements for exploring perspective and horizon visibility.',
       camera:{Height:15,FocalLengthField:650,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[18,8],ObjType:[3,3],ObjDist:[1200,12000],ObjDeltaDist:[450,1000],
         ObjSidePos:[-200,400],ObjSize:[45,65]}},
@@ -36,7 +36,7 @@
     // has positive distances and existing type-0 geometry. The Legacy composite
     // showModel=3 and its original refraction/presentation are NOT ported.
     bedford:{name:'Bedford Level · marker study',
-      description:'Starts from Legacy Bedford state 4 (three markers, 124–9784 m). Native globe only; not the original globe/flat overlay.',
+      description:'Bedford Level marker alignment for studying the appearance of objects near the horizon.',
       camera:{Height:4.04,FocalLengthField:5000,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[3,0],ObjType:[0,3],ObjDist:[124,0],ObjDeltaDist:[4830,100],
         ObjSidePos:[9.23,0],ObjSideVar:[18,0],ObjSize:[4.04,10]},
@@ -45,7 +45,7 @@
     // from the 3.4 km building bank). This is a Modern demonstration camera,
     // NOT an authored Legacy state or a reproduction of showModel=3.
     chicago:{name:'Chicago Skyline · distant-shore study',
-      description:'Modern view at ~63 km, eye height 2 m; source Chicago state 1 buildings. Compare Globe/Flat for horizon hiding.',
+      description:'The Chicago skyline across Lake Michigan: a study of horizon visibility and apparent height.',
       camera:{Height:2,FocalLengthField:925.6042410656,Pan:3.023361537686,
         Nick:-.16397488782,Roll:0,CameraEast:-2170.9508443,CameraNorth:-60000},
       objects:{NObjects:[6,0],ObjType:[4,3],ObjDist:[3400,0],ObjDeltaDist:[200,100],
@@ -55,7 +55,7 @@
     // Source-backed near-shore camera is retained as a separate resettable
     // reference. Only camera/atmosphere differ from the main Chicago preset.
     'chicago-near':{name:'Chicago Skyline · source-state camera',
-      description:'Legacy Chicago state 1: 3.4 km, zero refraction; native globe only, no combined globe/flat overlay.',
+      description:'The Chicago skyline as a reference for exploring perspective and surface geometry.',
       camera:{Height:2,FocalLengthField:34,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[6,0],ObjType:[4,3],ObjDist:[3400,0],ObjDeltaDist:[200,100],
         ObjSideType:[2,0],ObjSidePos:[1040,0],ObjSideVar:[-30.5,0],
@@ -68,7 +68,7 @@
     // narrow FOV toward the globe's geometric horizon at 1000 m. This is
     // a camera adaptation, not an optics/geometry correction.
     canigou:{name:'Mount Canigou · distant mountain study',
-      description:'Legacy Canigou state 3 terrain at 257 km / 1000 m; Modern camera tilted toward horizon (Nick -1°). Vacuum; not animation parity.',
+      description:'The Canigou mountain silhouette for exploring long-distance visibility and the horizon.',
       camera:{Height:1000,FocalLengthField:1000,Pan:0,Nick:-1,Roll:0},
       objects:{NObjects:[40,0],ObjType:[5,3],ObjDist:[257000,0],ObjDeltaDist:[60,100],
         ObjSideType:[2,0],ObjSidePos:[0,0],ObjSideVar:[-5620,0],
@@ -80,7 +80,7 @@
     // model; this is an intentionally approximate physical comparison. The
     // -0.5 degree Modern Nick similarly substitutes for source horizon aim.
     'canigou-low':{name:'Mount Canigou · low-observer refraction study',
-      description:'Canigou at 257 km / 244 m, horizon-aimed Modern camera (Nick -0.5°). Modern standard differs from Legacy constant-k refraction.',
+      description:'Mount Canigou as a case study in the effects of atmospheric refraction on distant views.',
       camera:{Height:244,FocalLengthField:1000,Pan:0,Nick:-.5,Roll:0},
       objects:{NObjects:[40,0],ObjType:[5,3],ObjDist:[257000,0],ObjDeltaDist:[60,100],
         ObjSideType:[2,0],ObjSidePos:[0,0],ObjSideVar:[-5620,0],
@@ -92,7 +92,7 @@
     // camera aims at both silhouettes; it does not reimplement source
     // horizon-centering or its preceding zero-interval preview states.
     grace:{name:'Anacapa Island / Platform Grace · distant study',
-      description:'Legacy Grace state 8 geometry: platforms at 28 km and Anacapa at 50.1 km. Native globe/vacuum and adapted eye-level camera; no Legacy composite overlay.',
+      description:'Offshore platforms and Anacapa Island for examining perspective and distant-object visibility.',
       camera:{Height:72,FocalLengthField:2000,Pan:0,Nick:-.21,Roll:0},
       objects:{NObjects:[2,11],ObjType:[6,5],ObjDist:[28000,50100],
         ObjDeltaDist:[20,22.7],ObjSideType:[0,0],ObjSidePos:[97.5,34.7],
@@ -103,7 +103,7 @@
     // Source showModel=3 is a composite overlay: Modern Compare remains
     // independent A/B with a fixed eye-level camera (not legacy horizon aim).
     causeway:{name:'Lake Pontchartrain Causeway · bridge horizon study',
-      description:'Legacy Causeway state 5 geometry: two 39 km bridge rows, 100 m observer and vacuum. Native Compare A/B; no original combined globe/flat overlay.',
+      description:'Bridge alignment over Lake Pontchartrain for comparing perspective and horizon visibility.',
       camera:{Height:100,FocalLengthField:2000,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[41,0],ObjType:[6,3],ObjDist:[0,0],ObjDeltaDist:[967.5,100],
         ObjSideType:[1,0],ObjSidePos:[45,0],ObjSideVar:[30,0],
@@ -113,7 +113,7 @@
     // bridge segments, 150 m spacing, zero refraction and 10.8 m observer.
     // Native physical Compare A/B replaces the legacy single globe canvas.
     tensas:{name:'Little Tensas Bayou · bridge profile study',
-      description:'Legacy Tensas state 4 geometry: 87 segments over 12.9 km and 10.8 m observer. Two variable-height carriageways and central crossover; vacuum Globe/Flat Compare.',
+      description:'The Little Tensas Bayou bridge profile and its roadway geometry in a perspective study.',
       camera:{Height:10.8,FocalLengthField:3000,Pan:0,Nick:0,Roll:0},
       objects:{NObjects:[87,0],ObjType:[7,3],ObjDist:[0,0],ObjDeltaDist:[150,100],
         ObjSideType:[0,0],ObjSidePos:[-2,0],ObjSideVar:[0,0],
@@ -124,7 +124,7 @@
     // Modern uses the same shared physical Globe/Flat ray tracer and
     // independent panels; the 18-state Legacy animation is not reproduced.
     soundly:{name:'Soundly Causeway · bridge observations',
-      description:'Legacy Soundly state 13 geometry: 128 segments at 300 m spacing, 10.8 m observer, zero refraction (vacuum). Physical Globe/Flat Compare; no narrated Legacy parity.',
+      description:'A causeway with navigation spans and supporting structures for studying perspective and horizon visibility.',
       camera:{Height:10.8,FocalLengthField:2200,Pan:0.45,Nick:-0.03,Roll:0},
       objects:{NObjects:[128,0],ObjType:[8,3],ObjDist:[496,0],ObjDeltaDist:[300,100],
         ObjSideType:[0,0],ObjSidePos:[55.5,0],ObjSideVar:[0,0],
@@ -165,19 +165,9 @@
     if(!choices.some(function(x){return Math.abs(x-value)<1e-8;}))throw RangeError('Unknown aspect ratio');
     model.deviceRatio=value;return value;
   }
-  // Keep the Pontchartrain caption tied to the *first* tower group shown
-  // by the Count control. The second group is an independent object group.
-  // Do not overwrite arbitrary user/imported descriptions.
-  function refreshDescription(model){
-    if(!model||model.DemoText!==PRESETS.pontchartrain.name||
-        !/^(?:\d+ transmission towers|\d+ (?:ships|measuring rods|Bedford markers|city skylines)) across Lake Pontchartrain$/.test(model.Description||''))
-      return model&&model.Description;
-    var types={0:'Bedford markers',1:'measuring rods',2:'ships',3:'transmission towers',4:'city skylines',5:'mountains',6:'bridges',7:'Tensas segments',8:'Soundly sections',9:'Soundly sections'};
-    var kind=types[model.ObjType&&model.ObjType[0]];
-    if(kind&&model.NObjects&&Number.isInteger(model.NObjects[0]))
-      model.Description=model.NObjects[0]+' '+kind+' across Lake Pontchartrain';
-    return model.Description;
-  }
+  // Preset descriptions are authored scene metadata, not a live summary of
+  // the observer, atmosphere or object bank. Those values belong in the HUD
+  // and physical controls; existing imported descriptions must stay intact.
   function applyPreset(model,id){
     var p=PRESETS[id];if(!p)throw RangeError('Unknown Scene preset: '+id);
     model.CameraEast=0;model.CameraNorth=0;
@@ -198,7 +188,6 @@
   }
   return Object.freeze({PRESETS:PRESETS,CAMERA:CAMERA,OBJECT:OBJECT,
     finiteNumber:finiteNumber,setCamera:setCamera,setObject:setObject,
-    refreshDescription:refreshDescription,
     setRadiusKm:setRadiusKm,setAim:setAim,setDeviceRatio:setDeviceRatio,
     applyPreset:applyPreset});
 }));

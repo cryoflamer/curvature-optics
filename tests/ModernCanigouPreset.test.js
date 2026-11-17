@@ -69,7 +69,9 @@ test('Canigou low-observer preset carries source state index 4 geometry but expl
   assert.equal(original.Height,244);
   assert.equal(original.refractionCoeff,.16761);
   assert.equal(p.atmosphere,'standard');
-  assert.match(p.description,/differs from Legacy constant-k/);
+  assert.match(p.description,/atmospheric refraction/);
+  assert.doesNotMatch(p.description,/Legacy|244|standard|constant-k/,
+    'author caption must not promise starting physical inputs or source-model parity');
   assert.notEqual(p.atmosphere,adapter.PRESETS.canigou.atmosphere);
 });
 
