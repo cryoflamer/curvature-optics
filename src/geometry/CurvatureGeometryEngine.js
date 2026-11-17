@@ -266,6 +266,94 @@
         [.95,.7],[.95,.9],[1,.9],[1,1],[-1,1]],mode:3,
         style:{fill:hidden?'#858b85':'#565a56'}}];
   }
+  // Source DrawShape type 7 (Tensas Bayou), in metres.  Legacy deliberately
+  // ignores ObjSize and ObjSizeVar for the local transform: heights, spans,
+  // shoulder rails, and the centre crossover are authored world dimensions.
+  // Longitudinal road/shore strips are joined below, between placements.
+  function tensasDimensions(drawn,variation){
+    if(!Number.isInteger(drawn)||drawn<0||!Number.isFinite(variation))
+      throw new RangeError('Tensas requires a drawn index and finite size variation');
+    var h=9.5,p=25.1,w=6.1;
+    if(drawn<2){h=25.5;p=5.1;w=5;}
+    else if(drawn<4){h=drawn===2?23.3:17.3;p=5.1;w=5;}
+    else if(drawn<6){if(drawn===4)h=11.4;p=drawn===4?11.7:18.4;
+      w=drawn===4?5.4:5.8;}
+    return {height:h*(variation+1),offset:p,width:w};
+  }
+  function localTensas(drawn,variation,hidden){
+    var d=tensasDimensions(drawn,variation),h=d.height,p=d.offset,w=d.width;
+    var out=[],fill;
+    function color(a,b){fill=hidden?b:a;}
+    function poly(xs,ys){out.push({type:'polygon',mode:3,
+      points:xs.map(function(x,i){return [x,ys[i]];}),style:{fill:fill}});}
+    function rect(x1,y1,x2,y2){poly([x1,x2,x2,x1,x1],[y1,y1,y2,y2,y1]);}
+    color('#adadab','#d2d2cf');
+    [-1,1].forEach(function(sign){
+      rect(sign*p-(w-1.3),0,sign*p-(w-2.7),h-2.4);
+      rect(sign*p+(w-2.7),0,sign*p+(w-1.3),h-2.4);
+    });
+    color('#8c8678','#b9b19e');
+    [-1,1].forEach(function(sign){rect(sign*p-w,h-2.4,sign*p+w,h-1.2);});
+    color('#565a56','#858b85');
+    [-1,1].forEach(function(sign){var c=sign*p;
+      poly([c-w,c-w,c-(w-1.3),c-(w-1.3),c+(w-1.3),c+(w-1.3),
+        c+w,c+w,c+(w-.4),c+(w-.4),c-(w-.4),c-(w-.4),c-w],
+        [h+.8,h-.2,h-.2,h-1.2,h-1.2,h-.2,h-.2,h+.8,h+.8,h,h,h+.8,h+.8]);
+    });
+    // Only the 48th drawn segment connects the two carriageways.
+    if(drawn===47){
+      color('#565a56','#858b85');
+      poly([-p+w,-p+w,-p+20.1,p-20.1,p-w,p-w,p-20.1,-p+20.1,-p+w],
+        [h+.8,h-.2,h,h,h-.2,h+.8,h+1,h+1,h+.8]);
+      color('#adadab','#d2d2cf');
+      poly([-p+w,-p+w,-p+20.1,p-20.1,p-w,p-w,p-20.1,-p+20.1,-p+w],
+        [h-.2,h-1,h-.8,h-.8,h-1,h-.2,h,h,h-.2]);
+      color('#8c8678','#b9b19e');
+      rect(-p+(w+.1),h-1.8,-p+(w+1.3),h-1);
+      rect(+p-(w+.1),h-1.8,+p-(w+1.3),h-1);
+      rect(-p+18.5,h-1.6,-p+19.7,h-.8);
+      rect(+p-18.5,h-1.6,+p-19.7,h-.8);
+      color('#565a56','#858b85');
+      poly([-p+(w+.1),-p+(w-.5),-p+(w+.1),-p+(w+.7),-p+(w+.1)],
+        [h-1.8,0,0,h-1.8,h-1.8]);
+      poly([+p-(w+.1),+p-(w-.5),+p-(w+.1),+p-(w+.7),+p-(w+.1)],
+        [h-1.8,0,0,h-1.8,h-1.8]);
+      poly([-p+(w+.7),-p+(w+1.3),-p+(w+1.9),-p+(w+1.3),-p+(w+.7)],
+        [h-1.8,0,0,h-1.8,h-1.8]);
+      poly([+p-(w+.7),+p-(w+1.3),+p-(w+1.9),+p-(w+1.3),+p-(w+.7)],
+        [h-1.8,0,0,h-1.8,h-1.8]);
+      poly([-p+18.5,-p+17.9,-p+18.5,-p+19.1,-p+18.5],
+        [h-1.6,0,0,h-1.6,h-1.6]);
+      poly([+p-18.5,+p-17.9,+p-18.5,+p-19.1,+p-18.5],
+        [h-1.6,0,0,h-1.6,h-1.6]);
+      poly([-p+19.1,-p+19.7,-p+20.3,-p+19.7,-p+19.1],
+        [h-1.6,0,0,h-1.6,h-1.6]);
+      poly([+p-19.1,+p-19.7,+p-20.3,+p-19.7,+p-19.1],
+        [h-1.6,0,0,h-1.6,h-1.6]);
+    }
+    return out;
+  }
+  function tensasStrip(previous,current,hidden,kind,edge){
+    var before=towerPlacement(previous.params),after=towerPlacement(current.params);
+    function vertex(plane,x,y){return [0,1,2].map(function(i){return plane.origin[i]+
+      x*plane.xAxis[i]+y*plane.yAxis[i];});}
+    var old=previous.scene.metadata.drawn,now=current.scene.metadata.drawn,
+      variation=current.variation,d=tensasDimensions(now,variation);
+    var p=kind==='tensas-shore'?100:d.offset, w=kind==='tensas-shore'?0:d.width-.4,
+      height=kind==='tensas-shore'?4.2*(variation+1)*(now===8?0:1):d.height,
+      oldHeight;
+    if(kind==='tensas-shore')oldHeight=4.2*(previous.variation+1)*(old===8?0:1);
+    else oldHeight=tensasDimensions(old,previous.variation).height;
+    var left=edge===undefined?-p-w:edge*p-w,right=edge===undefined?p+w:edge*p+w;
+    var oldD=kind==='tensas-shore'?null:tensasDimensions(old,previous.variation);
+    var oldL=oldD?edge*oldD.offset-(oldD.width-.4):left;
+    var oldR=oldD?edge*oldD.offset+(oldD.width-.4):right;
+    return {type:'polygon',mode:3,points:[vertex(before,oldL,oldHeight),
+      vertex(before,oldR,oldHeight),vertex(after,right,height),vertex(after,left,height)],
+      style:{fill:kind==='tensas-shore'?(now===8?'#687e28':'#49884b'):
+        (hidden?'#adb1bc':'#999ba2')},
+      metadata:{kind:kind,physicalObject:true}};
+  }
   function bridgeRoad(previous,current,hidden){
     // Road top is at the local y=1 in both neighbouring placed planes.
     // Legacy DrawShape's LastRoadP11/P12 track the preceding support;
@@ -295,6 +383,11 @@
       return localMountain(options.drawn,objIx,!!hidden);
     }
     if(objType===6)return localBridge(!!hidden);
+    if(objType===7){
+      if(!options||!Number.isInteger(options.drawn))
+        throw new TypeError('Tensas requires the drawn sequence index');
+      return localTensas(options.drawn,options.variation===undefined?0:options.variation,!!hidden);
+    }
     if(objType===1)return localMRod(!!hidden);
     if(objType===2)return localShip(!!hidden);
     throw new RangeError('Object type has not been independently ported');
@@ -373,7 +466,7 @@
     var r=model.geometryRadius,n=model.NObjects[objIx];
     if(r<=0||!Number.isInteger(n)||n<0||n>500)throw new RangeError('Invalid tower count or radius');
     var objType=model.ObjType[objIx];
-    if(![0,1,2,3,4,5,6].includes(objType))throw new RangeError('Object type has not been independently ported');
+    if(![0,1,2,3,4,5,6,7].includes(objType))throw new RangeError('Object type has not been independently ported');
     var delta=model.ObjDeltaDist[objIx]/r,first=model.ObjDist[objIx]/r;
     if(n>1&&delta<=0)throw new RangeError('Positive spacing required for multiple towers');
     var max=n;
@@ -405,7 +498,8 @@
       size=(size+1-Math.abs(variation))/2;
       if(size<0)size=-size;
       // Legacy type-4 skyline varies height only; width stays fixed.
-      var sizeHor=(objType===4||objType===5)?1:size;
+      var sizeHor=(objType===4||objType===5||objType===6)?1:size;
+      if(objType===7){size=1;sizeHor=1;}
       if(objType===2){sizeHor=.25*size+.75;size=.5*size+.5;}
       var side=model.ObjSidePos[objIx]/r,sideVar=model.ObjSideVar[objIx]/r/2;
       var sideType=model.ObjSideType[objIx];
@@ -429,9 +523,10 @@
         var hidden=!!globe&&!physical&&!(options&&options.opticsNeutral)&&lng>cutoff;
         var legacyDrawn=drawn+(globe?n-max:0);
         var metadata={objectIndex:objIx,sequenceIndex:drawn,drawn:legacyDrawn,
-          total:n,column:sideType===1?col+1:0,longitude:lng,latitude:lat,hidden:hidden};
+          total:n,column:sideType===1?col+1:0,longitude:lng,latitude:lat,hidden:hidden,
+          variation:model.ObjSizeVar[objIx]};
         var scene=createPlacedObjectScene(params,objType,objIx,hidden,metadata);
-        entries.push({params:params,scene:scene,hidden:hidden});
+        entries.push({params:params,scene:scene,hidden:hidden,variation:model.ObjSizeVar[objIx]});
       });
     }
     return entries;
@@ -462,6 +557,25 @@
           road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
             objectBank:objIx,column:column});
           primitives.push(road);
+        }
+        previousByColumn.set(column,entry);
+      }
+      if(model.ObjType[objIx]===7){
+        var previousTensas=previousByColumn.get(column);
+        if(previousTensas){
+          // The source shores exist for the first nine drawn supports only;
+          // both roads span the entire 87-support sequence. The surface and
+          // object meshes share the same continuous curvature placement.
+          if(entry.scene.metadata.drawn<=8){
+            var ground=tensasStrip(previousTensas,entry,entry.hidden,'tensas-shore');
+            ground.metadata=Object.assign({},ground.metadata,{placedObjectIndex:placedIndex,
+              objectBank:objIx,column:column});primitives.push(ground);
+          }
+          (model.ObjSidePos[objIx]<0?[-1,1]:[1,-1]).forEach(function(edge){
+            var road=tensasStrip(previousTensas,entry,entry.hidden,'tensas-road',edge);
+            road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
+              objectBank:objIx,column:column});primitives.push(road);
+          });
         }
         previousByColumn.set(column,entry);
       }

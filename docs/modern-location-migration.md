@@ -1,7 +1,7 @@
 # Modern geographic location migration — active checklist
 
-**Status (2026-11-17, #43):** six **partial** geographic native scenarios
-(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`, `causeway`) are available, with
+**Status (2026-11-17, #44):** seven **partial** geographic native scenarios
+(`pontchartrain`, `bedford`, `chicago`, `canigou`, `grace`, `causeway`, `tensas`) are available, with
 additional `chicago-near` and `canigou-low` source-view references; **no full
 Legacy scenario parity is certified**. This is a living delivery
 plan for incrementally adapting authored Legacy demonstrations to **native
@@ -61,8 +61,14 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
 - [x] **#43 — Lake Pontchartrain Causeway:** partial native source-state 5 bridge
   with 41 supports in each of two rows, 967.5 m intervals, 100 m observer,
   vacuum, and independently rendered Globe/Flat. See `tests/ModernCausewayPreset.test.js`.
-- [ ] **#44+ — Tensas and Soundly:** port source-backed types 7 and 8 without
-  changing the shared optical physics.
+- [x] **#44 — Little Tensas Bayou:** partial source-state 4 native `tensas`
+  preset with 87 type-7 supports, variable-height twin roads, eight short
+  shore segments and the single centre crossover. The shared physical ray
+  solver remains unchanged. Local polygons were verified against the original
+  Legacy DrawShape for source sequence indices, palettes and height variation;
+  independently rendered Globe/Flat are not narrated Legacy parity.
+  Evidence: `tests/ModernTensasPreset.test.js`, `tests/ModernSceneControls.test.js`.
+- [ ] **#45+ — Soundly:** port source-backed types 8/9 without changing the shared optics.
 - [ ] **Final integration:** recheck Scene, Compare, History, Animation Studio,
   working-session recovery, source geometry tolerances and visual baselines
   for every migrated scenario. No full migration parity is certified yet.
@@ -96,8 +102,7 @@ are adaptations, not claims of pixel-for-pixel or optical equivalence.
   non-equivalent Modern Standard atmosphere. `single` and `rows` remain
   demonstration samples, **not locations**.
 - Object IDs are source-specific. Modern Scene geometry/validation currently
-  supports `0–6`; Legacy `7` Tensas bridge and `8` Soundly Causeway
-  require explicit ports. Legacy
+  supports `0–7`; Legacy `8/9` Soundly Causeway requires explicit ports. Legacy
   type `9` exists but is **unused** in the nine authored demos.
 
 **Count policy:** eight geographic demos across six geographic subjects,
@@ -448,7 +453,8 @@ catalog entry. Do not tick it until the acceptance gates below are met.
   nine-state/animation visual parity remain open.
 - [ ] `bedford-level-experiment` — `Bedford` (7 states); type 0 exists, but
   negative starting distance and combined globe/flat view need decisions.
-- [ ] `tensas-bayou-bridge` — `Tensas` (6 states); requires type 7.
+- [ ] `tensas-bayou-bridge` — `Tensas` (6 states); partial source state 4
+  uses type 7, but six-state and narrated animation parity remain open.
 - [ ] `pontchartrain-soundly` — `Soundly` (18 states); requires type 8; preserve
   its embedded escaped apostrophe during source extraction.
 - [ ] `chicago-skyline` — `Chicago` (6 states); type 4 supported, distant and source-camera partial presets; full six-state/overlay acceptance pending.

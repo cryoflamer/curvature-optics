@@ -43,7 +43,7 @@ test('131 pure state adapter uses exact one model and validates before mutation'
   assert.equal(m.ObjDist[1],before);
   assert.throws(()=>adapter.setObject(m,1,'NObjects','1.5'),/integer/);
   adapter.setObject(m,1,'ObjType',4);assert.equal(m.ObjType[1],4);
-  assert.throws(()=>adapter.setObject(m,1,'ObjType',7),/Expected/);
+  assert.throws(()=>adapter.setObject(m,1,'ObjType',8),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'Height',''),/required/);
   assert.throws(()=>adapter.setRadiusKm(m,0),/Expected/);
   assert.throws(()=>adapter.setCamera(m,'foo',1),/Unknown/);
@@ -523,4 +523,24 @@ test('Causeway preset retains source bridge geometry through UI Compare, History
   assert.equal(r.win.CurvatureModernApp.getPreset(),'causeway');
   await r.fire('ModernResetPreset','click');
   assert.deepEqual(Array.from(m.ObjSidePos),[45,0]);
+});
+
+
+test('Tensas preset survives Compare editing, History return and Reset',async()=>{
+  const r=buildRuntime(),m=r.win.CurvatureModernApp.getModel();
+  assert.equal(await r.fire('ModernPreset','change','tensas'),true);
+  assert.deepEqual(Array.from(m.ObjType),[7,3]);
+  assert.deepEqual(Array.from(m.NObjects),[87,0]);
+  assert.equal(r.nodes.get('ModernAtmosphere').value,'vacuum');
+  r.fire('ModernCompareTab','click');
+  assert.equal(r.win.CurvatureModernApp.getMode(),'compare');
+  r.fire('ModernObject0ObjSidePos','change','-4');
+  await r.fire('ModernPreset','change','causeway');
+  assert.ok(r.historyEntries.some(e=>e.pinned&&
+    e.experiment.scene.resetPreset==='tensas'&&e.experiment.scene.objects.ObjSidePos[0]===-4));
+  await r.fire('ModernPreviousExperiment','click');
+  assert.equal(m.ObjSidePos[0],-4);
+  assert.equal(r.win.CurvatureModernApp.getPreset(),'tensas');
+  await r.fire('ModernResetPreset','click');
+  assert.deepEqual(Array.from(m.ObjSidePos),[-2,0]);
 });

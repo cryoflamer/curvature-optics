@@ -1001,6 +1001,7 @@
         "tests/ModernGracePreset.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernSceneControls.test.js",
+        "tests/ModernTensasPreset.test.js",
         "tests/ModernUiBootstrap.test.js",
         "tests/OpticalColdWarm1403.test.js",
         "tests/PhysicalCanvasInteraction117.test.js"
@@ -1456,6 +1457,7 @@
         "tests/ModernLocationEvidence.test.js",
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernTargetDirection.test.js",
+        "tests/ModernTensasPreset.test.js",
         "tests/OpticalTowerSilhouette106.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGuideExtent111.test.js",
@@ -2677,6 +2679,7 @@
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernSharedCompareControls.test.js",
+        "tests/ModernTensasPreset.test.js",
         "tests/OpticalRayHorizon.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalLongRangeGrid.test.js"
@@ -2746,6 +2749,7 @@
         "tests/ModernSharedCompareControls.test.js",
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
+        "tests/ModernTensasPreset.test.js",
         "tests/OpticalRayHorizon.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalLongRangeGrid.test.js"
@@ -2901,6 +2905,7 @@
         "tests/ModernSessionAutosave.test.js",
         "tests/ModernTargetIndicator.test.js",
         "tests/ModernTemperatureGradient.test.js",
+        "tests/ModernTensasPreset.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalLongRangeGrid.test.js"
       ],
@@ -2943,7 +2948,8 @@
         "tests/ModernChicagoPreset.test.js",
         "tests/ModernGracePreset.test.js",
         "tests/ModernLocationCatalog.test.js",
-        "tests/ModernLocationEvidence.test.js"
+        "tests/ModernLocationEvidence.test.js",
+        "tests/ModernTensasPreset.test.js"
       ],
       "commonJsToolCallers": [
         "tools/audit-modern-location-evidence.js"
@@ -3014,6 +3020,7 @@
         "tests/ModernMountainGeometry.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSharedCompareControls.test.js",
+        "tests/ModernTensasPreset.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalLongRangeGrid.test.js"
       ],

@@ -11,7 +11,7 @@
   var CAMERA={Height:[0.001,1e9],FocalLengthField:[1,100000],ViewAngleField:[0.1,160],
     Pan:[-360,360],Nick:[-90,90],Roll:[-180,180],
     CameraEast:[-1e7,1e7],CameraNorth:[-1e7,1e7]};
-  var OBJECT={NObjects:[0,200,true],ObjType:[0,6,true],ObjDist:[0,1e7],
+  var OBJECT={NObjects:[0,200,true],ObjType:[0,7,true],ObjDist:[0,1e7],
     ObjDeltaDist:[0.001,1e7],ObjSidePos:[-1e7,1e7],ObjSideVar:[-1e7,1e7],
     ObjSize:[0.001,1e6],ObjSizeVar:[-1e4,1e4],
     ObjSideType:[0,4,true],ObjSizeType:[0,4,true]};
@@ -108,6 +108,16 @@
       objects:{NObjects:[41,0],ObjType:[6,3],ObjDist:[0,0],ObjDeltaDist:[967.5,100],
         ObjSideType:[1,0],ObjSidePos:[45,0],ObjSideVar:[30,0],
         ObjSizeType:[0,0],ObjSize:[5,10],ObjSizeVar:[0,0]},
+      showGrid:true,atmosphere:'vacuum'},
+    // Legacy Tensas state index 3 (?demo=Tensas&pos=4): 87 source-authored
+    // bridge segments, 150 m spacing, zero refraction and 10.8 m observer.
+    // Native physical Compare A/B replaces the legacy single globe canvas.
+    tensas:{name:'Little Tensas Bayou · bridge profile study',
+      description:'Legacy Tensas state 4 geometry: 87 segments over 12.9 km and 10.8 m observer. Two variable-height carriageways and central crossover; vacuum Globe/Flat Compare.',
+      camera:{Height:10.8,FocalLengthField:3000,Pan:0,Nick:0,Roll:0},
+      objects:{NObjects:[87,0],ObjType:[7,3],ObjDist:[0,0],ObjDeltaDist:[150,100],
+        ObjSideType:[0,0],ObjSidePos:[-2,0],ObjSideVar:[0,0],
+        ObjSizeType:[0,0],ObjSize:[1,10],ObjSizeVar:[0,0]},
       showGrid:true,atmosphere:'vacuum'}
   });
   function finiteNumber(raw,min,max,integer){

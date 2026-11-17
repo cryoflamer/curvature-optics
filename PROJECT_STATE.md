@@ -1,3 +1,16 @@
+> **Little Tensas Bayou partial native Scene (#44, 2026-11-17):**
+> Introduced source-backed `tensas` from Legacy state index 3
+> (`?demo=Tensas&pos=4`), preserving 87 supports at 150 m spacing,
+> source 10.8 m camera and 3000 mm focal length, `vacuum`, and exact
+> type-7 local pillar, guardrail and center-crossover geometry. Separate
+> world-space continuous road and shore meshes follow the same shared physical
+> Globe/Flat placement and ray-optics renderer as the other Modern types.
+> The original DrawShape was not modified; source-matching shape tests,
+> independent A/B render and History/JSON/URL coverage are in
+> `tests/ModernTensasPreset.test.js`. The 6-state Legacy storyboard,
+> its historical refraction coefficient, and native pixel parity remain
+> unported. Next source-backed family is Soundly (types 8/9).
+>
 > **Lake Pontchartrain Causeway partial native Scene (#43, 2026-11-17):**
 > Added `causeway` as a source-backed Modern preset from authored Causeway
 > state index 4 (`?demo=Causeway&pos=5`): two rows of 41 bridge supports,
