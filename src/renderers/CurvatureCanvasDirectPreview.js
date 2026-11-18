@@ -159,7 +159,10 @@
       var drawFills=diagnostic.fills!==false;
       var drawStrokes=diagnostic.strokes!==false;
       var drawMask=diagnostic.horizonMask!==false;
-      // These variants are for an opt-in fixed-frame benchmark only. No live
+      // Benchmark-only: execute identical mesh preparation, camera projection,
+      // clipping and horizon classification, but issue no Canvas draw commands.
+      var skipCanvasPaint=diagnostic.skipCanvasPaint===true;
+      // These variants are only for opt-in benchmarks. No live
       // playback state or authored geometry is changed.
       var strokeMode=diagnostic.strokeMode||'normal';
       if(!['normal','path-only','simple','batched','opaque','black','unit-width','miter'].includes(strokeMode))
@@ -239,6 +242,9 @@
         }
         projectionMs+=clock()-start;
         if(!fillPixels&&!lines.length)return;
+        if(skipCanvasPaint){
+          projected+=pts.length;drawn+=lines.length;return;
+        }
         start=clock();
         var alpha=style.alpha==null?1:style.alpha;
         if(fillPixels){
@@ -313,12 +319,16 @@
       // Painter order: far objects, one white disk, surface/horizon guides,
       // then near objects. Guides are never occlusion masks.
       var setupEnd=clock();
-      ctx.clearRect(0,0,canvas.width,canvas.height);canvasCalls.clearRect++;
-      ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);canvasCalls.fillRect++;
+      if(!skipCanvasPaint){
+        ctx.clearRect(0,0,canvas.width,canvas.height);canvasCalls.clearRect++;
+        ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);canvasCalls.fillRect++;
+      }
       // Reset the join on every frame: an opt-in benchmark must not leave a
       // changed Canvas state behind for ordinary animation rendering.
-      ctx.lineJoin=(strokeMode==='simple'||strokeMode==='miter')?'miter':'round';
-      ctx.lineCap='butt';
+      if(!skipCanvasPaint){
+        ctx.lineJoin=(strokeMode==='simple'||strokeMode==='miter')?'miter':'round';
+        ctx.lineCap='butt';
+      }
       layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
       if(drawMask&&globe&&layers.some(function(layer){return layer.far.length;}))mask();
       // Metric guide rings replace the very dense legacy latitude/longitude
@@ -348,7 +358,8 @@
         fillCalls:fillCalls,strokeCalls:strokes,strokePrimitives:strokePrimitives,
         strokeStyleCounts:strokeStyleCounts,strokeWidthRange:strokeWidthRange,
         horizonMasks:masked,canvasCalls:canvasCalls,geometryReused:source.reused,
-        diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask,strokeMode:strokeMode},
+        diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask,strokeMode:strokeMode,
+          skipCanvasPaint:skipCanvasPaint},
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},
         limitations:['Legacy-style whole-object horizon masking, not physical visibility',

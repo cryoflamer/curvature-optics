@@ -2993,7 +2993,10 @@
     var run=newUiEl('ModernAnimationBenchmarkRun'),layersRun=newUiEl('ModernAnimationBenchmarkLayers'),
       strokesRun=newUiEl('ModernAnimationBenchmarkStrokes'),
       stylesRun=newUiEl('ModernAnimationBenchmarkStrokeStyles'),
-      widthsRun=newUiEl('ModernAnimationBenchmarkStrokeWidths');
+      widthsRun=newUiEl('ModernAnimationBenchmarkStrokeWidths'),
+      pipelineRun=newUiEl('ModernAnimationPipelineRun'),
+      pipelineCancel=newUiEl('ModernAnimationPipelineCancel'),
+      pipelineNote=newUiEl('ModernAnimationPipelineStatus');
     var cancel=newUiEl('ModernAnimationBenchmarkCancel');
     var again=newUiEl('ModernAnimationBenchmarkDownload'),note=newUiEl('ModernAnimationBenchmarkStatus');
     if(!run||!cancel||!studioBenchmarkApi)return;
@@ -3001,13 +3004,19 @@
       run.disabled=!!value;if(layersRun)layersRun.disabled=!!value;
       if(strokesRun)strokesRun.disabled=!!value;
       if(stylesRun)stylesRun.disabled=!!value;
-      if(widthsRun)widthsRun.disabled=!!value;cancel.hidden=!value;
+      if(widthsRun)widthsRun.disabled=!!value;
+      if(pipelineRun)pipelineRun.disabled=!!value;
+      if(pipelineCancel)pipelineCancel.hidden=!value||activeProfile!=='canvas-pipeline';
+      cancel.hidden=!value;
       if(again)again.hidden=!!value||!studioBenchmarkLastReport;
       ['ModernAnimationPlaybackPlay','ModernAnimationPlaybackPause','ModernAnimationPlaybackStop',
         'ModernAnimationPlaybackSeek','ModernAnimationPlaybackRetry','ModernAnimationPlaybackOptics',
         'ModernAnimationPlaybackDetail','ModernAnimationPlaybackFps',
         'ModernAnimationPlaybackInterpolation','ModernAnimationPlaybackProfileEnabled',
-        'ModernAnimationPlaybackExperiment','ModernCanvasDirectFills','ModernCanvasDirectStrokes',
+        'ModernAnimationFrameTimingEnabled','ModernAnimationFrameTimingAuto',
+        'ModernAnimationFrameTimingOrder','ModernAnimationFrameTimingClear',
+        'ModernAnimationFrameTimingExport','ModernAnimationPlaybackExperiment',
+        'ModernCanvasDirectFills','ModernCanvasDirectStrokes',
         'ModernCanvasDirectMask'].forEach(function(id){
           var element=newUiEl(id);if(element)element.disabled=!!value;
         });
@@ -3018,7 +3027,9 @@
         report.createdAt.replace(/[:.]/g,'-')+'.json';
       downloadHistoryJson(JSON.stringify(report,null,2)+'\n',filename);
     }
-    function status(message){if(note)note.textContent=message;}
+    var activeProfile=null;
+    function status(message){if(note)note.textContent=message;
+      if(activeProfile==='canvas-pipeline'&&pipelineNote)pipelineNote.textContent=message;}
     function canvasEnvironment(graph,sample,frameMs){
       var canvas=graph.Canvas,rect=canvas.getBoundingClientRect?
         canvas.getBoundingClientRect():{width:canvas.clientWidth,height:canvas.clientHeight};
@@ -3045,6 +3056,7 @@
         studioPlaybackQuality!=='canvas-direct'){
         status('Prepare a Canvas Direct project in Animation Studio first.');return;
       }
+      activeProfile=profile;
       var player=studioPlayback,previousMode=studioPlaybackExperiment?
         studioPlaybackExperiment.mode():'normal';
       var wasPlaying=player.status().playing,position=player.status().positionMs;
@@ -3066,6 +3078,9 @@
       }
       try{
         controls.halt();
+        // A manually started auto-sweep has its own RAF driver. It must not
+        // change the same playhead underneath the one-click diagnosis.
+        if(studioFrameTiming&&studioFrameTiming.autoRunning())studioFrameTiming.stopAutomatic();
         cancelStudioInitialPaint();
         if(studioPlaybackExperiment)studioPlaybackExperiment.setMode('normal');
         player.seek(position,profileNow());
@@ -3075,11 +3090,12 @@
           Model:root.CurveAppClass,renderer:root.CurvatureMainCanvasRenderer,
           optics:root.CurvaturePhysicalSceneOptics});
         var graphs=root.CurvatureModernAnimationGraphs;
+        var pipeline=profile==='canvas-pipeline';
         var settings={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
           animationMode:studioPrepared.mode,canvasDirectDiagnostics:{
-            fills:!newUiEl('ModernCanvasDirectFills')||newUiEl('ModernCanvasDirectFills').checked,
-            strokes:!newUiEl('ModernCanvasDirectStrokes')||newUiEl('ModernCanvasDirectStrokes').checked,
-            horizonMask:!newUiEl('ModernCanvasDirectMask')||newUiEl('ModernCanvasDirectMask').checked}};
+            fills:pipeline||!newUiEl('ModernCanvasDirectFills')||newUiEl('ModernCanvasDirectFills').checked,
+            strokes:pipeline||!newUiEl('ModernCanvasDirectStrokes')||newUiEl('ModernCanvasDirectStrokes').checked,
+            horizonMask:pipeline||!newUiEl('ModernCanvasDirectMask')||newUiEl('ModernCanvasDirectMask').checked}};
         // Render once outside measured callbacks. This is also the DOM-only
         // reference and the immutable bitmap copied into a separate canvas.
         baseline={A:studioPreviewRenderer.render(frameSample,'A',graphs.A,settings),B:null};
@@ -3099,11 +3115,12 @@
           otherCopy.drawImage(canvasB,0,0);
         }
         var env=canvasEnvironment(graphs.A,frameSample,frameTime);
-        function renderer(layerSettings){
+        function renderer(layerSettings,sourceSample){
           var options=layerSettings?Object.assign({},settings,
             {canvasDirectDiagnostics:layerSettings}):settings;
-          var a=studioPreviewRenderer.render(frameSample,'A',graphs.A,options);
-          var b=baseline.B?studioPreviewRenderer.render(frameSample,'B',graphs.B,options):null;
+          var sample=sourceSample||frameSample;
+          var a=studioPreviewRenderer.render(sample,'A',graphs.A,options);
+          var b=baseline.B?studioPreviewRenderer.render(sample,'B',graphs.B,options):null;
           return {A:a,B:b};
         }
         function metrics(res,post){
@@ -3119,6 +3136,7 @@
             return values.length?fn.apply(Math,values):null;
           }
           var data={rendererMs:res?post:null,postMs:null,
+            geometryMs:sum(t,u,'geometryMs'),
             projectionMs:sum(t,u,'projectionMs'),canvasMs:sum(t,u,'canvasMs'),
             fillCalls:sum(da,db,'fillCalls'),strokeCalls:sum(da,db,'strokeCalls'),
             strokePrimitives:sum(da,db,'strokePrimitives'),
@@ -3139,10 +3157,31 @@
         studioBenchmark=studioBenchmarkApi.create({
           requestFrame:function(cb){return requestAnimationFrame(cb);},
           cancelFrame:function(id){cancelAnimationFrame(id);},now:profileNow,
-          step:function(mode){
+          step:function(mode,frame){
             if(studioPlayback!==player||!animationWorkspaceOpen||document.hidden)
               throw Error('Benchmark interrupted by workspace or visibility change');
             var began=profileNow(),results=null,info;
+            if(profile==='canvas-pipeline'){
+              // The moving branches sample the identical normalized trajectory
+              // per pass and per frame. The fixed branch repeats the exact
+              // same physical scene/camera without advancing any geometry.
+              var moved=mode!=='pipeline_fixed_redraw';
+              var sampled=frameSample,at=frameTime,sampleBegan=profileNow();
+              if(moved){
+                var fraction=(frame.iteration+1)/frame.totalFrames;
+                at=Math.min(player.status().durationMs,
+                  player.status().durationMs*(.025+.95*fraction));
+                player.seek(at,profileNow());sampled=player.sample();
+              }
+              var sampleMs=profileNow()-sampleBegan;
+              var flags={fills:true,strokes:true,horizonMask:true,strokeMode:'normal',
+                skipCanvasPaint:mode==='pipeline_projection_only'};
+              results=renderer(flags,sampled);
+              info=metrics(results,profileNow()-began);
+              info.timelineMs=at;info.sampleMs=sampleMs;
+              info.painted=mode==='pipeline_projection_only'?0:1;
+              return info;
+            }
             if((mode.indexOf('canvas_')===0&&mode!=='canvas_only')||mode.indexOf('stroke_')===0){
               // Every diagnostic starts with identical geometry, mask, fills,
               // and outlines, independent of the live display checkboxes.
@@ -3201,7 +3240,8 @@
             throw Error('Unexpected benchmark mode');
           },
           progress:function(state){
-            var count=profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:
+            var count=profile==='canvas-pipeline'?studioBenchmarkApi.PIPELINE_MODES.length:
+              profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:
               profile==='canvas-strokes'?studioBenchmarkApi.STROKE_MODES.length:
               profile==='canvas-stroke-styles'?studioBenchmarkApi.STROKE_STYLE_MODES.length:
               profile==='canvas-stroke-widths'?studioBenchmarkApi.STROKE_WIDTH_MODES.length:
@@ -3211,7 +3251,19 @@
           },
           completed:function(report){
             studioBenchmarkLastReport=report;restore();
-            status(profile==='canvas-layers'?
+            function gap(mode){
+              var row=report.summary&&report.summary[mode];
+              var value=row&&row.gapMs;
+              return value&&Number.isFinite(value.p50)&&Number.isFinite(value.p95)?
+                value.p50.toFixed(1)+' / '+value.p95.toFixed(1)+' ms':'—';
+            }
+            status(profile==='canvas-pipeline'?
+              'Canvas pipeline diagnosis complete. RAF gap p50 / p95:\n'+
+              'Full motion: '+gap('pipeline_full')+'\n'+
+              'Projection only: '+gap('pipeline_projection_only')+'\n'+
+              'Frozen redraw: '+gap('pipeline_fixed_redraw')+'\n'+
+              'These are callback gaps, not presented-frame FPS. JSON downloaded automatically.':
+              profile==='canvas-layers'?
               'Canvas layers benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
               profile==='canvas-strokes'?
               'Canvas strokes benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
@@ -3226,7 +3278,16 @@
           failed:function(error){restore();status('Benchmark failed: '+error.message);},
           cancelled:function(){restore();status('Benchmark cancelled; Playback restored.');}
         });
-        studioBenchmark.start({environment:env,profile:profile});
+        if(pipeline){
+          env.diagnostics={fills:true,outlines:true,mask:true};
+          env.pipeline={timebase:'RAF callbacks',trajectory:'same normalized playhead for full/projection',
+            screenshotMode:'fixed scene redraw, geometry cache reused',
+            drawingDisabled:'projection-only painter and overlays, no Canvas drawing',
+            previewFpsBypassed:true,frameTimingObserverEnabled:!!(studioFrameTiming&&studioFrameTiming.enabled())};
+        }
+        studioBenchmark.start(pipeline?
+          {environment:env,profile:profile,passes:2,warmupFrames:10,sampleFrames:50}:
+          {environment:env,profile:profile});
       }catch(error){restore();status('Benchmark could not start: '+error.message);}
     }
     run.addEventListener('click',function(){startBenchmark('playback');});
@@ -3234,6 +3295,10 @@
     if(strokesRun)strokesRun.addEventListener('click',function(){startBenchmark('canvas-strokes');});
     if(stylesRun)stylesRun.addEventListener('click',function(){startBenchmark('canvas-stroke-styles');});
     if(widthsRun)widthsRun.addEventListener('click',function(){startBenchmark('canvas-stroke-widths');});
+    if(pipelineRun)pipelineRun.addEventListener('click',function(){startBenchmark('canvas-pipeline');});
+    if(pipelineCancel)pipelineCancel.addEventListener('click',function(){
+      if(studioBenchmark)studioBenchmark.cancel();
+    });
     cancel.addEventListener('click',function(){if(studioBenchmark)studioBenchmark.cancel();});
     if(again)again.addEventListener('click',function(){
       if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);
@@ -3242,8 +3307,10 @@
   function syncStudioFrameTimingControls(){
     var allowed=!!(studioPrepared&&studioPlayback&&studioPlaybackQuality==='canvas-direct'&&
       animationWorkspaceOpen&&!(studioBenchmark&&studioBenchmark.running()));
-    var toggle=newUiEl('ModernAnimationFrameTimingEnabled');
+    var pipelineButton=newUiEl('ModernAnimationPipelineRun');
+    if(pipelineButton)pipelineButton.disabled=!allowed;
     var enabled=!!(studioFrameTiming&&studioFrameTiming.enabled());
+    var toggle=newUiEl('ModernAnimationFrameTimingEnabled');
     var running=enabled&&studioFrameTiming.autoRunning();
     if(toggle){toggle.disabled=!allowed;toggle.checked=enabled;}
     var auto=newUiEl('ModernAnimationFrameTimingAuto');if(auto)auto.disabled=!allowed||!enabled||running;

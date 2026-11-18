@@ -1,7 +1,7 @@
-/* One-click, opt-in Canvas Direct comparison. A fixed experiment sample is
- * provided by the app: the benchmark neither ticks the player nor mutates its
- * project. Only browser RAF callbacks contribute measured rows; first-frame
- * setup and mode transitions are explicitly warmed up.
+/* One-click, opt-in Canvas Direct comparisons. Most profiles use one fixed
+ * sample; the canvas-pipeline profile advances identical sampled frames for
+ * full vs projection-only, with one frozen control. Only browser RAF callbacks
+ * contribute measured rows; initial setup and transitions are warmed up.
  */
 (function(root,factory){
   var api=factory();
@@ -10,6 +10,10 @@
 }(typeof window!=='undefined'?window:globalThis,function(){
   'use strict';
   var MODES=Object.freeze(['normal','canvas_only','dom_only','bitmap_replay','compute_only']);
+  // The same project, viewport and direct painter are exercised in three
+  // independent RAF-controlled pipelines; no live Play timer is needed.
+  var PIPELINE_MODES=Object.freeze(['pipeline_full','pipeline_projection_only',
+    'pipeline_fixed_redraw']);
   var LAYER_MODES=Object.freeze(['canvas_full','canvas_no_fills','canvas_no_strokes','canvas_no_mask']);
   var STROKE_MODES=Object.freeze(['stroke_baseline','stroke_path_only','stroke_simple','stroke_batched']);
   var STROKE_STYLE_MODES=Object.freeze(['stroke_baseline','stroke_opaque','stroke_black',
@@ -20,6 +24,7 @@
     'stroke_width_0_75','stroke_width_1','stroke_width_1_125','stroke_width_1_25',
     'stroke_width_1_5','stroke_width_2','stroke_width_3','stroke_width_4']);
   var METRICS=['gapMs','callbackMs','rendererMs','postMs','projectionMs','canvasMs',
+    'sampleMs','geometryMs','timelineMs','painted',
     'fillCalls','strokeCalls','strokePrimitives',
     'strokeTranslucent','strokeNonUnitWidth','strokeNonBlack','strokeRoundJoin',
     'strokeWidthMinPx','strokeWidthMaxPx',
@@ -66,14 +71,20 @@
         });
         var report={schema:'curvature-playback-benchmark/1',createdAt:new Date().toISOString(),
           config:{warmupFrames:config.warmupFrames,sampleFrames:config.sampleFrames,
-            passes:config.passes,modes:config.modes.slice(),camera:'fixed for every mode',
+            passes:config.passes,modes:config.modes.slice(),camera:config.profile==='canvas-pipeline'?'moving for full/projection, frozen for redraw':'fixed for every mode',
             profile:config.profile,
             widthSweepUnits:config.profile==='canvas-stroke-widths'?'Canvas backing-store pixels':undefined},
           environment:config.environment,runs:runs,summary:summary,
           notes:['RAF intervals include browser scheduling and deferred graphics work.',
             'JavaScript timings do not include deferred GPU or compositor time.',
             'DOM only reuses the last rendered result; bitmap replay uses one drawImage.',
-            'All modes use a frozen camera/sample, including Normal.',
+            config.profile==='canvas-pipeline'?
+              'Canvas pipeline: Full and Projection only use identical advancing animation samples; Fixed redraw reuses one frozen sample, reprojects and repaints it.':
+              'All modes use a frozen camera/sample, including Normal.',
+            config.profile==='canvas-pipeline'?
+              'Projection only runs Canvas Direct geometry, projection, clipping and visibility classification, but deliberately emits no Canvas paint commands, screen guides or decorations.':
+              'The existing benchmark modes are fixed-frame measurements.',
+            'RAF callback gaps are not presented-frame FPS; Canvas CPU time excludes deferred rasterization.',
             'Canvas operation counts cover only the Canvas Direct painter (excluding decorations).',
             'Layer and stroke passes force fills, outlines, and horizon mask on.',
             'Stroke path-only builds the same paths and suppresses only stroke() calls.',
@@ -99,7 +110,10 @@
       frame=null;if(!active)return;
       try{
         var at=options.now();
-        var payload=options.step(current.mode)||{};
+        var payload=options.step(current.mode,{pass:current.pass,
+          iteration:iteration,modeIndex:current.orderInPass,
+          warmup:iteration<config.warmupFrames,
+          totalFrames:config.warmupFrames+config.sampleFrames})||{};
         var elapsed=options.now()-at;
         var gap=lastAt===null?null:at-lastAt;
         lastAt=at;iteration++;
@@ -132,9 +146,10 @@
         environment:settings.environment||{},
         profile:settings.profile||'playback',modes:null};
       if(!['playback','canvas-layers','canvas-strokes','canvas-stroke-styles',
-        'canvas-stroke-widths'].includes(config.profile))
+        'canvas-stroke-widths','canvas-pipeline'].includes(config.profile))
         throw RangeError('Invalid benchmark profile');
-      config.modes=config.profile==='canvas-layers'?LAYER_MODES:
+      config.modes=config.profile==='canvas-pipeline'?PIPELINE_MODES:
+        config.profile==='canvas-layers'?LAYER_MODES:
         config.profile==='canvas-strokes'?STROKE_MODES:
         config.profile==='canvas-stroke-styles'?STROKE_STYLE_MODES:
         config.profile==='canvas-stroke-widths'?STROKE_WIDTH_MODES:MODES;
@@ -148,7 +163,8 @@
     }
     return Object.freeze({start:start,cancel:stop,running:isRunning});
   }
-  return Object.freeze({MODES:MODES,LAYER_MODES:LAYER_MODES,STROKE_MODES:STROKE_MODES,
+  return Object.freeze({MODES:MODES,PIPELINE_MODES:PIPELINE_MODES,
+    LAYER_MODES:LAYER_MODES,STROKE_MODES:STROKE_MODES,
     STROKE_STYLE_MODES:STROKE_STYLE_MODES,STROKE_WIDTH_MODES:STROKE_WIDTH_MODES,
     percentiles:percentiles,order:order,create:create});
 }));

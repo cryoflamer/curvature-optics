@@ -901,6 +901,41 @@ PNG/video export quality. Do not mistake synchronous Canvas API timings for
 deferred browser raster/composition time. Run from a representative slow frame
 with Canvas Direct selected and avoid changing the browser window mid-run.
 
+### One-click Canvas Direct pipeline diagnosis
+
+With an animation prepared in **Animation Studio**, choose **Canvas Direct** and
+open **Canvas Direct · frame timing**. Click **Run 3-mode pipeline diagnosis ·
+auto-export** once; there is no need to enable the separate input/RAF recording
+checkbox, move the slider, or press Play. The new diagnostic pauses Playback,
+runs two rotated passes through three modes (10 warmup + 50 measured RAF
+callbacks per mode), restores the original playhead/playing state, and downloads
+one `curvature-playback-benchmark-*.json` report automatically. Progress and a
+brief p50/p95 comparison appear in the same panel. **Cancel diagnosis** restores
+Playback without saving partial data. The renderer's normal quality, optics,
+geometry, export, and authored scene are not changed; the diagnostic locally
+forces fills, strokes and horizon mask on, restoring the user's display toggles.
+
+- **Full motion**: sample the moving camera/scene, compute the Canvas Direct
+  geometry/projection/clipping, and issue the usual Canvas drawing commands.
+- **Projection only**: use the *same* sampled moving trajectory and the same
+  geometry/projection/clipping, but suppress Canvas paint commands, guides and
+  decorations; this is **not** the Playback profiler's earlier lightweight
+  playhead-only `Compute only` mode.
+- **Frozen redraw**: repeatedly draw one fixed scene/camera with the normal
+  Canvas Direct renderer; geometry is cached, while projection and painting
+  still run. This is **not** a bitmap blit.
+
+The report contains RAF gaps, total synchronous callback time, renderer, mesh,
+projection and Canvas CPU timings and operation counts for each mode. A large
+gap in Full/Frozen but not Projection only suggests graphics-pipeline pressure,
+not proof of a specific `stroke()` defect. A similar gap across all modes
+suggests a different scheduling source. **RAF callback intervals are not
+presented-frame FPS**, and Canvas API call time excludes deferred rasterization.
+This test intentionally uses an independent unthrottled RAF benchmark clock
+rather than the normal Play timer, so the FPS Preview selection is recorded but
+not enforced. Test in Opera with the same viewport; compare the resulting JSON
+before making renderer or scheduling changes.
+
 ### Animation performance and pixel parity
 
 After #140.12.120.6 the Animation Studio has a collapsible **Performance & pixel parity**

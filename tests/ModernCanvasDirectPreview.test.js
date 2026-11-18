@@ -426,3 +426,27 @@ test('stroke width overrides validate values before Canvas painting',()=>{
   assert.throws(()=>draw(m,{canvasDirectDiagnostics:{strokeMode:'simple',strokeWidth:1}}),
     /Invalid Canvas Direct diagnostic stroke width/);
 });
+
+
+test('projection-only benchmark runs real clipping but never sends Canvas draw commands',()=>{
+  const m=soundly(),g=graph(),opts={atmosphere:'vacuum',
+    opticalQuality:'canvas-direct',deferDecorations:true};
+  const full=renderer.renderPhysical(g.g,m,opts);
+  assert.ok(full.directStats.strokeCalls>0&&full.timings.projectionMs>=0);
+  const projectionGraph=graph();
+  const projection=renderer.renderPhysical(projectionGraph.g,m,{...opts,
+    canvasDirectDiagnostics:{fills:true,strokes:true,horizonMask:true,
+      strokeMode:'normal',skipCanvasPaint:true}});
+  assert.equal(projection.drawn,full.drawn);
+  assert.equal(projection.primitiveCount,full.primitiveCount);
+  assert.equal(projection.directStats.horizonMasks,full.directStats.horizonMasks);
+  assert.equal(projection.directStats.strokeCalls,0);
+  assert.equal(projection.directStats.fillCalls,0);
+  assert.ok(projection.timings.projectionMs>=0);
+  for(const [command,count] of Object.entries(projectionGraph.stats().called))
+    assert.equal(count,0,'projection-only must not call '+command);
+  const restored=renderer.renderPhysical(projectionGraph.g,m,opts);
+  assert.ok(restored.directStats.strokeCalls>0);
+  assert.equal(restored.drawn,full.drawn);
+  assert.equal(restored.primitiveCount,full.primitiveCount);
+});

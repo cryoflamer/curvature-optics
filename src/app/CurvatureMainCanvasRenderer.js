@@ -133,7 +133,9 @@
       try{
         ctx.setTransform(1,0,0,1,0,0);
         direct=directSession.paint(g.Canvas,camera,m,options);
-        if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera,
+        if(decorations&&!options.deferDecorations&&
+           !(options.canvasDirectDiagnostics&&options.canvasDirectDiagnostics.skipCanvasPaint))
+          decorations.draw(g.Canvas,m,camera,
           {showCaptions:options.showCaptions!==false,captionMode:options.captionMode,
            includeGeometrySummary:options.includeGeometrySummary===true});
       }finally{ctx.restore();}

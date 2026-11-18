@@ -45,7 +45,7 @@ function harness(){
     studioBenchmarkLastReport:null,studioPlayback:player,studioPrepared:{id:'soundly',mode:'camera'},
     studioPlaybackExperiment:probe,studioPlaybackFps:'auto',studioPlaybackQuality:'canvas-direct',
     studioPlaybackDetail:'full',studioPlaybackFpsMeter:{reset(){}},
-    studioPlaybackLastPaint:25,studioPlaybackNextDue:20,
+    studioPlaybackLastPaint:25,studioPlaybackNextDue:20,studioFrameTiming:null,
     animationWorkspaceOpen:true,studioPreviewApi:{create(){return painter;}},
     studioPreviewRenderer:painter,studioPlaybackProfileEnabled:false,
     root:{navigator:{userAgent:'Test Opera'},devicePixelRatio:1.5,
@@ -76,7 +76,7 @@ function harness(){
     const [[id,callback]]=queue;queue.delete(id);
     now+=12;callback(now);
   }
-  return {context,node,queue,tick,downloads,paintOptions,get renderCount(){return renderCount;},
+  return {context,node,queue,tick,downloads,paintOptions,get position(){return position;},get renderCount(){return renderCount;},
     get playing(){return playing;},get starts(){return starts;},get stops(){return stops;}};
 }
 
@@ -208,4 +208,54 @@ test('stroke width sweep exports 30 runs with exact width overrides and restores
   assert.equal(h.node('ModernAnimationBenchmarkStrokeWidths').disabled,false);
   assert.equal(h.playing,true);
   assert.match(h.node('ModernAnimationBenchmarkStatus').textContent,/30 runs across ten modes/);
+});
+
+
+test('one click runs all three physical Canvas Direct pipeline modes and auto-exports one JSON',()=>{
+  const h=harness();
+  h.node('ModernCanvasDirectStrokes').checked=false;
+  h.node('ModernAnimationPipelineRun').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),true);
+  assert.equal(h.node('ModernAnimationPipelineRun').disabled,true);
+  assert.equal(h.node('ModernAnimationPipelineCancel').hidden,false);
+  for(let i=0;h.context.studioBenchmark.running()&&i<500;i++)h.tick();
+  assert.equal(h.context.studioBenchmark.running(),false);
+  assert.equal(h.downloads.length,1,'one click automatically downloads one file');
+  const {json}=h.downloads[0];
+  assert.equal(json.config.profile,'canvas-pipeline');
+  assert.deepEqual(Array.from(json.config.modes),
+    ['pipeline_full','pipeline_projection_only','pipeline_fixed_redraw']);
+  assert.equal(json.runs.length,6);
+  assert.equal(json.summary.pipeline_full.frames,100);
+  assert.equal(json.summary.pipeline_projection_only.frames,100);
+  assert.equal(json.summary.pipeline_fixed_redraw.frames,100);
+  assert.equal(json.environment.pipeline.drawingDisabled,
+    'projection-only painter and overlays, no Canvas drawing');
+  assert.equal(json.summary.pipeline_fixed_redraw.timelineMs.p50,40000);
+  assert.ok(json.summary.pipeline_full.timelineMs.p50>0);
+  assert.ok(json.summary.pipeline_projection_only.timelineMs.p50>0);
+  assert.ok(h.paintOptions.some(x=>x.skipCanvasPaint===true));
+  assert.ok(h.paintOptions.some(x=>x.skipCanvasPaint===false));
+  assert.ok(h.paintOptions.filter(x=>x.strokeMode==='normal').every(x=>
+    x.fills===true&&x.strokes===true&&x.horizonMask===true));
+  assert.equal(h.node('ModernCanvasDirectStrokes').checked,false,
+    'authored viewing switches must remain untouched');
+  assert.equal(h.position,40000,'the original timeline position is restored');
+  assert.equal(h.playing,true,'the original playback state is restored');
+  assert.equal(h.node('ModernAnimationPipelineRun').disabled,false);
+  assert.equal(h.node('ModernAnimationPipelineCancel').hidden,true);
+  assert.match(h.node('ModernAnimationPipelineStatus').textContent,/complete[\s\S]*JSON downloaded/);
+});
+
+test('one-click pipeline cancellation restores player without exporting incomplete data',()=>{
+  const h=harness();h.node('ModernAnimationPipelineRun').emit('click');
+  for(let i=0;i<15;i++)h.tick();
+  h.node('ModernAnimationPipelineCancel').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),false);
+  assert.equal(h.queue.size,0);
+  assert.equal(h.downloads.length,0);
+  assert.equal(h.position,40000);
+  assert.equal(h.playing,true);
+  assert.equal(h.node('ModernAnimationPipelineCancel').hidden,true);
+  assert.match(h.node('ModernAnimationPipelineStatus').textContent,/cancelled/);
 });

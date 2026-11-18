@@ -237,3 +237,64 @@ test('stroke width profile rotates ten width variants and preserves full RAF tel
   }
   assert.match(h.result.notes.join(' '),/backing-store pixels/);
 });
+
+
+test('one-click pipeline diagnosis rotates full, projection-only and frozen redraw with matching frame indices',()=>{
+  const modes=benchmark.PIPELINE_MODES;
+  assert.deepEqual(modes,['pipeline_full','pipeline_projection_only','pipeline_fixed_redraw']);
+  const h=harness();
+  h.runner.start({profile:'canvas-pipeline',passes:2,warmupFrames:2,sampleFrames:5,
+    environment:{previewFps:'auto',quality:'canvas-direct'}});
+  for(let i=0;h.runner.running()&&i<100;i++)h.tick();
+  assert.ok(h.result);
+  assert.equal(h.result.config.profile,'canvas-pipeline');
+  assert.equal(h.result.config.camera,'moving for full/projection, frozen for redraw');
+  assert.equal(h.result.runs.length,6);
+  assert.deepEqual(h.result.runs.slice(0,3).map(x=>x.mode),benchmark.order(0,modes));
+  assert.deepEqual(h.result.runs.slice(3,6).map(x=>x.mode),benchmark.order(1,modes));
+  for(const mode of modes){
+    assert.equal(h.result.summary[mode].frames,10);
+    assert.equal(h.result.summary[mode].gapMs.count,10);
+  }
+  assert.match(h.result.notes.join(' '),/Projection only runs Canvas Direct geometry/);
+  assert.match(h.result.notes.join(' '),/not presented-frame FPS/);
+  assert.equal(h.result.runs[0].rows.length,5);
+});
+
+test('pipeline step receives identical per-run iteration indices after each mode rotation',()=>{
+  const scheduled=new Map(),seen=[];
+  let id=0,clock=0,report=null;
+  const runner=benchmark.create({now:()=>clock,
+    requestFrame(fn){scheduled.set(++id,fn);return id;},
+    cancelFrame(key){scheduled.delete(key);},
+    step(mode,frame){seen.push({mode,...frame});clock+=3;return {sampleMs:1,painted:mode==='pipeline_projection_only'?0:1};},
+    progress(){},completed(r){report=r;},failed(e){throw e;},cancelled(){}});
+  runner.start({profile:'canvas-pipeline',passes:2,warmupFrames:1,sampleFrames:2});
+  while(runner.running()){
+    const [key,fn]=scheduled.entries().next().value;
+    scheduled.delete(key);clock+=16;fn(clock);
+  }
+  for(let i=0;i<6;i++){
+    assert.deepEqual(seen.slice(i*3,i*3+3).map(row=>row.iteration),[0,1,2]);
+    assert.equal(seen[i*3].pass,1+Math.floor(i/3));
+  }
+  assert.equal(report.summary.pipeline_projection_only.painted.p50,0);
+  assert.equal(report.summary.pipeline_full.painted.p50,1);
+  assert.equal(report.summary.pipeline_fixed_redraw.painted.p50,1);
+  assert.equal(report.summary.pipeline_full.sampleMs.p50,1);
+});
+
+test('one-click pipeline UI has its own launch, cancel and visible result status',()=>{
+  const html=fs.readFileSync('CurvatureModern.html','utf8');
+  const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
+  const direct=fs.readFileSync('src/renderers/CurvatureCanvasDirectPreview.js','utf8');
+  for(const id of ['ModernAnimationPipelineRun','ModernAnimationPipelineCancel',
+    'ModernAnimationPipelineStatus'])assert.ok(html.includes('id="'+id+'"'));
+  assert.match(app,/startBenchmark\('canvas-pipeline'\)/);
+  assert.match(app,/skipCanvasPaint:mode==='pipeline_projection_only'/);
+  assert.match(app,/passes:2,warmupFrames:10,sampleFrames:50/);
+  assert.match(app,/if\(pipelineRun\)pipelineRun\.addEventListener\('click'/);
+  assert.match(app,/if\(pipelineCancel\)pipelineCancel\.addEventListener\('click'/);
+  assert.match(direct,/if\(skipCanvasPaint\)/);
+  assert.ok(!fs.readFileSync('CurvatureApp.html','utf8').includes('ModernAnimationPipelineRun'));
+});

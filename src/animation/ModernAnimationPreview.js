@@ -216,7 +216,12 @@
         reason=error.message;
         result=renderer.renderPhysical(graph,config.model,config.options);
       }
-      var overlays=guides(config,side,graph);
+      // Suppress screen guides as well as the physical Canvas painter in the
+      // geometry/projection-only benchmark. Do not change ordinary playback.
+      var overlays=options&&options.canvasDirectDiagnostics&&
+        options.canvasDirectDiagnostics.skipCanvasPaint?
+        {eyeLevel:'skipped for diagnostics',horizon:'skipped for diagnostics'}:
+        guides(config,side,graph);
       return {quality:config.quality,requestedQuality:config.requestedQuality,
         fallback:reason,fallbackCount:fallbackCount,
         overlays:overlays,result:result,cameraModel:config.model};
