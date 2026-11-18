@@ -133,9 +133,9 @@ test('a rendering failure halts the player, cancels scheduled frames and reports
 
 test('clock display distinguishes sampled frame and supports zero-duration playheads',()=>{
   assert.deepEqual(controlsApi.describe({positionMs:1500,durationMs:3000,playing:true},800),
-    {seek:'500',time:'1.5 / 3.0 s (image at 0.8s)',playing:true});
+    {seek:'500',time:'1.50 / 3.00 s (image at 0.80s)',playing:true});
   assert.deepEqual(controlsApi.describe({positionMs:0,durationMs:0,playing:false},null),
-    {seek:'0',time:'0.0 / 0.0 s',playing:false});
+    {seek:'0',time:'0.00 / 0.00 s',playing:false});
 });
 
 test('browser UMD loads before ModernApp and Play/Pause/Stop/Seek are wired to controller',()=>{
@@ -155,4 +155,21 @@ test('browser UMD loads before ModernApp and Play/Pause/Stop/Seek are wired to c
 
 test('missing coordinator dependencies are rejected, not silently replaced by a stale player',()=>{
   assert.throws(()=>controlsApi.create({}),/live player and UI callbacks/);
+});
+
+test('keyframe jump pauses and cancels stale RAF, seeking exact milliseconds independent of slider',()=>{
+  const h=harness();h.controls.play();const stale=h.takeFrame();
+  h.now(1250);h.events.length=0;
+  h.controls.jumpTo(1234.5);
+  assert.equal(h.player().status().positionMs,1234.5);
+  assert.equal(h.player().status().playing,false);
+  assert.equal(h.controls.hasFrame(),false);
+  assert.deepEqual(h.events,['cancel-initial','invalidate','sync']);
+  assert.deepEqual(h.initial,['keyframe']);
+  assert.equal(h.saves.at(-1),false);
+  stale(1800);assert.equal(h.player().status().positionMs,1234.5);
+  h.controls.play();assert.deepEqual(h.renders.at(-1),{force:true,at:1234.5});
+  h.frame(1500);assert.equal(h.player().status().positionMs,1484.5);
+  assert.throws(()=>h.controls.jumpTo(-1),/Invalid keyframe time/);
+  assert.throws(()=>h.controls.jumpTo(3001),/Invalid keyframe time/);
 });

@@ -996,12 +996,12 @@
       host.appendChild(el(doc,'strong','',draft.name));
       host.appendChild(el(doc,'p','modern-studio-hint',draft.description));
       host.appendChild(el(doc,'p','modern-studio-hint',
-        'Play or seek above. Create copy in Animation Library to change this project.'));
+        'Select a keyframe to pause and jump to its arrival time, or play and seek above. Create copy in Animation Library to change this project.'));
       var list=el(doc,'ol','modern-studio-filmstrip');
       list.setAttribute('aria-label','Read-only keyframes');
       draft.frames.forEach(function(frame,i){
         var item=el(doc,'li','modern-studio-filmstrip-item');
-        var control=button(doc,(i+1)+' · '+frame.name,'Inspect keyframe '+(i+1),function(){actions.select(frame.key);});
+        var control=button(doc,(i+1)+' · '+frame.name,'Jump to keyframe '+(i+1),function(){actions.select(frame.key);});
         control.className+=' modern-studio-keyframe'+(frame===selected?' is-active':'');
         control.setAttribute('aria-pressed',String(frame===selected));
         item.appendChild(control);list.appendChild(item);
@@ -1018,7 +1018,7 @@
       return;
     }
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Edit keyframes below. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
+      'Select a keyframe to pause and jump to its arrival when compatible and included in the preview. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});

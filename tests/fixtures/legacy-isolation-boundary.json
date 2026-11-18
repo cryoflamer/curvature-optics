@@ -706,6 +706,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationDraftAutosave.test.js",
+        "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationPlayback.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
@@ -790,6 +791,7 @@
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
+        "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationParallelExport.test.js",
@@ -856,6 +858,7 @@
         "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
+        "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
@@ -868,6 +871,7 @@
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAnimationWorkspaceRecovery.test.js",
         "tests/ModernCameraSpline.test.js",
+        "tests/ModernDemoCatalog.test.js",
         "tests/ModernHistoryCleanup.test.js",
         "tests/ModernSemanticNaming.test.js"
       ],
@@ -983,6 +987,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernDemoCatalog.test.js"

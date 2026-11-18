@@ -25,7 +25,9 @@ demo card offers direct copy and portable export. My Projects retains independen
 backup selection and shows inherited covers before thumbnails. Personal cover
 editing is implemented. Soundly plays synchronized Globe/Flat vacuum Compare
 with Canvas Direct by default; the original Scene JSON is preserved.
-Presentation Mode is next; browser acceptance remains open.
+Click a compatible keyframe to pause and jump to its exact arrival time.
+Keyframe thumbnail capture and persistence are next, followed by Presentation
+Mode; browser acceptance remains open.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

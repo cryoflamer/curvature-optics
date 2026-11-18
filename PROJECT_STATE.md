@@ -1,3 +1,13 @@
+## Modern Demo Catalog — keyframe navigation (4A)
+
+Click a compatible included keyframe to pause and jump to its exact arrival
+(time in milliseconds), including Read-only Soundly. Compatible unprepared
+projects auto-prepare; excluded and incompatible cards remain selection-only.
+The same paused-frame renderer and retry lifecycle are reused; no authored
+project changes, new optical solver or thumbnail writes. The clock displays
+hundredths of a second. Next: 4B lazy keyframe thumbnail capture and 4C separate
+IndexedDB persistence before Presentation Mode.
+
 ## Modern Demo Catalog — synchronized Compare playback (4)
 
 Soundly opens in Globe/vacuum vs Flat/vacuum Compare with Canvas Direct
@@ -7,7 +17,7 @@ unchanged. Copies and portable export use Compare. Existing shared clock,
 paired fallback and Accurate exports are reused. Both canvases are covered
 by an opaque error notice if a paired paint fails. Isolated real Canvas
 checks passed at nine representative times; full-page browser acceptance
-and actual FPS remain open. Presentation Mode is next.
+and actual FPS remain open.
 
 ## Modern Demo Catalog — project cover editor (3A)
 

@@ -174,3 +174,47 @@ test('scheduling a hidden preview invalidates a pending visible paint',()=>{
 test('invalid lifecycle dependencies fail explicitly instead of silently skipping frames',()=>{
   assert.throws(()=>lifecycle.create({}),/frame scheduling/);
 });
+
+test('rapid keyframe navigation paints only the latest arrival and does not scroll',()=>{
+  const h=harness();h.setPosition(8500);
+  h.ctx.scheduleStudioInitialPaint('keyframe');h.frame();
+  h.setPosition(20950);h.ctx.scheduleStudioInitialPaint('keyframe');
+  assert.match(h.node('ModernAnimationPlaybackStatus').textContent,/selected keyframe/);
+  h.flush();assert.deepEqual(h.paints,[20950]);
+  assert.deepEqual(h.navigation,[]);
+  assert.equal(h.ctx.studioPlaybackRenderedAt,20950);
+});
+
+test('ModernApp keyframe routing prepares a compatible draft and leaves incompatible or excluded cards alone',()=>{
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const projects=require('../src/animation/ModernAnimationProject');
+  const playback=require('../src/animation/ModernAnimationPlayback');
+  const [demo]=require('../src/animation/ModernDemoCatalog').load();
+  const draft=studio.fromProject(demo.project),effects=[];
+  const context={studioApi:studio,studioProjects:projects,studioPlaybackApi:playback,
+    studioDraft:draft,studioPrepared:null,studioPlayback:null,studioActiveDemo:null,
+    studioPlaybackRenderedAt:0,studioPreviewNavigation:{cancel(){effects.push('cancel navigation');}},
+    stopStudioPlayback(clear){assert.equal(clear,true);effects.push('stop');},
+    ensureStudioPlaybackControls(){return {jumpTo(ms){
+      assert.equal(context.studioPlaybackRenderedAt,null);
+      context.studioPlayback.seek(ms,1000);effects.push(ms);
+    }};}};
+  const begin=app.indexOf('  function navigateStudioKeyframe(');
+  const end=app.indexOf('  // Animation Studio owns',begin);
+  assert.ok(begin>0&&end>begin);vm.runInNewContext(app.slice(begin,end),context);
+  assert.equal(context.navigateStudioKeyframe(draft.frames[3].key),true);
+  assert.deepEqual(effects,['stop','cancel navigation',20950]);
+  assert.equal(context.studioPlayback.status().positionMs,20950);
+  assert.equal(context.studioDraft,draft);
+  context.studioActiveDemo=demo;context.studioPrepared=demo.project;
+  assert.equal(context.navigateStudioKeyframe(draft.frames[0].key),false);
+  assert.equal(context.studioPlayback.status().positionMs,0);
+  effects.length=0;
+  context.studioDraft={...draft,activeFrameKeys:[draft.frames[0].key,draft.frames[1].key]};
+  assert.equal(context.navigateStudioKeyframe(draft.frames[3].key),false);
+  assert.deepEqual(effects,[]);
+  context.studioActiveDemo=null;context.studioPrepared=null;context.studioPlayback=null;
+  context.studioDraft={...draft,frames:[draft.frames[0]]};
+  assert.equal(context.navigateStudioKeyframe(draft.frames[0].key),false);
+  assert.deepEqual(effects,[]);
+});

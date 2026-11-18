@@ -322,6 +322,16 @@ Stop resets the playhead and requests a first-frame repaint without navigating
 away from the editor. Seek renders the exact selected position, while the
 on-screen clock distinguishes its value from the last physically painted frame.
 
+Explicit keyframe-card selection is a navigation action when the frame is in
+the compatible active playback sequence. The Studio resolves its draft key
+against the prepared project's `timeline()` and seeks to the exact arrival
+milliseconds, pauses, cancels pending playback and uses the paused-frame
+lifecycle. Compatible unprepared drafts auto-prepare; excluded or incompatible
+cards remain selection-only. This is not an edit or a new physical sample
+algorithm. Read-only demos never checkpoint selection/time into personal
+workspaces. Images will be stored separately from the physical project and
+LocalStorage recovery checkpoint in subsequent thumbnail stages.
+
 `ModernApp.js` continues to own the actual camera/physical renderer, DOM
 controls and status text, animation project construction, draft autosave,
 Preview layout/resize lifecycle and initial frame painting. The deterministic

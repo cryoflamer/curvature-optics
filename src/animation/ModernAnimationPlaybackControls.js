@@ -12,10 +12,10 @@
   function describe(status,renderedAt){
     return {seek:String(status.durationMs?
       Math.round(1000*status.positionMs/status.durationMs):0),
-      time:(status.positionMs/1000).toFixed(1)+' / '+
-        (status.durationMs/1000).toFixed(1)+' s'+
+      time:(status.positionMs/1000).toFixed(2)+' / '+
+        (status.durationMs/1000).toFixed(2)+' s'+
         (renderedAt!==null&&Math.abs(status.positionMs-renderedAt)>500?
-          ' (image at '+(renderedAt/1000).toFixed(1)+'s)':''),
+          ' (image at '+(renderedAt/1000).toFixed(2)+'s)':''),
       playing:!!status.playing};
   }
   // Pace preview paints by their START times and a phase-preserving deadline.
@@ -128,6 +128,18 @@
       if(typeof options.invalidatePaint==='function')options.invalidatePaint();
       options.render(true);options.sync();
     }
+    // Keyframe navigation is a paused, exact-time operation. Unlike slider
+    // scrubbing, it cancels the live clock and uses the layout-aware paint path.
+    function jumpTo(ms){
+      var player=options.player();
+      if(!player)return;
+      if(!Number.isFinite(ms)||ms<0||ms>player.status().durationMs)
+        throw RangeError('Invalid keyframe time');
+      halt();options.cancelInitial();
+      player.seek(ms,options.now());
+      if(typeof options.invalidatePaint==='function')options.invalidatePaint();
+      options.save(false);options.sync();options.scheduleInitial('keyframe');
+    }
     function visibility(hidden){
       var player=options.player();
       if(hidden&&player){
@@ -138,7 +150,7 @@
       }
     }
     return Object.freeze({cancel:cancel,halt:halt,schedule:schedule,tick:tick,
-      play:play,pause:pause,stop:stop,seek:seek,visibility:visibility,
+      play:play,pause:pause,stop:stop,seek:seek,jumpTo:jumpTo,visibility:visibility,
       hasFrame:function(){return frame!==null;}});
   }
   return Object.freeze({create:create,describe:describe,

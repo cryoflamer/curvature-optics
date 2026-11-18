@@ -354,7 +354,7 @@ test('Playback quality and rendered frame time are displayed distinctly from the
   assert.match(app,/var renderedAt=studioPlayback.status\(\).positionMs/);
   assert.match(app,/studioPlaybackRenderedAt=renderedAt/);
   assert.equal(playbackControls.describe({positionMs:2000,durationMs:4000,playing:false},1000).time,
-    '2.0 / 4.0 s (image at 1.0s)');
+    '2.00 / 4.00 s (image at 1.00s)');
   assert.match(app,/studioPlaybackControlsApi.describe\(studioPlayback.status\(\),studioPlaybackRenderedAt\)/);
   assert.match(app,/studioPrepared.mode/);
 });

@@ -199,3 +199,16 @@ test('Soundly Compare export plans keep both models on the authored timeline',()
   const [portable]=library.parsePortable(catalog.exportDemo('soundly'));
   assert.deepEqual(portable.project,p);
 });
+
+test('each Soundly keyframe jumps to the exact authored Compare sample in the detached draft',()=>{
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const [demo]=catalog.load(),draft=studio.fromProject(demo.project);
+  const timeline=projects.timeline(demo.project);
+  assert.equal(draft.frames.length,9);
+  for(const [i,frame] of draft.frames.entries()){
+    const ms=studio.keyframeArrival(draft,demo.project,frame.key);
+    assert.equal(ms,timeline[i].arrivalMs);
+    assert.deepEqual(projects.sampleAt(demo.project,ms),frame.experiment);
+  }
+  assert.equal(studio.keyframeArrival(draft,demo.project,draft.frames[3].key),20950);
+});

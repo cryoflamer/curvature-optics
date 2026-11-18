@@ -176,3 +176,16 @@ test('Timeline visually distinguishes preview membership from edit selection wit
   assert.equal(collect(noSelection.host,n=>n.className==='modern-studio-sequence-status is-excluded').length,0);
   assert.equal(collect(noSelection.host,n=>n.className==='modern-studio-filmstrip-legend').length,0);
 });
+
+test('keyframe arrival uses the prepared subsequence and not the original card index',()=>{
+  const draft=draftOf(fiveFrames());
+  const selected=studio.selectSequence(draft,studio.findSequences(draft)[1].id);
+  const project=studio.build(selected,'jump_sequence');
+  const active=studio.activeFrames(selected);
+  assert.equal(studio.keyframeArrival(selected,project,active[0].key),0);
+  assert.equal(studio.keyframeArrival(selected,project,active[1].key),animation.timeline(project)[1].arrivalMs);
+  assert.equal(studio.keyframeArrival(selected,project,draft.frames[0].key),null);
+  assert.equal(studio.keyframeArrival(selected,project,'missing'),null);
+  const wrong=studio.build(studio.selectSequence(draft,studio.findSequences(draft)[0].id),'wrong');
+  assert.throws(()=>studio.keyframeArrival(selected,wrong,active[0].key),/stale/);
+});

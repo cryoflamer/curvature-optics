@@ -267,6 +267,16 @@
       throw RangeError('Selected animation frames no longer exist');
     return draft.frames.filter(function(frame){return keys.has(frame.key);});
   }
+  // Draft keys, not History IDs or card indices, identify the active sequence.
+  // Use the validated playback timeline (its first travel is normalized to 0).
+  function keyframeArrival(draft,project,key){
+    var frames=activeFrames(draft);
+    var index=frames.findIndex(function(frame){return frame.key===key;});
+    if(index<0)return null;
+    var times=projects.timeline(project);
+    if(times.length!==frames.length)throw Error('Prepared animation sequence is stale');
+    return times[index].arrivalMs;
+  }
   function findSequences(draft){return draft.contract?[]:sequences.discover(draft.frames,draft.mode);}
   function selectSequence(draft,id){
     var found=findSequences(draft).find(function(item){return item.id===id;});
@@ -352,6 +362,6 @@
     createEditHistory:createEditHistory,recordEdit:recordEdit,endEditGroup:endEditGroup,
     stepEditHistory:stepEditHistory,
     edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
-    activeFrames:activeFrames,
+    activeFrames:activeFrames,keyframeArrival:keyframeArrival,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});
 }));

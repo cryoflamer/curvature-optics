@@ -2319,7 +2319,7 @@
         studioFrameLoading(true,'Rendering physical frame at '+(position/1000).toFixed(2)+' s…');
         var status=newUiEl('ModernAnimationPlaybackStatus');
         if(status){status.textContent=(reason==='restored'?'Restored project · ':'')+
-          'Rendering the '+(position===0?'first':'saved')+' frame (playback paused)…';
+          'Rendering the '+(reason==='keyframe'?'selected keyframe':(position===0?'first':'saved')+' frame')+' (playback paused)…';
           if(root.CurvatureModernStatusMessage)
             root.CurvatureModernStatusMessage.decorate(status,'info');}
       },
@@ -3226,6 +3226,28 @@
     if(message)message.textContent='Saved History selection appended to the Animation draft. '+
       (historyStoryboardQueue.length?'Unavailable snapshots remain for recovery.':'Migration complete.');
   }
+  // Selection is also allowed in detached demos. Only frames in the active,
+  // compatible playback sequence have a corresponding time. No edits, Undo
+  // entries or Library writes are implied by navigation.
+  function navigateStudioKeyframe(key){
+    if(!studioApi.activeFrames(studioDraft).some(function(frame){return frame.key===key;}))return false;
+    var newlyPrepared=!studioPlayback||!studioPrepared;
+    if(newlyPrepared&&!studioApi.inspect(studioDraft).compatible)return false;
+    var project=newlyPrepared?(studioActiveDemo?studioProjects.validate(studioActiveDemo.project):
+      studioApi.build(studioDraft,'studio_draft')):studioPrepared;
+    var arrival=studioApi.keyframeArrival(studioDraft,project,key);
+    if(arrival===null)return false;
+    if(newlyPrepared){
+      var player=studioPlaybackApi.create(project);
+      stopStudioPlayback(true);
+      studioPrepared=project;studioPlayback=player;
+    }
+    // A pending paint must not be mistaken for the selected frame's pixels.
+    studioPlaybackRenderedAt=null;
+    if(studioPreviewNavigation)studioPreviewNavigation.cancel();
+    ensureStudioPlaybackControls().jumpTo(arrival);
+    return newlyPrepared;
+  }
   // Animation Studio owns an independent draft, thumbnail picker and timeline.
   // Only an explicitly confirmed Camera Animation import replaces keyframes.
   function renderAnimationStudio(entries){
@@ -3356,6 +3378,9 @@
       },
       select:function(key){
         studioEditing.select(key);
+        try{
+          if(navigateStudioKeyframe(key))renderAnimationStudio(entries);
+        }catch(error){report(error);}
         var active=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-active');
         if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
       },
