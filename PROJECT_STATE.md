@@ -1,20 +1,20 @@
-## Modern Demo Catalog — lifecycle foundation (2A)
+## Modern Demo Catalog — detached Studio lifecycle (2B)
 
-Explicit built-in copy API and optional portable cover metadata implemented.
-Soundly working cover provenance is unverified; public release gate remains open.
-Next: 2B detached read-only Studio activation and mutation guards; then catalog UI.
+Soundly can be opened from the temporary Built-in demos controls in Animation
+Library. Playback and keyframe inspection are read-only; Create copy opens a
+new independent named project with its cover, Close demo restores the prior
+workspace, and Export demo produces ordinary portable JSON. Authored sources
+and user draft collections remain separate. Reload restores user work, not the
+built-in session. Browser acceptance remains open.
 
 > **Current roadmap — Modern built-in demonstrations (2026-11-18):**
-> Patch 0 recorded the architecture; patch 1 ships the immutable catalog API,
-> original Soundly JSON and deterministic classic-script data resource.
-> See [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
+> Patches 0, 1, 2A and 2B implemented; see
+> [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
 > Soundly: 9 frames, 59.1 s, spline, Globe/vacuum Scene; Compare reference
 > compatibility was previously validated, synchronized playback is not yet
-> verified. Runtime catalog loading requires no IndexedDB or fetch; the
-> generated resource is checked against the canonical JSON by Node tests.
-> No demo lifecycle or UI integration yet. Browser HTTP/file launch tests
-> were attempted but blocked by local Chromium policy; CI/Opera gate is open.
-> **NEXT: patch 2 — read-only project lifecycle and independent Create copy.**
+> verified. Catalog loading requires no IndexedDB or fetch. Working cover
+> rights remain unverified. CI/Opera browser gate is open.
+> **NEXT: patch 3 — Built-in Demos / My Projects catalog UI.**
 > User reported green CI after the obsolete profiler-test cleanup; tag
 > relocation has not been independently verified. Stage 5D remains deferred;
 > extreme fallback and measured FPS remain open. The Canvas Direct notes

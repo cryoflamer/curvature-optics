@@ -427,7 +427,7 @@ test('App timeline actions undo/redo through autosaved drafts without touching H
     }};
   const doc={listeners:{},body:{tagName:'BODY'},documentElement:{tagName:'HTML'},
     addEventListener(type,fn){this.listeners[type]=fn;}};
-  const ctx={studioApi:studio,studioEditingApi:editing,studioDraft:initial,studioSelectedKey:'history-1',
+  const ctx={studioActiveDemo:null,studioApi:studio,studioEditingApi:editing,studioDraft:initial,studioSelectedKey:'history-1',
     studioEditHistory:studio.createEditHistory(),studioPickerOpen:false,
     studioPickerChecked:{},studioPickerShowIncompatible:false,studioPickerScroll:0,
     studioFilmstripScroll:0,studioDiagnosticTransition:null,
@@ -739,7 +739,7 @@ test('Live Picker actions filter independently, keep hidden selections and inser
     studioPickerShowIncompatible:false,studioPickerChecked:Object.create(null),studioPickerScroll:0,studioFilmstripScroll:0,
     studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
     studioEditHistory:null,studioPrepared:null,studioPlayback:null,
-    studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
+    studioActiveDemo:null,studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
     studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
     studioDraft:{frames:[]},studioEditingApi:editing,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
       picker={shown,actions,options};}},
@@ -938,7 +938,7 @@ test('Locked v2 Picker filters by contract, protects hidden selections and block
     studioPickerChecked:{2:true,3:true,4:true},studioPickerScroll:0,studioFilmstripScroll:0,
     studioSelectedKey:null,studioDragSession:null,studioDiagnosticTransition:null,
     studioEditHistory:null,studioPrepared:null,studioPlayback:null,
-    studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
+    studioActiveDemo:null,studioLibraryActive:null,studioRestorePreviewPending:false,animationWorkspaceOpen:false,
     studioInitialPaintFrame:null,studioPlaybackRenderedAt:null,
     studioDraft:draft,studioEditingApi:editing,studioUI:{render(){},renderPicker(_doc,_host,shown,actions,options){
       picker={shown,actions,options};}},studioApi:studio,

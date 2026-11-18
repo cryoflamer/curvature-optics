@@ -17,28 +17,34 @@
       if(options.busy()||!options.ready()||!options.hasStudio())return;
       if(kind==='open'&&(!id||!options.hasProject(id)))return;
       if(kind==='draft'&&(!id||!options.hasDraft(id)))return;
-      if((kind==='open'&&options.workspaceId()===options.projectWorkspaceId(id))||
-         (kind==='draft'&&options.workspaceId()===id))return;
+      var detached=!!(options.detached&&options.detached());
+      if(kind==='demo'&&(!options.hasDemo||!options.hasDemo(id)))return;
+      if(kind==='copy'&&(!detached||!options.copyDemo))return;
+      if(!detached&&((kind==='open'&&options.workspaceId()===options.projectWorkspaceId(id))||
+         (kind==='draft'&&options.workspaceId()===id)))return;
       options.setBusy(true);options.renderLibrary();
       var generation=options.generation(),formerId=options.workspaceId();
-      var dropEmpty=!!formerId&&formerId.indexOf('draft_')===0&&!options.hasUnsavedWork();
-      if(!options.saveDraft(false)){
+      var skip=detached||(kind==='demo'&&options.canSkipDemoCheckpoint&&options.canSkipDemoCheckpoint());
+      var dropEmpty=!skip&&kind!=='demo'&&!!formerId&&formerId.indexOf('draft_')===0&&!options.hasUnsavedWork();
+      if(!skip&&!options.saveDraft(false)){
         options.setBusy(false);
         options.notice('Cannot switch: current working draft failed validation or storage.',true);
         return;
       }
       var wizardSwitched=false;
-      return options.persist().then(function(ok){
+      var expected=generation+(skip?0:1);
+      return Promise.resolve(skip?true:options.persist()).then(function(ok){
         if(!ok)throw Error('Current draft could not be stored; switching was cancelled to protect your work');
-        if(options.generation()!==generation+1)
+        if(options.generation()!==expected)
           throw Error('The draft changed while switching; please try again');
         function finish(next,value){
           options.activate(next,value);
           if(next==='wizard')wizardSwitched=true;
           if(dropEmpty&&formerId!==options.workspaceId())options.dropWorkspace(formerId);
         }
-        if(kind==='open')return options.fetchProject(id).then(function(record){
-          if(options.generation()!==generation+1)
+        if(kind==='demo'){finish('demo',options.fetchDemo(id));return;}
+        if(kind==='open'||kind==='copy')return (kind==='copy'?options.copyDemo(id):options.fetchProject(id)).then(function(record){
+          if(options.generation()!==expected)
             throw Error('The draft changed while opening; please try again');
           if(!record)throw Error('Saved animation no longer exists');
           finish('open',record);

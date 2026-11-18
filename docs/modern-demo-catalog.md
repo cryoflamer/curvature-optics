@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 1 (built-in demo catalog)**, 2026-11-18. Shipped catalog
-and Soundly source are implemented; lifecycle and UI are not yet connected.
-The active next step is patch 2; browser launch acceptance remains open.
+Status: **patch 2B (detached read-only lifecycle)**, 2026-11-18. Catalog,
+Soundly, covers, read-only activation, copy and portable export are implemented.
+The active next step is patch 3 (catalog UI); browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -164,8 +164,9 @@ record the split, and do not mark complete on implementation alone.
 | 0 — Architecture & Roadmap | Implemented | Documentation only; inspect current Studio boundaries and validate supplied Soundly export; retain prior migration evidence. |
 | 1 — Built-in Demo Catalog | Implemented; browser gate open | Ship original Soundly portable JSON and manifest; stable unique IDs, deterministic order, validate with existing APIs, reject invalid/duplicate catalog entries and missing assets with explicit errors, no IndexedDB writes. Test real asset loading and supported launch paths; source data immutable. |
 | 2A — Project Lifecycle foundation | Implemented | Explicit durable copy API; optional portable cover data, shipped Soundly working cover and provenance. |
-| 2B — Project Lifecycle integration | Next | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
-| 3 — Studio Catalog UI | Planned | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
+| 2B — Project Lifecycle integration | Implemented; browser gate open | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
+| 3 — Studio Catalog UI | Next | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
+| 3A — Project Cover Editor | Planned | Render cover prior to thumbnail; upload, capture current frame, replace/remove and portable round-trip for user projects. |
 | 4 — Compare Playback | Planned | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
@@ -213,7 +214,17 @@ excluded from physical fingerprints, preserved by update/rename and portable
 export/import. Old records without covers remain unchanged. Explicit copies use
 new library IDs and bypass content deduplication.
 
-2A does not activate a demo in the Studio editor. 2B must implement detached
-read-only activation, outgoing draft checkpoint, recovery and mutation guards.
-3A will implement cover upload/frame capture/replacement/removal and fallback
-thumbnail display; cover preservation across editor Save As must be checked there.
+2B connects the existing Studio player to an owned, detached demo draft. The
+retained workspace ID still points to the prior user checkpoint. The switch
+coordinator checkpoints outgoing user work before showing a demo, but skips
+checkpointing the demo itself (or a pristine initial blank). A failed outgoing
+write cancels activation. Late startup recovery cannot replace the viewer;
+reload restores the previous user workspace, not the demo. Playback quality
+may be overridden in memory, while interpolation, authored HUD appearance,
+keyframe edits, undo/redo and Save are locked. The minimal Library buttons
+Open, Create copy, Close demo and Export demo permit acceptance before the
+full gallery in patch 3. Export is ordinary portable JSON with the cover;
+Export all continues to include only user records. Save As on a named copy
+preserves its cover. Copy failure leaves the demo open. No new player or
+physical rendering path is introduced. 3A will implement cover upload/frame
+capture/replacement/removal and fallback thumbnail display.

@@ -160,6 +160,48 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.goto((ROOT / 'CurvatureModern.html').as_uri(), wait_until='load', timeout=30000)
         self.assert_shipped_demo_catalog()
 
+    def test_builtin_demo_readonly_copy_and_reload(self):
+        self.open_modern()
+        self.open_animation()
+        studio = self.page.locator('#ModernAnimationStudio')
+        library = self.page.locator('#ModernAnimationLibrary')
+        name = studio.get_by_label('Project name')
+        name.fill('Retained user draft')
+        expect(name).to_have_value('Retained user draft')
+        self.page.wait_for_timeout(750)
+        library.locator('[data-demo-id="soundly"]').click()
+        expect(studio).to_contain_text('Built-in demo · Read-only')
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+        expect(studio.get_by_label('Project name')).to_have_count(0)
+        expect(self.page.locator('#ModernAnimationPlaybackInterpolation')).to_be_disabled()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB)).length"""), 0)
+        library.get_by_text('Close demo', exact=True).click()
+        expect(studio.get_by_label('Project name')).to_have_value('Retained user draft')
+        library.locator('[data-demo-id="soundly"]').click()
+        expect(studio).to_contain_text('Built-in demo · Read-only')
+        library.get_by_text('Create copy', exact=True).click()
+        expect(studio.get_by_label('Project name')).to_have_value(
+            'Soundly Causeway · Bridge Camera Study (copy)')
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
+        self.assertTrue(self.page.evaluate("""async () => {
+            const rows = await CurvatureModernAnimationLibrary.list(indexedDB);
+            const demo = CurvatureModernDemoCatalog.load()[0];
+            return rows.length === 1 && rows[0].id !== demo.project.id &&
+                rows[0].cover.startsWith('data:image/png;base64,');
+        }"""))
+        # Reloading while viewing a demo restores the last user project, not
+        # a serialized editable version of the built-in.
+        library.locator('[data-demo-id="soundly"]').click()
+        expect(studio).to_contain_text('Built-in demo · Read-only')
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        expect(studio.get_by_label('Project name')).to_have_value(
+            'Soundly Causeway · Bridge Camera Study (copy)')
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_navigation_and_studio_bootstrap(self):
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()

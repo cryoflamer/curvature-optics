@@ -246,7 +246,7 @@ function switchHarness(libraryFails=false,draftFails=false){
     excerpt('  function requestStudioSwitch(kind,id){','  function deleteStudioWorkspace(id){');
   const vm=require('node:vm');const records=[],checkpoints=[],events=[];
   let drafts=0;
-  const ctx={Promise,Map,Set,Object,Array,Number,RangeError,Error,Date,
+  const ctx={studioActiveDemo:null,Promise,Map,Set,Object,Array,Number,RangeError,Error,Date,
     studioLibraryBusy:false,studioSwitchApi:workspaceSwitch,
     studioLibraryActionsApi:require('../src/animation/ModernAnimationLibraryActions'),
     studioEditHistory:null,studioLibraryRenamingId:'',

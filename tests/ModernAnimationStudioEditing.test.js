@@ -8,11 +8,11 @@ const studio=require('../src/animation/ModernAnimationStudio');
 const editing=require('../src/animation/ModernAnimationStudioEditing');
 const root=path.resolve(__dirname,'..');
 
-function harness(){
+function harness(readOnly=false){
   const effects=[];
   let state={draft:studio.blank(),selectedKey:null,history:studio.createEditHistory(),
     diagnosticTransition:null};
-  const options={studio,
+  const options={studio,readOnly:()=>readOnly,
     read:()=>state,
     write:changes=>{state={...state,...changes};},
     suggestName:draft=>draft,
@@ -112,4 +112,19 @@ test('coordinator reads current workspace each time instead of reviving a prior 
 
 test('invalid dependencies fail explicitly',()=>{
   assert.throws(()=>editing.create({}),/requires live state/);
+});
+
+
+test('read-only controller rejects every edit and history step before any mutation',()=>{
+  const h=harness(true);h.replaceState({draft:twoFrames(),selectedKey:'a'});
+  const initial=h.state.draft;
+  const next=studio.edit(initial,'name','Changed');
+  assert.equal(h.controller.commit(next),false);
+  assert.equal(h.controller.live(next,'name'),false);
+  assert.equal(h.controller.remove('a'),false);
+  assert.equal(h.controller.step('undo'),false);
+  assert.equal(h.controller.step('redo'),false);
+  assert.equal(h.state.draft,initial);assert.deepEqual(h.effects,[]);
+  h.controller.select('b');assert.equal(h.state.selectedKey,'b');
+  assert.equal(h.state.draft,initial);
 });

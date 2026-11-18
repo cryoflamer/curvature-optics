@@ -17,7 +17,7 @@ function harness(){
       count(type){return (this.listeners.get(type)||[]).length;}});
     return elements.get(id);
   }
-  const context=vm.createContext({newUiEl:node,studioPrepared:{mode:'camera'},
+  const context=vm.createContext({studioActiveDemo:null,newUiEl:node,studioPrepared:{mode:'camera'},
     studioPlayback:{status:()=>({durationMs:59100,positionMs:28100,playing:false})},
     studioDraft:{interpolation:'linear'},studioPlaybackDetail:'full',
     studioPlaybackQuality:'canvas-direct',studioPlaybackLastPaint:100,

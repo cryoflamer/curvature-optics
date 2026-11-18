@@ -84,7 +84,7 @@
           api.update(indexedDB(),request.project,request.quality,request.active.updatedAt,
             undefined,request.thumbnail):
           api.create(indexedDB(),request.project,request.quality,undefined,
-            request.thumbnail,true);
+            request.thumbnail,true,request.cover);
       }catch(error){
         options.notice('Animation was not saved: '+error.message,true);
         finishBusy();return Promise.resolve(false);

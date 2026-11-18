@@ -49,7 +49,7 @@ function harness(mode='camera'){
       addEventListener:(type,fn)=>{handlers[id+':'+type]=fn;}};
   }
   const context=vm.createContext({
-    newUiEl:id=>elements[id]||null,
+    studioActiveDemo:null,newUiEl:id=>elements[id]||null,
     studioDraft:draft,studioPrepared:prepared,studioPlayback:playback.create(prepared),
     studioPlaybackControls:null,studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
     studioPlaybackControlsApi:controls,

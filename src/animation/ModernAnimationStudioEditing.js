@@ -21,7 +21,9 @@
        typeof options.render!=='function')
       throw TypeError('Animation Studio editing requires live state and UI callbacks');
     var studio=options.studio;
+    function locked(){return typeof options.readOnly==='function'&&options.readOnly();}
     function commit(next,settings){
+      if(locked())return false;
       settings=settings||{};
       var state=options.read(),history=state.history;
       next=options.suggestName(next);
@@ -40,6 +42,7 @@
       return true;
     }
     function live(next,group){
+      if(locked())return false;
       var state=options.read();
       if(state.history)studio.recordEdit(state.history,state.draft,next,
         state.selectedKey,group);
@@ -49,6 +52,7 @@
       if(typeof options.refreshLibrary==='function')options.refreshLibrary();
     }
     function step(direction){
+      if(locked())return false;
       var state=options.read();
       if(!state.history)return false;
       var previous=studio.stepEditHistory(state.history,state.draft,state.selectedKey,direction);
@@ -72,6 +76,7 @@
       return true;
     }
     function remove(key){
+      if(locked())return false;
       var state=options.read();
       var index=state.draft.frames.findIndex(function(frame){return frame.key===key;});
       if(index<0)return false;

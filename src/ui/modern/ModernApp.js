@@ -50,6 +50,8 @@
   var studioSwitchApi=root.CurvatureModernAnimationWorkspaceSwitch;
   var studioPersistenceApi=root.CurvatureModernAnimationWorkspacePersistence;
   var studioLibrary=root.CurvatureModernAnimationLibrary;
+  var studioDemoCatalog=root.CurvatureModernDemoCatalog;
+  var studioActiveDemo=null,studioDemoEntries=null;
   var studioLibraryActionsApi=root.CurvatureModernAnimationLibraryActions;
   var studioLibraryFiltersApi=root.CurvatureModernAnimationLibraryFilters;
   // One gesture controller and one camera for Scene and both Compare models.
@@ -1243,6 +1245,7 @@
       studioProjectDiffers(studioDraft,studioPlaybackQuality,studioLibraryActive);
   }
   function studioHasUnsavedWork(){
+    if(studioActiveDemo)return false;
     if(studioLibraryActive)return studioLibraryDirty();
     if(!studioDraft||!studioApi)return false;
     var blank=studioApi.blank();
@@ -1255,6 +1258,7 @@
         JSON.stringify(studioDraft.cameraHudAppearance)!==JSON.stringify(cameraHudAppearance));
   }
   function studioCanSave(){
+    if(studioActiveDemo)return false;
     if(!studioApi||!studioDraft)return false;
     if(!studioDraft.contract)return studioApi.inspect(studioDraft).compatible;
     try{studioApi.buildSaved(studioDraft,'studio_save_check');return true;}
@@ -1402,6 +1406,26 @@
       }
     }
   }
+  function builtInStudioDemos(){
+    if(!studioDemoEntries&&studioDemoCatalog)studioDemoEntries=studioDemoCatalog.load();
+    return studioDemoEntries||[];
+  }
+  function openBuiltInDemo(id){
+    try{return requestStudioSwitch('demo',id);}
+    catch(error){studioLibraryNotice('Cannot open demo: '+error.message,true);}
+  }
+  function closeBuiltInDemo(){
+    if(studioActiveDemo)return requestStudioSwitch('draft',studioWorkspaceId);
+  }
+  function copyBuiltInDemo(){
+    if(studioActiveDemo)return requestStudioSwitch('copy',studioActiveDemo.id);
+  }
+  function exportBuiltInDemo(){
+    if(!studioActiveDemo||studioLibraryBusy)return;
+    try{downloadHistoryJson(studioDemoCatalog.exportDemo(studioActiveDemo.id),
+      'curvature-demo-'+studioActiveDemo.id+'.json');}
+    catch(error){studioLibraryNotice('Demo export failed: '+error.message,true);}
+  }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
     var host=newUiEl('ModernAnimationLibrary');
@@ -1414,7 +1438,10 @@
       String(document.activeElement.className||'').match(/modern-animation-library-filter-[a-zA-Z]+/);
     var visible=studioLibraryFiltersApi&&studioLibraryFilters?
       studioLibraryFiltersApi.filter(studioLibraryEntries,studioLibraryFilters):studioLibraryEntries;
+    var demos=[],catalogError=null;
+    try{demos=builtInStudioDemos();}catch(error){catalogError=error.message;}
     studioUI.renderLibrary(document,host,studioLibraryEntries,{
+      activeDemo:studioActiveDemo,demos:demos,catalogError:catalogError,
       filters:studioLibraryFilters,search:studioLibraryQueryDraft,
       filtersActive:studioLibraryFiltersApi&&studioLibraryFiltersApi.active(studioLibraryFilters),
       filtersAdvancedOpen:studioLibraryFilterAdvancedOpen,visibleEntries:visible,
@@ -1466,6 +1493,7 @@
       renameStart:function(id){studioLibraryRenamingId=id;studioLibraryExpanded=true;renderStudioLibrary();},
       renameCancel:function(){studioLibraryRenamingId='';renderStudioLibrary();},
       rename:function(id,name){renameNamedAnimation(id,name);},
+      openDemo:openBuiltInDemo,closeDemo:closeBuiltInDemo,copyDemo:copyBuiltInDemo,exportDemo:exportBuiltInDemo,
       newProject:function(){openStudioWizard();},
       save:function(){saveNamedAnimation(!!studioLibraryActive);},
       stashRestore:function(){return restoreSavedAnimation(true);},
@@ -1643,10 +1671,10 @@
     }).sort(function(a,b){return b.checkpoint.savedAt-a.checkpoint.savedAt;})
       .map(function(entry){return {id:entry.id,name:entry.checkpoint.draft.name,
         frames:entry.checkpoint.draft.frames.length,savedAt:entry.checkpoint.savedAt,
-        active:entry.id===studioWorkspaceId};});
+        active:!studioActiveDemo&&entry.id===studioWorkspaceId};});
   }
   function saveNamedAnimation(replace){
-    if(!studioLibrary||studioLibraryBusy)return Promise.resolve(false);
+    if(!studioLibrary||studioLibraryBusy||studioActiveDemo)return Promise.resolve(false);
     var project,quality=studioPlaybackQuality,active=studioLibraryActive;
     try{
       if(replace&&!active)throw Error('Open a saved animation before using Save Changes');
@@ -1667,7 +1695,7 @@
     var actions=studioLibraryActions();
     if(!actions){studioLibraryNotice('Animation Library actions module failed to load.',true);return Promise.resolve(false);}
     return actions.save({replace:replace,project:project,quality:quality,
-      active:active,thumbnail:studioLibraryThumbnail(project),
+      active:active,thumbnail:studioLibraryThumbnail(project),cover:active&&active.cover,
       startGeneration:studioDraftGeneration,priorWorkspaceId:studioWorkspaceId});
   }
   function activateSavedStudioProject(saved,request){
@@ -1783,6 +1811,15 @@
       busy:function(){return studioLibraryBusy;},
       ready:function(){return studioWorkspaceReady;},
       hasStudio:function(){return !!studioApi;},
+      detached:function(){return !!studioActiveDemo;},
+      canSkipDemoCheckpoint:function(){return studioDraftGeneration===0&&!studioLibraryActive&&!studioLibraryPending&&!studioHasUnsavedWork();},
+      hasDemo:function(id){return (!studioActiveDemo||studioActiveDemo.id!==id)&&builtInStudioDemos().some(function(d){return d.id===id;});},
+      fetchDemo:function(id){return builtInStudioDemos().find(function(d){return d.id===id;});},
+      copyDemo:function(id){
+        if(!studioActiveDemo||studioActiveDemo.id!==id)throw Error('Select a built-in demo first');
+        if(!root.indexedDB)throw Error('Creating a copy requires IndexedDB');
+        return studioDemoCatalog.copyToLibrary(root.indexedDB,id,undefined,root.crypto);
+      },
       hasProject:function(id){return studioLibraryEntries.some(function(e){return e.id===id;});},
       hasDraft:function(id){return !!studioWorkspaces&&studioWorkspaces.workspaces.some(function(e){return e.id===id;});},
       workspaceId:function(){return studioWorkspaceId;},
@@ -1804,13 +1841,30 @@
     }).request(kind,id);
   }
   function performStudioSwitch(kind,value){
+    // Prepare before replacing the editor. The catalog remains immutable and
+    // the retained workspace ID continues to point to the last user draft.
+    var wasDemo=!!studioActiveDemo, demoDraft, demoProject, demoPlayback;
+    if(kind==='demo'){
+      if(!value)throw Error('Built-in demo not found');
+      demoDraft=studioApi.fromProject(value.project);
+      demoProject=studioProjects.validate(value.project);
+      demoPlayback=studioPlaybackApi.create(demoProject);
+    }
     studioDiagnosticTransition=null;
     stopStudioPlayback(true);studioPrepared=null;
     studioFilmstripScroll=0;studioPickerOpen=false;studioPickerScroll=0;
     studioPickerShowIncompatible=false;
     studioPickerChecked=Object.create(null);studioDragSession=null;
     studioEditHistory=studioApi.createEditHistory();studioRestorePreviewPending=false;
-    if(kind==='wizard'){
+    studioActiveDemo=kind==='demo'?value:null;
+    if(kind==='demo'){
+      studioDraftGeneration++; // prevent late recovery from replacing this detached view
+      studioDraft=demoDraft;studioPrepared=demoProject;studioPlayback=demoPlayback;
+      studioSelectedKey=demoDraft.frames[0].key;studioPlaybackQuality=value.quality;
+      studioLibraryActive=null;studioLibraryPending=null;studioLibrarySelected='';
+      studioRestorePreviewPending=true;
+      studioLibraryMessage='Opened built-in demo · read-only. Create copy to edit.';
+    }else if(kind==='wizard'){
       studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
       studioDraft=studioApi.fromProject(value);
       studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
@@ -1833,7 +1887,8 @@
       studioWorkspaceId=value;
       restoreStudioDraft(studioDraftAutosave.getWorkspace(studioWorkspaces,value));
       studioLibrarySelected='';
-      studioLibraryMessage='Resumed draft. It is not saved to Animation Library.';
+      studioLibraryMessage=wasDemo?'Returned to the previous working draft.':
+        'Resumed draft. It is not saved to Animation Library.';
     }else{
       var record=value,id=record.id;
       studioWorkspaceId=studioDraftAutosave.projectWorkspaceId(id);
@@ -1871,6 +1926,7 @@
     studioLibraryError=kind==='open'&&studioLibraryPending!==null;
     var optics=newUiEl('ModernAnimationPlaybackOptics');if(optics)optics.value=studioPlaybackQuality;
     saveStudioDraft(false);syncStudioPlaybackControls();syncWorkspaceVisibility();
+    if(wasDemo&&kind!=='demo')refreshStudioLibrary();
     if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('library');
     if(experimentHistory)refreshHistoryList().catch(function(){renderAnimationStudio([]);});
     else renderAnimationStudio([]);
@@ -1896,7 +1952,7 @@
       var local=studioDraftAutosave.getWorkspace(studioWorkspaces,source);
       if(local){
         var detachedId=studioDraftAutosave.makeWorkspaceId(root.crypto);
-        if(source===studioWorkspaceId){
+        if(source===studioWorkspaceId&&!studioActiveDemo){
           studioWorkspaceId=detachedId;
           studioLibraryActive=null;studioLibraryPending=null;
           saveStudioDraft(false);
@@ -1907,6 +1963,7 @@
           }),Math.max(Date.now(),local.savedAt+1));
           studioWorkspaces=studioDraftAutosave.withWorkspace(studioWorkspaces,
             detachedId,independent);
+          if(source===studioWorkspaceId)studioWorkspaceId=detachedId;
           studioWorkspaces=studioDraftAutosave.normalizeCollection(Object.assign({},
             studioWorkspaces,{activeId:studioWorkspaceId}));
           dropStudioWorkspace(source);
@@ -1978,6 +2035,7 @@
     studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
   }
   function saveStudioDraft(throttled){
+    if(studioActiveDemo)return true; // runtime playback must never checkpoint a demo
     if(!studioDraftAutosave||!studioDraft||!studioWorkspaceReady)return false;
     var now=Date.now();
     if(throttled&&now-studioDraftLastPositionSave<1200)return studioWorkspaceLocalSaved;
@@ -2152,7 +2210,7 @@
     var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
     if(interpolationLabel)interpolationLabel.hidden=!camera;
     if(interpolation){
-      interpolation.hidden=!camera;interpolation.disabled=!camera;
+      interpolation.hidden=!camera;interpolation.disabled=!camera||!!studioActiveDemo;
       interpolation.value=studioDraft&&studioDraft.interpolation==='spline'?'spline':'linear';
     }
     syncStudioHudAppearance();
@@ -2626,10 +2684,10 @@
     var value=newUiEl('ModernAnimationHudOpacityValue');
     var position=newUiEl('ModernAnimationHudPosition');
     var size=newUiEl('ModernAnimationHudSize');
-    if(opacity)opacity.value=String(appearance.opacity);
+    if(opacity){opacity.value=String(appearance.opacity);opacity.disabled=!!studioActiveDemo;}
     if(value)value.textContent=appearance.opacity+'%';
-    if(position)position.value=appearance.position;
-    if(size)size.value=String(appearance.size);
+    if(position){position.value=appearance.position;position.disabled=!!studioActiveDemo;}
+    if(size){size.value=String(appearance.size);size.disabled=!!studioActiveDemo;}
   }
   function bindStudioCameraHud(){
     syncStudioHudAppearance();
@@ -2637,6 +2695,7 @@
       forEach(function(id){
         var input=newUiEl(id);if(!input)return;
         input.addEventListener(id==='ModernAnimationHudOpacity'?'input':'change',function(){
+          if(studioActiveDemo){syncStudioHudAppearance();return;}
           var appearance=Object.assign({},studioHudAppearance());
           if(id==='ModernAnimationHudOpacity')appearance.opacity=Number(input.value);
           if(id==='ModernAnimationHudPosition')appearance.position=input.value;
@@ -2894,6 +2953,7 @@
   // timeline or a separate optical renderer. Rebuild atomically and sample at
   // the same elapsed time; preserve running playback when switching mid-flight.
   function setStudioPreviewInterpolation(value){
+    if(studioActiveDemo)throw Error('Built-in demos are read-only');
     if(!studioDraft||!studioPrepared||!studioPlayback||studioPrepared.mode!=='camera')
       throw Error('Prepare a camera animation before changing interpolation');
     if(!['linear','spline'].includes(value))throw RangeError('Invalid camera interpolation');
@@ -3093,9 +3153,11 @@
     if(label)label.textContent='Saved History selection: '+historyStoryboardQueue.length+
       ' snapshots ('+count+' available). Append available frames to this draft, or discard the old selection.';
     var append=newUiEl('ModernAnimationLegacyAppend');
-    if(append)append.disabled=!count||!studioWorkspaceReady;
+    if(append)append.disabled=!count||!studioWorkspaceReady||!!studioActiveDemo;
+    var dismiss=newUiEl('ModernAnimationLegacyDismiss');if(dismiss)dismiss.disabled=!!studioActiveDemo;
   }
   function appendLegacyHistorySelection(){
+    if(studioActiveDemo)throw Error('Built-in demos are read-only');
     if(!studioApi||!studioWorkspaceReady)throw Error('Animation workspace is not ready');
     var found=new Set(studioHistoryEntries.map(function(entry){return entry.id;}));
     var available=historyStoryboardQueue.filter(function(id){return found.has(id);});
@@ -3174,6 +3236,7 @@
     }
     var studioEditing=studioEditingApi.create({
       studio:studioApi,
+      readOnly:function(){return !!studioActiveDemo;},
       read:function(){return {draft:studioDraft,selectedKey:studioSelectedKey,
         history:studioEditHistory};},
       write:function(changes){
@@ -3203,10 +3266,10 @@
       if(status){status.textContent=error.message;status.classList.add('is-error');
         if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'error');}
     }
-    function safe(action){try{action();}catch(error){report(error);}}
+    function safe(action){if(studioActiveDemo)return;try{action();}catch(error){report(error);}}
     renderStudioLibrary();
     studioUI.render(document,host,studioDraft,assessment,{
-      choose:function(){toggleAnimationPicker(!studioPickerOpen);},
+      choose:function(){if(!studioActiveDemo)toggleAnimationPicker(!studioPickerOpen);},
       importCamera:function(){safe(function(){
         // This is the only replacement import. Check that it can be built before
         // asking the user, and never discard existing keyframes silently.
@@ -3262,7 +3325,8 @@
       prepare:function(){
         try{
           stopStudioPlayback(true);
-          studioPrepared=studioApi.build(studioDraft,'studio_draft');
+          studioPrepared=studioActiveDemo?studioProjects.validate(studioActiveDemo.project):
+            studioApi.build(studioDraft,'studio_draft');
           studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
           saveStudioDraft(false);
           syncStudioPlaybackControls();
@@ -3293,6 +3357,7 @@
         }
       },
       dragStart:function(payload,event){
+        if(studioActiveDemo){if(event&&event.preventDefault)event.preventDefault();return;}
         if(payload.kind==='snapshots'&&studioDraft.contract){
           var source=entries.find(function(e){return e.id===payload.id;});
           if(!source||!animationPickerVerdict(source).allowed){
@@ -3358,7 +3423,7 @@
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,
-      pickerSelectedCount:animationPickerSelectedEntries(entries).length});
+      readOnly:!!studioActiveDemo,pickerSelectedCount:animationPickerSelectedEntries(entries).length});
     var picker=newUiEl('ModernAnimationSnapshotPicker');
     if(picker&&studioUI.renderPicker){
       var shown=animationPickerEntries(entries);
@@ -3467,7 +3532,7 @@
         }
       };
       studioUI.renderPicker(document,picker,shown,dragActions,{
-        open:studioPickerOpen,filters:studioPickerFilters,search:studioPickerQueryDraft,
+        open:!studioActiveDemo&&studioPickerOpen,filters:studioPickerFilters,search:studioPickerQueryDraft,
         advancedOpen:studioPickerAdvancedOpen,totalEntries:entries.length,
         selectedCount:animationPickerSelectedEntries(entries).length,
         checked:studioPickerChecked,contractMode:contractMode,
@@ -6761,7 +6826,7 @@
     });
     var discardLegacy=newUiEl('ModernAnimationLegacyDismiss');
     if(discardLegacy)discardLegacy.addEventListener('click',function(){
-      if(!historyStoryboardQueue.length)return;
+      if(studioActiveDemo||!historyStoryboardQueue.length)return;
       if(!root.confirm||!root.confirm('Discard the old saved History selection? '+
         'No History snapshots or Animation keyframes will be deleted.'))return;
       historyStoryboardQueue=[];saveApplicationPreferences();
@@ -6829,6 +6894,7 @@
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     getCameraHudVisible:function(){return cameraHudVisible;},
     getHistoryStore:function(){return experimentHistory;},
+    getBuiltInDemo:function(){return studioActiveDemo?studioActiveDemo.id:null;},
     getStudioPlayback:function(){return studioPlayback?studioPlayback.status():null;},
     getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?
       studioDraftAutosave.checkpoint({draft:studioDraft,selectedKey:studioSelectedKey,

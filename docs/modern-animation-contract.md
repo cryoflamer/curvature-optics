@@ -1,11 +1,12 @@
 # Modern Animation project contracts — compatibility foundation
 
-**Built-in catalog and planned project lifecycle:** see [Modern built-in demonstrations](modern-demo-catalog.md)
+**Built-in catalog and read-only project lifecycle:** see [Modern built-in demonstrations](modern-demo-catalog.md)
 for the agreed catalog, immutable originals, independent copies and acceptance
 roadmap. Built-ins will reuse these contracts and portable project validators;
 origin/read-only status belongs to trusted catalog/lifecycle metadata rather
 than a new animation mode. Patch 1 ships the validated catalog API and original
-Soundly source, but does not yet connect it to the Studio lifecycle.
+Soundly source; patch 2B connects it to detached Studio playback and independent
+copy/export, without serializing built-ins as editable workspace drafts.
 Scene/Compare adaptation must preserve reference equality and valid physical
 target scope; optional narrative support is a later compatibility
 change.

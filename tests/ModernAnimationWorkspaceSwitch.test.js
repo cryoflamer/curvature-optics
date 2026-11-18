@@ -143,3 +143,21 @@ test('a Wizard project is saved only after switching, with retry notice on failu
   assert.match(h.events.join('\n'),/use Save project to retry/);
   assert.equal(h.state.busy,false);
 });
+
+
+test('a detached viewer can leave without ever checkpointing its content',async()=>{
+  const h=harness();h.options.detached=()=>true;
+  h.drafts.add('draft_current');
+  await h.request('draft','draft_current');
+  assert.ok(h.events.includes('activate draft'));
+  assert.ok(!h.events.includes('checkpoint'));assert.ok(!h.events.includes('persist'));
+});
+
+test('pristine workspace permits a built-in view without writable storage',async()=>{
+  const h=harness({saveFails:true,persistOK:false});
+  h.options.hasDemo=id=>id==='soundly';h.options.fetchDemo=id=>({id});
+  h.options.canSkipDemoCheckpoint=()=>true;
+  await h.request('demo','soundly');
+  assert.ok(h.events.includes('activate demo'));
+  assert.ok(!h.events.includes('checkpoint'));assert.ok(!h.events.includes('persist'));
+});

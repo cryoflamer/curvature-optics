@@ -138,3 +138,14 @@ test('Soundly cover is a bounded local asset with explicitly unresolved provenan
   assert.ok(fs.existsSync(path.join(directory,demo.cover.asset)));
   assert.throws(()=>parse([{...soundly,cover:{...demo.cover,asset:'../bad.png'}}]),/Invalid built-in demo cover/);
 });
+
+
+test('built-in export uses portable user format and preserves authored settings and cover',()=>{
+  const [item]=library.parsePortable(catalog.exportDemo('soundly'));
+  const demo=catalog.load()[0];
+  assert.deepEqual(item.project,demo.project);
+  assert.equal(item.quality,demo.quality);
+  assert.match(item.cover,/^data:image\/png;base64,/);
+  assert.equal(item.id,undefined);assert.equal(item.readOnly,undefined);
+  assert.throws(()=>catalog.exportDemo('missing'),/Unknown built-in demo/);
+});

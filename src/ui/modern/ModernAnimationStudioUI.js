@@ -229,7 +229,11 @@
     }
     action(projectActions,'New project','Start a separate, autosaved working draft; previous drafts remain available',
       actions.newProject,options.busy);
-    action(projectActions,options.activeId?'Save changes':'Save project',
+    if(options.activeDemo){
+      action(projectActions,'Create copy','Create an independent editable project',actions.copyDemo,options.busy);
+      action(projectActions,'Close demo','Return to the previous working draft',actions.closeDemo,options.busy);
+      action(fileActions,'Export demo','Export the unchanged built-in project as portable JSON',actions.exportDemo,options.busy);
+    }else action(projectActions,options.activeId?'Save changes':'Save project',
       options.activeId?'Update the opened project in Animation Library':'Add this draft to Animation Library',
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
     if(options.activeId)action(projectActions,'Duplicate',
@@ -262,7 +266,21 @@
       action(fileActions,options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
     }
-    var message=el(doc,'p','modern-animation-library-note',options.activeId?
+    // Minimal entry point until the dedicated gallery is implemented.
+    if(options.catalogError)host.appendChild(el(doc,'p','modern-animation-library-message is-error',
+      'Built-in demos unavailable: '+options.catalogError));
+    if((options.demos||[]).length){
+      var demos=el(doc,'div','modern-animation-library-controls');
+      demos.appendChild(el(doc,'strong','','Built-in demos'));
+      options.demos.forEach(function(demo){
+        var open=action(demos,'Open '+demo.project.name,'Open read-only built-in demo',
+          function(){actions.openDemo(demo.id);},options.busy||!!options.activeDemo&&options.activeDemo.id===demo.id);
+        open.setAttribute('data-demo-id',demo.id);
+      });
+      host.appendChild(demos);
+    }
+    var message=el(doc,'p','modern-animation-library-note',options.activeDemo?
+      'Opened built-in demo: '+options.activeDemo.project.name+' · Read-only · Create copy to edit.':options.activeId?
       'Opened: '+(options.activeName||'saved project')+
         (options.dirty?' · Working edits autosaved separately · Save changes updates library':
          ' · Saved · Local draft retained'):
@@ -907,9 +925,34 @@
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
     host.textContent='';
     var heading=el(doc,'div','modern-studio-header');
-    heading.appendChild(el(doc,'strong','','Edit animation · Working draft'));
+    heading.appendChild(el(doc,'strong','',options.readOnly?'Built-in demo · Read-only':'Edit animation · Working draft'));
     heading.appendChild(el(doc,'span','',draft.frames.length+' frames'));
     host.appendChild(heading);
+    if(options.readOnly){
+      host.appendChild(el(doc,'strong','',draft.name));
+      host.appendChild(el(doc,'p','modern-studio-hint',draft.description));
+      host.appendChild(el(doc,'p','modern-studio-hint',
+        'Play or seek above. Create copy in Animation Library to change this project.'));
+      var list=el(doc,'ol','modern-studio-filmstrip');
+      list.setAttribute('aria-label','Read-only keyframes');
+      draft.frames.forEach(function(frame,i){
+        var item=el(doc,'li','modern-studio-filmstrip-item');
+        var control=button(doc,(i+1)+' · '+frame.name,'Inspect keyframe '+(i+1),function(){actions.select(frame.key);});
+        control.className+=' modern-studio-keyframe'+(frame===selected?' is-active':'');
+        control.setAttribute('aria-pressed',String(frame===selected));
+        item.appendChild(control);list.appendChild(item);
+      });
+      host.appendChild(list);
+      if(selected){
+        var details=el(doc,'section','modern-studio-selected-frame');
+        details.appendChild(el(doc,'strong','',selected.name));
+        details.appendChild(el(doc,'p','', 'Travel: '+selected.travelMs/1000+' s · Hold: '+selected.holdMs/1000+' s · Easing: '+selected.easing));
+        var entry=frameEntry(selected,entries);
+        details.appendChild(el(doc,'p','',snapshotPresentation.frameSummary(entry)));
+        host.appendChild(details);
+      }
+      return;
+    }
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Edit keyframes below. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));

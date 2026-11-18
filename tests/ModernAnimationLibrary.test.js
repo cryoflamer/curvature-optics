@@ -744,8 +744,10 @@ function projectLifecycleHarness(){
     source:'none',frames:[],cameraHudAppearance:null};},
     edit(draft,key,value){return {...draft,[key]:value};},build(draft,id){
     if(draft.frames.length<2)throw Error('not enough frames');
+    if(draft.contract)return studio.build(draft,id);
     return {id,name:draft.name,frames:draft.frames};
-  },fromProject(p){return {name:p.name,description:'',mode:'auto',target:'auto',source:'mixed',
+  },inspect(){return {compatible:true};},fromProject(p){if(p.keyframes)return studio.fromProject(p);
+    return {name:p.name,description:'',mode:'auto',target:'auto',source:'mixed',
     frames:p.frames.map(f=>({...f}))};}};
   const checkpoints=new Map([['project_old',{
     draft:{...oldDraft},selectedKey:'a',quality:'auto',prepared:false,positionMs:0,
@@ -754,7 +756,7 @@ function projectLifecycleHarness(){
   const autosave={projectWorkspaceId:id=>'project_'+id,
     makeWorkspaceId:()=> 'draft_'+(++sequence),
     getWorkspace:(_,id)=>checkpoints.get(id)||null};
-  const ctx={Promise,Date,Object,semanticNaming:null,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
+  const ctx={studioActiveDemo:null,studioDemoEntries:null,Promise,Date,Object,semanticNaming:null,root:{indexedDB:{},crypto:{}},studioApi,studioDraft:{...oldDraft},
     studioDraftAutosave:autosave,studioSwitchApi:workspaceSwitch,
     studioLibraryActionsApi:require('../src/animation/ModernAnimationLibraryActions'),
     downloadHistoryJson(){},
@@ -770,14 +772,21 @@ function projectLifecycleHarness(){
     studioPickerScroll:0,studioPickerChecked:{},studioDragSession:null,
     studioEditHistory:null,studioRestorePreviewPending:false,
     studioPrepared:null,studioPlayback:null,
-    studioPlaybackApi:null,animationWorkspaceOpen:false,experimentHistory:null,
+    studioProjects:require('../src/animation/ModernAnimationProject'),
+    studioPlaybackApi:{create(project){return {project};}},animationWorkspaceOpen:false,experimentHistory:null,
+    studioDemoCatalog:{load:()=>require('../src/animation/ModernDemoCatalog').load(),
+      copyToLibrary(_db,id){if(rejectSave)return Promise.reject(Error('storage unavailable'));
+        const demo=require('../src/animation/ModernDemoCatalog').load().find(d=>d.id===id);
+        const project={...structuredClone(demo.project),id:'demo_copy_'+(++sequence)};
+        const record={id:project.id,project,quality:demo.quality,updatedAt:10};stored.set(record.id,record);
+        return Promise.resolve(record);}},
     studioHistoryEntries:[],studioLibraryDirty(){return ctx.studioDraft.name!==
       ctx.studioLibraryActive.project.name||ctx.studioDraft.frames.length!==2;},
     studioLibraryThumbnail(){return null;},
     studioLibraryNotice(text){ctx.studioLibraryMessage=text;events.push(text);},
     renderStudioLibrary(){events.push('library UI');},
     renderAnimationStudio(){events.push('editor UI');},
-    saveStudioDraft(){ctx.studioDraftGeneration++;events.push('checkpoint');
+    saveStudioDraft(){if(ctx.studioActiveDemo)return true;ctx.studioDraftGeneration++;events.push('checkpoint');
       const cp={draft:structuredClone(ctx.studioDraft),selectedKey:ctx.studioSelectedKey,
         quality:ctx.studioPlaybackQuality,prepared:!!ctx.studioPrepared,positionMs:0,
         libraryId:ctx.studioLibraryActive?.id||ctx.studioLibraryPending?.id||null,
@@ -1223,4 +1232,82 @@ test('explicit built-in copies are independent durable records and bypass conten
   assert.deepEqual(catalog.load()[0],original);
   await assert.rejects(catalog.copyToLibrary(db,'missing'),/Unknown built-in/);
   await assert.rejects(catalog.copyToLibrary(null,'soundly'),/IndexedDB/);
+});
+
+
+test('a detached built-in view protects the outgoing user workspace and resumes it on close',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored,checkpoints,events}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Precious unsaved work'};
+  await ctx.openBuiltInDemo('soundly');
+  assert.equal(ctx.studioActiveDemo.id,'soundly');
+  assert.equal(ctx.studioPrepared.id,ctx.studioActiveDemo.project.id);
+  assert.equal(ctx.studioDraft.frames.length,9);
+  assert.equal(ctx.studioWorkspaceId,'project_old');
+  assert.equal(ctx.studioLibraryActive,null);
+  assert.equal(checkpoints.get('project_old').draft.name,'Precious unsaved work');
+  const checkpointCount=events.filter(e=>e==='checkpoint').length;
+  assert.equal(await ctx.saveNamedAnimation(false),false);
+  assert.equal(await ctx.saveNamedAnimation(true),false);
+  ctx.saveStudioDraft(false);
+  assert.equal(events.filter(e=>e==='checkpoint').length,checkpointCount);
+  assert.equal(stored.size,2);
+  await ctx.closeBuiltInDemo();
+  assert.equal(ctx.studioActiveDemo,null);
+  assert.equal(ctx.studioDraft.name,'Precious unsaved work');
+  assert.equal(ctx.studioWorkspaceId,'project_old');
+});
+
+test('failed outgoing checkpoint and failed copy do not replace editor or demo',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored}=h;
+  h.failDraft(true);await ctx.openBuiltInDemo('soundly');
+  assert.equal(ctx.studioActiveDemo,null);assert.equal(ctx.studioDraft.name,'Existing work');
+  h.failDraft(false);await ctx.openBuiltInDemo('soundly');
+  h.failSave(true);await ctx.copyBuiltInDemo();
+  assert.equal(ctx.studioActiveDemo.id,'soundly');assert.equal(stored.size,2);
+  assert.match(ctx.studioLibraryMessage,/storage unavailable/);
+  h.failSave(false);await ctx.copyBuiltInDemo();
+  assert.equal(ctx.studioActiveDemo,null);
+  assert.match(ctx.studioLibraryActive.id,/demo_copy_/);
+  const first=ctx.studioLibraryActive.id;
+  await ctx.openBuiltInDemo('soundly');await ctx.copyBuiltInDemo();
+  assert.notEqual(ctx.studioLibraryActive.id,first);assert.equal(stored.size,4);
+});
+
+
+test('detached demo autosave returns before reading or writing workspace storage',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const start=source.indexOf('  function saveStudioDraft(throttled){');
+  const end=source.indexOf('  function restoreStudioDraft(record){',start);
+  const ctx={studioActiveDemo:{id:'soundly'}};
+  vm.runInNewContext(source.slice(start,end),ctx);
+  assert.equal(ctx.saveStudioDraft(false),true);
+  assert.equal(ctx.saveStudioDraft(true),true);
+  assert.deepEqual(Object.keys(ctx).sort(),['saveStudioDraft','studioActiveDemo']);
+});
+
+test('read-only Studio shows keyframes without mutation controls and offers independent copy and export',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const demo=require('../src/animation/ModernDemoCatalog').load()[0];
+  const draft=studio.fromProject(demo.project),calls=[];
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',className:'',
+    disabled:false,appendChild(node){this.children.push(node);return node;},
+    addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section');
+  const actions={select:key=>calls.push(key),openDemo:id=>calls.push(id),copyDemo:()=>calls.push('copy'),
+    closeDemo:()=>calls.push('close'),exportDemo:()=>calls.push('export')};
+  const walk=node=>[node,...node.children.flatMap(walk)];
+  ui.render(doc,host,draft,studio.inspect(draft),actions,true,{readOnly:true});
+  const nodes=walk(host);
+  assert.ok(nodes.some(n=>n.textContent==='Built-in demo · Read-only'));
+  assert.equal(nodes.filter(n=>n.className.includes('modern-studio-keyframe')).length,9);
+  assert.ok(!nodes.some(n=>['input','textarea','select'].includes(n.tagName)));
+  nodes.find(n=>n.className.includes('modern-studio-keyframe')).listeners.click();
+  assert.equal(calls.at(-1),draft.frames[0].key);
+  const lib=doc.createElement('section');
+  ui.renderLibrary(doc,lib,[],{activeDemo:demo,demos:[demo],canSave:false},actions);
+  const libraryNodes=walk(lib);
+  for(const [label,event] of [['Create copy','copy'],['Close demo','close'],['Export demo','export']]){
+    libraryNodes.find(n=>n.textContent===label).listeners.click();assert.equal(calls.at(-1),event);
+  }
+  assert.ok(!libraryNodes.some(n=>['Save project','Save changes','Duplicate'].includes(n.textContent)));
 });
