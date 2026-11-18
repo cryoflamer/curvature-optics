@@ -257,3 +257,46 @@ and canvas sizes. Check `opera://gpu` or `chrome://gpu` and browser tracing when
 identifying the raster backend: the benchmark itself cannot determine whether
 Skia used a hairline, CPU, GPU or compositor path. A negative reproduction in
 this isolated page does not rule out interaction with Curvature's painter.
+
+
+## Isolated stroke-to-fill workaround benchmark
+
+In `tools/canvas-stroke-benchmark.html`, select **F · Workarounds: stroke vs
+polygon fill**. This is a direct engineering comparison, not another stroke
+width sweep. It runs three methods at each requested width `1.005`, `1.125`,
+`2.5` Canvas backing-store px: **native stroke**, **polygon fill**, and
+**thin 1 px stroke** (a deliberately thinner speed-control image). Mode **G ·
+Workarounds with scene fills** repeats the methods at widths `1.125` and `2.5`
+with the existing 1,189 scene-like fills interleaved with the contours.
+
+The source contours, original width, colors, opacity, order and joins/caps
+remain the same. The new polygon method constructs a clockwise rectangle for
+every segment plus a disk at every *interior* vertex, all in a single non-zero
+winding path for each polyline. It performs exactly one `fill()` per contour,
+not one fill per rectangle. This is crucial for opacity: overlapping segments
+should not receive alpha multiple times. It approximates a native round-joined,
+butt-capped stroke and is **not** general-purpose offset geometry for arbitrary
+joins, cap styles, transforms or degenerate/self-intersecting paths.
+
+The polygon path is built afresh on **each** measured frame. This avoids
+claiming a cache speedup that a moving Curvature camera cannot necessarily use.
+CPU-side `drawMs` includes this additional geometry construction; `gapMs`
+includes browser scheduling and asynchronous raster effects. Since the thin
+control intentionally changes width to 1 backing-store px, it is not
+visually equivalent to the requested stroke.
+
+On completion the page displays *native*, *polygon* and a magnified red
+pixel-difference heatmap (selection: `1.125` or `2.5` px). The automatically
+downloaded JSON contains `visualComparisons` at **both** widths. It reports
+pixels differing by more than 8/255 in at least one RGB channel, normalized
+by foreground ('ink') pixels; a mean per-channel absolute RGB difference;
+and the maximum channel difference. This is a fully composited screenshot
+comparison, performed **after** timing. Native and polygon rasterizers may
+produce different coverage/antialiasing, and errors in shared overlapping
+shapes can still be visible; inspect the images before adopting the method.
+
+**No production Canvas Direct renderer is modified.** A faster polygon `fill()`
+on a given Opera/Chromium/graphics backend would justify a separate integration
+with visual regression testing; it does not prove the same gain on another
+backend. In particular, `willReadFrequently` does not force a specific
+rasterizer, and these timings do not measure GPU-completion latency.

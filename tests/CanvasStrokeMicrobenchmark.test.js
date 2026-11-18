@@ -12,10 +12,10 @@ vm.runInNewContext(inline[1],sandbox,{filename:'canvas-stroke-benchmark.html'});
 const api=sandbox.CanvasStrokeMicrobenchmark;
 
 function mockCanvas() {
-  const calls={strokes:[],fills:0,lines:[],moves:[],clears:0};
+  const calls={strokes:[],fills:0,lines:[],moves:[],arcs:[],closes:0,clears:0};
   const ctx={lineWidth:1,globalAlpha:1,strokeStyle:'black',_scale:1,
     setTransform(x){this._scale=x;},clearRect(){calls.clears++;},fillRect(){calls.fills++;},
-    beginPath(){},moveTo(x,y){calls.moves.push([x*this._scale,y*this._scale]);},
+    beginPath(){},closePath(){calls.closes++;},arc(x,y,r,a,b){calls.arcs.push([x*this._scale,y*this._scale,r*this._scale,a,b]);},moveTo(x,y){calls.moves.push([x*this._scale,y*this._scale]);},
     lineTo(x,y){calls.lines.push([x*this._scale,y*this._scale]);},
     fill(){calls.fills++;},
     stroke(){calls.strokes.push({width:this.lineWidth*this._scale,alpha:this.globalAlpha,
@@ -39,7 +39,7 @@ function scheduledHarness(failAt=0) {
   return {runner,tick,scheduled,progress,get result(){return finished;},get error(){return error;}};
 }
 
-test('the file is standalone and the five profiles cover the intended independent factors',()=>{
+test('the file is standalone and all profiles cover the intended independent factors',()=>{
   assert.match(html,/Canvas 2D Stroke Threshold/);
   assert.doesNotMatch(html,/<script\s+src=/);
   assert.doesNotMatch(html,/CurvatureModern\.html|ModernAnimationPlaybackBenchmark\.js/);
@@ -133,4 +133,73 @@ test('validation, cancellation, error handling, and percentile calculation work 
   assert.match(failing.error.message,/synthetic failure/);
   assert.equal(failing.runner.running(),false);
   assert.equal(failing.scheduled.size,0);
+});
+
+test('workaround modes compare original, union polygon, and thin stroke without changing source paths',()=>{
+  for (const profile of ['alternatives','alternatives-scene']) {
+    const modes=api.modesFor(profile);
+    assert.equal(modes.length,profile==='alternatives'?9:6);
+    assert.deepEqual(Array.from(new Set(modes.map(m=>m.method))),['stroke','polygon','thin']);
+    assert.equal(new Set(modes.map(m=>m.id)).size,modes.length);
+    assert.ok(modes.every(m=>m.comparison && m.geometry==='polyline' && (m.fills === (profile==='alternatives-scene'))));
+    assert.ok(modes.every(m=>m.label.includes(' · ')));
+  }
+  const paths=api.geometry();
+  const modes=api.modesFor('alternatives');
+  const original=mockCanvas(),poly=mockCanvas(),thin=mockCanvas();
+  const r0=api.paint(original.ctx,modes.find(m=>m.width===1.125&&m.method==='stroke'),paths);
+  const rp=api.paint(poly.ctx,modes.find(m=>m.width===1.125&&m.method==='polygon'),paths);
+  const rt=api.paint(thin.ctx,modes.find(m=>m.width===1.125&&m.method==='thin'),paths);
+  assert.equal(r0.strokeCalls,1221);assert.equal(r0.polygonFillCalls,0);
+  assert.equal(rp.strokeCalls,0);assert.equal(rp.polygonFillCalls,1221);
+  assert.equal(rp.fillCalls,1222,'one union fill per contour plus canvas background');
+  assert.equal(rp.polygonLineToCalls,3*7326);
+  assert.equal(rp.polygonArcCalls,5*1221);
+  assert.equal(poly.calls.strokes.length,0);
+  assert.equal(poly.calls.fills,1222);
+  assert.equal(poly.calls.arcs.length,5*1221);
+  assert.equal(poly.calls.closes,6*1221);
+  assert.equal(rt.strokeCalls,1221);assert.equal(rt.effectiveStrokeWidthPx,1);
+  assert.equal(rt.requestedStrokeWidthPx,1.125);
+  assert.equal(thin.calls.strokes[0].width,1);
+  assert.equal(original.calls.strokes[0].width,1.125);
+  assert.equal(rp.sourceSegments,r0.sourceSegments);
+  const sceneMode=api.modesFor('alternatives-scene').find(m=>m.width===2.5&&m.method==='polygon');
+  const sceneCanvas=mockCanvas();const rs=api.paint(sceneCanvas.ctx,sceneMode,paths);
+  assert.equal(rs.fillCalls,1+1189+1221);
+  assert.equal(rs.polygonFillCalls,1221);
+});
+
+test('outline uses non-zero compatible same-winding rectangles and one fill for translucent joins',()=>{
+  const pts=[[0,0],[12,0],[12,10]];
+  const mock=mockCanvas();
+  const result=api.fillStrokeOutline(mock.ctx,pts,2);
+  assert.equal(result.lines,6);
+  assert.equal(result.arcs,1);
+  assert.equal(mock.calls.fills,1);
+  assert.deepEqual(mock.calls.arcs[0],[12,0,2,0,Math.PI*2]);
+  assert.deepEqual(mock.calls.moves.slice(0,2),[[0,-2],[14,0]]);
+  assert.equal(mock.calls.closes,2);
+  assert.deepEqual(mock.calls.lines.slice(0,3),[[12,-2],[12,2],[0,2]]);
+  const ignored=api.fillStrokeOutline(mock.ctx,pts,0);
+  assert.equal(ignored.lines,0);
+  assert.equal(mock.calls.fills,1);
+});
+
+test('pixel difference measures image discrepancy on ink pixels without diluting by blank area',()=>{
+  const ref=new Uint8ClampedArray([252,253,255,255, 0,0,0,255, 252,253,255,255]);
+  const same=new Uint8ClampedArray(ref);
+  const zero=api.comparePixels(ref,same);
+  assert.equal(zero.inkPixels,1);assert.equal(zero.changedInkPixels,0);
+  assert.equal(zero.meanAbsRGBPerChannel,0);
+  assert.equal(zero.heatmap.length,ref.length);
+  const altered=new Uint8ClampedArray(ref);
+  altered[4]=50;altered[5]=30;altered[6]=20;
+  const changed=api.comparePixels(ref,altered);
+  assert.equal(changed.inkPixels,1);assert.equal(changed.changedInkPixels,1);
+  assert.equal(changed.changedInkPercent,100);
+  assert.equal(changed.maxChannelDifference,50);
+  assert.equal(changed.meanAbsRGBPerChannel,(50+30+20)/3);
+  assert.equal(changed.heatmap[4],250,'heatmap exaggerates differences fivefold');
+  assert.throws(()=>api.comparePixels(ref,new Uint8ClampedArray(4)),/matching dimensions/);
 });

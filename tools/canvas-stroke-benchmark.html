@@ -6,7 +6,7 @@
 <title>Canvas 2D Stroke Threshold · Isolated Microbenchmark</title>
 <style>
 :root{color-scheme:light;font:15px/1.48 system-ui,-apple-system,"Segoe UI",sans-serif;color:#1b2838;background:#f3f6fa}
-*{box-sizing:border-box}body{margin:0}main{max-width:1270px;margin:0 auto;padding:26px 24px 60px}h1{font-size:1.9rem;letter-spacing:-.03em;margin:0 0 6px}h2{font-size:1.13rem;margin:0 0 12px}p{margin:5px 0 13px;color:#4b5d70}.eyebrow{font-size:.76rem;text-transform:uppercase;letter-spacing:.11em;color:#34669a;font-weight:750}.panel{background:#fff;border:1px solid #dce4ed;border-radius:12px;padding:20px;margin-top:16px;box-shadow:0 2px 9px #142a4209}.controls{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:end}.field{display:grid;gap:5px}label{font-size:.8rem;font-weight:700;color:#465569}select,input{border:1px solid #bac9d9;border-radius:7px;padding:9px 10px;font:inherit;background:white;color:#19283a}select{min-width:240px}input[type=number]{width:100px}button{background:#1a558d;border:0;color:white;padding:10px 16px;border-radius:7px;font:inherit;font-weight:700;cursor:pointer}button.secondary{background:#e9f0f8;color:#1b4b76}button.stop{background:#a62d40}button:disabled{opacity:.45;cursor:not-allowed}.buttons{display:flex;flex-wrap:wrap;gap:8px}.details{font-size:.86rem;color:#52667b;margin-top:12px}.status{font-variant-numeric:tabular-nums;color:#263c55;margin:12px 0 0;min-height:22px}.progress{height:8px;border-radius:20px;background:#e9eff5;overflow:hidden;margin-top:8px}.progress>div{height:100%;width:0;background:#2c85bb;transition:width .15s}.canvas-holder{overflow:auto;background:#e8eef4;border-radius:8px;border:1px solid #dbe4ee;max-height:820px}.canvas-holder canvas{width:1186px;height:791px;display:block;background:#fff}.note{font-size:.84rem;color:#607287}.plot{display:grid;gap:8px;margin:10px 0}.bar-row{display:grid;grid-template-columns:200px minmax(60px,1fr) 100px;align-items:center;gap:10px;font-size:.85rem;font-variant-numeric:tabular-nums}.bar-label{text-align:right;overflow-wrap:anywhere}.bar-track{height:20px;background:#eef2f6;border-radius:4px;overflow:hidden}.bar-fill{height:100%;background:#477db1;min-width:2px}.bar-fill.fast{background:#27a083}.bar-fill.slow{background:#c98344}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums;white-space:nowrap}th,td{padding:9px 11px;border-bottom:1px solid #e4ebf3;text-align:right}th:first-child,td:first-child{text-align:left}thead{background:#f0f5fa;color:#3b5068}tbody tr:hover{background:#f5f9fc}code{background:#eff4f9;padding:1px 4px;border-radius:3px}details{margin-top:12px;color:#485b70}summary{cursor:pointer;font-weight:700}.warn{color:#87582e}.hidden{display:none}@media(max-width:620px){main{padding:20px 12px}.panel{padding:14px}.bar-row{grid-template-columns:115px 1fr 80px;gap:6px;font-size:.76rem}}
+*{box-sizing:border-box}body{margin:0}main{max-width:1270px;margin:0 auto;padding:26px 24px 60px}h1{font-size:1.9rem;letter-spacing:-.03em;margin:0 0 6px}h2{font-size:1.13rem;margin:0 0 12px}p{margin:5px 0 13px;color:#4b5d70}.eyebrow{font-size:.76rem;text-transform:uppercase;letter-spacing:.11em;color:#34669a;font-weight:750}.panel{background:#fff;border:1px solid #dce4ed;border-radius:12px;padding:20px;margin-top:16px;box-shadow:0 2px 9px #142a4209}.controls{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:end}.field{display:grid;gap:5px}label{font-size:.8rem;font-weight:700;color:#465569}select,input{border:1px solid #bac9d9;border-radius:7px;padding:9px 10px;font:inherit;background:white;color:#19283a}select{min-width:240px}input[type=number]{width:100px}button{background:#1a558d;border:0;color:white;padding:10px 16px;border-radius:7px;font:inherit;font-weight:700;cursor:pointer}button.secondary{background:#e9f0f8;color:#1b4b76}button.stop{background:#a62d40}button:disabled{opacity:.45;cursor:not-allowed}.buttons{display:flex;flex-wrap:wrap;gap:8px}.details{font-size:.86rem;color:#52667b;margin-top:12px}.status{font-variant-numeric:tabular-nums;color:#263c55;margin:12px 0 0;min-height:22px}.progress{height:8px;border-radius:20px;background:#e9eff5;overflow:hidden;margin-top:8px}.progress>div{height:100%;width:0;background:#2c85bb;transition:width .15s}.canvas-holder{overflow:auto;background:#e8eef4;border-radius:8px;border:1px solid #dbe4ee;max-height:820px}.canvas-holder canvas{width:1186px;height:791px;display:block;background:#fff}.note{font-size:.84rem;color:#607287}.plot{display:grid;gap:8px;margin:10px 0}.bar-row{display:grid;grid-template-columns:200px minmax(60px,1fr) 100px;align-items:center;gap:10px;font-size:.85rem;font-variant-numeric:tabular-nums}.bar-label{text-align:right;overflow-wrap:anywhere}.bar-track{height:20px;background:#eef2f6;border-radius:4px;overflow:hidden}.bar-fill{height:100%;background:#477db1;min-width:2px}.bar-fill.fast{background:#27a083}.bar-fill.slow{background:#c98344}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums;white-space:nowrap}th,td{padding:9px 11px;border-bottom:1px solid #e4ebf3;text-align:right}th:first-child,td:first-child{text-align:left}thead{background:#f0f5fa;color:#3b5068}tbody tr:hover{background:#f5f9fc}code{background:#eff4f9;padding:1px 4px;border-radius:3px}details{margin-top:12px;color:#485b70}summary{cursor:pointer;font-weight:700}.warn{color:#87582e}.hidden{display:none}.compare-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:15px}.compare-grid strong{display:block;font-size:.85rem;margin-bottom:5px}.compare-grid canvas{display:block;width:100%;height:auto;border:1px solid #dce4ed;background:#fff}@media(max-width:800px){.compare-grid{grid-template-columns:1fr}}@media(max-width:620px){main{padding:20px 12px}.panel{padding:14px}.bar-row{grid-template-columns:115px 1fr 80px;gap:6px;font-size:.76rem}}
 </style>
 </head>
 <body>
@@ -23,6 +23,8 @@
         <option value="transform">C · Canvas transform vs physical width</option>
         <option value="context">D · Context allocation hint</option>
         <option value="scene">E · Interleaved fills + strokes</option>
+        <option value="alternatives">F · Workarounds: stroke vs polygon fill</option>
+        <option value="alternatives-scene">G · Workarounds with scene fills</option>
         <option value="all">All experiments</option>
       </select></div>
       <div class="field"><label for="warmup">Warm-up frames</label><input type="number" id="warmup" min="2" max="100" value="15"></div>
@@ -34,13 +36,26 @@
     <div id="status" class="status" role="status" aria-live="polite">Ready. Keep this tab visible during measurements.</div>
     <div class="progress"><div id="progress"></div></div>
     <details><summary>What is actually being measured?</summary>
-      <p>Each mode draws 1,221 contours into a 1334 × 889 backing store. Polyline mode uses six segments per contour; other factors do not change the paths, count, color, opacity, or line joins. RAF gaps, JavaScript drawing time, and draw call counts are recorded independently. Modes rotate between passes to reduce order bias. The first 15 RAF callbacks (configurable) of each mode are excluded.</p>
+      <p>Each mode processes 1,221 original contours on a 1334 × 889 backing store; the workaround modes replace stroke calls with one fill per outline. Polyline mode uses six segments per contour; other factors do not change the paths, count, color, opacity, or line joins. RAF gaps, JavaScript drawing time, and draw call counts are recorded independently. Modes rotate between passes to reduce order bias. The first 15 RAF callbacks (configurable) of each mode are excluded.</p>
       <p>Mode C changes the <code>CanvasRenderingContext2D</code> transform while keeping *effective backing-store line width and path coordinates the same*. It does not change the real display DPR. To compare DPR, repeat a run after changing browser zoom or OS scaling and compare the exported <code>devicePixelRatio</code> values. Mode D uses <code>{willReadFrequently:true}</code> as a context-creation hint; this is <strong>not</strong> a guarantee of CPU rasterization. For actual backend diagnostics inspect <code>opera://gpu</code> (or <code>chrome://gpu</code>) and browser tracing.</p>
       <p>RAF cadence may be limited by display refresh, tab scheduling, thermal state, or browser compositing. Inferred FPS is not the video presentation rate; this tool does not measure GPU work completion. An isolated test that does not reproduce the slowdown does <strong>not</strong> falsify a Curvature-specific interaction.</p>
+      <p>F and G compare the native wide <code>stroke()</code>, a single <code>fill()</code> of the union of segment rectangles and internal round joins, and a fast but visibly thinner 1-pixel <code>stroke()</code> control. Each mode keeps the same original polyline, colors, opacity, order, and desired width. Only the rendering method changes. Polygon geometry is rebuilt every frame, so <code>drawMs</code> includes its JavaScript cost.</p>
+      <p>The pixel comparison below runs <em>after</em> the RAF benchmark and is never included in timing. It compares composited RGB pixels (with a background-aware mask), not vector geometry. Differences may remain from antialiasing even if the shapes are geometrically equivalent. No browser GPU-completion timing is claimed.</p>
     </details>
   </section>
   <section class="panel"><h2>Canvas under test</h2><p class="note">Actual backing store: 1334 × 889 px. CSS display: 1186 × 791 px. The visible scene stays fixed for all repetitions within a mode.</p>
     <div class="canvas-holder" id="canvas-holder"><canvas id="canvas-default" width="1334" height="889" aria-label="Benchmark drawing"></canvas><canvas id="canvas-read" width="1334" height="889" style="display:none" aria-label="Benchmark drawing with read-frequency hint"></canvas></div>
+  </section>
+  <section class="panel hidden" id="comparison">
+    <h2>Visual fidelity · native stroke vs polygon fill</h2>
+    <div class="controls"><div class="field"><label for="compare-width">Requested width (backing px)</label>
+      <select id="compare-width"><option value="1.125">1.125 px</option><option value="2.5">2.5 px</option></select>
+    </div><button id="compare-run" class="secondary">Recalculate visual difference</button></div>
+    <p id="compare-stats" class="note"></p>
+    <div class="compare-grid"><div><strong>Native stroke</strong><canvas id="compare-reference" width="1334" height="889"></canvas></div>
+      <div><strong>Polygon fill</strong><canvas id="compare-polygon" width="1334" height="889"></canvas></div>
+      <div><strong>Difference heatmap</strong><canvas id="compare-difference" width="1334" height="889"></canvas></div>
+    </div><p class="note">Heatmap: red intensity shows RGB-channel differences exaggerated 5× for visibility. Computed once after measuring or when requested, never during the RAF timings.</p>
   </section>
   <section class="panel hidden" id="results"><h2>Measured results <span id="result-label"></span></h2><p class="note">Median requestAnimationFrame interval, lower is better. First 15 callbacks or the configured warm-up count are excluded. Compare within the same profile and pass.</p><div class="plot" id="plot"></div><div class="table-scroll"><table><thead><tr><th>Mode</th><th>Width (px)</th><th>RAF p50 (ms)</th><th>RAF p95 (ms)</th><th>Draw p50 (ms)</th><th>~ FPS*</th><th>Frames</th></tr></thead><tbody id="result-rows"></tbody></table></div><p class="note">* Reciprocal of median RAF interval, not measured displayed FPS.</p></section>
 </main>
@@ -55,11 +70,13 @@
     const context = opts.context || 'default';
     const transform = opts.transform || 1;
     const fills = !!opts.fills;
-    const id = ['w', String(width).replace('.', '_'), geometry, context, 'scale' + String(transform).replace('.', '_'), fills ? 'fills' : 'strokes'].join('-');
-    return {id, width, geometry, context, transform, fills,
+    const method = opts.method || 'stroke';
+    const comparison = !!opts.comparison;
+    const id = ['w', String(width).replace('.', '_'), geometry, context, 'scale' + String(transform).replace('.', '_'), fills ? 'fills' : 'strokes', ...(comparison ? ['compare',method] : [])].join('-');
+    return {id, width, geometry, context, transform, fills, method, comparison,
       label: labelWidth(width) + ' px' + (geometry !== 'polyline' ? ' · straight' : '') +
         (context !== 'default' ? ' · read hint' : '') + (transform !== 1 ? ' · transform ×' + transform : '') +
-        (fills ? ' · fills' : '')};
+        (fills ? ' · fills' : '') + (comparison ? ' · '+({stroke:'native stroke',polygon:'polygon fill',thin:'thin 1 px stroke'}[method] || method) : '')};
   }
   function modesFor(profile) {
     if (profile === 'threshold') return THRESHOLD.map(w => mode(w));
@@ -67,9 +84,14 @@
     if (profile === 'transform') return [1, 1.125].flatMap(s => [0.99, 1, 1.01, 1.125].map(w => mode(w, {transform:s})));
     if (profile === 'context') return ['default', 'read-frequently'].flatMap(c => [0.99, 1, 1.01, 1.125].map(w => mode(w, {context:c})));
     if (profile === 'scene') return [0.99, 1, 1.01, 1.125, 1.25].map(w => mode(w, {fills:true}));
+    if (profile === 'alternatives' || profile === 'alternatives-scene') {
+      const fills = profile === 'alternatives-scene';
+      return (fills ? [1.125,2.5] : [1.005,1.125,2.5]).flatMap(width =>
+        ['stroke','polygon','thin'].map(method => mode(width,{fills,method,comparison:true})));
+    }
     if (profile === 'all') {
       const seen = new Set();
-      return ['threshold','geometry','transform','context','scene'].flatMap(modesFor).filter(m => {
+      return ['threshold','geometry','transform','context','scene','alternatives','alternatives-scene'].flatMap(modesFor).filter(m => {
         if (seen.has(m.id)) return false;
         seen.add(m.id);
         return true;
@@ -95,38 +117,113 @@
     return paths;
   }
   const paths = geometry();
+  // The non-zero winding union of correctly oriented segment rectangles and
+  // full disks at *interior* vertices is a butt-capped, round-joined stroke.
+  // All pieces share the same winding: self-overlaps never subtract geometry,
+  // and one fill() applies transparency only once per complete polyline.
+  function fillStrokeOutline(ctx, points, radius) {
+    if (!Number.isFinite(radius) || radius <= 0 || points.length < 2) return {lines:0,arcs:0};
+    let lines = 0, arcs = 0, valid = 0;
+    ctx.beginPath();
+    for (let i=1; i<points.length; i++) {
+      const a=points[i-1], b=points[i], dx=b[0]-a[0], dy=b[1]-a[1];
+      const length=Math.hypot(dx,dy);
+      if (length < 1e-10) continue;
+      const nx=-dy/length*radius, ny=dx/length*radius;
+      // Clockwise in Canvas screen coordinates, matching the positive circle winding.
+      ctx.moveTo(a[0]-nx,a[1]-ny);
+      ctx.lineTo(b[0]-nx,b[1]-ny);
+      ctx.lineTo(b[0]+nx,b[1]+ny);
+      ctx.lineTo(a[0]+nx,a[1]+ny);
+      ctx.closePath();
+      lines+=3;valid++;
+    }
+    if (!valid) return {lines,arcs};
+    for (let i=1;i<points.length-1;i++) {
+      const p=points[i];
+      ctx.moveTo(p[0]+radius,p[1]);
+      ctx.arc(p[0],p[1],radius,0,2*Math.PI);
+      arcs++;
+    }
+    ctx.fill();
+    return {lines,arcs};
+  }
   function paint(ctx, m, pathData = paths) {
     const scale = m.transform;
+    const method = m.method || 'stroke';
+    if (!['stroke','polygon','thin'].includes(method)) throw Error('Unknown paint method: ' + method);
+    const actualWidth = method === 'thin' ? 1 : m.width;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#fcfdff';
     ctx.fillRect(0, 0, W, H);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    ctx.lineWidth = m.width / scale;
+    ctx.lineWidth = actualWidth / scale;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'butt';
-    let segments = 0, filled = 0;
+    let sourceSegments = 0, lines = 0, filled = 0, strokes = 0;
+    let polygonFills = 0, polygonLines = 0, polygonArcs = 0;
     for (let i = 0; i < pathData.length; i++) {
       const points = pathData[i];
-      ctx.beginPath();
-      ctx.moveTo(points[0][0] / scale, points[0][1] / scale);
       const selected = m.geometry === 'straight' ? [points[points.length - 1]] : points.slice(1);
-      for (const [x, y] of selected) {ctx.lineTo(x / scale, y / scale); segments++;}
-      if (m.fills && i < FILL_COUNT) {
-        ctx.fillStyle = '#dbe6f0';
-        ctx.globalAlpha = 1;
-        ctx.fill();
-        filled++;
+      sourceSegments += selected.length;
+      const fillBefore = m.fills && i < FILL_COUNT;
+      // Preserve the old native stroke path construction exactly for A–E.
+      if (method !== 'polygon' || fillBefore) {
+        ctx.beginPath();
+        ctx.moveTo(points[0][0] / scale, points[0][1] / scale);
+        for (const [x,y] of selected) {ctx.lineTo(x/scale,y/scale);lines++;}
+        if (fillBefore) {
+          ctx.fillStyle = '#dbe6f0';
+          ctx.globalAlpha = 1;
+          ctx.fill();
+          filled++;
+        }
       }
-      ctx.strokeStyle = i % 19 < 3 ? '#bd704b' : '#000000';
+      const color = i % 19 < 3 ? '#bd704b' : '#000000';
       ctx.globalAlpha = i < 33 ? 0.45 : 1;
-      ctx.stroke();
+      if (method === 'polygon') {
+        ctx.fillStyle = color;
+        const sourcePoints = m.geometry === 'straight' ? [points[0],points[points.length-1]] : points;
+        const outlinePoints = scale === 1 ? sourcePoints : sourcePoints.map(([x,y])=>[x/scale,y/scale]);
+        const count = fillStrokeOutline(ctx,outlinePoints,actualWidth/(2*scale));
+        polygonFills++;polygonLines+=count.lines;polygonArcs+=count.arcs;
+      } else {
+        ctx.strokeStyle = color;
+        ctx.stroke();
+        strokes++;
+      }
     }
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    return {strokeCalls:pathData.length, fillCalls:filled + 1, lineToCalls:segments,
-      effectiveStrokeWidthPx:m.width, assignedLineWidth:m.width / scale, transformScale:scale};
+    return {strokeCalls:strokes, polygonFillCalls:polygonFills, polygonLineToCalls:polygonLines,
+      polygonArcCalls:polygonArcs, fillCalls:filled + polygonFills + 1,
+      lineToCalls:lines + polygonLines, sourceSegments,
+      requestedStrokeWidthPx:m.width, effectiveStrokeWidthPx:actualWidth,
+      assignedLineWidth:actualWidth / scale, transformScale:scale, method};
+  }
+  function comparePixels(reference, candidate, background = [252,253,255]) {
+    if (reference.length !== candidate.length || reference.length % 4)
+      throw Error('RGBA buffers must have matching dimensions');
+    const heat = new Uint8ClampedArray(reference.length);
+    let ink = 0, changed = 0, sum = 0, maximum = 0;
+    for (let i=0;i<reference.length;i+=4) {
+      let difference=0, isInk=false;
+      for(let c=0;c<3;c++) {
+        const a=reference[i+c],b=candidate[i+c];
+        difference=Math.max(difference,Math.abs(a-b));
+        if(Math.abs(a-background[c])>8 || Math.abs(b-background[c])>8) isInk=true;
+      }
+      heat[i]=Math.min(255,difference*5);heat[i+1]=0;heat[i+2]=0;heat[i+3]=255;
+      if (!isInk) continue;
+      ink++;
+      if(difference>8)changed++;
+      sum+=Math.abs(reference[i]-candidate[i])+Math.abs(reference[i+1]-candidate[i+1])+Math.abs(reference[i+2]-candidate[i+2]);
+      maximum=Math.max(maximum,difference);
+    }
+    return {inkPixels:ink,changedInkPixels:changed,changedInkPercent:ink?100*changed/ink:0,
+      meanAbsRGBPerChannel:ink?sum/(ink*3):0,maxChannelDifference:maximum,heatmap:heat};
   }
   function percentile(values, p) {
     const a = values.filter(Number.isFinite).sort((x,y) => x-y);
@@ -227,7 +324,8 @@
     const $ = id => document.getElementById(id);
     const elements = {profile:$('profile'),warmup:$('warmup'),samples:$('samples'),passes:$('passes'),
       run:$('run'),stop:$('stop'),export:$('export'),progress:$('progress'),status:$('status'),
-      result:$('results'),plot:$('plot'),rows:$('result-rows'),label:$('result-label'),environment:$('environment')};
+      result:$('results'),plot:$('plot'),rows:$('result-rows'),label:$('result-label'),environment:$('environment'),
+      comparison:$('comparison'),compareWidth:$('compare-width'),compareRun:$('compare-run'),compareStats:$('compare-stats')};
     const canvases = {default:$('canvas-default'),'read-frequently':$('canvas-read')};
     const contexts = {default:canvases.default.getContext('2d'),
       'read-frequently':canvases['read-frequently'].getContext('2d',{willReadFrequently:true})};
@@ -265,6 +363,31 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url),1000);
     }
+    let lastComparisonProfile = 'alternatives';
+    const compareCanvases = {reference:$('compare-reference'),polygon:$('compare-polygon'),difference:$('compare-difference')};
+    function calculateComparison(width, fills) {
+      const original = mode(width,{method:'stroke',fills,comparison:true});
+      const polygon = mode(width,{method:'polygon',fills,comparison:true});
+      const refCtx=compareCanvases.reference.getContext('2d',{willReadFrequently:true});
+      const fillCtx=compareCanvases.polygon.getContext('2d',{willReadFrequently:true});
+      paint(refCtx,original);paint(fillCtx,polygon);
+      const ref=refCtx.getImageData(0,0,W,H), alt=fillCtx.getImageData(0,0,W,H);
+      const {heatmap,...stats}=comparePixels(ref.data,alt.data);
+      const difference=compareCanvases.difference.getContext('2d');
+      const image=difference.createImageData(W,H);
+      image.data.set(heatmap);
+      difference.putImageData(image,0,0);
+      elements.comparison.classList.remove('hidden');
+      elements.compareStats.textContent = `Requested ${width} backing px · ${fills ? 'with scene fills' : 'strokes only'} · ` +
+        `${stats.changedInkPercent.toFixed(2)}% of ink pixels differ by >8/255 RGB · ` +
+        `mean absolute RGB/channel ${stats.meanAbsRGBPerChannel.toFixed(2)}/255 · ` +
+        `max channel difference ${stats.maxChannelDifference}/255 · ink pixels ${stats.inkPixels}`;
+      if (lastResult && lastResult.config.profile === lastComparisonProfile) {
+        if (!lastResult.visualComparisons) lastResult.visualComparisons={};
+        lastResult.visualComparisons[String(width)] = {nativeVsPolygon:stats,withSceneFills:fills};
+      }
+      return stats;
+    }
     function renderResults(report) {
       elements.result.classList.remove('hidden');
       elements.label.textContent = `· ${report.config.profile}`;
@@ -289,7 +412,7 @@
       }
     }
     function setRunning(running) {
-      for (const el of [elements.profile,elements.warmup,elements.samples,elements.passes]) el.disabled=running;
+      for (const el of [elements.profile,elements.warmup,elements.samples,elements.passes,elements.compareWidth,elements.compareRun]) el.disabled=running;
       elements.run.disabled=running; elements.stop.disabled=!running;elements.export.disabled=running||!lastResult;
     }
     const runner = makeRunner({
@@ -304,7 +427,14 @@
       completed(r) {
         lastResult=r;setRunning(false);elements.progress.style.width='100%';
         elements.status.textContent=`Complete: ${r.runs.length} runs, ${r.config.modes.length} modes, ${r.config.passes} passes. JSON downloaded.`;
-        renderResults(r);exportReport(r);
+        renderResults(r);
+        if (r.config.profile === 'alternatives' || r.config.profile === 'alternatives-scene') {
+          lastComparisonProfile=r.config.profile;
+          calculateComparison(1.125,r.config.profile === 'alternatives-scene');
+          calculateComparison(2.5,r.config.profile === 'alternatives-scene');
+          calculateComparison(Number(elements.compareWidth.value),r.config.profile === 'alternatives-scene');
+        } else elements.comparison.classList.add('hidden');
+        exportReport(r);
       },
       failed(err) {setRunning(false);elements.status.textContent='Failed: '+(err?.message||String(err));}
     });
@@ -318,7 +448,7 @@
         elements.status.textContent='Please keep the benchmark tab visible.';return;
       }
       const profile=elements.profile.value;
-      lastResult=null;elements.result.classList.add('hidden');elements.progress.style.width='0%';
+      lastResult=null;elements.result.classList.add('hidden');elements.comparison.classList.add('hidden');elements.progress.style.width='0%';
       setRunning(true);
       try {runner.start({profile,warmup,samples,passes,modes:modesFor(profile),environment:environment()});}
       catch(err){setRunning(false);elements.status.textContent='Failed: '+err.message;}
@@ -327,6 +457,7 @@
       if(runner.cancel()){setRunning(false);elements.status.textContent='Stopped. Partial runs were discarded.';}
     });
     elements.export.addEventListener('click',()=>exportReport(lastResult));
+    elements.compareRun.addEventListener('click',()=>calculateComparison(Number(elements.compareWidth.value),lastComparisonProfile==='alternatives-scene'));
     document.addEventListener('visibilitychange',()=>{
       showEnvironment();
       if (document.visibilityState!=='visible' && runner.running()) {
@@ -337,7 +468,7 @@
     showEnvironment();
     paint(contexts.default,mode(1));
   }
-  root.CanvasStrokeMicrobenchmark = {modesFor,geometry,paint,percentile,summary,rotatedModes,makeRunner,constants:{W,H,N,FILL_COUNT}};
+  root.CanvasStrokeMicrobenchmark = {modesFor,geometry,paint,fillStrokeOutline,comparePixels,percentile,summary,rotatedModes,makeRunner,constants:{W,H,N,FILL_COUNT}};
   if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
