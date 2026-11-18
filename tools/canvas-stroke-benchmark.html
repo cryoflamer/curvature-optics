@@ -25,6 +25,7 @@
         <option value="scene">E · Interleaved fills + strokes</option>
         <option value="alternatives">F · Workarounds: stroke vs polygon fill</option>
         <option value="alternatives-scene">G · Workarounds with scene fills</option>
+        <option value="ctm-bypass">H · CTM hairline bypass · same physical width</option>
         <option value="all">All experiments</option>
       </select></div>
       <div class="field"><label for="warmup">Warm-up frames</label><input type="number" id="warmup" min="2" max="100" value="15"></div>
@@ -40,6 +41,7 @@
       <p>Mode C changes the <code>CanvasRenderingContext2D</code> transform while keeping *effective backing-store line width and path coordinates the same*. It does not change the real display DPR. To compare DPR, repeat a run after changing browser zoom or OS scaling and compare the exported <code>devicePixelRatio</code> values. Mode D uses <code>{willReadFrequently:true}</code> as a context-creation hint; this is <strong>not</strong> a guarantee of CPU rasterization. For actual backend diagnostics inspect <code>opera://gpu</code> (or <code>chrome://gpu</code>) and browser tracing.</p>
       <p>RAF cadence may be limited by display refresh, tab scheduling, thermal state, or browser compositing. Inferred FPS is not the video presentation rate; this tool does not measure GPU work completion. An isolated test that does not reproduce the slowdown does <strong>not</strong> falsify a Curvature-specific interaction.</p>
       <p>F and G compare the native wide <code>stroke()</code>, a single <code>fill()</code> of the union of segment rectangles and internal round joins, and a fast but visibly thinner 1-pixel <code>stroke()</code> control. Each mode keeps the same original polyline, colors, opacity, order, and desired width. Only the rendering method changes. Polygon geometry is rebuilt every frame, so <code>drawMs</code> includes its JavaScript cost.</p>
+      <p>H isolates the possible <strong>CTM-based hairline bypass</strong>. For each target width (0.99, 1.005, 1.125, 2.5 backing-store px), the native control uses CTM ×1 and <code>lineWidth = target</code>; the unit-width variant uses CTM ×target and <code>lineWidth = 1</code>; the half-width variant uses CTM ×(2 × target) and <code>lineWidth = 0.5</code>. Coordinates are divided by the exact CTM scale. All three should paint the same physical line geometry. H explicitly tests whether the renderer uses the assigned width or the transformed width to select its fast path; merely changing <code>lineWidth</code> does <em>not</em> guarantee a bypass. Unlike real DPR changes, this is an internal Canvas transform only.</p>
       <p>The pixel comparison below runs <em>after</em> the RAF benchmark and is never included in timing. It compares composited RGB pixels (with a background-aware mask), not vector geometry. Differences may remain from antialiasing even if the shapes are geometrically equivalent. No browser GPU-completion timing is claimed.</p>
     </details>
   </section>
@@ -47,13 +49,15 @@
     <div class="canvas-holder" id="canvas-holder"><canvas id="canvas-default" width="1334" height="889" aria-label="Benchmark drawing"></canvas><canvas id="canvas-read" width="1334" height="889" style="display:none" aria-label="Benchmark drawing with read-frequency hint"></canvas></div>
   </section>
   <section class="panel hidden" id="comparison">
-    <h2>Visual fidelity · native stroke vs polygon fill</h2>
+    <h2>Visual fidelity · native stroke vs candidate</h2>
     <div class="controls"><div class="field"><label for="compare-width">Requested width (backing px)</label>
       <select id="compare-width"><option value="1.125">1.125 px</option><option value="2.5">2.5 px</option></select>
+    </div><div class="field"><label for="compare-method">Candidate method</label>
+      <select id="compare-method"><option value="polygon">Polygon fill</option></select>
     </div><button id="compare-run" class="secondary">Recalculate visual difference</button></div>
     <p id="compare-stats" class="note"></p>
     <div class="compare-grid"><div><strong>Native stroke</strong><canvas id="compare-reference" width="1334" height="889"></canvas></div>
-      <div><strong>Polygon fill</strong><canvas id="compare-polygon" width="1334" height="889"></canvas></div>
+      <div><strong id="compare-alt-label">Candidate</strong><canvas id="compare-polygon" width="1334" height="889"></canvas></div>
       <div><strong>Difference heatmap</strong><canvas id="compare-difference" width="1334" height="889"></canvas></div>
     </div><p class="note">Heatmap: red intensity shows RGB-channel differences exaggerated 5× for visibility. Computed once after measuring or when requested, never during the RAF timings.</p>
   </section>
@@ -72,10 +76,16 @@
     const fills = !!opts.fills;
     const method = opts.method || 'stroke';
     const comparison = !!opts.comparison;
-    const id = ['w', String(width).replace('.', '_'), geometry, context, 'scale' + String(transform).replace('.', '_'), fills ? 'fills' : 'strokes', ...(comparison ? ['compare',method] : [])].join('-');
-    return {id, width, geometry, context, transform, fills, method, comparison,
+    const transformVariant = opts.transformVariant || null;
+    const variantLabel = {native:'native lineWidth',unit:'lineWidth = 1',half:'lineWidth = 0.5'};
+    const id = ['w', String(width).replace('.', '_'), geometry, context, 'scale' + String(transform).replace('.', '_'),
+      fills ? 'fills' : 'strokes', ...(transformVariant ? ['ctm',transformVariant] : []),
+      ...(comparison ? ['compare',method] : [])].join('-');
+    return {id, width, geometry, context, transform, fills, method, comparison, transformVariant,
       label: labelWidth(width) + ' px' + (geometry !== 'polyline' ? ' · straight' : '') +
-        (context !== 'default' ? ' · read hint' : '') + (transform !== 1 ? ' · transform ×' + transform : '') +
+        (context !== 'default' ? ' · read hint' : '') +
+        (transformVariant ? ' · ' + variantLabel[transformVariant] + ' · CTM ×' + labelWidth(transform) :
+          (transform !== 1 ? ' · transform ×' + transform : '')) +
         (fills ? ' · fills' : '') + (comparison ? ' · '+({stroke:'native stroke',polygon:'polygon fill',thin:'thin 1 px stroke'}[method] || method) : '')};
   }
   function modesFor(profile) {
@@ -89,9 +99,13 @@
       return (fills ? [1.125,2.5] : [1.005,1.125,2.5]).flatMap(width =>
         ['stroke','polygon','thin'].map(method => mode(width,{fills,method,comparison:true})));
     }
+    if (profile === 'ctm-bypass') return [0.99, 1.005, 1.125, 2.5].flatMap(width => [
+      mode(width,{transformVariant:'native'}),
+      mode(width,{transform:width,transformVariant:'unit'}),
+      mode(width,{transform:2*width,transformVariant:'half'})]);
     if (profile === 'all') {
       const seen = new Set();
-      return ['threshold','geometry','transform','context','scene','alternatives','alternatives-scene'].flatMap(modesFor).filter(m => {
+      return ['threshold','geometry','transform','context','scene','alternatives','alternatives-scene','ctm-bypass'].flatMap(modesFor).filter(m => {
         if (seen.has(m.id)) return false;
         seen.add(m.id);
         return true;
@@ -325,7 +339,8 @@
     const elements = {profile:$('profile'),warmup:$('warmup'),samples:$('samples'),passes:$('passes'),
       run:$('run'),stop:$('stop'),export:$('export'),progress:$('progress'),status:$('status'),
       result:$('results'),plot:$('plot'),rows:$('result-rows'),label:$('result-label'),environment:$('environment'),
-      comparison:$('comparison'),compareWidth:$('compare-width'),compareRun:$('compare-run'),compareStats:$('compare-stats')};
+      comparison:$('comparison'),compareWidth:$('compare-width'),compareMethod:$('compare-method'),
+      compareAltLabel:$('compare-alt-label'),compareRun:$('compare-run'),compareStats:$('compare-stats')};
     const canvases = {default:$('canvas-default'),'read-frequently':$('canvas-read')};
     const contexts = {default:canvases.default.getContext('2d'),
       'read-frequently':canvases['read-frequently'].getContext('2d',{willReadFrequently:true})};
@@ -365,26 +380,52 @@
     }
     let lastComparisonProfile = 'alternatives';
     const compareCanvases = {reference:$('compare-reference'),polygon:$('compare-polygon'),difference:$('compare-difference')};
-    function calculateComparison(width, fills) {
+    function configureComparison(profile) {
+      const ctm = profile === 'ctm-bypass';
+      const widths = ctm ? [0.99,1.005,1.125,2.5] : [1.125,2.5];
+      const candidates = ctm ? [['unit','CTM-scaled · lineWidth = 1'],['half','CTM-scaled · lineWidth = 0.5']] :
+        [['polygon','Polygon fill']];
+      elements.compareWidth.replaceChildren();
+      elements.compareMethod.replaceChildren();
+      for (const width of widths) elements.compareWidth.add(new Option(width + ' px',String(width)));
+      for (const [value,label] of candidates) elements.compareMethod.add(new Option(label,value));
+      elements.compareWidth.value = '1.125';
+    }
+    function calculateComparison(width, profile, candidate) {
+      const fills = profile === 'alternatives-scene';
       const original = mode(width,{method:'stroke',fills,comparison:true});
-      const polygon = mode(width,{method:'polygon',fills,comparison:true});
+      let alternate, label, statKey;
+      if (profile === 'ctm-bypass') {
+        if (candidate !== 'unit' && candidate !== 'half') throw Error('Unknown CTM candidate');
+        const desiredAssignedWidth = candidate === 'unit' ? 1 : 0.5;
+        alternate = mode(width,{method:'stroke',transform:width/desiredAssignedWidth,transformVariant:candidate});
+        label = `CTM-scaled · lineWidth = ${desiredAssignedWidth}`;
+        statKey = candidate === 'unit' ? 'nativeVsCTMUnitWidth' : 'nativeVsCTMHalfWidth';
+      } else {
+        if (candidate !== 'polygon') throw Error('Unknown polygon candidate');
+        alternate = mode(width,{method:'polygon',fills,comparison:true});
+        label='Polygon fill';statKey='nativeVsPolygon';
+      }
       const refCtx=compareCanvases.reference.getContext('2d',{willReadFrequently:true});
-      const fillCtx=compareCanvases.polygon.getContext('2d',{willReadFrequently:true});
-      paint(refCtx,original);paint(fillCtx,polygon);
-      const ref=refCtx.getImageData(0,0,W,H), alt=fillCtx.getImageData(0,0,W,H);
+      const altCtx=compareCanvases.polygon.getContext('2d',{willReadFrequently:true});
+      paint(refCtx,original);paint(altCtx,alternate);
+      const ref=refCtx.getImageData(0,0,W,H), alt=altCtx.getImageData(0,0,W,H);
       const {heatmap,...stats}=comparePixels(ref.data,alt.data);
       const difference=compareCanvases.difference.getContext('2d');
       const image=difference.createImageData(W,H);
       image.data.set(heatmap);
       difference.putImageData(image,0,0);
       elements.comparison.classList.remove('hidden');
-      elements.compareStats.textContent = `Requested ${width} backing px · ${fills ? 'with scene fills' : 'strokes only'} · ` +
+      elements.compareAltLabel.textContent=label;
+      elements.compareStats.textContent = `Requested ${width} backing px · ${label} · ${fills ? 'with scene fills' : 'strokes only'} · ` +
         `${stats.changedInkPercent.toFixed(2)}% of ink pixels differ by >8/255 RGB · ` +
         `mean absolute RGB/channel ${stats.meanAbsRGBPerChannel.toFixed(2)}/255 · ` +
         `max channel difference ${stats.maxChannelDifference}/255 · ink pixels ${stats.inkPixels}`;
-      if (lastResult && lastResult.config.profile === lastComparisonProfile) {
+      if (lastResult && lastResult.config.profile === profile) {
         if (!lastResult.visualComparisons) lastResult.visualComparisons={};
-        lastResult.visualComparisons[String(width)] = {nativeVsPolygon:stats,withSceneFills:fills};
+        const entry=lastResult.visualComparisons[String(width)] ||= {};
+        entry[statKey]=stats;
+        entry.withSceneFills=fills;
       }
       return stats;
     }
@@ -412,7 +453,7 @@
       }
     }
     function setRunning(running) {
-      for (const el of [elements.profile,elements.warmup,elements.samples,elements.passes,elements.compareWidth,elements.compareRun]) el.disabled=running;
+      for (const el of [elements.profile,elements.warmup,elements.samples,elements.passes,elements.compareWidth,elements.compareMethod,elements.compareRun]) el.disabled=running;
       elements.run.disabled=running; elements.stop.disabled=!running;elements.export.disabled=running||!lastResult;
     }
     const runner = makeRunner({
@@ -428,11 +469,14 @@
         lastResult=r;setRunning(false);elements.progress.style.width='100%';
         elements.status.textContent=`Complete: ${r.runs.length} runs, ${r.config.modes.length} modes, ${r.config.passes} passes. JSON downloaded.`;
         renderResults(r);
-        if (r.config.profile === 'alternatives' || r.config.profile === 'alternatives-scene') {
+        if (['alternatives','alternatives-scene','ctm-bypass'].includes(r.config.profile)) {
           lastComparisonProfile=r.config.profile;
-          calculateComparison(1.125,r.config.profile === 'alternatives-scene');
-          calculateComparison(2.5,r.config.profile === 'alternatives-scene');
-          calculateComparison(Number(elements.compareWidth.value),r.config.profile === 'alternatives-scene');
+          configureComparison(r.config.profile);
+          const widths=r.config.profile === 'ctm-bypass' ? [0.99,1.005,1.125,2.5] : [1.125,2.5];
+          const candidates=r.config.profile === 'ctm-bypass' ? ['unit','half'] : ['polygon'];
+          for (const width of widths) for (const candidate of candidates)
+            calculateComparison(width,r.config.profile,candidate);
+          calculateComparison(Number(elements.compareWidth.value),r.config.profile,elements.compareMethod.value);
         } else elements.comparison.classList.add('hidden');
         exportReport(r);
       },
@@ -457,7 +501,7 @@
       if(runner.cancel()){setRunning(false);elements.status.textContent='Stopped. Partial runs were discarded.';}
     });
     elements.export.addEventListener('click',()=>exportReport(lastResult));
-    elements.compareRun.addEventListener('click',()=>calculateComparison(Number(elements.compareWidth.value),lastComparisonProfile==='alternatives-scene'));
+    elements.compareRun.addEventListener('click',()=>calculateComparison(Number(elements.compareWidth.value),lastComparisonProfile,elements.compareMethod.value));
     document.addEventListener('visibilitychange',()=>{
       showEnvironment();
       if (document.visibilityState!=='visible' && runner.running()) {

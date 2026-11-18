@@ -203,3 +203,64 @@ test('pixel difference measures image discrepancy on ink pixels without diluting
   assert.equal(changed.heatmap[4],250,'heatmap exaggerates differences fivefold');
   assert.throws(()=>api.comparePixels(ref,new Uint8ClampedArray(4)),/matching dimensions/);
 });
+
+test('CTM bypass profile controls the assigned line width at fixed backing-store geometry',()=>{
+  const modes=api.modesFor('ctm-bypass');
+  const widths=[0.99,1.005,1.125,2.5];
+  assert.equal(modes.length,widths.length*3);
+  assert.equal(new Set(modes.map(m=>m.id)).size,modes.length);
+  const all=api.modesFor('all');
+  for (const m of modes) assert.ok(all.some(a=>a.id===m.id));
+  const paths=api.geometry();
+  for (const width of widths) {
+    const variants=modes.filter(m=>m.width===width);
+    assert.deepEqual(Array.from(variants,m=>m.transformVariant),['native','unit','half']);
+    assert.deepEqual(Array.from(variants,m=>m.transform),[1,width,2*width]);
+    const control=mockCanvas();
+    const controlStats=api.paint(control.ctx,variants[0],paths);
+    assert.equal(controlStats.strokeCalls,1221);
+    assert.equal(controlStats.sourceSegments,7326);
+    assert.equal(controlStats.lineToCalls,7326);
+    assert.equal(controlStats.assignedLineWidth,width);
+    assert.equal(controlStats.effectiveStrokeWidthPx,width);
+    for (let i=1;i<variants.length;i++) {
+      const alt=mockCanvas();
+      const stats=api.paint(alt.ctx,variants[i],paths);
+      const assigned=i===1?1:0.5;
+      assert.ok(Math.abs(stats.assignedLineWidth-assigned)<1e-12);
+      assert.equal(stats.effectiveStrokeWidthPx,width);
+      assert.equal(stats.transformScale,variants[i].transform);
+      assert.equal(stats.strokeCalls,controlStats.strokeCalls);
+      assert.equal(stats.lineToCalls,controlStats.lineToCalls);
+      assert.equal(stats.fillCalls,controlStats.fillCalls);
+      assert.equal(alt.calls.strokes.length,control.calls.strokes.length);
+      assert.equal(alt.calls.lines.length,control.calls.lines.length);
+      for (let k=0;k<alt.calls.lines.length;k++) {
+        assert.ok(Math.abs(alt.calls.lines[k][0]-control.calls.lines[k][0])<1e-9);
+        assert.ok(Math.abs(alt.calls.lines[k][1]-control.calls.lines[k][1])<1e-9);
+      }
+      for (let k=0;k<alt.calls.strokes.length;k++) {
+        assert.ok(Math.abs(alt.calls.strokes[k].width-width)<1e-12);
+        assert.equal(alt.calls.strokes[k].alpha,control.calls.strokes[k].alpha);
+        assert.equal(alt.calls.strokes[k].join,control.calls.strokes[k].join);
+        assert.equal(alt.calls.strokes[k].color,control.calls.strokes[k].color);
+      }
+    }
+  }
+});
+
+test('CTM bypass runs export each transform variant and separate measured widths',()=>{
+  const selected=api.modesFor('ctm-bypass').filter(m=>m.width===1.125);
+  const h=scheduledHarness();
+  h.runner.start({warmup:2,samples:10,passes:3,modes:selected,profile:'ctm-bypass',environment:{devicePixelRatio:1.5}});
+  for(let i=0;h.runner.running()&&i<1000;i++)h.tick();
+  assert.ok(h.result);
+  const r=h.result;
+  assert.equal(r.config.profile,'ctm-bypass');
+  assert.equal(r.config.modes.length,3);
+  assert.equal(r.runs.length,9);
+  assert.ok(r.runs.every(run=>run.rows.every(row=>row.assignedLineWidth>0)));
+  assert.equal(r.environment.devicePixelRatio,1.5);
+  assert.deepEqual(Array.from(r.config.modes,m=>m.transformVariant),['native','unit','half']);
+  assert.deepEqual(Array.from(r.config.modes,m=>m.transform),[1,1.125,2.25]);
+});

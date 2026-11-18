@@ -300,3 +300,47 @@ on a given Opera/Chromium/graphics backend would justify a separate integration
 with visual regression testing; it does not prove the same gain on another
 backend. In particular, `willReadFrequently` does not force a specific
 rasterizer, and these timings do not measure GPU-completion latency.
+
+## CTM hairline bypass: constant effective width
+
+Use **H · CTM hairline bypass · same physical width** in
+`tools/canvas-stroke-benchmark.html`. This is a targeted workaround test after
+F/G demonstrated that polygon fills can be slower than native strokes. It
+compares three representations of the **same backing-store line geometry** at
+four requested widths (`0.99`, `1.005`, `1.125`, `2.5` Canvas pixels):
+
+| Variant | Canvas CTM scale | Assigned `ctx.lineWidth` | Effective width |
+| --- | --- | --- | --- |
+| Native | `1` | `w` | `w` |
+| Unit-width | `w` | `1` | `w` |
+| Half-width | `2 * w` | `0.5` | `w` |
+
+For all variants, path coordinates are divided by their CTM scale, so the
+transformed points remain the same. Styles, original contours, draw-call
+count, round joins, butt caps, and backing-store canvas dimensions are held
+constant. The width below 1 px is a negative control. The 1.005 px case
+probes the observed cliff; 1.125 px is the original Curvature case, and
+2.5 px tests a less marginal wide stroke.
+
+The question is whether Chrome/Opera's graphics pipeline chooses its fast
+stroke path based on the **assigned** `lineWidth` or on the **transformed
+backing-store width**. If the latter, changing CTM cannot bypass the cliff;
+this is a falsifiable test, not a promised optimization. Profile C already
+compares equivalent CTMs at a smaller fixed scale; profile H isolates the
+practical `lineWidth = 1` and `lineWidth = 0.5` workaround at multiple widths.
+
+The JSON includes explicit `transformVariant` and `transform` per mode, plus
+per-frame `assignedLineWidth`, `effectiveStrokeWidthPx`, `gapMs` and
+`drawMs`. After measurement, it calculates separate composited-pixel
+comparisons for unit-width and half-width transforms against native strokes,
+at each width. They are stored as `visualComparisons[width].nativeVsCTMUnitWidth`
+and `.nativeVsCTMHalfWidth`; the page shows the selected candidate and a
+heatmap. As with F/G, visual comparisons run **after** RAF timing and may
+show antialiasing differences from floating-point coordinate transformation.
+
+Run H with the usual **3 rotated passes**. A useful bypass would need both
+significantly lower RAF gaps than native and near-identical pixels. The browser
+may internally normalize the CTM before rasterization, making all three
+variants equally slow; in that event, do not adopt this technique in the
+production renderer. This experiment is not a physical DPR or GPU timing test,
+and it changes no Canvas Direct production code.
