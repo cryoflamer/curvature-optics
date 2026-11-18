@@ -93,14 +93,14 @@
       }
     }));
   }
-  function exportDemo(id){
+  function exportDemo(id,lookup){
     var demo=load().find(function(entry){return entry.id===id;});
     if(!demo)throw Error('Unknown built-in demo: '+id);
     // Portable records carry the authored project ID, not the catalog identity.
     return library.exportPortable([{version:1,id:demo.project.id,project:demo.project,
       quality:demo.quality,thumbnail:demo.thumbnail,
       cover:demo.cover?bundled().covers[demo.cover.asset]:null,
-      createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}]);
+      createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],lookup);
   }
   function copyToLibrary(indexedDB,id,now,crypto){
     return Promise.resolve().then(function(){

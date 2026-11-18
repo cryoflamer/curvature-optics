@@ -760,6 +760,8 @@ function projectLifecycleHarness(){
     studioDraftAutosave:autosave,studioSwitchApi:workspaceSwitch,
     studioLibraryActionsApi:require('../src/animation/ModernAnimationLibraryActions'),
     downloadHistoryJson(){},
+    studioKeyframeThumbnails:null,studioThumbnailReady:Promise.resolve(),
+    importStudioKeyframeThumbnails(){return true;},
     studioWorkspaceReady:true,studioWorkspaceId:'project_old',
     studioWorkspaces:{workspaces:[{id:'project_old',checkpoint:checkpoints.get('project_old')}]},
     studioLibraryActive:stored.get('old'),studioLibraryPending:null,
@@ -1429,4 +1431,48 @@ test('Capture frame uses the displayed sample and both Compare canvases, never t
   assert.throws(()=>ctx.captureStudioCover('saved'),/Open this project/);
   ctx.studioPlaybackRenderedAt=100;ctx.newUiEl=()=>({hidden:false});
   assert.throws(()=>ctx.captureStudioCover('saved'),/Wait for the preview/);
+});
+
+test('portable keyframe images bind to exact project frame indices and remain outside saved records',async()=>{
+  const db=memoryIndexedDB(),project=studio.build(source(),'animation_images');
+  const entry=await library.create(db,project,'accurate',100);
+  const snapshots=animation.frameExperiments(project);
+  const img={mode:'scene',width:480,height:240,dataUrl:'data:image/webp;base64,YQ=='};
+  const text=library.exportPortable([entry],exp=>JSON.stringify(exp)===JSON.stringify(snapshots[1])?img:null);
+  const parsed=library.parsePortable(text);
+  assert.deepEqual(parsed[0].keyframeThumbnails,[{index:1,image:img}]);
+  assert.equal(library.parsePortable(library.exportPortable([entry]))[0].keyframeThumbnails,undefined);
+  assert.equal(library.fingerprint(parsed[0].project),library.fingerprint(project));
+  const dest=memoryIndexedDB();
+  const result=await library.importEntries(dest,parsed,101,{randomUUID:()=> 'aabbcc'});
+  assert.equal(result.created,1);
+  const saved=await library.get(dest,result.createdIds[0]);
+  assert.equal(saved.keyframeThumbnails,undefined);
+  assert.deepEqual(animation.frameExperiments(saved.project),snapshots);
+  for(const invalid of [[{index:2,image:img}], [{index:1,image:img},{index:1,image:img}],
+    [{index:1,image:{...img,mode:'compare'}}],[{index:1,image:null}]]){
+    const bundle=JSON.parse(text);bundle.animations[0].keyframeThumbnails=invalid;
+    assert.throws(()=>library.parsePortable(JSON.stringify(bundle)),/thumbnail/i);
+  }
+});
+
+
+test('Studio imports validated attachments into the shared cache without overwriting local images',async()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const code=app.slice(app.indexOf('  function importStudioKeyframeThumbnails('),app.indexOf('  var studioThumbnailProject='));
+  const thumbnail=require('../src/ui/modern/ModernExperimentThumbnail'),cache=thumbnail.createKeyframeCache();
+  const project=studio.build(source(),'animation_images'),frames=animation.frameExperiments(project);
+  const image={mode:'scene',width:480,height:240,dataUrl:'data:image/webp;base64,YQ=='};
+  const local={...image,dataUrl:'data:image/webp;base64,Yg=='};
+  const portable=library.parsePortable(library.exportPortable([library.record(project,'accurate',project.id,100,100)],()=>image));
+  cache.put(frames[0],local);let writes=[],renders=0;
+  const ctx={studioKeyframeThumbnails:cache,studioProjects:animation,
+    studioThumbnailPersistence:{async write(rows){writes.push(...rows);return true;}},
+    studioHistoryEntries:[],renderAnimationStudio(){renders++;}};
+  vm.runInNewContext(code,ctx);
+  assert.equal(await ctx.importStudioKeyframeThumbnails(portable),true);
+  assert.deepEqual(cache.get(frames[0]),local);assert.deepEqual(cache.get(frames[1]),image);
+  assert.equal(writes.length,1);assert.equal(JSON.stringify(writes[0].experiment),JSON.stringify(frames[1]));
+  assert.equal(renders,1);
+  assert.equal(await ctx.importStudioKeyframeThumbnails(portable),true);assert.equal(writes.length,1);
 });

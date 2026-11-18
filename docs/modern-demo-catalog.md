@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 4B (Keyframe Thumbnail Capture)**, 2026-11-19. Catalog,
+Status: **patch 4C (Keyframe Thumbnail Persistence)**, 2026-11-19. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Next: 4C (thumbnail persistence) before Presentation Mode; browser acceptance remains open.
+Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Persistent keyframe thumbnails and portable attachments are implemented. Next: Presentation Mode; browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -177,7 +177,7 @@ record the split, and do not mark complete on implementation alone.
 | 4A.1 — Paused Keyframe Rendering | Implemented; Opera acceptance open | Fix reported dependence on Play: immediate forced paint for a laid-out stage, deferred layout path otherwise; validate actual rendered time and preserve failure/retry. |
 | 4A.2 — Storyboard | Implemented; Opera acceptance open | Horizontal navigation strip beside playback, using shared keyframe selection. Keep detailed editor below, hide redundant editor for read-only demos; preserve Compare width. |
 | 4B — Keyframe Thumbnail Capture | Implemented; Opera acceptance open | Capture only a successfully painted selected keyframe at its exact arrival. Reuse bounded screenshot composition (Scene or both Compare sides), lazy capture on explicit jump, manual refresh and transient cache keyed by visual state; validate History provenance before reuse. No eager whole-project render. |
-| 4C — Keyframe Thumbnail Persistence | Planned | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
+| 4C — Keyframe Thumbnail Persistence | Implemented; Opera acceptance open | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
 | 7 — Soundly Finalization | Planned | Author final storyboard/captions and catalog presentation, verify both models, source provenance, browser/Opera smoothness, controls, copy/export/reimport; document observed accuracy limits. Tag only after CI/manual acceptance. First completed public demo milestone. |
@@ -406,3 +406,37 @@ physical frame. Opening a project, playing and ordinary scrubbing do not eagerly
 capture images. Read-only projects and their copies can reuse identical cached
 states in the same browser session. No cache contents enter the project, Undo,
 Library, export or draft checkpoint. Persistence and portable assets are 4C.
+
+### Durable keyframe thumbnail cache (patch 4C)
+
+An independent IndexedDB database (`curvature-modern-keyframe-thumbnails`,
+version 1, `images` store) holds validated thumbnails keyed by the exact
+serialized frame experiment used by the transient cache. This avoids storing
+raster data in project records, Undo, physical fingerprints or LocalStorage
+recovery checkpoints. Built-in demos, named copies and independent drafts
+share only exactly matching states. No eager physical renders are introduced.
+
+Startup hydrates the cache; captures made while the read is pending win over
+restored images. Captures (including explicit reuse of matching History images)
+are written asynchronously after the successful paint. The store is bounded to
+200 entries and 12 million combined key/image characters; each write prunes
+invalid and oldest-written rows transactionally. Reads do not refresh durable
+recency. Deleting a project does not remove shared images: they are evicted by
+the bounded cache. Storage failures leave the in-memory cache usable and log a
+warning; the cache is disposable and cannot block project saves or playback.
+
+Portable Library JSON and built-in demo exports automatically include available
+`keyframeThumbnails` attachments (optional array of `{index, image}` per
+animation). Index refers to the exported project's own keyframe order. Import
+validates unique indices, mode, image shape and size before writing projects;
+only after the project transaction succeeds are images added to the shared cache.
+Existing exact-state cached images take precedence. Import failure in optional
+thumbnail storage is reported separately from the successful project import.
+The physical project schema and deduplication fingerprint are unchanged. Files
+without attachments remain valid; older readers that reject unknown optional
+fields require an export without attachments from the underlying Library API.
+Attachments are limited to 12 million image characters per animation and the
+existing 50-million-character whole-file limit still applies. Export does not
+render missing images. Cache persistence is best-effort, not a permanent photo
+archive. Browser storage commit must finish before reload to restore a newly
+captured image.

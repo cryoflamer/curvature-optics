@@ -584,7 +584,31 @@
   var studioPlaybackControls=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
-  var studioKeyframeThumbnails=thumbnailApi&&thumbnailApi.createKeyframeCache?thumbnailApi.createKeyframeCache():null;
+  var studioThumbnailPersistence=thumbnailApi&&thumbnailApi.createKeyframePersistence&&root.indexedDB?
+    thumbnailApi.createKeyframePersistence(root.indexedDB,function(error){
+      if(root.console)root.console.warn('Keyframe thumbnails not persisted:',error);
+    }):null;
+  var studioKeyframeThumbnails=thumbnailApi&&thumbnailApi.createKeyframeCache?thumbnailApi.createKeyframeCache({
+    onPut:function(experiment,image){if(studioThumbnailPersistence)studioThumbnailPersistence.write([{experiment:experiment,image:image}]);}
+  }):null;
+  var studioThumbnailReady=Promise.resolve();
+  function importStudioKeyframeThumbnails(entries){
+    if(!studioKeyframeThumbnails)return false;
+    var rows=[];
+    entries.forEach(function(entry){
+      if(!entry.keyframeThumbnails||!entry.keyframeThumbnails.length)return;
+      var frames=studioProjects.frameExperiments(entry.project);
+      entry.keyframeThumbnails.forEach(function(item){
+        var experiment=frames[item.index];
+        if(!studioKeyframeThumbnails.get(experiment)){
+          studioKeyframeThumbnails.put(experiment,item.image,true);
+          rows.push({experiment:experiment,image:item.image});
+        }
+      });
+    });
+    if(rows.length)renderAnimationStudio(studioHistoryEntries);
+    return !rows.length?true:studioThumbnailPersistence?studioThumbnailPersistence.write(rows):false;
+  }
   var studioThumbnailProject=null,studioThumbnailExperiments=null;
   var studioPlaybackQuality='canvas-direct'; // New live previews use the qualified Canvas 2D approximation.
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
@@ -1425,9 +1449,12 @@
   }
   function exportBuiltInDemo(id){
     if(studioLibraryBusy)return;
-    try{downloadHistoryJson(studioDemoCatalog.exportDemo(id),
-      'curvature-demo-'+id+'.json');}
-    catch(error){studioLibraryNotice('Demo export failed: '+error.message,true);}
+    return studioThumbnailReady.then(function(){
+      try{downloadHistoryJson(studioDemoCatalog.exportDemo(id,function(experiment){
+        return studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);
+      }),'curvature-demo-'+id+'.json');}
+      catch(error){studioLibraryNotice('Demo export failed: '+error.message,true);}
+    });
   }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
@@ -1544,6 +1571,8 @@
       select:function(id){studioLibrarySelected=id;},
       render:renderStudioLibrary,notice:studioLibraryNotice,
       download:downloadHistoryJson,
+      keyframeThumbnail:function(experiment){return studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);},
+      importKeyframeThumbnails:importStudioKeyframeThumbnails,
       confirm:function(message){return typeof root.confirm!=='function'||root.confirm(message);},
       fail:function(message){studioLibraryMessage=message;studioLibraryError=true;},
       refreshState:applyStudioLibraryRefresh,
@@ -1551,8 +1580,9 @@
         studioLibraryExpanded=true;
         studioLibrarySelected=result.createdIds[0]||result.reusedIds[0]||studioLibrarySelected;
         studioLibraryMessage='Imported '+result.created+' animations; '+result.reused+
-          ' already present (including repeated entries in the file). Working draft unchanged.';
-        studioLibraryError=false;
+          ' already present (including repeated entries in the file). Working draft unchanged.'+
+          (result.thumbnailWarning?' Keyframe thumbnail storage unavailable; images may not survive reload.':'');
+        studioLibraryError=!!result.thumbnailWarning;
       },
       renamed:applyStudioLibraryRename,
       coverChanged:function(saved,current,id){applyStudioLibraryRename(saved,current,id,true);},
@@ -1587,15 +1617,23 @@
   }
   function exportNamedAnimations(all){
     var actions=studioLibraryActions();
-    if(actions)actions.exportEntries(all);
+    if(actions)return studioThumbnailReady.then(function(){actions.exportEntries(all);});
     else studioLibraryNotice('Animation Library actions module failed to load.',true);
   }
   function importNamedAnimations(file){
     var actions=studioLibraryActions();
-    if(actions)return actions.importFile(file);
+    if(actions)return studioThumbnailReady.then(function(){return actions.importFile(file);});
     studioLibraryNotice('Animation Library actions module failed to load.',true);
   }
-  function bindStudioLibrary(){refreshStudioLibrary();}
+  function bindStudioLibrary(){
+    if(studioThumbnailPersistence&&studioKeyframeThumbnails){
+      studioThumbnailReady=studioThumbnailPersistence.read().then(function(rows){
+        studioKeyframeThumbnails.restore(rows);
+        if(animationWorkspaceOpen&&studioDraft)renderAnimationStudio(studioHistoryEntries);
+      }).catch(function(error){if(root.console)root.console.warn('Keyframe thumbnails not restored:',error);});
+    }
+    refreshStudioLibrary();
+  }
   function studioLibraryThumbnail(project){
     // V2 projects keep the reference fixed even when their first frame moves.
     // A screenshot belongs to that *first frame*, never merely to the reference.

@@ -59,7 +59,8 @@ function harness(settings={}){
     confirm:message=>{logs.push(['confirm',message]);return settings.confirm!==false;},
     download:(value,name)=>logs.push(['download',value,name]),
     refreshState:entries=>{state.entries=entries;logs.push('entries');},
-    imported:result=>{state.selected=result.createdIds[0];logs.push(['imported',result.created]);},
+    importKeyframeThumbnails:settings.importKeyframeThumbnails,
+    imported:result=>{state.selected=result.createdIds[0];logs.push(['imported',result.created]);state.thumbnailWarning=result.thumbnailWarning;},
     renamed:(saved,old,id)=>{state.active=saved;logs.push(['renamed',id,old.updatedAt,saved.updatedAt]);},
     saved:(saved,request)=>{state.active=saved;state.selected=saved.id;
       logs.push(['saved',saved.id,request.replace]);},
@@ -176,4 +177,14 @@ test('delete prompts before removing, never signals detachment when canceled or 
   assert.equal(h.records.has('alpha'),false);
   assert.ok(h.logs.some(e=>Array.isArray(e)&&e[0]==='deleted'&&e[2]===true));
   assert.equal(h.state.selected,'');
+});
+
+
+test('thumbnail attachments are imported only after project commit and failure is non-destructive',async()=>{
+  const seen=[],h=harness({importKeyframeThumbnails:items=>{seen.push(items);return false;}});
+  h.fail();await h.service.importFile({size:12,text:()=>Promise.resolve('["gamma"]')});
+  assert.equal(seen.length,0);assert.equal(h.records.has('gamma'),false);
+  h.retry();await h.service.importFile({size:12,text:()=>Promise.resolve('["gamma"]')});
+  assert.deepEqual(seen,[['gamma']]);assert.equal(h.records.has('gamma'),true);
+  assert.equal(h.state.thumbnailWarning,true);assert.equal(h.state.busy,false);
 });

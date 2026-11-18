@@ -426,3 +426,61 @@ test('Keyframe cache checks History provenance and bounds retained data',()=>{
   cache.request(player,frame,100,b,history,false);cache.complete(player,'frame',100,false,b,()=>image);
   assert.equal(cache.get(a),null);assert.ok(cache.get(b));
 });
+
+// Minimal asynchronous transaction double; durable rows are shared across cache instances.
+function thumbnailIndexedDB(){
+  const rows=new Map();let exists=false,denied=false;
+  return {rows,deny(){denied=true;},open(name,version){
+    assert.equal(name,thumbnail.CACHE_DATABASE);assert.equal(version,1);
+    const request={};queueMicrotask(()=>{
+      if(denied){request.error=Error('Denied');request.onerror();return;}
+      const db={close(){},objectStoreNames:{contains:()=>exists},createObjectStore(name,options){
+        assert.equal(name,thumbnail.CACHE_STORE);assert.equal(options.keyPath,'id');exists=true;
+      },transaction(name,mode){
+        assert.equal(name,thumbnail.CACHE_STORE);let pending=0,aborted=false;
+        const tx={abort(){aborted=true;queueMicrotask(()=>tx.onabort());},objectStore(){
+          function op(fn){const req={};pending++;queueMicrotask(()=>{
+            if(aborted)return;
+            req.result=fn();if(req.onsuccess)req.onsuccess();
+            if(--pending===0&&!aborted)queueMicrotask(()=>tx.oncomplete());
+          });return req;}
+          return {getAll:()=>op(()=>[...rows.values()].map(x=>structuredClone(x))),
+            put:row=>op(()=>{assert.equal(mode,'readwrite');rows.set(row.id,structuredClone(row));}),
+            delete:id=>op(()=>{assert.equal(mode,'readwrite');rows.delete(id);})};
+        }};return tx;
+      }};request.result=db;if(!exists)request.onupgradeneeded();request.onsuccess();
+    });return request;
+  }};
+}
+test('durable keyframe cache restores across sessions, shares exact states and retains fresher local captures',async()=>{
+  const db=thumbnailIndexedDB(),errors=[],store=thumbnail.createKeyframePersistence(db,e=>errors.push(e));
+  const a={display:{mode:'scene'},scene:{camera:{Height:3}}},b=structuredClone(a);b.scene.camera.Height=8;
+  const image={mode:'scene',width:480,height:240,dataUrl:'data:image/webp;base64,YQ=='};
+  const recent={...image,dataUrl:'data:image/webp;base64,Yg=='};
+  assert.equal(await store.write([{experiment:a,image}]),true);
+  const cache=thumbnail.createKeyframeCache();cache.put(a,recent);
+  cache.restore(await thumbnail.createKeyframePersistence(db).read());
+  assert.deepEqual(cache.get(a),recent);assert.equal(cache.get(b),null);
+  const reload=thumbnail.createKeyframeCache();reload.restore(await store.read());
+  assert.deepEqual(reload.get(structuredClone(a)),image);
+  assert.equal(reload.request({}, {key:'duplicate'},0,a,[],false),false);
+  db.deny();assert.equal(await store.write([{experiment:b,image}]),false);
+  assert.equal(errors.length,1);assert.deepEqual(reload.get(a),image);
+  await assert.rejects(store.read(),/Denied/);
+});
+test('durable thumbnail store prunes oldest writes and corrupt rows under the count and character budgets',async()=>{
+  const db=thumbnailIndexedDB(),store=thumbnail.createKeyframePersistence(db);
+  const image={mode:'scene',width:480,height:240,dataUrl:'data:image/webp;base64,YQ=='};
+  const items=Array.from({length:220},(_,i)=>({experiment:{display:{mode:'scene'},i},image}));
+  assert.equal(await store.write(items),true);
+  assert.equal(db.rows.size,200);
+  assert.equal(db.rows.has(JSON.stringify(items[0].experiment)),false);
+  assert.equal(db.rows.has(JSON.stringify(items[219].experiment)),true);
+  db.rows.set('broken',{id:'broken',image,touched:0});
+  const big={...image,dataUrl:'data:image/webp;base64,'+'A'.repeat(700000)};
+  assert.equal(await store.write(items.slice(0,25).map(x=>({...x,image:big}))),true);
+  const rows=await store.read();
+  assert.ok(rows.reduce((n,r)=>n+r.id.length+r.image.dataUrl.length,0)<=12000000);
+  assert.equal(db.rows.has('broken'),false);
+  assert.ok(rows.some(r=>r.id===JSON.stringify(items[24].experiment)));
+});

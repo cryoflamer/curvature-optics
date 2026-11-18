@@ -101,7 +101,7 @@
   function portableItem(value){
     if(!value||typeof value!=='object'||Array.isArray(value)||
       Object.keys(value).some(function(key){return ![
-        'project','quality','thumbnail','createdAt','updatedAt','cover'].includes(key);}))
+        'project','quality','thumbnail','createdAt','updatedAt','cover','keyframeThumbnails'].includes(key);}))
       throw RangeError('Invalid portable animation entry');
     var project=projects.validate(value.project);
     var createdAt=value.createdAt==null?null:stamp(value.createdAt);
@@ -109,18 +109,41 @@
     if((createdAt===null)!==(updatedAt===null)||
       (createdAt!==null&&updatedAt<createdAt))
       throw RangeError('Invalid portable animation timestamps');
-    return withCover({project:project,quality:quality(value.quality),
+    var result=withCover({project:project,quality:quality(value.quality),
       thumbnail:thumbnails.validate(value.thumbnail||null,project.baseExperiment.display.mode),
       createdAt:createdAt,updatedAt:updatedAt},value.cover);
+    if(value.keyframeThumbnails!==undefined){
+      var items=value.keyframeThumbnails,seen=new Set(),chars=0;
+      if(!Array.isArray(items)||items.length>project.keyframes.length)throw RangeError('Invalid keyframe thumbnails');
+      var frames=projects.frameExperiments(project);
+      result.keyframeThumbnails=items.map(function(item){
+        if(!item||Object.keys(item).sort().join(',')!=='image,index'||!Number.isInteger(item.index)||
+           item.index<0||item.index>=frames.length||seen.has(item.index))throw RangeError('Invalid keyframe thumbnail index');
+        seen.add(item.index);
+        var image=thumbnails.validate(item.image,frames[item.index].display.mode);
+        if(!image||(chars+=image.dataUrl.length)>12000000)throw RangeError('Invalid or oversized keyframe thumbnails');
+        return {index:item.index,image:image};
+      });
+    }
+    return result;
   }
-  function exportPortable(entries){
+  function keyframeImages(project,lookup){
+    if(typeof lookup!=='function')return undefined;
+    var images=[],chars=0;
+    projects.frameExperiments(project).forEach(function(experiment,index){
+      var image=lookup(experiment);
+      if(image&&chars+image.dataUrl.length<=12000000){chars+=image.dataUrl.length;images.push({index:index,image:image});}
+    });
+    return images.length?images:undefined;
+  }
+  function exportPortable(entries,lookup){
     if(!Array.isArray(entries)||!entries.length||entries.length>MAX_PORTABLE_ITEMS)
       throw RangeError('Select 1–'+MAX_PORTABLE_ITEMS+' animations to export');
     var animations=entries.map(function(entry){
       var normalized=normalize(entry);
       return portableItem({project:normalized.project,quality:normalized.quality,
         thumbnail:normalized.thumbnail,cover:normalized.cover,createdAt:normalized.createdAt,
-        updatedAt:normalized.updatedAt});
+        updatedAt:normalized.updatedAt,keyframeThumbnails:keyframeImages(normalized.project,lookup)});
     });
     var result=JSON.stringify({format:PORTABLE_FORMAT,version:PORTABLE_VERSION,
       animations:animations},null,2)+'\n';

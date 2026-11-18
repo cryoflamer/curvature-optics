@@ -1,3 +1,12 @@
+## Modern Demo Catalog — durable keyframe thumbnails (4C)
+
+A separate bounded IndexedDB cache restores exact-state thumbnails after reload,
+shares unchanged frames across Read-only demos and copies, and prunes oldest
+writes. Optional portable per-frame image attachments are validated and imported
+only after project storage succeeds. No raster data enters project records or
+LocalStorage. Cache failures do not prevent playback or project saves. Next:
+Presentation Mode; full-page Opera acceptance remains open.
+
 ## Modern Demo Catalog — lazy keyframe thumbnails (4B)
 
 Storyboard and detailed editor display matching History screenshots or bounded

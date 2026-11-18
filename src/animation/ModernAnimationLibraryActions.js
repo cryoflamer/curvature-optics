@@ -39,7 +39,7 @@
           return entry.id===options.selected();
         });
         if(!entries.length)throw Error('Select a saved animation first');
-        options.download(api.exportPortable(entries),
+        options.download(api.exportPortable(entries,options.keyframeThumbnail),
           all?'curvature-animations.json':'curvature-animation.json');
         options.notice('Exported '+entries.length+' complete animation'+
           (entries.length===1?'':'s')+' to portable JSON.',false);
@@ -54,7 +54,12 @@
       options.setBusy(true);options.notice('Checking animation JSON…',false);
       return Promise.resolve().then(function(){return file.text();}).then(function(contents){
         var entries=api.parsePortable(contents);
-        return api.importEntries(indexedDB(),entries,undefined,options.crypto());
+        return api.importEntries(indexedDB(),entries,undefined,options.crypto()).then(function(result){
+          if(!options.importKeyframeThumbnails)return result;
+          return Promise.resolve().then(function(){return options.importKeyframeThumbnails(entries);})
+            .then(function(ok){if(ok===false)result.thumbnailWarning=true;return result;},
+              function(){result.thumbnailWarning=true;return result;});
+        });
       }).then(function(result){
         options.imported(result);
         return refresh();

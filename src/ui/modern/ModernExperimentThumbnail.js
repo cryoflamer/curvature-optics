@@ -9,6 +9,8 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   var MAX_DATA_LENGTH=750000,VIEW_WIDTH=480,VIEW_HEIGHT=300;
+  var CACHE_ENTRIES=200,CACHE_CHARS=12000000;
+  var CACHE_DATABASE='curvature-modern-keyframe-thumbnails',CACHE_STORE='images';
   // The physical painter intentionally clears its Canvas to transparent. In
   // the live Modern viewport CSS paints WHITE behind it; copying raw pixels
   // without that backdrop exposes the gallery's navy card background instead.
@@ -99,14 +101,14 @@
   }
   function createKeyframeCache(options){
     options=options||{};
-    var maxEntries=options.maxEntries||200,maxChars=options.maxChars||12000000;
+    var maxEntries=options.maxEntries||CACHE_ENTRIES,maxChars=options.maxChars||CACHE_CHARS;
     var cache=new Map(),chars=0,pending=null;
     function get(experiment){
       var key=keyframeKey(experiment),entry=cache.get(key);
       if(!entry)return null;
       cache.delete(key);cache.set(key,entry);return entry.image;
     }
-    function put(experiment,image){
+    function put(experiment,image,silent){
       var key=keyframeKey(experiment),normalized;
       try{normalized=valid(image,experiment.display.mode);}catch(error){return null;}
       if(!normalized)return null;
@@ -118,11 +120,16 @@
         var oldest=cache.keys().next().value;
         chars-=cache.get(oldest).size;cache.delete(oldest);
       }
+      if(!silent&&options.onPut)try{options.onPut(experiment,normalized);}catch(error){}
       return cache.get(key).image;
     }
     function request(player,frame,arrival,experiment,entries,refresh){
       pending=null;
-      if(!refresh&&(get(experiment)||historyThumbnail(frame,experiment,entries)))return false;
+      if(!refresh){
+        if(get(experiment))return false;
+        var historical=historyThumbnail(frame,experiment,entries);
+        if(historical){put(experiment,historical);return false;}
+      }
       pending={player:player,key:frame.key,arrival:arrival,experiment:keyframeKey(experiment)};
       return true;
     }
@@ -134,8 +141,93 @@
       // Optional image capture must never turn a valid physical render into a failure.
       try{return put(experiment,captureImage());}catch(error){return null;}
     }
-    return Object.freeze({get:get,request:request,complete:complete,
+    function restore(rows){
+      // Keep captures made while the initial asynchronous read was in flight.
+      var current=Array.from(cache.entries());
+      cache.clear();chars=0;
+      rows.forEach(function(raw){var row=checkedRow(raw);if(row)put(JSON.parse(row.id),row.image,true);});
+      current.forEach(function(pair){put(JSON.parse(pair[0]),pair[1].image,true);});
+    }
+    return Object.freeze({get:get,put:put,restore:restore,request:request,complete:complete,
       cancel:function(){pending=null;},hasPending:function(){return pending!==null;}});
+  }
+  // Independent, disposable IndexedDB cache. Exact state keys intentionally
+  // share images across projects/drafts/demos, without any owner or revision.
+  // Read/write transactions serialize pruning with concurrent browser tabs.
+  function cacheRow(experiment,image,now){
+    var id=keyframeKey(experiment),normalized=valid(image,experiment.display.mode);
+    if(!normalized||id.length+normalized.dataUrl.length>CACHE_CHARS)return null;
+    return {id:id,image:normalized,touched:now};
+  }
+  function checkedRow(row){
+    try{
+      if(!row||typeof row.id!=='string'||row.id.length>CACHE_CHARS||
+         !Number.isSafeInteger(row.touched)||row.touched<0)return null;
+      var result=cacheRow(JSON.parse(row.id),row.image,row.touched);
+      return result&&result.id===row.id?result:null;
+    }catch(error){return null;}
+  }
+  function boundedRows(rows){
+    var chars=0,result=[];
+    rows.sort(function(a,b){return b.touched-a.touched;});
+    rows.forEach(function(row){
+      var size=row.id.length+row.image.dataUrl.length;
+      if(result.length<CACHE_ENTRIES&&chars+size<=CACHE_CHARS){result.push(row);chars+=size;}
+    });
+    return result.reverse(); // oldest first, for memory LRU hydration
+  }
+  function cacheTransaction(indexedDB,mode,additions){
+    if(!indexedDB||typeof indexedDB.open!=='function')return Promise.reject(Error('Keyframe thumbnail storage unavailable'));
+    return new Promise(function(resolve,reject){
+      var db,tx,done=false,result,request;
+      function fail(error){if(done)return;done=true;if(db)db.close();reject(error||Error('Thumbnail cache transaction failed'));}
+      try{request=indexedDB.open(CACHE_DATABASE,1);}catch(error){fail(error);return;}
+      request.onblocked=function(){fail(Error('Thumbnail cache database blocked'));};
+      request.onerror=function(){fail(request.error);};
+      request.onupgradeneeded=function(){
+        var opened=request.result;
+        if(!opened.objectStoreNames.contains(CACHE_STORE))opened.createObjectStore(CACHE_STORE,{keyPath:'id'});
+      };
+      request.onsuccess=function(){
+        db=request.result;if(done){db.close();return;}
+        try{
+          tx=db.transaction(CACHE_STORE,mode);
+          tx.oncomplete=function(){if(!done){done=true;db.close();resolve(result);}};
+          tx.onabort=tx.onerror=function(){fail(tx.error);};
+          var store=tx.objectStore(CACHE_STORE),read=store.getAll();
+          read.onsuccess=function(){try{
+            var old=read.result||[],map=new Map();
+            old.forEach(function(raw){var row=checkedRow(raw);if(row)map.set(row.id,row);});
+            var latest=Array.from(map.values()).reduce(function(max,row){return Math.max(max,row.touched);},0);
+            (additions||[]).forEach(function(row){
+              // Monotonic ordering even for a batch or two tabs writing in the same millisecond.
+              row.touched=Math.max(row.touched,latest+1);latest=row.touched;map.set(row.id,row);
+            });
+            result=boundedRows(Array.from(map.values()));
+            if(mode==='readwrite'){
+              var keep=new Set(result.map(function(row){return row.id;}));
+              old.forEach(function(row){if(!keep.has(row.id))store.delete(row.id);});
+              (additions||[]).forEach(function(row){if(keep.has(row.id)&&map.get(row.id)===row)store.put(row);});
+            }
+          }catch(error){try{tx.abort();}catch(ignore){}fail(error);}};
+        }catch(error){fail(error);}
+      };
+    });
+  }
+  function createKeyframePersistence(indexedDB,onError){
+    var tail=Promise.resolve();
+    function report(error){if(onError)try{onError(error);}catch(ignore){}return false;}
+    function read(){return tail.then(function(){return cacheTransaction(indexedDB,'readonly');});}
+    function write(items){
+      var rows=[];
+      try{items.forEach(function(item){var row=cacheRow(item.experiment,item.image,Date.now());if(row)rows.push(row);});}
+      catch(error){return Promise.resolve(report(error));}
+      if(!rows.length)return tail.then(function(){return true;});
+      tail=tail.then(function(){return cacheTransaction(indexedDB,'readwrite',rows);})
+        .then(function(){return true;},report);
+      return tail;
+    }
+    return Object.freeze({read:read,write:write});
   }
   // Decode only local raster images, downsample, and re-encode to remove metadata.
   // Do not keep object URLs or the original potentially enormous source file.
@@ -165,5 +257,6 @@
     });
   }
   return Object.freeze({capture:capture,coverFromFile:coverFromFile,validate:valid,viewKey:viewKey,
-    historyThumbnail:historyThumbnail,createKeyframeCache:createKeyframeCache});
+    historyThumbnail:historyThumbnail,createKeyframeCache:createKeyframeCache,
+    createKeyframePersistence:createKeyframePersistence,CACHE_DATABASE:CACHE_DATABASE,CACHE_STORE:CACHE_STORE});
 }));

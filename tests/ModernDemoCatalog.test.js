@@ -212,3 +212,16 @@ test('each Soundly keyframe jumps to the exact authored Compare sample in the de
   }
   assert.equal(studio.keyframeArrival(draft,demo.project,draft.frames[3].key),20950);
 });
+
+
+test('Soundly portable attachments and independent copies use the same exact Compare frame states',()=>{
+  const [demo]=catalog.load(),frames=projects.frameExperiments(demo.project);
+  const image={mode:'compare',width:960,height:300,dataUrl:'data:image/webp;base64,YQ=='};
+  const thumbnail=require('../src/ui/modern/ModernExperimentThumbnail');
+  const cache=thumbnail.createKeyframeCache();cache.put(frames[3],image);
+  const [item]=library.parsePortable(catalog.exportDemo('soundly',cache.get));
+  assert.deepEqual(item.keyframeThumbnails,[{index:3,image}]);
+  const clone=projects.validate({...demo.project,id:'independent_copy',name:'Independent copy'});
+  assert.deepEqual(cache.get(projects.frameExperiments(clone)[3]),image);
+  assert.deepEqual(item.project,demo.project);
+});

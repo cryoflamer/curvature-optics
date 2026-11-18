@@ -3077,6 +3077,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationInitialFrame.test.js",
+        "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernDemoCatalog.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
         "tests/ModernThumbnailPreview.test.js"

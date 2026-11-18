@@ -17,7 +17,7 @@ identity. Excluded frames are still editable below the player. Patch 4B keeps
 keyframe images in a separate bounded, transient cache keyed by the exact
 validated experiment snapshot; captures require successful paused rendering at
 the selected arrival. The project schema, project fingerprints and draft
-checkpoints are unchanged. Persistent/portable thumbnails remain patch 4C.
+checkpoints are unchanged. Patch 4C stores thumbnails in a separate bounded IndexedDB cache keyed by exact frame state; optional portable Library attachments refer to frame indices, never to the physical project or LocalStorage checkpoint.
 
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can

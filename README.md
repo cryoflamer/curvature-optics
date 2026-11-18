@@ -29,9 +29,10 @@ Click a compatible keyframe to pause and jump to its exact arrival time,
 without starting Play; a laid-out preview paints immediately. A horizontal
 Storyboard below playback is available, with a collapsible detailed editor.
 Explicit jumps lazily capture matching Scene/Compare keyframe thumbnails in a
-transient cache; Capture thumbnail refreshes the selected view. Next: thumbnail
-persistence, followed by Presentation
-Mode; browser acceptance remains open.
+bounded IndexedDB cache; Capture thumbnail refreshes the selected view.
+Matching images survive reload and are shared across copies; portable exports
+include available keyframe images. Next: Presentation Mode; browser acceptance
+remains open.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

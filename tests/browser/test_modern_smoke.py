@@ -257,6 +257,31 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_soundly_keyframe_thumbnails_survive_reload_and_copy(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        demo = library.locator('[data-demo-id="soundly"]')
+        demo.get_by_text('Open demo', exact=True).click()
+        cards = self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')
+        expect(cards).to_have_count(9)
+        cards.nth(3).click()
+        image = cards.nth(3).locator('img')
+        expect(image).to_have_attribute('src', re.compile(r'^data:image/(webp|png);base64,'))
+        original = image.get_attribute('src')
+        self.page.wait_for_function("""async () => {
+            const rows = await CurvatureModernExperimentThumbnail.createKeyframePersistence(indexedDB).read();
+            return rows.some(row => row.image.dataUrl === %s);
+        }""" % json.dumps(original))
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        demo.get_by_text('Open demo', exact=True).click()
+        expect(image).to_have_attribute('src', original)
+        demo.get_by_text('Create copy', exact=True).click()
+        self.page.wait_for_function('CurvatureModernApp.getBuiltInDemo() === null')
+        expect(image).to_have_attribute('src', original)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_builtin_demo_readonly_copy_and_reload(self):
         self.open_modern()
         self.open_animation()
