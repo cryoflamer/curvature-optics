@@ -85,6 +85,58 @@
       throw RangeError('Invalid experiment thumbnail');
     return {dataUrl:value.dataUrl,width:value.width,height:value.height,mode:mode};
   }
+  // Transient storyboard cache: exact snapshot identity, not frame/source IDs
+  // or timing. A bounded LRU can safely share unchanged views across copies.
+  function keyframeKey(experiment){
+    return JSON.stringify(experiment);
+  }
+  function historyThumbnail(frame,experiment,entries){
+    var source=frame.sourceSnapshotId!=null&&entries.find(function(entry){
+      return entry.id===frame.sourceSnapshotId;
+    });
+    if(!source||keyframeKey(source.experiment)!==keyframeKey(experiment))return null;
+    try{return valid(source.thumbnail,experiment.display.mode);}catch(error){return null;}
+  }
+  function createKeyframeCache(options){
+    options=options||{};
+    var maxEntries=options.maxEntries||200,maxChars=options.maxChars||12000000;
+    var cache=new Map(),chars=0,pending=null;
+    function get(experiment){
+      var key=keyframeKey(experiment),entry=cache.get(key);
+      if(!entry)return null;
+      cache.delete(key);cache.set(key,entry);return entry.image;
+    }
+    function put(experiment,image){
+      var key=keyframeKey(experiment),normalized;
+      try{normalized=valid(image,experiment.display.mode);}catch(error){return null;}
+      if(!normalized)return null;
+      var size=key.length+normalized.dataUrl.length;
+      if(size>maxChars)return null;
+      if(cache.has(key)){chars-=cache.get(key).size;cache.delete(key);}
+      cache.set(key,{image:Object.freeze(normalized),size:size});chars+=size;
+      while(cache.size>maxEntries||chars>maxChars){
+        var oldest=cache.keys().next().value;
+        chars-=cache.get(oldest).size;cache.delete(oldest);
+      }
+      return cache.get(key).image;
+    }
+    function request(player,frame,arrival,experiment,entries,refresh){
+      pending=null;
+      if(!refresh&&(get(experiment)||historyThumbnail(frame,experiment,entries)))return false;
+      pending={player:player,key:frame.key,arrival:arrival,experiment:keyframeKey(experiment)};
+      return true;
+    }
+    function complete(player,key,renderedAt,playing,experiment,captureImage){
+      if(!pending)return null;
+      var wanted=pending;pending=null;
+      if(wanted.player!==player||wanted.key!==key||wanted.arrival!==renderedAt||playing||
+         wanted.experiment!==keyframeKey(experiment))return null;
+      // Optional image capture must never turn a valid physical render into a failure.
+      try{return put(experiment,captureImage());}catch(error){return null;}
+    }
+    return Object.freeze({get:get,request:request,complete:complete,
+      cancel:function(){pending=null;},hasPending:function(){return pending!==null;}});
+  }
   // Decode only local raster images, downsample, and re-encode to remove metadata.
   // Do not keep object URLs or the original potentially enormous source file.
   function coverFromFile(doc,file){
@@ -112,5 +164,6 @@
       }).finally(function(){urls.revokeObjectURL(url);});
     });
   }
-  return Object.freeze({capture:capture,coverFromFile:coverFromFile,validate:valid,viewKey:viewKey});
+  return Object.freeze({capture:capture,coverFromFile:coverFromFile,validate:valid,viewKey:viewKey,
+    historyThumbnail:historyThumbnail,createKeyframeCache:createKeyframeCache});
 }));

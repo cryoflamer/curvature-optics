@@ -232,9 +232,16 @@
     var p=validate(input);
     if(!Number.isInteger(index)||index<0||index>=p.keyframes.length)
       throw RangeError('Unknown animation keyframe');
+    return experimentAtFrame(p,index);
+  }
+  function experimentAtFrame(p,index){
     var value=p.keyframes[index].value;
     return p.mode==='experimental'?state.validate(value):
       applyValue(p.baseExperiment,p.mode,p.target,value);
+  }
+  function frameExperiments(input){
+    var p=validate(input);
+    return p.keyframes.map(function(frame,index){return experimentAtFrame(p,index);});
   }
   // Renderer handshake: compare a genuine in-between camera pose before any
   // expensive Accurate RK4 frames are dispatched. Sample multiple distinct
@@ -289,7 +296,7 @@
     return at(frames[frames.length-1].value);
   }
   return Object.freeze({VERSION:VERSION,VERSION_V2:VERSION_V2,validate:validate,create:create,
-    createV2:createV2,ready:ready,frameExperiment:frameExperiment,
+    createV2:createV2,ready:ready,frameExperiment:frameExperiment,frameExperiments:frameExperiments,
     validateHudAppearance:hud.validateAppearance,
     totalMs:totalMs,timeline:timeline,sampleAt:sampleAt,splineProof:splineProof});
 }));

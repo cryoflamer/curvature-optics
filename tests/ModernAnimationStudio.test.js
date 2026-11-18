@@ -250,8 +250,8 @@ test('Studio thumbnail filmstrip uses saved History images, selected-only contro
   const a=experiment(),b=clone(a);b.scene.camera.Height=75;
   let draft=studio.history([1,2],[entry(1,a,'Base'),entry(2,b,'High')]);
   const image='data:image/webp;base64,YQ==';
-  const saved=[{...entry(1,a,'Base'),thumbnail:{dataUrl:image}},
-    {...entry(2,b,'High'),thumbnail:{dataUrl:image}}];
+  const saved=[{...entry(1,a,'Base'),thumbnail:{dataUrl:image,mode:'scene',width:480,height:300}},
+    {...entry(2,b,'High'),thumbnail:{dataUrl:image,mode:'scene',width:480,height:300}}];
   const before=structuredClone([draft,saved]);
   const {doc,host}=mockDom(),calls=[];
   const actions={load(){},importCamera(){},edit(){},prepare(){},
@@ -1076,4 +1076,27 @@ test('Storyboard replaces redundant read-only list while owned projects retain c
   host.children=[];
   editor.render(doc,host,draft,studio.inspect(draft),{},false,{storyboard:true});
   assert.equal(collect(host,n=>n.className==='modern-studio-editor-details')[0].open,true);
+});
+
+
+test('Storyboard renders captured and missing thumbnails with an independent refresh action',()=>{
+  const a=experiment('compare'),b=clone(a);b.scene.camera.Height=45;
+  const draft=studio.history([1,2],[entry(1,a,'First'),entry(2,b,'Second')]);
+  const project=studio.build(draft,'storyboard_thumbs'),{doc,host}=mockDom(),calls=[];
+  const image={dataUrl:'data:image/webp;base64,YQ==',width:960,height:300,mode:'compare'};
+  editor.renderStoryboard(doc,host,draft,draft.frames,animation.timeline(project),'history-2',
+    (...args)=>calls.push(args),{resolve:f=>({...f,thumbnail:f.key==='history-1'?image:null}),refresh:key=>calls.push(['refresh',key])});
+  const cards=collect(host,n=>n.className.includes('modern-animation-storyboard-card'));
+  assert.equal(collect(cards[0],n=>n.tagName==='img')[0].src,image.dataUrl);
+  assert.equal(collect(cards[1],n=>n.className==='modern-storyboard-no-image').length,1);
+  collect(host,n=>n.className.includes('modern-animation-storyboard-capture'))[0].listeners.click();
+  cards[1].listeners.click();assert.deepEqual(calls,[['refresh','history-2'],['history-2','storyboard']]);
+});
+
+test('History source ID never displays an image for a changed keyframe',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=45;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),changed=clone(b);changed.scene.camera.Height=999;
+  editor.render(doc,host,draft,studio.inspect(draft),{},false,{entries:[{...entry(2,changed),thumbnail:{dataUrl:'data:image/webp;base64,YQ==',width:480,height:300,mode:'scene'}}],selectedKey:'history-2'});
+  assert.equal(collect(host,n=>n.tagName==='img').length,0);
 });

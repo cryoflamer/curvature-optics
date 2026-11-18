@@ -194,6 +194,7 @@ test('ModernApp keyframe routing prepares a compatible draft and leaves incompat
   const draft=studio.fromProject(demo.project),effects=[];
   const context={studioApi:studio,studioProjects:projects,studioPlaybackApi:playback,
     studioDraft:draft,studioPrepared:null,studioPlayback:null,studioActiveDemo:null,
+    studioKeyframeThumbnails:null,
     studioPlaybackRenderedAt:0,studioPreviewNavigation:{cancel(){effects.push('cancel navigation');}},
     stopStudioPlayback(clear){assert.equal(clear,true);effects.push('stop');},
     ensureStudioPlaybackControls(){return {jumpTo(ms){
@@ -260,4 +261,47 @@ test('a paused render that produces no pixels is not announced as ready',()=>{
   assert.match(h.node('ModernAnimationPlaybackStatus').textContent,/requested paused frame was not rendered/);
   assert.equal(h.ctx.studioRestorePreviewPending,true);
   assert.equal(h.node('ModernAnimationFrameLoadingA').hidden,false);
+});
+
+test('Soundly explicit jump requests and captures an exact paused thumbnail through ModernApp',()=>{
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const projects=require('../src/animation/ModernAnimationProject');
+  const playback=require('../src/animation/ModernAnimationPlayback');
+  const thumbnails=require('../src/ui/modern/ModernExperimentThumbnail');
+  const [demo]=require('../src/animation/ModernDemoCatalog').load();
+  const draft=studio.fromProject(demo.project),cache=thumbnails.createKeyframeCache();
+  const graphs={A:{Canvas:{width:800,height:500}},B:{Canvas:{width:800,height:500}}};
+  let captures=0,refreshes=0;
+  const context={studioApi:studio,studioProjects:projects,studioPlaybackApi:playback,
+    studioDraft:draft,studioPrepared:demo.project,studioPlayback:playback.create(demo.project),studioActiveDemo:demo,
+    studioSelectedKey:draft.frames[3].key,studioKeyframeThumbnails:cache,
+    studioThumbnailProject:null,studioThumbnailExperiments:null,studioHistoryEntries:[],
+    studioPlaybackRenderedAt:null,studioPreviewNavigation:null,document:{activeElement:null},newUiEl:()=>null,
+    renderAnimationStudio(){refreshes++;},
+    thumbnailApi:{...thumbnails,capture(doc,mode,views){captures++;assert.equal(mode,'compare');
+      assert.equal(views.length,2);assert.equal(views[0].layers[0],graphs.A.Canvas);
+      assert.equal(views[1].layers[0],graphs.B.Canvas);
+      return {mode,width:960,height:300,dataUrl:'data:image/webp;base64,YQ=='};}},
+    ensureStudioPlaybackControls(){return {jumpTo(ms){
+      context.studioPlayback.seek(ms,1000);
+      assert.equal(ms,20950);
+    }};}};
+  const begin=app.indexOf('  function studioKeyframeExperiment(');
+  const end=app.indexOf('  // Animation Studio owns',begin);
+  vm.runInNewContext(app.slice(begin,end),context);
+  const expected=projects.frameExperiment(demo.project,3);
+  assert.equal(context.resolveStudioKeyframe(draft.frames[3],[]).thumbnail,null);
+  context.navigateStudioKeyframe(context.studioSelectedKey);
+  assert.equal(captures,0);assert.equal(cache.hasPending(),true);
+  context.captureStudioKeyframeThumbnail(projects.sampleAt(demo.project,0),0,graphs);
+  assert.equal(captures,0);assert.equal(cache.get(expected),null);
+  context.navigateStudioKeyframe(context.studioSelectedKey);
+  context.captureStudioKeyframeThumbnail(context.studioPlayback.sample(),20950,graphs);
+  assert.equal(captures,1);assert.equal(refreshes,1);assert.ok(cache.get(expected));
+  context.navigateStudioKeyframe(context.studioSelectedKey);
+  assert.equal(cache.hasPending(),false);
+  context.navigateStudioKeyframe(context.studioSelectedKey,true);
+  context.captureStudioKeyframeThumbnail(context.studioPlayback.sample(),20950,graphs);
+  assert.equal(captures,2);assert.equal(refreshes,2);
+  assert.equal(context.studioDraft,draft);
 });

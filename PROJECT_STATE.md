@@ -1,3 +1,12 @@
+## Modern Demo Catalog — lazy keyframe thumbnails (4B)
+
+Storyboard and detailed editor display matching History screenshots or bounded
+transient captures after explicit paused jumps. Compare screenshots contain both
+viewports; stale time, player, selection and snapshot requests are rejected.
+Manual Capture thumbnail replaces the selected cached view. No eager captures,
+project schema changes or storage writes for images. Next: 4C persistence;
+full-page Opera acceptance remains open.
+
 ## Modern Demo Catalog — horizontal Storyboard (4A.2)
 
 A compact horizontally scrolling navigation strip is mounted directly below

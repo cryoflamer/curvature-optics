@@ -4,16 +4,18 @@
 (function(root,factory){
   var snapshotPresentation=root.CurvatureModernSnapshotPresentation;
   var thumbnailPreview=root.CurvatureModernThumbnailPreview;
+  var thumbnailApi=root.CurvatureModernExperimentThumbnail;
   var statusMessages=root.CurvatureModernStatusMessage;
   if(typeof module==='object'&&module.exports){
     snapshotPresentation=require('./ModernSnapshotPresentation');
     thumbnailPreview=require('./ModernThumbnailPreview');
     statusMessages=require('./ModernStatusMessage');
+    thumbnailApi=require('./ModernExperimentThumbnail');
   }
-  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages);
+  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages){
+}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
@@ -152,13 +154,11 @@
     if(demos.length)section.appendChild(gallery);
     host.appendChild(section);
   }
-  function frameEntry(frame,entries){
-    var match=frame.sourceSnapshotId!==null&&entries.find(function(item){
-      return item.id===frame.sourceSnapshotId;
-    });
-    // No thumbnail for imported camera frames: showing another frame's
-    // screenshot would falsely imply the physical view had been rendered.
-    return match||{name:frame.name,experiment:frame.experiment,thumbnail:null};
+  function frameEntry(frame,entries,resolve){
+    if(resolve)return resolve(frame);
+    // Source IDs are provenance, not proof that an image matches the current view.
+    var image=thumbnailApi&&thumbnailApi.historyThumbnail(frame,frame.experiment,entries);
+    return {name:frame.name,experiment:frame.experiment,thumbnail:image||null};
   }
   // Native drag-and-drop has a keyboard/button fallback and an explicit
   // Pointer Events path for touch/pen (HTML5 DnD is unreliable on touch).
@@ -983,7 +983,8 @@
   }
   // Navigation only: the prepared sequence and exact arrival times belong to
   // the player. The editor below retains all draft frames and mutation controls.
-  function renderStoryboard(doc,host,draft,frames,times,selectedKey,select){
+  function renderStoryboard(doc,host,draft,frames,times,selectedKey,select,options){
+    options=options||{};
     if(!host)return;
     var previous=host.querySelector&&host.querySelector('.modern-animation-storyboard-list');
     var scroll=previous?previous.scrollLeft:0;
@@ -995,6 +996,12 @@
     var header=el(doc,'div','modern-animation-storyboard-heading');
     header.appendChild(el(doc,'strong','','Storyboard · Keyframes'));
     header.appendChild(el(doc,'small','',frames.length+' of '+draft.frames.length+' · Click to pause and jump'));
+    if(options.refresh){
+      var refresh=button(doc,'Capture thumbnail','Capture selected keyframe thumbnail',function(){options.refresh(selectedKey);});
+      refresh.className='modern-studio-action modern-animation-storyboard-capture';
+      refresh.disabled=!frames.some(function(frame){return frame.key===selectedKey;});
+      header.appendChild(refresh);
+    }
     host.appendChild(header);
     var list=el(doc,'ol','modern-animation-storyboard-list');
     list.setAttribute('aria-label','Playback keyframes');
@@ -1007,6 +1014,7 @@
       control.className='modern-animation-storyboard-card'+(frame.key===selectedKey?' is-active':'');
       control.setAttribute('aria-pressed',String(frame.key===selectedKey));
       control.title=frame.name+' · '+time;
+      if(options.resolve)control.appendChild(snapshotPresentation.frameVisual(doc,options.resolve(frame),'modern-animation-storyboard-visual'));
       control.appendChild(el(doc,'strong','modern-animation-storyboard-name',index+'. '+frame.name));
       control.appendChild(el(doc,'small','modern-animation-storyboard-time',time));
       item.appendChild(control);list.appendChild(item);
@@ -1054,7 +1062,7 @@
         var details=el(doc,'section','modern-studio-selected-frame');
         details.appendChild(el(doc,'strong','',selected.name));
         details.appendChild(el(doc,'p','', 'Travel: '+selected.travelMs/1000+' s · Hold: '+selected.holdMs/1000+' s · Easing: '+selected.easing));
-        var entry=frameEntry(selected,entries);
+        var entry=frameEntry(selected,entries,options.resolveFrame);
         details.appendChild(el(doc,'p','',snapshotPresentation.frameSummary(entry)));
         host.appendChild(details);
       }
@@ -1141,7 +1149,7 @@
       host.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
 
     if(selected){
-      var previewEntry=frameEntry(selected,entries);
+      var previewEntry=frameEntry(selected,entries,options.resolveFrame);
       var preview=el(doc,'section','modern-studio-preview');
       preview.setAttribute('aria-label','Selected saved keyframe preview');
       var previewVisual=snapshotPresentation.frameVisual(doc,previewEntry,'modern-studio-preview-visual');
@@ -1150,7 +1158,7 @@
       previewCaption.appendChild(el(doc,'strong','',selected.name));
       previewCaption.appendChild(el(doc,'p','',snapshotPresentation.frameSummary(previewEntry)));
       previewCaption.appendChild(el(doc,'small','',
-        'Saved thumbnail · use the independent optical viewport above to play a prepared project.'));
+        'Keyframe thumbnail · use the independent optical viewport above to play a prepared project.'));
       preview.appendChild(previewCaption);host.appendChild(preview);
     }
 
@@ -1174,7 +1182,7 @@
     filmstrip.setAttribute('aria-label','Animation keyframe timeline');
     draft.frames.forEach(function(frame,i){
       filmstrip.appendChild(dropSlot(doc,i,actions,options.pickerSelectedCount||0));
-      var entry=frameEntry(frame,entries),item=el(doc,'li','modern-studio-filmstrip-item');
+      var entry=frameEntry(frame,entries,options.resolveFrame),item=el(doc,'li','modern-studio-filmstrip-item');
       var hasSelection=Array.isArray(draft.activeFrameKeys);
       var inPreview=!hasSelection||draft.activeFrameKeys.includes(frame.key);
       var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name+

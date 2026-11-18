@@ -1013,6 +1013,10 @@ button{cursor:pointer}
 .modern-animation-storyboard-card:hover{background:#e8f2fb}
 .modern-animation-storyboard-card.is-active{border-color:#2578c6;box-shadow:inset 0 0 0 1px #2578c6;background:#e9f4ff}
 .modern-animation-storyboard-card:focus-visible{outline:2px solid #2578c6;outline-offset:2px}
+.modern-animation-storyboard-visual{width:100%;height:62px;display:flex;align-items:center;
+  justify-content:center;background:#e4edf5;border-radius:3px;overflow:hidden}
+.modern-animation-storyboard-visual .modern-storyboard-image{object-fit:contain}
+.modern-animation-storyboard-capture{margin-left:auto}
 .modern-animation-storyboard-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
 .modern-animation-storyboard-time{font-variant-numeric:tabular-nums;color:#466681}
 .modern-studio-editor-details>summary{cursor:pointer;font-weight:600;color:#365a77;margin:6px 0}

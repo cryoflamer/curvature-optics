@@ -385,3 +385,44 @@ test('History exports no legacy Storyboard renderer; Animation retains shared sn
   assert.equal(visual.children[0].textContent,'No screenshot');
   assert.match(ui.frameSummary(first),/Camera 2 m/);
 });
+
+
+test('Keyframe capture is lazy, exact, paused, and belongs to the requesting player',()=>{
+  const cache=thumbnail.createKeyframeCache(),p={},q={},frame={key:'frame',sourceSnapshotId:null};
+  const exp={display:{mode:'compare'},scene:{camera:{Height:3}}},other=structuredClone(exp);
+  other.scene.camera.Height=8;
+  let captures=0;const doc=outputDoc(),capture=()=>{captures++;return thumbnail.capture(doc,'compare',[{layers:[canvas()]},{layers:[canvas()]}]);};
+  assert.equal(cache.complete(p,'frame',20950,false,exp,capture),null);
+  for(const args of [[q,'frame',20950,false,exp],[p,'other',20950,false,exp],[p,'frame',20951,false,exp],[p,'frame',20950,true,exp],[p,'frame',20950,false,other]]){
+    assert.equal(cache.request(p,frame,20950,exp,[],false),true);
+    assert.equal(cache.complete(...args,capture),null);
+  }
+  assert.equal(captures,0);
+  cache.request(p,frame,20950,exp,[],false);
+  const image=cache.complete(p,'frame',20950,false,exp,capture);
+  assert.equal(image.mode,'compare');assert.equal(image.width,960);
+  assert.equal(doc.operations.filter(x=>x[0]==='draw').length,2);
+  assert.equal(cache.get(exp),image);assert.equal(cache.get(other),null);
+  assert.equal(cache.request(q,{key:'copy'},123,exp,[],false),false);
+  assert.equal(cache.request(q,{key:'copy'},123,exp,[],true),true);
+  cache.cancel();assert.equal(cache.complete(q,'copy',123,false,exp,capture),null);
+  assert.equal(captures,1);
+});
+
+test('Keyframe cache checks History provenance and bounds retained data',()=>{
+  const cache=thumbnail.createKeyframeCache({maxEntries:1}),player={};
+  const a={display:{mode:'scene'},scene:{camera:{Height:3}}},b=structuredClone(a);b.scene.camera.Height=8;
+  const frame={key:'frame',sourceSnapshotId:7},image=thumbnail.capture(outputDoc(),'scene',[{layers:[canvas()]}]);
+  const history=[{id:7,experiment:a,thumbnail:image}];
+  assert.deepEqual(thumbnail.historyThumbnail(frame,a,history),image);
+  assert.equal(thumbnail.historyThumbnail(frame,b,history),null);
+  assert.equal(thumbnail.historyThumbnail(frame,a,[{...history[0],thumbnail:{...image,mode:'compare'}}]),null);
+  assert.equal(cache.request(player,frame,0,a,history,false),false);
+  cache.request(player,frame,0,a,history,true);
+  assert.ok(cache.complete(player,'frame',0,false,a,()=>image));
+  cache.request(player,frame,100,b,history,false);
+  assert.equal(cache.complete(player,'frame',100,false,b,()=>{throw Error('tainted');}),null);
+  assert.ok(cache.get(a));
+  cache.request(player,frame,100,b,history,false);cache.complete(player,'frame',100,false,b,()=>image);
+  assert.equal(cache.get(a),null);assert.ok(cache.get(b));
+});

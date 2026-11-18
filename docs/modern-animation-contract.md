@@ -13,7 +13,11 @@ rejecting changes of non-Camera display scope. Scene/Compare adaptation must
 preserve reference equality and valid physical target scope; optional narrative support is a later compatibility
 change. Patch 4A.2 adds a navigation-only Storyboard using the prepared
 sequence and exact arrival times; draft frame keys remain the shared selection
-identity. Excluded frames are still editable below the player.
+identity. Excluded frames are still editable below the player. Patch 4B keeps
+keyframe images in a separate bounded, transient cache keyed by the exact
+validated experiment snapshot; captures require successful paused rendering at
+the selected arrival. The project schema, project fingerprints and draft
+checkpoints are unchanged. Persistent/portable thumbnails remain patch 4C.
 
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can

@@ -584,6 +584,8 @@
   var studioPlaybackControls=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
+  var studioKeyframeThumbnails=thumbnailApi&&thumbnailApi.createKeyframeCache?thumbnailApi.createKeyframeCache():null;
+  var studioThumbnailProject=null,studioThumbnailExperiments=null;
   var studioPlaybackQuality='canvas-direct'; // New live previews use the qualified Canvas 2D approximation.
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
   var studioPlaybackFps='auto'; // Browser-local preview pacing, not export FPS.
@@ -2214,6 +2216,8 @@
   function stopStudioPlayback(clear){
     studioPlaybackFpsMeter.reset();
     if(clear){
+      if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();
+      studioThumbnailProject=null;studioThumbnailExperiments=null;
       if(studioPreviewNavigation)studioPreviewNavigation.cancel();
       cancelStudioInitialPaint();
     }
@@ -2503,6 +2507,9 @@
     if(studioPlayback.status().playing)studioPlaybackFpsMeter.record(now);
     else studioPlaybackFpsMeter.reset();
     studioFrameLoading(false,'');
+    // Gallery rendering is optional; it cannot invalidate a completed physical pair.
+    try{captureStudioKeyframeThumbnail(sampled,renderedAt,graphs);}
+    catch(error){if(root.console&&root.console.warn)root.console.warn('Keyframe thumbnail: '+error.message);}
   }
   function syncStudioQualitySummary(){
     var node=newUiEl('ModernAnimationQualitySummary');
@@ -3108,14 +3115,16 @@
     var controls=ensureStudioPlaybackControls();
     play.addEventListener('click',function(){safely(function(){
       studioPlaybackFpsMeter.reset();
+      if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();
       controls.play();
     });});
     var pause=newUiEl('ModernAnimationPlaybackPause');
     if(pause)pause.addEventListener('click',function(){safely(function(){controls.pause();});});
     var stop=newUiEl('ModernAnimationPlaybackStop');
-    if(stop)stop.addEventListener('click',function(){safely(function(){controls.stop();});});
+    if(stop)stop.addEventListener('click',function(){safely(function(){if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();controls.stop();});});
     var seek=newUiEl('ModernAnimationPlaybackSeek');
     if(seek)seek.addEventListener('input',function(){safely(function(){
+      if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();
       controls.seek(seek.value);
     });});
     var retry=newUiEl('ModernAnimationPlaybackRetry');
@@ -3231,7 +3240,53 @@
   // Selection is also allowed in detached demos. Only frames in the active,
   // compatible playback sequence have a corresponding time. No edits, Undo
   // entries or Library writes are implied by navigation.
-  function navigateStudioKeyframe(key){
+  function studioKeyframeExperiment(frame){
+    if(studioPrepared&&studioProjects.frameExperiments){
+      if(studioThumbnailProject!==studioPrepared){
+        var active=studioApi.activeFrames(studioDraft);
+        var experiments=studioProjects.frameExperiments(studioPrepared);
+        studioThumbnailExperiments=new Map(active.map(function(f,i){return [f.key,experiments[i]];}));
+        studioThumbnailProject=studioPrepared;
+      }
+      return studioThumbnailExperiments.get(frame.key)||frame.experiment;
+    }
+    return frame.experiment;
+  }
+  function resolveStudioKeyframe(frame,entries){
+    var experiment=studioKeyframeExperiment(frame);
+    var image=studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);
+    if(!image&&thumbnailApi&&thumbnailApi.historyThumbnail)
+      image=thumbnailApi.historyThumbnail(frame,experiment,entries);
+    return {name:frame.name,experiment:experiment,thumbnail:image||null};
+  }
+  function captureStudioKeyframeThumbnail(sampled,renderedAt,graphs){
+    if(!studioKeyframeThumbnails||!studioKeyframeThumbnails.hasPending())return;
+    var image=studioKeyframeThumbnails.complete(studioPlayback,studioSelectedKey,renderedAt,
+      studioPlayback.status().playing,sampled,function(){
+        var views=[{layers:[graphs.A.Canvas]}];
+        if(sampled.display.mode==='compare')views.push({layers:[graphs.B.Canvas]});
+        return thumbnailApi.capture(document,sampled.display.mode,views);
+      });
+    if(!image)return;
+    // Explicit jumps only. Refresh both representations, retaining keyboard
+    // focus if the user is still on the selected card; never scroll the page.
+    var focused=document.activeElement;
+    var storyboard=newUiEl('ModernAnimationStoryboard'),editor=newUiEl('ModernAnimationStudio');
+    var focusHost=storyboard&&storyboard.contains(focused)?storyboard:
+      editor&&editor.contains(focused)?editor:null;
+    var restore=focusHost&&focused&&focused.classList&&
+      (focused.classList.contains('modern-animation-storyboard-card')||
+       focused.classList.contains('modern-studio-keyframe')||
+       focused.classList.contains('modern-animation-storyboard-capture'))?focused.className:null;
+    renderAnimationStudio(studioHistoryEntries);
+    if(restore){
+      var selector=restore.includes('modern-animation-storyboard-capture')?'.modern-animation-storyboard-capture':
+        focusHost===storyboard?'.modern-animation-storyboard-card.is-active':'.modern-studio-keyframe.is-active';
+      var node=focusHost.querySelector(selector);if(node)node.focus({preventScroll:true});
+    }
+  }
+  function navigateStudioKeyframe(key,refresh){
+    if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();
     if(!studioApi.activeFrames(studioDraft).some(function(frame){return frame.key===key;}))return false;
     var newlyPrepared=!studioPlayback||!studioPrepared;
     if(newlyPrepared&&!studioApi.inspect(studioDraft).compatible)return false;
@@ -3247,6 +3302,10 @@
     // A pending paint must not be mistaken for the selected frame's pixels.
     studioPlaybackRenderedAt=null;
     if(studioPreviewNavigation)studioPreviewNavigation.cancel();
+    if(studioKeyframeThumbnails){
+      var frame=studioApi.activeFrames(studioDraft).find(function(f){return f.key===key;});
+      studioKeyframeThumbnails.request(studioPlayback,frame,arrival,studioKeyframeExperiment(frame),studioHistoryEntries,refresh);
+    }
     ensureStudioPlaybackControls().jumpTo(arrival);
     return newlyPrepared;
   }
@@ -3340,10 +3399,10 @@
     function safe(action){if(studioActiveDemo)return;try{action();}catch(error){report(error);}}
     renderStudioLibrary();
     var storyboard=newUiEl('ModernAnimationStoryboard');
-    function selectKeyframe(key,source){
+    function selectKeyframe(key,source,refresh){
       studioEditing.select(key);
       try{
-        if(navigateStudioKeyframe(key))renderAnimationStudio(entries);
+        if(navigateStudioKeyframe(key,refresh))renderAnimationStudio(entries);
       }catch(error){report(error);}
       var focusHost=source==='storyboard'?storyboard:host;
       var selector=source==='storyboard'?'.modern-animation-storyboard-card.is-active':'.modern-studio-keyframe.is-active';
@@ -3353,7 +3412,9 @@
     if(storyboard&&studioUI.renderStoryboard){
       var storyFrames=studioPrepared?studioApi.activeFrames(studioDraft):[];
       var storyTimes=studioPrepared?studioProjects.timeline(studioPrepared):[];
-      studioUI.renderStoryboard(document,storyboard,studioDraft,storyFrames,storyTimes,studioSelectedKey,selectKeyframe);
+      studioUI.renderStoryboard(document,storyboard,studioDraft,storyFrames,storyTimes,studioSelectedKey,selectKeyframe,{
+        resolve:function(frame){return resolveStudioKeyframe(frame,entries);},
+        refresh:function(key){selectKeyframe(key,'storyboard',true);}});
     }
     studioUI.render(document,host,studioDraft,assessment,{
       choose:function(){if(!studioActiveDemo)toggleAnimationPicker(!studioPickerOpen);},
@@ -3503,6 +3564,7 @@
       });}
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
+      resolveFrame:function(frame){return resolveStudioKeyframe(frame,entries);},
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,

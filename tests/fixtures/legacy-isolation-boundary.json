@@ -3072,9 +3072,11 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationLibrary.js",
+        "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernExperimentHistory.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentVisualHistory.test.js",
         "tests/ModernThumbnailPreview.test.js"

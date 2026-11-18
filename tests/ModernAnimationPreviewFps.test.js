@@ -36,7 +36,8 @@ function rendererHarness(target='60',options={}){
     studioPlaybackApi:{describeSample:()=>''},
     root:{CurvatureModernAnimationGraphs:graphs},
     profileNow:()=>time,newUiEl:node,attachStudioPreviewGraphs:()=>true,
-    syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); }
+    syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); },
+    captureStudioKeyframeThumbnail(sample,time,graphs){if(options.capture)options.capture(sample,time,graphs);}
   });
   const start=app.indexOf('  function renderStudioPlaybackSample(force){');
   const end=app.indexOf('  function syncStudioQualitySummary(){',start);
@@ -142,17 +143,19 @@ test('Compare falls back atomically to Accurate if either side cannot use Canvas
 });
 
 test('paired playback uses one owned sample and masks partial frames on a B failure',()=>{
-  let fail=true;
-  const h=rendererHarness('auto',{compare:true,render(side,opts){
+  let fail=true,captures=0;
+  const h=rendererHarness('auto',{compare:true,capture(){captures++;},render(side,opts){
     if(side==='B'&&fail)throw Error('failed B');
     return {quality:opts.quality,result:{},overlays:{}};
   }});
   assert.throws(()=>h.frame(1000,true),/failed B/);
   assert.equal(h.context.studioPlaybackRenderedAt,null);
+  assert.equal(captures,0);
   assert.equal(h.loading.at(-1),true);
   assert.strictEqual(h.samples[0].sample,h.samples[1].sample);
   fail=false;h.frame(1200,true);
   assert.equal(h.context.studioPlaybackRenderedAt,200);
+  assert.equal(captures,1);
   assert.equal(h.loading.at(-1),false);
   assert.strictEqual(h.samples[2].sample,h.samples[3].sample);
 });
