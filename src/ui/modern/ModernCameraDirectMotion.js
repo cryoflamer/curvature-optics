@@ -1,15 +1,31 @@
 /* Latest-pose RAF scheduler for display-only Canvas Direct camera interaction.
- * The application owns camera math, eligibility, rendering and exact settle;
- * this helper never changes a model, experiment or persistence state.
+ * Owns scheduling and detached-frame preflight for every camera input.
+ * The application owns rendering and exact settle; no live model mutation.
  */
 (function(root,factory){
   var api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  root.CurvatureModernCameraCanvasDirectDrag=api;
+  root.CurvatureModernCameraDirectMotion=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  function checkFrame(view,frame,checker){
+    var support=checker.canvasDirectSupport(frame,view.options);
+    if(!support.supported)throw checker.canvasDirectUnsupported(view.side+': '+support.reason);
+    return frame;
+  }
+  // Build and qualify the entire batch before the caller can paint any side.
+  function prepareFrames(views,livePose,pose,options){
+    return views.map(function(view){
+      var frame=Object.assign({},view.model,livePose,pose);
+      if(options.deriveFov){
+        frame.ViewAngle=Math.max(.1,Math.min(160,options.focalViewAngle(frame.FocalLengthField)));
+        frame.camViewAngle=frame.ViewAngle*Math.PI/180;
+      }
+      return {view:view,frame:checkFrame(view,frame,options.checker)};
+    });
+  }
   function create(options){
-    if(!options||typeof options.paint!=='function')throw TypeError('Direct drag painter required');
+    if(!options||typeof options.paint!=='function')throw TypeError('Direct motion painter required');
     var request=options.requestFrame||function(fn){return requestAnimationFrame(fn);};
     var cancel=options.cancelFrame||function(id){cancelAnimationFrame(id);};
     var onError=options.onError||function(error){throw error;};
@@ -28,7 +44,7 @@
       begin:function(){clear();painted=false;active=true;},
       move:function(pose){
         if(!active)return;
-        if(!pose||typeof pose!=='object')throw TypeError('Direct drag pose required');
+        if(!pose||typeof pose!=='object')throw TypeError('Direct motion pose required');
         latest=pose;
         if(pending)return;
         pending=true;
@@ -42,5 +58,5 @@
       hasPainted:function(){return painted;}
     });
   }
-  return Object.freeze({create:create});
+  return Object.freeze({create:create,checkFrame:checkFrame,prepareFrames:prepareFrames});
 }));

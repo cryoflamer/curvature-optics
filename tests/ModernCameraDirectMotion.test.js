@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const drag=require('../src/ui/modern/ModernCameraCanvasDirectDrag');
+const drag=require('../src/ui/modern/ModernCameraDirectMotion');
 function harness(){
   const frames=new Map(),drawn=[],errors=[];let next=0,cancelled=0;
   const preview=drag.create({requestFrame(fn){const id=++next;frames.set(id,fn);return id;},
@@ -45,4 +45,37 @@ test('Cancelled RAF callback cannot paint or consume the next interaction frame'
   const stale=[...h.frames.values()][0];h.preview.clear();h.preview.begin();h.preview.move({Pan:2});
   stale();assert.equal(h.drawn.length,0);assert.equal(h.frames.size,1);
   h.flush();assert.deepEqual(h.drawn,[{Pan:2}]);
+});
+
+function frameFixture(){
+  const views=['A','B'].map((side,i)=>({side,model:Object.freeze({Height:15,Pan:0,
+    FocalLengthField:100,ViewAngle:5,camViewAngle:5*Math.PI/180,showModel:i===0?1:0}),
+    options:Object.freeze({atmosphere:i===0?'standard':'vacuum'})}));
+  const checks=[];
+  const checker={canvasDirectSupport(frame,options){checks.push({frame,options});
+    return frame.Height>100&&options.atmosphere==='vacuum'?{supported:false,reason:'test domain'}:{supported:true};},
+    canvasDirectUnsupported(reason){return Object.assign(new RangeError(reason),{code:'CANVAS_DIRECT_UNSUPPORTED'});}};
+  return {views,checks,checker};
+}
+test('shared motion prepares detached A/B frames with current pose and independent physics',()=>{
+  const {views,checks,checker}=frameFixture();
+  const frames=drag.prepareFrames(views,{Height:20,Pan:1,FocalLengthField:200},
+    {Pan:3},{checker,deriveFov:true,focalViewAngle:f=>f===200?2:5});
+  assert.equal(checks.length,2);
+  assert.deepEqual(frames.map(e=>e.frame.showModel),[1,0]);
+  assert.deepEqual(checks.map(e=>e.options.atmosphere),['standard','vacuum']);
+  for(const {view,frame} of frames){
+    assert.notEqual(frame,view.model);assert.equal(frame.Pan,3);assert.equal(frame.Height,20);
+    assert.equal(frame.camViewAngle,2*Math.PI/180);assert.equal(view.model.Height,15);
+  }
+});
+test('shared motion preserves pointer FOV and rejects the complete batch with side-specific reason',()=>{
+  const {views,checks,checker}=frameFixture();
+  const options={checker,deriveFov:false,focalViewAngle(){throw Error('must not derive pointer FOV');}};
+  assert.equal(drag.prepareFrames(views,{}, {Height:20},options)[1].frame.ViewAngle,5);
+  assert.throws(()=>drag.prepareFrames(views,{}, {Height:200},options),
+    {code:'CANVAS_DIRECT_UNSUPPORTED',message:'B: test domain'});
+  assert.equal(checks.length,4);
+  assert.equal(views[1].model.Height,15);
+  assert.equal(drag.prepareFrames(views,{}, {Height:20},options).length,2);
 });

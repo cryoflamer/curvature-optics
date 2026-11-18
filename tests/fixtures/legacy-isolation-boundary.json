@@ -177,7 +177,7 @@
         "src/camera/ModernCameraSequence.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
         "src/ui/modern/ModernCameraDragPreview.js",
-        "src/ui/modern/ModernCameraCanvasDirectDrag.js",
+        "src/ui/modern/ModernCameraDirectMotion.js",
         "src/ui/modern/ModernRenderProfiler.js",
         "src/ui/modern/ModernPerformanceReport.js",
         "src/ui/modern/ModernGpuCapabilities.js",
@@ -397,7 +397,7 @@
       "src/ui/modern/ModernApplicationPreferences.js",
       "src/ui/modern/ModernAtmosphericPresentation.js",
       "src/ui/modern/ModernAtmosphericShimmer.js",
-      "src/ui/modern/ModernCameraCanvasDirectDrag.js",
+      "src/ui/modern/ModernCameraDirectMotion.js",
       "src/ui/modern/ModernCameraDragPreview.js",
       "src/ui/modern/ModernCameraHud.js",
       "src/ui/modern/ModernCameraInteraction.js",
@@ -2667,13 +2667,13 @@
       ],
       "commonJsToolCallers": []
     },
-    "src/ui/modern/ModernCameraCanvasDirectDrag.js": {
+    "src/ui/modern/ModernCameraDirectMotion.js": {
       "directHtmlLoads": [
         "modern"
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernCameraCanvasDirectDrag.test.js",
+        "tests/ModernCameraDirectMotion.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js"
       ],

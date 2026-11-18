@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard accepted by the user in Opera. Stage 4B camera sequences accepted by the user in Opera. Stage 5A research completed; 5B virtual Flat horizon mask implemented, manual acceptance pending.
+**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard accepted by the user in Opera. Stage 4B camera sequences accepted by the user in Opera. Stage 5A research completed; 5B virtual Flat horizon mask accepted by the user in Opera. Stage 5C implemented; extreme fallback acceptance pending. Stage 6 code cleanup implemented at the user’s request; manual regression and deferred 5D remain open.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -127,8 +127,8 @@ new pack until its Git history or a clean application confirms that fact.
 | **5A. Numerical qualification** | **Completed** | External reproducible point/boundary sweeps and headless Chromium comparisons on Stage 4B; record sampled accuracy and limitations. |
 | **5B. Virtual Flat horizon mask** | **Completed; user confirmed in Opera** | Apply positive-effective-curvature tangent disk and guide clipping with existing approximate painter order; verify near/far, translation, sign and actual Canvas. |
 | **5C. Support criteria & fallback** | Implemented; Opera acceptance pending | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. |
-| **5D. Requalification & documentation** | Planned | Repeat representative profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
-| **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
+| **5D. Requalification & documentation** | Deferred while proceeding to Stage 6 at user request | Repeat representative profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
+| **6. Cleanup & regression closure** | Code cleanup implemented; manual regression pending | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
 
 ## Stage 2 implementation notes (2026-11-18)
 
@@ -587,3 +587,41 @@ keeps its narrower eligibility policy.
   and low observer height should reject Canvas Direct, but may qualify at
   1000 m. Observe the actual fallback quality/reason; no physical validity
   claim follows from a preview being supported.
+
+
+## Stage 6 — interactive motion refactor & cleanup
+
+The user requested cleanup after 5C, without a separate 5D requalification
+pass. The existing measured 5A/5B results remain unchanged; 5D and extreme
+fallback manual acceptance are not claimed complete.
+
+- The shared pointer/wheel/keyboard/sequence RAF scheduler is now named
+  `ModernCameraDirectMotion.js` (formerly `ModernCameraCanvasDirectDrag.js`).
+  The old file/global and duplicate name are retired, with the Modern load
+  order, test harnesses and static inventory updated together. The Legacy
+  entrypoint, data models, rendering/export algorithms and schemas are untouched.
+- The module prepares detached frames for the current shared pose, retaining
+  each Compare side's original surface and atmosphere. `checkFrame` is shared
+  by initial qualification and per-frame preparation. The entire batch is
+  qualified before either viewport paints. FOV derivation remains conditional
+  on interaction ownership; pointer projection keeps its previous FOV semantics.
+- The initial qualification returns `{views, reason}` instead of maintaining
+  the mutable application-wide fallback reason. Five checked pointer pose
+  calculations share one helper. The Fast and Canvas Direct wheel routes
+  share the same idle-settle timer, retaining the 220 ms interval and the
+  ordinary redraw route for unsupported configurations.
+- Do not retire Fast optical motion or the CSS perspective/translation
+  compositor: their fallback routes remain reachable, and Fast remains a
+  user-selectable quality. The refactor deliberately leaves the exact settle,
+  Stop/Cancel, pointer capture, atmospheric suspension and selected quality
+  semantics alone. No new RK4 calculations or accuracy thresholds.
+- Added tests for batch preflight, per-side options, detached pose overlay,
+  FOV derivation, classified side-specific rejection and recovery. All 304
+  Node test files passed in seven shards (1766/1766); focused camera/direct/
+  architecture set 230/230, wider camera/Compare/Animation set 633/633,
+  refactor closure gate 136/136. Both static isolation audits passed.
+- Remaining acceptance: check Opera Scene/Compare pointer, wheel, keyboard,
+  sequence and Studio interactions, including an unsupported-profile fallback.
+  Instrumented FPS and representative 5D requalification are still open.
+  Do not infer performance improvements or general optical equivalence from
+  this structural cleanup.

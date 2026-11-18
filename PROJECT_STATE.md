@@ -31,8 +31,20 @@
 > cutoffs. Validation: 666/666 targeted and wider regression tests, both
 > static isolation audits. Actual Opera performance and extreme fallback
 > appearance not measured. Full test suite not repeated.
-> **NEXT:** manual acceptance of Stage 5C and Stage 5D representative
-> requalification/quality documentation, then Stage 6 cleanup.
+> **Stage 6 — interactive motion refactor & cleanup** implemented on the
+> Stage 5C baseline at the user's request. `ModernCameraDirectMotion.js`
+> replaces the misleadingly drag-named scheduler; detached frame preparation
+> and side-specific capability checks are shared. Removed the mutable
+> fallback-reason side channel, repeated checked drag-pose calculation and
+> duplicate wheel settle timer branch. Fast/CSS remain necessary fallback
+> routes; no change to optics, quality preferences, interaction timing or
+> exports. Validation: all 304 Node test files (1766/1766 across seven shards),
+> both static isolation audits and the 136-test refactor closure gate passed.
+> **NEXT:** manual Opera regression (Scene/Compare pointer, wheel, keyboard,
+> Camera Animation, Studio and unsupported-case fallback). Stage 5D was
+> deferred at the user's request to proceed to cleanup; representative
+> requalification and measured browser FPS are still open. Stage 5C extreme
+> fallback behavior has not been independently accepted in Opera.
 > See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates and historical validation notes.
 > Read `git log -1` to identify the applied HEAD.

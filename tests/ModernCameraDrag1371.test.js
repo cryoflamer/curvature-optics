@@ -103,7 +103,7 @@ function harness(options={}){
     CurvatureModernSceneState:require('../src/ui/modern/ModernSceneState'),
     CurvatureModernCameraInteraction:interaction,
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
-    CurvatureModernCameraCanvasDirectDrag:options.direct?require('../src/ui/modern/ModernCameraCanvasDirectDrag'):null,
+    CurvatureModernCameraDirectMotion:options.direct?require('../src/ui/modern/ModernCameraDirectMotion'):null,
     CurvatureOpticalEffectiveRadiusPreview:options.direct?{canvasDirectSupport(m,spec){
       if(options.rejectDirect&&options.rejectDirect(m,spec))return {supported:false,reason:'Atmosphere unsupported'};
       return require('../src/optics/OpticalEffectiveRadiusPreview').canvasDirectSupport(m,spec);

@@ -151,7 +151,7 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     NewGraphX3D(args){return {Canvas:sceneCanvas,UpdateCanvasSize(){},Redraw(){args.DrawFunc({Canvas:sceneCanvas});}};},
     xOnLoad(fn){ons.push(fn);},console};
   if(direct){
-    win.CurvatureModernCameraCanvasDirectDrag=require('../src/ui/modern/ModernCameraCanvasDirectDrag');
+    win.CurvatureModernCameraDirectMotion=require('../src/ui/modern/ModernCameraDirectMotion');
     win.CurvatureOpticalEffectiveRadiusPreview=require('../src/optics/OpticalEffectiveRadiusPreview');
   }
   if(sessionSupport){
