@@ -1203,3 +1203,24 @@ test('V2 unfinished and Experimental projects persist, import with safe provenan
   assert.equal((await library.importEntries(destination,imported,201,
     {randomUUID:()=> '11-22-33-44'})).reused,2);
 });
+
+test('explicit built-in copies are independent durable records and bypass content deduplication',async()=>{
+  const catalog=require('../src/animation/ModernDemoCatalog');
+  const db=memoryIndexedDB(), original=catalog.load()[0];
+  const a=await catalog.copyToLibrary(db,'soundly',1700000000000);
+  const b=await catalog.copyToLibrary(db,'soundly',1700000000001);
+  assert.notEqual(a.id,b.id);
+  assert.notEqual(a.id,original.project.id);
+  assert.match(a.cover,/^data:image\/png;base64,/);
+  assert.equal(a.cover,b.cover);
+  assert.equal(library.parsePortable(library.exportPortable([a]))[0].cover,a.cover);
+  const renamed=await library.rename(db,a.id,'Renamed',a.updatedAt,1700000000002);
+  assert.equal(renamed.cover,a.cover);
+  assert.equal(library.fingerprint(a.project),library.fingerprint(original.project));
+  assert.equal((await library.list(db)).length,2);
+  await library.remove(db,a.id);
+  assert.equal((await library.list(db)).length,1);
+  assert.deepEqual(catalog.load()[0],original);
+  await assert.rejects(catalog.copyToLibrary(db,'missing'),/Unknown built-in/);
+  await assert.rejects(catalog.copyToLibrary(null,'soundly'),/IndexedDB/);
+});

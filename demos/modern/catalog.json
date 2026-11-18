@@ -2,6 +2,14 @@
   "format": "curvature-modern-demo-catalog",
   "version": 1,
   "demos": [
-    { "id": "soundly", "asset": "soundly.json" }
+    {
+      "id": "soundly",
+      "asset": "soundly.json",
+      "cover": {
+        "asset": "covers/soundly.png",
+        "source": "User-supplied video still found via Google; original source unknown",
+        "status": "unverified"
+      }
+    }
   ]
 }

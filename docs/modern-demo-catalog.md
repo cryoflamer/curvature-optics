@@ -163,7 +163,8 @@ record the split, and do not mark complete on implementation alone.
 | --- | --- | --- |
 | 0 — Architecture & Roadmap | Implemented | Documentation only; inspect current Studio boundaries and validate supplied Soundly export; retain prior migration evidence. |
 | 1 — Built-in Demo Catalog | Implemented; browser gate open | Ship original Soundly portable JSON and manifest; stable unique IDs, deterministic order, validate with existing APIs, reject invalid/duplicate catalog entries and missing assets with explicit errors, no IndexedDB writes. Test real asset loading and supported launch paths; source data immutable. |
-| 2 — Project Lifecycle | Next | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
+| 2A — Project Lifecycle foundation | Implemented | Explicit durable copy API; optional portable cover data, shipped Soundly working cover and provenance. |
+| 2B — Project Lifecycle integration | Next | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
 | 3 — Studio Catalog UI | Planned | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
 | 4 — Compare Playback | Planned | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
@@ -200,3 +201,19 @@ user's report of green CI after profiler-test cleanup; tag relocation was
 recommended but has not been independently verified here. The deferred
 Stage 5D requalification and extreme fallback/manual performance evidence
 remain separate open work, not silently completed by this roadmap.
+
+## Project covers and lifecycle split
+
+Built-in cover paths are declared in the manifest; the generator validates PNG
+assets and embeds bounded data URLs for independent copies without network access.
+Soundly's user-supplied video still has unknown original source and unverified
+rights; replace or clear it before public release unless permission is confirmed.
+The optional library `cover` data URL is distinct from the first-frame `thumbnail`,
+excluded from physical fingerprints, preserved by update/rename and portable
+export/import. Old records without covers remain unchanged. Explicit copies use
+new library IDs and bypass content deduplication.
+
+2A does not activate a demo in the Studio editor. 2B must implement detached
+read-only activation, outgoing draft checkpoint, recovery and mutation guards.
+3A will implement cover upload/frame capture/replacement/removal and fallback
+thumbnail display; cover preservation across editor Save As must be checked there.

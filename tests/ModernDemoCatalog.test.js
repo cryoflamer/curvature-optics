@@ -129,3 +129,12 @@ test('Modern loads data and reader once, after library, before app; Legacy does 
   for(const file of ['CurvatureApp.html','CurvatureDemosHost.html'])
     assert.doesNotMatch(fs.readFileSync(path.join(root,file),'utf8'),/ModernDemoCatalog(?:Data)?\.js/);
 });
+
+test('Soundly cover is a bounded local asset with explicitly unresolved provenance',()=>{
+  const [demo]=catalog.load();
+  assert.equal(demo.cover.asset,'covers/soundly.png');
+  assert.equal(demo.cover.status,'unverified');
+  assert.ok(Object.isFrozen(demo.cover));
+  assert.ok(fs.existsSync(path.join(directory,demo.cover.asset)));
+  assert.throws(()=>parse([{...soundly,cover:{...demo.cover,asset:'../bad.png'}}]),/Invalid built-in demo cover/);
+});

@@ -32,6 +32,16 @@
     if(!Number.isSafeInteger(value)||value<=0)throw RangeError('Invalid animation library timestamp');
     return value;
   }
+  function cover(value){
+    if(value==null)return null;
+    if(typeof value!=='string'||value.length>750000||
+      !/^data:image\/(png|webp|jpeg);base64,[a-z\d+/=]+$/i.test(value))
+      throw RangeError('Invalid animation cover');
+    return value;
+  }
+  function withCover(record,value){
+    var image=cover(value);if(image!==null)record.cover=image;return record;
+  }
   function normalize(value){
     if(!value||typeof value!=='object'||Array.isArray(value)||value.version!==VERSION)
       throw RangeError('Unsupported animation library record');
@@ -41,9 +51,9 @@
     if(updatedAt<createdAt)throw RangeError('Invalid animation library revision');
     // Optional preview is a saved screenshot, never a synthesized render.
     // Old records without it remain compatible.
-    return {version:VERSION,id:id,createdAt:createdAt,updatedAt:updatedAt,
+    return withCover({version:VERSION,id:id,createdAt:createdAt,updatedAt:updatedAt,
       quality:quality(value.quality),project:project,
-      thumbnail:thumbnails.validate(value.thumbnail||null,project.baseExperiment.display.mode)};
+      thumbnail:thumbnails.validate(value.thumbnail||null,project.baseExperiment.display.mode)},value.cover);
   }
   function makeId(crypto,now){
     var token=crypto&&typeof crypto.randomUUID==='function'?crypto.randomUUID().replace(/-/g,''):
@@ -91,7 +101,7 @@
   function portableItem(value){
     if(!value||typeof value!=='object'||Array.isArray(value)||
       Object.keys(value).some(function(key){return ![
-        'project','quality','thumbnail','createdAt','updatedAt'].includes(key);}))
+        'project','quality','thumbnail','createdAt','updatedAt','cover'].includes(key);}))
       throw RangeError('Invalid portable animation entry');
     var project=projects.validate(value.project);
     var createdAt=value.createdAt==null?null:stamp(value.createdAt);
@@ -99,9 +109,9 @@
     if((createdAt===null)!==(updatedAt===null)||
       (createdAt!==null&&updatedAt<createdAt))
       throw RangeError('Invalid portable animation timestamps');
-    return {project:project,quality:quality(value.quality),
+    return withCover({project:project,quality:quality(value.quality),
       thumbnail:thumbnails.validate(value.thumbnail||null,project.baseExperiment.display.mode),
-      createdAt:createdAt,updatedAt:updatedAt};
+      createdAt:createdAt,updatedAt:updatedAt},value.cover);
   }
   function exportPortable(entries){
     if(!Array.isArray(entries)||!entries.length||entries.length>MAX_PORTABLE_ITEMS)
@@ -109,7 +119,7 @@
     var animations=entries.map(function(entry){
       var normalized=normalize(entry);
       return portableItem({project:normalized.project,quality:normalized.quality,
-        thumbnail:normalized.thumbnail,createdAt:normalized.createdAt,
+        thumbnail:normalized.thumbnail,cover:normalized.cover,createdAt:normalized.createdAt,
         updatedAt:normalized.updatedAt});
     });
     var result=JSON.stringify({format:PORTABLE_FORMAT,version:PORTABLE_VERSION,
@@ -169,7 +179,7 @@
             })}));
           var createdAt=item.createdAt===null?time:item.createdAt;
           var updatedAt=item.updatedAt===null?time:item.updatedAt;
-          var entry=record(project,item.quality,id,createdAt,updatedAt,item.thumbnail);
+          var entry=record(project,item.quality,id,createdAt,updatedAt,item.thumbnail,item.cover);
           store.add(entry);created.push(entry);
         });
         finish({created:created.length,reused:reused.length,
@@ -206,10 +216,10 @@
       Array.isArray(b.keyframes)&&b.keyframes.length&&
       thumbnailMatchesFirstFrame(a,projects.frameExperiment(b,0)));
   }
-  function record(project,optics,id,createdAt,updatedAt,thumbnail){
+  function record(project,optics,id,createdAt,updatedAt,thumbnail,coverImage){
     var valid=projects.validate(project);
     return normalize({version:VERSION,id:id||valid.id,createdAt:createdAt||Date.now(),
-      updatedAt:updatedAt||Date.now(),quality:optics,project:valid,thumbnail:thumbnail||null});
+      updatedAt:updatedAt||Date.now(),quality:optics,project:valid,thumbnail:thumbnail||null,cover:coverImage});
   }
   // All results are resolved on transaction completion, not request success.
   // A failed or aborted transaction never reports a successful save/delete.
@@ -262,8 +272,8 @@
       req.onsuccess=function(){try{finish(req.result?normalize(req.result):null);}catch(error){abort(error);}};
     });
   }
-  function create(indexedDB,project,optics,now,thumbnail,allowDuplicate){
-    var time=stamp(now||Date.now()),data=record(project,optics,project.id,time,time,thumbnail);
+  function create(indexedDB,project,optics,now,thumbnail,allowDuplicate,coverImage){
+    var time=stamp(now||Date.now()),data=record(project,optics,project.id,time,time,thumbnail,coverImage);
     return transaction(indexedDB,'readwrite',function(store,finish,abort){
       // Check ALL existing rows in the same readwrite transaction as add().
       // A second tab cannot race this check and silently create a copy.
@@ -294,7 +304,7 @@
         // is identical. An edited first frame must not retain a misleading image.
         var image=thumbnail||(sameFirstFrame(valid,old.project)?old.thumbnail:null);
         var next=record(valid,optics,valid.id,old.createdAt,
-          Math.max(stamp(now||Date.now()),old.updatedAt+1),image);
+          Math.max(stamp(now||Date.now()),old.updatedAt+1),image,old.cover);
         store.put(next);finish(next);
       }catch(error){abort(error);}};
     });
@@ -312,7 +322,7 @@
           throw Error('Animation Library project changed in another tab; reopen it before renaming');
         var project=projects.validate(Object.assign({},old.project,{name:name}));
         var next=record(project,old.quality,id,old.createdAt,
-          Math.max(stamp(now||Date.now()),old.updatedAt+1),old.thumbnail);
+          Math.max(stamp(now||Date.now()),old.updatedAt+1),old.thumbnail,old.cover);
         store.put(next);finish(next);
       }catch(error){abort(error);}};
     });

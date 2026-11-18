@@ -36,15 +36,19 @@
       throw Error('Unsupported built-in demo catalog');
     var ids=new Set(),assets=new Set();
     return Object.freeze(manifest.demos.map(function(entry){
-      if(!shape(entry,'asset,id')||typeof entry.id!=='string'||
+      if(!(shape(entry,'asset,id')||shape(entry,'asset,cover,id'))||typeof entry.id!=='string'||
         !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.id)||entry.id.length>80||
         typeof entry.asset!=='string'||
         !/^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/.test(entry.asset)||entry.asset==='catalog.json')
         throw Error('Invalid built-in demo catalog entry');
       if(ids.has(entry.id))throw Error('Duplicate built-in demo ID: '+entry.id);
       if(assets.has(entry.asset))throw Error('Duplicate built-in demo asset: '+entry.asset);
+      if(entry.cover!==undefined&&(!shape(entry.cover,'asset,source,status')||
+        !/^covers\/[a-z0-9]+(?:-[a-z0-9]+)*\.png$/.test(entry.cover.asset)||
+        typeof entry.cover.source!=='string'||entry.cover.status!=='unverified'))
+        throw Error('Invalid built-in demo cover');
       ids.add(entry.id);assets.add(entry.asset);
-      return Object.freeze({id:entry.id,asset:entry.asset});
+      return deepFreeze({id:entry.id,asset:entry.asset,cover:entry.cover?Object.assign({},entry.cover):null});
     }));
   }
   // Atomic validation: the caller gets a complete ordered catalog or an error,
@@ -68,12 +72,22 @@
           return Object.assign({},frame,{sourceSnapshotId:null});
         })}));
         return deepFreeze({id:entry.id,asset:entry.asset,project:project,
-          quality:item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
+          cover:entry.cover,quality:item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
           updatedAt:item.updatedAt});
       }catch(error){
         throw Error('Built-in demo '+entry.id+' ('+entry.asset+'): '+error.message);
       }
     }));
+  }
+  function copyToLibrary(indexedDB,id,now,crypto){
+    return Promise.resolve().then(function(){
+      var demo=load().find(function(entry){return entry.id===id;});
+      if(!demo)throw Error('Unknown built-in demo: '+id);
+      var project=projects.validate(Object.assign({},demo.project,{
+        id:library.makeId(crypto,now),name:demo.project.name.slice(0,113)+' (copy)'}));
+      return library.create(indexedDB,project,demo.quality,now,demo.thumbnail,true,
+        demo.cover?bundled().covers[demo.cover.asset]:null);
+    });
   }
   function load(){
     var data=bundled();
@@ -83,5 +97,5 @@
       return Object.prototype.hasOwnProperty.call(data.assets,asset)?data.assets[asset]:null;
     });
   }
-  return Object.freeze({FORMAT:FORMAT,VERSION:VERSION,parseManifest:parseManifest,parse:parse,load:load});
+  return Object.freeze({FORMAT:FORMAT,VERSION:VERSION,parseManifest:parseManifest,parse:parse,load:load,copyToLibrary:copyToLibrary});
 }));

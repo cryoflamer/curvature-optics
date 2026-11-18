@@ -980,6 +980,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationLibrary.test.js",
         "tests/ModernDemoCatalog.test.js"
       ],
       "commonJsToolCallers": [

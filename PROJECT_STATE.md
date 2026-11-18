@@ -1,3 +1,9 @@
+## Modern Demo Catalog — lifecycle foundation (2A)
+
+Explicit built-in copy API and optional portable cover metadata implemented.
+Soundly working cover provenance is unverified; public release gate remains open.
+Next: 2B detached read-only Studio activation and mutation guards; then catalog UI.
+
 > **Current roadmap — Modern built-in demonstrations (2026-11-18):**
 > Patch 0 recorded the architecture; patch 1 ships the immutable catalog API,
 > original Soundly JSON and deterministic classic-script data resource.
