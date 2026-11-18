@@ -162,9 +162,19 @@
       // These variants are for an opt-in fixed-frame benchmark only. No live
       // playback state or authored geometry is changed.
       var strokeMode=diagnostic.strokeMode||'normal';
-      if(!['normal','path-only','simple','batched'].includes(strokeMode))
+      if(!['normal','path-only','simple','batched','opaque','black','unit-width','miter'].includes(strokeMode))
         throw RangeError('Unknown Canvas Direct stroke diagnostic mode');
       var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0,strokePrimitives=0;
+      // Submitted strokes only. These counters show how many original paths
+      // each single-factor diagnostic actually changes on the chosen frame.
+      var strokeStyleCounts={translucent:0,nonUnitWidth:0,nonBlack:0,roundJoin:0};
+      function countStrokeStyle(color,width,alpha){
+        if(alpha<1)strokeStyleCounts.translucent++;
+        if(Math.abs(width-1)>1e-6)strokeStyleCounts.nonUnitWidth++;
+        if(!/^(?:black|#000|#000000|rgb\(0,\s*0,\s*0\))$/i.test(String(color).trim()))
+          strokeStyleCounts.nonBlack++;
+        if(strokeMode!=='simple'&&strokeMode!=='miter')strokeStyleCounts.roundJoin++;
+      }
       // Count calls issued by this painter, not the browser's deferred GPU work
       // or higher-level decorations. No Canvas prototype interception is used.
       var canvasCalls={beginPath:0,moveTo:0,lineTo:0,closePath:0,
@@ -179,6 +189,7 @@
         ctx.strokeStyle=batch.color;
         ctx.lineWidth=batch.width;
         ctx.stroke();canvasCalls.stroke++;strokes++;
+        countStrokeStyle(batch.color,batch.width,batch.alpha);
         ctx.globalAlpha=1;
         batch=null;
       }
@@ -233,9 +244,13 @@
         }
         if(lines.length){
           strokePrimitives++;
-          var strokeColor=strokeMode==='simple'?'#000':(style.stroke||(far?'#666':'black'));
-          var strokeWidth=strokeMode==='simple'?1:viewport.lineWidth(style.lineWidth,camera);
-          var strokeAlpha=strokeMode==='simple'?1:alpha;
+          // Change exactly one authored stroke property in each style mode;
+          // simple retains all four changes as a positive control.
+          var strokeColor=(strokeMode==='simple'||strokeMode==='black')?'#000':
+            (style.stroke||(far?'#666':'black'));
+          var strokeWidth=(strokeMode==='simple'||strokeMode==='unit-width')?1:
+            viewport.lineWidth(style.lineWidth,camera);
+          var strokeAlpha=(strokeMode==='simple'||strokeMode==='opaque')?1:alpha;
           if(strokeMode==='batched'){
             if(batch&&(batch.color!==strokeColor||batch.width!==strokeWidth||batch.alpha!==strokeAlpha))
               flushBatch();
@@ -247,7 +262,6 @@
             ctx.globalAlpha=strokeAlpha;
             ctx.strokeStyle=strokeColor;
             ctx.lineWidth=strokeWidth;
-            if(strokeMode==='simple')ctx.lineJoin='miter';
             ctx.beginPath();canvasCalls.beginPath++;
           }
           for(var e=0;e<lines.length;e++){
@@ -256,8 +270,9 @@
           }
           // Path-only preserves the entire clipping/path-building workload,
           // leaving precisely the final Canvas stroke() invocation out.
-          if(strokeMode==='normal'||strokeMode==='simple'){
+          if(strokeMode!=='path-only'&&strokeMode!=='batched'){
             ctx.stroke();canvasCalls.stroke++;strokes++;
+            countStrokeStyle(strokeColor,strokeWidth,strokeAlpha);
           }
         }
         ctx.globalAlpha=1;canvasMs+=clock()-start;
@@ -289,7 +304,10 @@
       var setupEnd=clock();
       ctx.clearRect(0,0,canvas.width,canvas.height);canvasCalls.clearRect++;
       ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);canvasCalls.fillRect++;
-      ctx.lineJoin='round';ctx.lineCap='butt';
+      // Reset the join on every frame: an opt-in benchmark must not leave a
+      // changed Canvas state behind for ordinary animation rendering.
+      ctx.lineJoin=(strokeMode==='simple'||strokeMode==='miter')?'miter':'round';
+      ctx.lineCap='butt';
       layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
       if(drawMask&&globe&&layers.some(function(layer){return layer.far.length;}))mask();
       // Metric guide rings replace the very dense legacy latitude/longitude
@@ -317,6 +335,7 @@
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
         fillCalls:fillCalls,strokeCalls:strokes,strokePrimitives:strokePrimitives,
+        strokeStyleCounts:strokeStyleCounts,
         horizonMasks:masked,canvasCalls:canvasCalls,geometryReused:source.reused,
         diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask,strokeMode:strokeMode},
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,

@@ -169,6 +169,30 @@ test('Canvas stroke profile runs four rotated fixed-frame variants with full tel
   assert.throws(()=>h.runner.start({profile:'invalid'}),/Invalid benchmark profile/);
 });
 
+test('stroke style profile rotates six single-factor modes and reports style distributions',()=>{
+  const h=harness();
+  h.runner.start({profile:'canvas-stroke-styles',warmupFrames:2,sampleFrames:4,passes:3,
+    environment:{scene:'Soundly',fixedTimeMs:27186}});
+  for(let i=0;h.runner.running()&&i<1000;i++)h.tick();
+  assert.ok(h.result);
+  assert.equal(h.result.config.profile,'canvas-stroke-styles');
+  assert.equal(h.result.runs.length,18);
+  assert.deepEqual(h.result.config.modes,benchmark.STROKE_STYLE_MODES);
+  assert.deepEqual(h.result.runs.slice(0,6).map(x=>x.mode),
+    benchmark.order(0,benchmark.STROKE_STYLE_MODES));
+  assert.deepEqual(h.result.runs.slice(6,12).map(x=>x.mode),
+    benchmark.order(1,benchmark.STROKE_STYLE_MODES));
+  assert.deepEqual(h.result.runs.slice(12,18).map(x=>x.mode),
+    benchmark.order(2,benchmark.STROKE_STYLE_MODES));
+  for(const mode of benchmark.STROKE_STYLE_MODES){
+    assert.equal(h.result.summary[mode].frames,12);
+    assert.equal(h.result.summary[mode].strokeCalls.p50,1450);
+    assert.equal(h.result.summary[mode].strokeTranslucent.count,0,
+      'unknown mock telemetry must remain missing, not fabricated');
+  }
+  assert.match(h.result.notes.join(' '),/single-factor/i);
+});
+
 test('stroke benchmark UI contains one independent opt-in button',()=>{
   const html=fs.readFileSync('CurvatureModern.html','utf8');
   const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
@@ -177,4 +201,9 @@ test('stroke benchmark UI contains one independent opt-in button',()=>{
   assert.match(app,/stroke_path_only/);
   assert.match(app,/stroke_simple/);
   assert.match(app,/stroke_batched/);
+  assert.match(html,/id="ModernAnimationBenchmarkStrokeStyles"/);
+  assert.match(app,/startBenchmark\('canvas-stroke-styles'\)/);
+  assert.match(app,/stroke_width_one/);
+  assert.match(app,/stroke_opaque/);
+  assert.match(app,/stroke_miter/);
 });

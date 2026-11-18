@@ -2969,13 +2969,15 @@
   // No animation project, History entry or export settings are modified.
   function bindStudioBenchmark(){
     var run=newUiEl('ModernAnimationBenchmarkRun'),layersRun=newUiEl('ModernAnimationBenchmarkLayers'),
-      strokesRun=newUiEl('ModernAnimationBenchmarkStrokes');
+      strokesRun=newUiEl('ModernAnimationBenchmarkStrokes'),
+      stylesRun=newUiEl('ModernAnimationBenchmarkStrokeStyles');
     var cancel=newUiEl('ModernAnimationBenchmarkCancel');
     var again=newUiEl('ModernAnimationBenchmarkDownload'),note=newUiEl('ModernAnimationBenchmarkStatus');
     if(!run||!cancel||!studioBenchmarkApi)return;
     function busy(value){
       run.disabled=!!value;if(layersRun)layersRun.disabled=!!value;
-      if(strokesRun)strokesRun.disabled=!!value;cancel.hidden=!value;
+      if(strokesRun)strokesRun.disabled=!!value;
+      if(stylesRun)stylesRun.disabled=!!value;cancel.hidden=!value;
       if(again)again.hidden=!!value||!studioBenchmarkLastReport;
       ['ModernAnimationPlaybackPlay','ModernAnimationPlaybackPause','ModernAnimationPlaybackStop',
         'ModernAnimationPlaybackSeek','ModernAnimationPlaybackRetry','ModernAnimationPlaybackOptics',
@@ -3093,7 +3095,11 @@
             strokePrimitives:sum(da,db,'strokePrimitives'),
             horizonMasks:sum(da,db,'horizonMasks'),sourceObjects:sum(a.previewLod||{},b.previewLod||{},'original'),
             primitivesProjected:sum(a,b,'primitiveCount'),visibleSegments:sum(a,b,'drawn')};
-          ['beginPath','moveTo','lineTo','closePath','clearRect','fillRect','clip','drawImage'].forEach(function(name){
+          var styleCounts=da.strokeStyleCounts||{},otherStyles=db.strokeStyleCounts||{};
+          ['translucent','nonUnitWidth','nonBlack','roundJoin'].forEach(function(name){
+            data['stroke'+name[0].toUpperCase()+name.slice(1)]=sum(styleCounts,otherStyles,name);
+          });
+          ['beginPath','moveTo','lineTo','closePath','clearRect','clip','drawImage'].forEach(function(name){
             data[name+'Calls']=sum(calls,other,name);
           });
           return data;
@@ -3116,6 +3122,10 @@
               else if(mode==='stroke_path_only')flags.strokeMode='path-only';
               else if(mode==='stroke_simple')flags.strokeMode='simple';
               else if(mode==='stroke_batched')flags.strokeMode='batched';
+              else if(mode==='stroke_opaque')flags.strokeMode='opaque';
+              else if(mode==='stroke_black')flags.strokeMode='black';
+              else if(mode==='stroke_width_one')flags.strokeMode='unit-width';
+              else if(mode==='stroke_miter')flags.strokeMode='miter';
               else if(mode!=='canvas_full'&&mode!=='stroke_baseline')
                 throw Error('Unknown Canvas diagnostic mode');
               results=renderer(flags);return metrics(results,profileNow()-began);
@@ -3159,7 +3169,9 @@
           },
           progress:function(state){
             var count=profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:
-              profile==='canvas-strokes'?studioBenchmarkApi.STROKE_MODES.length:studioBenchmarkApi.MODES.length;
+              profile==='canvas-strokes'?studioBenchmarkApi.STROKE_MODES.length:
+              profile==='canvas-stroke-styles'?studioBenchmarkApi.STROKE_STYLE_MODES.length:
+              studioBenchmarkApi.MODES.length;
             status('Pass '+state.pass+'/'+state.passes+' · '+state.mode+
               ' · '+state.measured+'/'+state.total+' measured · '+state.completed+'/'+(state.passes*count)+' runs');
           },
@@ -3169,6 +3181,8 @@
               'Canvas layers benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
               profile==='canvas-strokes'?
               'Canvas strokes benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
+              profile==='canvas-stroke-styles'?
+              'Canvas stroke styles benchmark complete: 18 runs across six modes. JSON downloaded automatically.':
               'Benchmark complete: 15 runs across five modes. JSON downloaded automatically.');
             try{download(report);}catch(error){status('Benchmark complete, automatic download failed: '+error.message+'. Use Download last JSON.');}
             if(again)again.hidden=false;
@@ -3182,6 +3196,7 @@
     run.addEventListener('click',function(){startBenchmark('playback');});
     if(layersRun)layersRun.addEventListener('click',function(){startBenchmark('canvas-layers');});
     if(strokesRun)strokesRun.addEventListener('click',function(){startBenchmark('canvas-strokes');});
+    if(stylesRun)stylesRun.addEventListener('click',function(){startBenchmark('canvas-stroke-styles');});
     cancel.addEventListener('click',function(){if(studioBenchmark)studioBenchmark.cancel();});
     if(again)again.addEventListener('click',function(){
       if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);

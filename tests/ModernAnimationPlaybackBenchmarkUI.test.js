@@ -140,3 +140,34 @@ test('Canvas strokes UI exports all four modes and restores current display sett
   assert.equal(h.node('ModernAnimationBenchmarkStrokes').disabled,false);
   assert.equal(h.playing,true);
 });
+
+test('stroke style benchmark exports six modes while retaining all live options',()=>{
+  const h=harness();
+  h.node('ModernCanvasDirectFills').checked=false;
+  h.node('ModernCanvasDirectStrokes').checked=false;
+  h.node('ModernCanvasDirectMask').checked=false;
+  h.node('ModernAnimationBenchmarkStrokeStyles').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),true);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokeStyles').disabled,true);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokes').disabled,true);
+  for(let i=0;h.context.studioBenchmark.running()&&i<4000;i++)h.tick();
+  assert.equal(h.downloads.length,1);
+  const report=h.downloads[0].json;
+  assert.equal(report.config.profile,'canvas-stroke-styles');
+  assert.equal(report.runs.length,18);
+  assert.equal(report.environment.fixedTimeMs,40000);
+  assert.equal(report.summary.stroke_baseline.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_width_one.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_miter.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_simple.strokeCalls.p50,60);
+  assert.deepEqual([...new Set(h.paintOptions.map(x=>x.strokeMode).filter(Boolean))].sort(),
+    ['black','miter','normal','opaque','simple','unit-width']);
+  assert.ok(h.paintOptions.filter(x=>x.strokeMode).every(x=>
+    x.fills===true&&x.strokes===true&&x.horizonMask===true));
+  assert.equal(h.node('ModernCanvasDirectFills').checked,false);
+  assert.equal(h.node('ModernCanvasDirectStrokes').checked,false);
+  assert.equal(h.node('ModernCanvasDirectMask').checked,false);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokeStyles').disabled,false);
+  assert.equal(h.playing,true);
+  assert.match(h.node('ModernAnimationBenchmarkStatus').textContent,/18 runs across six modes/);
+});

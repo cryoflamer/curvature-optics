@@ -140,3 +140,42 @@ strokes *with path work retained*. Simple tests style cost; batching tests
 submission count when geometry stays constant. RAF gaps include browser
 scheduling and asynchronous graphics/compositing work, so these data alone
 cannot locate the specific browser/GPU thread responsible for delays.
+
+## Canvas Direct stroke style isolation (Modern Animation Studio)
+
+The **Benchmark stroke styles** button appears alongside the layer and stroke
+benchmarks in **Playback profiler**. Use it after the earlier stroke test
+establishes that submitting normal `stroke()` calls is expensive while the
+combined simple style is faster. It freezes the same scene, camera, canvas
+size and authoring options across all six modes and forces fills, outlines
+and the horizon mask on:
+
+- `stroke_baseline`: authored color, alpha, scaled width, and **round** joins.
+- `stroke_opaque`: identical to baseline except outline alpha is forced to 1.
+- `stroke_black`: identical except outline color is forced to `#000`.
+- `stroke_width_one`: identical except `lineWidth` is forced to 1 Canvas pixel.
+- `stroke_miter`: identical except `lineJoin` is forced to `miter`.
+- `stroke_simple`: combined positive control: opaque black 1px miter strokes.
+
+Each mode retains exactly the same outline paths, line segments, number and
+order of `stroke()` calls, fills and mask. Thus the single-factor comparisons
+change *only* their named stroke style property; there are no substitutions of
+geometry, depth ordering or draw-call batching. The experiment deliberately
+changes pixel output and never affects normal Playback, PNG/video export or
+saved project state. The painter resets `lineJoin` before every frame so a
+previous `miter` or `simple` run cannot contaminate the following baseline.
+
+The automatically downloaded JSON has `config.profile: "canvas-stroke-styles"`;
+three rotated passes each measure 120 RAF callbacks after 30 warm-up frames.
+There are 18 runs in total. As well as existing Canvas operation counters, it
+contains per-frame `strokeTranslucent`, `strokeNonUnitWidth`, `strokeNonBlack`
+and `strokeRoundJoin`: the number of *submitted strokes* exhibiting each
+property (including the full and simple modes). These counters help detect a
+nominal single-factor change that does not actually affect the chosen frame.
+
+Compare `gapMs.p50` and `gapMs.p95` by mode **within this one JSON**, while
+checking that `strokeCalls` and path counters are identical. One-factor speedups
+are not necessarily additive, so the combined simple control also detects
+interactions. RAF intervals include scheduling and deferred browser paint;
+these data do not prove which graphics backend is responsible. `1000/p50`
+is an approximate comparison rate, not the application's achieved video FPS.

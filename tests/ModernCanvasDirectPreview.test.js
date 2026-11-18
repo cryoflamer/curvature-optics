@@ -326,6 +326,59 @@ test('batching reduces stroke calls while retaining fills and projected segments
     'object and mask fills retain their painter order');
 });
 
+test('stroke style isolation changes exactly one Canvas property per mode',()=>{
+  const m=soundly(),opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const baseGraph=graph();
+  const baseline=renderer.renderPhysical(baseGraph.g,m,opts);
+  const baseEvents=baseGraph.stats().events;
+  const baseStrokes=baseEvents.filter(e=>e.type==='stroke');
+  assert.ok(baseStrokes.length>500);
+  const modes={
+    opaque:(a,b)=>assert.deepEqual(b,{...a,alpha:1}),
+    black:(a,b)=>assert.deepEqual(b,{...a,color:'#000'}),
+    'unit-width':(a,b)=>assert.deepEqual(b,{...a,width:1}),
+    miter:(a,b)=>assert.deepEqual(b,{...a,join:'miter'}),
+    simple:(a,b)=>assert.deepEqual(b,{...a,alpha:1,color:'#000',width:1,join:'miter'})
+  };
+  for(const [mode,compare] of Object.entries(modes)){
+    const g=graph();
+    const r=renderer.renderPhysical(g.g,m,{...opts,canvasDirectDiagnostics:{strokeMode:mode}});
+    const events=g.stats().events,strokes=events.filter(e=>e.type==='stroke');
+    assert.equal(events.length,baseEvents.length,mode+' painter events unchanged');
+    assert.deepEqual(events.filter(e=>e.type==='fill'),baseEvents.filter(e=>e.type==='fill'),
+      mode+' fill sequence unchanged');
+    assert.equal(strokes.length,baseStrokes.length);
+    for(let i=0;i<strokes.length;i++)compare(baseStrokes[i],strokes[i]);
+    assert.deepEqual(r.directStats.canvasCalls,baseline.directStats.canvasCalls,
+      mode+' does not alter geometry or Canvas operation counts');
+    assert.equal(r.drawn,baseline.drawn);
+    assert.equal(r.primitiveCount,baseline.primitiveCount);
+    assert.equal(r.directStats.strokePrimitives,baseline.directStats.strokePrimitives);
+    assert.equal(r.directStats.horizonMasks,baseline.directStats.horizonMasks);
+    assert.equal(r.directStats.strokeStyleCounts.translucent,
+      strokes.filter(e=>e.alpha<1).length);
+    assert.equal(r.directStats.strokeStyleCounts.nonUnitWidth,
+      strokes.filter(e=>Math.abs(e.width-1)>1e-6).length);
+    assert.equal(r.directStats.strokeStyleCounts.nonBlack,
+      strokes.filter(e=>!(/^(?:black|#000|#000000|rgb\(0,\s*0,\s*0\))$/i).test(String(e.color))).length);
+    assert.equal(r.directStats.strokeStyleCounts.roundJoin,
+      strokes.filter(e=>e.join==='round').length);
+    // Switching back to the normal painter must not retain miter/black styles.
+    renderer.renderPhysical(g.g,m,opts);
+    assert.equal(g.g.Canvas.getContext('2d').lineJoin,'round');
+  }
+});
+
+test('stroke style counters describe only submitted strokes, not path-only work',()=>{
+  const m=soundly(),g=graph();
+  const r=renderer.renderPhysical(g.g,m,{atmosphere:'vacuum',opticalQuality:'canvas-direct',
+    deferDecorations:true,canvasDirectDiagnostics:{strokeMode:'path-only'}});
+  assert.ok(r.directStats.strokePrimitives>500);
+  assert.equal(r.directStats.strokeCalls,0);
+  assert.deepEqual(r.directStats.strokeStyleCounts,
+    {translucent:0,nonUnitWidth:0,nonBlack:0,roundJoin:0});
+});
+
 test('unknown stroke diagnostic mode is rejected instead of silently changing the painter',()=>{
   const m=soundly();
   assert.throws(()=>draw(m,{canvasDirectDiagnostics:{strokeMode:'unknown'}}),
