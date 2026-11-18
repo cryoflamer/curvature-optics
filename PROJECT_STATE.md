@@ -1,9 +1,24 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–2/6 complete**, with Stage **3 Canvas Direct drag and corrective repairs A/B/C implemented in source but not yet browser-certified**;
-> Stage **4 — shared interaction preview pipeline** is **blocked pending Stage 3 Opera visual/performance verification**. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
-> for the source inventory, acceptance gates, detailed stage-2 notes and
-> cross-chat handoff. This seven-profile follow-up is based on `7cc4926`
-> (signed Flat refraction); read `git log -1` to identify the applied HEAD.
+> Stages **1–3 complete**: after corrective repair C the user reported normal,
+> very fast and smooth Opera interaction (manual observation, no measured FPS).
+> Stage **4A — shared pointer/wheel/keyboard Canvas Direct** is implemented;
+> Stage **4B — camera sequences** is next after 4A browser acceptance. See
+> [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
+> for the source inventory, acceptance gates and historical validation notes.
+> Read `git log -1` to identify the applied HEAD.
+> **4A:** one owner and one latest-pose RAF scheduler serve pointer, Shift-wheel
+> FOV, Alt-wheel dolly and keyboard navigation. Wheel settles after 220 ms of
+> inactivity; key release/blur and pointer release/cancel restore selected
+> optics. Both Compare sides are preflighted at the new pose. Detached frames
+> derive FOV without `Update()` or RK4. Pointer poses remain provisional; wheel
+> and keyboard retain their existing live-model semantics. Existing Fast/CSS
+> fallback paths remain; camera-sequence timing/routing is unchanged.
+> Tests: final relevant regression 251/251, including targeted 105/105;
+> initial broad run 1745/1746 with the History failure passing on isolated
+> rerun (12/12). Both static audits passed. See roadmap for caveats.
+> Manual Opera acceptance is pending.
+> **NEXT:** verify wheel and keyboard motion and transitions between input
+> methods, then implement 4B. Stage 5 remains separate physical qualification.
 > Newly created Animation Studio previews now prefer **Canvas Direct** with
 > checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
 > choices in old drafts/Library records are preserved, and newly selected
@@ -94,8 +109,8 @@
 > optical-path integral. **Node verification:** 1739/1739 regression tests
 > passed across six shards; refactor closure 136/136; Legacy/Modern static
 > isolation audit passed with the new documented import. Browser look/FPS
-> after C remains unverified. **NEXT: Repeat Opera interaction checks for haze,
-> blue Flat grid and measured FPS; Stage 4 stays blocked pending acceptance.**
+> after C was subsequently accepted by manual user observation in Opera;
+> instrumented FPS remains unmeasured. Stage 4A follows.
 >
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**
 > Playback now offers `Full` / `Balanced` / `Performance` Scene detail,

@@ -1,4 +1,4 @@
-/* Latest-pose RAF scheduler for display-only Canvas Direct camera dragging.
+/* Latest-pose RAF scheduler for display-only Canvas Direct camera interaction.
  * The application owns camera math, eligibility, rendering and exact settle;
  * this helper never changes a model, experiment or persistence state.
  */
@@ -13,9 +13,9 @@
     var request=options.requestFrame||function(fn){return requestAnimationFrame(fn);};
     var cancel=options.cancelFrame||function(id){cancelAnimationFrame(id);};
     var onError=options.onError||function(error){throw error;};
-    var active=false,pending=false,frame=null,latest=null,painted=false;
+    var active=false,pending=false,frame=null,latest=null,painted=false,generation=0;
     function clear(){
-      active=false;latest=null;
+      generation++;active=false;latest=null;
       if(pending){cancel(frame);pending=false;frame=null;}
     }
     function paint(){
@@ -33,8 +33,8 @@
         if(pending)return;
         pending=true;
         // Both synchronous test schedulers and browser RAF are supported.
-        var called=false;
-        var id=request(function(){called=true;paint();});
+        var called=false,epoch=generation;
+        var id=request(function(){called=true;if(epoch===generation)paint();});
         if(!called)frame=id;
       },
       clear:clear,

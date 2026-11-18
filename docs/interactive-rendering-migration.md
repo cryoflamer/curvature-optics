@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–2 complete; Stage 3 pointer previews plus corrective repairs A, B and C implemented in source. Stage 3 Opera visual/performance acceptance is still pending, so Stage 4 remains blocked.
+**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard is implemented; 4B camera sequences follows 4A manual acceptance.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -122,7 +122,8 @@ new pack until its Git history or a clean application confirms that fact.
 | **1. Plan & inventory** | **Completed in this documentation compatpatch** | This document, `PROJECT_STATE.md` handoff, source-backed interaction inventory; no runtime changes. Verify Markdown links, documented source references, diff and patch application. |
 | **2. Studio defaults** | **Completed** | For *new* Animation Studio live previews, prefer `canvas-direct` and checked Thin outlines (≤1 backing px); keep Auto FPS, actual FPS, opt-out and previously saved explicit choices. Handle unsupported Canvas Direct atmospheres with an honest fallback/status. Regression: new/existing drafts, Prepare/Play/Pause/Seek/Stop, Compare, export unchanged. |
 | **3. Direct camera drag** | **Completed** | Add Canvas Direct previews to Scene and Compare drag (rotate + Shift-translate), preserving all camera/gesture math and pointer cancellation. Bound per-frame work, cache geometry when possible; after release render authoritative optics. Verify A/B independent physical settings and a safe, explicit fallback. Split Scene/Compare into 3a/3b if needed. |
-| **4. Shared interaction pipeline** | **Blocked on Stage 3 Opera acceptance** | Consolidate the preview adapter/scheduler across eligible pointer, wheel, keyboard and camera sequence movement. Keep existing movement timings, throttling, settle behavior, no stale RAF, and one ownership boundary; remove only proven-redundant CSS/Fast preview wiring after replacement passes tests. |
+| **4A. Shared pointer/wheel/keyboard pipeline** | Implemented; Opera acceptance pending | Reuse one direct scheduler and owner, retain fallbacks and input math, verify idle/release/interruption. |
+| **4B. Camera sequences** | Next after 4A acceptance | Reuse shared preview while preserving absolute sequence timing, Stop/Cancel and persistence. |
 | **5. Effective-curvature qualification** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. Sample representative supported and unsupported profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
 | **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
 
@@ -400,3 +401,41 @@ new pack until its Git history or a clean application confirms that fact.
    record only the **prior base SHA** within that commit if needed.
 5. Deliver one ZIP containing one format-patch and a concise Ukrainian
    summary of changes, checks, and any missing browser verification.
+
+
+## Stage 4A — shared pointer, wheel and keyboard preview
+
+- **Input baseline:** `4e50fee` (repair C). User reported normal, very fast,
+  smooth Opera interaction after C; this is manual Stage 3 acceptance, not
+  an instrumented FPS result.
+- The existing direct RAF scheduler now has a shared application owner
+  (pointer, wheel or keyboard), latest-pose coalescing, and generation checks
+  to discard callbacks left over from cancelled interactions. Compare keeps
+  per-side optical settings and checks both detached frames before painting.
+- Shift-wheel FOV and Alt-wheel dolly use the same direct painter, with
+  the existing 220 ms Auto wheel settle interval for direct motion. Ordinary
+  wheel scrolling and modifiers are unchanged. The direct FOV is derived
+  from the current focal length with the physical model's angle bounds.
+- Keyboard retains elapsed-time movement and bounds; direct paint is
+  coalesced separately from navigation ticks. Keyup/blur settles to the
+  configured quality. Input takeover clears old work, and a click-only
+  pointer takeover still restores the previous committed wheel pose.
+- The existing fallback modes remain available. Direct frame failures
+  restore both physical viewports even if the first frame partially painted.
+  The approximate rendering label remains explicit; direct motion does not
+  request RK4 or per-frame History capture. Pointer transaction semantics,
+  shared Compare pose, authorship/exports and legacy isolation are preserved.
+- Stage 4 is split deliberately: camera sequences retain existing timing,
+  Fast routing and Stop/Cancel semantics until 4B. No removal of fallbacks.
+- **Manual next:** compare Scene/Compare wheel and keyboard against resting
+  Accurate and explicit Fast, with Globe/Flat and different atmospheres;
+  test switching input, blur, mode changes, FOV, dolly and height. Measure
+  FPS if desired. Only after 4A acceptance proceed to 4B.
+- **Automated validation:** initial broad six-shard Node run: 1745/1746
+  passed; the one History integration assertion (gallery filter count) passed
+  in an isolated rerun of the entire History file (12/12). After the final
+  input-handoff and partial-Compare-failure fixes, targeted tests passed
+  105/105 and a wider camera, direct/fast preview, History and architecture
+  suite passed 251/251. The final tree was not rerun through all 304 test
+  files; no completely green full-suite claim. Both Legacy/Modern static
+  audits passed (only new test dependencies added to the isolation fixture).

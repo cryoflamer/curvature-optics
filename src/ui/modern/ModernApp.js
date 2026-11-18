@@ -62,14 +62,20 @@
       cursorHost:document.documentElement,
       perspective:root.CurvatureModernCameraPerspectiveWarp,
       angleMapping:root.CurvatureModernCameraInteraction.angles}):null;
+  var cameraDirectMotion=null;
   var cameraDirectDrag=root.CurvatureModernCameraCanvasDirectDrag?
     root.CurvatureModernCameraCanvasDirectDrag.create({
       requestFrame:function(fn){return requestAnimationFrame(fn);},
       cancelFrame:function(id){cancelAnimationFrame(id);},
       paint:function(pose){paintCameraDirectDrag(pose);},
       onError:function(error){
-        abortCameraDrag();
-        updateStatus('Canvas Direct drag unavailable: '+error.message,true);
+        var owner=cameraDirectMotion&&cameraDirectMotion.owner;
+        if(owner==='pointer')cancelCameraDrag();
+        else if(owner==='keyboard')stopCameraKeyboard(true);
+        else stopAutoCameraPreview();
+        // Even the first failed A/B frame may have partially painted.
+        redraw();
+        updateStatus('Canvas Direct '+(owner==='pointer'?'drag':'motion')+' unavailable: '+error.message,true);
       }}):null;
   // 140.0: diagnostics are opt-in and never select a rendering backend.
   var gpuCapabilities=root.CurvatureModernGpuCapabilities;
@@ -146,6 +152,7 @@
     if(autoCameraSettleTimer!==null){clearTimeout(autoCameraSettleTimer);autoCameraSettleTimer=null;}
   }
   function stopAutoCameraPreview(){
+    if(cameraDirectMotion&&cameraDirectMotion.owner!=='pointer')clearCameraDirectMotion();
     clearAutoCameraSettle();autoCameraActive=false;autoCameraLastFrame=-Infinity;
     autoCameraChangeSeq=0;autoCameraPaintedSeq=0;
     if(cameraMotionTimer!==null){clearTimeout(cameraMotionTimer);cameraMotionTimer=null;}
@@ -1162,7 +1169,7 @@
     catch(error){historyBaseline=null;}
   }
   function queueHistoryAuto(){
-    if(!experimentHistory||!persistence.ready||state.demosActive||cameraTransition||autoCameraActive)return;
+    if(!experimentHistory||!persistence.ready||state.demosActive||cameraTransition||autoCameraActive||cameraDirectMotion)return;
     var key;
     try{key=historyPhysicalSignature();}
     catch(error){return;}
@@ -1171,7 +1178,7 @@
     var generation=historyEpoch;
     historyTimer=setTimeout(function(){
       historyTimer=null;
-      if(!persistence.ready||state.demosActive||cameraTransition||autoCameraActive)return;
+      if(!persistence.ready||state.demosActive||cameraTransition||autoCameraActive||cameraDirectMotion)return;
       var snapshot,signature;
       try{snapshot=experimentSnapshot();signature=historyFingerprint.physicalSignature(snapshot);}
       catch(error){historyStatus('Auto-history capture failed: '+error.message,true);return;}
@@ -5416,8 +5423,10 @@
   }
   function navigationKeyActive(){return Object.keys(navigationKeys).length>0;}
   function stopCameraKeyboard(deferRender){
-    var wasPreviewing=autoCameraActive;
-    stopAutoCameraPreview();
+    var ownsDirect=cameraDirectMotion&&cameraDirectMotion.owner==='keyboard';
+    var wasPreviewing=autoCameraActive||ownsDirect;
+    if(navigationKeyActive()||navigationMoved||ownsDirect)stopAutoCameraPreview();
+    else return;
     if(navigationFrame!==null){cancelAnimationFrame(navigationFrame);navigationFrame=null;}
     Object.keys(navigationKeys).forEach(function(key){delete navigationKeys[key];});
     navigationStamp=null;navigationModifiers={fast:false,precise:false};
@@ -5438,14 +5447,14 @@
         catch(error){updateStatus('Navigation limit: '+error.message,true);stopCameraKeyboard();return;}
         Object.keys(next).forEach(function(k){model[k]=next[k];});
         navigationMoved=true;refreshNavigationCameraInputs();
-        if(!requestAutoCameraPreview())
+        if(!requestCameraDirectMotion('keyboard')&&!requestAutoCameraPreview())
           updateStatus('Moving camera · release keys to calculate physical optics');
       }
     }
-    navigationFrame=requestAnimationFrame(navigationTick);
+    if(navigationKeyActive())navigationFrame=requestAnimationFrame(navigationTick);
   }
   function keyboardAllowed(event){
-    if(!event||event.altKey||event.metaKey||state.demosActive||activeCameraPointer)return false;
+    if(!event||event.altKey||event.metaKey||state.demosActive||animationWorkspaceOpen||activeCameraPointer)return false;
     var target=event.target||document.activeElement;
     if(target){
       var tag=String(target.tagName||'').toLowerCase();
@@ -5482,7 +5491,10 @@
       if(event.preventDefault)event.preventDefault();
       if(navigationKeys[action])return;
       stopCameraTransition(false,'Transition interrupted by keyboard navigation',false);
-      cancelEdits();cancelPending();
+      var settledWheel=!navigationKeyActive()&&settleCameraWheel();
+      cancelEdits();
+      // Keep an interrupted wheel's exact redraw if the key never moves.
+      if(!settledWheel)cancelPending();
       navigationKeys[action]=true;
       navigationModifiers={fast:!!event.shiftKey,precise:!!event.ctrlKey};
       if(navigationFrame===null){navigationStamp=profileNow();navigationFrame=requestAnimationFrame(navigationTick);}
@@ -5664,14 +5676,58 @@
     }catch(error){directDragFallbackReason=error.message;return null;}
     return views;
   }
+  function beginCameraDirectMotion(owner,views){
+    cameraDirectMotion={owner:owner,views:views};
+    cameraDirectDrag.begin();
+    if(owner!=='pointer'&&atmosphericPresentation){stopShimmerFrame();atmosphericPresentation.suspend();}
+  }
+  function clearCameraDirectMotion(){
+    if(!cameraDirectMotion)return;
+    var owner=cameraDirectMotion.owner;
+    cameraDirectMotion=null;
+    cameraDirectDrag.clear();
+    if(owner!=='pointer'&&atmosphericPresentation){
+      atmosphericPresentation.resume();
+      if(atmosphericShimmer)atmosphericShimmer.resetClock();
+      scheduleShimmerFrame();
+    }
+  }
+  function requestCameraDirectMotion(owner){
+    if(state.demosActive||animationWorkspaceOpen||activeCameraPointer)return false;
+    if(cameraDirectMotion&&cameraDirectMotion.owner!==owner)return false;
+    if(!cameraDirectMotion){
+      var views=cameraDirectDragViews();
+      if(!views){
+        if(directDragFallbackReason)updateOpticalQualityStatus(
+          'Canvas Direct motion unavailable: '+directDragFallbackReason+' · existing preview retained','warning');
+        return false;
+      }
+      stopAutoCameraPreview();cancelPending();
+      beginCameraDirectMotion(owner,views);
+    }
+    cameraDirectDrag.move(captureCameraPose());
+    return true;
+  }
   function paintCameraDirectDrag(pose){
-    var active=activeCameraPointer;
-    if(!active||!active.directViews)return;
-    active.directViews.forEach(function(view){
+    var active=cameraDirectMotion;
+    if(!active)return;
+    // Preflight every side at the latest observer height before painting A.
+    // FOV is derived on the detached frame, never by updating a live model.
+    var frames=active.views.map(function(view){
+      var frame=Object.assign({},view.model,captureCameraPose(),pose);
+      if(active.owner!=='pointer'||(activeCameraPointer&&activeCameraPointer.interrupted)){
+        frame.ViewAngle=Math.max(.1,Math.min(160,
+          root.CurvatureModernCameraInteraction.focalViewAngle(frame.FocalLengthField)));
+        frame.camViewAngle=frame.ViewAngle*Math.PI/180;
+      }
+      root.CurvatureOpticalEffectiveRadiusPreview.canvasDirectParameters(frame,view.options);
+      return {view:view,frame:frame};
+    });
+    frames.forEach(function(entry){
+      var view=entry.view,frame=entry.frame;
       // Never call Update() or change either live model while moving. The
       // physical camera uses these pose fields and the original per-side
       // surface, atmosphere and authored object geometry.
-      var frame=Object.assign({},view.model,pose);
       root.CurvatureMainCanvasRenderer.renderPhysical(view.graph,frame,view.options);
       // Screen-space guides are drawn only after the direct painter. A cached
       // optical horizon may be reprojected at the new pose, but no RK4 solve
@@ -5683,13 +5739,13 @@
           drawCompareHorizon(view.side,view.graph,frame,view.options,true);
       }
     });
-    updateOpticalQualityStatus('Canvas Direct drag · approximate effective curvature','info');
+    updateOpticalQualityStatus('Canvas Direct '+(active.owner==='pointer'?'drag':active.owner)+' · approximate effective curvature','info');
   }
   function cancelCameraDrag(keepPreview,sample){
     var active=activeCameraPointer;
     activeCameraPointer=null;
     if(cameraInteraction)cameraInteraction.cancel();
-    if(cameraDirectDrag)cameraDirectDrag.clear();
+    if(cameraDirectMotion&&cameraDirectMotion.owner==='pointer')clearCameraDirectMotion();
     if(active&&active.directViews&&document.documentElement&&document.documentElement.classList)
       document.documentElement.classList.remove('modern-camera-dragging-global');
     if(cameraPreview){
@@ -5746,6 +5802,9 @@
       var rect=canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
       if(!rect||!(rect.width>0&&rect.height>0))return;
       stopCameraTransition(false,'Transition interrupted by mouse navigation',false);
+      var interrupted=!!cameraDirectMotion||navigationKeyActive()||autoCameraSettleTimer!==null||(!!cameraDirectDrag&&state.frame!==null);
+      stopCameraKeyboard(true);
+      if(interrupted)stopAutoCameraPreview();
       try{
         if(typeof canvas.focus==='function')canvas.focus({preventScroll:true});
         cameraInteraction.begin({viewport:view,x:event.clientX,y:event.clientY,
@@ -5754,7 +5813,9 @@
           camera:{Pan:model.Pan,Nick:model.Nick,Roll:model.Roll,Height:model.Height,
             CameraEast:model.CameraEast,CameraNorth:model.CameraNorth},
           referenceDistance:cameraReferenceDistance(),
-          fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
+          fovRadians:interrupted?Math.max(.1,Math.min(160,
+            root.CurvatureModernCameraInteraction.focalViewAngle(model.FocalLengthField)))*Math.PI/180:
+            model.camViewAngle,aspectRatio:model.deviceRatio});
         var directViews=cameraDirectDragViews();
         var liveCameraDrag=!directViews&&
           (state.opticalQuality==='auto'||state.opticalQuality==='fast')&&
@@ -5784,16 +5845,16 @@
         }
         if(atmosphericPresentation){stopShimmerFrame();atmosphericPresentation.suspend();}
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud,
-          directViews:directViews,liveOptics:liveCameraDrag,moved:false,
+          directViews:directViews,liveOptics:liveCameraDrag,moved:false,interrupted:interrupted,
           startPose:liveCameraDrag?captureCameraPose():null};
         if(directViews){
-          cameraDirectDrag.begin();
+          beginCameraDirectMotion('pointer',directViews);
           if(document.documentElement&&document.documentElement.classList)
             document.documentElement.classList.add('modern-camera-dragging-global');
         }
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
-      }catch(error){cancelCameraDrag();updateStatus('Camera drag: '+error.message,true);}
+      }catch(error){cancelCameraDrag();if(interrupted)redraw();updateStatus('Camera drag: '+error.message,true);}
     });
     canvas.addEventListener('pointermove',function(event){
       var active=activeCameraPointer;
@@ -5845,7 +5906,7 @@
         var hadPreview=cameraDirectDrag.hasPainted();
         cancelCameraDrag();
         if(!changed&&!active.moved){
-          if(hadPreview)redraw();
+          if(hadPreview||active.interrupted)redraw();
           return;
         }
         try{
@@ -5870,7 +5931,7 @@
       }
       if(active.liveOptics){
         stopAutoCameraPreview();cancelCameraDrag();
-        if(!changed&&!active.moved)return;
+        if(!changed&&!active.moved){if(active.interrupted)redraw();return;}
         try{
           var finalCamera=sample.mode==='translate'?checkedCameraPosition(
             root.CurvatureModernCameraInteraction.translate(sample)):
@@ -5882,7 +5943,7 @@
         return;
       }
       cancelCameraDrag(changed,sample);
-      if(!changed)return;
+      if(!changed){if(active.interrupted)redraw();return;}
       try{
         var next=sample.mode==='translate'?checkedCameraPosition(
           root.CurvatureModernCameraInteraction.translate(sample)):
@@ -5935,8 +5996,9 @@
          event.ctrlKey||event.metaKey||
          delta===0||activeCameraPointer||
          (view==='Scene'&&state.mode!=='scene')||
-         (view!=='Scene'&&state.mode!=='compare')||state.demosActive)return;
+         (view!=='Scene'&&state.mode!=='compare')||state.demosActive||animationWorkspaceOpen)return;
       stopCameraTransition(false,'Transition interrupted by wheel navigation',false);
+      if(navigationKeyActive())stopCameraKeyboard();
       var next;
       try{
         if(event.altKey){
@@ -5964,7 +6026,18 @@
       updateCameraHud();scheduleCameraWheelRedraw();
     },{passive:false});
   }
+  function settleCameraWheel(){
+    if(autoCameraSettleTimer===null&&!(cameraDirectMotion&&cameraDirectMotion.owner==='wheel'))return false;
+    stopAutoCameraPreview();redraw();return true;
+  }
   function scheduleCameraWheelRedraw(){
+    if(requestCameraDirectMotion('wheel')){
+      clearAutoCameraSettle();
+      autoCameraSettleTimer=setTimeout(function(){
+        autoCameraSettleTimer=null;stopAutoCameraPreview();redraw();
+      },AUTO_WHEEL_IDLE_MS);
+      return;
+    }
     if(state.opticalQuality==='auto'&&autoPreviewSupported()){
       requestAutoCameraPreview();
       clearAutoCameraSettle();
@@ -5983,20 +6056,20 @@
     if(active&&active.directViews){
       var painted=cameraDirectDrag.hasPainted();
       cancelCameraDrag();
-      if(painted)redraw();
+      if(painted||active.interrupted)redraw();
     }else if(active&&active.liveOptics&&active.startPose){
       CAMERA_POSE_FIELDS.forEach(function(field){model[field]=active.startPose[field];});
       stopAutoCameraPreview();
       cancelCameraDrag();
       syncNumericInputs();redraw();
-    }else cancelCameraDrag();
+    }else {cancelCameraDrag();if(active&&active.interrupted)redraw();}
   }
   function bindCameraDrag(){
     ['Scene','A','B'].forEach(bindCameraViewport);
     ['Scene','A','B'].forEach(bindFocalWheel);
-    if(root.addEventListener)root.addEventListener('blur',abortCameraDrag);
+    if(root.addEventListener)root.addEventListener('blur',function(){abortCameraDrag();settleCameraWheel();});
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden)abortCameraDrag();
+      if(document.hidden){abortCameraDrag();settleCameraWheel();}
     });
   }
   var pendingCompareScope=null;
@@ -6028,6 +6101,11 @@
       !sample&&state.compareLast.A&&state.compareLast.B?compareSide:null;
     if(selected&&pendingCompareScope&&pendingCompareScope!==selected)selected=null;
     if(selected&&state.timer!==null)selected=null;
+    if(!liveMotion&&(cameraDirectMotion||navigationKeyActive())){
+      selected=null;
+      if(navigationKeyActive()||(cameraDirectMotion&&cameraDirectMotion.owner==='keyboard'))stopCameraKeyboard(true);
+      else if(cameraDirectMotion&&cameraDirectMotion.owner==='wheel')stopAutoCameraPreview();
+    }
     if(activeCameraPointer&&!liveMotion)cancelCameraDrag();
     var setupStartedAt=profileNow();
     cancelPending();
@@ -6107,6 +6185,7 @@
     }
   }
   function scheduleRedraw(){
+    if(cameraDirectMotion){stopCameraKeyboard(true);stopAutoCameraPreview();abortCameraDrag();}
     updateSnapshotSaveAction();
     cancelPending();
     // A slider may be edited immediately before Refresh/pagehide, before the

@@ -114,7 +114,7 @@ function harness(options={}){
     CurvatureOpticalFastRayField:require('../src/optics/OpticalFastRayField'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){
-      if(options.failDirect&&opt.opticalQuality==='canvas-direct')throw Error('Canvas 2D failed');
+      if(opt.opticalQuality==='canvas-direct'&&(options.failDirect===true||options.failDirect===g.Canvas.name))throw Error('Canvas 2D failed');
       draws.push({g,m,opt,
       camera:{Pan:m.Pan,Nick:m.Nick,Height:m.Height,CameraEast:m.CameraEast,CameraNorth:m.CameraNorth}});
       return {drawn:20,fillTriangles:10,unresolved:0};}},
@@ -127,7 +127,7 @@ function harness(options={}){
     createElement(){return {className:'',hidden:false,textContent:'',setAttribute(){}};}};
   const ctx={window,document,requestAnimationFrame:requestFrame,cancelAnimationFrame:cancelFrame,
     setTimeout(fn,delay){const id=++zoomTimerId;
-      if(options.deferredWheel&&delay===90)zoomTimers.set(id,fn);else fn();
+      if(options.deferredWheel&&(delay===90||delay===220))zoomTimers.set(id,fn);else fn();
       return id;},clearTimeout(id){zoomTimers.delete(id);},console};
   window.window=window;
   window.CurvatureModernAnimationPlaybackControls=
@@ -646,9 +646,10 @@ test('Canvas Direct: rendering failure aborts pointer gesture and restores Accur
   assert.equal(h.app.getCameraInteraction().isActive(),false);
   assert.equal(c.captures.size,0);
   assert.equal(m.Pan,start);
-  h.flush();
-  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
   assert.match(h.nodes.get('ModernStatus').textContent,/Canvas Direct drag unavailable/);
+  const before=h.draws.length;h.flush();
+  assert.equal(h.draws.length,before+1,'restore even after first failed frame');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
 });
 
 test('Canvas Direct: Globe/Flat Vacuum Compare keeps separate geometries and shared camera',()=>{
@@ -712,4 +713,58 @@ test('Canvas Direct uses independent A/B cached horizons and skips mismatched ph
   b.emit('pointerup',{shiftKey:true,clientX:100,clientY:95});h.flush();
   assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
   assert.ok(h.horizonSolves>solves,'authoritative settle updates horizon for the new height');
+});
+
+
+test('Canvas Direct wheel: latest FOV is projected before idle settle in Scene',()=>{
+  const h=harness({deferred:true,deferredWheel:true,direct:true});h.flush();
+  const c=h.canvases.Scene,m=h.app.getModel(),before=h.draws.length;
+  c.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});
+  c.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});
+  assert.equal(h.queuedFrames,1);assert.equal(h.queuedZoom,1);
+  h.flush();assert.equal(h.draws.length,before+1);
+  const frame=h.draws.at(-1);assert.equal(frame.opt.opticalQuality,'canvas-direct');
+  assert.equal(frame.m.FocalLengthField,m.FocalLengthField);
+  close(frame.m.camViewAngle,interaction.focalViewAngle(m.FocalLengthField)*Math.PI/180);
+  h.flushZoom();h.flush();assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+  assert.equal(h.queuedFrames,0);assert.equal(h.queuedZoom,0);
+});
+test('Canvas Direct wheel: Compare dolly shares pose but preserves independent atmosphere',()=>{
+  const h=harness({deferred:true,deferredWheel:true,direct:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const select=h.nodes.get('ModernPairPreset');select.value='flat-inverse';select.listeners.change.call(select);h.flush();
+  const m=h.app.getModel(),north=m.CameraNorth,before=h.draws.length;
+  h.canvases.B.emit('wheel',{altKey:true,deltaY:-100,deltaMode:0});h.flush();
+  assert.equal(h.draws.length,before+2);assert.notEqual(m.CameraNorth,north);
+  const [a,b]=h.draws.slice(-2);assert.equal(a.opt.opticalQuality,'canvas-direct');
+  assert.equal(b.opt.opticalQuality,'canvas-direct');assert.equal(a.camera.CameraNorth,b.camera.CameraNorth);
+  assert.equal(a.opt.atmosphere,'standard');assert.equal(b.opt.atmosphere,'inverse-spherical');
+  assert.equal(b.m.showModel,2);
+  h.flushZoom();h.flush();assert.ok(h.draws.slice(-2).every(x=>x.opt.opticalQuality==='accurate'));
+});
+test('Canvas Direct wheel: click-only pointer takeover restores physical view and cancels idle timer',()=>{
+  const h=harness({deferred:true,deferredWheel:true,direct:true});h.flush();const c=h.canvases.Scene;
+  c.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});h.flush();
+  c.emit('pointerdown');c.emit('pointerup');h.flush();
+  assert.equal(h.queuedZoom,0);assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+test('Canvas Direct wheel: mode switch drops pending approximation and idle callback',()=>{
+  const h=harness({deferred:true,deferredWheel:true,direct:true});h.flush();const before=h.draws.length;
+  h.canvases.Scene.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});
+  h.nodes.get('ModernCompareTab').listeners.click();h.flushZoom();h.flush();
+  assert.equal(h.queuedZoom,0);assert.ok(h.draws.slice(before).every(x=>x.opt.opticalQuality==='accurate'));
+});
+
+test('Canvas Direct wheel: pointer takes over an already queued exact settle without losing redraw',()=>{
+  const h=harness({deferred:true,deferredWheel:true,direct:true});h.flush();const c=h.canvases.Scene;
+  c.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});h.flush();h.flushZoom();
+  assert.equal(h.queuedFrames,1);c.emit('pointerdown');c.emit('pointerup');h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+test('Canvas Direct wheel: failed second Compare paint restores both authoritative frames',()=>{
+  const h=harness({deferred:true,deferredWheel:true,direct:true,failDirect:'B'});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  h.canvases.A.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});h.flush();
+  assert.equal(h.queuedZoom,0);assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  h.flush();assert.ok(h.draws.slice(-2).every(x=>x.opt.opticalQuality==='accurate'));
 });

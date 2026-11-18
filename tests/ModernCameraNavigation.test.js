@@ -85,7 +85,7 @@ test('camera positions survive JSON/URL round-trip without changing legacy exper
   ])assert.throws(()=>codec.validate({...old,cameraPositions:invalid}),RangeError);
 });
 
-function boot(savedExperiment, initialPreferences, pageUrl, historyState, historySupport, sessionSupport){
+function boot(savedExperiment, initialPreferences, pageUrl, historyState, historySupport, sessionSupport, direct=false){
   const ids=[...read('CurvatureModern.html').matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]);
   const nodes=new Map(),renders=[],globalListeners={},frames=new Map(),timers=new Map();
   let clock=100,seq=0,ons=[];
@@ -141,13 +141,17 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     CurvatureOpticalFastRayField:require('../src/optics/OpticalFastRayField'),
     CurvatureOpticalPreviewLod:require('../src/optics/OpticalPreviewLod'),
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){renders.push({...pose,East:m.CameraEast,North:m.CameraNorth,Height:m.Height,Pan:m.Pan,
-      quality:opt.opticalQuality,stride:opt.previewLod.stride});
+      quality:opt.opticalQuality,stride:opt.previewLod&&opt.previewLod.stride});
       return {drawn:12,fillTriangles:3,unresolved:0,timings:{opticsMs:1,canvasMs:1}};}},
     localStorage:{getItem(k){return storage.get(k)||null;},setItem(k,v){storage.set(k,v);},removeItem(k){storage.delete(k);}},
     performance:{now:()=>clock},
     addEventListener(name,fn){(globalListeners[name]??=[]).push(fn);},
     NewGraphX3D(args){return {Canvas:sceneCanvas,UpdateCanvasSize(){},Redraw(){args.DrawFunc({Canvas:sceneCanvas});}};},
     xOnLoad(fn){ons.push(fn);},console};
+  if(direct){
+    win.CurvatureModernCameraCanvasDirectDrag=require('../src/ui/modern/ModernCameraCanvasDirectDrag');
+    win.CurvatureOpticalEffectiveRadiusPreview=require('../src/optics/OpticalEffectiveRadiusPreview');
+  }
   if(sessionSupport){
     win.indexedDB={open(){throw Error('unexpected direct IndexedDB access');}};
     win.CurvatureModernSessionAutosave=sessionSupport;
@@ -1228,4 +1232,24 @@ test('Camera HUD appearance controls persist across browser reload and do not re
   assert.equal(next.nodes.get('ModernCameraHudOpacity').value,'90');
   assert.equal(next.nodes.get('ModernCameraHudPosition').value,'top-left');
   assert.equal(next.nodes.get('ModernCameraHudSize').value,'100');
+});
+
+
+test('Canvas Direct keyboard uses a single latest-pose frame and restores accurate on release',()=>{
+  const h=boot(undefined,undefined,undefined,undefined,undefined,undefined,true);h.flushFrames();
+  const m=h.app.getModel(),start=m.CameraNorth,before=h.renders.length;
+  h.dispatchGlobal('keydown',{code:'KeyW'});
+  for(let i=0;i<4;i++){h.flushFrames(16);assert.ok(h.pendingFrames<=2);}
+  assert.ok(m.CameraNorth>start);assert.ok(h.renders.length>before);
+  assert.ok(h.renders.slice(before).every(r=>r.quality==='canvas-direct'));
+  h.dispatchGlobal('keyup',{code:'KeyW'});h.flushFrames();
+  assert.equal(h.renders.at(-1).quality,'accurate');assert.equal(h.pendingFrames,0);
+  assert.equal(h.renders.at(-1).North,m.CameraNorth);
+});
+test('Canvas Direct keyboard blur settles without stale RAF work',()=>{
+  const h=boot(undefined,undefined,undefined,undefined,undefined,undefined,true);h.flushFrames();
+  h.dispatchGlobal('keydown',{code:'KeyW'});h.flushFrames();h.flushFrames();
+  assert.equal(h.renders.at(-1).quality,'canvas-direct');
+  h.dispatchGlobal('blur',{});h.flushFrames();assert.equal(h.renders.at(-1).quality,'accurate');
+  assert.equal(h.pendingFrames,0);
 });

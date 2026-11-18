@@ -39,3 +39,10 @@ test('Canvas Direct drag accepts synchronous RAF test harnesses without stale pe
   assert.deepEqual(values,[{Pan:1},{Pan:2}]);assert.equal(cancelled,0);
   assert.throws(()=>drag.create({}),TypeError);
 });
+
+test('Cancelled RAF callback cannot paint or consume the next interaction frame',()=>{
+  const h=harness();h.preview.begin();h.preview.move({Pan:1});
+  const stale=[...h.frames.values()][0];h.preview.clear();h.preview.begin();h.preview.move({Pan:2});
+  stale();assert.equal(h.drawn.length,0);assert.equal(h.frames.size,1);
+  h.flush();assert.deepEqual(h.drawn,[{Pan:2}]);
+});
