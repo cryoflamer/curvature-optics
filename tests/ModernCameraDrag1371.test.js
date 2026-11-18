@@ -96,12 +96,20 @@ function harness(options={}){
     CurvatureModernSceneState:require('../src/ui/modern/ModernSceneState'),
     CurvatureModernCameraInteraction:interaction,
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
+    CurvatureModernCameraCanvasDirectDrag:options.direct?require('../src/ui/modern/ModernCameraCanvasDirectDrag'):null,
+    CurvatureOpticalEffectiveRadiusPreview:options.direct?{parameters(m,spec){
+      if(m.showModel===2&&spec.atmosphere!=='vacuum')throw RangeError('Flat refraction unsupported');
+      if(options.rejectDirect&&options.rejectDirect(m,spec))throw RangeError('Atmosphere unsupported');
+      return {effectiveRadius:m.rEarth,k:0};
+    }}:null,
     CurvatureModernCameraPerspectiveWarp:options.perspective?require('../src/ui/modern/ModernCameraPerspectiveWarp'):null,
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
     CurvatureOpticalFastRayField:require('../src/optics/OpticalFastRayField'),
     CurvaturePhysicalSceneOptics:{create(){return {}; }},
-    CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){draws.push({g,m,opt,
+    CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){
+      if(options.failDirect&&opt.opticalQuality==='canvas-direct')throw Error('Canvas 2D failed');
+      draws.push({g,m,opt,
       camera:{Pan:m.Pan,Nick:m.Nick,Height:m.Height,CameraEast:m.CameraEast,CameraNorth:m.CameraNorth}});
       return {drawn:20,fillTriangles:10,unresolved:0};}},
     CurvaturePhysicalCurvature:require('../src/app/CurvaturePhysicalCurvature'),
@@ -500,4 +508,132 @@ test('Camera position: legacy experiment without offset restores zero; new offse
   assert.equal(codec.validate(old).scene.camera.CameraNorth,0);
   assert.throws(()=>codec.validate({...snapshot,scene:{...snapshot.scene,
     camera:{...snapshot.scene.camera,CameraEast:1e8}}}),/range/);
+});
+
+// Stage 3: direct intermediate frames must remain *display only*. The exact
+// camera transaction, Compare configuration and History are committed once.
+test('Canvas Direct: Accurate Scene drag paints latest pose in RAF, restores Accurate on release',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  const canvas=h.canvases.Scene,model=h.app.getModel(),pan=model.Pan;
+  const before=h.draws.length;
+  canvas.emit('pointerdown');
+  canvas.emit('pointermove',{clientX:75,clientY:105});
+  canvas.emit('pointermove',{clientX:90,clientY:112});
+  assert.equal(h.draws.length,before);
+  assert.equal(model.Pan,pan,'pointer samples must not mutate authored camera');
+  assert.equal(h.document.documentElement.classList.contains('modern-camera-dragging-global'),true);
+  assert.equal(h.queuedFrames,1,'only the last pose is scheduled');
+  h.flush();
+  assert.equal(h.draws.length,before+1);
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  assert.equal(h.draws.at(-1).opt.canvasDirectOptions.thinOutlines,true);
+  assert.ok(h.draws.at(-1).camera.Pan<pan);
+  assert.equal(model.Pan,pan);
+  canvas.emit('pointerup',{clientX:90,clientY:112});
+  h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+  assert.equal(model.Pan,h.draws.at(-1).camera.Pan);
+  assert.equal(canvas.captures.size,0);
+  assert.equal(h.document.documentElement.classList.contains('modern-camera-dragging-global'),false);
+});
+test('Canvas Direct: Shift+drag is provisional, cancel restores physical Scene pixels',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  const canvas=h.canvases.Scene,m=h.app.getModel(),before=h.draws.length;
+  const height=m.Height,east=m.CameraEast;
+  canvas.emit('pointerdown',{shiftKey:true});
+  canvas.emit('pointermove',{clientX:100,clientY:100});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  assert.equal(m.Height,height);assert.equal(m.CameraEast,east);
+  canvas.emit('pointercancel');h.flush();
+  assert.equal(m.Height,height);assert.equal(m.CameraEast,east);
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+  assert.ok(h.draws.length>before+1);
+});
+test('Canvas Direct: compatible Compare paints both sides with shared pose and independent optics',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const select=h.nodes.get('ModernPairPreset');select.value='standard-vacuum';
+  select.listeners.change.call(select);h.flush();
+  const m=h.app.getModel(),before=h.draws.length,b=h.canvases.B,pan=m.Pan;
+  b.emit('pointerdown',{pointerId:9});
+  b.emit('pointermove',{pointerId:9,clientX:95,clientY:102});
+  assert.equal(m.Pan,pan);
+  h.flush();
+  assert.equal(h.draws.length,before+2);
+  const aFrame=h.draws.at(-2),bFrame=h.draws.at(-1);
+  assert.equal(aFrame.opt.opticalQuality,'canvas-direct');
+  assert.equal(bFrame.opt.opticalQuality,'canvas-direct');
+  assert.equal(aFrame.opt.atmosphere,'standard');
+  assert.equal(bFrame.opt.atmosphere,'vacuum');
+  assert.equal(aFrame.camera.Pan,bFrame.camera.Pan);
+  assert.equal(aFrame.camera.Nick,bFrame.camera.Nick);
+  assert.equal(m.Pan,pan);
+  b.emit('pointerup',{pointerId:9,clientX:95,clientY:102});h.flush();
+  assert.equal(h.draws.at(-2).opt.opticalQuality,'accurate');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+test('Canvas Direct: Compare rejects a mixed supported/unsupported pair without partial direct frames',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const before=h.draws.length,b=h.canvases.B;
+  // The default Compare pair has Standard atmosphere on both Globe/Flat;
+  // Effective Radius does not support refraction on a Flat surface.
+  assert.equal(h.app.getCompareConfig().B.surface,'flat');
+  assert.equal(h.app.getCompareConfig().B.atmosphere,'standard');
+  b.emit('pointerdown',{pointerId:8});b.emit('pointermove',{pointerId:8,clientX:100,clientY:90});
+  h.flush();
+  assert.match(h.nodes.get('ModernOpticalQualityStatus').textContent,/Canvas Direct drag unavailable/);
+  assert.equal(h.draws.length,before,'Accurate fallback uses existing CSS drag preview');
+  b.emit('pointerup',{pointerId:8,clientX:100,clientY:90});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+test('Canvas Direct: release before a queued preview discards it and draws only final optics',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  const c=h.canvases.Scene,initial=h.draws.length;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:85,clientY:89});
+  c.emit('pointerup',{clientX:85,clientY:89});h.flush();
+  assert.equal(h.draws.length,initial+1);
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+
+test('Canvas Direct: rendering failure aborts pointer gesture and restores Accurate frame',()=>{
+  const h=harness({deferred:true,direct:true,failDirect:true});h.flush();
+  const c=h.canvases.Scene,m=h.app.getModel(),start=m.Pan;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:98,clientY:90});h.flush();
+  assert.equal(h.app.getCameraInteraction().isActive(),false);
+  assert.equal(c.captures.size,0);
+  assert.equal(m.Pan,start);
+  h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+  assert.match(h.nodes.get('ModernStatus').textContent,/Canvas Direct drag unavailable/);
+});
+
+test('Canvas Direct: Globe/Flat Vacuum Compare keeps separate geometries and shared camera',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const select=h.nodes.get('ModernPairPreset');select.value='globe-flat-vacuum';
+  select.listeners.change.call(select);h.flush();
+  const c=h.canvases.A,initial=h.draws.length;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:82,clientY:98});h.flush();
+  assert.equal(h.draws.length,initial+2);
+  const a=h.draws.at(-2),b=h.draws.at(-1);
+  assert.equal(a.opt.opticalQuality,'canvas-direct');
+  assert.equal(b.opt.opticalQuality,'canvas-direct');
+  assert.equal(a.m.showModel,1);assert.equal(b.m.showModel,2);
+  assert.equal(a.opt.atmosphere,'vacuum');assert.equal(b.opt.atmosphere,'vacuum');
+  assert.equal(a.camera.Pan,b.camera.Pan);
+  c.emit('pointerup',{clientX:82,clientY:98});h.flush();
+  assert.equal(h.draws.at(-2).m.showModel,1);
+  assert.equal(h.draws.at(-1).m.showModel,2);
+});
+test('Canvas Direct: explicit Fast quality is respected on release, despite direct motion',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  const select=h.nodes.get('ModernOpticalQuality');select.value='fast';
+  select.listeners.change.call(select);h.flush();
+  const c=h.canvases.Scene;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:88,clientY:105});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  c.emit('pointerup',{clientX:88,clientY:105});h.flush();
+  assert.equal(h.app.getOpticalQuality(),'fast');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'fast');
 });

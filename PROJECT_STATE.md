@@ -1,8 +1,8 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–2/6 complete**; Stage **3 — direct Scene/Compare camera drag** is
+> Stages **1–3/6 complete**; Stage **4 — shared interaction preview pipeline** is
 > next. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates, detailed stage-2 notes and
-> cross-chat handoff. The prior base is `4ab9fac` (roadmap compatpatch).
+> cross-chat handoff. The prior base is `b972890` (Studio defaults compatpatch).
 > Newly created Animation Studio previews now prefer **Canvas Direct** with
 > checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
 > choices in old drafts/Library records are preserved, and newly selected
@@ -12,9 +12,17 @@
 > schema, authoritative Scene/Compare and Accurate PNG/video export are unchanged.
 > Targeted tests: 110/110; wider animation/camera/export regression: 595/595;
 > documentation/isolation: 17/17. The attempted entire suite timed out and
-> is not claimed green. Real Opera/browser FPS after the new defaults remains
-> to verify. Stage 3 should address **pointer drag only** before the
-> shared interaction mechanisms of Stage 4; keep exact release/cancel redraw.
+> is not claimed green. Real Opera/browser FPS remains to verify. Stage 3 now routes supported
+> **Scene/Compare pointer drags** (Pan/Nick and Shift-translation) through
+> RAF-coalesced Canvas Direct with 1 backing-pixel outlines; live scene
+> physics remains unchanged until release. Both Compare atmospheres must
+> qualify; unsupported Flat refraction retains the prior Fast/CSS preview.
+> Release/cancel/failure restore the configured physical renderer. Wheel,
+> keyboard and camera sequences are untouched; Stage 4 covers those paths.
+> Stage 3 pointer/Animation/Compare/isolation suite: 635/635; separate
+> physical/optical/Legacy suite: 689/689. Local headless Chromium smoke was
+> blocked by browser navigation policy, not completed; manual Opera verification
+> remains required.
 
 >
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**

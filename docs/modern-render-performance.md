@@ -88,7 +88,9 @@ far quicker. RAF gaps are scheduling measurements, not proof of presented FPS.
 **Thin outlines · max 1 canvas pixel** is retained in Animation Studio for
 Canvas Direct only, alongside the Preview FPS cap and Actual FPS display. It
 caps effective backing-store stroke widths; normal geometry, fills and horizon
-mask remain intact. The switch is disabled by default, and is not persisted to
+mask remain intact. The switch is enabled by default for new Studio previews, and is not persisted to
 project JSON or applied to offline frame/video exports. It can be turned off
-to restore authored stroke widths. The original experiments are recoverable
+to restore authored stroke widths. Supported Scene/Compare pointer dragging
+also enforces this 1 backing-pixel cap in its Canvas Direct preview without
+changing authored line styles or exact settled rendering. The original experiments are recoverable
 from Git history, rather than exposed as production UI or test pages.

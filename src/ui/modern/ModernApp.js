@@ -62,6 +62,15 @@
       cursorHost:document.documentElement,
       perspective:root.CurvatureModernCameraPerspectiveWarp,
       angleMapping:root.CurvatureModernCameraInteraction.angles}):null;
+  var cameraDirectDrag=root.CurvatureModernCameraCanvasDirectDrag?
+    root.CurvatureModernCameraCanvasDirectDrag.create({
+      requestFrame:function(fn){return requestAnimationFrame(fn);},
+      cancelFrame:function(id){cancelAnimationFrame(id);},
+      paint:function(pose){paintCameraDirectDrag(pose);},
+      onError:function(error){
+        abortCameraDrag();
+        updateStatus('Canvas Direct drag unavailable: '+error.message,true);
+      }}):null;
   // 140.0: diagnostics are opt-in and never select a rendering backend.
   var gpuCapabilities=root.CurvatureModernGpuCapabilities;
   var gpuSnapshot=null;
@@ -5616,10 +5625,58 @@
     host.appendChild(node);
     return node;
   }
+  // Stage 3: qualify both Compare atmospheres *before* the first direct frame.
+  // Unsupported and missing-module cases retain the existing Fast/CSS path.
+  // This read-only preview never mutates the authoritative Scene/Compare models.
+  var directDragFallbackReason=null;
+  function cameraDirectDragViews(){
+    directDragFallbackReason=null;
+    var checker=root.CurvatureOpticalEffectiveRadiusPreview;
+    var renderer=root.CurvatureMainCanvasRenderer;
+    if(!cameraDirectDrag||!checker||typeof checker.parameters!=='function'||
+      !renderer||typeof renderer.renderPhysical!=='function')return null;
+    var sides=state.mode==='compare'?['A','B']:['Scene'];
+    if(state.mode==='compare'&&!state.comparePair&&!prepareCompare())return null;
+    var views=[];
+    try{
+      sides.forEach(function(side){
+        var g=cameraViewport(side),m=side==='Scene'?model:state.comparePair&&state.comparePair[side];
+        var spec=side==='Scene'?null:state.compareConfig&&state.compareConfig[side];
+        var options={atmosphere:spec?spec.atmosphere:state.atmosphere,
+          temperatureProfile:spec?spec.temperatureProfile:state.temperatureProfile,
+          occlusionRadius:spec?spec.occlusionRadius:state.occlusionRadius,
+          visibility:spec?spec.visibility:state.visibility,
+          transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
+          inverseProfile:spec?spec.inverseProfile:state.inverseProfile,
+          opticalQuality:'canvas-direct',geometryBackend:'canvas',
+          canvasDirectOptions:{thinOutlines:true},showCaptions:false,
+          includeGeometrySummary:false,deferDecorations:true};
+        if(!g||!g.Canvas||!m)throw RangeError('Canvas Direct drag viewport is unavailable');
+        checker.parameters(m,options);
+        views.push({graph:g,model:m,options:options});
+      });
+    }catch(error){directDragFallbackReason=error.message;return null;}
+    return views;
+  }
+  function paintCameraDirectDrag(pose){
+    var active=activeCameraPointer;
+    if(!active||!active.directViews)return;
+    active.directViews.forEach(function(view){
+      // Never call Update() or change either live model while moving. The
+      // physical camera uses these pose fields and the original per-side
+      // surface, atmosphere and authored object geometry.
+      var frame=Object.assign({},view.model,pose);
+      root.CurvatureMainCanvasRenderer.renderPhysical(view.graph,frame,view.options);
+    });
+    updateOpticalQualityStatus('Canvas Direct drag · approximate effective curvature','info');
+  }
   function cancelCameraDrag(keepPreview,sample){
     var active=activeCameraPointer;
     activeCameraPointer=null;
     if(cameraInteraction)cameraInteraction.cancel();
+    if(cameraDirectDrag)cameraDirectDrag.clear();
+    if(active&&active.directViews&&document.documentElement&&document.documentElement.classList)
+      document.documentElement.classList.remove('modern-camera-dragging-global');
     if(cameraPreview){
       if(keepPreview===true)cameraPreview.hold(cameraMovePreview(sample));
       else cameraPreview.clear();
@@ -5630,7 +5687,7 @@
       scheduleShimmerFrame();
     }
     if(!active)return;
-    if(active.liveOptics){
+    if(active.liveOptics||active.directViews){
       if(active.canvas&&active.canvas.classList)active.canvas.classList.remove('is-camera-dragging');
       if(root.CurvatureModernCameraDragPreview&&root.CurvatureModernCameraDragPreview.setCursor)
         root.CurvatureModernCameraDragPreview.setCursor(active.canvas,'grab');
@@ -5683,15 +5740,19 @@
             CameraEast:model.CameraEast,CameraNorth:model.CameraNorth},
           referenceDistance:cameraReferenceDistance(),
           fovRadians:model.camViewAngle,aspectRatio:model.deviceRatio});
-        var liveCameraDrag=(state.opticalQuality==='auto'||state.opticalQuality==='fast')&&
+        var directViews=cameraDirectDragViews();
+        var liveCameraDrag=!directViews&&
+          (state.opticalQuality==='auto'||state.opticalQuality==='fast')&&
           autoPreviewSupported();
-        if(liveCameraDrag){
+        if(!directViews&&directDragFallbackReason)updateOpticalQualityStatus(
+          'Canvas Direct drag unavailable: '+directDragFallbackReason+' · existing preview retained','warning');
+        if(directViews||liveCameraDrag){
           cancelPending();
           if(canvas.classList)canvas.classList.add('is-camera-dragging');
           if(root.CurvatureModernCameraDragPreview&&root.CurvatureModernCameraDragPreview.setCursor)
             root.CurvatureModernCameraDragPreview.setCursor(canvas,'grabbing');
         }
-        if(cameraPreview&&!liveCameraDrag){
+        if(cameraPreview&&!liveCameraDrag&&!directViews){
           var sides=state.mode==='compare'?['A','B']:['Scene'];
           cameraPreview.begin({source:view,viewports:sides.map(function(side){
             var graph=cameraViewport(side);
@@ -5708,7 +5769,13 @@
         }
         if(atmosphericPresentation){stopShimmerFrame();atmosphericPresentation.suspend();}
         activeCameraPointer={canvas:canvas,id:event.pointerId,hud:hud,
-          liveOptics:liveCameraDrag,moved:false,startPose:liveCameraDrag?captureCameraPose():null};
+          directViews:directViews,liveOptics:liveCameraDrag,moved:false,
+          startPose:liveCameraDrag?captureCameraPose():null};
+        if(directViews){
+          cameraDirectDrag.begin();
+          if(document.documentElement&&document.documentElement.classList)
+            document.documentElement.classList.add('modern-camera-dragging-global');
+        }
         if(typeof canvas.setPointerCapture==='function')canvas.setPointerCapture(event.pointerId);
         if(event.preventDefault)event.preventDefault();
       }catch(error){cancelCameraDrag();updateStatus('Camera drag: '+error.message,true);}
@@ -5718,7 +5785,15 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.move({x:event.clientX,y:event.clientY});
       if(Math.hypot(sample.dx,sample.dy)<2)return;
-      if(active.liveOptics){
+      if(active.directViews){
+        try{
+          var directPose=sample.mode==='translate'?checkedCameraPosition(
+            root.CurvatureModernCameraInteraction.translate(sample)):
+            root.CurvatureModernCameraInteraction.angles(sample);
+          active.moved=true;
+          cameraDirectDrag.move(directPose);
+        }catch(error){updateStatus('Camera drag: '+error.message,true);return;}
+      }else if(active.liveOptics){
         try{
           var position=sample.mode==='translate'?checkedCameraPosition(
             root.CurvatureModernCameraInteraction.translate(sample)):
@@ -5751,6 +5826,33 @@
       if(!active||active.canvas!==canvas||active.id!==event.pointerId)return;
       var sample=cameraInteraction.end({x:event.clientX,y:event.clientY});
       var changed=sample&&Math.hypot(sample.dx,sample.dy)>=2;
+      if(active.directViews){
+        var hadPreview=cameraDirectDrag.hasPainted();
+        cancelCameraDrag();
+        if(!changed&&!active.moved){
+          if(hadPreview)redraw();
+          return;
+        }
+        try{
+          var directFinal=sample.mode==='translate'?checkedCameraPosition(
+            root.CurvatureModernCameraInteraction.translate(sample)):
+            root.CurvatureModernCameraInteraction.angles(sample);
+          var unchanged=sample.mode==='translate'?
+            directFinal.Height===model.Height&&directFinal.CameraEast===model.CameraEast&&
+              directFinal.CameraNorth===model.CameraNorth:
+            directFinal.Pan===model.Pan&&directFinal.Nick===model.Nick;
+          if(!unchanged){
+            cancelEdits();
+            Object.keys(directFinal).forEach(function(key){model[key]=directFinal[key];});
+            markCustom();syncNumericInputs();
+          }
+          // Even a return-to-origin gesture needs to replace approximate
+          // pixels with the user's selected full-quality Scene/Compare image.
+          redraw();
+        }catch(error){updateStatus('Camera drag: '+error.message,true);redraw();}
+        if(event.preventDefault)event.preventDefault();
+        return;
+      }
       if(active.liveOptics){
         stopAutoCameraPreview();cancelCameraDrag();
         if(!changed&&!active.moved)return;
@@ -5863,7 +5965,11 @@
   }
   function abortCameraDrag(){
     var active=activeCameraPointer;
-    if(active&&active.liveOptics&&active.startPose){
+    if(active&&active.directViews){
+      var painted=cameraDirectDrag.hasPainted();
+      cancelCameraDrag();
+      if(painted)redraw();
+    }else if(active&&active.liveOptics&&active.startPose){
       CAMERA_POSE_FIELDS.forEach(function(field){model[field]=active.startPose[field];});
       stopAutoCameraPreview();
       cancelCameraDrag();

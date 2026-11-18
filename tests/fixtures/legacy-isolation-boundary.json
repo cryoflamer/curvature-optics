@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 108,
-      "uniqueScripts": 106,
+      "scriptTags": 109,
+      "uniqueScripts": 107,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -177,6 +177,7 @@
         "src/camera/ModernCameraSequence.js",
         "src/ui/modern/ModernCameraPerspectiveWarp.js",
         "src/ui/modern/ModernCameraDragPreview.js",
+        "src/ui/modern/ModernCameraCanvasDirectDrag.js",
         "src/ui/modern/ModernRenderProfiler.js",
         "src/ui/modern/ModernPerformanceReport.js",
         "src/ui/modern/ModernGpuCapabilities.js",
@@ -396,6 +397,7 @@
       "src/ui/modern/ModernApplicationPreferences.js",
       "src/ui/modern/ModernAtmosphericPresentation.js",
       "src/ui/modern/ModernAtmosphericShimmer.js",
+      "src/ui/modern/ModernCameraCanvasDirectDrag.js",
       "src/ui/modern/ModernCameraDragPreview.js",
       "src/ui/modern/ModernCameraHud.js",
       "src/ui/modern/ModernCameraInteraction.js",
@@ -448,7 +450,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 195,
+  "sourceJsCount": 196,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2646,6 +2648,17 @@
         "tests/ModernAtmosphericPresentation13822.test.js",
         "tests/ModernAtmosphericShimmer1382.test.js",
         "tests/ModernPerformanceDiagnostics1401.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCameraCanvasDirectDrag.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCameraCanvasDirectDrag.test.js",
+        "tests/ModernCameraDrag1371.test.js"
       ],
       "commonJsToolCallers": []
     },

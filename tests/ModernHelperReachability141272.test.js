@@ -18,7 +18,7 @@ const modernScripts = scriptTags.filter(tag => tag.file.startsWith('src/ui/moder
 // future scripts absent from this test.
 const required = [
   'ModernAnimationPreviewGraph.js', 'ModernAnimationProjectWizardUI.js', 'ModernAnimationStudioUI.js', 'ModernApp.js', 'ModernApplicationPreferences.js', 'ModernAtmosphericPresentation.js',
-  'ModernAtmosphericShimmer.js', 'ModernCameraDragPreview.js', 'ModernCameraHud.js',
+  'ModernAtmosphericShimmer.js', 'ModernCameraDragPreview.js', 'ModernCameraCanvasDirectDrag.js', 'ModernCameraHud.js',
   'ModernCameraInteraction.js', 'ModernCameraNavigation.js', 'ModernCameraPerspectiveWarp.js',
   'ModernCompareGraph.js', 'ModernCompareModel.js',
   'ModernCompareState.js', 'ModernDemos.js', 'ModernExperimentFingerprint.js',

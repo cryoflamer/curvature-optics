@@ -44,12 +44,19 @@ uses this by default).
 
 Mouse movement sensitivity depends on the field of view and weighted scene
 object distances captured at the start of the drag. Alt + wheel moves a bounded
-fraction of this reference distance per notch. With ordinary Accurate selected, preview drags are an approximate
-CSS image shift; actual perspective, parallax and refractive visibility are
-recomputed on release. In **Display → Optical ray field → Auto**, qualified
-profiles instead use throttled Fast optical projections while dragging, with
-Accurate recomputed on release. Wheel events are similarly coalesced and
-refined after a short idle period.
+fraction of this reference distance per notch. For supported Scene/Compare pointer
+drags, **Canvas Direct** now paints the provisional camera pose using
+approximate effective curvature and outlines capped at one physical backing
+pixel. Pan/Nick and Shift-translation both use this route regardless of the
+selected settled quality (Auto, Fast or Accurate). The live camera and authored
+scene are untouched until pointerup; release restores the selected full-quality
+render (Accurate RK4 for Auto). If either Compare atmosphere cannot support
+effective curvature — e.g. Flat with refraction — the previous Fast/CSS drag
+preview is retained and an explicit status warning is shown. Wheel, keyboard
+and camera sequence motion still use their existing Fast/Accurate pipelines;
+wheel events are coalesced and refined after idle. See
+[`interactive-rendering-migration.md`](interactive-rendering-migration.md)
+for the remaining migration scope.
 
 The signed observer position is displayed in **Camera** settings and saved
 in the Modern experiment state, including URL sharing, JSON and the library.
