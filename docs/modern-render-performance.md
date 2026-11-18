@@ -216,3 +216,44 @@ isolates a width dependency but does not establish which graphics process or
 raster backend causes it. Parameter changes can affect pixel output and
 antialiasing; do not promote a forced width to production without visual
 comparison and normal-playback verification.
+
+## Isolated Canvas 2D stroke microbenchmark
+
+Open `tools/canvas-stroke-benchmark.html` directly in Opera/Chromium (a `file://`
+URL works). This standalone diagnostic imports **no Curvature modules**, changes
+no production rendering settings, and uses deterministic paths on an independent
+1334 × 889 backing-store Canvas with 1,221 individual `stroke()` calls per frame.
+The default outline-only experiment is deliberately simpler than Soundly; a
+separate scene-like mode interleaves 1,189 fills with the same strokes.
+
+Select one experiment at a time (or **All experiments**):
+
+- **A · 1 px threshold**: 0.95, 0.99, 1, 1.005, 1.01, 1.025, 1.05,
+  1.075, 1.1, 1.125, and 1.25 backing-store px; the other properties match.
+- **B · Straight vs polyline**: one vs six segments per contour at widths around
+  1 px; compare widths *within a geometry type* before comparing geometry.
+- **C · Canvas transform vs physical width**: identity vs 1.125× Canvas CTM,
+  scaling input coordinates and assigned `lineWidth` inversely so the actual
+  backing-store geometry and line width stay the same. This is **not** a change
+  in the real display `devicePixelRatio`.
+- **D · Context allocation hint**: default Canvas 2D context versus a separate
+  context created with `{willReadFrequently:true}`. This flag can influence
+  implementation but does **not** guarantee a CPU-only backend.
+- **E · Interleaved fills + strokes**: same contour widths with an additional
+  fill before most outlines, to probe a more scene-like painter workload.
+
+Default: 15 warm-up + 90 measured RAF frames per mode × three rotated passes.
+The run is cancelled if the tab becomes hidden. A timestamped JSON is downloaded
+on completion (and can be exported again); `config.profile`, browser DPR,
+context attributes, immutable mode definitions, measured rows, per-pass runs and
+aggregated `summary` distinguish this report from Curvature Playback benchmarks.
+Compare `gapMs.p50/p95` **within the same run**. `drawMs` is CPU-side elapsed
+JavaScript submission time, *not* proof of GPU completion. `1000 / gapMs.p50`
+is only indicative RAF cadence, not a reliable displayed video FPS estimate.
+
+To investigate a **real** device-pixel-ratio effect, repeat the same profile
+with a different browser zoom / display scaling, and compare the exported DPR
+and canvas sizes. Check `opera://gpu` or `chrome://gpu` and browser tracing when
+identifying the raster backend: the benchmark itself cannot determine whether
+Skia used a hairline, CPU, GPU or compositor path. A negative reproduction in
+this isolated page does not rule out interaction with Curvature's painter.

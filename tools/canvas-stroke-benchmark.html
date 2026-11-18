@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Canvas 2D Stroke Threshold · Isolated Microbenchmark</title>
+<style>
+:root{color-scheme:light;font:15px/1.48 system-ui,-apple-system,"Segoe UI",sans-serif;color:#1b2838;background:#f3f6fa}
+*{box-sizing:border-box}body{margin:0}main{max-width:1270px;margin:0 auto;padding:26px 24px 60px}h1{font-size:1.9rem;letter-spacing:-.03em;margin:0 0 6px}h2{font-size:1.13rem;margin:0 0 12px}p{margin:5px 0 13px;color:#4b5d70}.eyebrow{font-size:.76rem;text-transform:uppercase;letter-spacing:.11em;color:#34669a;font-weight:750}.panel{background:#fff;border:1px solid #dce4ed;border-radius:12px;padding:20px;margin-top:16px;box-shadow:0 2px 9px #142a4209}.controls{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:end}.field{display:grid;gap:5px}label{font-size:.8rem;font-weight:700;color:#465569}select,input{border:1px solid #bac9d9;border-radius:7px;padding:9px 10px;font:inherit;background:white;color:#19283a}select{min-width:240px}input[type=number]{width:100px}button{background:#1a558d;border:0;color:white;padding:10px 16px;border-radius:7px;font:inherit;font-weight:700;cursor:pointer}button.secondary{background:#e9f0f8;color:#1b4b76}button.stop{background:#a62d40}button:disabled{opacity:.45;cursor:not-allowed}.buttons{display:flex;flex-wrap:wrap;gap:8px}.details{font-size:.86rem;color:#52667b;margin-top:12px}.status{font-variant-numeric:tabular-nums;color:#263c55;margin:12px 0 0;min-height:22px}.progress{height:8px;border-radius:20px;background:#e9eff5;overflow:hidden;margin-top:8px}.progress>div{height:100%;width:0;background:#2c85bb;transition:width .15s}.canvas-holder{overflow:auto;background:#e8eef4;border-radius:8px;border:1px solid #dbe4ee;max-height:820px}.canvas-holder canvas{width:1186px;height:791px;display:block;background:#fff}.note{font-size:.84rem;color:#607287}.plot{display:grid;gap:8px;margin:10px 0}.bar-row{display:grid;grid-template-columns:200px minmax(60px,1fr) 100px;align-items:center;gap:10px;font-size:.85rem;font-variant-numeric:tabular-nums}.bar-label{text-align:right;overflow-wrap:anywhere}.bar-track{height:20px;background:#eef2f6;border-radius:4px;overflow:hidden}.bar-fill{height:100%;background:#477db1;min-width:2px}.bar-fill.fast{background:#27a083}.bar-fill.slow{background:#c98344}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums;white-space:nowrap}th,td{padding:9px 11px;border-bottom:1px solid #e4ebf3;text-align:right}th:first-child,td:first-child{text-align:left}thead{background:#f0f5fa;color:#3b5068}tbody tr:hover{background:#f5f9fc}code{background:#eff4f9;padding:1px 4px;border-radius:3px}details{margin-top:12px;color:#485b70}summary{cursor:pointer;font-weight:700}.warn{color:#87582e}.hidden{display:none}@media(max-width:620px){main{padding:20px 12px}.panel{padding:14px}.bar-row{grid-template-columns:115px 1fr 80px;gap:6px;font-size:.76rem}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Isolated Chromium / Canvas 2D experiment</div>
+  <h1>Stroke width threshold</h1>
+  <p>No Curvature imports, optics, horizon masks, projection, or playback logic. Fixed deterministic paths. Only the selected experimental factor varies within each comparison.</p>
+  <section class="panel" aria-label="Benchmark configuration">
+    <h2>Run a controlled comparison</h2>
+    <div class="controls">
+      <div class="field"><label for="profile">Experiment</label><select id="profile">
+        <option value="threshold">A · 1 px threshold (11 widths)</option>
+        <option value="geometry">B · Straight vs polyline</option>
+        <option value="transform">C · Canvas transform vs physical width</option>
+        <option value="context">D · Context allocation hint</option>
+        <option value="scene">E · Interleaved fills + strokes</option>
+        <option value="all">All experiments</option>
+      </select></div>
+      <div class="field"><label for="warmup">Warm-up frames</label><input type="number" id="warmup" min="2" max="100" value="15"></div>
+      <div class="field"><label for="samples">Measured frames</label><input type="number" id="samples" min="10" max="500" value="90"></div>
+      <div class="field"><label for="passes">Rotated passes</label><input type="number" id="passes" min="1" max="6" value="3"></div>
+      <div class="buttons"><button id="run">Run benchmark</button><button id="stop" class="stop" disabled>Stop</button><button id="export" class="secondary" disabled>Export JSON</button></div>
+    </div>
+    <div id="environment" class="details"></div>
+    <div id="status" class="status" role="status" aria-live="polite">Ready. Keep this tab visible during measurements.</div>
+    <div class="progress"><div id="progress"></div></div>
+    <details><summary>What is actually being measured?</summary>
+      <p>Each mode draws 1,221 contours into a 1334 × 889 backing store. Polyline mode uses six segments per contour; other factors do not change the paths, count, color, opacity, or line joins. RAF gaps, JavaScript drawing time, and draw call counts are recorded independently. Modes rotate between passes to reduce order bias. The first 15 RAF callbacks (configurable) of each mode are excluded.</p>
+      <p>Mode C changes the <code>CanvasRenderingContext2D</code> transform while keeping *effective backing-store line width and path coordinates the same*. It does not change the real display DPR. To compare DPR, repeat a run after changing browser zoom or OS scaling and compare the exported <code>devicePixelRatio</code> values. Mode D uses <code>{willReadFrequently:true}</code> as a context-creation hint; this is <strong>not</strong> a guarantee of CPU rasterization. For actual backend diagnostics inspect <code>opera://gpu</code> (or <code>chrome://gpu</code>) and browser tracing.</p>
+      <p>RAF cadence may be limited by display refresh, tab scheduling, thermal state, or browser compositing. Inferred FPS is not the video presentation rate; this tool does not measure GPU work completion. An isolated test that does not reproduce the slowdown does <strong>not</strong> falsify a Curvature-specific interaction.</p>
+    </details>
+  </section>
+  <section class="panel"><h2>Canvas under test</h2><p class="note">Actual backing store: 1334 × 889 px. CSS display: 1186 × 791 px. The visible scene stays fixed for all repetitions within a mode.</p>
+    <div class="canvas-holder" id="canvas-holder"><canvas id="canvas-default" width="1334" height="889" aria-label="Benchmark drawing"></canvas><canvas id="canvas-read" width="1334" height="889" style="display:none" aria-label="Benchmark drawing with read-frequency hint"></canvas></div>
+  </section>
+  <section class="panel hidden" id="results"><h2>Measured results <span id="result-label"></span></h2><p class="note">Median requestAnimationFrame interval, lower is better. First 15 callbacks or the configured warm-up count are excluded. Compare within the same profile and pass.</p><div class="plot" id="plot"></div><div class="table-scroll"><table><thead><tr><th>Mode</th><th>Width (px)</th><th>RAF p50 (ms)</th><th>RAF p95 (ms)</th><th>Draw p50 (ms)</th><th>~ FPS*</th><th>Frames</th></tr></thead><tbody id="result-rows"></tbody></table></div><p class="note">* Reciprocal of median RAF interval, not measured displayed FPS.</p></section>
+</main>
+<script>
+(function (root) {
+  'use strict';
+  const W = 1334, H = 889, N = 1221, FILL_COUNT = 1189;
+  const THRESHOLD = [0.95, 0.99, 1, 1.005, 1.01, 1.025, 1.05, 1.075, 1.1, 1.125, 1.25];
+  const labelWidth = n => Number(n).toString();
+  function mode(width, opts = {}) {
+    const geometry = opts.geometry || 'polyline';
+    const context = opts.context || 'default';
+    const transform = opts.transform || 1;
+    const fills = !!opts.fills;
+    const id = ['w', String(width).replace('.', '_'), geometry, context, 'scale' + String(transform).replace('.', '_'), fills ? 'fills' : 'strokes'].join('-');
+    return {id, width, geometry, context, transform, fills,
+      label: labelWidth(width) + ' px' + (geometry !== 'polyline' ? ' · straight' : '') +
+        (context !== 'default' ? ' · read hint' : '') + (transform !== 1 ? ' · transform ×' + transform : '') +
+        (fills ? ' · fills' : '')};
+  }
+  function modesFor(profile) {
+    if (profile === 'threshold') return THRESHOLD.map(w => mode(w));
+    if (profile === 'geometry') return ['straight', 'polyline'].flatMap(g => [0.99, 1, 1.01, 1.125].map(w => mode(w, {geometry:g})));
+    if (profile === 'transform') return [1, 1.125].flatMap(s => [0.99, 1, 1.01, 1.125].map(w => mode(w, {transform:s})));
+    if (profile === 'context') return ['default', 'read-frequently'].flatMap(c => [0.99, 1, 1.01, 1.125].map(w => mode(w, {context:c})));
+    if (profile === 'scene') return [0.99, 1, 1.01, 1.125, 1.25].map(w => mode(w, {fills:true}));
+    if (profile === 'all') {
+      const seen = new Set();
+      return ['threshold','geometry','transform','context','scene'].flatMap(modesFor).filter(m => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+    }
+    throw Error('Unknown profile: ' + profile);
+  }
+  function geometry() {
+    let seed = 0x41c6e91a;
+    const rand = () => { seed = (Math.imul(1664525, seed) + 1013904223) >>> 0; return seed / 4294967296; };
+    const paths = [];
+    for (let i = 0; i < N; i++) {
+      const x = 70 + rand() * (W - 140), y = 70 + rand() * (H - 140);
+      const angle = rand() * Math.PI * 2, length = 18 + rand() * 52;
+      const dx = Math.cos(angle) * length, dy = Math.sin(angle) * length;
+      const pts = [];
+      for (let k = 0; k <= 6; k++) {
+        const t = k / 6, drift = Math.sin(t * Math.PI * 2) * (3 + i % 7);
+        pts.push([x + dx * t - Math.sin(angle) * drift, y + dy * t + Math.cos(angle) * drift]);
+      }
+      paths.push(pts);
+    }
+    return paths;
+  }
+  const paths = geometry();
+  function paint(ctx, m, pathData = paths) {
+    const scale = m.transform;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#fcfdff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.lineWidth = m.width / scale;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'butt';
+    let segments = 0, filled = 0;
+    for (let i = 0; i < pathData.length; i++) {
+      const points = pathData[i];
+      ctx.beginPath();
+      ctx.moveTo(points[0][0] / scale, points[0][1] / scale);
+      const selected = m.geometry === 'straight' ? [points[points.length - 1]] : points.slice(1);
+      for (const [x, y] of selected) {ctx.lineTo(x / scale, y / scale); segments++;}
+      if (m.fills && i < FILL_COUNT) {
+        ctx.fillStyle = '#dbe6f0';
+        ctx.globalAlpha = 1;
+        ctx.fill();
+        filled++;
+      }
+      ctx.strokeStyle = i % 19 < 3 ? '#bd704b' : '#000000';
+      ctx.globalAlpha = i < 33 ? 0.45 : 1;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return {strokeCalls:pathData.length, fillCalls:filled + 1, lineToCalls:segments,
+      effectiveStrokeWidthPx:m.width, assignedLineWidth:m.width / scale, transformScale:scale};
+  }
+  function percentile(values, p) {
+    const a = values.filter(Number.isFinite).sort((x,y) => x-y);
+    if (!a.length) return null;
+    return a[Math.floor((a.length-1)*p)];
+  }
+  function summary(rows) {
+    const gap = rows.map(r => r.gapMs), draw = rows.map(r => r.drawMs);
+    return {frames:rows.length, gapMs:{p50:percentile(gap,.5),p95:percentile(gap,.95),max:percentile(gap,1)},
+      drawMs:{p50:percentile(draw,.5),p95:percentile(draw,.95),max:percentile(draw,1)}};
+  }
+  function rotatedModes(modes, pass) {
+    const shift = pass % modes.length;
+    return modes.slice(shift).concat(modes.slice(0,shift));
+  }
+  function makeRunner(deps) {
+    let task = null, frameId = null;
+    function finish() {
+      const state = task;
+      if (!state) return;
+      task = null; frameId = null;
+      state.result.finishedAt = new Date().toISOString();
+      state.result.summary = {};
+      for (const m of state.modes) {
+        const rows = state.result.runs.filter(r => r.modeId === m.id).flatMap(r => r.rows);
+        state.result.summary[m.id] = summary(rows);
+      }
+      deps.completed(state.result);
+    }
+    function advanceMode(state) {
+      state.modeIndex++;
+      state.frameIndex = 0;
+      state.lastTimestamp = null;
+      if (state.modeIndex >= state.modes.length) {
+        state.modeIndex = 0;
+        state.passIndex++;
+      }
+      if (state.passIndex >= state.passes) return finish();
+      state.current = {pass:state.passIndex+1, orderInPass:state.modeIndex+1,
+        modeId:rotatedModes(state.modes,state.passIndex)[state.modeIndex].id,rows:[]};
+      state.result.runs.push(state.current);
+      deps.progress(state);
+    }
+    function onFrame(timestamp) {
+      frameId = null;
+      const state = task;
+      if (!state) return;
+      try {
+        const m = rotatedModes(state.modes,state.passIndex)[state.modeIndex];
+        const gapMs = state.lastTimestamp == null ? null : timestamp-state.lastTimestamp;
+        state.lastTimestamp = timestamp;
+        const t0 = deps.now();
+        const counts = deps.paint(m);
+        const drawMs = deps.now() - t0;
+        if (state.frameIndex >= state.warmup) {
+          state.current.rows.push({gapMs,drawMs,...counts});
+        }
+        state.frameIndex++;
+        state.doneFrames++;
+        if (state.frameIndex >= state.warmup + state.samples) advanceMode(state);
+        if (task) {
+          if (state.doneFrames % 30 === 0) deps.progress(state);
+          frameId = deps.requestFrame(onFrame);
+        }
+      } catch (err) {
+        task = null;
+        if (frameId !== null) deps.cancelFrame(frameId);
+        frameId = null;
+        deps.failed(err);
+      }
+    }
+    return {
+      start(opts) {
+        if (task) throw Error('Benchmark is already running');
+        const {warmup, samples, passes, modes} = opts;
+        if (![warmup,samples,passes].every(Number.isInteger) || warmup < 2 || samples < 10 || passes < 1 || !modes.length)
+          throw Error('Invalid benchmark parameters');
+        const result = {schema:'canvas-stroke-microbenchmark/1', createdAt:new Date().toISOString(),
+          config:{profile:opts.profile,warmupFrames:warmup,sampleFrames:samples,passes,strokePrimitives:N,
+            geometrySeed:'0x41c6e91a',widthUnits:'Canvas backing-store pixels',modes},
+          environment:opts.environment,runs:[],summary:{}};
+        task = {result,modes,warmup,samples,passes,modeIndex:-1,passIndex:0,frameIndex:0,
+          lastTimestamp:null,doneFrames:0,totalFrames:modes.length*passes*(warmup+samples),current:null};
+        advanceMode(task);
+        frameId = deps.requestFrame(onFrame);
+      },
+      cancel() {
+        if (!task) return false;
+        task = null;
+        if (frameId !== null) deps.cancelFrame(frameId);
+        frameId = null;
+        return true;
+      },
+      running() {return !!task;}
+    };
+  }
+  function init() {
+    const $ = id => document.getElementById(id);
+    const elements = {profile:$('profile'),warmup:$('warmup'),samples:$('samples'),passes:$('passes'),
+      run:$('run'),stop:$('stop'),export:$('export'),progress:$('progress'),status:$('status'),
+      result:$('results'),plot:$('plot'),rows:$('result-rows'),label:$('result-label'),environment:$('environment')};
+    const canvases = {default:$('canvas-default'),'read-frequently':$('canvas-read')};
+    const contexts = {default:canvases.default.getContext('2d'),
+      'read-frequently':canvases['read-frequently'].getContext('2d',{willReadFrequently:true})};
+    if (!contexts.default || !contexts['read-frequently']) {
+      elements.status.textContent = 'Canvas 2D context unavailable'; elements.run.disabled = true; return;
+    }
+    let lastResult = null;
+    let visibleContext = 'default';
+    function selectContext(name) {
+      if (visibleContext === name) return;
+      canvases[visibleContext].style.display = 'none';
+      canvases[name].style.display = 'block';
+      visibleContext = name;
+    }
+    function environment() {
+      return {userAgent:navigator.userAgent,devicePixelRatio:window.devicePixelRatio || 1,
+        innerWidth:window.innerWidth,innerHeight:window.innerHeight,
+        visibilityState:document.visibilityState,
+        canvas:{width:W,height:H,cssWidth:canvases[visibleContext].getBoundingClientRect().width,
+          cssHeight:canvases[visibleContext].getBoundingClientRect().height},
+        contextAttributes:Object.fromEntries(Object.entries(contexts).map(([name,ctx]) =>
+          [name,typeof ctx.getContextAttributes === 'function' ? ctx.getContextAttributes() : null])),
+        note:'willReadFrequently is a hint, not proof of a software backend; no GPU completion time was measured'};
+    }
+    function showEnvironment() {
+      elements.environment.textContent = `Browser DPR: ${window.devicePixelRatio || 1} · Canvas ${W}×${H} backing px · 1,221 contours/frame · Tab: ${document.visibilityState}`;
+    }
+    function exportReport(result) {
+      if (!result) return;
+      const file = new Blob([JSON.stringify(result,null,2)],{type:'application/json'});
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'canvas-stroke-microbenchmark-' + result.createdAt.replace(/[:.]/g,'-') + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url),1000);
+    }
+    function renderResults(report) {
+      elements.result.classList.remove('hidden');
+      elements.label.textContent = `· ${report.config.profile}`;
+      elements.plot.replaceChildren();
+      elements.rows.replaceChildren();
+      const stats = report.config.modes.map(m => ({mode:m,...report.summary[m.id]}));
+      const maximum = Math.max(...stats.map(s => s.gapMs.p50 || 0),1);
+      for (const item of stats) {
+        const ms = item.gapMs.p50;
+        const row = document.createElement('div'); row.className = 'bar-row';
+        const name = document.createElement('div');name.className='bar-label';name.textContent=item.mode.label;
+        const track = document.createElement('div');track.className='bar-track';
+        const bar = document.createElement('div');bar.className='bar-fill '+(ms<=20?'fast':ms>=45?'slow':'');
+        bar.style.width = (ms/maximum*100).toFixed(1)+'%';track.appendChild(bar);
+        const val = document.createElement('div');val.textContent=ms == null?'—':ms.toFixed(1)+' ms';
+        row.append(name,track,val);elements.plot.appendChild(row);
+        const tr=document.createElement('tr');
+        [item.mode.label,item.mode.width,ms?.toFixed(2)??'—',item.gapMs.p95?.toFixed(2)??'—',
+          item.drawMs.p50?.toFixed(2)??'—',ms? (1000/ms).toFixed(1):'—',item.frames]
+          .forEach(t=>{const td=document.createElement('td');td.textContent=String(t);tr.appendChild(td);});
+        elements.rows.appendChild(tr);
+      }
+    }
+    function setRunning(running) {
+      for (const el of [elements.profile,elements.warmup,elements.samples,elements.passes]) el.disabled=running;
+      elements.run.disabled=running; elements.stop.disabled=!running;elements.export.disabled=running||!lastResult;
+    }
+    const runner = makeRunner({
+      requestFrame:cb=>requestAnimationFrame(cb),cancelFrame:id=>cancelAnimationFrame(id),
+      now:()=>performance.now(),
+      paint(m) {selectContext(m.context);return paint(contexts[m.context],m);},
+      progress(s) {
+        elements.progress.style.width=(s.doneFrames / s.totalFrames * 100).toFixed(1)+'%';
+        const m=rotatedModes(s.modes,s.passIndex)[s.modeIndex];
+        elements.status.textContent=`Pass ${s.passIndex+1}/${s.passes} · ${s.modeIndex+1}/${s.modes.length}: ${m.label} · ${s.doneFrames}/${s.totalFrames} frames`;
+      },
+      completed(r) {
+        lastResult=r;setRunning(false);elements.progress.style.width='100%';
+        elements.status.textContent=`Complete: ${r.runs.length} runs, ${r.config.modes.length} modes, ${r.config.passes} passes. JSON downloaded.`;
+        renderResults(r);exportReport(r);
+      },
+      failed(err) {setRunning(false);elements.status.textContent='Failed: '+(err?.message||String(err));}
+    });
+    elements.run.addEventListener('click',()=>{
+      const warmup=Number(elements.warmup.value),samples=Number(elements.samples.value),passes=Number(elements.passes.value);
+      if (!Number.isInteger(warmup)||warmup<2||warmup>100||!Number.isInteger(samples)||samples<10||samples>500||
+          !Number.isInteger(passes)||passes<1||passes>6) {
+        elements.status.textContent='Choose warm-up 2–100, measured frames 10–500, passes 1–6.';return;
+      }
+      if (document.visibilityState !== 'visible') {
+        elements.status.textContent='Please keep the benchmark tab visible.';return;
+      }
+      const profile=elements.profile.value;
+      lastResult=null;elements.result.classList.add('hidden');elements.progress.style.width='0%';
+      setRunning(true);
+      try {runner.start({profile,warmup,samples,passes,modes:modesFor(profile),environment:environment()});}
+      catch(err){setRunning(false);elements.status.textContent='Failed: '+err.message;}
+    });
+    elements.stop.addEventListener('click',()=>{
+      if(runner.cancel()){setRunning(false);elements.status.textContent='Stopped. Partial runs were discarded.';}
+    });
+    elements.export.addEventListener('click',()=>exportReport(lastResult));
+    document.addEventListener('visibilitychange',()=>{
+      showEnvironment();
+      if (document.visibilityState!=='visible' && runner.running()) {
+        runner.cancel();setRunning(false);
+        elements.status.textContent='Stopped: browser tab became hidden, invalidating RAF comparisons.';
+      }
+    });
+    showEnvironment();
+    paint(contexts.default,mode(1));
+  }
+  root.CanvasStrokeMicrobenchmark = {modesFor,geometry,paint,percentile,summary,rotatedModes,makeRunner,constants:{W,H,N,FILL_COUNT}};
+  if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+</body>
+</html>
