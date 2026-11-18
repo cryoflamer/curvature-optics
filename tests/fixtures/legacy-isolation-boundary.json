@@ -3067,7 +3067,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernExperimentHistory.test.js",
-        "tests/ModernExperimentVisualHistory.test.js"
+        "tests/ModernExperimentVisualHistory.test.js",
+        "tests/ModernThumbnailPreview.test.js"
       ],
       "commonJsToolCallers": []
     },

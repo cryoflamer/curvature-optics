@@ -199,3 +199,22 @@ test('History has a persistent inspector, other galleries share the popup, Legac
   assert.doesNotMatch(hist,/inspector\.hover\(/);
   assert.doesNotMatch(old,/ModernThumbnailPreview/);
 });
+
+
+test('cover uploads decode, bound dimensions, re-encode and release temporary URLs',async()=>{
+  const thumbnail=require('../src/ui/modern/ModernExperimentThumbnail');
+  let revoked=[],canvas,drawn;
+  const doc={defaultView:{URL:{createObjectURL:()=> 'blob:cover',revokeObjectURL:url=>revoked.push(url)}},
+    createElement(tag){if(tag==='img')return {naturalWidth:2000,naturalHeight:1000,
+      set src(value){queueMicrotask(()=>this.onload());}};
+      canvas={getContext:()=>({fillRect(){},drawImage(...args){drawn=args;}}),
+        toDataURL:()=> 'data:image/jpeg;base64,YQ=='};return canvas;}};
+  assert.equal(await thumbnail.coverFromFile(doc,{type:'image/png',size:10}),'data:image/jpeg;base64,YQ==');
+  assert.deepEqual([canvas.width,canvas.height],[960,480]);assert.deepEqual(drawn.slice(1),[0,0,960,480]);
+  assert.deepEqual(revoked,['blob:cover']);
+  await assert.rejects(thumbnail.coverFromFile(doc,{type:'image/svg+xml',size:10}),/Choose a PNG/);
+  await assert.rejects(thumbnail.coverFromFile(doc,{type:'image/png',size:20000001}),/Choose a PNG/);
+  doc.createElement=()=>({set src(value){queueMicrotask(()=>this.onerror());}});
+  await assert.rejects(thumbnail.coverFromFile(doc,{type:'image/png',size:10}),/Cannot decode/);
+  assert.deepEqual(revoked,['blob:cover','blob:cover']);
+});

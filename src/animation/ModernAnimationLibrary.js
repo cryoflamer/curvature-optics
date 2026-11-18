@@ -327,6 +327,22 @@
       }catch(error){abort(error);}};
     });
   }
+  // Cover changes are metadata-only and use the same optimistic revision as rename.
+  function setCover(indexedDB,id,image,expectedRevision,now){
+    validId(id);stamp(expectedRevision);image=cover(image);
+    return transaction(indexedDB,'readwrite',function(store,finish,abort){
+      var read=store.get(id);
+      read.onsuccess=function(){try{
+        if(!read.result)throw Error('Animation Library project was deleted');
+        var old=normalize(read.result);
+        if(old.updatedAt!==expectedRevision)
+          throw Error('Animation Library project changed in another tab; reopen it before changing the cover');
+        var next=record(old.project,old.quality,id,old.createdAt,
+          Math.max(stamp(now||Date.now()),old.updatedAt+1),old.thumbnail,image);
+        store.put(next);finish(next);
+      }catch(error){abort(error);}};
+    });
+  }
   function remove(indexedDB,id){
     validId(id);
     return transaction(indexedDB,'readwrite',function(store,finish,abort){
@@ -342,5 +358,5 @@
     PORTABLE_FORMAT:PORTABLE_FORMAT,PORTABLE_VERSION:PORTABLE_VERSION,
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
     exportPortable:exportPortable,parsePortable:parsePortable,importEntries:importEntries,
-    list:list,get:get,create:create,update:update,rename:rename,remove:remove});
+    list:list,get:get,create:create,update:update,rename:rename,setCover:setCover,remove:remove});
 }));

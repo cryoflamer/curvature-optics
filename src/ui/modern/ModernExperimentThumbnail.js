@@ -85,5 +85,32 @@
       throw RangeError('Invalid experiment thumbnail');
     return {dataUrl:value.dataUrl,width:value.width,height:value.height,mode:mode};
   }
-  return Object.freeze({capture:capture,validate:valid,viewKey:viewKey});
+  // Decode only local raster images, downsample, and re-encode to remove metadata.
+  // Do not keep object URLs or the original potentially enormous source file.
+  function coverFromFile(doc,file){
+    return Promise.resolve().then(function(){
+      if(!file||!/^image\/(png|jpeg|webp)$/i.test(file.type)||!(file.size>0)||file.size>20000000)
+        throw Error('Choose a PNG, JPEG or WebP image up to 20 MB');
+      var urls=doc.defaultView.URL,url=urls.createObjectURL(file);
+      return new Promise(function(resolve,reject){
+        var image=doc.createElement('img');
+        image.onload=function(){try{
+          var w=image.naturalWidth,h=image.naturalHeight;
+          if(!(w>0&&h>0)||w*h>50000000)throw Error('Unsupported image dimensions');
+          var canvas=doc.createElement('canvas'),fit=Math.min(1,960/w,600/h);
+          canvas.width=Math.max(1,Math.round(w*fit));canvas.height=Math.max(1,Math.round(h*fit));
+          var ctx=canvas.getContext('2d');ctx.fillStyle=VIEWPORT_BACKGROUND;
+          ctx.fillRect(0,0,canvas.width,canvas.height);
+          ctx.drawImage(image,0,0,canvas.width,canvas.height);
+          var data=canvas.toDataURL('image/jpeg',.85);
+          if(data.length>MAX_DATA_LENGTH||!/^data:image\/(jpeg|png);base64,[a-z\d+/=]+$/i.test(data))
+            throw Error('Encoded cover is too large or unavailable');
+          resolve(data);
+        }catch(error){reject(error);}};
+        image.onerror=function(){reject(Error('Cannot decode cover image'));};
+        image.src=url;
+      }).finally(function(){urls.revokeObjectURL(url);});
+    });
+  }
+  return Object.freeze({capture:capture,coverFromFile:coverFromFile,validate:valid,viewKey:viewKey});
 }));

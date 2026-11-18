@@ -1494,6 +1494,9 @@
       renameStart:function(id){studioLibraryRenamingId=id;studioLibraryExpanded=true;renderStudioLibrary();},
       renameCancel:function(){studioLibraryRenamingId='';renderStudioLibrary();},
       rename:function(id,name){renameNamedAnimation(id,name);},
+      uploadCover:function(id,file){changeStudioCover(id,function(){return thumbnailApi.coverFromFile(document,file);});},
+      captureCover:function(id){changeStudioCover(id,function(){return captureStudioCover(id);});},
+      removeCover:function(id){changeStudioCover(id,function(){return null;});},
       openDemo:openBuiltInDemo,closeDemo:closeBuiltInDemo,copyDemo:copyBuiltInDemo,exportDemo:exportBuiltInDemo,
       newProject:function(){openStudioWizard();},
       save:function(){saveNamedAnimation(!!studioLibraryActive);},
@@ -1550,6 +1553,7 @@
         studioLibraryError=false;
       },
       renamed:applyStudioLibraryRename,
+      coverChanged:function(saved,current,id){applyStudioLibraryRename(saved,current,id,true);},
       saved:activateSavedStudioProject,
       deleted:detachDeletedStudioProject
     });
@@ -1610,11 +1614,35 @@
     if(actions)return actions.rename(id,name);
     studioLibraryNotice('Animation Library actions module failed to load.',true);
   }
-  function applyStudioLibraryRename(saved,current,id){
+  function changeStudioCover(id,prepare){
+    if(studioActiveDemo||studioLibraryBusy)return;
+    var actions=studioLibraryActions();
+    if(actions)return actions.setCover(id,prepare);
+  }
+  function captureStudioCover(id){
+    if(!studioLibraryActive||studioLibraryActive.id!==id||!studioPlayback||!studioPrepared||
+      !animationWorkspaceOpen||studioPlayback.status().playing||
+      studioPlaybackRenderedAt===null)
+      throw Error('Open this project, preview and pause at a rendered frame first');
+    var loading=newUiEl('ModernAnimationFrameLoadingA');
+    if(loading&&!loading.hidden)throw Error('Wait for the preview frame to finish');
+    var graphs=root.CurvatureModernAnimationGraphs;
+    var mode=studioProjects.sampleAt(studioPrepared,studioPlaybackRenderedAt).display.mode;
+    var views=[{layers:[graphs.A.Canvas]}];
+    if(mode==='compare')views.push({layers:[graphs.B.Canvas]});
+    var image=thumbnailApi.capture(document,mode,views);
+    if(!image)throw Error('Current preview cannot be captured');
+    return image.dataUrl;
+  }
+  function applyStudioLibraryRename(saved,current,id,coverOnly){
     // Keep any unsaved physical edits to the current working draft. Rename
     // updates metadata only; don't silently apply Save Changes.
     if(studioLibraryActive&&studioLibraryActive.id===id){
-      var updateDraftName=studioDraft.name===studioLibraryActive.project.name;
+      if(coverOnly&&studioLibraryActive.updatedAt!==current.updatedAt){
+        studioLibraryMessage='Cover updated; the open workspace has an older saved revision. Use Duplicate to preserve edits.';
+        studioLibraryError=true;return;
+      }
+      var updateDraftName=!coverOnly&&studioDraft.name===studioLibraryActive.project.name;
       studioLibraryActive=saved;
       if(updateDraftName)studioDraft=studioApi.edit(studioDraft,'name',saved.project.name);
       // Renaming changes the Library revision even when the draft has a
@@ -1627,7 +1655,7 @@
       var workspace=studioDraftAutosave.projectWorkspaceId(id);
       var checkpoint=studioDraftAutosave.getWorkspace(studioWorkspaces,workspace);
       if(checkpoint&&checkpoint.libraryRevision===current.updatedAt){
-        var changedName=checkpoint.draft.name===current.project.name;
+        var changedName=!coverOnly&&checkpoint.draft.name===current.project.name;
         var updated=studioDraftAutosave.checkpoint(Object.assign({},checkpoint,{
           draft:changedName?studioApi.edit(checkpoint.draft,'name',saved.project.name):checkpoint.draft,
           libraryRevision:saved.updatedAt
@@ -1646,7 +1674,8 @@
       }
     }
     studioLibraryRenamingId='';studioLibrarySelected=id;
-    studioLibraryMessage='Renamed saved animation to '+saved.project.name;
+    studioLibraryMessage=coverOnly?(saved.cover?'Updated cover for ':'Removed cover from ')+saved.project.name:
+      'Renamed saved animation to '+saved.project.name;
     studioLibraryError=false;
   }
   function studioWorkspaceEditedIds(){
@@ -2369,6 +2398,7 @@
       canvasDirectOptions:{thinOutlines:!thinOutlines||thinOutlines.checked},
       animationMode:studioPrepared.mode};
     var begun=profileNow();
+    studioPlaybackRenderedAt=null; // Failed or partial frames must not be captured.
     var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
     var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
     // Never display mixed approximate/Accurate optics in Compare when either

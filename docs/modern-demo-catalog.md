@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 3 (Studio catalog UI)**, 2026-11-18. Catalog,
+Status: **patch 3A (Project Cover Editor)**, 2026-11-18. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate built-in and personal galleries are implemented. The active next step is patch 3A (cover editor); browser acceptance remains open.
+Separate built-in and personal galleries are implemented. The active next step is patch 4 (Compare Playback); browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -166,8 +166,8 @@ record the split, and do not mark complete on implementation alone.
 | 2A — Project Lifecycle foundation | Implemented | Explicit durable copy API; optional portable cover data, shipped Soundly working cover and provenance. |
 | 2B — Project Lifecycle integration | Implemented; browser gate open | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
 | 3 — Studio Catalog UI | Implemented; browser gate open | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
-| 3A — Project Cover Editor | Next | Upload, capture current frame, replace/remove and portable round-trip for user projects. Cover-first display and thumbnail fallback are already implemented in patch 3. |
-| 4 — Compare Playback | Planned | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
+| 3A — Project Cover Editor | Implemented; browser gate open | Upload, capture current frame, replace/remove and portable round-trip for user projects. Cover-first display and thumbnail fallback are already implemented in patch 3. |
+| 4 — Compare Playback | Next | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
 | 7 — Soundly Finalization | Planned | Author final storyboard/captions and catalog presentation, verify both models, source provenance, browser/Opera smoothness, controls, copy/export/reimport; document observed accuracy limits. Tag only after CI/manual acceptance. First completed public demo milestone. |
@@ -253,3 +253,36 @@ protected Legacy references 6/6. Isolated Chromium DOM validated gallery
 controls, keyboard copying callbacks, personal cover rendering and details.
 All 13 full browser smoke cases were attempted but navigation was blocked by
 ERR_BLOCKED_BY_ADMINISTRATOR; CI and Opera acceptance are still required.
+
+### Project cover editor (patch 3A)
+
+Saved personal cards support Upload cover, Capture frame and Remove cover.
+PNG/JPEG/WebP uploads are decoded locally, bounded to 20 MB input and 50 MP,
+resized to fit 960 × 600 and re-encoded as a portable JPEG (750,000-character
+limit); a temporary object URL is released. Capture frame requires the opened
+personal project and a successfully rendered, paused preview. It captures
+the last displayed frame, even if the playback clock advanced on pause. It copies the actual scene Canvas (both A/B for Compare),
+without HUD, using the existing screenshot composition. No physical rerender.
+Removing a cover restores the normal thumbnail/placeholder fallback. Unsaved
+projects must be saved before cover editing. Built-in cards remain read-only;
+cover editing is disabled while the detached demo viewer is open.
+
+Cover changes commit immediately as metadata-only, revision-checked library
+transactions; physics, thumbnail, name and quality are not changed. Local
+workspace revision is advanced only when it matches the previous saved
+revision. Save As, copy and portable export retain the cover. Existing import
+content-deduplication is unchanged (an already present project is not overwritten).
+
+Canvas Direct is the default Studio optics choice for new drafts and built-in
+projects authored with Auto; Soundly opens and copies with Canvas Direct,
+without changing the original JSON. Explicit non-Auto authored or saved user
+choices are honored, and existing capability checks and Accurate fallback
+remain in place. No change to physical or export accuracy policies.
+
+Validation: complete Node suite 1791/1791 before the final paused-frame
+capture clarification; final focused suite 86/86 including a displayed-frame
+A/B capture test. Refactor closure 136/136, protected Legacy references 6/6,
+and both boundary checks passed. Isolated Chromium decoded and re-encoded
+Soundly's PNG and composited two real canvases. The new full-page browser smoke
+case was attempted but blocked at navigation (ERR_BLOCKED_BY_ADMINISTRATOR);
+CI/Opera acceptance is still required.

@@ -73,6 +73,19 @@
       }).catch(function(error){options.fail('Cannot rename animation: '+error.message);})
         .then(finishBusy);
     }
+    function setCover(id,prepare){
+      var api=library();if(options.busy()||!api)return;
+      var current=options.entries().find(function(entry){return entry.id===id;});
+      if(!current){options.notice('Saved animation no longer exists.',true);return;}
+      options.setBusy(true);options.render();
+      return Promise.resolve().then(prepare).then(function(image){
+        return api.setCover(indexedDB(),id,image,current.updatedAt);
+      }).then(function(saved){
+        options.coverChanged(saved,current,id);
+        return refresh();
+      }).catch(function(error){options.fail('Cannot change cover: '+error.message);})
+        .then(finishBusy);
+    }
     function save(request){
       var api=library();if(options.busy()||!api)return Promise.resolve(false);
       options.setBusy(true);options.notice('Saving animation to library…',false);
@@ -111,7 +124,7 @@
         .then(finishBusy);
     }
     return Object.freeze({refresh:refresh,exportEntries:exportEntries,
-      importFile:importFile,rename:rename,save:save,remove:remove});
+      importFile:importFile,rename:rename,setCover:setCover,save:save,remove:remove});
   }
   return Object.freeze({create:create});
 }));

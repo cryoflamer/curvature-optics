@@ -1361,3 +1361,72 @@ test('copying directly from a catalog card checkpoints user work and refreshes t
   assert.ok(ctx.studioLibraryEntries.some(e=>e.id===ctx.studioLibraryActive.id));
   assert.equal(stored.size,3);
 });
+
+
+test('cover edits are revision-checked metadata and round-trip independently of physics and thumbnail',async()=>{
+  const db=memoryIndexedDB(),catalog=require('../src/animation/ModernDemoCatalog');
+  const original=await catalog.copyToLibrary(db,'soundly',1000);
+  assert.equal(original.quality,'canvas-direct');
+  const cover='data:image/jpeg;base64,YQ==';
+  const changed=await library.setCover(db,original.id,cover,original.updatedAt,1001);
+  assert.deepEqual(changed.project,original.project);
+  assert.deepEqual(changed.thumbnail,original.thumbnail);
+  assert.equal(changed.quality,original.quality);
+  assert.equal(changed.cover,cover);
+  assert.equal(library.parsePortable(library.exportPortable([changed]))[0].cover,cover);
+  await assert.rejects(library.setCover(db,original.id,null,original.updatedAt,1002),/another tab/);
+  assert.throws(()=>library.setCover(db,original.id,'https://example.com/a.png',changed.updatedAt),/Invalid animation cover/);
+  const saved=await library.update(db,changed.project,changed.quality,changed.updatedAt,1002);
+  assert.equal(saved.cover,cover);
+  const cleared=await library.setCover(db,original.id,null,saved.updatedAt,1003);
+  assert.equal(cleared.cover,undefined);
+  assert.deepEqual(cleared.project,original.project);
+  assert.deepEqual(await library.get(db,original.id),cleared);
+  assert.match(library.parsePortable(catalog.exportDemo('soundly'))[0].cover,/^data:image\/png/);
+});
+
+test('cover controls are personal only, capture requires opened project',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const demo=require('../src/animation/ModernDemoCatalog').load()[0];
+  const project=studio.build(source(),'animation_a');
+  const entry=library.record(project,'auto',project.id,10,11,null,'data:image/png;base64,AAAA');
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',className:'',
+    appendChild(node){this.children.push(node);return node;},addEventListener(name,fn){this.listeners[name]=fn;},
+    setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section'),calls=[];
+  const walk=node=>[node,...node.children.flatMap(walk)];
+  const actions={uploadCover:(id,file)=>calls.push(['upload',id,file]),captureCover:id=>calls.push(['capture',id]),removeCover:id=>calls.push(['remove',id])};
+  ui.renderLibrary(doc,host,[entry],{demos:[demo],activeId:entry.id},actions);
+  const built=walk(host).find(n=>n['data-demo-id']==='soundly');
+  const mine=walk(host).find(n=>n['data-animation-id']===entry.id);
+  assert.ok(!walk(built).some(n=>['Upload cover','Capture frame','Remove cover'].includes(n.textContent)));
+  const input=walk(mine).find(n=>n.type==='file');input.files=[{type:'image/png'}];input.listeners.change();
+  assert.deepEqual(calls.at(-1),['upload',entry.id,input.files[0]]);
+  for(const [label,action] of [['Capture frame','capture'],['Remove cover','remove']]){
+    const button=walk(mine).find(n=>n.textContent===label);assert.equal(button.disabled,false);
+    button.listeners.click();assert.deepEqual(calls.at(-1),[action,entry.id]);
+  }
+  host.children=[];ui.renderLibrary(doc,host,[entry],{demos:[demo],activeId:null},actions);
+  assert.equal(walk(host).find(n=>n.textContent==='Capture frame').disabled,true);
+});
+
+
+test('Capture frame uses the displayed sample and both Compare canvases, never the moving clock',()=>{
+  const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
+  const body=app.slice(app.indexOf('  function captureStudioCover('),app.indexOf('  function applyStudioLibraryRename('));
+  const A={},B={},doc={},calls=[];
+  const ctx={studioLibraryActive:{id:'saved'},studioPlayback:{status:()=>({playing:false,positionMs:120})},
+    studioPrepared:{},studioPlaybackRenderedAt:100,animationWorkspaceOpen:true,
+    newUiEl:()=>({hidden:true}),root:{CurvatureModernAnimationGraphs:{A:{Canvas:A},B:{Canvas:B}}},
+    studioProjects:{sampleAt:(project,time)=>{assert.equal(time,100);return {display:{mode:'compare'}};}},
+    document:doc,thumbnailApi:{capture:(...args)=>{calls.push(args);return {dataUrl:'cover'};}}};
+  vm.runInNewContext(body,ctx);
+  assert.equal(ctx.captureStudioCover('saved'),'cover');
+  assert.equal(calls[0][0],doc);assert.equal(calls[0][1],'compare');
+  assert.equal(calls[0][2][0].layers[0],A);assert.equal(calls[0][2][1].layers[0],B);
+  assert.throws(()=>ctx.captureStudioCover('other'),/Open this project/);
+  ctx.studioPlaybackRenderedAt=null;
+  assert.throws(()=>ctx.captureStudioCover('saved'),/Open this project/);
+  ctx.studioPlaybackRenderedAt=100;ctx.newUiEl=()=>({hidden:false});
+  assert.throws(()=>ctx.captureStudioCover('saved'),/Wait for the preview/);
+});

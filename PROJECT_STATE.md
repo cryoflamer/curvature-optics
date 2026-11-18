@@ -1,3 +1,12 @@
+## Modern Demo Catalog — project cover editor (3A)
+
+Personal saved projects now support uploading/replacing a bounded raster cover,
+capturing a paused rendered frame and removing the cover independently of their
+physical thumbnail. Changes use optimistic metadata revisions and preserve
+working edits; built-in originals remain read-only. Soundly's authored Auto
+preview resolves to Canvas Direct on open/copy; original JSON and explicit
+user quality choices are unchanged. Browser acceptance remains open.
+
 ## Modern Demo Catalog — Studio catalog UI (3)
 
 Animation Library now separates Built-in Demos and My Projects into labelled
@@ -9,13 +18,13 @@ backup selection. Details still inspect physical data. No editable actions on
 built-ins; browser acceptance remains open.
 
 > **Current roadmap — Modern built-in demonstrations (2026-11-18):**
-> Patches 0, 1, 2A, 2B and 3 implemented; see
+> Patches 0, 1, 2A, 2B, 3 and 3A implemented; see
 > [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
 > Soundly: 9 frames, 59.1 s, spline, Globe/vacuum Scene; Compare reference
 > compatibility was previously validated, synchronized playback is not yet
 > verified. Catalog loading requires no IndexedDB or fetch. Working cover
 > rights remain unverified. CI/Opera browser gate is open.
-> **NEXT: patch 3A — project cover editor.**
+> **NEXT: patch 4 — Compare Playback.**
 > User reported green CI after the obsolete profiler-test cleanup; tag
 > relocation has not been independently verified. Stage 5D remains deferred;
 > extreme fallback and measured FPS remain open. The Canvas Direct notes

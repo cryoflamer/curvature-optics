@@ -72,7 +72,7 @@
           return Object.assign({},frame,{sourceSnapshotId:null});
         })}));
         return deepFreeze({id:entry.id,asset:entry.asset,project:project,
-          cover:entry.cover,quality:item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
+          cover:entry.cover,quality:item.quality==='auto'?'canvas-direct':item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
           updatedAt:item.updatedAt});
       }catch(error){
         throw Error('Built-in demo '+entry.id+' ('+entry.asset+'): '+error.message);

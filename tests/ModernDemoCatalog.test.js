@@ -25,7 +25,8 @@ test('shipped Soundly is the original export, with its complete camera trajector
   assert.equal(demo.id,'soundly');
   assert.notEqual(demo.id,demo.project.id);
   assert.deepEqual(demo.project,library.parsePortable(source)[0].project);
-  assert.equal(demo.quality,'auto');
+  assert.equal(demo.quality,'canvas-direct');
+  assert.equal(library.parsePortable(source)[0].quality,'auto');
   assert.equal(demo.project.keyframes.length,9);
   assert.equal(demo.project.interpolation,'spline');
   assert.equal(demo.project.baseExperiment.display.mode,'scene');
@@ -148,4 +149,12 @@ test('built-in export uses portable user format and preserves authored settings 
   assert.match(item.cover,/^data:image\/png;base64,/);
   assert.equal(item.id,undefined);assert.equal(item.readOnly,undefined);
   assert.throws(()=>catalog.exportDemo('missing'),/Unknown built-in demo/);
+});
+
+
+test('built-in Auto defaults to Canvas Direct without overwriting explicitly authored alternatives',()=>{
+  for(const quality of ['auto','canvas-direct','fast','accurate','effective-radius']){
+    const data=cloneSource();data.animations[0].quality=quality;
+    assert.equal(parse([soundly],()=>JSON.stringify(data))[0].quality,quality==='auto'?'canvas-direct':quality);
+  }
 });

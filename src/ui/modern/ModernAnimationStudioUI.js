@@ -549,6 +549,22 @@
         var rename=button(doc,'Rename','Rename saved animation '+p.name,function(){actions.renameStart(entry.id);});
         rename.disabled=!!options.busy;controls.appendChild(rename);
 
+        if(actions.uploadCover){
+          var input=el(doc,'input');input.type='file';input.accept='image/png,image/jpeg,image/webp';
+          input.hidden=true;input.setAttribute('aria-label','Cover image for '+p.name);
+          input.addEventListener('change',function(){
+            var file=input.files&&input.files[0];if(file)actions.uploadCover(entry.id,file);
+            input.value='';
+          });
+          var upload=button(doc,'Upload cover','Choose or replace a project cover',function(){input.click();});
+          upload.disabled=!!options.busy||!!options.activeDemo;controls.appendChild(upload);controls.appendChild(input);
+          var capture=button(doc,'Capture frame','Use the current paused preview frame as cover',function(){actions.captureCover(entry.id);});
+          capture.disabled=!!options.busy||!!options.activeDemo||!editing;controls.appendChild(capture);
+          if(entry.cover){
+            var clear=button(doc,'Remove cover','Remove custom cover and show the saved thumbnail',function(){actions.removeCover(entry.id);});
+            clear.disabled=!!options.busy||!!options.activeDemo;controls.appendChild(clear);
+          }
+        }
         card.appendChild(controls);
       }
       var remove=libraryDelete(doc,'Delete saved animation '+p.name,function(){actions.remove(entry.id);});

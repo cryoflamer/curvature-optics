@@ -237,6 +237,41 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(demo).not_to_have_class(re.compile('is-selected'))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_personal_cover_editor_and_default_demo_optics(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        demo = library.locator('[data-demo-id="soundly"]')
+        optics = self.page.locator('#ModernAnimationPlaybackOptics')
+        demo.get_by_text('Open demo', exact=True).click()
+        expect(optics).to_have_value('canvas-direct')
+        demo.get_by_text('Create copy', exact=True).click()
+        personal = library.locator('[data-animation-id]')
+        expect(personal).to_have_count(1)
+        expect(optics).to_have_value('canvas-direct')
+        expect(personal.get_by_text('Remove cover', exact=True)).to_be_enabled()
+        original = personal.locator('.modern-animation-library-cover-image').get_attribute('src')
+        personal.get_by_text('Remove cover', exact=True).click()
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_count(0)
+        personal.locator('input[type=file]').set_input_files(str(ROOT / 'demos/modern/covers/soundly.png'))
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', re.compile('^data:image/jpeg;base64,'))
+        expect(personal.get_by_text('Capture frame', exact=True)).to_be_enabled()
+        # Wait for the initial paused preview to complete before capturing.
+        expect(self.page.locator('#ModernAnimationFrameLoadingA')).to_be_hidden(timeout=30000)
+        personal.get_by_text('Capture frame', exact=True).click()
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', re.compile('^data:image/(webp|png);base64,'))
+        self.assertTrue(self.page.evaluate("""async () => {
+            const rows = await CurvatureModernAnimationLibrary.list(indexedDB);
+            return rows.length === 1 && rows[0].quality === 'canvas-direct' &&
+              /^data:image\\/(webp|png);base64,/.test(rows[0].cover);
+        }"""))
+        self.assertIsNotNone(original)
+        expect(demo.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', 'demos/modern/covers/soundly.png')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_navigation_and_studio_bootstrap(self):
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
