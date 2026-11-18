@@ -7,7 +7,7 @@
   var protocol='curvature-demos-v1';
   var frame,ready=false,started=false,selected='TransLine';
   var directRuntime=null,unsubscribeDirect=null,directGeneration=0;
-  var names=[],lastBenchmarkReport=null,benchmarkRunning=false,telemetryConnected=false;
+  var names=[],telemetryConnected=false;
   function el(id){return root.document.getElementById(id);}
   function status(message,kind){
     var node=el('ModernDemoStatus');if(!node)return;
@@ -16,10 +16,8 @@
   }
   function enable(available){
     ['ModernDemoPlay','ModernDemoPrev','ModernDemoNext','ModernDemoReset'].forEach(function(id){
-      var node=el(id);if(node)node.disabled=!available||benchmarkRunning;
+      var node=el(id);if(node)node.disabled=!available;
     });
-    var benchmark=el('ModernDemoBenchmarkRun');
-    if(benchmark)benchmark.disabled=!available||!directRuntime||!telemetryConnected||benchmarkRunning;
   }
   function send(command,name){
     if(!ready||!frame)return;
@@ -80,52 +78,6 @@
       'Connected · waiting for Legacy draws.'):'Connected · animation paused.','connected');
     var draw=el('ModernDemoDrawFps');
     if(draw)draw.textContent=metric(data.drawFps,1);
-    var gap=el('ModernDemoDrawGap');
-    if(gap)gap.textContent=metric(data.drawGapMs&&data.drawGapMs.p50,1)+' ms';
-    var cpu=el('ModernDemoDrawCpu');
-    if(cpu)cpu.textContent=metric(data.drawCpuMs&&data.drawCpuMs.p50,1)+' ms';
-    var raf=el('ModernDemoRafGap');
-    if(raf)raf.textContent=metric(data.rafGapMs&&data.rafGapMs.p50,1)+' ms';
-  }
-  function benchmarkStatus(message){
-    var node=el('ModernDemoBenchmarkStatus');if(node)node.textContent=message;
-  }
-  function downloadBenchmark(report){
-    if(!report||report.schema!=='curvature-legacy-demo-benchmark/1')return;
-    var blob=new root.Blob([JSON.stringify(report,null,2)],{type:'application/json'});
-    var url=root.URL.createObjectURL(blob);
-    var link=root.document.createElement('a');
-    link.href=url;
-    link.download='curvature-legacy-benchmark-'+report.createdAt.replace(/[:.]/g,'-')+'.json';
-    link.style.display='none';
-    root.document.body.appendChild(link);
-    try{link.click();}finally{
-      root.document.body.removeChild(link);
-      if(typeof root.setTimeout==='function')root.setTimeout(function(){root.URL.revokeObjectURL(url);},1000);
-      else root.URL.revokeObjectURL(url);
-    }
-  }
-  function onBenchmarkStarted(){
-    benchmarkRunning=true;enable(ready);
-    var picker=el('ModernDemoSelect');if(picker)picker.disabled=true;
-    var run=el('ModernDemoBenchmarkRun'),cancel=el('ModernDemoBenchmarkCancel');
-    if(run)run.disabled=true;
-    if(cancel){cancel.hidden=false;cancel.disabled=false;}
-    benchmarkStatus('Recording 10 seconds of actual Legacy draws…');
-  }
-  function onBenchmarkEnd(cancelled,report){
-    benchmarkRunning=false;enable(ready);
-    var picker=el('ModernDemoSelect');if(picker)picker.disabled=!ready;
-    var run=el('ModernDemoBenchmarkRun'),cancel=el('ModernDemoBenchmarkCancel');
-    if(run)run.disabled=!ready||!telemetryConnected;
-    if(cancel)cancel.hidden=true;
-    if(cancelled){benchmarkStatus('Recording cancelled.');return;}
-    if(!report||report.schema!=='curvature-legacy-demo-benchmark/1')return;
-    lastBenchmarkReport=report;
-    var download=el('ModernDemoBenchmarkDownload');if(download)download.hidden=false;
-    benchmarkStatus('Recorded '+report.drawCount+' Legacy draws in '+
-      metric(report.elapsedMs/1000,1)+' seconds · '+metric(report.drawFps,1)+' draw FPS. JSON exported.');
-    downloadBenchmark(report);
   }
   function onPerformanceStatus(data){
     if(data.state==='connected'){
@@ -144,9 +96,6 @@
     else if(data.type==='state')onState(data);
     else if(data.type==='performance')onPerformance(data);
     else if(data.type==='performance-status')onPerformanceStatus(data);
-    else if(data.type==='benchmark-started')onBenchmarkStarted();
-    else if(data.type==='benchmark-cancelled')onBenchmarkEnd(true);
-    else if(data.type==='performance-report')onBenchmarkEnd(false,data.report);
   }
   function ensureTelemetry(candidate,generation){
     function current(){return generation===directGeneration&&directRuntime===candidate;}
@@ -157,7 +106,6 @@
       telemetryConnected=false;
       enable(ready);
       telemetryStatus(message,'error');
-      benchmarkStatus('Legacy FPS telemetry unavailable. Benchmark cannot record until connected.');
     }
     if(attached()){
       telemetryConnected=true;
@@ -199,13 +147,8 @@
     directRuntime=null;
     ready=false;
     names=[];
-    benchmarkRunning=false;
     telemetryConnected=false;
     telemetryStatus('Connecting Legacy FPS telemetry…');
-    lastBenchmarkReport=null;
-    var download=el('ModernDemoBenchmarkDownload');if(download)download.hidden=true;
-    var cancel=el('ModernDemoBenchmarkCancel');if(cancel)cancel.hidden=true;
-    benchmarkStatus('Start Soundly, then record a 10-second benchmark.');
     selected='TransLine';
     enable(false);
     var picker=el('ModernDemoSelect');if(picker)picker.disabled=true;
@@ -252,14 +195,6 @@
     });
     var picker=el('ModernDemoSelect');
     if(picker){picker.disabled=true;picker.addEventListener('change',function(){changeDemo(picker.value);});}
-    var run=el('ModernDemoBenchmarkRun');
-    if(run)run.addEventListener('click',function(){send('benchmark-start');});
-    var cancel=el('ModernDemoBenchmarkCancel');
-    if(cancel)cancel.addEventListener('click',function(){send('benchmark-cancel');});
-    var download=el('ModernDemoBenchmarkDownload');
-    if(download)download.addEventListener('click',function(){
-      if(lastBenchmarkReport)downloadBenchmark(lastBenchmarkReport);
-    });
     enable(false);
   }
   function activate(){

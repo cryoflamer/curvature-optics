@@ -29,8 +29,6 @@ function rendererHarness(target='60'){
     studioPlaybackFps:target,studioPlaybackLastPaint:-Infinity,studioPlaybackNextDue:-Infinity,
     studioPlaybackRenderedAt:null,
     studioPlaybackFpsMeter:meter,studioPlaybackControlsApi:controls,
-    studioPlaybackProfileEnabled:false,studioPlaybackProfiler:null,
-    studioPlaybackExperiment:null,
     studioPlaybackQuality:'canvas-direct',studioPlaybackDetail:'full',
     studioPreviewApi:{create:()=>fakeRenderer},studioPreviewRenderer:null,
     studioQualityAudit:null,studioLastParity:null,studioLastQualityFrame:null,
@@ -39,7 +37,7 @@ function rendererHarness(target='60'){
     profileNow:()=>time,newUiEl:node,attachStudioPreviewGraphs:()=>true,
     syncStudioCameraHud(){},studioFrameLoading(){}
   });
-  const start=app.indexOf('  function renderStudioPlaybackSample(force,benchmark){');
+  const start=app.indexOf('  function renderStudioPlaybackSample(force){');
   const end=app.indexOf('  function syncStudioQualitySummary(){',start);
   assert.ok(start>0&&end>start,'extract real renderer orchestration');
   vm.runInContext(app.slice(start,end)+'\nthis.paint=renderStudioPlaybackSample;',context);
@@ -119,19 +117,4 @@ test('preview FPS belongs to browser preferences and is independent of PNG/video
   assert.match(app,/studioPlaybackFps:studioPlaybackFps/);
   assert.doesNotMatch(app,/studioDraft\.studioPlaybackFps\s*=/);
   assert.doesNotMatch(app,/studioPrepared\.studioPlaybackFps\s*=/);
-});
-
-test('profiled preview returns measurable stages without changing the sample or pacing',()=>{
-  const h=rendererHarness('30');
-  h.context.studioPlaybackProfileEnabled=true;
-  h.context.studioPlaybackProfiler={};
-  h.frame(1000);
-  const report=h.context.paint(true);
-  assert.equal(report.painted,true);
-  assert.ok(report.rendererMs>=14);
-  assert.ok(report.prepareMs>=0&&report.postMs>=0);
-  assert.equal(report.A,null,'missing backend timings stay unknown, never invented');
-  assert.equal(h.paints.length,2);
-  h.context.studioPlaybackProfileEnabled=false;
-  assert.equal(h.context.paint(true),undefined);
 });

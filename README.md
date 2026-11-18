@@ -850,91 +850,28 @@ not a project keyframe or Library property. PNG/video export has its **own**
 independent fixed FPS selection. Actual Opera frame rate and presentation
 smoothness still require a browser check.
 
-The **Playback profiler** disclosure (off by default) enables live measurements
-only while Play is running. Its recent p50/p95 numbers separate browser RAF
-and paint-to-paint gaps from measured main-thread callback time, sample and
-preview preparation, renderer, HUD/quality-audit/diagnostics, Playback UI sync,
-and scheduling/autosave. Canvas Direct also shows its existing geometry,
-projection/clipping and Canvas 2D call timings. The opt-in **Playback experiment**
-selector is available only when the profiler is enabled and Canvas Direct is
-selected. **Normal** moves and paints the camera; **Compute only** advances the
-playhead and samples its camera/scene without setting up graphs or drawing
-Canvas (the prior image stays visible); **Canvas replay** paints the same
-captured camera/scene on successive RAF callbacks while the timeline still
-advances. Switching experiment modes clears the measurement window; Play, Seek
-and workspace changes invalidate frozen samples. The Actual FPS indicator
-counts real paints only, so Compute only reports sample-to-sample gaps in the
-profiler instead. Diagnostic modes are temporary, never saved in JSON or export,
-and must not be interpreted as browser compositor timings. To isolate the
-slow Soundly segment, compare the three modes at the same Preview FPS and
-viewport size; changing FPS/scene complexity between runs makes the results
-harder to interpret. Enable it, reproduce the slow
-Soundly segment, and compare **paint-to-paint gap** with **RAF callback CPU**;
-these are deliberately distinct measurements. Canvas 2D call time is not GPU
-rasterization/compositing time, and separate p95 values are not additive.
-The profiler never changes optics, frame cap or export; turning it off clears
-its rolling measurements. Browser measurements remain necessary for conclusions.
+#### Canvas Direct stroke-width optimization
 
-### One-click Canvas Direct benchmark
+The browser-side Canvas Direct slowdown was isolated to the rasterization of
+real outlines. In the reference Opera/Chromium scene, moving camera frames used
+approximately 1,400 `stroke()` calls; the synchronized callback cost was about
+10 ms, yet the RAF interval rose from approximately 15–16 ms at widths up to
+**1.0 physical backing-store pixel** to around 70 ms at **1.125 pixels**.
+Path-only and empty-stroke controls were significantly faster, while
+projections without Canvas paint remained inexpensive. These results do not
+identify a specific Skia implementation bug or measure presented video FPS.
 
-Under **Animation Studio → Playback profiler → Run benchmark**, a separate,
-opt-in diagnostic runner pauses the live playhead and freezes one Scene/Compare
-sample at its current position. **Normal (fixed sample)** repeats the full
-preview+HUD/quality/UI path. **Canvas only** repeats the physical Canvas Direct
-renderer without Playback DOM updates. **DOM only** updates the HUD, quality
-report and Playback UI using a pre-rendered result, without repainting the main
-Canvas. **Bitmap replay** redraws an offscreen copy via `drawImage` (and the
-Compare B image if present). **Compute only** re-samples the fixed playhead
-without rendering. These modes are intentionally different from the earlier
-*live* Compute/Replay experiments.
+**Thin outlines · max 1 canvas pixel** is a display-only option when Canvas
+Direct is selected. It caps the authored outline width in backing-store pixels;
+geometry, fills, horizon masking, ordering, and scene/project data are unchanged.
+Turn it off to see the original authored stroke widths. The switch is off by
+default and does not change frame/video exports. During live Playback, Actual
+FPS reports completed paints and Auto requests every available browser RAF.
 
-One click runs three passes through all five modes in rotated order: each mode
-has 30 unmeasured warmup RAF callbacks, then 120 measured callbacks. A visible
-progress counter and **Cancel benchmark** are provided. On completion, a single
-`curvature-playback-benchmark-*.json` is automatically downloaded and can be
-retrieved via **Download last JSON**. It includes per-run samples and p50/p95
-for RAF scheduling gaps, callback CPU time and available Canvas Direct timings,
-plus canvas backing/CSS dimensions, DPR, browser user agent and render settings.
-The controls and playback state are restored on completion, cancellation, or
-error; the runner does not edit experiment keyframes, save a project, or change
-PNG/video export quality. Do not mistake synchronous Canvas API timings for
-deferred browser raster/composition time. Run from a representative slow frame
-with Canvas Direct selected and avoid changing the browser window mid-run.
-
-### One-click Canvas Direct pipeline diagnosis
-
-With an animation prepared in **Animation Studio**, choose **Canvas Direct** and
-open **Canvas Direct · frame timing**. Click **Run 3-mode pipeline diagnosis ·
-auto-export** once; there is no need to enable the separate input/RAF recording
-checkbox, move the slider, or press Play. The new diagnostic pauses Playback,
-runs two rotated passes through three modes (10 warmup + 50 measured RAF
-callbacks per mode), restores the original playhead/playing state, and downloads
-one `curvature-playback-benchmark-*.json` report automatically. Progress and a
-brief p50/p95 comparison appear in the same panel. **Cancel diagnosis** restores
-Playback without saving partial data. The renderer's normal quality, optics,
-geometry, export, and authored scene are not changed; the diagnostic locally
-forces fills, strokes and horizon mask on, restoring the user's display toggles.
-
-- **Full motion**: sample the moving camera/scene, compute the Canvas Direct
-  geometry/projection/clipping, and issue the usual Canvas drawing commands.
-- **Projection only**: use the *same* sampled moving trajectory and the same
-  geometry/projection/clipping, but suppress Canvas paint commands, guides and
-  decorations; this is **not** the Playback profiler's earlier lightweight
-  playhead-only `Compute only` mode.
-- **Frozen redraw**: repeatedly draw one fixed scene/camera with the normal
-  Canvas Direct renderer; geometry is cached, while projection and painting
-  still run. This is **not** a bitmap blit.
-
-The report contains RAF gaps, total synchronous callback time, renderer, mesh,
-projection and Canvas CPU timings and operation counts for each mode. A large
-gap in Full/Frozen but not Projection only suggests graphics-pipeline pressure,
-not proof of a specific `stroke()` defect. A similar gap across all modes
-suggests a different scheduling source. **RAF callback intervals are not
-presented-frame FPS**, and Canvas API call time excludes deferred rasterization.
-This test intentionally uses an independent unthrottled RAF benchmark clock
-rather than the normal Play timer, so the FPS Preview selection is recorded but
-not enforced. Test in Opera with the same viewport; compare the resulting JSON
-before making renderer or scheduling changes.
+The temporary Canvas stroke test page, fixed/moving benchmark runners,
+frame-timing controls and diagnostic rendering modes were removed after the
+optimization was verified in real Playback (up to about 160 FPS with Auto in the
+reported environment). The historical commits preserve the experiments.
 
 ### Animation performance and pixel parity
 

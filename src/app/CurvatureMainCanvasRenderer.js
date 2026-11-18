@@ -133,8 +133,7 @@
       try{
         ctx.setTransform(1,0,0,1,0,0);
         direct=directSession.paint(g.Canvas,camera,m,options);
-        if(decorations&&!options.deferDecorations&&
-           !(options.canvasDirectDiagnostics&&options.canvasDirectDiagnostics.skipCanvasPaint))
+        if(decorations&&!options.deferDecorations)
           decorations.draw(g.Canvas,m,camera,
           {showCaptions:options.showCaptions!==false,captionMode:options.captionMode,
            includeGeometrySummary:options.includeGeometrySummary===true});
@@ -152,10 +151,7 @@
           paintMs:dt.projectionMs+dt.canvasMs,decorationsMs:directEnd-directStart-dt.totalMs,
           geometryMs:dt.geometryMs,strokeCalls:direct.strokeCalls},
         directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
-          strokePrimitives:direct.strokePrimitives,
-          strokeStyleCounts:direct.strokeStyleCounts,strokeWidthRange:direct.strokeWidthRange,
-          horizonMasks:direct.horizonMasks,canvasCalls:direct.canvasCalls,
-          geometryReused:direct.geometryReused},
+          horizonMasks:direct.horizonMasks,geometryReused:direct.geometryReused},
         decorationCamera:options.deferDecorations?camera:null,
         decorationPhysicalGuides:options.deferDecorations?[]:null,
         warning:'Experimental Canvas Direct: straight rays and local effective radius;'+

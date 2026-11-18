@@ -154,59 +154,10 @@
         }
         return result;
       }
-      // Diagnostics affect only Canvas Direct presentation; no scene state is changed.
-      var diagnostic=options.canvasDirectDiagnostics||{};
-      var drawFills=diagnostic.fills!==false;
-      var drawStrokes=diagnostic.strokes!==false;
-      var drawMask=diagnostic.horizonMask!==false;
-      // Benchmark-only: execute identical mesh preparation, camera projection,
-      // clipping and horizon classification, but issue no Canvas draw commands.
-      var skipCanvasPaint=diagnostic.skipCanvasPaint===true;
-      // These variants are only for opt-in benchmarks. No live
-      // playback state or authored geometry is changed.
-      var strokeMode=diagnostic.strokeMode||'normal';
-      if(!['normal','path-only','empty-stroke','simple','batched','opaque','black','unit-width','miter'].includes(strokeMode))
-        throw RangeError('Unknown Canvas Direct stroke diagnostic mode');
-      // Fixed Canvas backing-pixel width for the opt-in width sweep only.
-      // Keep the authored viewport width intact for all ordinary rendering.
-      var widthOverride=diagnostic.strokeWidth;
-      var thinOutlines=diagnostic.thinOutlines===true;
-      if(widthOverride!==undefined&&(thinOutlines||strokeMode!=='normal'||
-        typeof widthOverride!=='number'||!Number.isFinite(widthOverride)||
-        widthOverride<0.01||widthOverride>64))
-        throw RangeError('Invalid Canvas Direct diagnostic stroke width');
-      var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0,strokePrimitives=0;
-      // Submitted strokes only. These counters show how many original paths
-      // each single-factor diagnostic actually changes on the chosen frame.
-      var strokeStyleCounts={translucent:0,nonUnitWidth:0,nonBlack:0,roundJoin:0};
-      var strokeWidthRange={minPx:null,maxPx:null};
-      function countStrokeStyle(color,width,alpha){
-        strokeWidthRange.minPx=strokeWidthRange.minPx===null?width:Math.min(strokeWidthRange.minPx,width);
-        strokeWidthRange.maxPx=strokeWidthRange.maxPx===null?width:Math.max(strokeWidthRange.maxPx,width);
-        if(alpha<1)strokeStyleCounts.translucent++;
-        if(Math.abs(width-1)>1e-6)strokeStyleCounts.nonUnitWidth++;
-        if(!/^(?:black|#000|#000000|rgb\(0,\s*0,\s*0\))$/i.test(String(color).trim()))
-          strokeStyleCounts.nonBlack++;
-        if(strokeMode!=='simple'&&strokeMode!=='miter')strokeStyleCounts.roundJoin++;
-      }
-      // Count calls issued by this painter, not the browser's deferred GPU work
-      // or higher-level decorations. No Canvas prototype interception is used.
-      var canvasCalls={beginPath:0,moveTo:0,lineTo:0,closePath:0,
-        fill:0,stroke:0,clip:0,clearRect:0,fillRect:0,drawImage:0};
-      var projectionMs=0,canvasMs=0,batch=null;
-      // Only consecutive contours with matching paint state may share a path.
-      // Flush before EVERY fill to preserve the existing painter-layer order;
-      // batching across a fill or horizon mask would alter occlusion.
-      function flushBatch(){
-        if(!batch)return;
-        ctx.globalAlpha=batch.alpha;
-        ctx.strokeStyle=batch.color;
-        ctx.lineWidth=batch.width;
-        ctx.stroke();canvasCalls.stroke++;strokes++;
-        countStrokeStyle(batch.color,batch.width,batch.alpha);
-        ctx.globalAlpha=1;
-        batch=null;
-      }
+      // Display-only cap in backing-store pixels; authored scene data stays intact.
+      var thinOutlines=!!(options.canvasDirectOptions&&options.canvasDirectOptions.thinOutlines);
+      var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0;
+      var projectionMs=0,canvasMs=0;
       function drawPrimitive(p,role,far){
         var start=clock(),style=p.style||{},mode=p.type==='line'?1:(p.mode==null?1:p.mode);
         var sourcePoints=p.points,local=role!=='objects';
@@ -219,13 +170,13 @@
           var first=pts[0],last=pts[pts.length-1];
           if(first.x===last.x&&first.y===last.y&&first.z===last.z)pts.pop();
         }
-        var fillPoints=(drawFills||role==='occlusion')&&polygon&&(mode&2)?nearPolygon(pts):null;
+        var fillPoints=polygon&&(mode&2)?nearPolygon(pts):null;
         var fillPixels=fillPoints&&fillPoints.length>=3?
           clipScreenPolygon(fillPoints.map(screen),canvas.width,canvas.height):null;
         // Object outlines retain their original edges; near-plane closing
         // edges created for a filled polygon are never invented as strokes.
         var lines=[];
-        if(drawStrokes&&(mode&1)){var count=polygon?pts.length:pts.length-1;
+        if(mode&1){var count=polygon?pts.length:pts.length-1;
           for(var j=0;j<count;j++){
             var a=pts[j],b=pts[(j+1)%pts.length];
             if(a.z<=c.near&&b.z<=c.near)continue;
@@ -243,59 +194,29 @@
         }
         projectionMs+=clock()-start;
         if(!fillPixels&&!lines.length)return;
-        if(skipCanvasPaint){
-          projected+=pts.length;drawn+=lines.length;return;
-        }
         start=clock();
         var alpha=style.alpha==null?1:style.alpha;
         if(fillPixels){
-          flushBatch();
           ctx.globalAlpha=alpha;
-          ctx.fillStyle=style.fill||'white';ctx.beginPath();canvasCalls.beginPath++;
-          ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);canvasCalls.moveTo++;
+          ctx.fillStyle=style.fill||'white';ctx.beginPath();
+          ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);
           for(var k=1;k<fillPixels.length;k++){
-            ctx.lineTo(fillPixels[k][0],fillPixels[k][1]);canvasCalls.lineTo++;
+            ctx.lineTo(fillPixels[k][0],fillPixels[k][1]);
           }
-          ctx.closePath();canvasCalls.closePath++;
-          ctx.fill();canvasCalls.fill++;fillCalls++;
+          ctx.closePath();
+          ctx.fill();fillCalls++;
         }
         if(lines.length){
-          strokePrimitives++;
-          // Change exactly one authored stroke property in each style mode;
-          // simple retains all four changes as a positive control.
-          var strokeColor=(strokeMode==='simple'||strokeMode==='black')?'#000':
-            (style.stroke||(far?'#666':'black'));
-          var strokeWidth=widthOverride!==undefined?widthOverride:
-            (strokeMode==='simple'||strokeMode==='unit-width')?1:
-            viewport.lineWidth(style.lineWidth,camera);
-          if(thinOutlines)strokeWidth=Math.min(strokeWidth,1);
-          var strokeAlpha=(strokeMode==='simple'||strokeMode==='opaque')?1:alpha;
-          if(strokeMode==='batched'){
-            if(batch&&(batch.color!==strokeColor||batch.width!==strokeWidth||batch.alpha!==strokeAlpha))
-              flushBatch();
-            if(!batch){
-              batch={color:strokeColor,width:strokeWidth,alpha:strokeAlpha};
-              ctx.beginPath();canvasCalls.beginPath++;
-            }
-          }else{
-            ctx.globalAlpha=strokeAlpha;
-            ctx.strokeStyle=strokeColor;
-            ctx.lineWidth=strokeWidth;
-            ctx.beginPath();canvasCalls.beginPath++;
-          }
+          ctx.globalAlpha=alpha;
+          ctx.strokeStyle=style.stroke||(far?'#666':'black');
+          var width=viewport.lineWidth(style.lineWidth,camera);
+          ctx.lineWidth=thinOutlines?Math.min(width,1):width;
+          ctx.beginPath();
           for(var e=0;e<lines.length;e++){
-            ctx.moveTo(lines[e][0][0],lines[e][0][1]);canvasCalls.moveTo++;
-            ctx.lineTo(lines[e][1][0],lines[e][1][1]);canvasCalls.lineTo++;
+            ctx.moveTo(lines[e][0][0],lines[e][0][1]);
+            ctx.lineTo(lines[e][1][0],lines[e][1][1]);
           }
-          // Empty-stroke preserves clipping, submitted path commands and the
-          // number/style of stroke() calls, but clears the outline just before
-          // stroke(); only fill paths produce actual pixels.
-          if(strokeMode==='empty-stroke'){ctx.beginPath();canvasCalls.beginPath++;}
-          // Path-only leaves precisely the final Canvas stroke() invocation out.
-          if(strokeMode!=='path-only'&&strokeMode!=='batched'){
-            ctx.stroke();canvasCalls.stroke++;strokes++;
-            countStrokeStyle(strokeColor,strokeWidth,strokeAlpha);
-          }
+          ctx.stroke();strokes++;
         }
         ctx.globalAlpha=1;canvasMs+=clock()-start;
         projected+=pts.length;drawn+=lines.length;
@@ -324,18 +245,12 @@
       // Painter order: far objects, one white disk, surface/horizon guides,
       // then near objects. Guides are never occlusion masks.
       var setupEnd=clock();
-      if(!skipCanvasPaint){
-        ctx.clearRect(0,0,canvas.width,canvas.height);canvasCalls.clearRect++;
-        ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);canvasCalls.fillRect++;
-      }
-      // Reset the join on every frame: an opt-in benchmark must not leave a
-      // changed Canvas state behind for ordinary animation rendering.
-      if(!skipCanvasPaint){
-        ctx.lineJoin=(strokeMode==='simple'||strokeMode==='miter')?'miter':'round';
-        ctx.lineCap='butt';
-      }
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
+      // Reset state after other renderers use this Canvas.
+      ctx.lineJoin='round';ctx.lineCap='butt';
       layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
-      if(drawMask&&globe&&layers.some(function(layer){return layer.far.length;}))mask();
+      if(globe&&layers.some(function(layer){return layer.far.length;}))mask();
       // Metric guide rings replace the very dense legacy latitude/longitude
       // grid in this *preview only*. They are not physical surfaces or masks.
       // A handful of 1/2/3/5/10 km circles preserves distance context and
@@ -356,15 +271,10 @@
         geometry.globeHorizonGuides(geom,{segments:192}).primitives.forEach(function(p){drawPrimitive(p,'visual-aid',false);});
       }
       layers.forEach(function(layer){layer.near.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',false);});});});
-      var flushStart=clock();flushBatch();canvasMs+=clock()-flushStart;
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
-        fillCalls:fillCalls,strokeCalls:strokes,strokePrimitives:strokePrimitives,
-        strokeStyleCounts:strokeStyleCounts,strokeWidthRange:strokeWidthRange,
-        horizonMasks:masked,canvasCalls:canvasCalls,geometryReused:source.reused,
-        diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask,strokeMode:strokeMode,
-          skipCanvasPaint:skipCanvasPaint},
+        fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,geometryReused:source.reused,
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},
         limitations:['Legacy-style whole-object horizon masking, not physical visibility',

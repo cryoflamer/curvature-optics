@@ -14,9 +14,7 @@ function modern(){
     get firstChild(){return this.children[0]||null;}};}
   for(const id of ['ModernDemoFrame','ModernDemoStatus','ModernDemoProgress','ModernDemoSelect',
     'ModernDemoTitle','ModernDemoPlay','ModernDemoPrev','ModernDemoNext','ModernDemoReset',
-    'ModernDemoDrawFps','ModernDemoDrawGap','ModernDemoDrawCpu','ModernDemoRafGap',
-    'ModernDemoBenchmarkRun','ModernDemoBenchmarkCancel','ModernDemoBenchmarkDownload',
-    'ModernDemoBenchmarkStatus','ModernDemoTelemetryStatus'])nodes.set(id,node());
+    'ModernDemoDrawFps','ModernDemoTelemetryStatus'])nodes.set(id,node());
   const frame=nodes.get('ModernDemoFrame');frame.src='about:blank';
   const eventHandlers={},docBody=node();
   const host={location:{origin:'http://localhost:8000'},document:{body:docBody,
@@ -45,37 +43,9 @@ function modern(){
 
 test('Demos UI renders live draw rate independently of RAF cadence',()=>{
   const h=modern();h.api.activate();h.frame.handlers.load();
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,false);
   assert.match(h.get('ModernDemoTelemetryStatus').textContent,/Connected/);
-  h.emit('performance',{drawFps:46.666,drawGapMs:{p50:20.9},
-    drawCpuMs:{p50:5.4},rafGapMs:{p50:6.1}});
+  h.emit('performance',{drawFps:46.666,drawCount:9,playing:true});
   assert.equal(h.get('ModernDemoDrawFps').textContent,'46.7');
-  assert.equal(h.get('ModernDemoDrawGap').textContent,'20.9 ms');
-  assert.equal(h.get('ModernDemoDrawCpu').textContent,'5.4 ms');
-  assert.equal(h.get('ModernDemoRafGap').textContent,'6.1 ms');
-});
-
-test('Demos benchmark runs from one button, automatically downloads JSON and supports repeat export',()=>{
-  const h=modern();h.api.activate();h.frame.handlers.load();
-  h.click('ModernDemoBenchmarkRun');assert.equal(h.methods.at(-1),'benchmark-start');
-  h.emit('benchmark-started',{durationMs:10000});
-  assert.equal(h.get('ModernDemoBenchmarkCancel').hidden,false);
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,true);
-  h.emit('state',{demo:'TransLine',position:1,total:8,playing:true});
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,true,'state changes cannot reenable benchmark');
-  assert.equal(h.get('ModernDemoNext').disabled,true,'playback controls are locked during recording');
-  const report={schema:'curvature-legacy-demo-benchmark/1',
-    createdAt:'2026-11-18T10:00:00.000Z',drawCount:480,drawFps:48,elapsedMs:10000};
-  h.emit('performance-report',{report});
-  assert.equal(h.get('ModernDemoBenchmarkCancel').hidden,true);
-  assert.equal(h.get('ModernDemoBenchmarkDownload').hidden,false);
-  assert.equal(h.downloads.length,1);
-  assert.match(h.downloads[0].name,/^curvature-legacy-benchmark-.*\.json$/);
-  assert.deepEqual(JSON.parse(h.urls[0].parts[0]),report);
-  h.click('ModernDemoBenchmarkDownload');assert.equal(h.downloads.length,2);
-  h.click('ModernDemoBenchmarkRun');h.emit('benchmark-started');
-  h.click('ModernDemoBenchmarkCancel');assert.equal(h.methods.at(-1),'benchmark-cancel');
-  h.emit('benchmark-cancelled');assert.equal(h.downloads.length,2);
 });
 
 function host(){
@@ -97,29 +67,22 @@ function host(){
   return {window,runtime:window.CurvatureLegacyDemosRuntime,demos,messages,handlers};
 }
 
-test('Host automatically starts a paused Legacy demo and restores pause after a report',()=>{
+test('Host accepts live draw telemetry without changing playback state',()=>{
   const h=host(),events=[];
   h.runtime.subscribe(event=>events.push(event));
-  let started=0,cancelled=0,busy=false;
-  const meter={start(ms){started++;busy=true;assert.equal(ms,10000);return true;},
-    cancel(){if(!busy)return false;cancelled++;busy=false;return true;},
-    running:()=>busy,reset(){},dispose(){}};
+  const meter={reset(){},dispose(){}};
   assert.deepEqual(JSON.parse(JSON.stringify(h.runtime.performanceStatus())),{attached:false});
   assert.equal(h.runtime.attachPerformance(meter),true);
   assert.deepEqual(JSON.parse(JSON.stringify(h.runtime.performanceStatus())),{attached:true});
-  assert.equal(h.runtime.command('benchmark-start'),true);
-  assert.equal(started,1);assert.equal(h.demos.playing,true);
-  busy=false;h.runtime.publishPerformanceReport({schema:'curvature-legacy-demo-benchmark/1'});
+  assert.equal(h.runtime.command('play'),true);
+  assert.equal(h.demos.playing,true);
+  h.runtime.publishPerformance({drawFps:45,drawCount:12,playing:true});
+  assert.equal(events.at(-1).type,'performance');
+  assert.equal(events.at(-1).drawFps,45);
+  assert.equal(h.demos.playing,true);
+  assert.equal(h.runtime.command('pause'),true);
   assert.equal(h.demos.playing,false);
-  assert.equal(events.at(-1).type,'performance-report');
-  assert.equal(h.runtime.command('benchmark-start'),true);
-  h.runtime.command('benchmark-cancel');assert.equal(cancelled,1);
-  h.runtime.command('play');assert.equal(h.demos.playing,true);
-  h.runtime.command('benchmark-start');
-  busy=false;h.runtime.publishPerformanceReport({schema:'curvature-legacy-demo-benchmark/1'});
-  assert.equal(h.demos.playing,true,'running state must remain running');
 });
-
 
 test('Cached host missing FPS script is repaired inside iframe and does not change Modern script list',()=>{
   const h=modern();
@@ -135,26 +98,23 @@ test('Cached host missing FPS script is repaired inside iframe and does not chan
   assert.equal(appendCount,1);
   assert.match(script.src,/LegacyDemoPerformance\.js/);
   assert.match(h.get('ModernDemoTelemetryStatus').textContent,/Installing/);
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,true);
   attached=true;script.onload();
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,false);
   assert.equal(h.get('ModernDemoTelemetryStatus').dataset.state,'connected');
   h.emit('performance',{drawFps:45,drawCount:10,playing:true});
   assert.equal(h.get('ModernDemoDrawFps').textContent,'45.0');
   assert.equal(appendCount,1);
 });
 
-test('Outdated controller or unavailable script reports an error instead of enabling benchmark',()=>{
+test('Outdated controller reports a telemetry error',()=>{
   const h=modern();
   const runtime=h.frame.contentWindow.CurvatureLegacyDemosRuntime;
   delete runtime.performanceStatus;
   h.api.activate();h.frame.handlers.load();
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,true);
   assert.equal(h.get('ModernDemoTelemetryStatus').dataset.state,'error');
   assert.match(h.get('ModernDemoTelemetryStatus').textContent,/outdated/i);
 });
 
-test('Telemetry recovery load error is surfaced and benchmark remains disabled',()=>{
+test('Telemetry recovery load error is surfaced',()=>{
   const h=modern();
   const runtime=h.frame.contentWindow.CurvatureLegacyDemosRuntime;
   runtime.performanceStatus=()=>({attached:false});
@@ -163,7 +123,6 @@ test('Telemetry recovery load error is surfaced and benchmark remains disabled',
   h.frame.contentWindow.document={head:{appendChild(node){script=node;}},createElement(){return {};}};
   h.api.activate();h.frame.handlers.load();
   script.onerror();
-  assert.equal(h.get('ModernDemoBenchmarkRun').disabled,true);
   assert.equal(h.get('ModernDemoTelemetryStatus').dataset.state,'error');
   assert.match(h.get('ModernDemoTelemetryStatus').textContent,/failed to load/i);
 });
@@ -197,16 +156,6 @@ test('Real host-bound meter publishes GraphX3DX draw measurements through the if
   const metrics=events.filter(event=>event.type==='performance').at(-1);
   assert.equal(rendered,2);
   assert.equal(metrics.drawCount,2);
-  assert.equal(metrics.drawCpuMs.p50,3);
   assert.ok(metrics.drawFps>0);
-  assert.equal(h.runtime.command('benchmark-start'),true);
-  now+=18;h.window.graph.Draw();now+=18;h.window.graph.Draw();
-  // Fire the benchmark expiry timer (there is no real clock in this host).
-  timeouts.values().next().value();
-  const report=events.filter(event=>event.type==='performance-report').at(-1).report;
-  assert.equal(report.drawCount,2);
-  assert.equal(report.statistics.drawCpuMs.p50,3);
-  assert.equal(report.environment.canvasStart.width,900);
-  assert.equal(report.environment.devicePixelRatio,1.25);
   assert.equal(h.demos.playing,true,'pre-existing playback remains active');
 });

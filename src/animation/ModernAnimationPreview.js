@@ -153,7 +153,7 @@
         occlusionRadius:spec.occlusionRadius,visibility:spec.visibility,
         temperatureProfile:spec.temperatureProfile,transitionProfile:spec.transitionProfile,
         inverseProfile:spec.inverseProfile,interactive:false,geometryBackend:'canvas',
-        opticalQuality:quality,canvasDirectDiagnostics:options.canvasDirectDiagnostics,
+        opticalQuality:quality,canvasDirectOptions:options.canvasDirectOptions,
         previewLod:{stride:quality==='fast'||quality==='effective-radius'?detailStride:1},
         cacheSession:sessions[side]||undefined}};
     }
@@ -216,12 +216,7 @@
         reason=error.message;
         result=renderer.renderPhysical(graph,config.model,config.options);
       }
-      // Suppress screen guides as well as the physical Canvas painter in the
-      // geometry/projection-only benchmark. Do not change ordinary playback.
-      var overlays=options&&options.canvasDirectDiagnostics&&
-        options.canvasDirectDiagnostics.skipCanvasPaint?
-        {eyeLevel:'skipped for diagnostics',horizon:'skipped for diagnostics'}:
-        guides(config,side,graph);
+      var overlays=guides(config,side,graph);
       return {quality:config.quality,requestedQuality:config.requestedQuality,
         fallback:reason,fallbackCount:fallbackCount,
         overlays:overlays,result:result,cameraModel:config.model};
