@@ -68,6 +68,11 @@ Not every module is solely owned by the listed layer. Verify **actual callers an
 A future refactor should begin with a specific defect or maintenance goal and pass the [development verification](development.md), rather than another speculative sweep for unused code.
 
 ## Focused architectural references
+The [active Canvas Direct interactive rendering migration plan](interactive-rendering-migration.md)
+tracks the source-backed Scene/Compare drag, wheel, keyboard and Animation Studio
+preview architecture, staged rollout, and physical fallbacks. It is a *future
+work plan*, not evidence that Modern interactive preview has already migrated.
+
 
 The general architecture above is the current entry point. Keep the following
 specialized evidence accessible where maintenance or regression analysis needs

@@ -1,3 +1,17 @@
+> **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
+> Stage **1/6 complete** in the documentation compatpatch; Stage **2 — Studio
+> defaults** is next. The full source-backed inventory, six compatpatch gates,
+> architectural invariants, known physical limits and cross-chat handoff are in
+> [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md).
+> Starting Git baseline: `8e6897f` (Canvas Direct diagnostics cleanup, after
+> Thin outlines). The next change should make **new** Animation Studio live
+> previews default to Canvas Direct + Thin outlines ≤1 Canvas backing pixel,
+> while retaining Auto FPS, explicit saved quality choices, unsupported-profile
+> fallback, authoritative Scene/Compare and deterministic Accurate exports.
+> **Do not interpret this documentation stage as an implemented UI change.**
+> After each subsequent compatpatch, update this handoff and the linked plan
+> with completion status, tested behavior, outstanding checks and next stage.
+>
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**
 > Playback now offers `Full` / `Balanced` / `Performance` Scene detail,
 > independent of optics quality. The shared Fast-only OpticalPreviewLod maps
