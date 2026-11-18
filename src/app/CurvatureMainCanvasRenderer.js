@@ -150,7 +150,8 @@
           paintMs:dt.projectionMs+dt.canvasMs,decorationsMs:directEnd-directStart-dt.totalMs,
           geometryMs:dt.geometryMs,strokeCalls:direct.strokeCalls},
         directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
-          horizonMasks:direct.horizonMasks,geometryReused:direct.geometryReused},
+          horizonMasks:direct.horizonMasks,canvasCalls:direct.canvasCalls,
+          geometryReused:direct.geometryReused},
         decorationCamera:options.deferDecorations?camera:null,
         decorationPhysicalGuides:options.deferDecorations?[]:null,
         warning:'Experimental Canvas Direct: straight rays and local effective radius;'+

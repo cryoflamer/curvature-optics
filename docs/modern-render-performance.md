@@ -73,3 +73,32 @@ and `CurvatureModernApp.getPerformanceSnapshot()` exposes the export data.
   recording. Context recovery retains the existing cached texture behavior.
 - A/B per-viewport samples and independent optical caches are unchanged.
 - UI buttons never call the optical or Canvas renderer on their own.
+
+## Canvas Direct layer benchmark (Modern Animation Studio)
+
+In Animation Studio, select **Canvas Direct** and open **Playback profiler**.
+Click **Benchmark Canvas layers** at the desired position in a Soundly project.
+The benchmark freezes one camera/scene sample and runs three rotated passes
+(30 warm-up + 120 measured RAF callbacks for each mode) through:
+
+- `canvas_full` — fills, outlines, and horizon mask enabled;
+- `canvas_no_fills` — object fills disabled, but horizon mask retained;
+- `canvas_no_strokes` — outlines disabled;
+- `canvas_no_mask` — horizon mask disabled.
+
+All variations start with the same three diagnostic flags enabled; the current
+live Fills / Outlines / Horizon mask checkboxes are not changed. The benchmark
+restores the prior playback position and playing state on completion or cancel.
+One timestamped JSON is downloaded automatically. `summary` aggregates each mode
+across all three passes; `runs` preserves every measured frame, including RAF gaps,
+synchronous callback/render/projection/Canvas timings, and Canvas 2D call counts;
+`config.profile` distinguishes layer experiments from the original five-mode
+Playback benchmark. Canvas call counts cover **the Canvas Direct painter only**
+(including its background clear/fill and mask), excluding HUD, decorations,
+other browser-side work, and deferred GPU/compositor processing. The number of
+`clip` calls is normally zero: the painter clips geometry numerically.
+
+Compare each variation to `canvas_full` **inside the same report**. Do not
+interpret differences across separate Legacy and Modern videos as isolated
+renderer cost. Fast RAF intervals alone do not demonstrate actual frame display
+rate; browser scheduling and deferred graphics may dominate.

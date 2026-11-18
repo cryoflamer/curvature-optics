@@ -160,6 +160,10 @@
       var drawStrokes=diagnostic.strokes!==false;
       var drawMask=diagnostic.horizonMask!==false;
       var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0;
+      // Count calls issued by this painter, not the browser's deferred GPU work
+      // or higher-level decorations. No Canvas prototype interception is used.
+      var canvasCalls={beginPath:0,moveTo:0,lineTo:0,closePath:0,
+        fill:0,stroke:0,clip:0,clearRect:0,fillRect:0,drawImage:0};
       var projectionMs=0,canvasMs=0;
       function drawPrimitive(p,role,far){
         var start=clock(),style=p.style||{},mode=p.type==='line'?1:(p.mode==null?1:p.mode);
@@ -199,16 +203,22 @@
         if(!fillPixels&&!lines.length)return;
         start=clock();
         ctx.globalAlpha=style.alpha==null?1:style.alpha;
-        if(fillPixels){ctx.fillStyle=style.fill||'white';ctx.beginPath();
-          ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);
-          for(var k=1;k<fillPixels.length;k++)ctx.lineTo(fillPixels[k][0],fillPixels[k][1]);
-          ctx.closePath();ctx.fill();fillCalls++;
+        if(fillPixels){ctx.fillStyle=style.fill||'white';ctx.beginPath();canvasCalls.beginPath++;
+          ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);canvasCalls.moveTo++;
+          for(var k=1;k<fillPixels.length;k++){
+            ctx.lineTo(fillPixels[k][0],fillPixels[k][1]);canvasCalls.lineTo++;
+          }
+          ctx.closePath();canvasCalls.closePath++;
+          ctx.fill();canvasCalls.fill++;fillCalls++;
         }
         if(lines.length){ctx.strokeStyle=style.stroke||(far?'#666':'black');
           ctx.lineWidth=viewport.lineWidth(style.lineWidth,camera);
-          ctx.beginPath();for(var e=0;e<lines.length;e++){
-            ctx.moveTo(lines[e][0][0],lines[e][0][1]);ctx.lineTo(lines[e][1][0],lines[e][1][1]);
-          }ctx.stroke();strokes++;
+          ctx.beginPath();canvasCalls.beginPath++;
+          for(var e=0;e<lines.length;e++){
+            ctx.moveTo(lines[e][0][0],lines[e][0][1]);canvasCalls.moveTo++;
+            ctx.lineTo(lines[e][1][0],lines[e][1][1]);canvasCalls.lineTo++;
+          }
+          ctx.stroke();canvasCalls.stroke++;strokes++;
         }
         ctx.globalAlpha=1;canvasMs+=clock()-start;
         projected+=pts.length;drawn+=lines.length;
@@ -237,8 +247,8 @@
       // Painter order: far objects, one white disk, surface/horizon guides,
       // then near objects. Guides are never occlusion masks.
       var setupEnd=clock();
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.clearRect(0,0,canvas.width,canvas.height);canvasCalls.clearRect++;
+      ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);canvasCalls.fillRect++;
       ctx.lineJoin='round';ctx.lineCap='butt';
       layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
       if(drawMask&&globe&&layers.some(function(layer){return layer.far.length;}))mask();
@@ -265,7 +275,8 @@
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
-        fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,geometryReused:source.reused,
+        fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,canvasCalls:canvasCalls,
+        geometryReused:source.reused,
         diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask},
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},

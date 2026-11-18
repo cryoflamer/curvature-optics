@@ -22,14 +22,18 @@ function model(){
 }
 function graph(trackPaths=false){
   let filled=0,stroked=0,paths=0,activePath=[];
+  const called={beginPath:0,moveTo:0,lineTo:0,closePath:0,fill:0,stroke:0,
+    clip:0,clearRect:0,fillRect:0,drawImage:0};
   const fillColors=[],paintedPaths=[];
-  const ctx={save(){},restore(){},setTransform(){},fillRect(){},clearRect(){},
-    beginPath(){paths++;if(trackPaths)activePath=[];},
-    moveTo(x,y){if(trackPaths)activePath.push([x,y]);},
-    lineTo(x,y){if(trackPaths)activePath.push([x,y]);},closePath(){},
-    fill(){filled++;fillColors.push(this.fillStyle);
+  const ctx={save(){},restore(){},setTransform(){},
+    fillRect(){called.fillRect++;},clearRect(){called.clearRect++;},
+    beginPath(){called.beginPath++;paths++;if(trackPaths)activePath=[];},
+    moveTo(x,y){called.moveTo++;if(trackPaths)activePath.push([x,y]);},
+    lineTo(x,y){called.lineTo++;if(trackPaths)activePath.push([x,y]);},
+    closePath(){called.closePath++;},
+    fill(){called.fill++;filled++;fillColors.push(this.fillStyle);
       if(trackPaths)paintedPaths.push({color:this.fillStyle,points:activePath.slice()});},
-    stroke(){stroked++;}};
+    stroke(){called.stroke++;stroked++;},clip(){called.clip++;},drawImage(){called.drawImage++;}};
   const g={Canvas:{width:800,height:500,getContext(){return ctx;}},Camera:{},
     ContextScale:1,WinTrans:{ScaleX:500,ScaleY:-500,OffsetX:400,OffsetY:250},
     AutoScalePix:false,MinLineWidth:1,ScalePixInt:false,DevicePixelRatio:1,
@@ -38,7 +42,7 @@ function graph(trackPaths=false){
     SetCamera(p){this.Camera={CamPos:p.CamPos,CamUp:p.CamUp,CamViewCenter:p.CamViewCenter,
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
-  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths})};
+  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths,called})};
 }
 function soundly(){const m=model();state.applyPreset(m,'soundly');m.Height=8.55;
   m.FocalLengthField=2038;m.Pan=.49;m.Nick=-.006;
@@ -224,4 +228,24 @@ test('Soundly moving-camera horizon mask is clipped to the Canvas viewport',()=>
     canvasDirectDiagnostics:{strokes:false,horizonMask:false}});
   assert.equal(off.directStats.horizonMasks,0);
   assert.equal(unmasked.stats().paintedPaths.filter(p=>p.color==='white').length,0);
+});
+
+test('Canvas Direct counters match the exact issued path and paint calls, including layer variants',()=>{
+  const m=soundly(),options={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  for(const flags of [{fills:true,strokes:true,horizonMask:true},
+    {fills:false,strokes:true,horizonMask:true},
+    {fills:true,strokes:false,horizonMask:true},
+    {fills:true,strokes:true,horizonMask:false}]){
+    const g=graph();
+    const result=renderer.renderPhysical(g.g,m,{...options,canvasDirectDiagnostics:flags});
+    assert.deepEqual(result.directStats.canvasCalls,g.stats().called);
+    assert.equal(result.directStats.canvasCalls.fill,result.directStats.fillCalls);
+    assert.equal(result.directStats.canvasCalls.stroke,result.directStats.strokeCalls);
+    assert.equal(result.directStats.canvasCalls.beginPath,
+      result.directStats.fillCalls+result.directStats.strokeCalls);
+    assert.equal(result.directStats.canvasCalls.clearRect,1);
+    assert.equal(result.directStats.canvasCalls.fillRect,1);
+    assert.equal(result.directStats.canvasCalls.clip,0,
+      'direct painter performs clipping in JavaScript, not Canvas clip()');
+  }
 });

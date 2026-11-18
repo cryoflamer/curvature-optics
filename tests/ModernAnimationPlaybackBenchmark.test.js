@@ -109,3 +109,37 @@ test('benchmark code is isolated to Modern and the independent fixed-frame runne
   vm.runInContext(fs.readFileSync(path,'utf8'),browser);
   assert.equal(typeof browser.CurvatureModernAnimationPlaybackBenchmark.create,'function');
 });
+
+test('Canvas layer profile rotates four fixed-frame variants and includes operation statistics',()=>{
+  const h=harness();
+  h.runner.start({profile:'canvas-layers',warmupFrames:2,sampleFrames:4,passes:3,
+    environment:{scene:'Soundly',displayMode:'scene',fixedTimeMs:1234}});
+  for(let i=0;h.runner.running()&&i<500;i++)h.tick();
+  assert.ok(h.result);
+  assert.equal(h.result.runs.length,12);
+  assert.equal(h.result.config.profile,'canvas-layers');
+  assert.equal(h.result.summary.canvas_full.frames,12);
+  assert.equal(h.result.summary.canvas_no_mask.fillCalls.count,12);
+  assert.equal(h.result.summary.canvas_no_strokes.callbackMs.count,12);
+  assert.deepEqual(h.result.config.modes,benchmark.LAYER_MODES);
+  assert.deepEqual(h.result.runs.slice(0,4).map(x=>x.mode),benchmark.order(0,benchmark.LAYER_MODES));
+  assert.deepEqual(h.result.runs.slice(4,8).map(x=>x.mode),benchmark.order(1,benchmark.LAYER_MODES));
+  for(const run of h.result.runs){
+    assert.equal(run.rows.length,4);
+    assert.equal(run.statistics.fillCalls.p50,1400);
+    assert.equal(run.statistics.beginPathCalls.count,0,'missing metric is a null distribution, not fabricated zero');
+  }
+});
+
+test('layer benchmark UI reuses the same runner and reads nested Canvas Direct counters',()=>{
+  const html=fs.readFileSync('CurvatureModern.html','utf8');
+  const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
+  const renderer=fs.readFileSync('src/app/CurvatureMainCanvasRenderer.js','utf8');
+  assert.match(html,/id="ModernAnimationBenchmarkLayers"/);
+  assert.match(app,/startBenchmark\('canvas-layers'\)/);
+  assert.match(app,/a\.directStats/);
+  assert.match(app,/canvas_no_fills/);
+  assert.match(app,/canvas_no_strokes/);
+  assert.match(app,/canvas_no_mask/);
+  assert.match(renderer,/canvasCalls:direct\.canvasCalls/);
+});

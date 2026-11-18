@@ -2160,8 +2160,10 @@
     if(clock)clock.textContent=info.time;
     var probe=newUiEl('ModernAnimationPlaybackExperiment');
     var benchmarking=!!(studioBenchmark&&studioBenchmark.running());
-    var benchRun=newUiEl('ModernAnimationBenchmarkRun');
-    if(benchRun)benchRun.disabled=benchmarking||!ready||studioPlaybackQuality!=='canvas-direct';
+    ['ModernAnimationBenchmarkRun','ModernAnimationBenchmarkLayers'].forEach(function(id){
+      var button=newUiEl(id);
+      if(button)button.disabled=benchmarking||!ready||studioPlaybackQuality!=='canvas-direct';
+    });
     if(probe){
       probe.disabled=benchmarking||!studioPlaybackProfileEnabled||!studioPlaybackProfiler||
         studioPlaybackQuality!=='canvas-direct';
@@ -2965,11 +2967,12 @@
   // Benchmark is an independent RAF sequence with a single frozen sample.
   // No animation project, History entry or export settings are modified.
   function bindStudioBenchmark(){
-    var run=newUiEl('ModernAnimationBenchmarkRun'),cancel=newUiEl('ModernAnimationBenchmarkCancel');
+    var run=newUiEl('ModernAnimationBenchmarkRun'),layersRun=newUiEl('ModernAnimationBenchmarkLayers');
+    var cancel=newUiEl('ModernAnimationBenchmarkCancel');
     var again=newUiEl('ModernAnimationBenchmarkDownload'),note=newUiEl('ModernAnimationBenchmarkStatus');
     if(!run||!cancel||!studioBenchmarkApi)return;
     function busy(value){
-      run.disabled=!!value;cancel.hidden=!value;
+      run.disabled=!!value;if(layersRun)layersRun.disabled=!!value;cancel.hidden=!value;
       if(again)again.hidden=!!value||!studioBenchmarkLastReport;
       ['ModernAnimationPlaybackPlay','ModernAnimationPlaybackPause','ModernAnimationPlaybackStop',
         'ModernAnimationPlaybackSeek','ModernAnimationPlaybackRetry','ModernAnimationPlaybackOptics',
@@ -2990,17 +2993,24 @@
     function canvasEnvironment(graph,sample,frameMs){
       var canvas=graph.Canvas,rect=canvas.getBoundingClientRect?
         canvas.getBoundingClientRect():{width:canvas.clientWidth,height:canvas.clientHeight};
+      var otherGraph=root.CurvatureModernAnimationGraphs&&root.CurvatureModernAnimationGraphs.B;
+      var otherCanvas=sample.display&&sample.display.mode==='compare'&&otherGraph&&otherGraph.Canvas;
+      var otherRect=otherCanvas&&otherCanvas.getBoundingClientRect?otherCanvas.getBoundingClientRect():null;
       return {scene:sample.scene&&sample.scene.title||studioPrepared.name||'Animation Studio',
         projectId:studioPrepared.id,projectMode:studioPrepared.mode,
+        displayMode:sample.display&&sample.display.mode||'scene',
         fixedTimeMs:frameMs,quality:studioPlaybackQuality,detail:studioPlaybackDetail,
         previewFps:studioPlaybackFps,userAgent:root.navigator&&root.navigator.userAgent||'',
         devicePixelRatio:root.devicePixelRatio||1,
         canvas:{width:canvas.width,height:canvas.height,cssWidth:rect.width,cssHeight:rect.height},
+        canvasB:otherCanvas?{width:otherCanvas.width,height:otherCanvas.height,
+          cssWidth:otherRect?otherRect.width:otherCanvas.clientWidth,
+          cssHeight:otherRect?otherRect.height:otherCanvas.clientHeight}:null,
         diagnostics:{fills:!!(!newUiEl('ModernCanvasDirectFills')||newUiEl('ModernCanvasDirectFills').checked),
           outlines:!!(!newUiEl('ModernCanvasDirectStrokes')||newUiEl('ModernCanvasDirectStrokes').checked),
           mask:!!(!newUiEl('ModernCanvasDirectMask')||newUiEl('ModernCanvasDirectMask').checked)}};
     }
-    run.addEventListener('click',function(){
+    function startBenchmark(profile){
       if(studioBenchmark&&studioBenchmark.running())return;
       if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen||
         studioPlaybackQuality!=='canvas-direct'){
@@ -3060,18 +3070,29 @@
           otherCopy.drawImage(canvasB,0,0);
         }
         var env=canvasEnvironment(graphs.A,frameSample,frameTime);
-        function renderer(){
-          var a=studioPreviewRenderer.render(frameSample,'A',graphs.A,settings);
-          var b=baseline.B?studioPreviewRenderer.render(frameSample,'B',graphs.B,settings):null;
+        function renderer(layerSettings){
+          var options=layerSettings?Object.assign({},settings,
+            {canvasDirectDiagnostics:layerSettings}):settings;
+          var a=studioPreviewRenderer.render(frameSample,'A',graphs.A,options);
+          var b=baseline.B?studioPreviewRenderer.render(frameSample,'B',graphs.B,options):null;
           return {A:a,B:b};
         }
         function metrics(res,post){
-          var a=res&&res.A&&res.A.result||{},b=res&&res.B&&res.B.result||{},t=a.timings||{},u=b.timings||{};
-          return {rendererMs:res?post:null,postMs:null,
-            projectionMs:Number.isFinite(t.projectionMs)?t.projectionMs+(u.projectionMs||0):null,
-            canvasMs:Number.isFinite(t.canvasMs)?t.canvasMs+(u.canvasMs||0):null,
-            fillCalls:Number.isFinite(a.fillCalls)?a.fillCalls+(b.fillCalls||0):null,
-            strokeCalls:Number.isFinite(a.strokeCalls)?a.strokeCalls+(b.strokeCalls||0):null};
+          var a=res&&res.A&&res.A.result||{},b=res&&res.B&&res.B.result||{};
+          var t=a.timings||{},u=b.timings||{},da=a.directStats||{},db=b.directStats||{};
+          function sum(left,right,key){
+            return Number.isFinite(left[key])?left[key]+(Number.isFinite(right[key])?right[key]:0):null;
+          }
+          var calls=da.canvasCalls||{},other=db.canvasCalls||{};
+          var data={rendererMs:res?post:null,postMs:null,
+            projectionMs:sum(t,u,'projectionMs'),canvasMs:sum(t,u,'canvasMs'),
+            fillCalls:sum(da,db,'fillCalls'),strokeCalls:sum(da,db,'strokeCalls'),
+            horizonMasks:sum(da,db,'horizonMasks'),sourceObjects:sum(a.previewLod||{},b.previewLod||{},'original'),
+            primitivesProjected:sum(a,b,'primitiveCount'),visibleSegments:sum(a,b,'drawn')};
+          ['beginPath','moveTo','lineTo','closePath','clearRect','fillRect','clip','drawImage'].forEach(function(name){
+            data[name+'Calls']=sum(calls,other,name);
+          });
+          return data;
         }
         studioBenchmarkLastReport=null;busy(true);
         studioBenchmark=studioBenchmarkApi.create({
@@ -3081,16 +3102,28 @@
             if(studioPlayback!==player||!animationWorkspaceOpen||document.hidden)
               throw Error('Benchmark interrupted by workspace or visibility change');
             var began=profileNow(),results=null,info;
+            if(mode.indexOf('canvas_')===0&&mode!=='canvas_only'){
+              // All variants begin from the same layer configuration, regardless
+              // of the user's current live-display checkboxes.
+              var flags={fills:true,strokes:true,horizonMask:true};
+              if(mode==='canvas_no_fills')flags.fills=false;
+              else if(mode==='canvas_no_strokes')flags.strokes=false;
+              else if(mode==='canvas_no_mask')flags.horizonMask=false;
+              else if(mode!=='canvas_full')throw Error('Unknown Canvas layer mode');
+              results=renderer(flags);return metrics(results,profileNow()-began);
+            }
             if(mode==='normal'){
               info=renderStudioPlaybackSample(true,{sample:frameSample,timeMs:frameTime});
               syncStudioPlaybackControls();
               var diag=info&&info.A;
-              return {rendererMs:info&&info.rendererMs||null,postMs:info&&info.postMs||null,
-                projectionMs:diag&&diag.projectionMs,canvasMs:diag&&diag.canvasMs,
-                fillCalls:baseline.A.result&&baseline.A.result.fillCalls+
-                  (baseline.B&&baseline.B.result.fillCalls||0),
-                strokeCalls:baseline.A.result&&baseline.A.result.strokeCalls+
-                  (baseline.B&&baseline.B.result.strokeCalls||0)};
+              var normalStats=metrics(baseline,info&&info.rendererMs);
+              normalStats.postMs=info&&info.postMs;
+              var diagB=info&&info.B;
+              normalStats.projectionMs=diag&&Number.isFinite(diag.projectionMs)?
+                diag.projectionMs+(diagB&&diagB.projectionMs||0):null;
+              normalStats.canvasMs=diag&&Number.isFinite(diag.canvasMs)?
+                diag.canvasMs+(diagB&&diagB.canvasMs||0):null;
+              return normalStats;
             }
             if(mode==='canvas_only'){
               results=renderer();
@@ -3117,21 +3150,26 @@
             throw Error('Unexpected benchmark mode');
           },
           progress:function(state){
+            var count=profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:studioBenchmarkApi.MODES.length;
             status('Pass '+state.pass+'/'+state.passes+' · '+state.mode+
-              ' · '+state.measured+'/'+state.total+' measured · '+state.completed+'/15 runs');
+              ' · '+state.measured+'/'+state.total+' measured · '+state.completed+'/'+(state.passes*count)+' runs');
           },
           completed:function(report){
             studioBenchmarkLastReport=report;restore();
-            status('Benchmark complete: 15 runs across five modes. JSON downloaded automatically.');
+            status(profile==='canvas-layers'?
+              'Canvas layers benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
+              'Benchmark complete: 15 runs across five modes. JSON downloaded automatically.');
             try{download(report);}catch(error){status('Benchmark complete, automatic download failed: '+error.message+'. Use Download last JSON.');}
             if(again)again.hidden=false;
           },
           failed:function(error){restore();status('Benchmark failed: '+error.message);},
           cancelled:function(){restore();status('Benchmark cancelled; Playback restored.');}
         });
-        studioBenchmark.start({environment:env});
+        studioBenchmark.start({environment:env,profile:profile});
       }catch(error){restore();status('Benchmark could not start: '+error.message);}
-    });
+    }
+    run.addEventListener('click',function(){startBenchmark('playback');});
+    if(layersRun)layersRun.addEventListener('click',function(){startBenchmark('canvas-layers');});
     cancel.addEventListener('click',function(){if(studioBenchmark)studioBenchmark.cancel();});
     if(again)again.addEventListener('click',function(){
       if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);
