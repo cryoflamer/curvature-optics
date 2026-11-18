@@ -393,3 +393,49 @@ I/J; the independent A–H profiles remain usable when WebGL2 is blocked.
 
 **No production Canvas Direct code was modified.** Test results on a software
 WebGL2 backend do not predict performance on another browser or GPU.
+
+## Canvas Direct interaction timing: manual Timeline vs automatic seek vs Play
+
+This is a **diagnostic of the real Animation Studio Canvas Direct path**, not a
+replacement for the optics renderer or the isolated stroke microbenchmark.
+Choose Canvas Direct as the Playback optics, prepare an animation (for example
+Soundly), and expand **Canvas Direct · frame timing (manual vs automatic)**.
+
+1. Enable **Record real timeline paints**. This starts an independent,
+   opt-in RAF observer, which has a small potential scheduling cost. It does
+   **not** enable the older Playback profiler automatically.
+2. While paused, drag the **Timeline** slider manually, slowly and quickly.
+   The seek handler forces the same real Canvas Direct redraw as before.
+3. Run **Auto-sweep timeline · 4s**. The monitor issues time-based slider values
+   from 0 to 1000 and invokes **the same seek function** as manual dragging.
+   The Play clock is paused for this trial, so it cannot race with the sweep.
+   This is not the separate fixed-frame benchmark: the sampled scene changes.
+4. Optionally press **Play** with **Preview FPS = Auto** to measure the original
+   Playback RAF path. The manual, auto-seek and Play samples remain separately
+   labeled in one export. Stop the sweep before changing experiments.
+5. Click **Export timing JSON**. Use **Clear measurements** to start a clean
+   comparison, especially before switching between `Request next RAF before`
+   and `after` modes (auto-sweep only). Both variants paint the same scene;
+   the request placement is the only intended difference.
+
+The report distinguishes **input handler starts**, **render call starts**,
+**successful Canvas Direct paint calls**, **synchronous wall time inside the
+render call**, **input-to-render-start/end wall time**, **separation of paint
+starts**, and **diagnostic RAF callback intervals**. Every group includes
+p50/p95/p99 with bounded raw event records in `measurements` and aggregated
+statistics under `summary.manual`, `.auto`, `.playback`.
+
+A slow Canvas 2D `stroke()` can perform deferred rasterization after its
+synchronous JavaScript method returns. Neither these counters nor a visual
+impression proves that a frame was composited or presented on the monitor;
+they measure scheduling of **actual application code**, not compositor FPS.
+Therefore compare event and paint **counts** and their gaps rather than
+calling `1000 / paint-gap` an unconditional displayed FPS. The opt-in observer
+also runs when there are no input events, so its RAF gap must not be confused
+with the pace of the manual input events.
+
+Recording and auto-sweep are disabled until a prepared Canvas Direct project
+is available. Hiding the tab or changing/discarding the active project stops
+the sweep. With recording off, playback behavior remains the same; no RAF
+observer is scheduled and no timing samples are stored. No working experiment,
+History, optical geometry, renderer style, or PNG/video export is modified.

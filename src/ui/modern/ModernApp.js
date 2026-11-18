@@ -33,6 +33,7 @@
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPlaybackControlsApi=root.CurvatureModernAnimationPlaybackControls;
   var studioPlaybackProfilerApi=root.CurvatureModernAnimationPlaybackProfiler;
+  var studioFrameTimingApi=root.CurvatureModernAnimationFrameTiming;
   var studioPlaybackExperimentApi=root.CurvatureModernAnimationPlaybackExperiment;
   var studioBenchmarkApi=root.CurvatureModernAnimationPlaybackBenchmark;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
@@ -564,12 +565,14 @@
   var studioPlaybackControls=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
+  var studioFrameTimingMarkPaint=null;
   var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
   var studioPlaybackFps='auto'; // Browser-local preview pacing, not export FPS.
   var studioPlaybackFpsMeter=studioPlaybackControlsApi.createPreviewFpsMeter();
   var studioPlaybackProfileEnabled=false;
   var studioPlaybackProfiler=studioPlaybackProfilerApi?studioPlaybackProfilerApi.create():null;
+  var studioFrameTiming=null; // Created lazily only when the diagnostic is enabled.
   var studioPlaybackExperiment=studioPlaybackExperimentApi?studioPlaybackExperimentApi.create():null;
   var studioBenchmark=null,studioBenchmarkLastReport=null;
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
@@ -2093,7 +2096,18 @@
         requestFrame:function(fn){return requestAnimationFrame(fn);},
         cancelFrame:function(frame){cancelAnimationFrame(frame);},
         cancelInitial:cancelStudioInitialPaint,
-        render:renderStudioPlaybackSample,
+        render:function(force,benchmark){
+          if(studioFrameTiming&&studioFrameTiming.enabled()&&
+             studioPlaybackQuality==='canvas-direct'){
+            var painted=false,prior=studioFrameTimingMarkPaint;
+            studioFrameTimingMarkPaint=function(){painted=true;};
+            try{return studioFrameTiming.render(function(){
+              return renderStudioPlaybackSample(force,benchmark);
+            },function(){return painted;});}
+            finally{studioFrameTimingMarkPaint=prior;}
+          }
+          return renderStudioPlaybackSample(force,benchmark);
+        },
         profiler:{enabled:function(){return studioPlaybackProfileEnabled&&!!studioPlaybackProfiler;},
           record:function(sample){
             var report=studioPlaybackProfiler.record(sample);
@@ -2117,6 +2131,7 @@
     return studioPlaybackControls;
   }
   function stopStudioPlayback(clear){
+    if(typeof studioFrameTiming!=='undefined'&&studioFrameTiming)studioFrameTiming.stopAutomatic();
     if(studioBenchmark&&studioBenchmark.running())studioBenchmark.cancel();
     studioPlaybackFpsMeter.reset();
     if(clear){
@@ -2178,8 +2193,14 @@
           ' (no paints)':'');
     }
     syncCanvasDirectDiagnostics();
+    if(typeof studioFrameTiming!=='undefined'&&typeof syncStudioFrameTimingControls==='function')
+      syncStudioFrameTimingControls();
     var play=newUiEl('ModernAnimationPlaybackPlay');if(play)play.disabled=info.playing;
     var pause=newUiEl('ModernAnimationPlaybackPause');if(pause)pause.disabled=!info.playing;
+    if(typeof studioFrameTiming!=='undefined'&&studioFrameTiming&&studioFrameTiming.autoRunning()){
+      if(play)play.disabled=true;
+      if(pause)pause.disabled=true;
+    }
   }
   function previewGraphsReady(){
     var graphs=root.CurvatureModernAnimationGraphs;
@@ -2425,6 +2446,7 @@
     // This timestamp always corresponds to the pixels just drawn. The
     // playback clock may advance during synchronous Accurate rendering.
     studioPlaybackRenderedAt=renderedAt;
+    if(typeof studioFrameTimingMarkPaint==='function')studioFrameTimingMarkPaint();
     studioPlaybackNextDue=studioPlaybackControlsApi.nextPreviewDue(
       studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force);
     studioPlaybackLastPaint=now;
@@ -3217,6 +3239,109 @@
       if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);
     });
   }
+  function syncStudioFrameTimingControls(){
+    var allowed=!!(studioPrepared&&studioPlayback&&studioPlaybackQuality==='canvas-direct'&&
+      animationWorkspaceOpen&&!(studioBenchmark&&studioBenchmark.running()));
+    var toggle=newUiEl('ModernAnimationFrameTimingEnabled');
+    var enabled=!!(studioFrameTiming&&studioFrameTiming.enabled());
+    var running=enabled&&studioFrameTiming.autoRunning();
+    if(toggle){toggle.disabled=!allowed;toggle.checked=enabled;}
+    var auto=newUiEl('ModernAnimationFrameTimingAuto');if(auto)auto.disabled=!allowed||!enabled||running;
+    var stop=newUiEl('ModernAnimationFrameTimingStop');if(stop)stop.disabled=!running;
+    ['ModernAnimationFrameTimingClear','ModernAnimationFrameTimingExport'].forEach(function(id){
+      var el=newUiEl(id);if(el)el.disabled=!enabled||running;
+    });
+    var order=newUiEl('ModernAnimationFrameTimingOrder');if(order)order.disabled=!enabled||running;
+  }
+  function describeStudioFrameTiming(report){
+    function number(value){return Number.isFinite(value)?value.toFixed(1):'—';}
+    function line(name,row){
+      return name+': '+row.inputs+' inputs · '+row.paints+'/'+row.renderCalls+
+        ' painted calls · paint-start gap p50/p95 '+number(row.paintStartGapMs.p50)+
+        '/'+number(row.paintStartGapMs.p95)+' ms · JS render p50/p95 '+
+        number(row.renderCpuMs.p50)+'/'+number(row.renderCpuMs.p95)+' ms';
+    }
+    return (report.autoRunning?'Auto-sweep running…\n':'')+
+      line('Manual seek',report.summary.manual)+'\n'+
+      line('Automatic seek',report.summary.auto)+'\n'+
+      line('Live Play',report.summary.playback)+'\n'+
+      'Diagnostic RAF observer: '+report.summary.rafCallbacks+' callbacks · gap p50/p95 '+
+      number(report.summary.rafGapMs.p50)+'/'+number(report.summary.rafGapMs.p95)+
+      ' ms. Counts are NOT presented-frame FPS.';
+  }
+  function ensureStudioFrameTiming(){
+    if(!studioFrameTiming){
+      if(!studioFrameTimingApi)throw Error('Canvas Direct frame timing module is missing');
+      studioFrameTiming=studioFrameTimingApi.create({now:profileNow,
+        requestFrame:function(fn){return requestAnimationFrame(fn);},
+        cancelFrame:function(id){cancelAnimationFrame(id);},
+        onUpdate:function(report){
+          var output=newUiEl('ModernAnimationFrameTimingReport');
+          if(output)output.textContent=describeStudioFrameTiming(report);
+          syncStudioFrameTimingControls();
+        },
+        onError:function(error){playbackNotice('Auto-sweep failed: '+error.message,'error');}
+      });
+    }
+    return studioFrameTiming;
+  }
+  function bindStudioFrameTiming(autoSeek){
+    var toggle=newUiEl('ModernAnimationFrameTimingEnabled');
+    if(!toggle)return;
+    toggle.addEventListener('change',function(){
+      try{
+        if(toggle.checked&&studioPlaybackQuality!=='canvas-direct'){
+          toggle.checked=false;return;
+        }
+        ensureStudioFrameTiming().setEnabled(toggle.checked);
+        syncStudioFrameTimingControls();
+      }catch(error){toggle.checked=false;playbackNotice('Frame timing: '+error.message,'error');}
+    });
+    var auto=newUiEl('ModernAnimationFrameTimingAuto');
+    if(auto)auto.addEventListener('click',function(){
+      try{
+        if(!studioPlayback||studioPlaybackQuality!=='canvas-direct'||
+          (studioBenchmark&&studioBenchmark.running()))return;
+        // Do not run the independent Play clock while synthesizing timeline
+        // positions. Both manual and automatic seek call autoSeek below.
+        ensureStudioPlaybackControls().pause();
+        var order=newUiEl('ModernAnimationFrameTimingOrder');
+        ensureStudioFrameTiming().startAutomatic(autoSeek,{durationMs:4000,
+          requestOrder:order?order.value:'after'});
+        syncStudioFrameTimingControls();
+      }catch(error){playbackNotice('Auto-sweep: '+error.message,'error');}
+    });
+    var stop=newUiEl('ModernAnimationFrameTimingStop');
+    if(stop)stop.addEventListener('click',function(){
+      if(studioFrameTiming)studioFrameTiming.stopAutomatic();
+      syncStudioFrameTimingControls();
+    });
+    var clear=newUiEl('ModernAnimationFrameTimingClear');
+    if(clear)clear.addEventListener('click',function(){
+      if(studioFrameTiming)studioFrameTiming.clear();
+    });
+    var exportButton=newUiEl('ModernAnimationFrameTimingExport');
+    if(exportButton)exportButton.addEventListener('click',function(){
+      if(!studioFrameTiming||!studioFrameTiming.enabled())return;
+      var canvas=root.CurvatureModernAnimationGraphs&&
+        root.CurvatureModernAnimationGraphs.A&&root.CurvatureModernAnimationGraphs.A.Canvas;
+      var rect=canvas&&canvas.getBoundingClientRect?canvas.getBoundingClientRect():null;
+      var report=studioFrameTiming.exportData({
+        userAgent:root.navigator&&root.navigator.userAgent||'',
+        devicePixelRatio:root.devicePixelRatio||1,
+        quality:studioPlaybackQuality,previewFpsTarget:studioPlaybackFps,
+        sceneDetail:studioPlaybackDetail,
+        projectMode:studioPrepared&&studioPrepared.mode,
+        displayMode:studioPrepared&&studioPrepared.display&&studioPrepared.display.mode,
+        canvas:canvas?{width:canvas.width,height:canvas.height,
+          cssWidth:rect?rect.width:canvas.clientWidth,
+          cssHeight:rect?rect.height:canvas.clientHeight}:null
+      });
+      downloadHistoryJson(JSON.stringify(report,null,2)+'\n','curvature-frame-timing-'+
+        report.createdAt.replace(/[:.]/g,'-')+'.json');
+    });
+    syncStudioFrameTimingControls();
+  }
   function bindStudioPlayback(){
     function playbackNotice(text,kind){
       var status=newUiEl('ModernAnimationPlaybackStatus');
@@ -3327,6 +3452,7 @@
     }}
     var controls=ensureStudioPlaybackControls();
     play.addEventListener('click',function(){safely(function(){
+      if(typeof studioFrameTiming!=='undefined'&&studioFrameTiming)studioFrameTiming.stopAutomatic();
       studioPlaybackFpsMeter.reset();
       if(studioPlaybackExperiment)studioPlaybackExperiment.clear();
       if(studioPlaybackProfileEnabled&&studioPlaybackProfiler){
@@ -3341,7 +3467,21 @@
     var stop=newUiEl('ModernAnimationPlaybackStop');
     if(stop)stop.addEventListener('click',function(){safely(function(){controls.stop();});});
     var seek=newUiEl('ModernAnimationPlaybackSeek');
-    if(seek)seek.addEventListener('input',function(){safely(function(){controls.seek(seek.value);});});
+    function seekWithTiming(source){
+      if(!seek)return;
+      var actualSeek=function(){controls.seek(seek.value);};
+      if(typeof studioFrameTiming!=='undefined'&&studioFrameTiming&&
+         studioFrameTiming.enabled()&&studioPlaybackQuality==='canvas-direct')
+        return studioFrameTiming.input(source,seek.value,actualSeek);
+      return actualSeek();
+    }
+    if(seek)seek.addEventListener('input',function(){safely(function(){
+      if(typeof studioFrameTiming!=='undefined'&&studioFrameTiming)studioFrameTiming.stopAutomatic();
+      seekWithTiming('manual');
+    });});
+    if(typeof bindStudioFrameTiming==='function')bindStudioFrameTiming(function(value){
+      if(seek){seek.value=String(value);safely(function(){seekWithTiming('auto');});}
+    });
     var retry=newUiEl('ModernAnimationPlaybackRetry');
     if(retry)retry.addEventListener('click',function(){
       if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
@@ -3353,7 +3493,10 @@
     bindStudioVideoExport();
     observeStudioPreviewSize();
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden&&studioBenchmark&&studioBenchmark.running())studioBenchmark.cancel();
+      if(document.hidden){
+        if(studioBenchmark&&studioBenchmark.running())studioBenchmark.cancel();
+        if(typeof studioFrameTiming!=='undefined'&&studioFrameTiming)studioFrameTiming.stopAutomatic();
+      }
       controls.visibility(document.hidden);
     });
   }

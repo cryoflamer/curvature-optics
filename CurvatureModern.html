@@ -91,6 +91,7 @@
 <script src="src/animation/ModernAnimationStudio.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1"></script>
 <script src="src/animation/ModernAnimationPlayback.js"></script>
 <script src="src/animation/ModernAnimationPlaybackControls.js"></script>
+<script src="src/animation/ModernAnimationFrameTiming.js"></script>
 <script src="src/animation/ModernAnimationPlaybackProfiler.js"></script>
 <script src="src/animation/ModernAnimationPlaybackExperiment.js"></script>
 <script src="src/animation/ModernAnimationPlaybackBenchmark.js?canvas-ops-benchmark=1"></script>
@@ -301,6 +302,25 @@
             <small id="ModernAnimationBenchmarkStatus" role="status">Playback: five modes; Canvas layers / strokes: four each; stroke styles: six; stroke widths: ten. All use a frozen frame, three rotated passes, 30 warmup and 120 measured RAF callbacks per mode.</small>
             <output id="ModernAnimationPlaybackProfileReport" class="modern-animation-profiler-report" aria-live="off">Enable profiling, then Play the animation.</output>
             <small>Recent main-thread p50 / p95 timings. Paint gaps include browser scheduling; Canvas 2D timings exclude deferred compositing. Profiling itself adds some overhead.</small>
+          </div>
+        </details>
+        <details id="ModernAnimationFrameTimingSection" class="modern-camera-hud-settings">
+          <summary>Canvas Direct · frame timing (manual vs automatic)</summary>
+          <div class="modern-camera-hud-settings-body modern-animation-profiler-body">
+            <label><input type="checkbox" id="ModernAnimationFrameTimingEnabled"> Record real timeline paints (opt-in)</label>
+            <div class="modern-animation-benchmark-actions">
+              <button type="button" id="ModernAnimationFrameTimingAuto" disabled>Auto-sweep timeline · 4s</button>
+              <button type="button" id="ModernAnimationFrameTimingStop" disabled>Stop sweep</button>
+              <button type="button" id="ModernAnimationFrameTimingClear" disabled>Clear measurements</button>
+              <button type="button" id="ModernAnimationFrameTimingExport" disabled>Export timing JSON</button>
+            </div>
+            <label for="ModernAnimationFrameTimingOrder">Request next RAF (auto-sweep only)</label>
+            <select id="ModernAnimationFrameTimingOrder">
+              <option value="after" selected>After synchronous repaint</option>
+              <option value="before">Before synchronous repaint</option>
+            </select>
+            <output id="ModernAnimationFrameTimingReport" class="modern-animation-profiler-report" aria-live="off">Choose Canvas Direct and enable recording. Drag Timeline manually, run the 4s auto-sweep, then optionally Play the animation. Export one JSON with all three paths.</output>
+            <small>The auto-sweep calls exactly the same seek handler as manual dragging. RAF timestamps, JS paint calls and input events are counted separately; this does not measure presented frames or GPU completion. An opt-in RAF monitor may introduce small overhead. No project or export settings are changed.</small>
           </div>
         </details>
         <label class="modern-camera-hud-toggle" for="ModernAnimationPlaybackCameraHud"><input type="checkbox" id="ModernAnimationPlaybackCameraHud" checked> Camera HUD</label>

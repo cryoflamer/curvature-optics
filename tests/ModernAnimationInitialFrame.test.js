@@ -129,7 +129,8 @@ test('Prepare, restoration, Stop, Seek and workspace entry are connected to fram
   assert.match(app,/animationWorkspaceOpen=true;syncWorkspaceVisibility\(\);\s*if\(studioPlayback\)scheduleStudioInitialPaint\('opened'\)/);
   assert.match(app,/controls.seek\(seek.value\)/);
   assert.match(playbackControls.create.toString(),/player.seek\(player.status\(\).durationMs\*Number\(raw\)\/1000,options.now\(\)\)/);
-  assert.match(app,/render:renderStudioPlaybackSample/);
+  assert.match(app,/render:function\(force,benchmark\)/);
+  assert.match(app,/return renderStudioPlaybackSample\(force,benchmark\)/);
   assert.match(app,/sync:syncStudioPlaybackControls/);
   assert.match(html,/id="ModernAnimationFrameLoadingA"/);
   assert.match(html,/id="ModernAnimationFrameLoadingB"/);
