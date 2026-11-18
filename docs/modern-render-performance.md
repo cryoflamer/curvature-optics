@@ -102,3 +102,41 @@ Compare each variation to `canvas_full` **inside the same report**. Do not
 interpret differences across separate Legacy and Modern videos as isolated
 renderer cost. Fast RAF intervals alone do not demonstrate actual frame display
 rate; browser scheduling and deferred graphics may dominate.
+
+
+## Canvas Direct stroke isolation benchmark (Modern Animation Studio)
+
+After the layer benchmark identifies expensive outlines, click **Benchmark Canvas
+strokes** in the same Playback profiler. No new page or project file is created.
+This opt-in benchmark freezes the current scene/camera and forces the same
+fills, outlines and horizon mask on in all modes, even if the live diagnostics
+checkboxes are off. It performs three rotated passes of 30 warm-up and 120
+measured RAF callbacks for each of these four diagnostic render variants:
+
+- `stroke_baseline`: original Canvas Direct path construction and `stroke()`.
+- `stroke_path_only`: exactly the same line clipping and path construction,
+  with `stroke()` omitted. **Contours are invisible**, but calls to
+  `beginPath()`, `moveTo()` and `lineTo()` remain.
+- `stroke_simple`: same individual contours and stroke calls, but solid black,
+  opaque 1-device-pixel lines with miter joins instead of authored styles.
+  This is *not* an equivalent image and is never used during normal Playback.
+- `stroke_batched`: combines consecutive strokes having identical color,
+  alpha and width into one `beginPath()` / `stroke()` pair. Pending paths are
+  flushed **before each fill** (including the horizon mask), at style changes,
+  and at the end. This is an experimental diagnostic, **not yet a production
+  optimization**: same-style overlapping subpaths can differ subtly in alpha
+  compositing or line antialiasing.
+
+A single JSON is downloaded on completion; `config.profile` is `canvas-strokes`.
+`strokePrimitives` is the number of projected primitives whose outline paths
+were prepared, while `strokeCalls` counts the number of actual `stroke()`
+invocations. `lineToCalls`, `beginPathCalls`, RAF intervals, and JavaScript
+stage timings distinguish path-building from stroke submission. The current
+Playback position, running state and live layer toggles are restored when the
+benchmark stops, completes or fails.
+
+**Interpretation:** baseline vs path-only measures the effect of submitting
+strokes *with path work retained*. Simple tests style cost; batching tests
+submission count when geometry stays constant. RAF gaps include browser
+scheduling and asynchronous graphics/compositing work, so these data alone
+cannot locate the specific browser/GPU thread responsible for delays.

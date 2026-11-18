@@ -11,8 +11,9 @@
   'use strict';
   var MODES=Object.freeze(['normal','canvas_only','dom_only','bitmap_replay','compute_only']);
   var LAYER_MODES=Object.freeze(['canvas_full','canvas_no_fills','canvas_no_strokes','canvas_no_mask']);
+  var STROKE_MODES=Object.freeze(['stroke_baseline','stroke_path_only','stroke_simple','stroke_batched']);
   var METRICS=['gapMs','callbackMs','rendererMs','postMs','projectionMs','canvasMs',
-    'fillCalls','strokeCalls','horizonMasks','sourceObjects','primitivesProjected',
+    'fillCalls','strokeCalls','strokePrimitives','horizonMasks','sourceObjects','primitivesProjected',
     'visibleSegments','beginPathCalls','moveToCalls','lineToCalls','closePathCalls',
     'clearRectCalls','fillRectCalls','clipCalls','drawImageCalls'];
   function percentiles(values){
@@ -63,7 +64,10 @@
             'DOM only reuses the last rendered result; bitmap replay uses one drawImage.',
             'All modes use a frozen camera/sample, including Normal.',
             'Canvas operation counts cover only the Canvas Direct painter (excluding decorations).',
-            'Layer passes force the baseline layers on before disabling only the named layer.',
+            'Layer and stroke passes force fills, outlines, and horizon mask on.',
+            'Stroke path-only builds the same paths and suppresses only stroke() calls.',
+            'Stroke simple uses an opaque black 1px miter-joined outline; its image differs.',
+            'Stroke batched merges only consecutive same-style outlines, flushing before fills; overlaps may differ.',
             'Instrumentation adds a small amount of synchronous work to the painter.']};
         release();options.completed(report);return;
       }
@@ -110,9 +114,10 @@
         sampleFrames:settings.sampleFrames===undefined?120:settings.sampleFrames,
         environment:settings.environment||{},
         profile:settings.profile||'playback',modes:null};
-      if(!['playback','canvas-layers'].includes(config.profile))
+      if(!['playback','canvas-layers','canvas-strokes'].includes(config.profile))
         throw RangeError('Invalid benchmark profile');
-      config.modes=config.profile==='canvas-layers'?LAYER_MODES:MODES;
+      config.modes=config.profile==='canvas-layers'?LAYER_MODES:
+        config.profile==='canvas-strokes'?STROKE_MODES:MODES;
       if(!Number.isInteger(config.passes)||config.passes<1||config.passes>10||
         !Number.isInteger(config.warmupFrames)||config.warmupFrames<1||config.warmupFrames>1000||
         !Number.isInteger(config.sampleFrames)||config.sampleFrames<2||config.sampleFrames>10000)
@@ -123,6 +128,6 @@
     }
     return Object.freeze({start:start,cancel:stop,running:isRunning});
   }
-  return Object.freeze({MODES:MODES,LAYER_MODES:LAYER_MODES,
+  return Object.freeze({MODES:MODES,LAYER_MODES:LAYER_MODES,STROKE_MODES:STROKE_MODES,
     percentiles:percentiles,order:order,create:create});
 }));

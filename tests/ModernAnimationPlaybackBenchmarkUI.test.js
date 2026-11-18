@@ -8,6 +8,7 @@ const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
 function harness(){
   const nodes=new Map(),queue=new Map(),downloads=[];
   let nextId=0,now=1000,position=40000,playing=true,renderCount=0,stops=0,starts=0;
+  const paintOptions=[];
   function node(id){
     if(!nodes.has(id))nodes.set(id,{hidden:false,disabled:false,checked:true,
       textContent:'',listeners:new Map(),addEventListener(event,cb){
@@ -25,8 +26,17 @@ function harness(){
     sample(){return sample;},pause(){playing=false;stops++;},start(){playing=true;starts++;},
     seek(v){position=v;}};
   const controls={halt(){player.pause();},schedule(){starts++;}};
-  const painter={render(){renderCount++;now+=4;return {quality:'canvas-direct',overlays:{},
-    result:{timings:{projectionMs:2,canvasMs:2},fillCalls:40,strokeCalls:60}};}};
+  const painter={render(_sample,_side,_graph,options){
+    renderCount++;now+=4;
+    const flags=options&&options.canvasDirectDiagnostics||{};
+    paintOptions.push({...flags});
+    const calls=flags.strokeMode==='path-only'?0:flags.strokeMode==='batched'?10:60;
+    return {quality:'canvas-direct',overlays:{},
+      result:{timings:{projectionMs:2,canvasMs:2},
+        directStats:{fillCalls:40,strokeCalls:calls,strokePrimitives:60,
+          horizonMasks:1,canvasCalls:{beginPath:100,stroke:calls,lineTo:250}},
+        previewLod:{original:128},primitiveCount:250,drawn:250}};
+  }};
   const probe={mode(){return 'normal';},setMode(){}};
   const context=vm.createContext({
     newUiEl:node,studioBenchmarkApi:runner,studioBenchmark:null,
@@ -64,7 +74,7 @@ function harness(){
     const [[id,callback]]=queue;queue.delete(id);
     now+=12;callback(now);
   }
-  return {context,node,queue,tick,downloads,get renderCount(){return renderCount;},
+  return {context,node,queue,tick,downloads,paintOptions,get renderCount(){return renderCount;},
     get playing(){return playing;},get starts(){return starts;},get stops(){return stops;}};
 }
 
@@ -99,4 +109,34 @@ test('Cancel benchmark restores Playback without exporting partial JSON',()=>{
   assert.equal(h.downloads.length,0);
   assert.equal(h.playing,true);
   assert.match(h.node('ModernAnimationBenchmarkStatus').textContent,/cancelled/);
+});
+
+
+test('Canvas strokes UI exports all four modes and restores current display settings',()=>{
+  const h=harness();
+  h.node('ModernCanvasDirectFills').checked=false;
+  h.node('ModernCanvasDirectStrokes').checked=false;
+  h.node('ModernCanvasDirectMask').checked=false;
+  h.node('ModernAnimationBenchmarkStrokes').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),true);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokes').disabled,true);
+  for(let i=0;h.context.studioBenchmark.running()&&i<3000;i++)h.tick();
+  assert.equal(h.downloads.length,1);
+  const report=h.downloads[0].json;
+  assert.equal(report.config.profile,'canvas-strokes');
+  assert.equal(report.runs.length,12);
+  assert.equal(report.environment.fixedTimeMs,40000);
+  assert.equal(report.summary.stroke_baseline.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_path_only.strokeCalls.p50,0);
+  assert.equal(report.summary.stroke_batched.strokeCalls.p50,10);
+  assert.equal(report.summary.stroke_path_only.strokePrimitives.p50,60);
+  const modes=new Set(h.paintOptions.map(x=>x.strokeMode).filter(Boolean));
+  assert.deepEqual([...modes].sort(),['batched','normal','path-only','simple']);
+  assert.ok(h.paintOptions.filter(x=>x.strokeMode).every(x=>
+    x.fills===true&&x.strokes===true&&x.horizonMask===true));
+  assert.equal(h.node('ModernCanvasDirectFills').checked,false);
+  assert.equal(h.node('ModernCanvasDirectStrokes').checked,false);
+  assert.equal(h.node('ModernCanvasDirectMask').checked,false);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokes').disabled,false);
+  assert.equal(h.playing,true);
 });

@@ -292,10 +292,11 @@
             <div class="modern-animation-benchmark-actions">
               <button type="button" id="ModernAnimationBenchmarkRun" title="Run three passes through five fixed-frame modes and download one JSON report">Run benchmark</button>
               <button type="button" id="ModernAnimationBenchmarkLayers" title="Measure the same frozen Canvas Direct frame with all layers, no object fills, no outlines, and no horizon mask">Benchmark Canvas layers</button>
+              <button type="button" id="ModernAnimationBenchmarkStrokes" title="Compare normal strokes, built paths without stroke(), simple 1px lines, and batching for a fixed Canvas Direct frame">Benchmark Canvas strokes</button>
               <button type="button" id="ModernAnimationBenchmarkCancel" hidden>Cancel benchmark</button>
               <button type="button" id="ModernAnimationBenchmarkDownload" hidden>Download last JSON</button>
             </div>
-            <small id="ModernAnimationBenchmarkStatus" role="status">Playback benchmark: five modes. Canvas layers: four modes with the same frozen frame and baseline layers forced on; three rotated passes, 30 warmup and 120 measured RAF callbacks per mode.</small>
+            <small id="ModernAnimationBenchmarkStatus" role="status">Playback: five modes. Canvas layers and Canvas strokes: four modes each, with the same frozen frame and baseline layers; three rotated passes, 30 warmup and 120 measured RAF callbacks per mode.</small>
             <output id="ModernAnimationPlaybackProfileReport" class="modern-animation-profiler-report" aria-live="off">Enable profiling, then Play the animation.</output>
             <small>Recent main-thread p50 / p95 timings. Paint gaps include browser scheduling; Canvas 2D timings exclude deferred compositing. Profiling itself adds some overhead.</small>
           </div>

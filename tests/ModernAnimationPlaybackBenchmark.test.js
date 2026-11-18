@@ -143,3 +143,38 @@ test('layer benchmark UI reuses the same runner and reads nested Canvas Direct c
   assert.match(app,/canvas_no_mask/);
   assert.match(renderer,/canvasCalls:direct\.canvasCalls/);
 });
+
+
+test('Canvas stroke profile runs four rotated fixed-frame variants with full telemetry',()=>{
+  const h=harness();
+  h.runner.start({profile:'canvas-strokes',warmupFrames:2,sampleFrames:4,passes:3,
+    environment:{scene:'Soundly',fixedTimeMs:26890.5}});
+  for(let i=0;h.runner.running()&&i<500;i++)h.tick();
+  assert.ok(h.result);
+  assert.equal(h.result.config.profile,'canvas-strokes');
+  assert.equal(h.result.runs.length,12);
+  assert.deepEqual(h.result.config.modes,benchmark.STROKE_MODES);
+  assert.deepEqual(h.result.runs.slice(0,4).map(x=>x.mode),
+    benchmark.order(0,benchmark.STROKE_MODES));
+  assert.deepEqual(h.result.runs.slice(4,8).map(x=>x.mode),
+    benchmark.order(1,benchmark.STROKE_MODES));
+  for(const mode of benchmark.STROKE_MODES){
+    assert.equal(h.result.summary[mode].frames,12);
+    assert.equal(h.result.summary[mode].strokeCalls.p50,1450);
+    assert.equal(h.result.summary[mode].strokePrimitives.count,0);
+  }
+  assert.equal(h.result.runs[0].rows.length,4);
+  assert.match(h.result.notes.join(' '),/Path-only|path-only/i);
+  assert.throws(()=>benchmark.create({}),/requires/);
+  assert.throws(()=>h.runner.start({profile:'invalid'}),/Invalid benchmark profile/);
+});
+
+test('stroke benchmark UI contains one independent opt-in button',()=>{
+  const html=fs.readFileSync('CurvatureModern.html','utf8');
+  const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
+  assert.match(html,/id="ModernAnimationBenchmarkStrokes"/);
+  assert.match(app,/startBenchmark\('canvas-strokes'\)/);
+  assert.match(app,/stroke_path_only/);
+  assert.match(app,/stroke_simple/);
+  assert.match(app,/stroke_batched/);
+});

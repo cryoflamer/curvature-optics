@@ -159,12 +159,29 @@
       var drawFills=diagnostic.fills!==false;
       var drawStrokes=diagnostic.strokes!==false;
       var drawMask=diagnostic.horizonMask!==false;
-      var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0;
+      // These variants are for an opt-in fixed-frame benchmark only. No live
+      // playback state or authored geometry is changed.
+      var strokeMode=diagnostic.strokeMode||'normal';
+      if(!['normal','path-only','simple','batched'].includes(strokeMode))
+        throw RangeError('Unknown Canvas Direct stroke diagnostic mode');
+      var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0,strokePrimitives=0;
       // Count calls issued by this painter, not the browser's deferred GPU work
       // or higher-level decorations. No Canvas prototype interception is used.
       var canvasCalls={beginPath:0,moveTo:0,lineTo:0,closePath:0,
         fill:0,stroke:0,clip:0,clearRect:0,fillRect:0,drawImage:0};
-      var projectionMs=0,canvasMs=0;
+      var projectionMs=0,canvasMs=0,batch=null;
+      // Only consecutive contours with matching paint state may share a path.
+      // Flush before EVERY fill to preserve the existing painter-layer order;
+      // batching across a fill or horizon mask would alter occlusion.
+      function flushBatch(){
+        if(!batch)return;
+        ctx.globalAlpha=batch.alpha;
+        ctx.strokeStyle=batch.color;
+        ctx.lineWidth=batch.width;
+        ctx.stroke();canvasCalls.stroke++;strokes++;
+        ctx.globalAlpha=1;
+        batch=null;
+      }
       function drawPrimitive(p,role,far){
         var start=clock(),style=p.style||{},mode=p.type==='line'?1:(p.mode==null?1:p.mode);
         var sourcePoints=p.points,local=role!=='objects';
@@ -202,8 +219,11 @@
         projectionMs+=clock()-start;
         if(!fillPixels&&!lines.length)return;
         start=clock();
-        ctx.globalAlpha=style.alpha==null?1:style.alpha;
-        if(fillPixels){ctx.fillStyle=style.fill||'white';ctx.beginPath();canvasCalls.beginPath++;
+        var alpha=style.alpha==null?1:style.alpha;
+        if(fillPixels){
+          flushBatch();
+          ctx.globalAlpha=alpha;
+          ctx.fillStyle=style.fill||'white';ctx.beginPath();canvasCalls.beginPath++;
           ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);canvasCalls.moveTo++;
           for(var k=1;k<fillPixels.length;k++){
             ctx.lineTo(fillPixels[k][0],fillPixels[k][1]);canvasCalls.lineTo++;
@@ -211,14 +231,34 @@
           ctx.closePath();canvasCalls.closePath++;
           ctx.fill();canvasCalls.fill++;fillCalls++;
         }
-        if(lines.length){ctx.strokeStyle=style.stroke||(far?'#666':'black');
-          ctx.lineWidth=viewport.lineWidth(style.lineWidth,camera);
-          ctx.beginPath();canvasCalls.beginPath++;
+        if(lines.length){
+          strokePrimitives++;
+          var strokeColor=strokeMode==='simple'?'#000':(style.stroke||(far?'#666':'black'));
+          var strokeWidth=strokeMode==='simple'?1:viewport.lineWidth(style.lineWidth,camera);
+          var strokeAlpha=strokeMode==='simple'?1:alpha;
+          if(strokeMode==='batched'){
+            if(batch&&(batch.color!==strokeColor||batch.width!==strokeWidth||batch.alpha!==strokeAlpha))
+              flushBatch();
+            if(!batch){
+              batch={color:strokeColor,width:strokeWidth,alpha:strokeAlpha};
+              ctx.beginPath();canvasCalls.beginPath++;
+            }
+          }else{
+            ctx.globalAlpha=strokeAlpha;
+            ctx.strokeStyle=strokeColor;
+            ctx.lineWidth=strokeWidth;
+            if(strokeMode==='simple')ctx.lineJoin='miter';
+            ctx.beginPath();canvasCalls.beginPath++;
+          }
           for(var e=0;e<lines.length;e++){
             ctx.moveTo(lines[e][0][0],lines[e][0][1]);canvasCalls.moveTo++;
             ctx.lineTo(lines[e][1][0],lines[e][1][1]);canvasCalls.lineTo++;
           }
-          ctx.stroke();canvasCalls.stroke++;strokes++;
+          // Path-only preserves the entire clipping/path-building workload,
+          // leaving precisely the final Canvas stroke() invocation out.
+          if(strokeMode==='normal'||strokeMode==='simple'){
+            ctx.stroke();canvasCalls.stroke++;strokes++;
+          }
         }
         ctx.globalAlpha=1;canvasMs+=clock()-start;
         projected+=pts.length;drawn+=lines.length;
@@ -272,12 +312,13 @@
         geometry.globeHorizonGuides(geom,{segments:192}).primitives.forEach(function(p){drawPrimitive(p,'visual-aid',false);});
       }
       layers.forEach(function(layer){layer.near.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',false);});});});
+      var flushStart=clock();flushBatch();canvasMs+=clock()-flushStart;
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
-        fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,canvasCalls:canvasCalls,
-        geometryReused:source.reused,
-        diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask},
+        fillCalls:fillCalls,strokeCalls:strokes,strokePrimitives:strokePrimitives,
+        horizonMasks:masked,canvasCalls:canvasCalls,geometryReused:source.reused,
+        diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask,strokeMode:strokeMode},
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},
         limitations:['Legacy-style whole-object horizon masking, not physical visibility',

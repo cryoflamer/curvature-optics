@@ -2160,7 +2160,8 @@
     if(clock)clock.textContent=info.time;
     var probe=newUiEl('ModernAnimationPlaybackExperiment');
     var benchmarking=!!(studioBenchmark&&studioBenchmark.running());
-    ['ModernAnimationBenchmarkRun','ModernAnimationBenchmarkLayers'].forEach(function(id){
+    ['ModernAnimationBenchmarkRun','ModernAnimationBenchmarkLayers',
+      'ModernAnimationBenchmarkStrokes'].forEach(function(id){
       var button=newUiEl(id);
       if(button)button.disabled=benchmarking||!ready||studioPlaybackQuality!=='canvas-direct';
     });
@@ -2967,12 +2968,14 @@
   // Benchmark is an independent RAF sequence with a single frozen sample.
   // No animation project, History entry or export settings are modified.
   function bindStudioBenchmark(){
-    var run=newUiEl('ModernAnimationBenchmarkRun'),layersRun=newUiEl('ModernAnimationBenchmarkLayers');
+    var run=newUiEl('ModernAnimationBenchmarkRun'),layersRun=newUiEl('ModernAnimationBenchmarkLayers'),
+      strokesRun=newUiEl('ModernAnimationBenchmarkStrokes');
     var cancel=newUiEl('ModernAnimationBenchmarkCancel');
     var again=newUiEl('ModernAnimationBenchmarkDownload'),note=newUiEl('ModernAnimationBenchmarkStatus');
     if(!run||!cancel||!studioBenchmarkApi)return;
     function busy(value){
-      run.disabled=!!value;if(layersRun)layersRun.disabled=!!value;cancel.hidden=!value;
+      run.disabled=!!value;if(layersRun)layersRun.disabled=!!value;
+      if(strokesRun)strokesRun.disabled=!!value;cancel.hidden=!value;
       if(again)again.hidden=!!value||!studioBenchmarkLastReport;
       ['ModernAnimationPlaybackPlay','ModernAnimationPlaybackPause','ModernAnimationPlaybackStop',
         'ModernAnimationPlaybackSeek','ModernAnimationPlaybackRetry','ModernAnimationPlaybackOptics',
@@ -3087,6 +3090,7 @@
           var data={rendererMs:res?post:null,postMs:null,
             projectionMs:sum(t,u,'projectionMs'),canvasMs:sum(t,u,'canvasMs'),
             fillCalls:sum(da,db,'fillCalls'),strokeCalls:sum(da,db,'strokeCalls'),
+            strokePrimitives:sum(da,db,'strokePrimitives'),
             horizonMasks:sum(da,db,'horizonMasks'),sourceObjects:sum(a.previewLod||{},b.previewLod||{},'original'),
             primitivesProjected:sum(a,b,'primitiveCount'),visibleSegments:sum(a,b,'drawn')};
           ['beginPath','moveTo','lineTo','closePath','clearRect','fillRect','clip','drawImage'].forEach(function(name){
@@ -3102,14 +3106,18 @@
             if(studioPlayback!==player||!animationWorkspaceOpen||document.hidden)
               throw Error('Benchmark interrupted by workspace or visibility change');
             var began=profileNow(),results=null,info;
-            if(mode.indexOf('canvas_')===0&&mode!=='canvas_only'){
-              // All variants begin from the same layer configuration, regardless
-              // of the user's current live-display checkboxes.
-              var flags={fills:true,strokes:true,horizonMask:true};
+            if((mode.indexOf('canvas_')===0&&mode!=='canvas_only')||mode.indexOf('stroke_')===0){
+              // Every diagnostic starts with identical geometry, mask, fills,
+              // and outlines, independent of the live display checkboxes.
+              var flags={fills:true,strokes:true,horizonMask:true,strokeMode:'normal'};
               if(mode==='canvas_no_fills')flags.fills=false;
               else if(mode==='canvas_no_strokes')flags.strokes=false;
               else if(mode==='canvas_no_mask')flags.horizonMask=false;
-              else if(mode!=='canvas_full')throw Error('Unknown Canvas layer mode');
+              else if(mode==='stroke_path_only')flags.strokeMode='path-only';
+              else if(mode==='stroke_simple')flags.strokeMode='simple';
+              else if(mode==='stroke_batched')flags.strokeMode='batched';
+              else if(mode!=='canvas_full'&&mode!=='stroke_baseline')
+                throw Error('Unknown Canvas diagnostic mode');
               results=renderer(flags);return metrics(results,profileNow()-began);
             }
             if(mode==='normal'){
@@ -3150,7 +3158,8 @@
             throw Error('Unexpected benchmark mode');
           },
           progress:function(state){
-            var count=profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:studioBenchmarkApi.MODES.length;
+            var count=profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:
+              profile==='canvas-strokes'?studioBenchmarkApi.STROKE_MODES.length:studioBenchmarkApi.MODES.length;
             status('Pass '+state.pass+'/'+state.passes+' · '+state.mode+
               ' · '+state.measured+'/'+state.total+' measured · '+state.completed+'/'+(state.passes*count)+' runs');
           },
@@ -3158,6 +3167,8 @@
             studioBenchmarkLastReport=report;restore();
             status(profile==='canvas-layers'?
               'Canvas layers benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
+              profile==='canvas-strokes'?
+              'Canvas strokes benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
               'Benchmark complete: 15 runs across five modes. JSON downloaded automatically.');
             try{download(report);}catch(error){status('Benchmark complete, automatic download failed: '+error.message+'. Use Download last JSON.');}
             if(again)again.hidden=false;
@@ -3170,6 +3181,7 @@
     }
     run.addEventListener('click',function(){startBenchmark('playback');});
     if(layersRun)layersRun.addEventListener('click',function(){startBenchmark('canvas-layers');});
+    if(strokesRun)strokesRun.addEventListener('click',function(){startBenchmark('canvas-strokes');});
     cancel.addEventListener('click',function(){if(studioBenchmark)studioBenchmark.cancel();});
     if(again)again.addEventListener('click',function(){
       if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);

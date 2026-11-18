@@ -24,7 +24,7 @@ function graph(trackPaths=false){
   let filled=0,stroked=0,paths=0,activePath=[];
   const called={beginPath:0,moveTo:0,lineTo:0,closePath:0,fill:0,stroke:0,
     clip:0,clearRect:0,fillRect:0,drawImage:0};
-  const fillColors=[],paintedPaths=[];
+  const fillColors=[],paintedPaths=[],events=[];
   const ctx={save(){},restore(){},setTransform(){},
     fillRect(){called.fillRect++;},clearRect(){called.clearRect++;},
     beginPath(){called.beginPath++;paths++;if(trackPaths)activePath=[];},
@@ -32,8 +32,11 @@ function graph(trackPaths=false){
     lineTo(x,y){called.lineTo++;if(trackPaths)activePath.push([x,y]);},
     closePath(){called.closePath++;},
     fill(){called.fill++;filled++;fillColors.push(this.fillStyle);
+      events.push({type:'fill',color:this.fillStyle});
       if(trackPaths)paintedPaths.push({color:this.fillStyle,points:activePath.slice()});},
-    stroke(){called.stroke++;stroked++;},clip(){called.clip++;},drawImage(){called.drawImage++;}};
+    stroke(){called.stroke++;stroked++;events.push({type:'stroke',color:this.strokeStyle,
+      width:this.lineWidth,alpha:this.globalAlpha,join:this.lineJoin});},
+    clip(){called.clip++;},drawImage(){called.drawImage++;}};
   const g={Canvas:{width:800,height:500,getContext(){return ctx;}},Camera:{},
     ContextScale:1,WinTrans:{ScaleX:500,ScaleY:-500,OffsetX:400,OffsetY:250},
     AutoScalePix:false,MinLineWidth:1,ScalePixInt:false,DevicePixelRatio:1,
@@ -42,7 +45,7 @@ function graph(trackPaths=false){
     SetCamera(p){this.Camera={CamPos:p.CamPos,CamUp:p.CamUp,CamViewCenter:p.CamViewCenter,
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
-  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths,called})};
+  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths,called,events})};
 }
 function soundly(){const m=model();state.applyPreset(m,'soundly');m.Height=8.55;
   m.FocalLengthField=2038;m.Pan=.49;m.Nick=-.006;
@@ -248,4 +251,83 @@ test('Canvas Direct counters match the exact issued path and paint calls, includ
     assert.equal(result.directStats.canvasCalls.clip,0,
       'direct painter performs clipping in JavaScript, not Canvas clip()');
   }
+});
+
+
+test('path-only builds the same clipped outlines and fills but omits every stroke() call',()=>{
+  const m=soundly(),baseGraph=graph(),pathGraph=graph();
+  const opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const base=renderer.renderPhysical(baseGraph.g,m,opts);
+  const path=renderer.renderPhysical(pathGraph.g,m,{...opts,
+    canvasDirectDiagnostics:{strokeMode:'path-only'}});
+  const b=base.directStats,p=path.directStats;
+  assert.ok(b.strokeCalls>500);
+  assert.equal(p.strokeCalls,0);
+  assert.equal(p.strokePrimitives,b.strokePrimitives);
+  assert.equal(p.strokePrimitives,b.strokeCalls,'one outline per stroke in the baseline');
+  assert.equal(path.drawn,base.drawn);
+  assert.equal(path.primitiveCount,base.primitiveCount);
+  assert.equal(p.fillCalls,b.fillCalls);
+  for(const key of ['beginPath','moveTo','lineTo','closePath','fill','clearRect','fillRect'])
+    assert.equal(p.canvasCalls[key],b.canvasCalls[key],key+' still executes');
+  assert.deepEqual(p.canvasCalls,pathGraph.stats().called);
+  assert.equal(p.canvasCalls.stroke,0);
+});
+
+test('simple stroke preserves projected paths, using the same calls as baseline',()=>{
+  const m=soundly(),simple=graph(),base=graph();
+  const opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const a=renderer.renderPhysical(base.g,m,opts);
+  const b=renderer.renderPhysical(simple.g,m,{...opts,
+    canvasDirectDiagnostics:{strokeMode:'simple'}});
+  assert.deepEqual(b.directStats.canvasCalls,a.directStats.canvasCalls);
+  assert.equal(b.directStats.strokePrimitives,a.directStats.strokePrimitives);
+  assert.equal(b.primitiveCount,a.primitiveCount);
+  assert.equal(b.drawn,a.drawn);
+  assert.equal(simple.g.Canvas.getContext('2d').lineJoin,'miter');
+  assert.equal(simple.g.Canvas.getContext('2d').lineWidth,1);
+  assert.equal(simple.g.Canvas.getContext('2d').strokeStyle,'#000');
+  assert.ok(simple.stats().events.filter(e=>e.type==='stroke').every(e=>
+    e.color==='#000'&&e.width===1&&e.alpha===1&&e.join==='miter'));
+  // A subsequent default frame must reset the diagnostic styling.
+  renderer.renderPhysical(simple.g,m,opts);
+  assert.equal(simple.g.Canvas.getContext('2d').lineJoin,'round');
+});
+
+test('batching reduces stroke calls while retaining fills and projected segments',()=>{
+  const m=soundly(),base=graph(),batched=graph();
+  const opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const a=renderer.renderPhysical(base.g,m,opts);
+  const b=renderer.renderPhysical(batched.g,m,{...opts,
+    canvasDirectDiagnostics:{strokeMode:'batched'}});
+  const before=a.directStats,after=b.directStats;
+  assert.ok(after.strokeCalls<before.strokeCalls,
+    'contiguous same-style paths must combine in the Soundly scene');
+  assert.ok(after.strokeCalls>0,'pending final batch must be flushed');
+  assert.equal(after.strokePrimitives,before.strokePrimitives);
+  assert.equal(b.drawn,a.drawn);
+  assert.equal(b.primitiveCount,a.primitiveCount);
+  assert.equal(after.horizonMasks,before.horizonMasks);
+  assert.equal(after.fillCalls,before.fillCalls,'mask and object fills remain in place');
+  assert.equal(after.canvasCalls.lineTo,before.canvasCalls.lineTo,
+    'every stroke segment still reaches Canvas');
+  assert.ok(after.canvasCalls.beginPath<before.canvasCalls.beginPath);
+  assert.deepEqual(after.canvasCalls,batched.stats().called);
+  assert.equal(after.canvasCalls.stroke,after.strokeCalls);
+  const events=batched.stats().events;
+  const maskIndex=events.findIndex(e=>e.type==='fill'&&e.color==='white');
+  assert.ok(maskIndex>0,'horizon mask must still be painted');
+  assert.ok(events.slice(0,maskIndex).some(e=>e.type==='stroke'),
+    'far-object strokes are flushed before the white mask');
+  assert.ok(events.slice(maskIndex+1).some(e=>e.type==='stroke'),
+    'near-object strokes still paint over the mask');
+  assert.deepEqual(events.filter(e=>e.type==='fill').map(e=>e.color),
+    base.stats().events.filter(e=>e.type==='fill').map(e=>e.color),
+    'object and mask fills retain their painter order');
+});
+
+test('unknown stroke diagnostic mode is rejected instead of silently changing the painter',()=>{
+  const m=soundly();
+  assert.throws(()=>draw(m,{canvasDirectDiagnostics:{strokeMode:'unknown'}}),
+    /Unknown Canvas Direct stroke diagnostic mode/);
 });

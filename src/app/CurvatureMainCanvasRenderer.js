@@ -150,6 +150,7 @@
           paintMs:dt.projectionMs+dt.canvasMs,decorationsMs:directEnd-directStart-dt.totalMs,
           geometryMs:dt.geometryMs,strokeCalls:direct.strokeCalls},
         directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
+          strokePrimitives:direct.strokePrimitives,
           horizonMasks:direct.horizonMasks,canvasCalls:direct.canvasCalls,
           geometryReused:direct.geometryReused},
         decorationCamera:options.deferDecorations?camera:null,
