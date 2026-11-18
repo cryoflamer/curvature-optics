@@ -2,7 +2,26 @@
 > Stages **1–3 complete**: after corrective repair C the user reported normal,
 > very fast and smooth Opera interaction (manual observation, no measured FPS).
 > Stage **4A — pointer/wheel/keyboard** accepted by the user in Opera.
-> Stage **4B — camera sequences** implemented; awaiting browser acceptance.
+> Stage **4B — camera sequences** accepted by the user in Opera (reported
+> working and visually very accurate; no instrumented FPS).
+> **Stage 5A — numerical qualification** completed externally on `fa45a7f`:
+> 2572 point cases, 66 RK4 convergence controls, 46 bracketed visibility
+> thresholds (43 resolved), five headless Chromium scenes. Standard and
+> -6.5 K/km lapse, ranges <=40 km and heights <=100 m: maximum sampled
+> visible-point error 0.406 backing pixels at diagonal FOV 1° (1200x800).
+> This is a sampled single-branch comparison, not a universal accuracy bound.
+> **Stage 5B — virtual Flat horizon masking** implemented: positive effective
+> curvature now activates the existing approximate far/mask/near painter
+> order and clips metric guides to the same observer-local tangent distance.
+> Flat zero/negative curvature has no virtual mask; Globe is unchanged.
+> The physical model, RK4 diagnostics and authoritative exports are unchanged.
+> Chromium regression (Flat exponential, 30 km tower, eye 15 m): the
+> lowest non-white tower row (RGB minimum <200 over white) changed from
+> 439 to 393, matching Accurate's 393 at 1200x800; no general parity claim.
+> Validation: 24/24 Canvas Direct tests; 264/264 wider regression tests;
+> both static isolation audits passed. Full test suite not repeated.
+> **NEXT:** manual Opera acceptance of positive-curvature Flat masking,
+> then Stage 5C (centralize qualification/support and fallback criteria).
 > See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates and historical validation notes.
 > Read `git log -1` to identify the applied HEAD.
@@ -16,8 +35,7 @@
 > Validation: 68/68 navigation tests, 669/669 broader camera/animation/History/
 > architecture tests; both static isolation audits passed. Entire 304-file
 > test suite and browser FPS were not measured in this compatpatch.
-> **NEXT:** verify Camera Animation Play/Stop/Cancel, input takeover, holds,
-> and Globe/Flat Compare in Opera; then Stage 5 (physical qualification).
+> Stage 4B manual acceptance subsequently received; see above.
 > Newly created Animation Studio previews now prefer **Canvas Direct** with
 > checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
 > choices in old drafts/Library records are preserved, and newly selected

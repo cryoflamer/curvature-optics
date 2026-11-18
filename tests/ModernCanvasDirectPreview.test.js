@@ -163,7 +163,7 @@ test('Globe and Flat render Vacuum and Standard with independent signed curvatur
   const inverse=draw(m,{atmosphere:'inverse-temperature',occlusionRadius:R,
     inverseProfile:{source:'standard',weight:1}});
   assert.ok(inverse.effectiveRadiusMeters>0,'inverse Flat has positive virtual curvature');
-  assert.equal(inverse.directStats.horizonMasks,0,'Flat does not invent a certified horizon');
+  assert.equal(inverse.directStats.horizonMasks,1,'positive effective curvature has a virtual mask');
 });
 
 test('Flat signed-curvature painter bends object and ground guides in the observer frame',()=>{
@@ -243,8 +243,8 @@ test('Canvas Direct supports all authored atmosphere profiles on Globe and Flat'
       assert.ok(g.stats().paintedPaths.concat(g.stats().strokedPaths.map(points=>({points})))
         .every(path=>path.points.every(point=>point.every(Number.isFinite))),
         `${shape} ${kind} finite Canvas paths`);
-      if(shape===2)assert.equal(result.directStats.horizonMasks,0,
-        'Flat approximation never claims a certified horizon');
+      if(shape===2&&p.effectiveCurvature<=0)assert.equal(result.directStats.horizonMasks,0,
+        'nonpositive effective curvature has no virtual horizon');
     }
     assert.equal(JSON.stringify(m),original,'renderer leaves the authored model untouched');
   }
@@ -448,4 +448,68 @@ test('Canvas Direct reuses full captions, geometry summary and frame without cha
   const suppressed=renderer.renderPhysical(g.g,m,{...options,captionMode:'off'});
   assert.equal(suppressed.directStats.captionCount,0);
   assert.equal(JSON.stringify(m),before);
+});
+
+
+test('Flat positive curvature masks distant object packages but preserves near packages and nonpositive profiles',()=>{
+  const m=model();state.applyPreset(m,'single');m.showModel=2;m.Height=15;
+  m.NObjects=[1,0];m.ObjDist=[30000,0];m.ObjSize=[65,65];m.ObjSidePos=[0,0];
+  m.CameraEast=0;m.CameraNorth=0;m.Pan=0;m.Nick=-.13;m.FocalLengthField=2000;
+  m.showGrid=0;m.showData=0;m.showTangent=0;m.Update();
+  const before=JSON.stringify(m),opts={opticalQuality:'canvas-direct',deferDecorations:true,
+    occlusionRadius:R,canvasDirectOptions:{thinOutlines:true}};
+  for(const atmosphere of ['exponential-occlusion','inverse-spherical','inverse-temperature','profile-transition']){
+    const g=graph(true),r=renderer.renderPhysical(g.g,m,{...opts,atmosphere,
+      inverseProfile:{source:'standard',weight:1},transitionProfile:{source:'standard',weight:1}});
+    assert.equal(r.directStats.horizonMasks,1,atmosphere);
+    const {events,paintedPaths}=g.stats();
+    assert.deepEqual(events.at(-1),{type:'fill',color:'white'},'one opaque mask after the far tower');
+    const disk=paintedPaths.at(-1).points;
+    assert.ok(disk.length>=4&&Math.max(...disk.map(p=>p[0]))-Math.min(...disk.map(p=>p[0]))>790);
+    assert.ok(disk.every(([x,y])=>Number.isFinite(x)&&Number.isFinite(y)&&x>=-2.001&&x<=802.001&&y>=-2.001&&y<=502.001));
+  }
+  assert.equal(JSON.stringify(m),before);
+  for(const atmosphere of ['vacuum','standard'])assert.equal(draw(m,{...opts,atmosphere}).directStats.horizonMasks,0);
+  const positive={...opts,atmosphere:'exponential-occlusion'};
+  const g=graph(true);
+  const far=renderer.renderPhysical(g.g,m,positive);
+  m.CameraNorth=25000;m.Update();
+  const near=renderer.renderPhysical(g.g,m,positive);
+  assert.equal(far.directStats.horizonMasks,1);
+  assert.equal(near.directStats.horizonMasks,0,'translated observer sees near tower without mask');
+  assert.equal(near.cacheReused,true,'observer translation reuses authored mesh');
+  m.CameraNorth=0;m.Height=200;m.Update();
+  assert.equal(renderer.renderPhysical(g.g,m,positive).directStats.horizonMasks,0,
+    'raising the observer moves the virtual horizon beyond the tower');
+});
+
+test('Flat positive curvature clips metric rings and radial guides to the same virtual tangent distance',()=>{
+  const m=model();state.applyPreset(m,'single');m.showModel=2;m.Height=15;m.NObjects=[0,0];
+  m.showGrid=1;m.metricGridExtentKm=40;m.FocalLengthField=100;m.Nick=-1;m.Update();
+  const physicalWorld=require('../src/geometry/CurvaturePhysicalWorldGeometry');
+  const opts={atmosphere:'exponential-occlusion',occlusionRadius:R};
+  const g=graph(true),result=renderer.renderPhysical(g.g,m,{...opts,opticalQuality:'canvas-direct',deferDecorations:true});
+  const horizon=R*Math.acos(R/(R+m.Height));
+  assert.equal(result.directStats.metricGrid.rings,physicalWorld.RINGS.filter(d=>d<=horizon).length);
+  assert.equal(result.directStats.metricGrid.spokes,24);
+  assert.equal(result.directStats.metricGrid.extentMeters,40000);
+  assert.equal(result.directStats.horizonMasks,0,'grid alone requires no object mask');
+  assert.ok(result.directStats.metricGrid.segments>0);
+  assert.ok(draw(m,{atmosphere:'vacuum'}).directStats.metricGrid.rings>result.directStats.metricGrid.rings);
+});
+
+test('Flat virtual mask is painted between far and near banks even after camera rotation',()=>{
+  const m=model();state.applyPreset(m,'single');m.showModel=2;m.Height=15;
+  m.NObjects=[1,1];m.ObjType=[3,3];m.ObjDist=[30000,10000];m.ObjSize=[65,65];
+  m.ObjSidePos=[0,0];m.Pan=.04;m.Nick=-.13;m.Roll=9;m.FocalLengthField=2000;
+  m.showGrid=0;m.showData=0;m.showTangent=0;m.Update();
+  const g=graph(true),r=renderer.renderPhysical(g.g,m,{atmosphere:'exponential-occlusion',
+    occlusionRadius:R,opticalQuality:'canvas-direct',deferDecorations:true,
+    visibility:{enabled:true,rangeKm:60},canvasDirectOptions:{thinOutlines:true}});
+  assert.equal(r.directStats.horizonMasks,1);
+  const events=g.stats().events,mask=events.findIndex(e=>e.type==='fill'&&e.color==='white');
+  assert.ok(mask>0&&mask<events.length-1,'opaque mask between object banks');
+  assert.ok(events.slice(0,mask).some(e=>e.type==='stroke'),'far outlines precede mask');
+  assert.ok(events.slice(mask+1).some(e=>e.type==='stroke'),'near outlines follow mask');
+  assert.ok(events.every(e=>e.type!=='stroke'||e.width<=1));
 });

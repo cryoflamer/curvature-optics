@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard accepted by the user in Opera. Stage 4B camera sequences implemented; manual acceptance pending.
+**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard accepted by the user in Opera. Stage 4B camera sequences accepted by the user in Opera. Stage 5A research completed; 5B virtual Flat horizon mask implemented, manual acceptance pending.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -123,8 +123,11 @@ new pack until its Git history or a clean application confirms that fact.
 | **2. Studio defaults** | **Completed** | For *new* Animation Studio live previews, prefer `canvas-direct` and checked Thin outlines (≤1 backing px); keep Auto FPS, actual FPS, opt-out and previously saved explicit choices. Handle unsupported Canvas Direct atmospheres with an honest fallback/status. Regression: new/existing drafts, Prepare/Play/Pause/Seek/Stop, Compare, export unchanged. |
 | **3. Direct camera drag** | **Completed** | Add Canvas Direct previews to Scene and Compare drag (rotate + Shift-translate), preserving all camera/gesture math and pointer cancellation. Bound per-frame work, cache geometry when possible; after release render authoritative optics. Verify A/B independent physical settings and a safe, explicit fallback. Split Scene/Compare into 3a/3b if needed. |
 | **4A. Shared pointer/wheel/keyboard pipeline** | **Completed; user confirmed in Opera** | Reuse one direct scheduler and owner, retain fallbacks and input math, verify idle/release/interruption. |
-| **4B. Camera sequences** | Implemented; Opera acceptance pending | Reuse shared preview while preserving absolute sequence timing, Stop/Cancel and persistence. |
-| **5. Effective-curvature qualification** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. Sample representative supported and unsupported profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
+| **4B. Camera sequences** | **Completed; user confirmed in Opera** | Reuse shared preview while preserving absolute sequence timing, Stop/Cancel and persistence. |
+| **5A. Numerical qualification** | **Completed** | External reproducible point/boundary sweeps and headless Chromium comparisons on Stage 4B; record sampled accuracy and limitations. |
+| **5B. Virtual Flat horizon mask** | Implemented; Opera acceptance pending | Apply positive-effective-curvature tangent disk and guide clipping with existing approximate painter order; verify near/far, translation, sign and actual Canvas. |
+| **5C. Support criteria & fallback** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. |
+| **5D. Requalification & documentation** | Planned | Repeat representative profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
 | **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
 
 ## Stage 2 implementation notes (2026-11-18)
@@ -469,3 +472,69 @@ new pack until its Git history or a clean application confirms that fact.
   add views with different height/FOV/angles, play with arrival pauses, test
   Stop/Cancel and keyboard/wheel/mouse takeover. Check selected settled
   quality returns; Stage 5 begins after browser acceptance.
+
+
+## Stage 5A — numerical qualification on the accepted Stage 4B baseline
+
+The user subsequently confirmed Camera Animation works and the preview looks
+very accurate in Opera. External research archive `canvas-direct-stage5-research.zip`
+(on `fa45a7f`, no source edits) contains `probe.js`, `boundary.js`, `browser.py`,
+JSON results and PNGs. Research scope and results:
+
+- 2464 nominal-radius and 108 supplemental-radius point cases, eleven
+  configurations of seven profiles; ranges 1–200 km, observer heights
+  2/15/100/1000 m, targets 0/10/100/1000 m, diagonal FOV 0.1/1/5/20°,
+  1200x800 backing pixels. Error summaries use reference-visible and
+  approximate-visible points in the reference viewport. This is a
+  single-forward-branch RK4 comparison, not full mesh/image equivalence.
+- 66 step-halving controls (200 to 100 m): unchanged visibility status;
+  maximum projection change 0.0000074 px at FOV 1° in the controls.
+- Standard and -6.5 K/km lapse, ranges <=40 km, heights <=100 m:
+  maximum sampled screen errors 0.022/0.087/0.406/1.523 px for FOV
+  20/5/1/0.1° respectively (in-view subsets differ with FOV).
+- Visibility-boundary study: 46 bracketed thresholds, 43 resolved. Inverse
+  spherical and exponential effective-surface boundary errors below 1 mm
+  in the sampled cases through 40 km; not a guarantee for all heights/ranges.
+- Five real Canvas2D scenes in isolated headless Chromium, grid/decorations
+  disabled. Timings are synchronous renderer calls, not UI FPS. Soundly
+  warm Pan median: Direct 8.9 ms, Accurate 65.7 ms, Fast 298.8 ms in that run.
+  Fast/Accurate unresolved counts varied by scene.
+- Confirmed positive-curvature Flat masking defect: Flat Exponential
+  occlusion, 30 km tower, 15 m eye, Accurate has zero unresolved primitives
+  but Direct paints the hidden tower base. The point-projection formula
+  itself is not the source of this discrepancy.
+- Negative/nonpositive effective Globe curvature remains unsupported;
+  centralized support/fallback policy is Stage 5C. Do not infer universal
+  precision or physical visibility from the sampled point statistics.
+
+## Stage 5B — virtual Flat horizon masking
+
+For positive effective curvature on physically Flat, use the same virtual
+sphere as `flatRefractionPoint`. Let `R=1/C_eff`, eye height `H`, and
+`q=H/R`. Its tangent disk radius is `sqrt(H)*sqrt(R)*sqrt(2+q)/(1+q)`
+and its eye-relative depth below the observer is `H*(2+q)/(1+q)`.
+The corresponding authored Flat ground distance is the arc
+`R*atan2(rDisk,R/(1+q))`, not the projected chord. Classify existing object
+packages relative to the translated observer using that ground distance;
+paint far packages, the white disk, guides, then near packages. Use the same
+approximate tangent distance to limit metric rings, labels and spokes, also
+respecting the existing signed embedding domain. Zero/negative effective
+curvature on Flat still has no virtual ground mask. Globe's previous painter
+convention remains unchanged; do not publish a new physical horizon diagnosis.
+
+- Red/green Canvas tests cover four engineered profiles, nonpositive controls,
+  translated observer and camera height, finite viewport-clipped mask, grid
+  bounds, and far/near bank ordering with Pan/Nick/Roll, haze and thin outlines.
+- Headless Chromium rerender of the Stage 5A tower: at 1200x800 backing pixels,
+  the bounding rectangle of pixels with RGB minimum <200 over white was
+  (559,294)–(640,439) before; after it was (559,294)–(640,393), exactly the
+  Accurate rectangle. Dark pixel counts 1578 before, 668 after, 663 Accurate.
+  This verifies the visible boundary in that scene, not exact pixel matching.
+- Validation: all 24 Canvas Direct tests and 264 wider regression tests
+  passed, plus both static Legacy/Modern isolation audits. Full repository
+  suite not repeated.
+- Limitations: whole-package partition and 192-vertex disk remain approximate,
+  especially for geometry crossing the tangent, long connected structures,
+  unusual poses and extreme profiles. No mutual depth test, no new RK4 or
+  multi-ray visibility solver, no change to scientific exports or atmospheric
+  horizon diagnostics. Opera acceptance and Stage 5C remain open.

@@ -161,6 +161,17 @@
       var began=clock(),params=effective.canvasDirectParameters(model,options);
       var geom=geometricModel(model,params),source=objects(model,params),geometryAt=clock();
       var R=params.effectiveRadius,H=model.Height,globe=params.geometry==='globe';
+      // Only positive effective curvature has a virtual ground tangent.
+      // For Flat the authored coordinates are still planar arc distances;
+      // compute the tangent disk in the SAME local embedding as its objects.
+      // Stable formulas avoid cancellation in R - R*R/(R+H).
+      var flatMask=!globe&&params.effectiveCurvature>0&&Number.isFinite(R);
+      var ratio=flatMask?H/R:0;
+      var disk=globe?geom:flatMask?{
+        rDisk:Math.sqrt(H)*Math.sqrt(R)*Math.sqrt(2+ratio)/(1+ratio),
+        zDisk:H*(2+ratio)/(1+ratio)}:null;
+      var horizon=globe?(H>0?R*Math.acos(R/(R+H)):0):flatMask?
+        R*Math.atan2(disk.rDisk,R/(1+ratio)):Infinity;
       var east=model.CameraEast||0,north=model.CameraNorth||0;
       var observer=translation.frame(east,north,H,globe?1/R:0);
       var c=cameraProjection(camera,canvas.width,canvas.height);
@@ -270,20 +281,19 @@
       }
       // These are the SAME metric landmarks/extent as the physical ground grid,
       // but projected through the local effective-curvature approximation. Do
-      // not ask the RK4 ground sampler for each frame or invent a Flat horizon.
+      // not ask the RK4 ground sampler or report a certified optical horizon.
       // Surface guides are observer-centred, as in the physical renderer; the
       // authored object meshes above retain their separate world placement.
       function drawMetricGrid(){
         if(!(model.showGrid&1))return {rings:0,spokes:0,labels:0,segments:0,extentMeters:0};
         var extent=physicalWorld.guideExtent(model),radii=physicalWorld.RINGS.filter(function(r){return r<=extent;});
         if(!radii.length||radii[radii.length-1]<extent)radii.push(extent);
-        var horizon=globe?(H>0?R*Math.acos(R/(R+H)):0):Infinity;
         // A Flat local-gradient preview may have a finite embedding domain;
         // reaching that limit is NOT a certified optical or ground horizon.
         var domain=!globe&&params.effectiveCurvature!==0?
           (Math.PI/2-1e-3)/Math.abs(params.effectiveCurvature):Infinity;
         var distances=radii.filter(function(d){return d<=Math.min(horizon,domain)+1e-8;});
-        if(globe&&horizon>0&&horizon<extent&&distances[distances.length-1]!==horizon)
+        if(disk&&horizon>0&&horizon<Math.min(extent,domain)&&distances[distances.length-1]!==horizon)
           distances.push(horizon);
         function point(d,az){
           var e=d*Math.sin(az),n=d*Math.cos(az);
@@ -320,7 +330,7 @@
           // diagnosis. Keep the entire path batched to avoid thousands of
           // Canvas stroke calls at interactive frame rates.
           distances.forEach(function(d){
-            if(d===horizon&&globe)return; // clipping boundary, not an authored ring
+            if(d===horizon&&disk)return; // clipping boundary, not an authored ring
             result.rings++;
             for(var i=0;i<64;i++)if(segment(d,i*2*Math.PI/64,d,(i+1)*2*Math.PI/64))result.segments++;
           });
@@ -380,7 +390,7 @@
       function mask(){
         var points=[];
         for(var i=0;i<192;i++){var t=i*2*Math.PI/192;
-          points.push([geom.rDisk*Math.cos(t),geom.rDisk*Math.sin(t),-geom.zDisk]);}
+          points.push([disk.rDisk*Math.cos(t),disk.rDisk*Math.sin(t),-disk.zDisk]);}
         drawPrimitive({type:'polygon',mode:2,points:points,style:{fill:'white'}},'occlusion',false);
         masked++;
       }
@@ -393,7 +403,10 @@
           // the observer-local world frame instead of the optical camera basis.
           var q=[group.anchor[0]-origin[0],group.anchor[1]-origin[1],group.anchor[2]-origin[2]];
           var x=dot(q,observer.right),y=dot(q,observer.forward);
-          (globe&&Math.hypot(x,y)>geom.rDisk?far:near).push(group);
+          // On Flat, x/y are unwarped planar distances, not the
+          // tangent disk's chord radius. Recompute after camera translation.
+          var beyond=disk&&Math.hypot(x,y)>(globe?disk.rDisk:horizon);
+          (beyond?far:near).push(group);
         });
         return {far:far,near:near};
       }
@@ -421,7 +434,7 @@
       // Reset state after other renderers use this Canvas.
       ctx.lineJoin='round';ctx.lineCap='butt';
       layers.forEach(function(layer){layer.far.forEach(function(group){paintGroup(group,true);});});
-      if(globe&&layers.some(function(layer){return layer.far.length;}))mask();
+      if(disk&&layers.some(function(layer){return layer.far.length;}))mask();
       var metricGrid=drawMetricGrid();
       if(globe&&(geom.showTangent||geom.showData)){
         geometry.globeHorizonGuides(geom,{segments:192}).primitives.forEach(function(p){drawPrimitive(p,'visual-aid',false);});
