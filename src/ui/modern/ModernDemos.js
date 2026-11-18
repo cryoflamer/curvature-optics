@@ -7,7 +7,7 @@
   var protocol='curvature-demos-v1';
   var frame,ready=false,started=false,selected='TransLine';
   var directRuntime=null,unsubscribeDirect=null,directGeneration=0;
-  var names=[],lastBenchmarkReport=null,benchmarkRunning=false;
+  var names=[],lastBenchmarkReport=null,benchmarkRunning=false,telemetryConnected=false;
   function el(id){return root.document.getElementById(id);}
   function status(message,kind){
     var node=el('ModernDemoStatus');if(!node)return;
@@ -19,7 +19,7 @@
       var node=el(id);if(node)node.disabled=!available||benchmarkRunning;
     });
     var benchmark=el('ModernDemoBenchmarkRun');
-    if(benchmark)benchmark.disabled=!available||!directRuntime||benchmarkRunning;
+    if(benchmark)benchmark.disabled=!available||!directRuntime||!telemetryConnected||benchmarkRunning;
   }
   function send(command,name){
     if(!ready||!frame)return;
@@ -69,7 +69,15 @@
   function metric(value,precision){
     return typeof value==='number'&&Number.isFinite(value)?value.toFixed(precision||1):'—';
   }
+  function telemetryStatus(message,state){
+    var node=el('ModernDemoTelemetryStatus');
+    if(node){node.textContent=message;node.dataset.state=state||'waiting';}
+  }
   function onPerformance(data){
+    telemetryConnected=true;
+    enable(ready);
+    telemetryStatus(data.playing?(data.drawCount?'Connected · Legacy draws measured.':
+      'Connected · waiting for Legacy draws.'):'Connected · animation paused.','connected');
     var draw=el('ModernDemoDrawFps');
     if(draw)draw.textContent=metric(data.drawFps,1);
     var gap=el('ModernDemoDrawGap');
@@ -109,7 +117,7 @@
     benchmarkRunning=false;enable(ready);
     var picker=el('ModernDemoSelect');if(picker)picker.disabled=!ready;
     var run=el('ModernDemoBenchmarkRun'),cancel=el('ModernDemoBenchmarkCancel');
-    if(run)run.disabled=!ready;
+    if(run)run.disabled=!ready||!telemetryConnected;
     if(cancel)cancel.hidden=true;
     if(cancelled){benchmarkStatus('Recording cancelled.');return;}
     if(!report||report.schema!=='curvature-legacy-demo-benchmark/1')return;
@@ -118,6 +126,13 @@
     benchmarkStatus('Recorded '+report.drawCount+' Legacy draws in '+
       metric(report.elapsedMs/1000,1)+' seconds · '+metric(report.drawFps,1)+' draw FPS. JSON exported.');
     downloadBenchmark(report);
+  }
+  function onPerformanceStatus(data){
+    if(data.state==='connected'){
+      telemetryConnected=true;
+      enable(ready);
+      telemetryStatus('Connected · waiting for Legacy draws.','connected');
+    }
   }
   function onMessage(event){
     if(directRuntime||!trusted(event))return;
@@ -128,9 +143,53 @@
     if(data.type==='catalog')onCatalog(data);
     else if(data.type==='state')onState(data);
     else if(data.type==='performance')onPerformance(data);
+    else if(data.type==='performance-status')onPerformanceStatus(data);
     else if(data.type==='benchmark-started')onBenchmarkStarted();
     else if(data.type==='benchmark-cancelled')onBenchmarkEnd(true);
     else if(data.type==='performance-report')onBenchmarkEnd(false,data.report);
+  }
+  function ensureTelemetry(candidate,generation){
+    function current(){return generation===directGeneration&&directRuntime===candidate;}
+    function attached(){return typeof candidate.performanceStatus==='function'&&
+      candidate.performanceStatus().attached===true;}
+    function unavailable(message){
+      if(!current())return;
+      telemetryConnected=false;
+      enable(ready);
+      telemetryStatus(message,'error');
+      benchmarkStatus('Legacy FPS telemetry unavailable. Benchmark cannot record until connected.');
+    }
+    if(attached()){
+      telemetryConnected=true;
+      enable(ready);
+      telemetryStatus('Connected · waiting for Legacy draws.','connected');
+      return;
+    }
+    if(typeof candidate.attachPerformance!=='function'){
+      unavailable('Legacy host is outdated (telemetry runtime missing). Reload the page.');
+      return;
+    }
+    // A cached host document may omit the new instrumentation script while
+    // still exposing the controller. Load it only inside that same-origin iframe.
+    var childDocument;
+    try{childDocument=frame.contentWindow.document;}catch(error){
+      unavailable('Cannot access the Legacy telemetry host.');return;
+    }
+    if(!childDocument||!childDocument.head||typeof childDocument.createElement!=='function'){
+      unavailable('Legacy iframe cannot initialize FPS telemetry.');return;
+    }
+    telemetryStatus('Installing missing Legacy FPS telemetry…');
+    var script=childDocument.createElement('script');
+    script.src='src/diagnostics/LegacyDemoPerformance.js?telemetry-recovery=1';
+    script.onload=function(){
+      if(!current())return;
+      if(attached()){
+        telemetryConnected=true;enable(ready);
+        telemetryStatus('Connected · waiting for Legacy draws.','connected');
+      }else unavailable('Legacy FPS script loaded but did not attach to GraphX3DX.');
+    };
+    script.onerror=function(){unavailable('Legacy FPS script failed to load. Check the local server.');};
+    childDocument.head.appendChild(script);
   }
   function attachDirect(){
     // A replaced or reloaded host is a new engine instance, so no previous
@@ -141,6 +200,8 @@
     ready=false;
     names=[];
     benchmarkRunning=false;
+    telemetryConnected=false;
+    telemetryStatus('Connecting Legacy FPS telemetry…');
     lastBenchmarkReport=null;
     var download=el('ModernDemoBenchmarkDownload');if(download)download.hidden=true;
     var cancel=el('ModernDemoBenchmarkCancel');if(cancel)cancel.hidden=true;
@@ -157,13 +218,17 @@
       candidate=frame.contentWindow&&frame.contentWindow.CurvatureLegacyDemosRuntime;
     }catch(error){return;} // A foreign origin must not leak access.
     if(!candidate||typeof candidate.subscribe!=='function'||
-       typeof candidate.command!=='function')return;
+       typeof candidate.command!=='function'){
+      telemetryStatus('Legacy host controller unavailable. Reload the page.','error');
+      return;
+    }
     directRuntime=candidate;
     try{
       unsubscribeDirect=candidate.subscribe(function(data){
         if(directGeneration===generation&&directRuntime===candidate)accept(data);
       });
     }catch(error){directRuntime=null;status('Unable to connect to Demos host.','error');return;}
+    ensureTelemetry(candidate,generation);
     // The child may initialize before or after iframe load. Subscription
     // replays state when available; a not-yet-started manager publishes later.
     if(ready)send('status');
@@ -202,7 +267,7 @@
     if(!started){
       started=true;
       status('Loading isolated Legacy demonstration engine…');
-      frame.src='CurvatureDemosHost.html?embed=demos';
+      frame.src='CurvatureDemosHost.html?embed=demos&telemetry=connected';
     }else if(ready)send('status');
   }
   function deactivate(){send('pause');}

@@ -1298,3 +1298,9 @@ button{cursor:pointer}
 .modern-studio-picker-card.is-incompatible{background:#f4f6f8;opacity:.75;cursor:default}
 .modern-studio-picker-incompatibility{
   color:#934b37;white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
+
+/* The diagnostic port must report readiness even when the Canvas is paused. */
+.modern-demos-telemetry{display:block;margin:8px 0 4px;font-size:12px;
+  font-weight:600;color:#3b6178}
+.modern-demos-telemetry[data-state="error"]{color:#a02c27}
+.modern-demos-telemetry[data-state="connected"]{color:#276047}

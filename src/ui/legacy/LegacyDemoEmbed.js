@@ -155,8 +155,11 @@
     },
     attachPerformance:function(meter){
       if(disposed||performanceMeter||!meter||typeof meter.start!=='function')return false;
-      performanceMeter=meter;return true;
+      performanceMeter=meter;
+      notify('performance-status',{state:'connected'});
+      return true;
     },
+    performanceStatus:function(){return {attached:!!performanceMeter};},
     publishPerformance:function(metrics){notify('performance',metrics);},
     publishPerformanceReport:function(report){
       if(benchmarkAutoStarted)controller.command('pause');

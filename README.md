@@ -255,7 +255,13 @@ for the recording and is paused again afterward; a running demo continues
 playing. The runner exports `curvature-legacy-benchmark-*.json` automatically,
 with raw draw/RAF samples, p50/p95, Canvas backing/CSS dimensions, DPR,
 user agent and selected demo/step. Use **Cancel** to discard an incomplete
-recording; **Download JSON again** repeats the export. Scripted pauses and
+recording; **Download JSON again** repeats the export. The Demos panel
+also shows **Legacy FPS telemetry: Connected / Waiting / Error**. A missing
+instrumentation script (for example when an older iframe document is cached)
+is recovered inside the same-origin Legacy iframe, never injected into Modern.
+The iframe URL is cache-separated from the earlier uninstrumented host; if the
+server is serving outdated files, the panel reports the problem and disables
+the benchmark instead of silently displaying dashes. Scripted pauses and
 slow narrative segments count toward the measured 10-second wall-clock FPS:
 compare with Modern's *fixed-camera* benchmark only after checking frame
 content, dimensions and animation activity, not just the headline FPS.

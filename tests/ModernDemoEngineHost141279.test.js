@@ -48,7 +48,7 @@ test('141.2.79: Modern Demos loads dedicated host lazily without changing Scene/
   const modern=read('src/ui/modern/ModernDemos.js');
   const html=read('CurvatureModern.html');
   assert.match(html,/id="ModernDemoFrame"[^>]*src="about:blank"/);
-  assert.match(modern,/frame\.src='CurvatureDemosHost\.html\?embed=demos'/);
+  assert.match(modern,/frame\.src='CurvatureDemosHost\.html\?embed=demos&telemetry=connected'/);
   assert.doesNotMatch(modern,/frame\.src='CurvatureApp\.html/);
   assert.match(read('src/ui/legacy/LegacyDemoEmbed.js'),/get\('embed'\)!=='demos'/);
   assert.match(read('src/ui/modern/ModernApp.js'),/return; \/\/ Never serialize Demos/);

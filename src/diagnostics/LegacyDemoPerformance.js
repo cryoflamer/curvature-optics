@@ -120,6 +120,9 @@
      !root.document.documentElement.hasAttribute('data-direct-demos-host')||
      !root.graph||!root.CurvatureLegacyDemosRuntime)return;
   var runtime=root.CurvatureLegacyDemosRuntime;
+  // The parent may retry loading this same host-local script if an old cached
+  // iframe omitted it. Never wrap GraphX3DX twice.
+  if(typeof runtime.performanceStatus==='function'&&runtime.performanceStatus().attached)return;
   var meter=create({graph:root.graph,now:function(){return root.performance.now();},
     raf:function(fn){return root.requestAnimationFrame(fn);},
     cancelRaf:function(id){root.cancelAnimationFrame(id);},
@@ -134,6 +137,9 @@
       userAgent:root.navigator&&root.navigator.userAgent||null};},
     onUpdate:function(metrics){runtime.publishPerformance(metrics);},
     onComplete:function(report){runtime.publishPerformanceReport(report);}});
-  runtime.attachPerformance(meter);
+  if(!runtime.attachPerformance(meter)){
+    meter.dispose();
+    return;
+  }
   root.addEventListener('pagehide',function(){meter.dispose();});
 }(typeof window==='undefined'?globalThis:window));
