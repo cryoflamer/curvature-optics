@@ -120,8 +120,15 @@
       var first=model.ObjDist[0]>model.ObjDist[1]?0:1;
       var order=[first,1-first].filter(function(i){return model.NObjects[i]>0;});
       var banks=order.map(function(index){
-        var scene=geometry.createObjectSequenceScene(source,index,params.geometry==='globe',
-          {opticsNeutral:true});
+        // The accurate physical renderer authors Flat objects with the
+        // continuous east/north basis (physicalSurface + zero curvature).
+        // Legacy Flat placement instead mirrors the lateral object axis.
+        // Reuse the physical basis here; the signed refraction embedding below
+        // changes elevation, never east/west handedness during camera drag.
+        var physicalFlat=params.geometry==='flat';
+        var scene=geometry.createObjectSequenceScene(source,index,!physicalFlat,
+          physicalFlat?{opticsNeutral:true,physicalSurface:true,curvature:0}:
+            {opticsNeutral:true});
         var groups=[];
         scene.primitives.forEach(function(p){
           var i=p.metadata&&p.metadata.placedObjectIndex;

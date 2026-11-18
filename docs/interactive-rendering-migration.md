@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–3, signed Flat refraction, and all-existing-profile Canvas Direct follow-ups complete; Stage 4 (shared interaction pipeline) is next.
+**Status:** Stages 1–2 complete; Stage 3 pointer previews implemented, with Flat orientation correction A applied and decoration/grid correction B pending. Stage 4 remains blocked until Stage 3 visual validation.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -196,6 +196,41 @@ new pack until its Git history or a clean application confirms that fact.
   **not** browser verification. Test Scene and Compare manually in Opera with
   supported and unsupported atmospheres, HiDPI, Shimmer and cancellation
   before declaring visual/performance parity.
+
+## Stage 3 corrective repair A — Flat orientation parity (2026-11-18)
+
+- **Observed in Opera:** in Compare, Flat Standard became horizontally mirrored
+  while the mouse was held; mouseup restored normal optics. Captions and
+  auxiliary markings also disappeared or differed during the same gesture.
+  These are separate problems: this repair addresses **object orientation**,
+  not presentation decorations (repair B below).
+- **Verified cause:** `CurvatureCanvasDirectPreview.objects()` built Flat
+  geometry with the **Legacy Flat authoring convention**, whose local lateral
+  object axis is reversed. The authoritative Scene/Compare physics uses
+  `composeOpticalMain(...,{physicalWorld:true})`, which builds Flat geometry
+  with `physicalSurface:true, curvature:0` and a continuous physical
+  east/north basis. The two paths therefore drew objects with opposite
+  horizontal handedness, independently of signed refraction or Pan/Nick.
+- **Repair:** Canvas Direct now requests the exact **physical-world Flat
+  object placement** (including local silhouettes and connected object meshes)
+  but keeps the existing signed `flatRefractionPoint()` for the approximate
+  atmospheric bending. Globe's existing effective-radius geometry path is
+  untouched. No change to Accurate RK4, authoring, History, exports, or
+  non-gesture quality selection.
+- **Tests:** `tests/ModernCanvasDirectOrientationParity.test.js` uses
+  independently authored physical Flat polygons and physical camera
+  projection as its pixel reference. It compares actual Canvas Direct stroke
+  endpoints across nine combinations of atmosphere (Vacuum, Standard, Inverse
+  temperature) and Pan/Nick/Roll/translation. The original mirrored placement
+  **failed** the test; the corrected placement passes. Three regression shards
+  passed **1248/1248 tests**. Browser rendering and FPS still require user
+  verification. The isolation audit's source/HTML
+  boundaries are unchanged; only newly added test dependencies were recorded.
+- **Next — repair B:** preserve captions, full presentation markings and
+  proper ground-grid/eye-level/horizon geometry during drag, preferably with
+  the existing screen-space decoration pipeline and without reintroducing
+  RK4 per intermediate frame. Check real Scene/Compare pixels and performance
+  in Opera before unblocking Stage 4 (wheel, keyboard, camera sequence).
 
 ## Signed Flat refraction follow-up (2026-11-18; completed before Stage 4)
 

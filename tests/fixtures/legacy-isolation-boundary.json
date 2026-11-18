@@ -1051,6 +1051,7 @@
         "tests/ModernAngularGuide.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
         "tests/ModernCameraTelemetry.test.js",
+        "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernTargetDirection.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
@@ -1479,6 +1480,7 @@
         "tests/CurvatureTowerType1.test.js",
         "tests/ModernBedfordPreset.test.js",
         "tests/ModernCanigouPreset.test.js",
+        "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernCausewayPreset.test.js",
         "tests/ModernChicagoPreset.test.js",
@@ -1750,6 +1752,7 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernCameraDrag1371.test.js",
+        "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernEffectiveRadiusPreview.test.js"
       ],
@@ -2033,6 +2036,7 @@
         "src/app/CurvatureMainCanvasRenderer.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernCanvasDirectPreview.test.js"
       ],
       "commonJsToolCallers": []
@@ -2174,6 +2178,7 @@
         "tests/CurvatureRenderingFixes.test.js",
         "tests/CurvatureViewportReference.test.js",
         "tests/ModernAngularGuide.test.js",
+        "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/PhysicalCurvatureCamera127.test.js"
       ],
       "commonJsToolCallers": []

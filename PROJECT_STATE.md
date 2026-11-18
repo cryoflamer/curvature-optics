@@ -1,6 +1,6 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–3/6 complete**, with **signed Flat and all-seven-profile Canvas Direct** follow-ups; Stage **4 — shared interaction preview pipeline** is
-> next. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
+> Stages **1–2/6 complete**, with Stage **3 drag preview implemented but under visual repair**;
+> Stage **4 — shared interaction preview pipeline** is **blocked pending Stage 3 repair B and Opera verification**. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates, detailed stage-2 notes and
 > cross-chat handoff. This seven-profile follow-up is based on `7cc4926`
 > (signed Flat refraction); read `git log -1` to identify the applied HEAD.
@@ -41,6 +41,24 @@
 > blocked by browser navigation policy, not completed; manual Opera verification
 > remains required.
 
+>
+> **Stage 3 corrective follow-up A — Flat drag orientation (2026-11-18):**
+> Canvas Direct's Flat object mesh used Legacy's mirrored lateral placement,
+> whereas Accurate RK4 uses the physical east/north placement. During pointer
+> drag this reversed the horizontal object orientation, which recovered after
+> mouseup because the authoritative renderer repainted the scene. The direct
+> Flat mesh now uses `physicalSurface: true, curvature: 0` for *authored* object
+> placement, while its signed atmospheric approximation still bends the virtual
+> surface in the observer frame. Globe placement, camera state, physical RK4,
+> model/History and exports are unchanged. New pixel-coordinate parity tests
+> compare actual direct Canvas strokes to independently projected physical
+> Flat geometry across Pan/Nick/Roll, camera translation and Vacuum/Standard/
+> Inverse temperature. Regression shards: **1248/1248 passed**; static
+> isolation audit `--check` passed with unchanged Legacy/Modern HTML loads.
+> No browser visual parity or measured FPS is claimed.
+> **NEXT: Stage 3 repair B** — restore moving captions, HUD-adjacent markings,
+> eye-level/horizon guides and correct grid during drag without expensive RK4;
+> after that, manual Opera Scene/Compare checks before Stage 4.
 >
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**
 > Playback now offers `Full` / `Balanced` / `Performance` Scene detail,
