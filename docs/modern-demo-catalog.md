@@ -453,3 +453,7 @@ fullscreen, or Open Studio, restores the ordinary layout and focus without
 resetting the playhead. Create copy exits into the existing durable copy flow.
 Resize uses the existing paused repaint or live playback path. No additional
 player, physical state, autosave format or authored fields are introduced.
+
+### Portable JSON filenames (7A.1)
+
+Catalog, Storyboard and Animation Library exports share one naming function: a filesystem-safe project title (Unicode letters and digits retained), local timestamp `YYYYMMDD-HHMMSS-mmm`, and `-with-thumbnails` if any keyframe images are included. Library-wide backups use `curvature-animations`. The suffix does not promise completeness for library exports; complete Storyboard export retains its existing guarantee. The JSON content and project name are unchanged.

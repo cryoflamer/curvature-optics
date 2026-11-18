@@ -1,3 +1,7 @@
+## Modern Demo Catalog — Export Filename Naming (7A.1)
+
+All portable animation JSON exports use the project title (or `curvature-animations` for library-wide backups), local export timestamp including milliseconds, and a `-with-thumbnails` suffix only when the exported payload actually contains keyframe images. Titles and portable schema are unchanged. Diagnostic, History and media exports are unaffected.
+
 ## Modern Demo Catalog — Complete Storyboard Export (7A)
 
 Narrative Support accepted by user in Opera. Storyboard actions capture missing

@@ -1462,9 +1462,9 @@
   function exportBuiltInDemo(id){
     if(studioLibraryBusy)return;
     return studioThumbnailReady.then(function(){
-      try{downloadHistoryJson(studioDemoCatalog.exportDemo(id,function(experiment){
+      try{var json=studioDemoCatalog.exportDemo(id,function(experiment){
         return studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);
-      }),'curvature-demo-'+id+'.json');}
+      });downloadHistoryJson(json,studioLibraryActionsApi.exportFilename(json));}
       catch(error){studioLibraryNotice('Demo export failed: '+error.message,true);}
     });
   }
@@ -3376,8 +3376,8 @@
       if(node)node.textContent=text;
     }
     function download(lookup,complete){
-      var filename='curvature-animation.json',json;
-      if(demo){filename='curvature-demo-'+demo.id+'.json';
+      var json;
+      if(demo){
         json=studioDemoCatalog.exportDemo(demo.id,lookup,{complete:complete,compact:!complete});}
       else{
         var now=Date.now();
@@ -3385,7 +3385,7 @@
           createdAt:now,updatedAt:now,cover:record&&record.cover};
         json=studioLibrary.exportPortable([entry],lookup,{complete:complete});
       }
-      downloadHistoryJson(json,filename);
+      downloadHistoryJson(json,studioLibraryActionsApi.exportFilename(json));
     }
     if(action==='compact'){
       try{download(undefined,false);status('Exported compact project JSON.');}

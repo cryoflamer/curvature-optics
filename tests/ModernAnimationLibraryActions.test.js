@@ -19,7 +19,7 @@ function harness(settings={}){
   let reject=false,renaming=0;
   const library={MAX_PORTABLE_LENGTH:1024,
     list(){logs.push('list');return Promise.resolve([...records.values()]);},
-    exportPortable(items){return JSON.stringify(items.map(e=>e.id));},
+    exportPortable(items){return JSON.stringify({animations:items});},
     parsePortable(text){return JSON.parse(text);},
     importEntries(db,items){logs.push('import');if(reject)return Promise.reject(Error('import denied'));
       items.forEach(id=>records.set(id,{id,updatedAt:1,project:{name:id}}));
@@ -94,9 +94,9 @@ test('export selected and all preserve portable JSON, filenames and selection',(
   const h=harness();
   h.service.exportEntries(false);h.service.exportEntries(true);
   const downloads=h.logs.filter(e=>Array.isArray(e)&&e[0]==='download');
-  assert.deepEqual(downloads.map(e=>[e[1],e[2]]),[
-    ['["alpha"]','curvature-animation.json'],
-    ['["alpha","beta"]','curvature-animations.json']]);
+  assert.deepEqual(downloads.map(e=>JSON.parse(e[1]).animations.map(item=>item.id)),[['alpha'],['alpha','beta']]);
+  assert.match(downloads[0][2],/^alpha-\d{8}-\d{6}-\d{3}\.json$/);
+  assert.match(downloads[1][2],/^curvature-animations-\d{8}-\d{6}-\d{3}\.json$/);
   assert.equal(h.state.selected,'alpha');
 });
 
@@ -187,4 +187,14 @@ test('thumbnail attachments are imported only after project commit and failure i
   h.retry();await h.service.importFile({size:12,text:()=>Promise.resolve('["gamma"]')});
   assert.deepEqual(seen,[['gamma']]);assert.equal(h.records.has('gamma'),true);
   assert.equal(h.state.thumbnailWarning,true);assert.equal(h.state.busy,false);
+});
+
+ test('portable filename reflects title, actual keyframe attachments and local export time',()=>{
+  const now=new Date(2026,10,19,13,20,45,123);
+  const wire=(name,images)=>JSON.stringify({animations:[{project:{name},keyframeThumbnails:images}]});
+  assert.equal(actions.exportFilename(wire('Soundly · Bridge / Study',[]),now),'soundly-bridge-study-20261119-132045-123.json');
+  assert.equal(actions.exportFilename(wire('Мій міст',[{}]),now),'мій-міст-20261119-132045-123-with-thumbnails.json');
+  assert.equal(actions.exportFilename(wire('???',[]),now),'curvature-animation-20261119-132045-123.json');
+  assert.equal(actions.exportFilename(wire('Soundly',[{}]),now,true),'curvature-animations-20261119-132045-123-with-thumbnails.json');
+  assert.notEqual(actions.exportFilename(wire('Soundly',[]),now),actions.exportFilename(wire('Soundly',[]),+now+1));
 });

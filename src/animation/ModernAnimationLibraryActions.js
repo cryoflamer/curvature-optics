@@ -8,6 +8,21 @@
   root.CurvatureModernAnimationLibraryActions=api;
 }(typeof window!=='undefined'?window:globalThis,function(){
   'use strict';
+  // Name the actual portable payload, including cached (possibly partial) images.
+  // Local time is intentional: filenames sort naturally in the user's downloads.
+  function exportFilename(json,now,all){
+    var payload=JSON.parse(json),entries=payload.animations||[];
+    var name=!all&&entries.length===1&&entries[0].project?entries[0].project.name:'curvature-animations';
+    var slug=String(name||'').normalize('NFKC').toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'');
+    slug=Array.from(slug).slice(0,60).join('').replace(/-+$/,'')||'curvature-animation';
+    var date=new Date(now===undefined?Date.now():now);
+    function pad(n,width){return String(n).padStart(width||2,'0');}
+    var stamp=pad(date.getFullYear(),4)+pad(date.getMonth()+1)+pad(date.getDate())+'-'+
+      pad(date.getHours())+pad(date.getMinutes())+pad(date.getSeconds())+'-'+pad(date.getMilliseconds(),3);
+    var images=entries.some(function(entry){return Array.isArray(entry.keyframeThumbnails)&&entry.keyframeThumbnails.length>0;});
+    return slug+'-'+stamp+(images?'-with-thumbnails':'')+'.json';
+  }
   function create(options){
     if(!options||typeof options.library!=='function'||
        typeof options.busy!=='function'||typeof options.render!=='function'||
@@ -39,8 +54,8 @@
           return entry.id===options.selected();
         });
         if(!entries.length)throw Error('Select a saved animation first');
-        options.download(api.exportPortable(entries,options.keyframeThumbnail),
-          all?'curvature-animations.json':'curvature-animation.json');
+        var json=api.exportPortable(entries,options.keyframeThumbnail);
+        options.download(json,exportFilename(json,undefined,all));
         options.notice('Exported '+entries.length+' complete animation'+
           (entries.length===1?'':'s')+' to portable JSON.',false);
       }catch(error){options.notice('Animation export failed: '+error.message,true);}
@@ -131,5 +146,5 @@
     return Object.freeze({refresh:refresh,exportEntries:exportEntries,
       importFile:importFile,rename:rename,setCover:setCover,save:save,remove:remove});
   }
-  return Object.freeze({create:create});
+  return Object.freeze({create:create,exportFilename:exportFilename});
 }));

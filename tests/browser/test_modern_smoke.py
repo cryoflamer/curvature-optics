@@ -422,7 +422,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(demo.get_by_role('button', name='Rename')).to_have_count(0)
         with self.page.expect_download() as download:
             demo.get_by_text('Export demo', exact=True).click()
-        self.assertEqual(download.value.suggested_filename, 'curvature-demo-soundly.json')
+        self.assertRegex(download.value.suggested_filename, r'^soundly-causeway-bridge-camera-study-\d{8}-\d{6}-\d{3}(?:-with-thumbnails)?\.json$')
         studio.get_by_label('Project name').fill('Keep original work')
         self.page.wait_for_timeout(750)
         copy = demo.get_by_text('Create copy', exact=True)
