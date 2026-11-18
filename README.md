@@ -31,8 +31,10 @@ Storyboard below playback is available, with a collapsible detailed editor.
 Explicit jumps lazily capture matching Scene/Compare keyframe thumbnails in a
 bounded IndexedDB cache; Capture thumbnail refreshes the selected view.
 Matching images survive reload and are shared across copies; portable exports
-include available keyframe images. Next: Presentation Mode; browser acceptance
-remains open.
+include available keyframe images. **Presentation** opens a viewer-focused
+layout with the same player, Storyboard, HUD and optional fullscreen. **Open Studio**
+returns to editing without resetting playback. Next: Narrative Support; browser
+acceptance remains open.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

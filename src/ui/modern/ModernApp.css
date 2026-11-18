@@ -1341,3 +1341,22 @@ button{cursor:pointer}
   border-radius:3px;background:#20374be8;color:white;font-size:10px}
 .modern-animation-library-cover>.modern-animation-library-visual{width:100%;height:100%}
 .modern-animation-library-cover [hidden]{display:none!important}
+
+/* Presentation is a view of the existing stage; canvases and timeline stay mounted. */
+.modern-animation-author-controls{display:contents}
+.modern-animation-presentation-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;color:#183550}
+.modern-animation-presentation-bar[hidden]{display:none}
+.modern-animation-presentation-bar>div{flex:1;min-width:180px;display:flex;flex-direction:column;gap:3px}
+#ModernAnimationPresentationFrame{font-size:12px;color:#456680}
+.modern-animation-presentation-bar button{border:1px solid #9cbddd;border-radius:6px;background:#e7f2fd;color:#255e91;padding:7px 12px;cursor:pointer}
+.modern-animation-playback.is-presenting{position:fixed;inset:0;z-index:2000;width:100%;height:100%;max-height:none;margin:0;border:0;border-radius:0;overflow:auto;overscroll-behavior:contain;padding:12px clamp(10px,2vw,28px)}
+.modern-animation-playback.is-presenting .modern-animation-playback-heading > strong,
+.modern-animation-playback.is-presenting #ModernAnimationPresent,
+.modern-animation-playback.is-presenting .modern-animation-author-controls,
+.modern-animation-playback.is-presenting .modern-animation-quality-section,
+.modern-animation-playback.is-presenting .modern-animation-frame-export,
+.modern-animation-playback.is-presenting .modern-animation-storyboard-capture,
+.modern-animation-playback.is-presenting .modern-animation-playback-diagnostics{display:none!important}
+.modern-animation-playback.is-presenting .modern-animation-playback-panels{margin-inline:auto;width:min(100%,max(320px,calc((100dvh - 248px) * 1.5)))}
+.modern-animation-playback.is-presenting .modern-animation-playback-panels.is-compare{width:min(100%,max(320px,calc((100dvh - 248px) * 3)))}
+@media(max-width:680px){.modern-animation-playback.is-presenting .modern-animation-playback-panels.is-compare{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}.modern-animation-playback.is-presenting .modern-animation-playback-controls input[type=range]{flex-basis:100%}}

@@ -582,6 +582,7 @@
     studioUI.createPreviewNavigation(root,document):null;
   var studioPlayback=null;
   var studioPlaybackControls=null;
+  var studioPresentation=null,studioPresentationProject=null,studioPresentationTimes=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
   var studioThumbnailPersistence=thumbnailApi&&thumbnailApi.createKeyframePersistence&&root.indexedDB?
@@ -2254,6 +2255,7 @@
   function stopStudioPlayback(clear){
     studioPlaybackFpsMeter.reset();
     if(clear){
+      if(studioPresentation)studioPresentation.leave();
       if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();
       studioThumbnailProject=null;studioThumbnailExperiments=null;
       if(studioPreviewNavigation)studioPreviewNavigation.cancel();
@@ -2288,6 +2290,7 @@
     syncStudioHudAppearance();
     syncStudioFrameExportControls();
     if(!ready)return;
+    syncStudioPresentation();
     var info=studioPlaybackControlsApi.describe(studioPlayback.status(),studioPlaybackRenderedAt);
     var seek=newUiEl('ModernAnimationPlaybackSeek');
     if(seek)seek.value=info.seek;
@@ -3080,6 +3083,41 @@
   // Benchmarks use an independent RAF sequence: traditional profiles freeze
   // the sample, while pipeline and moving-width profiles advance it. Neither
   // changes the authored project, History or export settings.
+  function syncStudioPresentation(){
+    if(!studioPresentation||!studioPresentation.isActive()||!studioPrepared||!studioPlayback)return;
+    if(studioPresentationProject!==studioPrepared){
+      studioPresentationProject=studioPrepared;studioPresentationTimes=studioProjects.timeline(studioPrepared);
+    }
+    var title=newUiEl('ModernAnimationPresentationTitle'),frame=newUiEl('ModernAnimationPresentationFrame');
+    if(title)title.textContent=studioDraft.name;
+    if(frame)frame.textContent=root.CurvatureModernAnimationPresentation.frameLabel(
+      studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt)||'Rendering frame…';
+    var copy=newUiEl('ModernAnimationPresentationCopy');if(copy)copy.hidden=!studioActiveDemo;
+    var fullscreen=newUiEl('ModernAnimationPresentationFullscreen'),stage=newUiEl('ModernAnimationPlaybackStage');
+    if(fullscreen){fullscreen.hidden=!stage.requestFullscreen||document.fullscreenEnabled===false;
+      fullscreen.textContent=document.fullscreenElement===stage?'Exit fullscreen':'Fullscreen';}
+  }
+  function bindStudioPresentation(){
+    var stage=newUiEl('ModernAnimationPlaybackStage'),bar=newUiEl('ModernAnimationPresentationBar');
+    var enter=newUiEl('ModernAnimationPresent'),exit=newUiEl('ModernAnimationPresentationExit');
+    if(!stage||!bar||!enter||!exit||!root.CurvatureModernAnimationPresentation)return;
+    studioPresentation=root.CurvatureModernAnimationPresentation.create({document:document,stage:stage,bar:bar,exitButton:exit,
+      ready:function(){return animationWorkspaceOpen&&!!studioPrepared&&!!studioPlayback;},
+      sync:syncStudioPresentation,
+      resize:function(){
+        studioPlaybackLastPaint=-Infinity;
+        if(studioPlayback&&animationWorkspaceOpen&&!studioPlayback.status().playing)scheduleStudioInitialPaint('resized');
+      },fullscreenError:function(error){
+        var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Fullscreen unavailable: '+error.message;
+      }});
+    enter.addEventListener('click',function(){studioPresentation.enter();});
+    exit.addEventListener('click',function(){studioPresentation.leave();});
+    var full=newUiEl('ModernAnimationPresentationFullscreen');if(full)full.addEventListener('click',function(){studioPresentation.fullscreen();});
+    var copy=newUiEl('ModernAnimationPresentationCopy');if(copy)copy.addEventListener('click',function(){
+      if(!studioActiveDemo)return;
+      var id=studioActiveDemo.id;studioPresentation.leave();copyBuiltInDemo(id);
+    });
+  }
   function bindStudioPlayback(){
     function playbackNotice(text,kind){
       var status=newUiEl('ModernAnimationPlaybackStatus');
@@ -3169,6 +3207,7 @@
     if(retry)retry.addEventListener('click',function(){
       if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
     });
+    bindStudioPresentation();
     bindStudioQualityAudit();
     bindStudioCameraHud();
     bindStudioTargetIndicator();
@@ -6465,6 +6504,7 @@
   function setMode(mode,remember){
     if(mode==='animation')animationReturnAfterRestore=false;
     if(mode!=='animation'&&animationWorkspaceOpen){
+      if(studioPresentation)studioPresentation.leave();
       cancelStudioInitialPaint();stopStudioPlayback(false);
       if(studioPlayback)saveStudioDraft(false);
     }

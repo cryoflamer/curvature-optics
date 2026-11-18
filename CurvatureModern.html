@@ -92,6 +92,7 @@
 <script src="src/animation/ModernAnimationStudio.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1"></script>
 <script src="src/animation/ModernAnimationPlayback.js"></script>
 <script src="src/animation/ModernAnimationPlaybackControls.js"></script>
+<script src="src/animation/ModernAnimationPresentation.js"></script>
 <script src="src/animation/ModernAnimationDraftAutosave.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1&amp;stash-restore=1"></script>
 <script src="src/animation/ModernAnimationWorkspaceRecovery.js"></script>
 <script src="src/animation/ModernAnimationWorkspaceSwitch.js"></script>
@@ -233,14 +234,22 @@
     <section id="ModernAnimationPlaybackStage" class="modern-animation-playback" aria-label="Isolated animation preview" hidden>
       <div class="modern-animation-playback-heading">
         <strong>Animation playback · independent physical view</strong>
+        <button type="button" id="ModernAnimationPresent" class="modern-ghost-button">Presentation</button>
         <span id="ModernAnimationPlaybackQuality">Ready</span>
         <span id="ModernAnimationPlaybackParameter" role="status" hidden></span>
+      </div>
+      <div id="ModernAnimationPresentationBar" class="modern-animation-presentation-bar" hidden>
+        <div><strong id="ModernAnimationPresentationTitle"></strong><span id="ModernAnimationPresentationFrame"></span></div>
+        <button type="button" id="ModernAnimationPresentationFullscreen">Fullscreen</button>
+        <button type="button" id="ModernAnimationPresentationCopy" hidden>Create copy</button>
+        <button type="button" id="ModernAnimationPresentationExit">Open Studio</button>
       </div>
       <div id="ModernAnimationPlaybackPanels" class="modern-animation-playback-panels">
         <div class="modern-animation-playback-view"><span id="ModernAnimationPlaybackLabelA">Scene</span><div id="ModernAnimationCanvasA" class="modern-animation-playback-canvas"><div id="ModernAnimationFrameLoadingA" class="modern-animation-frame-loading" hidden>Rendering physical frame…</div></div></div>
         <div id="ModernAnimationPlaybackViewB" class="modern-animation-playback-view" hidden><span id="ModernAnimationPlaybackLabelB">Model B</span><div id="ModernAnimationCanvasB" class="modern-animation-playback-canvas"><div id="ModernAnimationFrameLoadingB" class="modern-animation-frame-loading" hidden>Rendering physical frame…</div></div></div>
       </div>
       <div class="modern-animation-playback-controls">
+        <div class="modern-animation-author-controls">
         <label id="ModernAnimationPlaybackInterpolationLabel" for="ModernAnimationPlaybackInterpolation" hidden>Camera interpolation</label>
         <select id="ModernAnimationPlaybackInterpolation" title="Switch camera motion between straight linear segments and smooth spline curves without changing keyframes or the playhead" hidden>
           <option value="linear">Linear</option>
@@ -273,8 +282,10 @@
           title="For Canvas Direct only: cap authored outlines to one physical Canvas pixel to avoid slow browser stroke rasterization. Disable to restore authored widths.">
           <input type="checkbox" id="ModernCanvasDirectThinOutlines" checked> Thin outlines · max 1 canvas pixel
         </label>
+        </div>
         <label class="modern-camera-hud-toggle" for="ModernAnimationPlaybackCameraHud"><input type="checkbox" id="ModernAnimationPlaybackCameraHud" checked> Camera HUD</label>
         <label class="modern-camera-hud-toggle" for="ModernAnimationTargetToggle"><input type="checkbox" id="ModernAnimationTargetToggle" checked> Target direction</label>
+        <div class="modern-animation-author-controls">
         <label for="ModernAnimationTargetSelection">Target <select id="ModernAnimationTargetSelection"><option value="scene">All towers</option><option value="group-0">Group 1</option><option value="group-1">Group 2</option></select></label>
         <details class="modern-camera-hud-settings" id="ModernAnimationHudSettings">
           <summary>HUD appearance</summary>
@@ -294,6 +305,7 @@
             <small>Saved with this animation when edited. Applies to playback and optional PNG / video burn-in.</small>
           </div>
         </details>
+        </div>
         <button type="button" id="ModernAnimationPlaybackPlay">Play</button>
         <button type="button" id="ModernAnimationPlaybackPause" disabled>Pause</button>
         <button type="button" id="ModernAnimationPlaybackStop">Stop</button>

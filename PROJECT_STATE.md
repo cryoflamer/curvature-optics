@@ -1,3 +1,13 @@
+## Modern Demo Catalog — Presentation Mode (5)
+
+A viewer-focused, viewport-filling layout reuses the mounted playback stage,
+clock, Scene/Compare canvases and Storyboard. Title/current painted frame or
+transition, actual optics quality, transport, HUD toggles, native fullscreen,
+Open Studio and built-in Create copy are available. Background controls are
+inert and focus is restored on exit. Resize uses existing playback lifecycle;
+no edits to source demos or physical contracts. Next: Narrative Support;
+full-page browser acceptance remains open.
+
 ## Modern Demo Catalog — durable keyframe thumbnails (4C)
 
 A separate bounded IndexedDB cache restores exact-state thumbnails after reload,

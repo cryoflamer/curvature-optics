@@ -29,7 +29,7 @@ function harness(){
     saveApplicationPreferences(){stats.prefs++;},saveStudioDraft(){stats.save++;},renderStudioLibrary(){},
     renderStudioPlaybackSample(force){assert.equal(force,true);stats.render++;},
     stopStudioPlayback(){stats.stop++;},
-    bindStudioQualityAudit(){},bindStudioCameraHud(){},bindStudioTargetIndicator(){},
+    bindStudioPresentation(){},syncStudioPresentation(){},bindStudioQualityAudit(){},bindStudioCameraHud(){},bindStudioTargetIndicator(){},
     bindStudioFrameExport(){},bindStudioVideoExport(){},observeStudioPreviewSize(){},
     scheduleStudioInitialPaint(){},setStudioPreviewInterpolation(){},
     root:{},document:{hidden:false,addEventListener(){}},studioPreviewRenderer:null});

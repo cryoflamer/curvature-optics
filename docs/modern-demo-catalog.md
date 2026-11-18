@@ -2,7 +2,7 @@
 
 Status: **patch 4C (Keyframe Thumbnail Persistence)**, 2026-11-19. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Persistent keyframe thumbnails and portable attachments are implemented. Next: Presentation Mode; browser acceptance remains open.
+Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Persistent keyframe thumbnails and portable attachments are implemented. Presentation Mode is implemented; next: Narrative Support. Browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -178,7 +178,7 @@ record the split, and do not mark complete on implementation alone.
 | 4A.2 — Storyboard | Implemented; Opera acceptance open | Horizontal navigation strip beside playback, using shared keyframe selection. Keep detailed editor below, hide redundant editor for read-only demos; preserve Compare width. |
 | 4B — Keyframe Thumbnail Capture | Implemented; Opera acceptance open | Capture only a successfully painted selected keyframe at its exact arrival. Reuse bounded screenshot composition (Scene or both Compare sides), lazy capture on explicit jump, manual refresh and transient cache keyed by visual state; validate History provenance before reuse. No eager whole-project render. |
 | 4C — Keyframe Thumbnail Persistence | Implemented; Opera acceptance open | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
-| 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
+| 5 — Presentation Mode | Implemented; Opera acceptance open | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
 | 7 — Soundly Finalization | Planned | Author final storyboard/captions and catalog presentation, verify both models, source provenance, browser/Opera smoothness, controls, copy/export/reimport; document observed accuracy limits. Tag only after CI/manual acceptance. First completed public demo milestone. |
 | 8+ — Legacy Demo Migration | Planned | Chicago, Canigou, Causeway, Pontchartrain/TransLine, Bedford, Grace, Tensas (order provisional); Curve last as a distinct educational lesson. Reuse Studio; add universal capabilities only when justified by source choreography. One bounded adaptation at a time, with explicit evidence and limitations. |
@@ -440,3 +440,15 @@ existing 50-million-character whole-file limit still applies. Export does not
 render missing images. Cache persistence is best-effort, not a permanent photo
 archive. Browser storage commit must finish before reload to restore a newly
 captured image.
+
+### Presentation view
+The Presentation button on a prepared preview opens a viewport-filling,
+viewer-only layout of the same mounted stage. Play, Pause, Stop, seek,
+Storyboard, camera HUD and target visibility remain available; editing and
+export controls are hidden. The project title and the last painted keyframe
+or transition identify the image; the actual optics quality remains visible.
+Fullscreen is optional (browser permission); Escape after exiting native
+fullscreen, or Open Studio, restores the ordinary layout and focus without
+resetting the playhead. Create copy exits into the existing durable copy flow.
+Resize uses the existing paused repaint or live playback path. No additional
+player, physical state, autosave format or authored fields are introduced.
