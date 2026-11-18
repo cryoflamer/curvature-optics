@@ -164,11 +164,21 @@
       var strokeMode=diagnostic.strokeMode||'normal';
       if(!['normal','path-only','simple','batched','opaque','black','unit-width','miter'].includes(strokeMode))
         throw RangeError('Unknown Canvas Direct stroke diagnostic mode');
+      // Fixed Canvas backing-pixel width for the opt-in width sweep only.
+      // Keep the authored viewport width intact for all ordinary rendering.
+      var widthOverride=diagnostic.strokeWidth;
+      if(widthOverride!==undefined&&(strokeMode!=='normal'||
+        typeof widthOverride!=='number'||!Number.isFinite(widthOverride)||
+        widthOverride<0.01||widthOverride>64))
+        throw RangeError('Invalid Canvas Direct diagnostic stroke width');
       var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0,strokePrimitives=0;
       // Submitted strokes only. These counters show how many original paths
       // each single-factor diagnostic actually changes on the chosen frame.
       var strokeStyleCounts={translucent:0,nonUnitWidth:0,nonBlack:0,roundJoin:0};
+      var strokeWidthRange={minPx:null,maxPx:null};
       function countStrokeStyle(color,width,alpha){
+        strokeWidthRange.minPx=strokeWidthRange.minPx===null?width:Math.min(strokeWidthRange.minPx,width);
+        strokeWidthRange.maxPx=strokeWidthRange.maxPx===null?width:Math.max(strokeWidthRange.maxPx,width);
         if(alpha<1)strokeStyleCounts.translucent++;
         if(Math.abs(width-1)>1e-6)strokeStyleCounts.nonUnitWidth++;
         if(!/^(?:black|#000|#000000|rgb\(0,\s*0,\s*0\))$/i.test(String(color).trim()))
@@ -248,7 +258,8 @@
           // simple retains all four changes as a positive control.
           var strokeColor=(strokeMode==='simple'||strokeMode==='black')?'#000':
             (style.stroke||(far?'#666':'black'));
-          var strokeWidth=(strokeMode==='simple'||strokeMode==='unit-width')?1:
+          var strokeWidth=widthOverride!==undefined?widthOverride:
+            (strokeMode==='simple'||strokeMode==='unit-width')?1:
             viewport.lineWidth(style.lineWidth,camera);
           var strokeAlpha=(strokeMode==='simple'||strokeMode==='opaque')?1:alpha;
           if(strokeMode==='batched'){
@@ -335,7 +346,7 @@
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
         fillCalls:fillCalls,strokeCalls:strokes,strokePrimitives:strokePrimitives,
-        strokeStyleCounts:strokeStyleCounts,
+        strokeStyleCounts:strokeStyleCounts,strokeWidthRange:strokeWidthRange,
         horizonMasks:masked,canvasCalls:canvasCalls,geometryReused:source.reused,
         diagnostics:{fills:drawFills,strokes:drawStrokes,horizonMask:drawMask,strokeMode:strokeMode},
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,

@@ -34,6 +34,8 @@ function harness(){
     return {quality:'canvas-direct',overlays:{},
       result:{timings:{projectionMs:2,canvasMs:2},
         directStats:{fillCalls:40,strokeCalls:calls,strokePrimitives:60,
+          strokeWidthRange:{minPx:flags.strokeWidth===undefined?2:flags.strokeWidth,
+            maxPx:flags.strokeWidth===undefined?3:flags.strokeWidth},
           horizonMasks:1,canvasCalls:{beginPath:100,stroke:calls,lineTo:250}},
         previewLod:{original:128},primitiveCount:250,drawn:250}};
   }};
@@ -170,4 +172,40 @@ test('stroke style benchmark exports six modes while retaining all live options'
   assert.equal(h.node('ModernAnimationBenchmarkStrokeStyles').disabled,false);
   assert.equal(h.playing,true);
   assert.match(h.node('ModernAnimationBenchmarkStatus').textContent,/18 runs across six modes/);
+});
+
+
+test('stroke width sweep exports 30 runs with exact width overrides and restores controls',()=>{
+  const h=harness();
+  h.node('ModernCanvasDirectFills').checked=false;
+  h.node('ModernCanvasDirectStrokes').checked=false;
+  h.node('ModernCanvasDirectMask').checked=false;
+  h.node('ModernAnimationBenchmarkStrokeWidths').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),true);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokeWidths').disabled,true);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokeStyles').disabled,true);
+  for(let i=0;h.context.studioBenchmark.running()&&i<6000;i++)h.tick();
+  assert.equal(h.context.studioBenchmark.running(),false);
+  assert.equal(h.downloads.length,1);
+  const report=h.downloads[0].json;
+  assert.equal(report.config.profile,'canvas-stroke-widths');
+  assert.equal(report.runs.length,30);
+  assert.equal(report.summary.stroke_baseline.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_width_1.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_width_1_125.strokeCalls.p50,60);
+  assert.equal(report.summary.stroke_width_1_125.strokeWidthMinPx.p50,1.125);
+  assert.equal(report.summary.stroke_width_1_125.strokeWidthMaxPx.p50,1.125);
+  assert.equal(report.summary.stroke_baseline.strokeWidthMinPx.p50,2);
+  assert.equal(report.summary.stroke_baseline.strokeWidthMaxPx.p50,3);
+  assert.deepEqual([...new Set(h.paintOptions.map(x=>x.strokeWidth)
+    .filter(x=>x!==undefined))].sort((a,b)=>a-b),
+    [0.5,0.75,1,1.125,1.25,1.5,2,3,4]);
+  assert.ok(h.paintOptions.filter(x=>x.strokeWidth!==undefined).every(x=>
+    x.strokeMode==='normal'&&x.fills===true&&x.strokes===true&&x.horizonMask===true));
+  assert.equal(h.node('ModernCanvasDirectFills').checked,false);
+  assert.equal(h.node('ModernCanvasDirectStrokes').checked,false);
+  assert.equal(h.node('ModernCanvasDirectMask').checked,false);
+  assert.equal(h.node('ModernAnimationBenchmarkStrokeWidths').disabled,false);
+  assert.equal(h.playing,true);
+  assert.match(h.node('ModernAnimationBenchmarkStatus').textContent,/30 runs across ten modes/);
 });

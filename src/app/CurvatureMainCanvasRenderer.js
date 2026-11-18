@@ -151,7 +151,7 @@
           geometryMs:dt.geometryMs,strokeCalls:direct.strokeCalls},
         directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
           strokePrimitives:direct.strokePrimitives,
-          strokeStyleCounts:direct.strokeStyleCounts,
+          strokeStyleCounts:direct.strokeStyleCounts,strokeWidthRange:direct.strokeWidthRange,
           horizonMasks:direct.horizonMasks,canvasCalls:direct.canvasCalls,
           geometryReused:direct.geometryReused},
         decorationCamera:options.deferDecorations?camera:null,

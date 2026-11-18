@@ -14,9 +14,15 @@
   var STROKE_MODES=Object.freeze(['stroke_baseline','stroke_path_only','stroke_simple','stroke_batched']);
   var STROKE_STYLE_MODES=Object.freeze(['stroke_baseline','stroke_opaque','stroke_black',
     'stroke_width_one','stroke_miter','stroke_simple']);
+  // Values are Canvas backing-store pixels (not CSS pixels). Baseline retains
+  // all authored widths; the other modes override only the width.
+  var STROKE_WIDTH_MODES=Object.freeze(['stroke_baseline','stroke_width_0_5',
+    'stroke_width_0_75','stroke_width_1','stroke_width_1_125','stroke_width_1_25',
+    'stroke_width_1_5','stroke_width_2','stroke_width_3','stroke_width_4']);
   var METRICS=['gapMs','callbackMs','rendererMs','postMs','projectionMs','canvasMs',
     'fillCalls','strokeCalls','strokePrimitives',
     'strokeTranslucent','strokeNonUnitWidth','strokeNonBlack','strokeRoundJoin',
+    'strokeWidthMinPx','strokeWidthMaxPx',
     'horizonMasks','sourceObjects','primitivesProjected',
     'visibleSegments','beginPathCalls','moveToCalls','lineToCalls','closePathCalls',
     'clearRectCalls','fillRectCalls','clipCalls','drawImageCalls'];
@@ -61,7 +67,8 @@
         var report={schema:'curvature-playback-benchmark/1',createdAt:new Date().toISOString(),
           config:{warmupFrames:config.warmupFrames,sampleFrames:config.sampleFrames,
             passes:config.passes,modes:config.modes.slice(),camera:'fixed for every mode',
-            profile:config.profile},
+            profile:config.profile,
+            widthSweepUnits:config.profile==='canvas-stroke-widths'?'Canvas backing-store pixels':undefined},
           environment:config.environment,runs:runs,summary:summary,
           notes:['RAF intervals include browser scheduling and deferred graphics work.',
             'JavaScript timings do not include deferred GPU or compositor time.',
@@ -73,6 +80,9 @@
             'Stroke simple uses an opaque black 1px miter-joined outline; its image differs.',
             'Stroke batched merges only consecutive same-style outlines, flushing before fills; overlaps may differ.',
             'Stroke style modes each change only opacity, color, width, or join; simple changes all four.',
+            'Stroke width sweep preserves each authored path, fill, mask, color, alpha, join and stroke() call; only lineWidth varies.',
+            'Sweep widths are Canvas backing-store pixels under an identity 2D transform, not CSS pixels; compare canvas and cssWidth in environment.',
+            'The baseline has authored widths; strokeWidthMinPx/MaxPx record submitted effective widths.',
             'Stroke style counts describe submitted strokes, not prepared paths or deferred browser work.',
             'Single-factor results may interact: do not sum their RAF differences as independent costs.',
             'Instrumentation adds a small amount of synchronous work to the painter.']};
@@ -121,11 +131,13 @@
         sampleFrames:settings.sampleFrames===undefined?120:settings.sampleFrames,
         environment:settings.environment||{},
         profile:settings.profile||'playback',modes:null};
-      if(!['playback','canvas-layers','canvas-strokes','canvas-stroke-styles'].includes(config.profile))
+      if(!['playback','canvas-layers','canvas-strokes','canvas-stroke-styles',
+        'canvas-stroke-widths'].includes(config.profile))
         throw RangeError('Invalid benchmark profile');
       config.modes=config.profile==='canvas-layers'?LAYER_MODES:
         config.profile==='canvas-strokes'?STROKE_MODES:
-        config.profile==='canvas-stroke-styles'?STROKE_STYLE_MODES:MODES;
+        config.profile==='canvas-stroke-styles'?STROKE_STYLE_MODES:
+        config.profile==='canvas-stroke-widths'?STROKE_WIDTH_MODES:MODES;
       if(!Number.isInteger(config.passes)||config.passes<1||config.passes>10||
         !Number.isInteger(config.warmupFrames)||config.warmupFrames<1||config.warmupFrames>1000||
         !Number.isInteger(config.sampleFrames)||config.sampleFrames<2||config.sampleFrames>10000)
@@ -137,5 +149,6 @@
     return Object.freeze({start:start,cancel:stop,running:isRunning});
   }
   return Object.freeze({MODES:MODES,LAYER_MODES:LAYER_MODES,STROKE_MODES:STROKE_MODES,
-    STROKE_STYLE_MODES:STROKE_STYLE_MODES,percentiles:percentiles,order:order,create:create});
+    STROKE_STYLE_MODES:STROKE_STYLE_MODES,STROKE_WIDTH_MODES:STROKE_WIDTH_MODES,
+    percentiles:percentiles,order:order,create:create});
 }));

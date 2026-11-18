@@ -206,4 +206,34 @@ test('stroke benchmark UI contains one independent opt-in button',()=>{
   assert.match(app,/stroke_width_one/);
   assert.match(app,/stroke_opaque/);
   assert.match(app,/stroke_miter/);
+  assert.match(html,/id="ModernAnimationBenchmarkStrokeWidths"/);
+  assert.match(app,/startBenchmark\('canvas-stroke-widths'\)/);
+  assert.ok(benchmark.STROKE_WIDTH_MODES.includes('stroke_width_1_125'));
+});
+
+
+test('stroke width profile rotates ten width variants and preserves full RAF telemetry',()=>{
+  const h=harness();
+  h.runner.start({profile:'canvas-stroke-widths',warmupFrames:2,sampleFrames:4,passes:3,
+    environment:{scene:'Soundly',fixedTimeMs:27363.3,devicePixelRatio:1.125}});
+  for(let i=0;h.runner.running()&&i<1500;i++)h.tick();
+  assert.ok(h.result);
+  assert.equal(h.result.config.profile,'canvas-stroke-widths');
+  assert.equal(h.result.config.widthSweepUnits,'Canvas backing-store pixels');
+  assert.equal(h.result.runs.length,30);
+  assert.deepEqual(h.result.config.modes,benchmark.STROKE_WIDTH_MODES);
+  assert.deepEqual(h.result.runs.slice(0,10).map(x=>x.mode),
+    benchmark.order(0,benchmark.STROKE_WIDTH_MODES));
+  assert.deepEqual(h.result.runs.slice(10,20).map(x=>x.mode),
+    benchmark.order(1,benchmark.STROKE_WIDTH_MODES));
+  assert.deepEqual(h.result.runs.slice(20,30).map(x=>x.mode),
+    benchmark.order(2,benchmark.STROKE_WIDTH_MODES));
+  for(const mode of benchmark.STROKE_WIDTH_MODES){
+    assert.equal(h.result.summary[mode].frames,12);
+    assert.equal(h.result.summary[mode].strokeCalls.p50,1450);
+    assert.equal(h.result.summary[mode].gapMs.count,12);
+    assert.equal(h.result.summary[mode].strokeWidthMinPx.count,0,
+      'unavailable widths must be null, not zero');
+  }
+  assert.match(h.result.notes.join(' '),/backing-store pixels/);
 });

@@ -294,10 +294,11 @@
               <button type="button" id="ModernAnimationBenchmarkLayers" title="Measure the same frozen Canvas Direct frame with all layers, no object fills, no outlines, and no horizon mask">Benchmark Canvas layers</button>
               <button type="button" id="ModernAnimationBenchmarkStrokes" title="Compare normal strokes, built paths without stroke(), simple 1px lines, and batching for a fixed Canvas Direct frame">Benchmark Canvas strokes</button>
               <button type="button" id="ModernAnimationBenchmarkStrokeStyles" title="Isolate opacity, color, width and join style one at a time against the normal Canvas Direct stroke, plus a combined simple control">Benchmark stroke styles</button>
+              <button type="button" id="ModernAnimationBenchmarkStrokeWidths" title="Compare original stroke widths against fixed 0.5, 0.75, 1, 1.125, 1.25, 1.5, 2, 3 and 4 Canvas pixel widths at an unchanged frozen camera">Benchmark stroke widths</button>
               <button type="button" id="ModernAnimationBenchmarkCancel" hidden>Cancel benchmark</button>
               <button type="button" id="ModernAnimationBenchmarkDownload" hidden>Download last JSON</button>
             </div>
-            <small id="ModernAnimationBenchmarkStatus" role="status">Playback: five modes; Canvas layers / strokes: four each; stroke styles: six. All use a frozen frame, three rotated passes, 30 warmup and 120 measured RAF callbacks per mode.</small>
+            <small id="ModernAnimationBenchmarkStatus" role="status">Playback: five modes; Canvas layers / strokes: four each; stroke styles: six; stroke widths: ten. All use a frozen frame, three rotated passes, 30 warmup and 120 measured RAF callbacks per mode.</small>
             <output id="ModernAnimationPlaybackProfileReport" class="modern-animation-profiler-report" aria-live="off">Enable profiling, then Play the animation.</output>
             <small>Recent main-thread p50 / p95 timings. Paint gaps include browser scheduling; Canvas 2D timings exclude deferred compositing. Profiling itself adds some overhead.</small>
           </div>

@@ -2970,14 +2970,16 @@
   function bindStudioBenchmark(){
     var run=newUiEl('ModernAnimationBenchmarkRun'),layersRun=newUiEl('ModernAnimationBenchmarkLayers'),
       strokesRun=newUiEl('ModernAnimationBenchmarkStrokes'),
-      stylesRun=newUiEl('ModernAnimationBenchmarkStrokeStyles');
+      stylesRun=newUiEl('ModernAnimationBenchmarkStrokeStyles'),
+      widthsRun=newUiEl('ModernAnimationBenchmarkStrokeWidths');
     var cancel=newUiEl('ModernAnimationBenchmarkCancel');
     var again=newUiEl('ModernAnimationBenchmarkDownload'),note=newUiEl('ModernAnimationBenchmarkStatus');
     if(!run||!cancel||!studioBenchmarkApi)return;
     function busy(value){
       run.disabled=!!value;if(layersRun)layersRun.disabled=!!value;
       if(strokesRun)strokesRun.disabled=!!value;
-      if(stylesRun)stylesRun.disabled=!!value;cancel.hidden=!value;
+      if(stylesRun)stylesRun.disabled=!!value;
+      if(widthsRun)widthsRun.disabled=!!value;cancel.hidden=!value;
       if(again)again.hidden=!!value||!studioBenchmarkLastReport;
       ['ModernAnimationPlaybackPlay','ModernAnimationPlaybackPause','ModernAnimationPlaybackStop',
         'ModernAnimationPlaybackSeek','ModernAnimationPlaybackRetry','ModernAnimationPlaybackOptics',
@@ -3089,10 +3091,17 @@
             return Number.isFinite(left[key])?left[key]+(Number.isFinite(right[key])?right[key]:0):null;
           }
           var calls=da.canvasCalls||{},other=db.canvasCalls||{};
+          var wa=da.strokeWidthRange||{},wb=db.strokeWidthRange||{};
+          function aggregateWidth(key,fn){
+            var values=[wa[key],wb[key]].filter(Number.isFinite);
+            return values.length?fn.apply(Math,values):null;
+          }
           var data={rendererMs:res?post:null,postMs:null,
             projectionMs:sum(t,u,'projectionMs'),canvasMs:sum(t,u,'canvasMs'),
             fillCalls:sum(da,db,'fillCalls'),strokeCalls:sum(da,db,'strokeCalls'),
             strokePrimitives:sum(da,db,'strokePrimitives'),
+            strokeWidthMinPx:aggregateWidth('minPx',Math.min),
+            strokeWidthMaxPx:aggregateWidth('maxPx',Math.max),
             horizonMasks:sum(da,db,'horizonMasks'),sourceObjects:sum(a.previewLod||{},b.previewLod||{},'original'),
             primitivesProjected:sum(a,b,'primitiveCount'),visibleSegments:sum(a,b,'drawn')};
           var styleCounts=da.strokeStyleCounts||{},otherStyles=db.strokeStyleCounts||{};
@@ -3126,6 +3135,8 @@
               else if(mode==='stroke_black')flags.strokeMode='black';
               else if(mode==='stroke_width_one')flags.strokeMode='unit-width';
               else if(mode==='stroke_miter')flags.strokeMode='miter';
+              else if(studioBenchmarkApi.STROKE_WIDTH_MODES.indexOf(mode)>0)
+                flags.strokeWidth=Number(mode.slice('stroke_width_'.length).replace('_','.'));
               else if(mode!=='canvas_full'&&mode!=='stroke_baseline')
                 throw Error('Unknown Canvas diagnostic mode');
               results=renderer(flags);return metrics(results,profileNow()-began);
@@ -3171,6 +3182,7 @@
             var count=profile==='canvas-layers'?studioBenchmarkApi.LAYER_MODES.length:
               profile==='canvas-strokes'?studioBenchmarkApi.STROKE_MODES.length:
               profile==='canvas-stroke-styles'?studioBenchmarkApi.STROKE_STYLE_MODES.length:
+              profile==='canvas-stroke-widths'?studioBenchmarkApi.STROKE_WIDTH_MODES.length:
               studioBenchmarkApi.MODES.length;
             status('Pass '+state.pass+'/'+state.passes+' · '+state.mode+
               ' · '+state.measured+'/'+state.total+' measured · '+state.completed+'/'+(state.passes*count)+' runs');
@@ -3183,6 +3195,8 @@
               'Canvas strokes benchmark complete: 12 runs across four modes. JSON downloaded automatically.':
               profile==='canvas-stroke-styles'?
               'Canvas stroke styles benchmark complete: 18 runs across six modes. JSON downloaded automatically.':
+              profile==='canvas-stroke-widths'?
+              'Canvas stroke width sweep complete: 30 runs across ten modes. JSON downloaded automatically.':
               'Benchmark complete: 15 runs across five modes. JSON downloaded automatically.');
             try{download(report);}catch(error){status('Benchmark complete, automatic download failed: '+error.message+'. Use Download last JSON.');}
             if(again)again.hidden=false;
@@ -3197,6 +3211,7 @@
     if(layersRun)layersRun.addEventListener('click',function(){startBenchmark('canvas-layers');});
     if(strokesRun)strokesRun.addEventListener('click',function(){startBenchmark('canvas-strokes');});
     if(stylesRun)stylesRun.addEventListener('click',function(){startBenchmark('canvas-stroke-styles');});
+    if(widthsRun)widthsRun.addEventListener('click',function(){startBenchmark('canvas-stroke-widths');});
     cancel.addEventListener('click',function(){if(studioBenchmark)studioBenchmark.cancel();});
     if(again)again.addEventListener('click',function(){
       if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);

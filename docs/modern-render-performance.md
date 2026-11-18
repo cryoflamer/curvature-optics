@@ -179,3 +179,40 @@ are not necessarily additive, so the combined simple control also detects
 interactions. RAF intervals include scheduling and deferred browser paint;
 these data do not prove which graphics backend is responsible. `1000/p50`
 is an approximate comparison rate, not the application's achieved video FPS.
+
+
+## Canvas Direct stroke width sweep (Modern Animation Studio)
+
+After the single-factor stroke-style benchmark identifies authored stroke width
+as the dominant sensitivity, use **Benchmark stroke widths** in **Playback
+profiler** to measure a frozen frame with one baseline plus nine forced widths:
+`0.5`, `0.75`, `1`, `1.125`, `1.25`, `1.5`, `2`, `3`, `4`. The JSON profile is
+`canvas-stroke-widths`, with stable mode identifiers `stroke_baseline` and
+`stroke_width_0_5` through `stroke_width_4` (underscores represent decimal
+points). Three rotated passes measure 120 RAF callbacks per mode after 30 warmups
+(30 runs in total). Download is automatic; the original Playback state is
+restored afterward or after cancellation.
+
+Each width mode retains the exact same projected geometry, clipped paths,
+`stroke()` calls, order, joins, stroke colors and alpha, fills and horizon mask.
+**Only `ctx.lineWidth` changes.** The baseline retains authored, scaled widths.
+These are diagnostic images, not a change to regular Playback, exports or
+project data. Look at `strokeCalls`, `beginPathCalls`, `lineToCalls`,
+`strokeWidthMinPx` and `strokeWidthMaxPx` in the JSON to confirm isolation.
+
+The fixed values are **Canvas backing-store pixels**, because Canvas Direct
+paints after `setTransform(1,0,0,1,0,0)`. They are not CSS pixels: for example,
+with `canvas.width = 1334` and `cssWidth = 1186`, a 1 CSS px line corresponds
+approximately to `1334/1186 = 1.125` Canvas px. The 1.125 step deliberately
+probes this neighborhood, but remains *exactly* 1.125 Canvas px even when DPR
+or canvas CSS dimensions differ. `devicePixelRatio`, canvas and CSS dimensions
+are recorded in `environment`. Baseline widths may differ across objects and
+can be non-integer.
+
+Compare `gapMs` p50 and p95 **within each pass as well as pooled across passes**.
+RAF intervals include scheduling and deferred browser graphics work, so
+`1000/gapMs.p50` is a comparison proxy, **not** achieved video FPS. The sweep
+isolates a width dependency but does not establish which graphics process or
+raster backend causes it. Parameter changes can affect pixel output and
+antialiasing; do not promote a forced width to production without visual
+comparison and normal-playback verification.

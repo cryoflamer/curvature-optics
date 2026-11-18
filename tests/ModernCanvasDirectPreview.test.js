@@ -384,3 +384,45 @@ test('unknown stroke diagnostic mode is rejected instead of silently changing th
   assert.throws(()=>draw(m,{canvasDirectDiagnostics:{strokeMode:'unknown'}}),
     /Unknown Canvas Direct stroke diagnostic mode/);
 });
+
+
+test('stroke width sweep retains full path geometry and every other stroke property',()=>{
+  const m=soundly(),opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const baselineGraph=graph(),baseline=renderer.renderPhysical(baselineGraph.g,m,opts);
+  const original=baselineGraph.stats().events;
+  const baseStrokes=original.filter(e=>e.type==='stroke');
+  assert.ok(baseStrokes.length>500);
+  assert.ok(baseline.directStats.strokeWidthRange.minPx>0);
+  assert.ok(baseline.directStats.strokeWidthRange.maxPx>=baseline.directStats.strokeWidthRange.minPx);
+  for(const width of [0.5,0.75,1,1.125,1.25,1.5,2,3,4]){
+    const g=graph(),result=renderer.renderPhysical(g.g,m,{...opts,
+      canvasDirectDiagnostics:{fills:true,strokes:true,horizonMask:true,strokeMode:'normal',strokeWidth:width}});
+    const events=g.stats().events;
+    assert.equal(events.length,original.length,`${width}: total painter operations`);
+    assert.deepEqual(events.filter(e=>e.type==='fill'),original.filter(e=>e.type==='fill'));
+    const strokes=events.filter(e=>e.type==='stroke');
+    assert.equal(strokes.length,baseStrokes.length);
+    for(let i=0;i<strokes.length;i++){
+      assert.deepEqual(strokes[i],{...baseStrokes[i],width},`${width}: stroke ${i}`);
+    }
+    assert.deepEqual(result.directStats.canvasCalls,baseline.directStats.canvasCalls);
+    assert.equal(result.drawn,baseline.drawn);
+    assert.equal(result.primitiveCount,baseline.primitiveCount);
+    assert.equal(result.directStats.strokeCalls,baseline.directStats.strokeCalls);
+    assert.equal(result.directStats.horizonMasks,baseline.directStats.horizonMasks);
+    assert.equal(result.directStats.strokeWidthRange.minPx,width);
+    assert.equal(result.directStats.strokeWidthRange.maxPx,width);
+    renderer.renderPhysical(g.g,m,opts);
+    assert.equal(g.g.Canvas.getContext('2d').lineJoin,'round');
+  }
+});
+
+test('stroke width overrides validate values before Canvas painting',()=>{
+  const m=soundly();
+  for(const strokeWidth of [0,-1,65,NaN,Infinity,'1',null]){
+    assert.throws(()=>draw(m,{canvasDirectDiagnostics:{strokeWidth}}),
+      /Invalid Canvas Direct diagnostic stroke width/);
+  }
+  assert.throws(()=>draw(m,{canvasDirectDiagnostics:{strokeMode:'simple',strokeWidth:1}}),
+    /Invalid Canvas Direct diagnostic stroke width/);
+});
