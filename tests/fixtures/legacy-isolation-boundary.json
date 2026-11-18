@@ -1051,6 +1051,7 @@
         "tests/ModernAngularGuide.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
         "tests/ModernCameraTelemetry.test.js",
+        "tests/ModernCanvasDirectAtmosphericParity.test.js",
         "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernTargetDirection.test.js",
@@ -2022,11 +2023,14 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/app/CurvatureMainCanvasRenderer.js"
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/renderers/CurvatureCanvasDirectPreview.js"
       ],
       "commonJsTestCallers": [
         "tests/AtmosphericVisibility.test.js",
-        "tests/ModernAtmosphericControls1383.test.js"
+        "tests/ModernAtmosphericControls1383.test.js",
+        "tests/ModernCanvasDirectAtmosphericParity.test.js",
+        "tests/ModernCanvasDirectPreview.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2038,6 +2042,7 @@
         "src/app/CurvatureMainCanvasRenderer.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCanvasDirectAtmosphericParity.test.js",
         "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernCanvasDirectPreview.test.js"
       ],

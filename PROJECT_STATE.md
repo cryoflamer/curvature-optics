@@ -1,5 +1,5 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–2/6 complete**, with Stage **3 Canvas Direct drag and corrective repairs A/B implemented in source but not yet browser-certified**;
+> Stages **1–2/6 complete**, with Stage **3 Canvas Direct drag and corrective repairs A/B/C implemented in source but not yet browser-certified**;
 > Stage **4 — shared interaction preview pipeline** is **blocked pending Stage 3 Opera visual/performance verification**. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates, detailed stage-2 notes and
 > cross-chat handoff. This seven-profile follow-up is based on `7cc4926`
@@ -77,6 +77,25 @@
 > motion FPS before unblocking Stage 4. Node regression/isolation results for
 > this repair are recorded in `docs/interactive-rendering-migration.md`.
 
+>
+> **Stage 3 corrective repair C — Visibility & haze / Flat grid colors (2026-11-18):**
+> Opera showed that during Canvas Direct camera drag, atmosphere Visibility & haze
+> disappeared and the Flat metric grid briefly became black. Direct painting
+> now uses the shared `CurvatureAtmosphericVisibility` extinction/blend law for
+> rendered object fills and strokes, including implicitly black strokes, with
+> a cached representative distance per authored object package. A small per-
+> object swatch cache avoids repeated exponential/hex conversions; camera moves
+> update only observer-relative range. It does **not** re-run RK4 or mutate the
+> physical/History models. Metric grid rings/spokes use the exact same shared
+> physical color fallback as the Accurate renderer on Globe **and** Flat,
+> rather than Legacy `FEGridCol`. Atmospheres still control refractive
+> geometry independently from haze; Compare visibility remains shared by UI
+> contract. Haze is approximate airlight over source range, not a solved
+> optical-path integral. **Node verification:** 1739/1739 regression tests
+> passed across six shards; refactor closure 136/136; Legacy/Modern static
+> isolation audit passed with the new documented import. Browser look/FPS
+> after C remains unverified. **NEXT: Repeat Opera interaction checks for haze,
+> blue Flat grid and measured FPS; Stage 4 stays blocked pending acceptance.**
 >
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**
 > Playback now offers `Full` / `Balanced` / `Performance` Scene detail,

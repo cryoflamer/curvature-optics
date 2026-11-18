@@ -309,13 +309,16 @@ test('browser script order and Modern-only isolation of Canvas Direct',()=>{
     html.indexOf('src/renderers/CurvatureCanvasDirectPreview.js'));
   assert.ok(html.indexOf('src/geometry/CurvaturePhysicalWorldGeometry.js')<
     html.indexOf('src/renderers/CurvatureCanvasDirectPreview.js'));
+  assert.ok(html.indexOf('src/renderers/CurvatureAtmosphericVisibility.js')<
+    html.indexOf('src/renderers/CurvatureCanvasDirectPreview.js'));
   assert.match(html,/value="canvas-direct"/);
   assert.doesNotMatch(code,/\bGraphX3DX\s*\(|\bDrawModel\s*\(/);
   const browser=vm.createContext({CurvatureGeometryEngine:require('../src/geometry/CurvatureGeometryEngine'),
     CurvatureOpticalEffectiveRadiusPreview:require('../src/optics/OpticalEffectiveRadiusPreview'),
     CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
     CurvatureCanvasProjection:require('../src/renderers/CurvatureCanvasProjection'),
-    CurvaturePhysicalWorldGeometry:require('../src/geometry/CurvaturePhysicalWorldGeometry')});
+    CurvaturePhysicalWorldGeometry:require('../src/geometry/CurvaturePhysicalWorldGeometry'),
+    CurvatureAtmosphericVisibility:require('../src/renderers/CurvatureAtmosphericVisibility')});
   vm.runInContext(code,browser);
   assert.equal(typeof browser.CurvatureCanvasDirectPreview.create,'function');
 });

@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–2 complete; Stage 3 pointer previews plus corrective repairs A and B implemented in source. Stage 3 Opera visual/performance acceptance is still pending, so Stage 4 remains blocked.
+**Status:** Stages 1–2 complete; Stage 3 pointer previews plus corrective repairs A, B and C implemented in source. Stage 3 Opera visual/performance acceptance is still pending, so Stage 4 remains blocked.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -254,9 +254,35 @@ new pack until its Git history or a clean application confirms that fact.
   Targeted Canvas Direct / pointer / orientation tests passed after the final
   drawing-domain guard. These are code regressions, not Opera raster or FPS
   certification.
-- **Verification gate remains open:** run manual Opera tests for captions,
-  HiDPI thickness, Globe/Flat grid under Pan/Nick/Shift and independent A/B
-  atmospheres; check real FPS on dense scenes before Stage 4.
+- **Corrective repair C — atmospheric visibility and physical grid palette
+  (2026-11-18):** Opera testing after B exposed two intermediate-frame differences:
+  Visibility & haze was ignored during drag, and Flat metric rings/spokes
+  turned black until the accurate settle repaint. The Canvas Direct painter
+  now reuses `CurvatureAtmosphericVisibility.validate()` / `blend()` for
+  object fills and strokes, including strokes whose black fallback color was
+  implicit. Its approximate observer-relative distance is derived from each
+  cached object package's authored vertex centre; only the current observer
+  translation and visibility range are evaluated each frame. Per-object
+  palette memoization avoids repeated extinction math for dense meshes. The
+  extinction presentation never changes geometry, horizon masks, guide colors
+  or project data. The metric grid now uses the same `GlobeGridCol ||
+  FEGridCol || 'blue'` palette as the Physical metric guide composer on
+  **both** Globe and Flat; the black `FEGridCol` continues to belong to
+  Legacy Flat. Scene/Compare drag continues passing the selected visibility
+  settings (shared by Compare), while authored atmosphere/refraction profiles
+  remain independent A/B. No extra optical/RK4 computations are introduced.
+  Haze distances are a representative approximation, not exact optical-path
+  integration; Canvas Direct retains its existing painter-order/occlusion
+  limitations. Browser look/FPS after C is not yet certified.
+  **Verification:** the full 304-file Node regression suite passed in six
+  shards (1739/1739 tests), the architecture/refactor closure passed
+  (136/136 focused tests) and the Legacy/Modern source boundary audit
+  `--check` passed with its updated dependency inventory. No Opera frame or
+  actual FPS test was performed for this repair.
+- **Verification gate remains open:** re-check Opera drag for Visibility & haze
+  ON/OFF and 1–500 km range, Globe/Flat metric blue color, caption settings,
+  Pan/Nick/Shift and distinct A/B atmospheres. Check actual FPS in a dense
+  Soundly or Pontchartrain scene before Stage 4.
 
 
 ## Signed Flat refraction follow-up (2026-11-18; completed before Stage 4)

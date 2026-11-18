@@ -9,13 +9,14 @@
     root.CurvatureOpticalEffectiveRadiusPreview||(typeof require==='function'?require('../optics/OpticalEffectiveRadiusPreview'):null),
     root.CurvatureCameraTranslation||(typeof require==='function'?require('../geometry/CurvatureCameraTranslation'):null),
     root.CurvatureCanvasProjection||(typeof require==='function'?require('./CurvatureCanvasProjection'):null),
-    root.CurvaturePhysicalWorldGeometry||(typeof require==='function'?require('../geometry/CurvaturePhysicalWorldGeometry'):null));
+    root.CurvaturePhysicalWorldGeometry||(typeof require==='function'?require('../geometry/CurvaturePhysicalWorldGeometry'):null),
+    root.CurvatureAtmosphericVisibility||(typeof require==='function'?require('./CurvatureAtmosphericVisibility'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureCanvasDirectPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(geometry,effective,translation,viewport,physicalWorld){
+}(typeof globalThis!=='undefined'?globalThis:this,function(geometry,effective,translation,viewport,physicalWorld,visibility){
   'use strict';
-  if(!geometry||!effective||!translation||!viewport||!physicalWorld)
-    throw Error('Canvas Direct requires Modern geometry, effective radius, translation, projection and metric landmarks');
+  if(!geometry||!effective||!translation||!viewport||!physicalWorld||!visibility)
+    throw Error('Canvas Direct requires Modern geometry, effective radius, translation, projection, metric landmarks and atmospheric visibility');
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
   function unit(v){var n=Math.hypot(v[0],v[1],v[2]);if(!(n>0))throw RangeError('Degenerate camera');return v.map(function(x){return x/n;});}
@@ -134,17 +135,29 @@
         scene.primitives.forEach(function(p){
           var i=p.metadata&&p.metadata.placedObjectIndex;
           if(!Number.isInteger(i))throw Error('Canvas Direct needs source object identity');
-          if(!groups[i])groups[i]={index:i,primitives:[],anchor:null};
-          groups[i].primitives.push(p);
-          if(!groups[i].anchor)groups[i].anchor=p.points[0];
+          if(!groups[i])groups[i]={index:i,primitives:[],anchor:null,center:[0,0,0],vertices:0};
+          var group=groups[i];
+          group.primitives.push(p);
+          if(!group.anchor)group.anchor=p.points[0];
+          // An object's atmospheric range is independent of Pan/Nick/Roll.
+          // Cache one representative centre for all its authored vertices;
+          // recenter it cheaply against the current observer on each frame.
+          p.points.forEach(function(point){for(var axis=0;axis<3;axis++)group.center[axis]+=point[axis];group.vertices++;});
         });
-        return {index:index,groups:groups.filter(Boolean)};
+        return {index:index,groups:groups.filter(Boolean).map(function(group){
+          group.center=group.center.map(function(v){return v/group.vertices;});
+          delete group.vertices;return group;
+        })};
       });
       cachedKey=key;cached=banks;
       return {banks:banks,reused:false};
     }
     function paint(canvas,camera,model,options){
       options=options||{};
+      // Reuse the exact 5%-contrast transmission law and color semantics from
+      // the accurate physical presentation. Haze changes only painted object
+      // colors, never the optical geometry, metric grid, masks or labels.
+      var haze=visibility.validate(options.visibility);
       var began=clock(),params=effective.canvasDirectParameters(model,options);
       var geom=geometricModel(model,params),source=objects(model,params),geometryAt=clock();
       var R=params.effectiveRadius,H=model.Height,globe=params.geometry==='globe';
@@ -189,7 +202,7 @@
       var thinOutlines=!!(options.canvasDirectOptions&&options.canvasDirectOptions.thinOutlines);
       var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0;
       var projectionMs=0,canvasMs=0;
-      function drawPrimitive(p,role,far){
+      function drawPrimitive(p,role,far,tint){
         var start=clock(),style=p.style||{},mode=p.type==='line'?1:(p.mode==null?1:p.mode);
         var sourcePoints=p.points,local=role!=='objects';
         var pts=sourcePoints.map(function(point){return cameraPoint(point,local);});
@@ -229,7 +242,9 @@
         var alpha=style.alpha==null?1:style.alpha;
         if(fillPixels){
           ctx.globalAlpha=alpha;
-          ctx.fillStyle=style.fill||'white';ctx.beginPath();
+          var fillColor=style.fill||'white';
+          ctx.fillStyle=tint?tint(fillColor):fillColor;
+          ctx.beginPath();
           ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);
           for(var k=1;k<fillPixels.length;k++){
             ctx.lineTo(fillPixels[k][0],fillPixels[k][1]);
@@ -239,7 +254,8 @@
         }
         if(lines.length){
           ctx.globalAlpha=alpha;
-          ctx.strokeStyle=style.stroke||(far?'#666':'black');
+          var strokeColor=style.stroke||(far?'#666':'black');
+          ctx.strokeStyle=tint?tint(strokeColor):strokeColor;
           var width=viewport.lineWidth(style.lineWidth,camera);
           ctx.lineWidth=thinOutlines?Math.min(width,1):width;
           ctx.beginPath();
@@ -294,7 +310,9 @@
         var started=clock(),pixel=camera.pixelTransform&&camera.pixelTransform.contextScale||1;
         ctx.save();
         try{
-          ctx.strokeStyle=globe?model.GlobeGridCol:model.FEGridCol;
+          // Physical Scene/Compare uses GlobeGridCol for BOTH surfaces.
+          // FEGridCol is a separate Legacy Flat palette (black by default).
+          ctx.strokeStyle=model.GlobeGridCol||model.FEGridCol||'blue';
           ctx.globalAlpha=.7;ctx.lineWidth=thinOutlines?1:viewport.lineWidth(1,camera);
           ctx.beginPath();
           // Ring polygon chords and 24 radial spokes match the physical grid
@@ -380,6 +398,21 @@
         return {far:far,near:near};
       }
       var layers=source.banks.map(partition),groups=source.banks.reduce(function(s,b){return s+b.groups.length;},0);
+      function paintGroup(group,far){
+        var tint=null;
+        if(haze.enabled){
+          var relative=translation.pointAt(group.center,observer);
+          var distance=Math.hypot(relative[0],relative[1]);
+          var colors=new Map();
+          // Tall/dense object banks reuse a handful of palette entries.
+          // Avoid redoing exp() and hex decoding for every polygon in a RAF.
+          tint=function(color){
+            if(!colors.has(color))colors.set(color,visibility.blend(color,distance,haze.rangeKm));
+            return colors.get(color);
+          };
+        }
+        group.primitives.forEach(function(p){drawPrimitive(p,'objects',far,tint);});
+      }
       // Painter order: far objects, one white disk, surface/horizon guides,
       // then near objects. Guides are never occlusion masks.
       var setupEnd=clock();
@@ -387,13 +420,13 @@
       ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
       // Reset state after other renderers use this Canvas.
       ctx.lineJoin='round';ctx.lineCap='butt';
-      layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
+      layers.forEach(function(layer){layer.far.forEach(function(group){paintGroup(group,true);});});
       if(globe&&layers.some(function(layer){return layer.far.length;}))mask();
       var metricGrid=drawMetricGrid();
       if(globe&&(geom.showTangent||geom.showData)){
         geometry.globeHorizonGuides(geom,{segments:192}).primitives.forEach(function(p){drawPrimitive(p,'visual-aid',false);});
       }
-      layers.forEach(function(layer){layer.near.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',false);});});});
+      layers.forEach(function(layer){layer.near.forEach(function(group){paintGroup(group,false);});});
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,metricGrid:metricGrid,
