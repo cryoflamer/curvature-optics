@@ -9,7 +9,7 @@ const preferences=require('../src/ui/modern/ModernApplicationPreferences');
 const app=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8');
 
-function rendererHarness(target='60'){
+function rendererHarness(target='60',options={}){
   let time=1000,playing=true,renderCost=14;
   const paints=[],nodes=new Map();
   function node(id){
@@ -19,12 +19,13 @@ function rendererHarness(target='60'){
   }
   const graph=()=>({Canvas:{width:900,height:600}});
   const graphs={A:graph(),B:graph()};
-  const fakeRenderer={render(){paints.push(time);time+=renderCost;
-    return {quality:'canvas-direct',result:{drawn:128},overlays:{}};}};
+  const fakeRenderer={render(sample,side,graph,opts){paints.push(time);time+=renderCost;
+    return options.render?options.render(side,opts):
+      {quality:'canvas-direct',result:{drawn:128},overlays:{}};}};
   const meter=controls.createPreviewFpsMeter();
   const context=vm.createContext({
     studioPlayback:{status:()=>({playing,positionMs:time-1000,durationMs:100000}),
-      sample:()=>({display:{mode:'scene'}})},
+      sample:()=>({display:{mode:options.compare?'compare':'scene'}})},
     studioPrepared:{mode:'camera',id:'fps_test'},animationWorkspaceOpen:true,
     studioPlaybackFps:target,studioPlaybackLastPaint:-Infinity,studioPlaybackNextDue:-Infinity,
     studioPlaybackRenderedAt:null,
@@ -117,4 +118,25 @@ test('preview FPS belongs to browser preferences and is independent of PNG/video
   assert.match(app,/studioPlaybackFps:studioPlaybackFps/);
   assert.doesNotMatch(app,/studioDraft\.studioPlaybackFps\s*=/);
   assert.doesNotMatch(app,/studioPrepared\.studioPlaybackFps\s*=/);
+});
+
+test('Compare falls back atomically to Accurate if either side cannot use Canvas Direct',()=>{
+  for(const rejected of ['A','B']){
+    const requests=[];
+    const h=rendererHarness('auto',{compare:true,render(side,opts){
+      requests.push([side,opts.quality]);
+      return side===rejected&&opts.quality==='canvas-direct'?{
+        quality:'accurate',fallback:'Canvas Direct unavailable: Flat refraction',
+        result:{drawn:12},overlays:{}}:
+        {quality:opts.quality,result:{drawn:12},overlays:{}};
+    }});
+    h.frame(1000,true);
+    assert.deepEqual(requests,[['A','canvas-direct'],['B','canvas-direct'],
+      [rejected==='A'?'B':'A','accurate']],
+      'the supported side is repainted in Accurate to avoid mixed optics');
+    assert.match(h.node('ModernAnimationPlaybackQuality').textContent,
+      /Accurate RK4 optics · Canvas Direct unavailable/);
+    assert.match(h.node('ModernAnimationPlaybackDiagnostics').textContent,
+      /Preview fallback: Canvas Direct unavailable/);
+  }
 });

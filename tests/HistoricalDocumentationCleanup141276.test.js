@@ -38,12 +38,13 @@ test('140.12.76: retired chronological migration and patch notes stay out of act
     'refactor-closure-140.12.73.md','cpu-hybrid-shooting.md']) {
     assert.ok(!names.includes(name), `superseded documentation is back: ${name}`);
   }
-  // Two topic-based Animation v2 guides and one long-lived location migration
-  // checklist are explicit exceptions, not permission for patch-specific diaries.
+  // The Animation v2 guides, location checklist, and the active topic-based
+  // interactive-rendering migration plan are bounded exceptions, not permission
+  // for another chronological series of patch diaries.
   for(const name of ['modern-animation-contract.md', 'modern-animation-project-wizard.md',
-    'modern-location-migration.md'])
+    'modern-location-migration.md', 'interactive-rendering-migration.md'])
     assert.ok(names.includes(name), 'required topic-based guide missing: '+name);
-  assert.ok(names.length <= 51, 'a chronological documentation tree was reintroduced');
+  assert.ok(names.length <= 52, 'a chronological documentation tree was reintroduced');
 });
 
 test('140.12.76: current guides, test-backed contracts, and physical evidence survive', () => {

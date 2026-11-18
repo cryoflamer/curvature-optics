@@ -561,7 +561,7 @@
   var studioPlaybackControls=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
-  var studioPlaybackQuality='auto'; // Physical -> Accurate; camera -> qualified Fast.
+  var studioPlaybackQuality='canvas-direct'; // New live previews use the qualified Canvas 2D approximation.
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
   var studioPlaybackFps='auto'; // Browser-local preview pacing, not export FPS.
   var studioPlaybackFpsMeter=studioPlaybackControlsApi.createPreviewFpsMeter();
@@ -1793,13 +1793,13 @@
       studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
       studioDraft=studioApi.fromProject(value);
       studioSelectedKey=studioDraft.frames.length?studioDraft.frames[0].key:null;
-      studioPlaybackQuality='auto';studioLibraryActive=null;studioLibraryPending=null;
+      studioPlaybackQuality='canvas-direct';studioLibraryActive=null;studioLibraryPending=null;
       studioLibrarySelected='';
       studioLibraryMessage='New v2 project draft created; saving to Animation Library.';
     }else if(kind==='new'){
       studioWorkspaceId=studioDraftAutosave.makeWorkspaceId(root.crypto);
       studioDraft=studioApi.edit(studioApi.blank(),'cameraHudAppearance',cameraHudAppearance);
-      studioSelectedKey=null;studioPlaybackQuality='auto';
+      studioSelectedKey=null;studioPlaybackQuality='canvas-direct';
       studioLibraryActive=null;studioLibraryPending=null;studioLibrarySelected='';
       studioLibraryMessage='New draft created; other projects and drafts are preserved.';
     }else if(kind==='restore'){
@@ -2286,15 +2286,20 @@
     var graphs=root.CurvatureModernAnimationGraphs;
     var thinOutlines=newUiEl('ModernCanvasDirectThinOutlines');
     var renderOptions={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
-      canvasDirectOptions:{thinOutlines:!!(thinOutlines&&thinOutlines.checked)},
+      canvasDirectOptions:{thinOutlines:!thinOutlines||thinOutlines.checked},
       animationMode:studioPrepared.mode};
     var begun=profileNow();
     var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
     var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
-    // When Model B discovers an unsupported fast configuration, repaint A
-    // in Accurate too: a Compare frame must not silently mix approximations.
-    if(b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
-      {quality:'accurate',sceneDetail:studioPlaybackDetail,animationMode:studioPrepared.mode});
+    // Never display mixed approximate/Accurate optics in Compare when either
+    // side rejects the requested preview (e.g. refracted Flat or unsupported k).
+    if(b&&(a.fallback||b.fallback)&&a.quality!==b.quality&&
+      (a.quality==='accurate'||b.quality==='accurate')){
+      var exactOptions={quality:'accurate',sceneDetail:studioPlaybackDetail,
+        animationMode:studioPrepared.mode};
+      if(a.quality!=='accurate')a=studioPreviewRenderer.render(sampled,'A',graphs.A,exactOptions);
+      if(b.quality!=='accurate')b=studioPreviewRenderer.render(sampled,'B',graphs.B,exactOptions);
+    }
     syncStudioCameraHud(a,b,graphs,isCompare);
     var spent=profileNow()-begun; // includes any Accurate redraw after a B fallback
     var fast=a.quality==='fast'&&(!b||b.quality==='fast');
@@ -2318,9 +2323,12 @@
       syncStudioQualitySummary();
     }
     var qualityNode=newUiEl('ModernAnimationPlaybackQuality');
-    if(qualityNode)qualityNode.textContent=canvasDirectMode?'Canvas Direct · experimental':
+    if(qualityNode)qualityNode.textContent=canvasDirectMode?'Canvas Direct · approximate':
       effectiveRadiusMode?'Effective Radius · experimental':
-      fast?'Fast Preview · approximate':'Accurate RK4 optics'+(b&&b.quality!==a.quality?' / mixed quality':'');
+      fast?'Fast Preview · approximate':'Accurate RK4 optics'+
+      (studioPlaybackQuality==='canvas-direct'&&(a.fallback||(b&&b.fallback))?
+        ' · Canvas Direct unavailable':'')+
+      (b&&b.quality!==a.quality?' / mixed quality':'');
     var diagnostic=newUiEl('ModernAnimationPlaybackDiagnostics');
     if(diagnostic){
       function describe(view,side){
@@ -2340,11 +2348,11 @@
       var fallbackReasons=[a.fallback,b&&b.fallback].filter(Boolean);
       var requestedLabel={auto:'Auto',fast:'Fast if supported',accurate:'Accurate RK4',
         'effective-radius':'Effective Radius','canvas-direct':'Canvas Direct'}[studioPlaybackQuality];
-      var effectiveLabel=canvasDirectMode?'Canvas Direct (experimental)':
+      var effectiveLabel=canvasDirectMode?'Canvas Direct (approximate)':
         effectiveRadiusMode?'Effective Radius (experimental)':
         fast?'Fast Preview (approximate)':
         (b&&b.quality!==a.quality?'Mixed quality':'Accurate RK4');
-      var fallbackNote=fallbackReasons.length?' · Fast unavailable: '+
+      var fallbackNote=fallbackReasons.length?' · Preview fallback: '+
         Array.from(new Set(fallbackReasons)).join(' / '):'';
       diagnostic.textContent='Requested optics: '+requestedLabel+' · Effective: '+effectiveLabel+
         ' · Scene detail: '+detailLabel+(fast?' (Fast)':effectiveRadiusMode?' (Effective Radius)':canvasDirectMode?' (Canvas Direct)':' (Accurate uses full geometry)')+

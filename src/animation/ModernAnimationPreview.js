@@ -7,17 +7,19 @@
   var experiment=root.CurvatureModernExperimentState;
   var horizon=root.CurvatureRayHorizon,physicalCamera=root.CurvaturePhysicalCamera;
   var fastField=root.CurvatureOpticalFastRayField,previewLod=root.CurvatureOpticalPreviewLod;
+  var effectiveRadius=root.CurvatureOpticalEffectiveRadiusPreview;
   if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
     horizon=require('../optics/OpticalRayHorizon');
     physicalCamera=require('../app/CurvaturePhysicalCamera');
     fastField=require('../optics/OpticalFastRayField');
     previewLod=require('../optics/OpticalPreviewLod');
+    effectiveRadius=require('../optics/OpticalEffectiveRadiusPreview');
   }
-  var api=factory(experiment,horizon,physicalCamera,fastField,previewLod);
+  var api=factory(experiment,horizon,physicalCamera,fastField,previewLod,effectiveRadius);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera,fastField,previewLod){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera,fastField,previewLod,effectiveRadius){
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
@@ -196,6 +198,17 @@
       var config=build(data,side,options);
       if(typeof graph.UpdateCanvasSize==='function')graph.UpdateCanvasSize();
       var key=fastKey(config),reason=null,result;
+      if(config.quality==='canvas-direct'){
+        if(!effectiveRadius||typeof effectiveRadius.parameters!=='function')
+          throw Error('Canvas Direct eligibility checker is unavailable');
+        try{effectiveRadius.parameters(config.model,config.options);}
+        catch(error){
+          if(!(error instanceof RangeError))throw error;
+          config.quality='accurate';config.options.opticalQuality='accurate';
+          config.options.previewLod={stride:1};
+          reason='Canvas Direct unavailable: '+error.message;
+        }
+      }
       if(config.quality==='fast'&&fastUnsupported.has(key)){
         config.quality='accurate';config.options.opticalQuality='accurate';
         config.options.previewLod={stride:1};

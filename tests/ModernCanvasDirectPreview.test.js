@@ -169,6 +169,34 @@ test('Animation Preview routes explicit Canvas Direct without affecting Fast / A
   assert.equal(view.build(snap,'A',{quality:'auto',animationMode:'physical'}).quality,'accurate');
   assert.deepEqual(snap,previous);
 });
+test('Animation Studio rejects unsupported Canvas Direct atmospheres with explicit Accurate fallback',()=>{
+  const m=soundly(),base={occlusionRadius:R,preset:'soundly',resetPreset:'soundly'};
+  const comparison=compare.preset('globe-flat-vacuum');
+  const display={mode:'scene',eyeLevel:false,horizon:false,selected:'A'};
+  class FakeModel{Update(){}}
+  const calls=[];
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical(_g,_m,options){
+    calls.push(options.opticalQuality);return {drawn:5};
+  }}});
+  const directScene=experiment.capture(m,{...base,atmosphere:'standard'},comparison,display);
+  assert.equal(view.render(directScene,'A',{Canvas:{}},{quality:'canvas-direct'}).quality,
+    'canvas-direct','Globe Standard remains supported');
+  const unsupported=experiment.capture(m,{...base,atmosphere:'inverse-temperature'},comparison,display);
+  const before=structuredClone(unsupported);
+  const result=view.render(unsupported,'A',{Canvas:{}},{quality:'canvas-direct'});
+  assert.equal(result.requestedQuality,'canvas-direct');
+  assert.equal(result.quality,'accurate');
+  assert.match(result.fallback,/Canvas Direct unavailable.*supports Vacuum, Standard/);
+  assert.equal(calls.at(-1),'accurate');
+  assert.deepEqual(unsupported,before,'fallback does not rewrite authored atmosphere');
+  m.showModel=2;m.Update();
+  const flat=experiment.capture(m,{...base,atmosphere:'standard'},comparison,display);
+  const flatResult=view.render(flat,'A',{Canvas:{}},{quality:'canvas-direct'});
+  assert.equal(flatResult.quality,'accurate');
+  assert.match(flatResult.fallback,/Flat surface/);
+  assert.equal(view.render(flat,'A',{Canvas:{}},{quality:'accurate'}).fallback,null);
+});
+
 test('browser script order and Modern-only isolation of Canvas Direct',()=>{
   const html=fs.readFileSync('CurvatureModern.html','utf8');
   const code=fs.readFileSync('src/renderers/CurvatureCanvasDirectPreview.js','utf8');

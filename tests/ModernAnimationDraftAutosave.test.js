@@ -118,6 +118,17 @@ test('checkpoint validation rejects corrupt records and duplicate IDs without ov
   assert.equal(autosave.newer(checkpoint,{...checkpoint,savedAt:20}).savedAt,30);
 });
 
+test('Canvas Direct and Effective Radius choices round-trip while old Auto stays unchanged',()=>{
+  const draft=studio.blank(),local=storage();
+  for(const quality of ['canvas-direct','effective-radius','auto','fast','accurate']){
+    const cp=autosave.checkpoint({draft,selectedKey:null,quality,
+      prepared:false,positionMs:0},1000);
+    assert.equal(cp.quality,quality);
+    assert.equal(autosave.writeLocal(local,cp),true);
+    assert.equal(autosave.readLocal(local).quality,quality);
+  }
+});
+
 test('IndexedDB retains a single durable animation checkpoint independent of localStorage',async()=>{
   const db=memoryIndexedDB(),local=storage();
   assert.equal(await autosave.read(db),null);

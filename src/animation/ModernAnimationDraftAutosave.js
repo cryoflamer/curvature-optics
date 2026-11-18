@@ -65,7 +65,8 @@
     var selected=input.selectedKey;
     if(selected!==null&&(!keys.has(selected)||typeof selected!=='string'))selected=null;
     var quality=input.quality;
-    if(!['auto','accurate','fast'].includes(quality))throw RangeError('Invalid playback quality');
+    if(!['auto','accurate','fast','effective-radius','canvas-direct'].includes(quality))
+      throw RangeError('Invalid playback quality');
     if(typeof input.prepared!=='boolean')throw RangeError('Invalid prepared flag');
     // Optional association with a named project; older v1 checkpoints stay valid.
     var libraryId=input.libraryId===undefined?null:input.libraryId;

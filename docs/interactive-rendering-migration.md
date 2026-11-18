@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stage 1 — inventory and plan recorded; Stage 2 is next.
+**Status:** Stage 2 — Studio defaults implemented; Stage 3 (direct camera drag) is next.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -114,11 +114,42 @@ new pack until its Git history or a clean application confirms that fact.
 | Stage | Status | Deliverable and acceptance gate |
 | --- | --- | --- |
 | **1. Plan & inventory** | **Completed in this documentation compatpatch** | This document, `PROJECT_STATE.md` handoff, source-backed interaction inventory; no runtime changes. Verify Markdown links, documented source references, diff and patch application. |
-| **2. Studio defaults** | **Next** | For *new* Animation Studio live previews, prefer `canvas-direct` and checked Thin outlines (≤1 backing px); keep Auto FPS, actual FPS, opt-out and previously saved explicit choices. Handle unsupported Canvas Direct atmospheres with an honest fallback/status. Regression: new/existing drafts, Prepare/Play/Pause/Seek/Stop, Compare, export unchanged. |
-| **3. Direct camera drag** | Planned | Add Canvas Direct previews to Scene and Compare drag (rotate + Shift-translate), preserving all camera/gesture math and pointer cancellation. Bound per-frame work, cache geometry when possible; after release render authoritative optics. Verify A/B independent physical settings and a safe, explicit fallback. Split Scene/Compare into 3a/3b if needed. |
+| **2. Studio defaults** | **Completed** | For *new* Animation Studio live previews, prefer `canvas-direct` and checked Thin outlines (≤1 backing px); keep Auto FPS, actual FPS, opt-out and previously saved explicit choices. Handle unsupported Canvas Direct atmospheres with an honest fallback/status. Regression: new/existing drafts, Prepare/Play/Pause/Seek/Stop, Compare, export unchanged. |
+| **3. Direct camera drag** | **Next** | Add Canvas Direct previews to Scene and Compare drag (rotate + Shift-translate), preserving all camera/gesture math and pointer cancellation. Bound per-frame work, cache geometry when possible; after release render authoritative optics. Verify A/B independent physical settings and a safe, explicit fallback. Split Scene/Compare into 3a/3b if needed. |
 | **4. Shared interaction pipeline** | Planned | Consolidate the preview adapter/scheduler across eligible pointer, wheel, keyboard and camera sequence movement. Keep existing movement timings, throttling, settle behavior, no stale RAF, and one ownership boundary; remove only proven-redundant CSS/Fast preview wiring after replacement passes tests. |
 | **5. Effective-curvature qualification** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. Sample representative supported and unsupported profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
 | **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
+
+## Stage 2 implementation notes (2026-11-18)
+
+- New Animation Studio previews and new/wizard drafts now select Canvas Direct;
+  the HTML checkbox starts with `Thin outlines` checked, capping Canvas Direct
+  strokes to one backing-store pixel, and `Preview FPS` remains Auto. The
+  checkbox is an **in-session display option**: toggling it does not alter
+  a project, library record, or exported media. Its unchecked state is not
+  saved across reload; a fresh page starts with thin outlines enabled.
+- Existing autosaved workspaces and named Library records retain their explicit
+  optics quality, including `auto`, `fast` and `accurate`. Checkpoint quality
+  validation was extended to `canvas-direct` and `effective-radius`, matching
+  the already-supported Library quality choices. This does not change the
+  animation project format or the offline Accurate export pipeline.
+- Before Canvas Direct paints, the preview checks support through the existing
+  effective-radius parameter calculation. Unsupported atmospheres or Flat
+  refraction fall back to Accurate RK4 **without changing the user's selection**;
+  the actual renderer and fallback reason are displayed. Compare re-renders
+  the other side in Accurate rather than presenting mixed-quality A/B frames.
+  Errors unrelated to recognized unsupported parameters remain visible.
+- Targeted Node regression: 110/110 passed for default wiring, checkpoints,
+  unsupported profiles, Compare fallback, pacing, and Canvas Direct outlines.
+  A wider run of 595 Animation, Camera, Compare, Canvas and export regressions
+  plus 17 documentation/isolation checks also passed. An attempted full suite
+  exceeded the execution budget and is **not** claimed as fully green.
+  Browser/Opera visual testing and real FPS measurements after this change
+  are still required; do not infer 160 FPS in all scenes.
+- **Next:** Stage 3 — inventory the Scene/Compare drag hook points in detail,
+  route only eligible pointer gesture previews through Canvas Direct, and
+  preserve exact redraw on release/cancel. Do not migrate wheel or keyboard
+  interaction prematurely.
 
 ## Required stage-by-stage verification
 

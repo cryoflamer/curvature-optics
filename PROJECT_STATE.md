@@ -1,16 +1,21 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stage **1/6 complete** in the documentation compatpatch; Stage **2 — Studio
-> defaults** is next. The full source-backed inventory, six compatpatch gates,
-> architectural invariants, known physical limits and cross-chat handoff are in
-> [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md).
-> Starting Git baseline: `8e6897f` (Canvas Direct diagnostics cleanup, after
-> Thin outlines). The next change should make **new** Animation Studio live
-> previews default to Canvas Direct + Thin outlines ≤1 Canvas backing pixel,
-> while retaining Auto FPS, explicit saved quality choices, unsupported-profile
-> fallback, authoritative Scene/Compare and deterministic Accurate exports.
-> **Do not interpret this documentation stage as an implemented UI change.**
-> After each subsequent compatpatch, update this handoff and the linked plan
-> with completion status, tested behavior, outstanding checks and next stage.
+> Stages **1–2/6 complete**; Stage **3 — direct Scene/Compare camera drag** is
+> next. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
+> for the source inventory, acceptance gates, detailed stage-2 notes and
+> cross-chat handoff. The prior base is `4ab9fac` (roadmap compatpatch).
+> Newly created Animation Studio previews now prefer **Canvas Direct** with
+> checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
+> choices in old drafts/Library records are preserved, and newly selected
+> Canvas Direct can now survive workspace autosave. Unsupported refractive
+> atmospheres/Flat cases fall back to Accurate with an explanatory status;
+> Compare does not silently mix direct/accurate frames. The authored project
+> schema, authoritative Scene/Compare and Accurate PNG/video export are unchanged.
+> Targeted tests: 110/110; wider animation/camera/export regression: 595/595;
+> documentation/isolation: 17/17. The attempted entire suite timed out and
+> is not claimed green. Real Opera/browser FPS after the new defaults remains
+> to verify. Stage 3 should address **pointer drag only** before the
+> shared interaction mechanisms of Stage 4; keep exact release/cancel redraw.
+
 >
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**
 > Playback now offers `Full` / `Balanced` / `Performance` Scene detail,
