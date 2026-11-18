@@ -165,7 +165,7 @@
       // These variants are only for opt-in benchmarks. No live
       // playback state or authored geometry is changed.
       var strokeMode=diagnostic.strokeMode||'normal';
-      if(!['normal','path-only','simple','batched','opaque','black','unit-width','miter'].includes(strokeMode))
+      if(!['normal','path-only','empty-stroke','simple','batched','opaque','black','unit-width','miter'].includes(strokeMode))
         throw RangeError('Unknown Canvas Direct stroke diagnostic mode');
       // Fixed Canvas backing-pixel width for the opt-in width sweep only.
       // Keep the authored viewport width intact for all ordinary rendering.
@@ -285,8 +285,11 @@
             ctx.moveTo(lines[e][0][0],lines[e][0][1]);canvasCalls.moveTo++;
             ctx.lineTo(lines[e][1][0],lines[e][1][1]);canvasCalls.lineTo++;
           }
-          // Path-only preserves the entire clipping/path-building workload,
-          // leaving precisely the final Canvas stroke() invocation out.
+          // Empty-stroke preserves clipping, submitted path commands and the
+          // number/style of stroke() calls, but clears the outline just before
+          // stroke(); only fill paths produce actual pixels.
+          if(strokeMode==='empty-stroke'){ctx.beginPath();canvasCalls.beginPath++;}
+          // Path-only leaves precisely the final Canvas stroke() invocation out.
           if(strokeMode!=='path-only'&&strokeMode!=='batched'){
             ctx.stroke();canvasCalls.stroke++;strokes++;
             countStrokeStyle(strokeColor,strokeWidth,strokeAlpha);

@@ -1,6 +1,6 @@
 /* One-click, opt-in Canvas Direct comparisons. Most profiles use one fixed
- * sample; the canvas-pipeline profile advances identical sampled frames for
- * full vs projection-only, with one frozen control. Only browser RAF callbacks
+ * sample; the canvas-pipeline and moving stroke-width profiles advance
+ * identical sampled frames for controlled comparisons. Only browser RAF callbacks
  * contribute measured rows; initial setup and transitions are warmed up.
  */
 (function(root,factory){
@@ -23,6 +23,13 @@
   var STROKE_WIDTH_MODES=Object.freeze(['stroke_baseline','stroke_width_0_5',
     'stroke_width_0_75','stroke_width_1','stroke_width_1_125','stroke_width_1_25',
     'stroke_width_1_5','stroke_width_2','stroke_width_3','stroke_width_4']);
+  // Moving-camera, equal-frame comparisons. The no-stroke control still
+  // builds every path; the empty-stroke control calls stroke() on an empty path.
+  var MOVING_STROKE_WIDTH_MODES=Object.freeze(['motion_baseline',
+    'motion_width_0_25','motion_width_0_5','motion_width_0_75',
+    'motion_width_1','motion_width_1_125','motion_width_1_25',
+    'motion_width_1_5','motion_width_2','motion_width_3',
+    'motion_path_only','motion_empty_stroke']);
   var METRICS=['gapMs','callbackMs','rendererMs','postMs','projectionMs','canvasMs',
     'sampleMs','geometryMs','timelineMs','painted',
     'fillCalls','strokeCalls','strokePrimitives',
@@ -71,9 +78,11 @@
         });
         var report={schema:'curvature-playback-benchmark/1',createdAt:new Date().toISOString(),
           config:{warmupFrames:config.warmupFrames,sampleFrames:config.sampleFrames,
-            passes:config.passes,modes:config.modes.slice(),camera:config.profile==='canvas-pipeline'?'moving for full/projection, frozen for redraw':'fixed for every mode',
+            passes:config.passes,modes:config.modes.slice(),camera:config.profile==='canvas-pipeline'?'moving for full/projection, frozen for redraw':
+              config.profile==='canvas-stroke-width-motion'?'identical moving camera for all stroke widths and controls':'fixed for every mode',
             profile:config.profile,
-            widthSweepUnits:config.profile==='canvas-stroke-widths'?'Canvas backing-store pixels':undefined},
+            widthSweepUnits:['canvas-stroke-widths','canvas-stroke-width-motion'].includes(config.profile)?
+              'Canvas backing-store pixels':undefined},
           environment:config.environment,runs:runs,summary:summary,
           notes:['RAF intervals include browser scheduling and deferred graphics work.',
             'JavaScript timings do not include deferred GPU or compositor time.',
@@ -92,6 +101,8 @@
             'Stroke batched merges only consecutive same-style outlines, flushing before fills; overlaps may differ.',
             'Stroke style modes each change only opacity, color, width, or join; simple changes all four.',
             'Stroke width sweep preserves each authored path, fill, mask, color, alpha, join and stroke() call; only lineWidth varies.',
+            'Moving stroke-width variants sample the same camera path at the same normalized times for each mode and pass.',
+            'Motion path-only builds paths and fills but omits stroke(); motion empty-stroke submits one empty stroke() per original outline, preserving fill operations.',
             'Sweep widths are Canvas backing-store pixels under an identity 2D transform, not CSS pixels; compare canvas and cssWidth in environment.',
             'The baseline has authored widths; strokeWidthMinPx/MaxPx record submitted effective widths.',
             'Stroke style counts describe submitted strokes, not prepared paths or deferred browser work.',
@@ -146,9 +157,10 @@
         environment:settings.environment||{},
         profile:settings.profile||'playback',modes:null};
       if(!['playback','canvas-layers','canvas-strokes','canvas-stroke-styles',
-        'canvas-stroke-widths','canvas-pipeline'].includes(config.profile))
+        'canvas-stroke-widths','canvas-pipeline','canvas-stroke-width-motion'].includes(config.profile))
         throw RangeError('Invalid benchmark profile');
       config.modes=config.profile==='canvas-pipeline'?PIPELINE_MODES:
+        config.profile==='canvas-stroke-width-motion'?MOVING_STROKE_WIDTH_MODES:
         config.profile==='canvas-layers'?LAYER_MODES:
         config.profile==='canvas-strokes'?STROKE_MODES:
         config.profile==='canvas-stroke-styles'?STROKE_STYLE_MODES:
@@ -166,5 +178,6 @@
   return Object.freeze({MODES:MODES,PIPELINE_MODES:PIPELINE_MODES,
     LAYER_MODES:LAYER_MODES,STROKE_MODES:STROKE_MODES,
     STROKE_STYLE_MODES:STROKE_STYLE_MODES,STROKE_WIDTH_MODES:STROKE_WIDTH_MODES,
+    MOVING_STROKE_WIDTH_MODES:MOVING_STROKE_WIDTH_MODES,
     percentiles:percentiles,order:order,create:create});
 }));

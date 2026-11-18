@@ -259,3 +259,69 @@ test('one-click pipeline cancellation restores player without exporting incomple
   assert.equal(h.node('ModernAnimationPipelineCancel').hidden,true);
   assert.match(h.node('ModernAnimationPipelineStatus').textContent,/cancelled/);
 });
+
+test('one click sweeps moving-camera widths and two controls, then exports one JSON',()=>{
+  const h=harness();
+  h.node('ModernCanvasDirectFills').checked=false;
+  h.node('ModernCanvasDirectStrokes').checked=false;
+  h.node('ModernCanvasDirectMask').checked=false;
+  h.node('ModernAnimationMovingStrokeWidthsRun').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),true);
+  assert.equal(h.node('ModernAnimationMovingStrokeWidthsRun').disabled,true);
+  assert.equal(h.node('ModernAnimationPipelineCancel').hidden,false);
+  for(let i=0;h.context.studioBenchmark.running()&&i<1500;i++)h.tick();
+  assert.equal(h.context.studioBenchmark.running(),false);
+  assert.equal(h.downloads.length,1);
+  const report=h.downloads[0].json;
+  assert.equal(report.config.profile,'canvas-stroke-width-motion');
+  assert.equal(report.config.widthSweepUnits,'Canvas backing-store pixels');
+  assert.equal(report.config.warmupFrames,8);
+  assert.equal(report.config.sampleFrames,36);
+  assert.equal(report.runs.length,24);
+  for(const mode of runner.MOVING_STROKE_WIDTH_MODES){
+    assert.equal(report.summary[mode].frames,72);
+    assert.equal(report.summary[mode].timelineMs.count,72);
+    const first=report.runs.find(r=>r.mode===mode);
+    assert.equal(first.rows[0].timelineMs,report.runs[0].rows[0].timelineMs);
+    assert.equal(first.rows.at(-1).timelineMs,report.runs[0].rows.at(-1).timelineMs);
+    assert.equal(first.rows[0].painted,1);
+  }
+  assert.equal(report.summary.motion_path_only.strokeCalls.p50,0);
+  assert.equal(report.summary.motion_empty_stroke.strokeCalls.p50,60);
+  assert.equal(report.summary.motion_baseline.strokeCalls.p50,60);
+  assert.equal(report.summary.motion_width_0_25.strokeWidthMinPx.p50,0.25);
+  assert.equal(report.summary.motion_width_1_125.strokeWidthMaxPx.p50,1.125);
+  assert.equal(report.summary.motion_width_3.strokeWidthMaxPx.p50,3);
+  assert.deepEqual([...new Set(h.paintOptions.map(x=>x.strokeWidth)
+    .filter(x=>x!==undefined))].sort((a,b)=>a-b),
+    [0.25,0.5,0.75,1,1.125,1.25,1.5,2,3]);
+  assert.ok(h.paintOptions.some(x=>x.strokeMode==='path-only'));
+  assert.ok(h.paintOptions.some(x=>x.strokeMode==='empty-stroke'));
+  assert.ok(h.paintOptions.filter(x=>x.strokeMode).every(x=>
+    x.fills===true&&x.strokes===true&&x.horizonMask===true));
+  assert.deepEqual(report.environment.movingStrokeWidth.widthsPx,
+    [0.25,0.5,0.75,1,1.125,1.25,1.5,2,3]);
+  assert.equal(h.node('ModernCanvasDirectFills').checked,false);
+  assert.equal(h.node('ModernCanvasDirectStrokes').checked,false);
+  assert.equal(h.node('ModernCanvasDirectMask').checked,false);
+  assert.equal(h.position,40000);
+  assert.equal(h.playing,true);
+  assert.equal(h.node('ModernAnimationMovingStrokeWidthsRun').disabled,false);
+  assert.equal(h.node('ModernAnimationPipelineCancel').hidden,true);
+  assert.match(h.node('ModernAnimationPipelineStatus').textContent,
+    /Moving stroke-width sweep complete[\s\S]*JSON downloaded/);
+});
+
+test('cancelling moving stroke-width benchmark restores Play and does not export',()=>{
+  const h=harness();
+  h.node('ModernAnimationMovingStrokeWidthsRun').emit('click');
+  for(let i=0;i<25;i++)h.tick();
+  h.node('ModernAnimationPipelineCancel').emit('click');
+  assert.equal(h.context.studioBenchmark.running(),false);
+  assert.equal(h.queue.size,0);
+  assert.equal(h.downloads.length,0);
+  assert.equal(h.position,40000);
+  assert.equal(h.playing,true);
+  assert.equal(h.node('ModernAnimationPipelineCancel').hidden,true);
+  assert.match(h.node('ModernAnimationPipelineStatus').textContent,/cancelled/);
+});

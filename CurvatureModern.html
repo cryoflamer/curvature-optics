@@ -309,9 +309,10 @@
           <div class="modern-camera-hud-settings-body modern-animation-profiler-body">
             <div class="modern-animation-benchmark-actions">
               <button type="button" id="ModernAnimationPipelineRun" disabled title="One click: test advancing full rendering, identical moving geometry/projection without Canvas painting, and frozen-frame redraw; then download one JSON">Run 3-mode pipeline diagnosis · auto-export</button>
+              <button type="button" id="ModernAnimationMovingStrokeWidthsRun" disabled title="One click: test baseline and nine physical-pixel line widths on the same moving camera path, plus path-only and empty-stroke controls; export one JSON">Run moving stroke-width sweep · auto-export</button>
               <button type="button" id="ModernAnimationPipelineCancel" hidden>Cancel diagnosis</button>
             </div>
-            <output id="ModernAnimationPipelineStatus" class="modern-animation-profiler-report" role="status">One click runs all three Canvas Direct tests with matched settings, rotating two passes and automatically exporting a comparison JSON. Playback and timeline position are restored afterwards. No need to enable frame timing recording.</output>
+            <output id="ModernAnimationPipelineStatus" class="modern-animation-profiler-report" role="status">One click runs three pipeline modes, or use the moving stroke-width sweep to compare nine physical-pixel widths with baseline and two stroke controls. Both auto-export one JSON, preserve Playback and restore the timeline. Frame timing recording is not required.</output>
 
             <label><input type="checkbox" id="ModernAnimationFrameTimingEnabled"> Record real timeline paints (opt-in)</label>
             <div class="modern-animation-benchmark-actions">

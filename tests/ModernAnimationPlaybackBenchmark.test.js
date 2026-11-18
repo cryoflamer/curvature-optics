@@ -298,3 +298,37 @@ test('one-click pipeline UI has its own launch, cancel and visible result status
   assert.match(direct,/if\(skipCanvasPaint\)/);
   assert.ok(!fs.readFileSync('CurvatureApp.html','utf8').includes('ModernAnimationPipelineRun'));
 });
+
+test('moving stroke-width runner compares twelve modes over identical per-frame camera samples',()=>{
+  const modes=benchmark.MOVING_STROKE_WIDTH_MODES;
+  assert.deepEqual(modes,['motion_baseline','motion_width_0_25','motion_width_0_5',
+    'motion_width_0_75','motion_width_1','motion_width_1_125',
+    'motion_width_1_25','motion_width_1_5','motion_width_2','motion_width_3',
+    'motion_path_only','motion_empty_stroke']);
+  const h=harness();
+  h.runner.start({profile:'canvas-stroke-width-motion',passes:2,warmupFrames:2,
+    sampleFrames:3,environment:{quality:'canvas-direct'}});
+  while(h.runner.running())h.tick();
+  const report=h.result;
+  assert.equal(report.config.profile,'canvas-stroke-width-motion');
+  assert.equal(report.config.widthSweepUnits,'Canvas backing-store pixels');
+  assert.match(report.config.camera,/identical moving camera/);
+  assert.equal(report.runs.length,24);
+  assert.deepEqual(report.runs.slice(0,12).map(r=>r.mode),benchmark.order(0,modes));
+  assert.deepEqual(report.runs.slice(12).map(r=>r.mode),benchmark.order(1,modes));
+  for(const mode of modes){
+    assert.equal(report.summary[mode].frames,6);
+    assert.equal(report.summary[mode].gapMs.count,6);
+  }
+  assert.match(report.notes.join(' '),/empty-stroke submits one empty stroke/);
+});
+
+test('moving stroke-width UI remains Modern-only and auto-exports',()=>{
+  const html=fs.readFileSync('CurvatureModern.html','utf8');
+  const app=fs.readFileSync('src/ui/modern/ModernApp.js','utf8');
+  assert.match(html,/id="ModernAnimationMovingStrokeWidthsRun"/);
+  assert.match(app,/startBenchmark\('canvas-stroke-width-motion'\)/);
+  assert.match(app,/flags.strokeMode='empty-stroke'/);
+  assert.match(app,/passes:2,warmupFrames:8,sampleFrames:36/);
+  assert.doesNotMatch(fs.readFileSync('CurvatureApp.html','utf8'),/ModernAnimationMovingStrokeWidthsRun/);
+});

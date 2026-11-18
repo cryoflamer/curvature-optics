@@ -24,7 +24,7 @@ function graph(trackPaths=false){
   let filled=0,stroked=0,paths=0,activePath=[];
   const called={beginPath:0,moveTo:0,lineTo:0,closePath:0,fill:0,stroke:0,
     clip:0,clearRect:0,fillRect:0,drawImage:0};
-  const fillColors=[],paintedPaths=[],events=[];
+  const fillColors=[],paintedPaths=[],strokedPaths=[],events=[];
   const ctx={save(){},restore(){},setTransform(){},
     fillRect(){called.fillRect++;},clearRect(){called.clearRect++;},
     beginPath(){called.beginPath++;paths++;if(trackPaths)activePath=[];},
@@ -34,7 +34,8 @@ function graph(trackPaths=false){
     fill(){called.fill++;filled++;fillColors.push(this.fillStyle);
       events.push({type:'fill',color:this.fillStyle});
       if(trackPaths)paintedPaths.push({color:this.fillStyle,points:activePath.slice()});},
-    stroke(){called.stroke++;stroked++;events.push({type:'stroke',color:this.strokeStyle,
+    stroke(){called.stroke++;stroked++;if(trackPaths)strokedPaths.push(activePath.slice());
+      events.push({type:'stroke',color:this.strokeStyle,
       width:this.lineWidth,alpha:this.globalAlpha,join:this.lineJoin});},
     clip(){called.clip++;},drawImage(){called.drawImage++;}};
   const g={Canvas:{width:800,height:500,getContext(){return ctx;}},Camera:{},
@@ -45,7 +46,7 @@ function graph(trackPaths=false){
     SetCamera(p){this.Camera={CamPos:p.CamPos,CamUp:p.CamUp,CamViewCenter:p.CamViewCenter,
       SceneSize:p.SceneSize,ScreenSize:1,ObjectZExtend:0,Zoom:1};},
     SetCameraZoom(z){this.Camera.Zoom=z;}};
-  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths,called,events})};
+  return {g,stats:()=>({filled,stroked,paths,fillColors,paintedPaths,strokedPaths,called,events})};
 }
 function soundly(){const m=model();state.applyPreset(m,'soundly');m.Height=8.55;
   m.FocalLengthField=2038;m.Pan=.49;m.Nick=-.006;
@@ -394,7 +395,7 @@ test('stroke width sweep retains full path geometry and every other stroke prope
   assert.ok(baseStrokes.length>500);
   assert.ok(baseline.directStats.strokeWidthRange.minPx>0);
   assert.ok(baseline.directStats.strokeWidthRange.maxPx>=baseline.directStats.strokeWidthRange.minPx);
-  for(const width of [0.5,0.75,1,1.125,1.25,1.5,2,3,4]){
+  for(const width of [0.25,0.5,0.75,1,1.125,1.25,1.5,2,3,4]){
     const g=graph(),result=renderer.renderPhysical(g.g,m,{...opts,
       canvasDirectDiagnostics:{fills:true,strokes:true,horizonMask:true,strokeMode:'normal',strokeWidth:width}});
     const events=g.stats().events;
@@ -449,4 +450,35 @@ test('projection-only benchmark runs real clipping but never sends Canvas draw c
   assert.ok(restored.directStats.strokeCalls>0);
   assert.equal(restored.drawn,full.drawn);
   assert.equal(restored.primitiveCount,full.primitiveCount);
+});
+
+test('empty-stroke calls the same number of stroke() operations on empty paths',()=>{
+  const m=soundly(),opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const baseGraph=graph(true),emptyGraph=graph(true),pathGraph=graph(true);
+  const base=renderer.renderPhysical(baseGraph.g,m,opts);
+  const empty=renderer.renderPhysical(emptyGraph.g,m,{...opts,
+    canvasDirectDiagnostics:{strokeMode:'empty-stroke'}});
+  const paths=renderer.renderPhysical(pathGraph.g,m,{...opts,
+    canvasDirectDiagnostics:{strokeMode:'path-only'}});
+  assert.ok(base.directStats.strokeCalls>500);
+  assert.equal(empty.directStats.strokeCalls,base.directStats.strokeCalls);
+  assert.equal(empty.directStats.strokePrimitives,base.directStats.strokePrimitives);
+  assert.equal(empty.directStats.fillCalls,base.directStats.fillCalls);
+  assert.equal(empty.drawn,base.drawn);
+  assert.equal(empty.primitiveCount,base.primitiveCount);
+  assert.equal(empty.directStats.horizonMasks,base.directStats.horizonMasks);
+  assert.equal(empty.directStats.canvasCalls.stroke,base.directStats.canvasCalls.stroke);
+  assert.equal(empty.directStats.canvasCalls.moveTo,base.directStats.canvasCalls.moveTo);
+  assert.equal(empty.directStats.canvasCalls.lineTo,base.directStats.canvasCalls.lineTo);
+  assert.equal(empty.directStats.canvasCalls.beginPath,
+    base.directStats.canvasCalls.beginPath+base.directStats.strokeCalls);
+  assert.equal(paths.directStats.strokeCalls,0);
+  assert.ok(baseGraph.stats().strokedPaths.every(p=>p.length>0));
+  assert.ok(emptyGraph.stats().strokedPaths.every(p=>p.length===0));
+  assert.deepEqual(empty.directStats.canvasCalls,emptyGraph.stats().called);
+  assert.deepEqual(emptyGraph.stats().events.filter(e=>e.type==='fill'),
+    baseGraph.stats().events.filter(e=>e.type==='fill'));
+  assert.equal(empty.directStats.canvasCalls.fill,base.directStats.canvasCalls.fill);
+  const restored=renderer.renderPhysical(emptyGraph.g,m,opts);
+  assert.ok(restored.directStats.strokeCalls>0);
 });

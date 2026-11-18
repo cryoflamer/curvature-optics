@@ -439,3 +439,41 @@ is available. Hiding the tab or changing/discarding the active project stops
 the sweep. With recording off, playback behavior remains the same; no RAF
 observer is scheduled and no timing samples are stored. No working experiment,
 History, optical geometry, renderer style, or PNG/video export is modified.
+
+
+### Moving Canvas Direct line-width experiment (one-click)
+
+In **Animation Studio → Playback**, prepare the camera animation and select
+**Canvas Direct**. Under **Canvas Direct · frame timing (manual vs automatic)**,
+click **Run moving stroke-width sweep · auto-export** once. No recording toggle
+or manual repetitions are required. The application automatically tests the
+same moving camera trajectory with the same sampled timeline positions in
+**two rotated passes** (8 warmup RAF callbacks + 36 measured callbacks per
+mode) and downloads one `curvature-playback-benchmark-*.json`. The shared
+**Cancel diagnosis** button stops the test; no partial JSON is exported.
+The previous timeline position, paused/playing state and display switches are
+restored. It does not modify the project, optical model, or export renderer.
+
+The `canvas-stroke-width-motion` profile runs 12 variants: authored baseline,
+fixed **0.25, 0.5, 0.75, 1.0, 1.125, 1.25, 1.5, 2.0 and 3.0** pixel outlines,
+plus **path-only** (builds and submits outlines to Canvas paths but does not
+call `stroke()`) and **empty-stroke** (builds the same outline paths and then
+clears each path just before `stroke()`, preserving the number of `stroke()`
+calls without rasterizing outline segments). Fills, horizon mask, clip
+computation, colors, opacity and line joins remain enabled and unchanged.
+Diagnostic widths are **physical backing-store pixels** under an identity
+Canvas transform, not CSS pixels; the exported `devicePixelRatio`, physical
+canvas size and `strokeWidthMinPx`/`strokeWidthMaxPx` document that distinction.
+All rendering modes use the actual Canvas Direct path and source scene. The
+empty-stroke control deliberately renders outlines invisible; it is not a
+visual alternative for production use. Other rendering options and ordinary
+Animation playback remain unchanged outside the experiment.
+
+Compare `summary.*.gapMs` p50/p95, per-pass drift, `callbackMs`, `canvasMs`,
+`strokeCalls`, `strokePrimitives`, `fillCalls` and measured effective widths.
+**RAF gaps are not presented-frame FPS**; fast synchronous Canvas commands can
+still trigger deferred rasterization/compositing, and one experiment does not
+identify the exact GPU driver or compositor work. The path-only vs empty-stroke
+controls help distinguish path construction, `stroke()` call overhead and
+actual line rasterization. Browser performance can drift over sequential runs;
+check both rotated passes instead of interpreting a single median as a proof.
