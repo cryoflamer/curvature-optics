@@ -70,6 +70,11 @@
       paint:function(pose){paintCameraDirectDrag(pose);},
       onError:function(error){
         var owner=cameraDirectMotion&&cameraDirectMotion.owner;
+        if(owner==='sequence'){
+          stopCameraTransition(false,'Animation failed: '+error.message,true);
+          sequenceStatus('Animation failed: '+error.message,true);
+          return;
+        }
         if(owner==='pointer')cancelCameraDrag();
         else if(owner==='keyboard')stopCameraKeyboard(true);
         else stopAutoCameraPreview();
@@ -144,7 +149,7 @@
     return qualifiedFastProfile(state.atmosphere);
   }
   function effectiveOpticalQuality(){
-    if(cameraTransition)return 'fast';
+    if(cameraTransition&&!cameraTransition.direct)return 'fast';
     return state.opticalQuality==='auto'?(autoCameraActive&&autoPreviewSupported()?'fast':'accurate'):
       state.opticalQuality;
   }
@@ -5060,6 +5065,22 @@
     if(renderNow)redraw();
     return true;
   }
+  function queueCameraTransitionTick(current){
+    current.frame=requestAnimationFrame(function(now){
+      // A callback already dispatched by the browser may survive cancellation.
+      if(cameraTransition===current)cameraTransitionTick(now);
+    });
+  }
+  function requestCameraSequencePreview(current){
+    if(!current.direct){requestAutoCameraPreview();return;}
+    var pose=captureCameraPose();
+    // Holds need no repeated painting, but elapsed-time sampling continues.
+    if(current.lastPreviewPose&&CAMERA_POSE_FIELDS.every(function(key){
+      return pose[key]===current.lastPreviewPose[key];
+    }))return;
+    current.lastPreviewPose=pose;
+    if(!requestCameraDirectMotion('sequence'))throw Error('Canvas Direct sequence preview is unavailable');
+  }
   function cameraTransitionTick(now){
     var current=cameraTransition;
     if(!current)return;
@@ -5068,15 +5089,15 @@
     try{
       transitionPose(cameraSequenceApi.cameraAt(current.sequence,elapsed));
       if(elapsed>=current.durationMs){
-        // Drop stale Fast redraws before the authoritative final sample.
+        // Drop stale preview redraws before the authoritative final sample.
         stopCameraTransition(false,'Completed camera animation',true);
         return;
       }
       transitionInputPreview();
       sequenceStatus('Playing animation · '+Math.round(100*elapsed/current.durationMs)+'% · '+
         (elapsed/1000).toFixed(1)+' / '+(current.durationMs/1000).toFixed(1)+' s');
-      requestAutoCameraPreview();
-      current.frame=requestAnimationFrame(cameraTransitionTick);
+      requestCameraSequencePreview(current);
+      if(cameraTransition===current)queueCameraTransitionTick(current);
     }catch(error){
       stopCameraTransition(false,'Animation failed: '+error.message,true);
       sequenceStatus('Animation failed: '+error.message,true);
@@ -5204,7 +5225,6 @@
     if(!cameraSequenceApi)throw Error('Camera sequence module is unavailable');
     if(cameraTransition)throw RangeError('An animation is already playing');
     if(state.demosActive||state.mode==='demos')throw RangeError('Switch to Scene or Compare first');
-    if(!autoPreviewSupported())throw RangeError('Fast Preview is unavailable for this atmosphere / surface combination');
     var frames=cameraSequenceApi.validate(cameraSequence);
     if(frames.length<2)throw RangeError('Add at least two keyframes');
     var duration=cameraSequenceApi.totalMs(frames);
@@ -5217,13 +5237,27 @@
         checkedCameraPosition(cameraSequenceApi.cameraAt(frames,half));
       }
     });
+    // Qualify the actual first keyframe, not the camera before Play. Do not
+    // mutate the live pose until at least one preview route is available.
+    var directViews=cameraDirectDragViews(frames[0].camera);
+    if(!directViews&&!autoPreviewSupported())
+      throw RangeError('Camera sequence preview is unavailable for this atmosphere / surface combination');
     stopCameraKeyboard(true);abortCameraDrag();cancelEdits();cancelPending();stopAutoCameraPreview();
-    cameraTransition={original:captureCameraPose(),sequence:frames,
-      startedAt:profileNow(),durationMs:duration,frame:null};
+    var current={original:captureCameraPose(),sequence:frames,direct:!!directViews,
+      startedAt:profileNow(),durationMs:duration,frame:null,lastPreviewPose:null};
+    cameraTransition=current;
     transitionPose(frames[0].camera);transitionInputPreview();markCustom();sequenceControls();
     sequenceStatus('Playing camera sequence · 0%');
-    requestAutoCameraPreview();
-    cameraTransition.frame=requestAnimationFrame(cameraTransitionTick);
+    try{
+      if(directViews)beginCameraDirectMotion('sequence',directViews);
+      else if(directDragFallbackReason)updateOpticalQualityStatus(
+        'Canvas Direct sequence unavailable: '+directDragFallbackReason+' · Fast Preview retained','warning');
+      requestCameraSequencePreview(current);
+      if(cameraTransition===current)queueCameraTransitionTick(current);
+    }catch(error){
+      stopCameraTransition(false,'Animation failed: '+error.message,true);
+      sequenceStatus('Animation failed: '+error.message,true);
+    }
   }
   function bindCameraSequence(){
     var picker=newUiEl('ModernSequenceKeyframes');
@@ -5490,11 +5524,11 @@
       if(!action||!keyboardAllowed(event))return;
       if(event.preventDefault)event.preventDefault();
       if(navigationKeys[action])return;
-      stopCameraTransition(false,'Transition interrupted by keyboard navigation',false);
+      var interruptedSequence=stopCameraTransition(false,'Transition interrupted by keyboard navigation',true);
       var settledWheel=!navigationKeyActive()&&settleCameraWheel();
       cancelEdits();
       // Keep an interrupted wheel's exact redraw if the key never moves.
-      if(!settledWheel)cancelPending();
+      if(!settledWheel&&!interruptedSequence)cancelPending();
       navigationKeys[action]=true;
       navigationModifiers={fast:!!event.shiftKey,precise:!!event.ctrlKey};
       if(navigationFrame===null){navigationStamp=profileNow();navigationFrame=requestAnimationFrame(navigationTick);}
@@ -5647,7 +5681,7 @@
   // Unsupported and missing-module cases retain the existing Fast/CSS path.
   // This read-only preview never mutates the authoritative Scene/Compare models.
   var directDragFallbackReason=null;
-  function cameraDirectDragViews(){
+  function cameraDirectDragViews(pose){
     directDragFallbackReason=null;
     var checker=root.CurvatureOpticalEffectiveRadiusPreview;
     var renderer=root.CurvatureMainCanvasRenderer;
@@ -5670,7 +5704,7 @@
           canvasDirectOptions:{thinOutlines:true},showCaptions:state.captionMode!=='off',
           captionMode:state.captionMode,includeGeometrySummary:true,deferDecorations:false};
         if(!g||!g.Canvas||!m)throw RangeError('Canvas Direct drag viewport is unavailable');
-        checker.canvasDirectParameters(m,options);
+        checker.canvasDirectParameters(pose?Object.assign({},m,pose):m,options);
         views.push({side:side,graph:g,model:m,options:options});
       });
     }catch(error){directDragFallbackReason=error.message;return null;}
@@ -5801,8 +5835,8 @@
         (view!=='Scene'&&state.mode!=='compare'))return;
       var rect=canvas.getBoundingClientRect&&canvas.getBoundingClientRect();
       if(!rect||!(rect.width>0&&rect.height>0))return;
-      stopCameraTransition(false,'Transition interrupted by mouse navigation',false);
-      var interrupted=!!cameraDirectMotion||navigationKeyActive()||autoCameraSettleTimer!==null||(!!cameraDirectDrag&&state.frame!==null);
+      var interruptedSequence=stopCameraTransition(false,'Transition interrupted by mouse navigation',false);
+      var interrupted=interruptedSequence||!!cameraDirectMotion||navigationKeyActive()||autoCameraSettleTimer!==null||(!!cameraDirectDrag&&state.frame!==null);
       stopCameraKeyboard(true);
       if(interrupted)stopAutoCameraPreview();
       try{
@@ -5997,7 +6031,7 @@
          delta===0||activeCameraPointer||
          (view==='Scene'&&state.mode!=='scene')||
          (view!=='Scene'&&state.mode!=='compare')||state.demosActive||animationWorkspaceOpen)return;
-      stopCameraTransition(false,'Transition interrupted by wheel navigation',false);
+      stopCameraTransition(false,'Transition interrupted by wheel navigation',true);
       if(navigationKeyActive())stopCameraKeyboard();
       var next;
       try{
@@ -6091,7 +6125,8 @@
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
     var liveMotion=opticalSampleMode==='camera-motion';
-    if(cameraTransition&&!liveMotion)stopCameraTransition(false,'Animation interrupted by redraw',false);
+    var interruptedSequence=cameraTransition&&!liveMotion&&
+      stopCameraTransition(false,'Animation interrupted by redraw',false);
     var sample=opticalSampleMode==='cold'||opticalSampleMode==='warm';
     state.opticalSample=sample?opticalSampleMode:null;
     // A targeted physical-input edit cannot invalidate the other viewport.
@@ -6099,6 +6134,7 @@
     // No partial draws on first load, mode switch, or explicit cold/warm runs.
     var selected=(compareSide==='A'||compareSide==='B')&&state.mode==='compare'&&
       !sample&&state.compareLast.A&&state.compareLast.B?compareSide:null;
+    if(interruptedSequence)selected=null;
     if(selected&&pendingCompareScope&&pendingCompareScope!==selected)selected=null;
     if(selected&&state.timer!==null)selected=null;
     if(!liveMotion&&(cameraDirectMotion||navigationKeyActive())){
@@ -6185,6 +6221,7 @@
     }
   }
   function scheduleRedraw(){
+    stopCameraTransition(false,'Animation interrupted by parameter change',false);
     if(cameraDirectMotion){stopCameraKeyboard(true);stopAutoCameraPreview();abortCameraDrag();}
     updateSnapshotSaveAction();
     cancelPending();

@@ -1,24 +1,23 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
 > Stages **1–3 complete**: after corrective repair C the user reported normal,
 > very fast and smooth Opera interaction (manual observation, no measured FPS).
-> Stage **4A — shared pointer/wheel/keyboard Canvas Direct** is implemented;
-> Stage **4B — camera sequences** is next after 4A browser acceptance. See
-> [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
+> Stage **4A — pointer/wheel/keyboard** accepted by the user in Opera.
+> Stage **4B — camera sequences** implemented; awaiting browser acceptance.
+> See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates and historical validation notes.
 > Read `git log -1` to identify the applied HEAD.
-> **4A:** one owner and one latest-pose RAF scheduler serve pointer, Shift-wheel
-> FOV, Alt-wheel dolly and keyboard navigation. Wheel settles after 220 ms of
-> inactivity; key release/blur and pointer release/cancel restore selected
-> optics. Both Compare sides are preflighted at the new pose. Detached frames
-> derive FOV without `Update()` or RK4. Pointer poses remain provisional; wheel
-> and keyboard retain their existing live-model semantics. Existing Fast/CSS
-> fallback paths remain; camera-sequence timing/routing is unchanged.
-> Tests: final relevant regression 251/251, including targeted 105/105;
-> initial broad run 1745/1746 with the History failure passing on isolated
-> rerun (12/12). Both static audits passed. See roadmap for caveats.
-> Manual Opera acceptance is pending.
-> **NEXT:** verify wheel and keyboard motion and transitions between input
-> methods, then implement 4B. Stage 5 remains separate physical qualification.
+> **4B:** Camera Animation uses the shared Canvas Direct owner and latest-pose
+> RAF scheduler in Scene/Compare; Fast remains a preflight fallback. Absolute
+> sequence timing, hold intervals, interpolation, Stop/Cancel and keyframe
+> persistence are unchanged. Unchanged held poses do not repaint. Completion,
+> interruption or runtime failure restores the selected physical renderer; a
+> failed Compare paint or targeted edit restores both sides. No RK4 per direct
+> frame. Stale sequence callbacks cannot advance a replacement playback.
+> Validation: 68/68 navigation tests, 669/669 broader camera/animation/History/
+> architecture tests; both static isolation audits passed. Entire 304-file
+> test suite and browser FPS were not measured in this compatpatch.
+> **NEXT:** verify Camera Animation Play/Stop/Cancel, input takeover, holds,
+> and Globe/Flat Compare in Opera; then Stage 5 (physical qualification).
 > Newly created Animation Studio previews now prefer **Canvas Direct** with
 > checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
 > choices in old drafts/Library records are preserved, and newly selected

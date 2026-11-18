@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard is implemented; 4B camera sequences follows 4A manual acceptance.
+**Status:** Stages 1–3 complete (user reported normal, very fast and smooth Opera interaction after repair C; no instrumented FPS measurement). Stage 4A pointer/wheel/keyboard accepted by the user in Opera. Stage 4B camera sequences implemented; manual acceptance pending.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -122,8 +122,8 @@ new pack until its Git history or a clean application confirms that fact.
 | **1. Plan & inventory** | **Completed in this documentation compatpatch** | This document, `PROJECT_STATE.md` handoff, source-backed interaction inventory; no runtime changes. Verify Markdown links, documented source references, diff and patch application. |
 | **2. Studio defaults** | **Completed** | For *new* Animation Studio live previews, prefer `canvas-direct` and checked Thin outlines (≤1 backing px); keep Auto FPS, actual FPS, opt-out and previously saved explicit choices. Handle unsupported Canvas Direct atmospheres with an honest fallback/status. Regression: new/existing drafts, Prepare/Play/Pause/Seek/Stop, Compare, export unchanged. |
 | **3. Direct camera drag** | **Completed** | Add Canvas Direct previews to Scene and Compare drag (rotate + Shift-translate), preserving all camera/gesture math and pointer cancellation. Bound per-frame work, cache geometry when possible; after release render authoritative optics. Verify A/B independent physical settings and a safe, explicit fallback. Split Scene/Compare into 3a/3b if needed. |
-| **4A. Shared pointer/wheel/keyboard pipeline** | Implemented; Opera acceptance pending | Reuse one direct scheduler and owner, retain fallbacks and input math, verify idle/release/interruption. |
-| **4B. Camera sequences** | Next after 4A acceptance | Reuse shared preview while preserving absolute sequence timing, Stop/Cancel and persistence. |
+| **4A. Shared pointer/wheel/keyboard pipeline** | **Completed; user confirmed in Opera** | Reuse one direct scheduler and owner, retain fallbacks and input math, verify idle/release/interruption. |
+| **4B. Camera sequences** | Implemented; Opera acceptance pending | Reuse shared preview while preserving absolute sequence timing, Stop/Cancel and persistence. |
 | **5. Effective-curvature qualification** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. Sample representative supported and unsupported profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
 | **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
 
@@ -439,3 +439,33 @@ new pack until its Git history or a clean application confirms that fact.
   suite passed 251/251. The final tree was not rerun through all 304 test
   files; no completely green full-suite claim. Both Legacy/Modern static
   audits passed (only new test dependencies added to the isolation fixture).
+
+
+## Stage 4B — shared Camera Sequence preview
+
+- Input baseline: accepted Stage 4A (`624b8ae`). User reported that wheel and
+  keyboard work in Opera; no instrumented frame rate was supplied.
+- Camera Animation in Scene and Compare uses the existing Canvas Direct
+  scheduler under a sequence owner. Preflight uses the first keyframe pose;
+  unsupported/missing direct capability retains the existing Fast path if
+  supported. If neither qualifies, Play is rejected before changing the pose.
+- Absolute elapsed-time sampling, travel/easing/holds, immutable keyframes,
+  UI controls and experiment schema remain unchanged. Identical held poses
+  skip direct paint; current FOV, height, position and angles are evaluated
+  on detached per-side frames, with the Stage 3 grid, haze and decorations.
+- Stop keeps the last sampled pose; Cancel restores the pre-Play pose;
+  completion renders the exact last keyframe using the selected settled
+  quality (Auto settles to Accurate). Runtime direct errors stop playback
+  and restore physical rendering, including both Compare sides.
+- Manual takeover without movement still settles the interrupted sequence.
+  Mode switches, blur, edits and debounced curvature changes cancel playback;
+  targeted Compare edits during playback restore both viewports. Cancelled
+  sequence callbacks are bound to their original playback identity.
+- Automated validation: 68/68 navigation tests (8 new sequence regressions);
+  669/669 wider camera, animation, Canvas Direct, Fast, History and boundary
+  tests; both static isolation audits passed. Full 304-file regression and
+  actual Opera image/FPS verification remain unperformed for 4B.
+- **Manual next:** Camera → Camera Animation in Scene and Globe/Flat Compare,
+  add views with different height/FOV/angles, play with arrival pauses, test
+  Stop/Cancel and keyboard/wheel/mouse takeover. Check selected settled
+  quality returns; Stage 5 begins after browser acceptance.

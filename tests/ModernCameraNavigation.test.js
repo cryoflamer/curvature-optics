@@ -141,7 +141,9 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     CurvatureOpticalFastRayField:require('../src/optics/OpticalFastRayField'),
     CurvatureOpticalPreviewLod:require('../src/optics/OpticalPreviewLod'),
     CurvatureMainCanvasRenderer:{renderPhysical(g,m,opt){renders.push({...pose,East:m.CameraEast,North:m.CameraNorth,Height:m.Height,Pan:m.Pan,
-      quality:opt.opticalQuality,stride:opt.previewLod&&opt.previewLod.stride});
+      quality:opt.opticalQuality,stride:opt.previewLod&&opt.previewLod.stride,
+      atmosphere:opt.atmosphere,surface:m.showModel,Nick:m.Nick,Roll:m.Roll,Focal:m.FocalLengthField,
+      camViewAngle:m.camViewAngle,thin:opt.canvasDirectOptions&&opt.canvasDirectOptions.thinOutlines});
       return {drawn:12,fillTriangles:3,unresolved:0,timings:{opticsMs:1,canvasMs:1}};}},
     localStorage:{getItem(k){return storage.get(k)||null;},setItem(k,v){storage.set(k,v);},removeItem(k){storage.delete(k);}},
     performance:{now:()=>clock},
@@ -174,8 +176,11 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(read('src/ui/modern/ModernApp.js'),context);
   const app=win.CurvatureModernApp;
-  for(const name of ['A','B'])app.registerCompareGraph(name,{
-    UpdateCanvasSize(){},Redraw(){app.drawCompare(name,{Canvas:canvas(name)});}});
+  for(const name of ['A','B']){
+    const compareCanvas=canvas(name);
+    app.registerCompareGraph(name,{Canvas:compareCanvas,
+      UpdateCanvasSize(){},Redraw(){app.drawCompare(name,{Canvas:compareCanvas});}});
+  }
   ons[0]();
   function flushFrames(ms=16){clock+=ms;const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(clock);}
   function dispatchGlobal(name,evt){const event={code:'',key:'',target:sceneCanvas,
@@ -184,6 +189,7 @@ function boot(savedExperiment, initialPreferences, pageUrl, historyState, histor
     for(const listener of globalListeners[name]||[])listener(event);return event;}
   return {app,win,document,nodes,renders,storage,canvas:sceneCanvas,flushFrames,dispatchGlobal,
     flushTimers(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());},
+    takeFrames(){const pending=[...frames.values()];frames.clear();return pending;},
     get pendingFrames(){return frames.size;}};
 }
 
@@ -1252,4 +1258,134 @@ test('Canvas Direct keyboard blur settles without stale RAF work',()=>{
   assert.equal(h.renders.at(-1).quality,'canvas-direct');
   h.dispatchGlobal('blur',{});h.flushFrames();assert.equal(h.renders.at(-1).quality,'accurate');
   assert.equal(h.pendingFrames,0);
+});
+
+
+function directSequenceBoot(){
+  const h=boot(undefined,undefined,undefined,undefined,undefined,undefined,true);
+  h.flushFrames();return h;
+}
+function sequenceButton(h,name){h.nodes.get('ModernSequence'+name).dispatch('click');}
+test('Canvas Direct sequence samples absolute time, skips unchanged holds and restores exact final pose',()=>{
+  const h=directSequenceBoot(),m=h.app.getModel();savedSequence(h);
+  const snapshots=JSON.stringify(h.app.getCameraSequence()),before=h.renders.length;
+  sequenceButton(h,'Play');h.flushFrames(500);
+  const initial=h.renders.length;assert.ok(initial>before);
+  assert.equal(h.renders.at(-1).quality,'canvas-direct');assert.equal(h.renders.at(-1).thin,true);
+  h.flushFrames(200);h.flushFrames(200);assert.equal(h.renders.length,initial,'hold does not repaint');
+  h.flushFrames(2100);approx(m.CameraNorth,200);h.flushFrames(0);
+  approx(h.renders.at(-1).North,200);
+  assert.ok(h.renders.slice(before).every(r=>r.quality==='canvas-direct'));
+  assert.ok(h.pendingFrames<=2);
+  h.flushFrames(7500);h.flushFrames();
+  assert.equal(h.app.getCameraAnimation().playing,false);
+  approx(m.CameraNorth,800);assert.equal(h.renders.at(-1).quality,'accurate');
+  assert.equal(h.renders.at(-1).North,800);assert.equal(h.pendingFrames,0);
+  assert.equal(JSON.stringify(h.app.getCameraSequence()),snapshots);
+});
+test('Canvas Direct sequence updates FOV and all pose fields, with independent Compare atmosphere and geometry',()=>{
+  const h=directSequenceBoot(),n=h.nodes;twoFrameAnimation(h);
+  n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+  n.get('ModernModelTabA').dispatch('click');n.get('ModernModelAtmosphere').value='standard';
+  n.get('ModernModelAtmosphere').dispatch('change');h.flushFrames();
+  n.get('ModernModelTabB').dispatch('click');n.get('ModernModelAtmosphere').value='vacuum';
+  n.get('ModernModelAtmosphere').dispatch('change');h.flushFrames();
+  const before=h.renders.length;sequenceButton(h,'Play');h.flushFrames(2500);h.flushFrames(0);
+  const [a,b]=h.renders.slice(-2);
+  assert.equal(a.quality,'canvas-direct');assert.equal(b.quality,'canvas-direct');
+  assert.notEqual(a.surface,b.surface);assert.equal(a.atmosphere,'standard');assert.equal(b.atmosphere,'vacuum');
+  for(const r of [a,b]){approx(r.North,200);approx(r.East,50);approx(r.Height,57.5);
+    approx(r.Pan,15);approx(r.Nick,-2.5);approx(r.Roll,5);approx(r.Focal,Math.sqrt(2000*800));
+    approx(r.camViewAngle,interaction.focalViewAngle(r.Focal)*Math.PI/180);}
+  assert.ok(h.renders.slice(before).every(r=>r.quality==='canvas-direct'));
+  h.flushFrames(2500);h.flushFrames();assert.ok(h.renders.slice(-2).every(r=>r.quality==='accurate'&&r.North===400));
+});
+test('Canvas Direct sequence Stop/Cancel and a stale dispatched callback cannot overwrite a new playback',()=>{
+  const h=directSequenceBoot(),m=h.app.getModel();twoFrameAnimation(h);m.CameraNorth=23;
+  sequenceButton(h,'Play');h.flushFrames(1250);h.flushFrames(0);
+  const held=m.CameraNorth,stale=h.takeFrames();sequenceButton(h,'Stop');h.flushFrames();
+  approx(m.CameraNorth,held);assert.equal(h.renders.at(-1).quality,'accurate');
+  sequenceButton(h,'Play');for(const callback of stale)callback(999999);
+  assert.equal(h.app.getCameraAnimation().playing,true);approx(m.CameraNorth,0);
+  h.flushFrames(1000);sequenceButton(h,'Cancel');h.flushFrames();approx(m.CameraNorth,held);
+  assert.equal(h.renders.at(-1).quality,'accurate');assert.equal(h.pendingFrames,0);
+});
+test('Canvas Direct sequence restores configured Fast or Auto on completion',()=>{
+  for(const quality of ['fast','auto']){
+    const h=directSequenceBoot(),n=h.nodes;twoFrameAnimation(h);
+    n.get('ModernOpticalQuality').value=quality;n.get('ModernOpticalQuality').dispatch('change');h.flushFrames();
+    sequenceButton(h,'Play');h.flushFrames(1000);assert.equal(h.renders.at(-1).quality,'canvas-direct');
+    h.flushFrames(4000);h.flushFrames();assert.equal(h.renders.at(-1).quality,quality==='auto'?'accurate':'fast');
+  }
+});
+test('Canvas Direct sequence input takeover without motion restores physical rendering',()=>{
+  for(const gesture of ['pointer','keyboard','wheel','blur']){
+    const h=directSequenceBoot(),m=h.app.getModel();
+    addCurrent(h,{CameraNorth:0,FocalLengthField:interaction.focalLimits.max});
+    addCurrent(h,{CameraNorth:400,FocalLengthField:interaction.focalLimits.max});
+    sequenceButton(h,'Play');h.flushFrames(1200);h.flushFrames(0);
+    assert.equal(h.renders.at(-1).quality,'canvas-direct');const north=m.CameraNorth;
+    if(gesture==='pointer'){
+      const p={button:0,pointerId:9,isPrimary:true,clientX:20,clientY:20};
+      h.canvas.dispatch('pointerdown',p);h.canvas.dispatch('pointerup',p);
+    }else if(gesture==='keyboard'){
+      h.dispatchGlobal('keydown',{code:'KeyW'});h.dispatchGlobal('keyup',{code:'KeyW'});
+    }else if(gesture==='wheel'){
+      // Interpolation of equal focal lengths can round one ulp below max.
+      m.FocalLengthField=interaction.focalLimits.max;
+      h.canvas.dispatch('wheel',{deltaY:-100,deltaMode:0,shiftKey:true});
+    }
+    else h.dispatchGlobal('blur',{});
+    h.flushFrames();assert.equal(h.app.getCameraAnimation().playing,false,gesture);
+    assert.equal(h.renders.at(-1).quality,'accurate',gesture);approx(m.CameraNorth,north);
+    h.flushFrames(10000);approx(m.CameraNorth,north);
+  }
+});
+test('Canvas Direct sequence preflight fallback remains Fast; failure during play restores Accurate',()=>{
+  const h=directSequenceBoot();twoFrameAnimation(h);
+  const checker=h.win.CurvatureOpticalEffectiveRadiusPreview;
+  h.win.CurvatureOpticalEffectiveRadiusPreview={canvasDirectParameters(){throw Error('preflight rejected');}};
+  sequenceButton(h,'Play');h.flushFrames(500);h.flushFrames();assert.equal(h.renders.at(-1).quality,'fast');
+  sequenceButton(h,'Stop');h.flushFrames();
+  h.win.CurvatureOpticalEffectiveRadiusPreview=checker;
+  sequenceButton(h,'Play');h.flushFrames(500);h.flushFrames(0);
+  assert.equal(h.renders.at(-1).quality,'canvas-direct');
+  const render=h.win.CurvatureMainCanvasRenderer.renderPhysical;
+  h.win.CurvatureMainCanvasRenderer.renderPhysical=(g,m,opt)=>{
+    if(opt.opticalQuality==='canvas-direct')throw Error('preview failed');return render(g,m,opt);
+  };
+  h.flushFrames(100);h.flushFrames(0);h.flushFrames();
+  assert.equal(h.app.getCameraAnimation().playing,false);assert.equal(h.renders.at(-1).quality,'accurate');
+  assert.match(h.nodes.get('ModernSequenceStatus').textContent,/preview failed/);assert.equal(h.pendingFrames,0);
+});
+
+
+test('Canvas Direct Compare sequence restores both sides after a targeted atmospheric edit or partial paint failure',()=>{
+  for(const cause of ['edit','failure']){
+    const h=directSequenceBoot(),n=h.nodes;twoFrameAnimation(h);
+    n.get('ModernCompareTab').dispatch('click');h.flushFrames();
+    sequenceButton(h,'Play');h.flushFrames(1000);h.flushFrames(0);
+    assert.ok(h.renders.slice(-2).every(r=>r.quality==='canvas-direct'));
+    if(cause==='edit'){
+      n.get('ModernModelTabB').dispatch('click');n.get('ModernModelAtmosphere').value='standard';
+      n.get('ModernModelAtmosphere').dispatch('change');
+    }else{
+      const render=h.win.CurvatureMainCanvasRenderer.renderPhysical;
+      let directCalls=0;
+      h.win.CurvatureMainCanvasRenderer.renderPhysical=(g,m,opt)=>{
+        if(opt.opticalQuality==='canvas-direct'&&++directCalls===2)throw Error('second side failed');
+        return render(g,m,opt);
+      };
+      h.flushFrames(100);h.flushFrames(0);
+    }
+    h.flushFrames();assert.equal(h.app.getCameraAnimation().playing,false,cause);
+    const [a,b]=h.renders.slice(-2);assert.equal(a.quality,'accurate');assert.equal(b.quality,'accurate');
+    assert.notEqual(a.surface,b.surface);approx(a.North,b.North);assert.equal(h.pendingFrames,0);
+  }
+});
+test('Canvas Direct sequence is interrupted by debounced curvature changes',()=>{
+  const h=directSequenceBoot(),n=h.nodes;twoFrameAnimation(h);sequenceButton(h,'Play');h.flushFrames(1000);
+  n.get('ModernCurvature').value='0';n.get('ModernCurvature').dispatch('input');
+  assert.equal(h.app.getCameraAnimation().playing,false);
+  h.flushTimers();h.flushFrames();assert.equal(h.renders.at(-1).quality,'accurate');
 });

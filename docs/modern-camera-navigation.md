@@ -50,13 +50,13 @@ approximate effective curvature and outlines capped at one physical backing
 pixel. Pan/Nick and Shift-translation both use this route regardless of the
 selected settled quality (Auto, Fast or Accurate). The live camera and authored
 scene are untouched until pointerup; release restores the selected full-quality
-render (Accurate RK4 for Auto). If either Compare atmosphere cannot support
-effective curvature — e.g. Flat with refraction — the previous Fast/CSS drag
-preview is retained and an explicit status warning is shown. Wheel, keyboard
-and camera sequence motion still use their existing Fast/Accurate pipelines;
-wheel events are coalesced and refined after idle. See
+render (Accurate RK4 for Auto). All seven existing atmosphere profiles can
+qualify for the local-gradient approximation, including refracting Flat
+surfaces. Invalid/unrepresentable input retains the available Fast/CSS
+fallback. Wheel, keyboard and Camera Animation use the same direct scheduler
+when supported. Wheel settles after 220 ms of inactivity. See
 [`interactive-rendering-migration.md`](interactive-rendering-migration.md)
-for the remaining migration scope.
+for current acceptance gates and limitations.
 
 The signed observer position is displayed in **Camera** settings and saved
 in the Modern experiment state, including URL sharing, JSON and the library.
@@ -87,13 +87,11 @@ Demos and Legacy never receive Modern navigation events.
 These keys can be held together. Translation in multiple directions is
 normalized so diagonals do not move faster. Keyboard movement is integrated
 from elapsed time with bounded steps, with numeric values updated immediately,
-and with **Accurate** selected the expensive optical redraw happens on key
-release. When **Auto** is selected, eligible profiles instead render Fast
-optical snapshots at a bounded cadence (at most one pending renderer frame),
-then one complete Accurate image after release. This is not 60 FPS physical
-rendering: frames may take longer than the requested 120 ms interval.
-Unsupported profiles retain the release-only Accurate workflow. The browser/OS may
-intercept certain Ctrl shortcuts before the application receives them.
+and Canvas Direct coalesces moving poses independently of the selected settled
+quality. Key release restores the selected physical renderer. If direct is
+unavailable, supported Auto/Fast retains the old paced optical preview;
+Accurate retains release-only rendering. The browser/OS may intercept
+certain Ctrl shortcuts before the application receives them.
 
 The Camera sidebar has `East` and `North` numeric fields, in metres, alongside
 Height, Pan, Nick, Roll and focal length. They use the same physical camera
@@ -126,7 +124,9 @@ views are persisted as optional `cameraPositions` in Modern experiments and
 links, without altering Legacy state. They are not required for animation.
 
 Sequence interpolation samples from **absolute elapsed time**, independent of
-Fast optical frames, and never changes authored objects, atmosphere or surface.
+preview frames, and never changes authored objects, atmosphere or surface.
+When supported, Camera Animation paints via Canvas Direct with Fast as an
+initial fallback; unchanged held poses need no direct repaint.
 Stop keeps the camera position at the last sample; Cancel restores the pre-Play
 view. Manual navigation, mode changes and focus loss stop playback. Compare
 receives a single common camera pose on both sides. Discrete camera aim and
@@ -146,8 +146,8 @@ experiments, Camera Positions or animation frames.
 
 These are **user interface/performance choices**, not scene physics: they do
 not enter exported experiment JSON, share URLs or keyframes. In particular,
-`Auto` always begins at rest using Accurate, then uses Fast only for eligible
-motion. `Auto LOD` stores the *Auto choice*, not the measured tower stride.
+`Auto` begins at rest using Accurate; eligible motion uses Canvas Direct,
+with Fast retained as an available fallback. `Auto LOD` stores the *Auto choice*, not the measured tower stride.
 WebGL2 is still experimental; when unavailable the renderer uses its existing
 per-frame Canvas fallback without changing the saved selection.
 
