@@ -482,3 +482,34 @@ test('empty-stroke calls the same number of stroke() operations on empty paths',
   const restored=renderer.renderPhysical(emptyGraph.g,m,opts);
   assert.ok(restored.directStats.strokeCalls>0);
 });
+
+
+test('thin outlines cap authored widths without changing paint operations or scene state',()=>{
+  const m=soundly(),before=JSON.stringify(m);
+  const opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  const base=graph();
+  const baseResult=renderer.renderPhysical(base.g,m,opts);
+  const thin=graph();
+  const thinResult=renderer.renderPhysical(thin.g,m,{...opts,
+    canvasDirectDiagnostics:{thinOutlines:true}});
+  const baseEvents=base.stats().events,thinEvents=thin.stats().events;
+  assert.equal(thinEvents.length,baseEvents.length);
+  assert.deepEqual(thinEvents.filter(e=>e.type==='fill'),baseEvents.filter(e=>e.type==='fill'));
+  const original=baseEvents.filter(e=>e.type==='stroke');
+  const capped=thinEvents.filter(e=>e.type==='stroke');
+  assert.ok(original.length>500);
+  assert.equal(capped.length,original.length);
+  for(let i=0;i<original.length;i++){
+    assert.deepEqual(capped[i],{...original[i],width:Math.min(original[i].width,1)});
+  }
+  assert.equal(thinResult.drawn,baseResult.drawn);
+  assert.equal(thinResult.primitiveCount,baseResult.primitiveCount);
+  assert.deepEqual(thinResult.directStats.canvasCalls,baseResult.directStats.canvasCalls);
+  assert.equal(thinResult.directStats.strokeWidthRange.maxPx,1);
+  assert.equal(JSON.stringify(m),before);
+  const restored=renderer.renderPhysical(thin.g,m,opts);
+  assert.deepEqual(restored.directStats.strokeWidthRange,baseResult.directStats.strokeWidthRange);
+  assert.throws(()=>renderer.renderPhysical(graph().g,m,{...opts,
+    canvasDirectDiagnostics:{thinOutlines:true,strokeWidth:0.5}}),
+    /Invalid Canvas Direct diagnostic stroke width/);
+});

@@ -170,7 +170,8 @@
       // Fixed Canvas backing-pixel width for the opt-in width sweep only.
       // Keep the authored viewport width intact for all ordinary rendering.
       var widthOverride=diagnostic.strokeWidth;
-      if(widthOverride!==undefined&&(strokeMode!=='normal'||
+      var thinOutlines=diagnostic.thinOutlines===true;
+      if(widthOverride!==undefined&&(thinOutlines||strokeMode!=='normal'||
         typeof widthOverride!=='number'||!Number.isFinite(widthOverride)||
         widthOverride<0.01||widthOverride>64))
         throw RangeError('Invalid Canvas Direct diagnostic stroke width');
@@ -267,6 +268,7 @@
           var strokeWidth=widthOverride!==undefined?widthOverride:
             (strokeMode==='simple'||strokeMode==='unit-width')?1:
             viewport.lineWidth(style.lineWidth,camera);
+          if(thinOutlines)strokeWidth=Math.min(strokeWidth,1);
           var strokeAlpha=(strokeMode==='simple'||strokeMode==='opaque')?1:alpha;
           if(strokeMode==='batched'){
             if(batch&&(batch.color!==strokeColor||batch.width!==strokeWidth||batch.alpha!==strokeAlpha))

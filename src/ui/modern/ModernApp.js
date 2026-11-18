@@ -2363,6 +2363,8 @@
       var checkbox=newUiEl(diagnosticChecks[key]);
       canvasDirectDiagnostics[key]=!checkbox||checkbox.checked;
     });
+    var thinOutlines=newUiEl('ModernCanvasDirectThinOutlines');
+    canvasDirectDiagnostics.thinOutlines=!!(thinOutlines&&thinOutlines.checked);
     var renderOptions={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
       canvasDirectDiagnostics:canvasDirectDiagnostics,animationMode:studioPrepared.mode};
     var begun=profileNow();
@@ -3537,7 +3539,8 @@
     // Bind once at startup, never in syncStudioPlaybackControls(): that function
     // runs on every animation frame. Rebinding here would accumulate thousands
     // of change listeners and make a single paused checkbox click hang the UI.
-    ['ModernCanvasDirectFills','ModernCanvasDirectStrokes','ModernCanvasDirectMask'].forEach(function(id){
+    ['ModernCanvasDirectFills','ModernCanvasDirectStrokes','ModernCanvasDirectMask',
+      'ModernCanvasDirectThinOutlines'].forEach(function(id){
       var checkbox=newUiEl(id);
       if(checkbox)checkbox.addEventListener('change',function(){
         if(!studioPlayback||studioPlaybackQuality!=='canvas-direct')return;
