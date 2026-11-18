@@ -1262,14 +1262,14 @@ test('failed outgoing checkpoint and failed copy do not replace editor or demo',
   h.failDraft(true);await ctx.openBuiltInDemo('soundly');
   assert.equal(ctx.studioActiveDemo,null);assert.equal(ctx.studioDraft.name,'Existing work');
   h.failDraft(false);await ctx.openBuiltInDemo('soundly');
-  h.failSave(true);await ctx.copyBuiltInDemo();
+  h.failSave(true);await ctx.copyBuiltInDemo('soundly');
   assert.equal(ctx.studioActiveDemo.id,'soundly');assert.equal(stored.size,2);
   assert.match(ctx.studioLibraryMessage,/storage unavailable/);
-  h.failSave(false);await ctx.copyBuiltInDemo();
+  h.failSave(false);await ctx.copyBuiltInDemo('soundly');
   assert.equal(ctx.studioActiveDemo,null);
   assert.match(ctx.studioLibraryActive.id,/demo_copy_/);
   const first=ctx.studioLibraryActive.id;
-  await ctx.openBuiltInDemo('soundly');await ctx.copyBuiltInDemo();
+  await ctx.openBuiltInDemo('soundly');await ctx.copyBuiltInDemo('soundly');
   assert.notEqual(ctx.studioLibraryActive.id,first);assert.equal(stored.size,4);
 });
 
@@ -1310,4 +1310,54 @@ test('read-only Studio shows keyframes without mutation controls and offers inde
     libraryNodes.find(n=>n.textContent===label).listeners.click();assert.equal(calls.at(-1),event);
   }
   assert.ok(!libraryNodes.some(n=>['Save project','Save changes','Duplicate'].includes(n.textContent)));
+});
+
+test('catalog cards separate built-ins from user backup selection, prefer covers and isolate actions',()=>{
+  const ui=require('../src/ui/modern/ModernAnimationStudioUI');
+  const demo=require('../src/animation/ModernDemoCatalog').load()[0];
+  const project=studio.build(source(),'animation_a');
+  const cover='data:image/png;base64,AAAA';
+  const entry=library.record(project,'auto',project.id,10,11,null,cover);
+  const doc={createElement(tag){return {tagName:tag,children:[],listeners:{},textContent:'',className:'',
+    appendChild(node){this.children.push(node);return node;},addEventListener(name,fn){this.listeners[name]=fn;},
+    setAttribute(name,value){this[name]=value;}};}};
+  const host=doc.createElement('section'),calls=[];
+  const walk=node=>[node,...node.children.flatMap(walk)];
+  const actions={openDemo:id=>calls.push(['open',id]),copyDemo:id=>calls.push(['copy',id]),
+    exportDemo:id=>calls.push(['export',id]),select:id=>calls.push(['select',id])};
+  ui.renderLibrary(doc,host,[entry],{demos:[demo],selectedId:entry.id},actions);
+  const built=walk(host).find(n=>n['data-demo-id']==='soundly');
+  const mine=walk(host).find(n=>n['data-animation-id']===entry.id);
+  assert.ok(built&&mine);
+  assert.ok(!built.className.includes('is-selected'));
+  assert.ok(mine.className.includes('is-selected'));
+  assert.equal(walk(built).find(n=>n.tagName==='img').src,'demos/modern/covers/soundly.png');
+  assert.equal(walk(mine).find(n=>n.tagName==='img').src,cover);
+  assert.ok(walk(built).some(n=>n.textContent==='Reference image'));
+  assert.ok(!walk(built).some(n=>n.textContent==='Rename'||n.className.includes('modern-card-delete')));
+  for(const [label,action] of [['Open demo','open'],['Create copy','copy'],['Export demo','export']]){
+    const control=walk(built).find(n=>n.textContent===label);
+    assert.equal(control.tagName,'button');control.listeners.click();
+    assert.deepEqual(calls.at(-1),[action,demo.id]);
+  }
+  const image=walk(mine).find(n=>n.className==='modern-animation-library-cover-image');
+  image.listeners.error();assert.equal(image.hidden,true);
+  assert.equal(walk(mine).find(n=>n.className==='modern-animation-library-visual').hidden,false);
+  host.children=[];
+  ui.renderLibrary(doc,host,[entry],{demos:[demo],expanded:false,busy:true},actions);
+  assert.ok(!walk(host).some(n=>n['data-animation-id']===entry.id));
+  const locked=walk(host).find(n=>n['data-demo-id']==='soundly');
+  assert.ok(walk(locked).filter(n=>n.tagName==='button').every(n=>n.disabled));
+});
+
+test('copying directly from a catalog card checkpoints user work and refreshes the named gallery',async()=>{
+  const h=projectLifecycleHarness(),{ctx,stored,checkpoints}=h;
+  ctx.studioDraft={...ctx.studioDraft,name:'Do not lose this draft'};
+  h.failDraft(true);await ctx.copyBuiltInDemo('soundly');
+  assert.equal(stored.size,2);assert.equal(ctx.studioDraft.name,'Do not lose this draft');
+  h.failDraft(false);await ctx.copyBuiltInDemo('soundly');
+  assert.equal(checkpoints.get('project_old').draft.name,'Do not lose this draft');
+  assert.equal(ctx.studioActiveDemo,null);assert.match(ctx.studioLibraryActive.id,/demo_copy_/);
+  assert.ok(ctx.studioLibraryEntries.some(e=>e.id===ctx.studioLibraryActive.id));
+  assert.equal(stored.size,3);
 });

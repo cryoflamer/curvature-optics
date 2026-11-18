@@ -1417,19 +1417,20 @@
   function closeBuiltInDemo(){
     if(studioActiveDemo)return requestStudioSwitch('draft',studioWorkspaceId);
   }
-  function copyBuiltInDemo(){
-    if(studioActiveDemo)return requestStudioSwitch('copy',studioActiveDemo.id);
+  function copyBuiltInDemo(id){
+    var pending=requestStudioSwitch('copy',id);
+    if(pending)return pending.then(function(){return refreshStudioLibrary();});
   }
-  function exportBuiltInDemo(){
-    if(!studioActiveDemo||studioLibraryBusy)return;
-    try{downloadHistoryJson(studioDemoCatalog.exportDemo(studioActiveDemo.id),
-      'curvature-demo-'+studioActiveDemo.id+'.json');}
+  function exportBuiltInDemo(id){
+    if(studioLibraryBusy)return;
+    try{downloadHistoryJson(studioDemoCatalog.exportDemo(id),
+      'curvature-demo-'+id+'.json');}
     catch(error){studioLibraryNotice('Demo export failed: '+error.message,true);}
   }
   function renderStudioLibrary(){
     if(!studioUI||!studioUI.renderLibrary)return;
     var host=newUiEl('ModernAnimationLibrary');
-    var previous=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery');
+    var previous=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery:not(.modern-demo-gallery)');
     if(previous)studioLibraryScroll=previous.scrollLeft;
     var wasSearching=host&&host.querySelector&&
       host.querySelector('.modern-animation-library-search')===document.activeElement;
@@ -1464,7 +1465,7 @@
         // Keep the card DOM stable between clicks so the browser can dispatch dblclick.
         // Rebuilding the gallery after the first click would swallow double-clicks.
         if(host&&host.querySelectorAll){
-          Array.prototype.forEach.call(host.querySelectorAll('.modern-animation-library-card'),function(card){
+          Array.prototype.forEach.call(host.querySelectorAll('.modern-animation-library-card[data-animation-id]'),function(card){
             var chosen=card.getAttribute('data-animation-id')===id;
             card.classList.toggle('is-selected',chosen);
             var title=card.querySelector('.modern-animation-library-card-title');
@@ -1507,7 +1508,7 @@
       open:function(id){requestStudioSwitch('open',id);},
       remove:function(id){deleteNamedAnimation(id);}
     });
-    var gallery=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery');
+    var gallery=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery:not(.modern-demo-gallery)');
     if(gallery)gallery.scrollLeft=studioLibraryScroll;
     if(wasSearching||focusClass){
       var replacement=host&&host.querySelector&&host.querySelector(wasSearching?
@@ -1813,10 +1814,10 @@
       hasStudio:function(){return !!studioApi;},
       detached:function(){return !!studioActiveDemo;},
       canSkipDemoCheckpoint:function(){return studioDraftGeneration===0&&!studioLibraryActive&&!studioLibraryPending&&!studioHasUnsavedWork();},
-      hasDemo:function(id){return (!studioActiveDemo||studioActiveDemo.id!==id)&&builtInStudioDemos().some(function(d){return d.id===id;});},
+      hasDemo:function(id){return builtInStudioDemos().some(function(d){return d.id===id;});},
+      currentDemoId:function(){return studioActiveDemo&&studioActiveDemo.id;},
       fetchDemo:function(id){return builtInStudioDemos().find(function(d){return d.id===id;});},
       copyDemo:function(id){
-        if(!studioActiveDemo||studioActiveDemo.id!==id)throw Error('Select a built-in demo first');
         if(!root.indexedDB)throw Error('Creating a copy requires IndexedDB');
         return studioDemoCatalog.copyToLibrary(root.indexedDB,id,undefined,root.crypto);
       },

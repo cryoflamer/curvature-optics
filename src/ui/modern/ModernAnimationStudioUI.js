@@ -85,6 +85,73 @@
       experiment:project.baseExperiment,thumbnail:entry.thumbnail,
       createdAt:entry.updatedAt,source:'Animation Library'};
   }
+  function libraryCardVisual(doc,entry,coverImage,coverLabel){
+    var p=entry.project;
+    var visual=snapshotPresentation.frameVisual(doc,{name:p.name,experiment:p.baseExperiment,
+      thumbnail:entry.thumbnail},'modern-animation-library-visual');
+    if(!entry.thumbnail)visual.appendChild(el(doc,'small','modern-animation-library-no-preview',
+      'No saved screenshot'));
+    if(!coverImage)return visual;
+    var wrapper=el(doc,'div','modern-animation-library-visual modern-animation-library-cover');
+    var image=el(doc,'img','modern-animation-library-cover-image');
+    image.src=coverImage;image.alt=p.name+' cover';image.loading='lazy';
+    image.addEventListener('error',function(){image.hidden=true;label.hidden=true;visual.hidden=false;});
+    var label=el(doc,'small','modern-animation-library-cover-label',coverLabel||'Project cover');
+    visual.hidden=true;wrapper.appendChild(visual);wrapper.appendChild(image);wrapper.appendChild(label);
+    return wrapper;
+  }
+  function libraryCardMeta(project){
+    var duration=project.keyframes.reduce(function(sum,frame){return sum+frame.travelMs+frame.holdMs;},0)/1000;
+    return (project.mode==='experimental'?'Experimental · no playback':
+      project.mode==='camera'?'Camera motion':project.target.parameter==='surface.curvature'?
+      'Earth curvature':'Temperature gradient')+' · '+project.keyframes.length+
+      ' frames · '+duration.toFixed(1)+' s';
+  }
+  function renderDemoGallery(doc,host,options,actions,inspector){
+    var section=el(doc,'section','modern-animation-library-category modern-demo-category');
+    section.setAttribute('aria-label','Built-in Demos');
+    var demos=options.demos||[];
+    section.appendChild(el(doc,'strong','modern-animation-library-category-title','Built-in Demos · '+demos.length));
+    if(options.catalogError)section.appendChild(el(doc,'p','modern-animation-library-message is-error',
+      'Built-in demos unavailable: '+options.catalogError));
+    else if(!demos.length)section.appendChild(el(doc,'p','modern-animation-library-empty','No built-in demos available.'));
+    var gallery=el(doc,'div','modern-animation-library-gallery modern-demo-gallery');
+    gallery.setAttribute('aria-label','Built-in demo projects');
+    demos.forEach(function(demo){
+      var p=demo.project,active=!!options.activeDemo&&options.activeDemo.id===demo.id;
+      var card=el(doc,'article','modern-animation-library-card modern-demo-card'+(active?' is-editing':''));
+      card.setAttribute('data-demo-id',demo.id);card.setAttribute('role','group');
+      card.setAttribute('aria-label',p.name+' · Built-in demo · Read-only');
+      card.appendChild(libraryCardVisual(doc,demo,demo.cover?'demos/modern/'+demo.cover.asset:null,
+        'Reference image'));
+      var info=el(doc,'div','modern-animation-library-card-info');
+      var title=el(doc,'strong','modern-animation-library-card-title',p.name);
+      title.title=p.name;info.appendChild(title);
+      info.appendChild(el(doc,'span','modern-demo-card-status',active?'Opened · Read-only':'Built-in · Read-only'));
+      info.appendChild(el(doc,'small','modern-animation-library-card-meta',libraryCardMeta(p)));
+      var summary=el(doc,'small','modern-animation-library-card-summary',
+        snapshotPresentation.frameSummary({experiment:p.baseExperiment}));
+      summary.title=summary.textContent;info.appendChild(summary);
+      if(p.description){var description=el(doc,'small','modern-animation-library-card-summary',p.description);
+        description.title=p.description;info.appendChild(description);}
+      card.appendChild(info);
+      var controls=el(doc,'div','modern-animation-library-card-actions');
+      function add(label,description,callback,disabled){
+        var control=button(doc,label,description,callback);control.disabled=!!disabled;
+        controls.appendChild(control);
+      }
+      add(active?'Opened':'Open demo','Open read-only built-in demo '+p.name,
+        function(){actions.openDemo(demo.id);},options.busy||active);
+      add('Create copy','Create editable copy of '+p.name,function(){actions.copyDemo(demo.id);},options.busy);
+      add('Export demo','Export built-in demo '+p.name,function(){actions.exportDemo(demo.id);},options.busy);
+      card.appendChild(controls);
+      if(inspector){var preview=libraryPreviewEntry(demo);preview.source='Built-in Demo';
+        inspector.infoButton(card,preview,card,p.name);}
+      gallery.appendChild(card);
+    });
+    if(demos.length)section.appendChild(gallery);
+    host.appendChild(section);
+  }
   function frameEntry(frame,entries){
     var match=frame.sourceSnapshotId!==null&&entries.find(function(item){
       return item.id===frame.sourceSnapshotId;
@@ -205,7 +272,7 @@
   function renderLibrary(doc,host,entries,options,actions){
     if(!host||!doc)return;
     options=options||{};entries=entries||[];
-    var inspector=galleryPreview(doc,host,entries.length>0&&options.expanded!==false);
+    var inspector=galleryPreview(doc,host,(entries.length>0&&options.expanded!==false)||(options.demos||[]).length>0);
     host.textContent='';
     var head=el(doc,'div','modern-animation-library-heading');
     head.appendChild(el(doc,'strong','','Animation Library'));
@@ -230,9 +297,7 @@
     action(projectActions,'New project','Start a separate, autosaved working draft; previous drafts remain available',
       actions.newProject,options.busy);
     if(options.activeDemo){
-      action(projectActions,'Create copy','Create an independent editable project',actions.copyDemo,options.busy);
       action(projectActions,'Close demo','Return to the previous working draft',actions.closeDemo,options.busy);
-      action(fileActions,'Export demo','Export the unchanged built-in project as portable JSON',actions.exportDemo,options.busy);
     }else action(projectActions,options.activeId?'Save changes':'Save project',
       options.activeId?'Update the opened project in Animation Library':'Add this draft to Animation Library',
       actions.save,options.busy||!options.canSave||!!options.activeId&&!options.dirty);
@@ -266,19 +331,10 @@
       action(fileActions,options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
     }
-    // Minimal entry point until the dedicated gallery is implemented.
-    if(options.catalogError)host.appendChild(el(doc,'p','modern-animation-library-message is-error',
-      'Built-in demos unavailable: '+options.catalogError));
-    if((options.demos||[]).length){
-      var demos=el(doc,'div','modern-animation-library-controls');
-      demos.appendChild(el(doc,'strong','','Built-in demos'));
-      options.demos.forEach(function(demo){
-        var open=action(demos,'Open '+demo.project.name,'Open read-only built-in demo',
-          function(){actions.openDemo(demo.id);},options.busy||!!options.activeDemo&&options.activeDemo.id===demo.id);
-        open.setAttribute('data-demo-id',demo.id);
-      });
-      host.appendChild(demos);
-    }
+    renderDemoGallery(doc,host,options,actions,inspector);
+    var userHeading=el(doc,'div','modern-animation-library-category modern-my-projects-category');
+    userHeading.appendChild(el(doc,'strong','modern-animation-library-category-title','My Projects · '+entries.length));
+    host.appendChild(userHeading);
     var message=el(doc,'p','modern-animation-library-note',options.activeDemo?
       'Opened built-in demo: '+options.activeDemo.project.name+' · Read-only · Create copy to edit.':options.activeId?
       'Opened: '+(options.activeName||'saved project')+
@@ -448,10 +504,7 @@
           if(event.preventDefault)event.preventDefault();actions.select(entry.id);
         }
       });
-      var visual=snapshotPresentation.frameVisual(doc,{name:p.name,experiment:p.baseExperiment,
-        thumbnail:entry.thumbnail},'modern-animation-library-visual');
-      if(!entry.thumbnail)visual.appendChild(el(doc,'small','modern-animation-library-no-preview',
-        'No saved screenshot'));
+      var visual=libraryCardVisual(doc,entry,entry.cover,'Project cover');
       card.appendChild(visual);
       var info=el(doc,'div','modern-animation-library-card-info');
       var title=el(doc,'strong','modern-animation-library-card-title',p.name);
@@ -467,12 +520,7 @@
       if((options.editedIds||[]).includes(entry.id))
         info.appendChild(el(doc,'small','modern-animation-library-local-edits',
           'Local draft edits · not yet saved to Library'));
-      var duration=p.keyframes.reduce(function(sum,frame){return sum+frame.travelMs+frame.holdMs;},0)/1000;
-      info.appendChild(el(doc,'small','modern-animation-library-card-meta',
-        (p.mode==='experimental'?'Experimental · no playback':
-          p.mode==='camera'?'Camera motion':p.target.parameter==='surface.curvature'?
-          'Earth curvature':'Temperature gradient')+' · '+p.keyframes.length+
-        ' frames · '+duration.toFixed(1)+' s'));
+      info.appendChild(el(doc,'small','modern-animation-library-card-meta',libraryCardMeta(p)));
       var summary=el(doc,'small','modern-animation-library-card-summary',
         snapshotPresentation.frameSummary({experiment:p.baseExperiment}));
       summary.title=summary.textContent;info.appendChild(summary);

@@ -19,9 +19,11 @@ numerical, visual, animation and browser acceptance gates. The agreed next
 implementation path is the [Modern built-in demo catalog roadmap](docs/modern-demo-catalog.md):
 immutable Studio projects, editable copies, synchronized Compare playback and
 presentation mode. The first Soundly portable JSON and read-only catalog now
-ship with Modern; open Soundly from the temporary Built-in demos buttons
-in Animation Library, then play, export, close or create an editable copy.
-The full catalog gallery is the next step; browser acceptance remains open.
+ship with Modern; open Soundly from the Built-in Demos card gallery
+in Animation Library, then play or close it with the existing controls. Each
+demo card offers direct copy and portable export. My Projects retains independent
+backup selection and shows inherited covers before thumbnails. Cover editing
+is the next step; browser acceptance remains open.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

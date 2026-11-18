@@ -18,8 +18,9 @@
       if(kind==='open'&&(!id||!options.hasProject(id)))return;
       if(kind==='draft'&&(!id||!options.hasDraft(id)))return;
       var detached=!!(options.detached&&options.detached());
-      if(kind==='demo'&&(!options.hasDemo||!options.hasDemo(id)))return;
-      if(kind==='copy'&&(!detached||!options.copyDemo))return;
+      if((kind==='demo'||kind==='copy')&&(!options.hasDemo||!options.hasDemo(id)))return;
+      if(kind==='demo'&&options.currentDemoId&&options.currentDemoId()===id)return;
+      if(kind==='copy'&&!options.copyDemo)return;
       if(!detached&&((kind==='open'&&options.workspaceId()===options.projectWorkspaceId(id))||
          (kind==='draft'&&options.workspaceId()===id)))return;
       options.setBusy(true);options.renderLibrary();

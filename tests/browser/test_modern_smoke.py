@@ -14,6 +14,7 @@ from __future__ import annotations
 import http.server
 import json
 import os
+import re
 from pathlib import Path
 import threading
 import unittest
@@ -169,7 +170,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         name.fill('Retained user draft')
         expect(name).to_have_value('Retained user draft')
         self.page.wait_for_timeout(750)
-        library.locator('[data-demo-id="soundly"]').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
         expect(studio).to_contain_text('Built-in demo · Read-only')
         expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
         expect(studio.get_by_label('Project name')).to_have_count(0)
@@ -179,9 +180,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernAnimationLibrary.list(indexedDB)).length"""), 0)
         library.get_by_text('Close demo', exact=True).click()
         expect(studio.get_by_label('Project name')).to_have_value('Retained user draft')
-        library.locator('[data-demo-id="soundly"]').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
         expect(studio).to_contain_text('Built-in demo · Read-only')
-        library.get_by_text('Create copy', exact=True).click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
         expect(studio.get_by_label('Project name')).to_have_value(
             'Soundly Causeway · Bridge Camera Study (copy)')
         self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
@@ -193,13 +194,47 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""))
         # Reloading while viewing a demo restores the last user project, not
         # a serialized editable version of the built-in.
-        library.locator('[data-demo-id="soundly"]').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
         expect(studio).to_contain_text('Built-in demo · Read-only')
         self.page.reload(wait_until='load')
         self.open_animation()
         expect(studio.get_by_label('Project name')).to_have_value(
             'Soundly Causeway · Bridge Camera Study (copy)')
         self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_demo_catalog_cards_and_direct_copy(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        studio = self.page.locator('#ModernAnimationStudio')
+        demo = library.locator('[data-demo-id="soundly"]')
+        expect(library.get_by_text('Built-in Demos · 1', exact=True)).to_be_visible()
+        expect(library.get_by_text('My Projects · 0', exact=True)).to_be_visible()
+        expect(demo.locator('.modern-animation-library-cover-image')).to_be_visible()
+        expect(demo.locator('img')).to_have_js_property('complete', True)
+        self.assertGreater(demo.locator('img').evaluate('(img) => img.naturalWidth'), 0)
+        expect(demo.locator('.modern-card-delete')).to_have_count(0)
+        expect(demo.get_by_role('button', name='Rename')).to_have_count(0)
+        with self.page.expect_download() as download:
+            demo.get_by_text('Export demo', exact=True).click()
+        self.assertEqual(download.value.suggested_filename, 'curvature-demo-soundly.json')
+        studio.get_by_label('Project name').fill('Keep original work')
+        self.page.wait_for_timeout(750)
+        copy = demo.get_by_text('Create copy', exact=True)
+        copy.focus()
+        copy.press('Enter')
+        expect(studio.get_by_label('Project name')).to_have_value(
+            'Soundly Causeway · Bridge Camera Study (copy)')
+        expect(library.get_by_text('My Projects · 1', exact=True)).to_be_visible()
+        personal = library.locator('[data-animation-id]')
+        expect(personal).to_have_count(1)
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', re.compile('^data:image/png;base64,'))
+        expect(demo.locator('.modern-demo-card-status')).to_have_text('Built-in · Read-only')
+        expect(library).to_contain_text('Keep original work')
+        personal.click()
+        expect(demo).not_to_have_class(re.compile('is-selected'))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
     def test_navigation_and_studio_bootstrap(self):

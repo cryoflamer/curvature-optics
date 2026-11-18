@@ -120,6 +120,7 @@
       image.src=entry.thumbnail.dataUrl;image.alt=data.title+' saved physical render';
       card.appendChild(image);
     }else card.appendChild(el(doc,'p','modern-history-empty',
+      entry.source==='Built-in Demo'?'No physical screenshot saved; the authored physical settings are shown below.':
       'No screenshot saved; physical settings and Restore are still available.'));
     card.appendChild(el(doc,'strong','modern-history-inspector-title',data.title));
     if(data.title!==data.classification)

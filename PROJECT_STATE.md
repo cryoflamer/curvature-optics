@@ -1,20 +1,21 @@
-## Modern Demo Catalog — detached Studio lifecycle (2B)
+## Modern Demo Catalog — Studio catalog UI (3)
 
-Soundly can be opened from the temporary Built-in demos controls in Animation
-Library. Playback and keyframe inspection are read-only; Create copy opens a
-new independent named project with its cover, Close demo restores the prior
-workspace, and Export demo produces ordinary portable JSON. Authored sources
-and user draft collections remain separate. Reload restores user work, not the
-built-in session. Browser acceptance remains open.
+Animation Library now separates Built-in Demos and My Projects into labelled
+card galleries. Soundly displays its working reference photo; user copies
+inherit a portable cover and show it before the physical thumbnail. Open demo
+uses the existing read-only player, Create copy protects outgoing edits even
+when invoked directly from a card, and Export demo is independent of personal
+backup selection. Details still inspect physical data. No editable actions on
+built-ins; browser acceptance remains open.
 
 > **Current roadmap — Modern built-in demonstrations (2026-11-18):**
-> Patches 0, 1, 2A and 2B implemented; see
+> Patches 0, 1, 2A, 2B and 3 implemented; see
 > [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
 > Soundly: 9 frames, 59.1 s, spline, Globe/vacuum Scene; Compare reference
 > compatibility was previously validated, synchronized playback is not yet
 > verified. Catalog loading requires no IndexedDB or fetch. Working cover
 > rights remain unverified. CI/Opera browser gate is open.
-> **NEXT: patch 3 — Built-in Demos / My Projects catalog UI.**
+> **NEXT: patch 3A — project cover editor.**
 > User reported green CI after the obsolete profiler-test cleanup; tag
 > relocation has not been independently verified. Stage 5D remains deferred;
 > extreme fallback and measured FPS remain open. The Canvas Direct notes

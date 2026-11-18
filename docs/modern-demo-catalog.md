@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 2B (detached read-only lifecycle)**, 2026-11-18. Catalog,
+Status: **patch 3 (Studio catalog UI)**, 2026-11-18. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-The active next step is patch 3 (catalog UI); browser acceptance remains open.
+Separate built-in and personal galleries are implemented. The active next step is patch 3A (cover editor); browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -165,8 +165,8 @@ record the split, and do not mark complete on implementation alone.
 | 1 — Built-in Demo Catalog | Implemented; browser gate open | Ship original Soundly portable JSON and manifest; stable unique IDs, deterministic order, validate with existing APIs, reject invalid/duplicate catalog entries and missing assets with explicit errors, no IndexedDB writes. Test real asset loading and supported launch paths; source data immutable. |
 | 2A — Project Lifecycle foundation | Implemented | Explicit durable copy API; optional portable cover data, shipped Soundly working cover and provenance. |
 | 2B — Project Lifecycle integration | Implemented; browser gate open | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
-| 3 — Studio Catalog UI | Next | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
-| 3A — Project Cover Editor | Planned | Render cover prior to thumbnail; upload, capture current frame, replace/remove and portable round-trip for user projects. |
+| 3 — Studio Catalog UI | Implemented; browser gate open | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
+| 3A — Project Cover Editor | Next | Upload, capture current frame, replace/remove and portable round-trip for user projects. Cover-first display and thumbnail fallback are already implemented in patch 3. |
 | 4 — Compare Playback | Planned | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
@@ -228,3 +228,28 @@ Export all continues to include only user records. Save As on a named copy
 preserves its cover. Copy failure leaves the demo open. No new player or
 physical rendering path is introduced. 3A will implement cover upload/frame
 capture/replacement/removal and fallback thumbnail display.
+
+### Studio catalog UI (patch 3)
+
+Animation Library now presents two separately labelled categories on one page:
+Built-in Demos (always visible) and My Projects (existing saved-project
+filters, folding, backup selection and working drafts remain personal only).
+Built-in cards reuse the existing card visual style, show a read-only/opened
+indicator, authored metadata and a static reference image. Open demo opens the
+existing paused Studio player; its existing playback controls remain the only
+player. Create copy can be invoked directly on a card and uses the same durable
+outgoing-workspace checkpoint and validated copy operation as detached playback.
+Export demo is available without opening the project; it never changes personal
+backup selection. Details inspect the validated experiment and actual saved
+physical thumbnail, if any, not the reference photograph. No rename or delete
+controls exist on built-in cards. Personal cards show the portable cover first,
+then a saved thumbnail or neutral no-screenshot state; broken covers fall back
+without altering project data. The working Soundly image remains unverified.
+User gallery scroll/selection excludes built-in cards. Cover editing remains 3A.
+
+Validation: complete Node regression (1787/1787), followed by 65 focused tests
+including the final physical-details wording; refactor closure 136/136 and
+protected Legacy references 6/6. Isolated Chromium DOM validated gallery
+controls, keyboard copying callbacks, personal cover rendering and details.
+All 13 full browser smoke cases were attempted but navigation was blocked by
+ERR_BLOCKED_BY_ADMINISTRATOR; CI and Opera acceptance are still required.
