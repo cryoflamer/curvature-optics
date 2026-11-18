@@ -29,8 +29,9 @@
       // frames before the first physical paint or a saved-position repaint.
       function next(){frame=options.requestFrame(paint);}
       function paint(){
+        if(generation!==token)return;
         frame=null;
-        if(generation!==token||!options.ready()||!options.visible())return;
+        if(!options.ready()||!options.visible())return;
         var width=options.width('A');
         if(width!==null&&width<2&&attempts++<12){next();return;}
         try{
@@ -39,6 +40,12 @@
           options.complete();
         }catch(error){options.failed(error);}
       }
+      // A user jump is an explicit paused redraw, just like slider scrubbing.
+      // When the stage has layout, paint now rather than relying on a future
+      // animation tick (an off-screen/idle preview may delay RAF callbacks).
+      // Newly exposed or zero-width stages keep the normal layout wait.
+      var width=options.width('A');
+      if(reason==='keyframe'&&width!==null&&width>=2){paint();return;}
       frame=options.requestFrame(function(){
         if(generation===token)next();
       });

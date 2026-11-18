@@ -176,10 +176,11 @@ test('invalid lifecycle dependencies fail explicitly instead of silently skippin
 });
 
 test('rapid keyframe navigation paints only the latest arrival and does not scroll',()=>{
-  const h=harness();h.setPosition(8500);
+  const h=harness();h.setPosition(8500);h.setWidth(0);
   h.ctx.scheduleStudioInitialPaint('keyframe');h.frame();
-  h.setPosition(20950);h.ctx.scheduleStudioInitialPaint('keyframe');
-  assert.match(h.node('ModernAnimationPlaybackStatus').textContent,/selected keyframe/);
+  h.setWidth(640);h.setPosition(20950);h.ctx.scheduleStudioInitialPaint('keyframe');
+  assert.match(h.node('ModernAnimationPlaybackStatus').textContent,/20\.95 s ready/);
+  assert.deepEqual(h.paints,[20950],'visible keyframe paints without waiting for RAF');
   h.flush();assert.deepEqual(h.paints,[20950]);
   assert.deepEqual(h.navigation,[]);
   assert.equal(h.ctx.studioPlaybackRenderedAt,20950);
@@ -217,4 +218,46 @@ test('ModernApp keyframe routing prepares a compatible draft and leaves incompat
   context.studioDraft={...draft,frames:[draft.frames[0]]};
   assert.equal(context.navigateStudioKeyframe(draft.frames[0].key),false);
   assert.deepEqual(effects,[]);
+});
+
+// Exercise the real controls together with ModernApp's actual lifecycle wiring,
+// rather than treating an enqueued paint as proof of a visible frame.
+test('keyframe jumps paint before Play, after Pause, Stop and completion',()=>{
+  const h=harness();
+  const [demo]=require('../src/animation/ModernDemoCatalog').load();
+  const player=require('../src/animation/ModernAnimationPlayback').create(demo.project);
+  h.ctx.studioPlayback=player;
+  // Keep the fake renderer's sampled time in step with the real player.
+  const paint=h.ctx.renderStudioPlaybackSample;
+  h.ctx.renderStudioPlaybackSample=force=>{h.setPosition(player.status().positionMs);paint(force);};
+  const c=playbackControls.create({player:()=>player,now:()=>1000,open:()=>true,
+    mode:()=> 'camera',pending:()=>h.ctx.studioRestorePreviewPending,
+    requestFrame:h.ctx.requestAnimationFrame,cancelFrame:h.ctx.cancelAnimationFrame,
+    cancelInitial:h.ctx.cancelStudioInitialPaint,render:h.ctx.renderStudioPlaybackSample,
+    sync(){},save(){},scheduleInitial:h.ctx.scheduleStudioInitialPaint,announce(){}});
+  function jump(ms){
+    h.ctx.studioPlaybackRenderedAt=null;c.jumpTo(ms);
+    assert.equal(player.status().playing,false);
+    assert.equal(h.ctx.studioPlaybackRenderedAt,ms);
+    assert.equal(h.paints.at(-1),ms);
+    assert.equal(h.queued(),0);
+  }
+  jump(20950);c.play();c.pause();jump(8500);c.stop();jump(15000);
+  player.seek(player.status().durationMs,1000);jump(35400);
+});
+
+test('a hidden or zero-width keyframe stage still defers until layout is available',()=>{
+  const h=harness();h.setPosition(8500);h.setVisible(false);
+  h.ctx.scheduleStudioInitialPaint('keyframe');assert.deepEqual(h.paints,[]);
+  h.setVisible(true);h.setWidth(0);h.ctx.scheduleStudioInitialPaint('keyframe');
+  h.frame();h.frame();assert.deepEqual(h.paints,[]);
+  h.setWidth(640);h.frame();assert.deepEqual(h.paints,[8500]);
+});
+
+test('a paused render that produces no pixels is not announced as ready',()=>{
+  const h=harness();h.setPosition(8500);h.ctx.renderStudioPlaybackSample=()=>{};
+  h.ctx.scheduleStudioInitialPaint('keyframe');
+  assert.match(h.node('ModernAnimationPlaybackStatus').textContent,/requested paused frame was not rendered/);
+  assert.equal(h.ctx.studioRestorePreviewPending,true);
+  assert.equal(h.node('ModernAnimationFrameLoadingA').hidden,false);
 });

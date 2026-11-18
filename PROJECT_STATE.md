@@ -1,3 +1,12 @@
+## Modern Demo Catalog — paused keyframe rendering (4A.1)
+
+User reported keyframe navigation dependent on Play and excessive scrolling.
+Keyframe jumps now force a paused paint immediately when the preview has
+layout, with deferred layout/retry otherwise; success requires an exact
+rendered timestamp. Manual Opera verification remains open. Next: 4A.2
+horizontal Storyboard near playback, then 4B/4C thumbnails. No layout or
+physical algorithm changes in 4A.1.
+
 ## Modern Demo Catalog — keyframe navigation (4A)
 
 Click a compatible included keyframe to pause and jump to its exact arrival

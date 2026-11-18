@@ -566,3 +566,12 @@ Neither change thins bridge objects, changes the geometric horizon mask, or
 adds adaptive optics to playback. Review the 26–32 s Soundly transitions and
 low-eye viewpoints in a browser: the remaining depth ambiguity is still the
 known whole-object Legacy painter approximation, not a physical depth test.
+
+### Paused keyframe jump completion
+
+A keyframe jump is an explicit paused redraw. The layout-aware preview
+lifecycle paints synchronously when the host width is usable, or waits for
+layout when it is not. The normal Play clock is not started. A frame is
+reported ready only after its rendered timestamp matches the paused playhead.
+The existing failure/retry and hidden-workspace guards remain in effect.
+Storyboard placement and thumbnail payloads are separate follow-up work.

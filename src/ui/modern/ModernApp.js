@@ -2326,6 +2326,8 @@
       render:function(){
         studioPlaybackLastPaint=-Infinity;
         renderStudioPlaybackSample(true);
+        if(studioPlaybackRenderedAt!==studioPlayback.status().positionMs)
+          throw Error('The requested paused frame was not rendered');
       },
       complete:function(){
         studioFrameLoading(false,'');

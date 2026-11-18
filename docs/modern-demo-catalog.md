@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 4A (Keyframe Navigation)**, 2026-11-19. Catalog,
+Status: **patch 4A.1 (Paused Keyframe Rendering)**, 2026-11-19. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation is implemented. Next: 4B (thumbnail capture), then 4C (thumbnail persistence) before Presentation Mode; browser acceptance remains open.
+Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. Next: 4A.2 (horizontal Storyboard beside playback), 4B (thumbnail capture), then 4C (thumbnail persistence) before Presentation Mode; browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -174,6 +174,8 @@ record the split, and do not mark complete on implementation alone.
 | 3A — Project Cover Editor | Implemented; browser gate open | Upload, capture current frame, replace/remove and portable round-trip for user projects. Cover-first display and thumbnail fallback are already implemented in patch 3. |
 | 4 — Compare Playback | Implemented; browser gate open | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 4A — Keyframe Navigation | Implemented; browser gate open | Click an included compatible keyframe to pause, seek to exact arrival milliseconds and repaint using existing paused-frame lifecycle. Auto-prepare compatible unprepared drafts; excluded/incompatible cards remain editor selections. Read-only navigation does not persist authored changes. |
+| 4A.1 — Paused Keyframe Rendering | Implemented; Opera acceptance open | Fix reported dependence on Play: immediate forced paint for a laid-out stage, deferred layout path otherwise; validate actual rendered time and preserve failure/retry. |
+| 4A.2 — Storyboard | Planned | Horizontal navigation strip beside playback, using shared keyframe selection. Keep detailed editor below, hide redundant editor for read-only demos; preserve Compare width. |
 | 4B — Keyframe Thumbnail Capture | Planned | Capture only a successfully painted selected keyframe at its exact arrival. Reuse bounded screenshot composition (Scene or both Compare sides), lazy capture on explicit jump, manual refresh and transient cache keyed by visual state; validate History provenance before reuse. No eager whole-project render. |
 | 4C — Keyframe Thumbnail Persistence | Planned | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
@@ -353,3 +355,17 @@ protected Legacy references 6/6 passed. Chromium was launched using the
 system executable, but full-page navigation was blocked by
 ERR_BLOCKED_BY_ADMINISTRATOR. The new end-to-end case is retained for CI;
 manual Opera acceptance remains open.
+
+### Paused keyframe rendering (patch 4A.1)
+
+Opera feedback: keyframe navigation was reported to work only after Play,
+and the editor filmstrip is too far below the playback view. The 4A.1
+change directly paints a selected paused frame when the preview host has
+a usable layout width, reusing the lifecycle renderer and completion/error
+callbacks. Hidden or not-yet-laid-out views retain the deferred path.
+The rendered timestamp must equal the requested paused playhead before
+announcing success. Covering stale RAF callbacks must not clear newer
+requests. No animation clock start is necessary. The actual Opera failure
+mechanism has not been reproduced here; manual acceptance is required.
+4A.2 will put a shared-selection Storyboard next to playback before adding
+keyframe thumbnails; it is deliberately separate from this correction.
