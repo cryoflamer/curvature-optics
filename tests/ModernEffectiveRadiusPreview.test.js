@@ -155,3 +155,42 @@ test('browser loader and studio selector expose the new mode in the right order'
     html.indexOf('src/app/CurvatureMainCanvasRenderer.js'));
   assert.match(html,/value="effective-radius"/);
 });
+
+test('Canvas Direct qualification follows the actual height, radius, surface and profile weights',()=>{
+  const candidate=m({rEarth:26e6,Height:0});
+  const inspect=(options)=>effective.canvasDirectSupport(candidate,options);
+  assert.equal(inspect({atmosphere:'standard'}).supported,false);
+  candidate.Height=1000;
+  assert.equal(inspect({atmosphere:'standard'}).supported,true);
+  candidate.Height=0;candidate.rEarth=R;
+  assert.equal(inspect({atmosphere:'standard'}).supported,true);
+  candidate.rEarth=26e6;
+  const options={atmosphere:'profile-transition',occlusionRadius:R,
+    transitionProfile:{source:'standard',weight:0}};
+  assert.equal(inspect(options).supported,false);
+  options.transitionProfile.weight=1;
+  assert.equal(inspect(options).supported,true);
+  candidate.showModel=2;
+  const result=inspect({atmosphere:'standard'});
+  assert.equal(result.supported,true);assert.ok(result.parameters.effectiveCurvature<0);
+  assert.equal(inspect({atmosphere:'vacuum'}).parameters.effectiveRadius,Infinity);
+  assert.match(inspect({atmosphere:'inverse-spherical'}).reason,/occlusionRadius/);
+  assert.equal(inspect({atmosphere:'custom'}).supported,false);
+  candidate.Height=1000;
+  assert.equal(inspect({atmosphere:'exponential-occlusion',occlusionRadius:1}).supported,false);
+});
+
+test('Canvas Direct rejects an effective Globe outside the local camera or authored sequence domain',()=>{
+  const options={atmosphere:'exponential-occlusion',occlusionRadius:1000};
+  const candidate=m({NObjects:[1,0],ObjDist:[100,0],CameraNorth:0});
+  assert.equal(effective.canvasDirectSupport(candidate,options).supported,true);
+  candidate.CameraNorth=2000;
+  assert.match(effective.canvasDirectSupport(candidate,options).reason,/globe origin/);
+  candidate.CameraNorth=0;candidate.ObjDist=[4000,0];
+  assert.match(effective.canvasDirectSupport(candidate,options).reason,/Object sequence/);
+  assert.throws(()=>effective.canvasDirectParameters(candidate,options),effective.isCanvasDirectUnsupported);
+  candidate.showModel=2;
+  assert.equal(effective.canvasDirectSupport(candidate,options).supported,true,'Flat vertex domain is checked by the painter');
+  candidate.CameraEast=NaN;
+  assert.match(effective.canvasDirectSupport(candidate,options).reason,/Camera offset/);
+});

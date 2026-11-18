@@ -104,10 +104,10 @@ function harness(options={}){
     CurvatureModernCameraInteraction:interaction,
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
     CurvatureModernCameraCanvasDirectDrag:options.direct?require('../src/ui/modern/ModernCameraCanvasDirectDrag'):null,
-    CurvatureOpticalEffectiveRadiusPreview:options.direct?{canvasDirectParameters(m,spec){
-      if(options.rejectDirect&&options.rejectDirect(m,spec))throw RangeError('Atmosphere unsupported');
-      return require('../src/optics/OpticalEffectiveRadiusPreview').canvasDirectParameters(m,spec);
-    }}:null,
+    CurvatureOpticalEffectiveRadiusPreview:options.direct?{canvasDirectSupport(m,spec){
+      if(options.rejectDirect&&options.rejectDirect(m,spec))return {supported:false,reason:'Atmosphere unsupported'};
+      return require('../src/optics/OpticalEffectiveRadiusPreview').canvasDirectSupport(m,spec);
+    },canvasDirectUnsupported:require('../src/optics/OpticalEffectiveRadiusPreview').canvasDirectUnsupported}:null,
     CurvatureModernCameraPerspectiveWarp:options.perspective?require('../src/ui/modern/ModernCameraPerspectiveWarp'):null,
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
     CurvatureModernCompareModel:compareModel,CurvatureModernCompareState:compareState,
@@ -767,4 +767,18 @@ test('Canvas Direct wheel: failed second Compare paint restores both authoritati
   h.canvases.A.emit('wheel',{shiftKey:true,deltaY:-100,deltaMode:0});h.flush();
   assert.equal(h.queuedZoom,0);assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
   h.flush();assert.ok(h.draws.slice(-2).every(x=>x.opt.opticalQuality==='accurate'));
+});
+
+test('Canvas Direct rechecks both Compare sides at the latest pose before painting either side',()=>{
+  let reject=false;
+  const h=harness({deferred:true,direct:true,rejectDirect:(m)=>reject&&m.showModel===2});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const b=h.canvases.B;
+  b.emit('pointerdown',{shiftKey:true});
+  const before=h.draws.length;reject=true;
+  b.emit('pointermove',{shiftKey:true,clientX:100,clientY:95});h.flush();
+  assert.equal(h.draws.slice(before).some(r=>r.opt.opticalQuality==='canvas-direct'),false);
+  assert.equal(h.app.getCameraInteraction().isActive(),false);
+  assert.match(h.nodes.get('ModernStatus').textContent,/B: Atmosphere unsupported/);
+  h.flush();assert.ok(h.draws.slice(-2).every(r=>r.opt.opticalQuality==='accurate'));
 });

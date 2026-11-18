@@ -32,7 +32,8 @@
     var all=simple.concat(['profile-transition','inverse-temperature',
       'inverse-spherical','exponential-occlusion']);
     if(!(interactive?all:simple).includes(kind))
-      throw RangeError('Effective Radius supports Vacuum, Standard and Temperature lapse only');
+      throw RangeError(interactive?'Canvas Direct does not support atmosphere '+kind:
+        'Effective Radius supports Vacuum, Standard and Temperature lapse only');
     // Canvas Direct uses exactly the existing physical profile's local n(h)
     // and dn(h); no new ray tracer, atmosphere, or assumed constant k is added.
     // The explicit Effective Radius mode remains restricted to its qualified set.
@@ -44,7 +45,7 @@
       {occlusionRadius:options.occlusionRadius};
     var atmosphere=tracer.atmosphere(kind,profileOptions);
     var index=atmosphere.n(model.Height),gradient=atmosphere.dn(model.Height);
-    if(!(index>0)||!Number.isFinite(gradient))throw RangeError('Invalid local atmospheric gradient');
+    if(!(index>0)||!Number.isFinite(index)||!Number.isFinite(gradient))throw RangeError('Invalid local atmospheric gradient');
     // The tangent-frame approximation subtracts downward ray curvature from
     // physical surface curvature: C_eff = C_surface + (dn/dh)/n.
     // Flat Standard therefore has NEGATIVE effective curvature: it is a
@@ -70,7 +71,56 @@
   }
   function parameters(model,options){return resolveParameters(model,options,false);}
   // Wider, explicitly approximate eligibility for live Canvas Direct only.
-  function canvasDirectParameters(model,options){return resolveParameters(model,options,true);}
+  function canvasDirectUnsupported(reason){
+    var error=new RangeError(reason);
+    error.code='CANVAS_DIRECT_UNSUPPORTED';
+    return error;
+  }
+  function isCanvasDirectUnsupported(error){
+    return !!error&&error.code==='CANVAS_DIRECT_UNSUPPORTED';
+  }
+  function canvasDirectParameters(model,options){
+    var p;
+    if(options&&['profile-transition','inverse-temperature','inverse-spherical','exponential-occlusion'].includes(options.atmosphere)&&
+      (!Number.isFinite(options.occlusionRadius)||!(options.occlusionRadius>0)))
+      throw canvasDirectUnsupported('A positive finite occlusionRadius is required');
+    try{p=resolveParameters(model,options,true);}
+    catch(error){
+      if(!(error instanceof RangeError))throw error;
+      throw canvasDirectUnsupported(error.message);
+    }
+    if(!Number.isFinite(p.radius)||!Number.isFinite(p.effectiveCurvature)||
+      (p.effectiveCurvature!==0&&!Number.isFinite(p.effectiveRadius))||
+      (p.geometry==='globe'&&!Number.isFinite(p.effectiveRadius+p.eye)))
+      throw canvasDirectUnsupported('Nonfinite effective surface geometry');
+    var east=model.CameraEast===undefined?0:model.CameraEast;
+    var north=model.CameraNorth===undefined?0:model.CameraNorth;
+    if(!Number.isFinite(east)||!Number.isFinite(north)||Math.abs(east)>1e7||Math.abs(north)>1e7)
+      throw canvasDirectUnsupported('Camera offset exceeds the local preview domain');
+    if(p.geometry==='globe'){
+      if(Math.hypot(east,north)*p.effectiveCurvature>=Math.PI/2)
+        throw canvasDirectUnsupported('Camera is too far from the effective globe origin');
+      // The geometric authoring engine would otherwise silently truncate
+      // object sequences at the virtual antipode. Do not drop authored rows.
+      if(model.NObjects&&model.ObjDist&&model.ObjDeltaDist){
+        for(var i=0;i<2;i++){
+          if(model.NObjects[i]>0&&
+            (model.ObjDist[i]+(model.NObjects[i]-1)*model.ObjDeltaDist[i])*p.effectiveCurvature>Math.PI)
+            throw canvasDirectUnsupported('Object sequence exceeds the effective globe domain');
+        }
+      }
+    }
+    return p;
+  }
+  // Cheap, pose-specific capability check, not a numerical accuracy certificate.
+  // Never cache by atmosphere name: height, radius and profile weights matter.
+  function canvasDirectSupport(model,options){
+    try{return {supported:true,parameters:canvasDirectParameters(model,options),reason:null};}
+    catch(error){
+      if(!isCanvasDirectUnsupported(error))throw error;
+      return {supported:false,parameters:null,reason:error.message};
+    }
+  }
   function ray(p,d,h){
     if(!Number.isFinite(d)||!Number.isFinite(h)||d<0||h<0)return {status:'blocked'};
     if(d===0)return {status:'visible',angle:h>=p.eye?Math.PI/2:-Math.PI/2};
@@ -231,5 +281,6 @@
     return Object.freeze({transform:transform,clearCache:function(){}});
   }
   return Object.freeze({create:create,parameters:parameters,
-    canvasDirectParameters:canvasDirectParameters,ray:ray});
+    canvasDirectParameters:canvasDirectParameters,canvasDirectSupport:canvasDirectSupport,
+    canvasDirectUnsupported:canvasDirectUnsupported,isCanvasDirectUnsupported:isCanvasDirectUnsupported,ray:ray});
 }));

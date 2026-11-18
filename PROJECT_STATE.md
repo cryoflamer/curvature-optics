@@ -10,7 +10,7 @@
 > -6.5 K/km lapse, ranges <=40 km and heights <=100 m: maximum sampled
 > visible-point error 0.406 backing pixels at diagonal FOV 1° (1200x800).
 > This is a sampled single-branch comparison, not a universal accuracy bound.
-> **Stage 5B — virtual Flat horizon masking** implemented: positive effective
+> **Stage 5B — virtual Flat horizon masking** accepted by the user in Opera: positive effective
 > curvature now activates the existing approximate far/mask/near painter
 > order and clips metric guides to the same observer-local tangent distance.
 > Flat zero/negative curvature has no virtual mask; Globe is unchanged.
@@ -20,8 +20,19 @@
 > 439 to 393, matching Accurate's 393 at 1200x800; no general parity claim.
 > Validation: 24/24 Canvas Direct tests; 264/264 wider regression tests;
 > both static isolation audits passed. Full test suite not repeated.
-> **NEXT:** manual Opera acceptance of positive-curvature Flat masking,
-> then Stage 5C (centralize qualification/support and fallback criteria).
+> **Stage 5C — shared capability and fallback policy** implemented: the
+> pose-specific `canvasDirectSupport` inspector covers finite local optical
+> parameters, effective Globe sign/range, camera translation and authored
+> sequence limits. Flat vertex-domain failures are explicitly classified by
+> the painter; Studio retries Accurate without changing requested quality.
+> Interactive navigation retains the existing preflight fallback and restores
+> selected physical rendering on failure; Compare checks both current poses.
+> No new RK4 in supported direct motion and no arbitrary FOV/range accuracy
+> cutoffs. Validation: 666/666 targeted and wider regression tests, both
+> static isolation audits. Actual Opera performance and extreme fallback
+> appearance not measured. Full test suite not repeated.
+> **NEXT:** manual acceptance of Stage 5C and Stage 5D representative
+> requalification/quality documentation, then Stage 6 cleanup.
 > See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates and historical validation notes.
 > Read `git log -1` to identify the applied HEAD.

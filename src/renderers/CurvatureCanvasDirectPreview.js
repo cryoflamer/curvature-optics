@@ -85,9 +85,10 @@
   function flatRefractionPoint(east,north,height,eye,curvature){
     var distance=Math.hypot(east,north),angle=curvature*distance;
     if(!Number.isFinite(angle)||Math.abs(angle)>=Math.PI/2)
-      throw RangeError('Flat effective curvature exceeds local preview range');
+      throw effective.canvasDirectUnsupported('Flat effective curvature exceeds local preview range');
     var stretch=1+curvature*height;
-    if(!(stretch>0))throw RangeError('Flat effective surface height is unsupported');
+    if(!(stretch>0)||!Number.isFinite(stretch))
+      throw effective.canvasDirectUnsupported('Flat effective surface height is unsupported');
     // Stable for tiny curvature and exactly identical to the vacuum plane
     // when curvature is zero (no subtraction of enormous virtual radii).
     var sinc=angle===0?1:Math.sin(angle)/angle;

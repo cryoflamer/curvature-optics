@@ -513,3 +513,41 @@ test('Flat virtual mask is painted between far and near banks even after camera 
   assert.ok(events.slice(mask+1).some(e=>e.type==='stroke'),'near outlines follow mask');
   assert.ok(events.every(e=>e.type!=='stroke'||e.width<=1));
 });
+
+test('Studio recovers from real Flat embedding rejection without changing the requested quality',()=>{
+  const m=soundly(),effective=require('../src/optics/OpticalEffectiveRadiusPreview');
+  m.showModel=2;m.Update();
+  const display={mode:'scene',eyeLevel:false,horizon:false,selected:'A'};
+  const snapshot=experiment.capture(m,{occlusionRadius:1000,atmosphere:'exponential-occlusion',
+    preset:'soundly',resetPreset:'soundly'},compare.preset('globe-flat-vacuum'),display);
+  const before=structuredClone(snapshot),calls=[];
+  const studio=preview.create({Model:m.constructor,renderer:{renderPhysical(g,frame,options){
+    calls.push(options.opticalQuality);
+    if(options.opticalQuality==='canvas-direct')return renderer.renderPhysical(g,frame,{...options,deferDecorations:true});
+    return {drawn:1};
+  }}});
+  const result=studio.render(snapshot,'A',graph().g,{quality:'canvas-direct'});
+  assert.deepEqual(calls,['canvas-direct','accurate']);
+  assert.equal(result.requestedQuality,'canvas-direct');assert.equal(result.quality,'accurate');
+  assert.match(result.fallback,/local preview range/);assert.deepEqual(snapshot,before);
+  assert.throws(()=>direct.flatRefractionPoint(0,2000,0,15,1/1000),effective.isCanvasDirectUnsupported);
+  const next=structuredClone(snapshot);next.scene.occlusionRadius=R;
+  assert.equal(studio.render(next,'A',graph().g,{quality:'canvas-direct'}).quality,'canvas-direct');
+});
+
+test('Studio does not hide unrelated RangeErrors or failed authoritative fallbacks',()=>{
+  const m=soundly(),effective=require('../src/optics/OpticalEffectiveRadiusPreview');
+  const snapshot=experiment.capture(m,{occlusionRadius:R,atmosphere:'standard',preset:'soundly',resetPreset:'soundly'},
+    compare.preset('globe-flat-vacuum'),{mode:'scene',eyeLevel:false,horizon:false,selected:'A'});
+  class FakeModel{Update(){}}
+  for(const declared of [false,true]){
+    const calls=[];
+    const studio=preview.create({Model:FakeModel,renderer:{renderPhysical(g,m,o){
+      calls.push(o.opticalQuality);
+      if(declared&&o.opticalQuality==='canvas-direct')throw effective.canvasDirectUnsupported('test domain');
+      throw RangeError('unrelated renderer error');
+    }}});
+    assert.throws(()=>studio.render(snapshot,'A',{Canvas:{}},{quality:'canvas-direct'}),/unrelated renderer error/);
+    assert.deepEqual(calls,declared?['canvas-direct','accurate']:['canvas-direct']);
+  }
+});

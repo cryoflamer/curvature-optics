@@ -1344,7 +1344,7 @@ test('Canvas Direct sequence input takeover without motion restores physical ren
 test('Canvas Direct sequence preflight fallback remains Fast; failure during play restores Accurate',()=>{
   const h=directSequenceBoot();twoFrameAnimation(h);
   const checker=h.win.CurvatureOpticalEffectiveRadiusPreview;
-  h.win.CurvatureOpticalEffectiveRadiusPreview={canvasDirectParameters(){throw Error('preflight rejected');}};
+  h.win.CurvatureOpticalEffectiveRadiusPreview={canvasDirectSupport(){return {supported:false,reason:'preflight rejected'};},canvasDirectUnsupported:checker.canvasDirectUnsupported};
   sequenceButton(h,'Play');h.flushFrames(500);h.flushFrames();assert.equal(h.renders.at(-1).quality,'fast');
   sequenceButton(h,'Stop');h.flushFrames();
   h.win.CurvatureOpticalEffectiveRadiusPreview=checker;

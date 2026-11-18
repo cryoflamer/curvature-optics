@@ -125,8 +125,8 @@ new pack until its Git history or a clean application confirms that fact.
 | **4A. Shared pointer/wheel/keyboard pipeline** | **Completed; user confirmed in Opera** | Reuse one direct scheduler and owner, retain fallbacks and input math, verify idle/release/interruption. |
 | **4B. Camera sequences** | **Completed; user confirmed in Opera** | Reuse shared preview while preserving absolute sequence timing, Stop/Cancel and persistence. |
 | **5A. Numerical qualification** | **Completed** | External reproducible point/boundary sweeps and headless Chromium comparisons on Stage 4B; record sampled accuracy and limitations. |
-| **5B. Virtual Flat horizon mask** | Implemented; Opera acceptance pending | Apply positive-effective-curvature tangent disk and guide clipping with existing approximate painter order; verify near/far, translation, sign and actual Canvas. |
-| **5C. Support criteria & fallback** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. |
+| **5B. Virtual Flat horizon mask** | **Completed; user confirmed in Opera** | Apply positive-effective-curvature tangent disk and guide clipping with existing approximate painter order; verify near/far, translation, sign and actual Canvas. |
+| **5C. Support criteria & fallback** | Implemented; Opera acceptance pending | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. |
 | **5D. Requalification & documentation** | Planned | Repeat representative profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
 | **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
 
@@ -537,4 +537,53 @@ convention remains unchanged; do not publish a new physical horizon diagnosis.
   especially for geometry crossing the tangent, long connected structures,
   unusual poses and extreme profiles. No mutual depth test, no new RK4 or
   multi-ray visibility solver, no change to scientific exports or atmospheric
-  horizon diagnostics. Opera acceptance and Stage 5C remain open.
+  horizon diagnostics. The user subsequently confirmed Stage 5B works in Opera; see Stage 5C.
+
+
+## Stage 5C — shared capability and fallback policy
+
+`OpticalEffectiveRadiusPreview.canvasDirectSupport(model, options)` is the
+shared, cheap preflight for Studio and interactive Scene/Compare. It returns
+support, parameters and a reason; the direct painter uses the same throwing
+parameter resolver. This is a **representability check**, not an accuracy
+certificate. All seven named profiles remain supported where representable.
+Each pose is evaluated with its current height and independent atmosphere,
+including profile weights and target radius; there is no sticky rejection
+cache for Canvas Direct. The existing explicit Effective Radius renderer
+keeps its narrower eligibility policy.
+
+- Reject nonfinite optical/surface parameters, invalid engineered target
+  radius, nonpositive effective Globe curvature, and camera translations
+  outside the local domain. Reject Globe sequences that would pass the
+  virtual antipode rather than silently dropping objects in the geometry
+  engine. Legitimate zero/signed Flat curvature is preserved. The Flat
+  per-vertex signed-embedding checks also report the same explicit capability
+  error code (`CANVAS_DIRECT_UNSUPPORTED`); they are evaluated on real mesh
+  vertices during painting, not by an extra full-scene scan in every preflight.
+- Studio retries Accurate at full detail on a classified direct rejection
+  (including a runtime vertex rejection); keeps requested quality and source
+  data unchanged, reports the reason, and uses the existing Compare pair
+  redraw to avoid mixed quality. Other runtime errors and failures of the
+  authoritative fallback remain visible. The Fast rejection counter still
+  counts only Fast failures.
+- Scene/Compare checks both sides at the latest pose before either direct
+  paint. Existing preflight Fast/CSS fallback and final configured physical
+  redraw semantics are retained; a rejected moving pose follows the existing
+  abort-and-restore path. Compare reason identifies the rejecting side. No
+  new RK4 work on a supported direct frame; no new renderer selection or
+  saved preference. Flat runtime rejection can still occur after part of a
+  frame is painted; the existing restoration path handles that case.
+- Do not infer universal image accuracy from support. No hard FOV, distance,
+  or pixel-error threshold is selected from the limited Stage 5A samples;
+  warnings and representative requalification are Stage 5D.
+- Tests cover actual sign changes with observer height, radius/surface and
+  profile-weight edits, finite parameters, effective camera/sequence domain,
+  a real direct-painter Flat mesh rejection with a stub authoritative retry,
+  recovery after changing the target radius, unrelated errors, and Compare
+  preflight on each new pose. 666/666 wider camera/Studio/Compare/rendering
+  tests and both static isolation audits passed. Full repository suite and
+  browser FPS/visual acceptance not repeated. Manual check: normal Globe/Flat
+  navigation and Studio remain smooth; a Standard Globe with radius 26,000 km
+  and low observer height should reject Canvas Direct, but may qualify at
+  1000 m. Observe the actual fallback quality/reason; no physical validity
+  claim follows from a preview being supported.

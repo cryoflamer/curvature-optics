@@ -5685,7 +5685,7 @@
     directDragFallbackReason=null;
     var checker=root.CurvatureOpticalEffectiveRadiusPreview;
     var renderer=root.CurvatureMainCanvasRenderer;
-    if(!cameraDirectDrag||!checker||typeof checker.canvasDirectParameters!=='function'||
+    if(!cameraDirectDrag||!checker||typeof checker.canvasDirectSupport!=='function'||
       !renderer||typeof renderer.renderPhysical!=='function')return null;
     var sides=state.mode==='compare'?['A','B']:['Scene'];
     if(state.mode==='compare'&&!state.comparePair&&!prepareCompare())return null;
@@ -5704,7 +5704,8 @@
           canvasDirectOptions:{thinOutlines:true},showCaptions:state.captionMode!=='off',
           captionMode:state.captionMode,includeGeometrySummary:true,deferDecorations:false};
         if(!g||!g.Canvas||!m)throw RangeError('Canvas Direct drag viewport is unavailable');
-        checker.canvasDirectParameters(pose?Object.assign({},m,pose):m,options);
+        var support=checker.canvasDirectSupport(pose?Object.assign({},m,pose):m,options);
+        if(!support.supported)throw checker.canvasDirectUnsupported(side+': '+support.reason);
         views.push({side:side,graph:g,model:m,options:options});
       });
     }catch(error){directDragFallbackReason=error.message;return null;}
@@ -5754,7 +5755,9 @@
           root.CurvatureModernCameraInteraction.focalViewAngle(frame.FocalLengthField)));
         frame.camViewAngle=frame.ViewAngle*Math.PI/180;
       }
-      root.CurvatureOpticalEffectiveRadiusPreview.canvasDirectParameters(frame,view.options);
+      var checker=root.CurvatureOpticalEffectiveRadiusPreview;
+      var support=checker.canvasDirectSupport(frame,view.options);
+      if(!support.supported)throw checker.canvasDirectUnsupported(view.side+': '+support.reason);
       return {view:view,frame:frame};
     });
     frames.forEach(function(entry){

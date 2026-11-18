@@ -199,14 +199,13 @@
       if(typeof graph.UpdateCanvasSize==='function')graph.UpdateCanvasSize();
       var key=fastKey(config),reason=null,result;
       if(config.quality==='canvas-direct'){
-        if(!effectiveRadius||typeof effectiveRadius.canvasDirectParameters!=='function')
+        if(!effectiveRadius||typeof effectiveRadius.canvasDirectSupport!=='function')
           throw Error('Canvas Direct eligibility checker is unavailable');
-        try{effectiveRadius.canvasDirectParameters(config.model,config.options);}
-        catch(error){
-          if(!(error instanceof RangeError))throw error;
+        var support=effectiveRadius.canvasDirectSupport(config.model,config.options);
+        if(!support.supported){
           config.quality='accurate';config.options.opticalQuality='accurate';
           config.options.previewLod={stride:1};
-          reason='Canvas Direct unavailable: '+error.message;
+          reason='Canvas Direct unavailable: '+support.reason;
         }
       }
       if(config.quality==='fast'&&fastUnsupported.has(key)){
@@ -220,13 +219,15 @@
       }
       try{result=renderer.renderPhysical(graph,config.model,config.options);}
       catch(error){
-        // Retry only the explicitly declared Fast-capability rejection. A
-        // failed Accurate render (or any other error) must remain visible.
-        if(config.quality!=='fast'||!isFastUnsupported(error))throw error;
-        markFastUnsupported(key);fallbackCount++;
+        // Retry only a declared capability rejection, including a Flat mesh
+        // vertex outside the local embedding. Unexpected errors remain visible.
+        var directRejected=config.quality==='canvas-direct'&&effectiveRadius.isCanvasDirectUnsupported(error);
+        var fastRejected=config.quality==='fast'&&isFastUnsupported(error);
+        if(!directRejected&&!fastRejected)throw error;
+        if(fastRejected){markFastUnsupported(key);fallbackCount++;}
         config.quality='accurate';config.options.opticalQuality='accurate';
         config.options.previewLod={stride:1};
-        reason=error.message;
+        reason=directRejected?'Canvas Direct unavailable: '+error.message:error.message;
         result=renderer.renderPhysical(graph,config.model,config.options);
       }
       var overlays=guides(config,side,graph);
