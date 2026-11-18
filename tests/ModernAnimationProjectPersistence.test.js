@@ -165,3 +165,37 @@ test('Animation Library renders an Experimental project without assuming a physi
   function text(node){return [String(node.textContent||''),...(node.children||[]).map(text)].join(' ');}
   assert.match(text(host),/Experimental · no playback · 0 frames/);
 });
+
+test('Optional narrative survives V1/V2 Studio edits, Undo, checkpoints and portable JSON without changing physics',()=>{
+  const a=scene(),b=copy(a);b.scene.camera.Height=75;
+  const caption='  <img src=x onerror=alert(1)>\nA second line.  ';
+  const plain=caption.trim();
+  for(const origin of [projects.create([a,b],opts('narrative_v1')),
+    projects.createV2(contracts.create(a,{mode:'camera'}),[a,b],opts('narrative_v2'))]){
+    const original=studio.fromProject(origin),key=original.frames[1].key;
+    const edited=studio.editFrame(original,key,'description',caption);
+    assert.equal(original.frames[1].description,undefined);
+    const history=studio.createEditHistory();assert.equal(studio.recordEdit(history,original,edited,key),true);
+    assert.equal(studio.stepEditHistory(history,edited,key,'undo').draft.frames[1].description,undefined);
+    assert.equal(studio.stepEditHistory(history,original,key,'redo').draft.frames[1].description,caption);
+    const restored=checkpoint(edited).draft;
+    assert.equal(restored.frames[1].description,caption);
+    const project=studio.buildSaved(restored,origin.id);
+    assert.equal(project.keyframes[1].description,plain);
+    assert.deepEqual(projects.sampleAt(project,2500),projects.sampleAt(origin,2500));
+    assert.deepEqual(projects.frameExperiments(project),projects.frameExperiments(origin));
+    assert.equal(projects.timeline(project)[1].description,plain);
+    assert.notEqual(library.fingerprint(project),library.fingerprint(origin));
+    const wire=library.exportPortable([library.record(project,'canvas-direct',project.id,1,2)]);
+    assert.equal(library.parsePortable(wire)[0].project.keyframes[1].description,plain);
+    const cleared=studio.editFrame(studio.fromProject(project),key,'description','');
+    const rebuilt=studio.buildSaved(cleared,origin.id);
+    assert.equal(Object.hasOwn(rebuilt.keyframes[1],'description'),false);
+    assert.equal(library.fingerprint(rebuilt),library.fingerprint(origin));
+    for(const bad of [null,123,'x'.repeat(1001)]){
+      const invalid=copy(project);invalid.keyframes[1].description=bad;
+      assert.throws(()=>projects.validate(invalid),/text/);
+    }
+    assert.throws(()=>studio.editFrame(original,key,'description','x'.repeat(1001)),/text/);
+  }
+});

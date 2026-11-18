@@ -1,3 +1,15 @@
+## Modern Demo Catalog — Narrative Support (6)
+
+Optional plain-text keyframe descriptions (1000 characters, empty omitted in
+portable JSON) survive editing, Undo/Redo, draft recovery, copy and import/export.
+Presentation displays the explanation of the last arrived keyframe using the
+actual painted time, including outgoing travel, with an explicit frame label.
+The next arrival replaces or clears the caption; no panel for captionless
+sequences. Old projects and physics are unchanged. User confirmed step 5 in
+Opera; narrative browser acceptance remains open. Next: Soundly Finalization
+(author captions and complete visual/provenance acceptance). No caption overlay
+in exported video or PNG is included in this step.
+
 ## Modern Demo Catalog — Presentation Mode (5)
 
 A viewer-focused, viewport-filling layout reuses the mounted playback stage,

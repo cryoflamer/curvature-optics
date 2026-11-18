@@ -3092,6 +3092,10 @@
     if(title)title.textContent=studioDraft.name;
     if(frame)frame.textContent=root.CurvatureModernAnimationPresentation.frameLabel(
       studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt)||'Rendering frame…';
+    var narrative=newUiEl('ModernAnimationPresentationNarrative');
+    if(narrative)root.CurvatureModernAnimationPresentation.syncNarrative(narrative,
+      newUiEl('ModernAnimationPresentationNarrativeLabel'),newUiEl('ModernAnimationPresentationNarrativeText'),
+      studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
     var copy=newUiEl('ModernAnimationPresentationCopy');if(copy)copy.hidden=!studioActiveDemo;
     var fullscreen=newUiEl('ModernAnimationPresentationFullscreen'),stage=newUiEl('ModernAnimationPlaybackStage');
     if(fullscreen){fullscreen.hidden=!stage.requestFullscreen||document.fullscreenEnabled===false;

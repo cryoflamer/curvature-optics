@@ -91,9 +91,12 @@
       contract:reference?{mode:p.contract.mode,target:p.contract.target,
         reference:reference}:null,
       interpolation:p.interpolation||'linear',fixed:fixed,
-      keyframes:p.keyframes.map(function(frame){return {
-        value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing
-      };})});
+      keyframes:p.keyframes.map(function(frame){
+        var item={value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing};
+        // A distinct authored narrative must not be discarded by import deduplication.
+        if(frame.description)item.description=frame.description;
+        return item;
+      })});
   }
   // Portable files own complete projects (including all keyframe physics).
   // Browser-local record IDs are only source provenance: importing always

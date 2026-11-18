@@ -54,7 +54,7 @@
     if(left.length!==right.length||left.some(function(key,i){return key!==right[i];}))return false;
     for(var i=0;i<a.frames.length;i++){
       var x=a.frames[i],y=b.frames[i];
-      for(var field of ['key','sourceSnapshotId','name','travelMs','holdMs','easing','experiment'])
+      for(var field of ['key','sourceSnapshotId','name','description','travelMs','holdMs','easing','experiment'])
         if(x[field]!==y[field])return false;
     }
     return true;
@@ -90,12 +90,14 @@
       if(seen.has(id))return false;seen.add(id);return found.has(id);
     }).map(function(id,i){
       var entry=found.get(id),before=old.get('history-'+id);
-      return {key:'history-'+id,sourceSnapshotId:id,
+      var frame={key:'history-'+id,sourceSnapshotId:id,
         name:before?before.name:(entry.name||naming.snapshot(entry.experiment)),
         experiment:state.validate(entry.experiment),
         travelMs:i===0?0:before&&before.travelMs?before.travelMs:5000,
         holdMs:before?before.holdMs:0,
         easing:before?before.easing:'linear'};
+      if(before&&before.description!==undefined)frame.description=before.description;
+      return frame;
     });
     draft.source='history';draft.activeFrameKeys=null;return draft;
   }
@@ -128,10 +130,12 @@
     draft.target=project.target?project.target.scope+'|'+project.target.parameter:'auto';
     draft.source='mixed';
     draft.frames=project.keyframes.map(function(frame,i){
-      return {key:'library-'+i,sourceSnapshotId:frame.sourceSnapshotId,
+      var result={key:'library-'+i,sourceSnapshotId:frame.sourceSnapshotId,
         name:frame.name,experiment:legacy?projects.sampleAt(project,arrivals[i].arrivalMs):
           projects.frameExperiment(project,i),
         travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing};
+      if(frame.description!==undefined)result.description=frame.description;
+      return result;
     });
     if(legacy&&!inspect(draft).compatible)
       throw RangeError('Saved animation project cannot be edited');
@@ -170,6 +174,9 @@
     if(!frame)throw RangeError('Unknown Studio frame');
     if(property==='name'){
       frame.name=cleanText(value,120);
+    }else if(property==='description'){
+      var caption=cleanText(value,1000);
+      if(caption)frame.description=caption;else delete frame.description;
     }else if(property==='easing'){
       if(!['linear','smoothstep'].includes(value))throw RangeError('Invalid easing');
       frame.easing=value;
@@ -330,7 +337,7 @@
     }
     return projects.create(activeFrames(draft).map(function(f){
       return {id:f.sourceSnapshotId===null?undefined:f.sourceSnapshotId,
-        name:f.name,experiment:f.experiment,travelMs:f.travelMs,
+        name:f.name,description:f.description,experiment:f.experiment,travelMs:f.travelMs,
         holdMs:f.holdMs,easing:f.easing};
     }),Object.assign({id:id,name:draft.name,description:draft.description,
       mode:result.mode,target:result.target,interpolation:draft.interpolation||'linear'},
@@ -342,7 +349,7 @@
   function buildSaved(draft,id){
     if(!draft.contract)return build(draft,id); // preserve untouched V1 exports
     return projects.createV2(draft.contract,draft.frames.map(function(f){
-      return {sourceSnapshotId:f.sourceSnapshotId,name:f.name,experiment:f.experiment,
+      return {sourceSnapshotId:f.sourceSnapshotId,name:f.name,description:f.description,experiment:f.experiment,
         travelMs:f.travelMs,holdMs:f.holdMs,easing:f.easing};
     }),{id:id,name:draft.name,description:draft.description,
       interpolation:draft.interpolation||'linear',

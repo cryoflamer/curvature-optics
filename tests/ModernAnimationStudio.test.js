@@ -210,6 +210,9 @@ test('Studio fields persist valid in-progress edits on input before focus leaves
   const textarea=controls.find(n=>n.tagName==='textarea');
   textarea.value='An important physical experiment';textarea.listeners.input();
   assert.deepEqual(calls.at(-1),['liveEdit','description','An important physical experiment']);
+  const caption=controls.filter(n=>n.tagName==='textarea')[1];
+  assert.equal(caption.maxLength,1000);caption.value='Frame explanation';caption.listeners.input();
+  assert.deepEqual(calls.at(-1),['liveFrame','history-2','description','Frame explanation']);
 });
 
 test('Spline disables Easing but retains the previous value for Linear',()=>{

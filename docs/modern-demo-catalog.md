@@ -2,7 +2,7 @@
 
 Status: **patch 4C (Keyframe Thumbnail Persistence)**, 2026-11-19. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Persistent keyframe thumbnails and portable attachments are implemented. Presentation Mode is implemented; next: Narrative Support. Browser acceptance remains open.
+Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Persistent keyframe thumbnails and portable attachments are implemented. Presentation Mode and optional keyframe narratives are implemented; user confirmed Presentation Mode in Opera. Next: Soundly Finalization. Narrative browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -117,9 +117,7 @@ not a full-page navigation or playback test.
 | `src/ui/modern/ModernAnimationStudioUI.js`, `ModernApp.js` | Existing Studio UI and application integration owners. Use current cards, selection and status conventions; avoid a second Studio. |
 | `src/animation/ModernAnimationPlayback.js`, `ModernAnimationPreview.js`, `ModernAnimationCompareComposition.js` | Deterministic clock samples an owned project; preview already accepts Scene/A/B and checks Canvas Direct capability. Reuse shared sample/clock and existing rendering/export composition. Browser synchronization and actual speed still require acceptance. |
 
-Strict project/keyframe validation means optional narrative fields require an
-explicit backward-compatible validator/editor/export change later, not an
-unvalidated extra field today. Current camera contracts lock presentation as
+Optional keyframe `description` is now a validated plain-text field (up to 1000 characters, empty omitted in portable projects). Studio, draft checkpoints, Undo/Redo, copy and portable export/import preserve it. Current camera contracts lock presentation as
 well as physics; Scene/Compare is not merely a freely editable display toggle
 inside every project. An alternate playback view, if supported, needs a
 validated detached reference/project and must never silently retarget a
@@ -178,8 +176,8 @@ record the split, and do not mark complete on implementation alone.
 | 4A.2 — Storyboard | Implemented; Opera acceptance open | Horizontal navigation strip beside playback, using shared keyframe selection. Keep detailed editor below, hide redundant editor for read-only demos; preserve Compare width. |
 | 4B — Keyframe Thumbnail Capture | Implemented; Opera acceptance open | Capture only a successfully painted selected keyframe at its exact arrival. Reuse bounded screenshot composition (Scene or both Compare sides), lazy capture on explicit jump, manual refresh and transient cache keyed by visual state; validate History provenance before reuse. No eager whole-project render. |
 | 4C — Keyframe Thumbnail Persistence | Implemented; Opera acceptance open | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
-| 5 — Presentation Mode | Implemented; Opera acceptance open | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
-| 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
+| 5 — Presentation Mode | Implemented; user confirmed in Opera | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
+| 6 — Narrative Support | Implemented; Opera acceptance open | Optional plain-text keyframe description, up to 1000 characters; outgoing caption remains visible until the next arrival, including travel, with explicit source-frame label. Empty next caption clears the text. Synchronize to the last successfully painted time. A bounded panel is shown in Presentation only when the active sequence has explanations. Old JSON remains readable and unchanged; draft checkpoints, Undo/Redo, copies and portable export/import preserve descriptions. Author Soundly captions in step 7; PNG/video overlays are not added by this step. |
 | 7 — Soundly Finalization | Planned | Author final storyboard/captions and catalog presentation, verify both models, source provenance, browser/Opera smoothness, controls, copy/export/reimport; document observed accuracy limits. Tag only after CI/manual acceptance. First completed public demo milestone. |
 | 8+ — Legacy Demo Migration | Planned | Chicago, Canigou, Causeway, Pontchartrain/TransLine, Bedford, Grace, Tensas (order provisional); Curve last as a distinct educational lesson. Reuse Studio; add universal capabilities only when justified by source choreography. One bounded adaptation at a time, with explicit evidence and limitations. |
 

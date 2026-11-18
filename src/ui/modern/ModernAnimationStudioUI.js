@@ -1013,7 +1013,7 @@
       var control=button(doc,'','Jump to keyframe '+index+': '+frame.name+' · '+time,function(){select(frame.key,'storyboard');});
       control.className='modern-animation-storyboard-card'+(frame.key===selectedKey?' is-active':'');
       control.setAttribute('aria-pressed',String(frame.key===selectedKey));
-      control.title=frame.name+' · '+time;
+      control.title=frame.name+' · '+time+(frame.description?'\n'+frame.description:'');
       if(options.resolve)control.appendChild(snapshotPresentation.frameVisual(doc,options.resolve(frame),'modern-animation-storyboard-visual'));
       control.appendChild(el(doc,'strong','modern-animation-storyboard-name',index+'. '+frame.name));
       control.appendChild(el(doc,'small','modern-animation-storyboard-time',time));
@@ -1246,6 +1246,10 @@
       var fields=el(doc,'div','modern-studio-frame-fields');
       fields.appendChild(field(doc,'Frame name',selected.name,'text',function(value){actions.frame(selected.key,'name',value);},null,
         function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'name',value);}));
+      var narrative=field(doc,'Frame explanation (optional)',selected.description||'','textarea',
+        function(value){actions.frame(selected.key,'description',value);},null,
+        function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'description',value);});
+      narrative.className+=' modern-studio-frame-narrative';fields.appendChild(narrative);
       if(index>0)fields.appendChild(field(doc,'Travel to frame (s)',selected.travelMs/1000,'number',
         function(value){actions.frame(selected.key,'travelMs',value);},null,
         function(value){if(actions.liveFrame)actions.liveFrame(selected.key,'travelMs',value);}));

@@ -128,7 +128,8 @@
       throw RangeError(v2?'Animation project allows 0–200 keyframes':
         'Animation requires 2–200 keyframes');
     var keyframes=input.keyframes.map(function(frame,index){
-      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing']);
+      var hasDescription=Object.prototype.hasOwnProperty.call(frame||{},'description');
+      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasDescription?['description']:[]));
       var source=frame.sourceSnapshotId;
       if(source!==null&&!(Number.isSafeInteger(source)&&source>0)&&
         !(typeof source==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(source)))
@@ -140,8 +141,10 @@
       var value=mode==='experimental'?state.validate(frame.value):
         mode==='camera'?pose(frame.value):readTarget(
           applyValue(baseExperiment,mode,target,frame.value),target);
-      return {sourceSnapshotId:source,name:name,value:value,travelMs:travel,
+      var result={sourceSnapshotId:source,name:name,value:value,travelMs:travel,
         holdMs:hold,easing:frame.easing};
+      if(hasDescription){var caption=text(frame.description,1000,true);if(caption)result.description=caption;}
+      return result;
     });
     if(mode==='camera'){
       for(var i=1;i<keyframes.length;i++)camera.interpolate(keyframes[i-1].value,keyframes[i].value,.5,keyframes[i].easing);
@@ -172,12 +175,14 @@
     var mode=inspected.mode,target=inspected.target;
     var frames=entries.map(function(entry,i){
       var source=entry.source,id=source.sourceSnapshotId===undefined?source.id:source.sourceSnapshotId;
-      return {sourceSnapshotId:id===undefined?null:id,
+      var frame={sourceSnapshotId:id===undefined?null:id,
         name:source.name&&source.name.trim()?source.name:'Frame '+(i+1),
         value:mode==='camera'?entry.experiment.scene.camera:readTarget(entry.experiment,target),
         travelMs:i===0?0:(source.travelMs===undefined?5000:source.travelMs),
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(mode==='camera'?'smoothstep':'linear'):source.easing};
+      if(source.description!==undefined)frame.description=source.description;
+      return frame;
     });
     var result={version:VERSION,id:options.id,name:options.name||'Animation',
       description:options.description||'',mode:mode,target:target,
@@ -206,13 +211,15 @@
     }
     var frames=entries.map(function(entry,i){
       var source=entry.source,id=source.sourceSnapshotId===undefined?source.id:source.sourceSnapshotId;
-      return {sourceSnapshotId:id===undefined?null:id,
+      var frame={sourceSnapshotId:id===undefined?null:id,
         name:source.name&&source.name.trim()?source.name:'Frame '+(i+1),
         value:c.mode==='experimental'?entry.experiment:
           c.mode==='camera'?entry.experiment.scene.camera:readTarget(entry.experiment,c.target),
         travelMs:i===0?0:(source.travelMs===undefined?5000:source.travelMs),
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(c.mode==='camera'?'smoothstep':'linear'):source.easing};
+      if(source.description!==undefined)frame.description=source.description;
+      return frame;
     });
     var result={version:VERSION_V2,id:options.id,name:options.name||'Animation',
       description:options.description||'',mode:c.mode,target:c.target,
@@ -267,7 +274,9 @@
     var p=validate(input),ms=0;requireReady(p);
     return p.keyframes.map(function(frame){
       ms+=frame.travelMs;var arrivalMs=ms;ms+=frame.holdMs;
-      return {name:frame.name,arrivalMs:arrivalMs,departureMs:ms};
+      var item={name:frame.name,arrivalMs:arrivalMs,departureMs:ms};
+      if(frame.description)item.description=frame.description;
+      return item;
     });
   }
   function sampleAt(input,timeMs){

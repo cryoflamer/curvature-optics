@@ -46,3 +46,23 @@ test('current frame labels distinguish holds and transitions at exact arrival',(
   assert.equal(api.frameLabel(times,100),'1 / 2 · A');assert.equal(api.frameLabel(times,101),'1 → 2 · A → B');
   assert.equal(api.frameLabel(times,300),'2 / 2 · B');assert.equal(api.frameLabel(times,400),'2 / 2 · B');assert.equal(api.frameLabel(times,NaN),'');
 });
+
+test('Narration follows painted time, including holds, travel, reverse seeks and empty destination',()=>{
+  const times=[{name:'A',arrivalMs:0,departureMs:200,description:'First <b>literal</b>'},
+    {name:'B',arrivalMs:500,departureMs:500},
+    {name:'C',arrivalMs:1000,departureMs:1200,description:'Last'}];
+  const first={label:'1 / 3 · A',text:'First <b>literal</b>'};
+  assert.equal(api.narrativeAt(times,NaN),null);
+  for(const time of [0,200,201,499])assert.deepEqual(api.narrativeAt(times,time),first);
+  for(const time of [500,501,999])assert.equal(api.narrativeAt(times,time),null);
+  assert.deepEqual(api.narrativeAt(times,1000),{label:'3 / 3 · C',text:'Last'});
+  const panel={},label={textContent:''},body={textContent:'',scrollTop:7};
+  Object.defineProperty(body,'innerHTML',{set(){throw Error('Narration must remain plain text');}});
+  api.syncNarrative(panel,label,body,times,1000);
+  assert.equal(body.textContent,'Last');assert.equal(body.scrollTop,0);assert.equal(panel.hidden,false);
+  api.syncNarrative(panel,label,body,times,499);assert.equal(body.textContent,first.text);
+  body.scrollTop=5;api.syncNarrative(panel,label,body,times,300);assert.equal(body.scrollTop,5);
+  api.syncNarrative(panel,label,body,times,500);assert.equal(body.textContent,'');assert.equal(label.textContent,'');
+  api.syncNarrative(panel,label,body,times,NaN);assert.equal(body.textContent,'');
+  api.syncNarrative(panel,label,body,[{name:'Old',arrivalMs:0,departureMs:10}],0);assert.equal(panel.hidden,true);
+});

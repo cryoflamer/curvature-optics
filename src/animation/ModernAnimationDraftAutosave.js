@@ -53,10 +53,12 @@
         !(typeof id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(id)))
         throw RangeError('Invalid animation source snapshot');
       if(!['linear','smoothstep'].includes(frame.easing))throw RangeError('Invalid animation easing');
-      return {key:key,sourceSnapshotId:id,name:string(frame.name,120),
+      var result={key:key,sourceSnapshotId:id,name:string(frame.name,120),
         experiment:experiment.validate(frame.experiment),
         travelMs:number(frame.travelMs,i===0?0:200,i===0?0:120000),
         holdMs:number(frame.holdMs,0,120000),easing:frame.easing};
+      if(frame.description!==undefined)result.description=string(frame.description,1000);
+      return result;
     });
     var active=draft.activeFrameKeys==null?null:draft.activeFrameKeys;
     if(active!==null&&(!Array.isArray(active)||active.length<2||active.length>frames.length||

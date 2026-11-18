@@ -259,6 +259,36 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
 
+    def test_soundly_copy_narrative_follows_storyboard_and_is_plain_text(self):
+        self.open_modern()
+        self.open_animation()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        details = editor.locator('.modern-studio-editor-details')
+        if not details.locator('summary').evaluate('(el) => el.parentElement.open'):
+            details.locator('summary').click()
+        editor.locator('.modern-studio-keyframe').nth(3).click()
+        caption = editor.get_by_label('Frame explanation (optional)')
+        literal = '<b>Low view</b>\nBridge explanation'
+        caption.fill(literal)
+        caption.press('Tab')
+        editor.locator('.modern-studio-keyframe').nth(3).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.page.locator('#ModernAnimationPresent').click()
+        narrative = self.page.locator('#ModernAnimationPresentationNarrative')
+        text = self.page.locator('#ModernAnimationPresentationNarrativeText')
+        expect(narrative).to_be_visible()
+        expect(text).to_have_text(literal)
+        expect(text.locator('b')).to_have_count(0)
+        self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card').nth(4).click()
+        expect(text).to_be_empty()
+        self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card').nth(3).click()
+        expect(text).to_have_text(literal)
+        self.page.keyboard.press('Escape')
+        expect(narrative).not_to_be_visible()
+
     def test_soundly_lazy_keyframe_thumbnails(self):
         self.open_modern()
         self.open_animation()

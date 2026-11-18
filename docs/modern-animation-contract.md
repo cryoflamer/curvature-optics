@@ -10,14 +10,23 @@ copy/export, without serializing built-ins as editable workspace drafts.
 Patch 4 uses an explicit catalog `displayMode` override for Camera projects,
 validating both base and contract reference, preserving the source and
 rejecting changes of non-Camera display scope. Scene/Compare adaptation must
-preserve reference equality and valid physical target scope; optional narrative support is a later compatibility
-change. Patch 4A.2 adds a navigation-only Storyboard using the prepared
+preserve reference equality and valid physical target scope. Patch 4A.2 adds a navigation-only Storyboard using the prepared
 sequence and exact arrival times; draft frame keys remain the shared selection
 identity. Excluded frames are still editable below the player. Patch 4B keeps
 keyframe images in a separate bounded, transient cache keyed by the exact
 validated experiment snapshot; captures require successful paused rendering at
 the selected arrival. The project schema, project fingerprints and draft
 checkpoints are unchanged. Patch 4C stores thumbnails in a separate bounded IndexedDB cache keyed by exact frame state; optional portable Library attachments refer to frame indices, never to the physical project or LocalStorage checkpoint.
+
+Step 6 accepts optional `keyframes[].description` for both v1 and v2 projects.
+It is plain text, at most 1000 characters, trimmed and omitted when empty in
+portable projects. Draft checkpoints preserve in-progress text; Undo/Redo,
+copy, save and import/export retain the field. Library deduplication includes
+nonempty narrative text; the physics, compatibility and thumbnail identities
+are unchanged. Presentation uses the last successfully rendered time: the
+arrived frame owns its explanation through the hold and outgoing transition,
+until the next arrival (including a blank caption). Text is assigned through
+`textContent`, not HTML. No PNG/video caption overlay is introduced.
 
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can

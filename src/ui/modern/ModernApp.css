@@ -1360,3 +1360,13 @@ button{cursor:pointer}
 .modern-animation-playback.is-presenting .modern-animation-playback-panels{margin-inline:auto;width:min(100%,max(320px,calc((100dvh - 248px) * 1.5)))}
 .modern-animation-playback.is-presenting .modern-animation-playback-panels.is-compare{width:min(100%,max(320px,calc((100dvh - 248px) * 3)))}
 @media(max-width:680px){.modern-animation-playback.is-presenting .modern-animation-playback-panels.is-compare{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}.modern-animation-playback.is-presenting .modern-animation-playback-controls input[type=range]{flex-basis:100%}}
+
+/* Narrative is authored plain text, not HTML. Reserve space across transitions. */
+.modern-studio-frame-narrative{grid-column:1/-1}
+.modern-animation-presentation-narrative{display:none}
+.modern-animation-playback.is-presenting .modern-animation-presentation-narrative:not([hidden]){display:flex;flex-direction:column;gap:3px;height:6.5em;box-sizing:border-box;max-width:100%;padding:8px 12px;margin:8px 0;background:#f0f6fc;border:1px solid #c6d8e9;border-radius:6px;color:#183550}
+#ModernAnimationPresentationNarrativeLabel{font-size:12px;min-height:1.2em}
+#ModernAnimationPresentationNarrativeText{white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;min-height:0;flex:1;font-size:14px;line-height:1.4}
+.modern-animation-playback.is-presenting:has(.modern-animation-presentation-narrative:not([hidden])) .modern-animation-playback-panels{width:min(100%,max(320px,calc((100dvh - 368px) * 1.5)))}
+.modern-animation-playback.is-presenting:has(.modern-animation-presentation-narrative:not([hidden])) .modern-animation-playback-panels.is-compare{width:min(100%,max(320px,calc((100dvh - 368px) * 3)))}
+@media(max-width:680px){.modern-animation-playback.is-presenting:has(.modern-animation-presentation-narrative:not([hidden])) .modern-animation-playback-panels.is-compare{width:100%}}

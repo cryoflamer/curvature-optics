@@ -5,13 +5,31 @@
   root.CurvatureModernAnimationPresentation=api;
 }(typeof window!=='undefined'?window:globalThis,function(){
   'use strict';
-  function frameLabel(times,position){
-    if(!times||!times.length||!Number.isFinite(position))return '';
+  function frameIndex(times,position){
+    if(!times||!times.length||!Number.isFinite(position))return -1;
     var i=0;
     while(i+1<times.length&&position>=times[i+1].arrivalMs)i++;
+    return i;
+  }
+  function frameLabel(times,position){
+    var i=frameIndex(times,position);if(i<0)return '';
     if(i+1<times.length&&position>times[i].departureMs)
       return (i+1)+' → '+(i+2)+' · '+times[i].name+' → '+times[i+1].name;
     return (i+1)+' / '+times.length+' · '+times[i].name;
+  }
+  // Outgoing caption remains readable during travel; next arrival replaces it
+  // even when the destination has no description. The painted clock is authoritative.
+  function narrativeAt(times,position){
+    var i=frameIndex(times,position);
+    if(i<0||!times[i].description)return null;
+    return {label:(i+1)+' / '+times.length+' · '+times[i].name,text:times[i].description};
+  }
+  function syncNarrative(panel,label,body,times,position){
+    var caption=narrativeAt(times,position);
+    panel.hidden=!times||!times.some(function(t){return !!t.description;});
+    var nextLabel=caption?caption.label:'',nextText=caption?caption.text:'';
+    if(label.textContent!==nextLabel)label.textContent=nextLabel;
+    if(body.textContent!==nextText){body.textContent=nextText;body.scrollTop=0;}
   }
   function create(options){
     var doc=options.document,stage=options.stage,bar=options.bar,active=false;
@@ -65,5 +83,5 @@
     doc.addEventListener('fullscreenchange',function(){if(active){options.sync();options.resize();}});
     return Object.freeze({enter:enter,leave:leave,fullscreen:fullscreen,isActive:function(){return active;}});
   }
-  return Object.freeze({create:create,frameLabel:frameLabel});
+  return Object.freeze({create:create,frameLabel:frameLabel,narrativeAt:narrativeAt,syncNarrative:syncNarrative});
 }));
