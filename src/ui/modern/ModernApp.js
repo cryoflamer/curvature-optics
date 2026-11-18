@@ -3339,6 +3339,22 @@
     }
     function safe(action){if(studioActiveDemo)return;try{action();}catch(error){report(error);}}
     renderStudioLibrary();
+    var storyboard=newUiEl('ModernAnimationStoryboard');
+    function selectKeyframe(key,source){
+      studioEditing.select(key);
+      try{
+        if(navigateStudioKeyframe(key))renderAnimationStudio(entries);
+      }catch(error){report(error);}
+      var focusHost=source==='storyboard'?storyboard:host;
+      var selector=source==='storyboard'?'.modern-animation-storyboard-card.is-active':'.modern-studio-keyframe.is-active';
+      var active=focusHost&&focusHost.querySelector&&focusHost.querySelector(selector);
+      if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
+    }
+    if(storyboard&&studioUI.renderStoryboard){
+      var storyFrames=studioPrepared?studioApi.activeFrames(studioDraft):[];
+      var storyTimes=studioPrepared?studioProjects.timeline(studioPrepared):[];
+      studioUI.renderStoryboard(document,storyboard,studioDraft,storyFrames,storyTimes,studioSelectedKey,selectKeyframe);
+    }
     studioUI.render(document,host,studioDraft,assessment,{
       choose:function(){if(!studioActiveDemo)toggleAnimationPicker(!studioPickerOpen);},
       importCamera:function(){safe(function(){
@@ -3378,14 +3394,7 @@
             'frame:'+key+':'+field);
         }catch(error){/* Do not persist incomplete or invalid intermediate numbers. */}
       },
-      select:function(key){
-        studioEditing.select(key);
-        try{
-          if(navigateStudioKeyframe(key))renderAnimationStudio(entries);
-        }catch(error){report(error);}
-        var active=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-active');
-        if(active&&typeof active.focus==='function')active.focus({preventScroll:true});
-      },
+      select:selectKeyframe,
       focusTransition:function(index){
         if(!studioEditing.focusTransition(index))return;
         var chosen=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-transition-to');
@@ -3497,7 +3506,7 @@
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,
-      readOnly:!!studioActiveDemo,pickerSelectedCount:animationPickerSelectedEntries(entries).length});
+      storyboard:!!storyboard&&(!studioActiveDemo||!!studioPrepared),readOnly:!!studioActiveDemo,pickerSelectedCount:animationPickerSelectedEntries(entries).length});
     var picker=newUiEl('ModernAnimationSnapshotPicker');
     if(picker&&studioUI.renderPicker){
       var shown=animationPickerEntries(entries);

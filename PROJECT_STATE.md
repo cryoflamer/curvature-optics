@@ -1,3 +1,11 @@
+## Modern Demo Catalog — horizontal Storyboard (4A.2)
+
+A compact horizontally scrolling navigation strip is mounted directly below
+playback controls. Shared key-based selection, exact prepared arrival times,
+no duplicated read-only timeline, and a collapsible owned-project editor.
+No physics or thumbnail storage changes. Next: 4B capture, then 4C persistence.
+Full-page Opera acceptance remains open.
+
 ## Modern Demo Catalog — paused keyframe rendering (4A.1)
 
 User reported keyframe navigation dependent on Play and excessive scrolling.

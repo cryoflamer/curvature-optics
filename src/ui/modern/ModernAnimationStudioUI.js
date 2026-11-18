@@ -981,12 +981,54 @@
       'Prepare the preview to play above; Save project is a separate action.'));
     return bar;
   }
+  // Navigation only: the prepared sequence and exact arrival times belong to
+  // the player. The editor below retains all draft frames and mutation controls.
+  function renderStoryboard(doc,host,draft,frames,times,selectedKey,select){
+    if(!host)return;
+    var previous=host.querySelector&&host.querySelector('.modern-animation-storyboard-list');
+    var scroll=previous?previous.scrollLeft:0;
+    var previousKey=host.__storyboardSelectedKey;
+    host.textContent='';
+    host.hidden=!frames.length||frames.length!==times.length;
+    host.__storyboardSelectedKey=selectedKey;
+    if(host.hidden)return;
+    var header=el(doc,'div','modern-animation-storyboard-heading');
+    header.appendChild(el(doc,'strong','','Storyboard · Keyframes'));
+    header.appendChild(el(doc,'small','',frames.length+' of '+draft.frames.length+' · Click to pause and jump'));
+    host.appendChild(header);
+    var list=el(doc,'ol','modern-animation-storyboard-list');
+    list.setAttribute('aria-label','Playback keyframes');
+    var active=null;
+    frames.forEach(function(frame,i){
+      var index=draft.frames.findIndex(function(f){return f.key===frame.key;})+1;
+      var time=(times[i].arrivalMs/1000).toFixed(2)+' s';
+      var item=el(doc,'li','modern-animation-storyboard-item');
+      var control=button(doc,'','Jump to keyframe '+index+': '+frame.name+' · '+time,function(){select(frame.key,'storyboard');});
+      control.className='modern-animation-storyboard-card'+(frame.key===selectedKey?' is-active':'');
+      control.setAttribute('aria-pressed',String(frame.key===selectedKey));
+      control.title=frame.name+' · '+time;
+      control.appendChild(el(doc,'strong','modern-animation-storyboard-name',index+'. '+frame.name));
+      control.appendChild(el(doc,'small','modern-animation-storyboard-time',time));
+      item.appendChild(control);list.appendChild(item);
+      if(frame.key===selectedKey)active=control;
+    });
+    host.appendChild(list);
+    list.scrollLeft=scroll;
+    // Do not scroll the page: reveal selection only within the horizontal strip.
+    if(active&&previousKey!==selectedKey&&list.getBoundingClientRect&&active.getBoundingClientRect){
+      var bounds=list.getBoundingClientRect(),card=active.getBoundingClientRect();
+      if(card.left<bounds.left)list.scrollLeft+=card.left-bounds.left-4;
+      else if(card.right>bounds.right)list.scrollLeft+=card.right-bounds.right+4;
+    }
+  }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
     var inspector=galleryPreview(doc,host);
     options=options||{};
     var entries=options.entries||[];
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
+    var previousEditor=host.querySelector&&host.querySelector('.modern-studio-editor-details');
+    var editorOpen=!prepared||!previousEditor||previousEditor.open;
     host.textContent='';
     var heading=el(doc,'div','modern-studio-header');
     heading.appendChild(el(doc,'strong','',options.readOnly?'Built-in demo · Read-only':'Edit animation · Working draft'));
@@ -997,6 +1039,7 @@
       host.appendChild(el(doc,'p','modern-studio-hint',draft.description));
       host.appendChild(el(doc,'p','modern-studio-hint',
         'Select a keyframe to pause and jump to its arrival time, or play and seek above. Create copy in Animation Library to change this project.'));
+      if(options.storyboard)return; // navigation is adjacent to the player
       var list=el(doc,'ol','modern-studio-filmstrip');
       list.setAttribute('aria-label','Read-only keyframes');
       draft.frames.forEach(function(frame,i){
@@ -1016,6 +1059,12 @@
         host.appendChild(details);
       }
       return;
+    }
+    if(options.storyboard){
+      var editorDetails=el(doc,'details','modern-studio-editor-details');
+      editorDetails.open=editorOpen;
+      editorDetails.appendChild(el(doc,'summary','','Keyframe Editor · project and frame settings'));
+      host.appendChild(editorDetails);host=editorDetails;
     }
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Select a keyframe to pause and jump to its arrival when compatible and included in the preview. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
@@ -1219,5 +1268,5 @@
       'Export PNG/video from Playback; JSON backup and permanent project saves are in Animation Library.'));
   }
   return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary,
-    createPreviewNavigation:createPreviewNavigation});
+    renderStoryboard:renderStoryboard,createPreviewNavigation:createPreviewNavigation});
 }));

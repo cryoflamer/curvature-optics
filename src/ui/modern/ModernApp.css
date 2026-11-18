@@ -999,6 +999,23 @@ button{cursor:pointer}
 .modern-animation-playback-controls button:disabled{opacity:.5;cursor:default}
 .modern-animation-playback-controls select{max-width:280px;border:1px solid #9cbddd;
   border-radius:6px;background:white;padding:7px;color:#255e91}
+.modern-animation-storyboard{margin-top:10px;min-width:0;max-width:100%}
+.modern-animation-storyboard[hidden]{display:none}
+.modern-animation-storyboard-heading{display:flex;align-items:baseline;flex-wrap:wrap;
+  gap:6px 12px;color:#365a77;font-size:12px}
+.modern-animation-storyboard-heading small{color:#587087}
+.modern-animation-storyboard-list{display:flex;gap:6px;overflow-x:auto;min-width:0;
+  margin:3px 0 0;padding:4px 3px 8px;list-style:none;overscroll-behavior-x:contain}
+.modern-animation-storyboard-item{flex:0 0 142px;min-width:0}
+.modern-animation-storyboard-card{display:flex;flex-direction:column;gap:5px;align-items:flex-start;
+  width:100%;min-height:48px;padding:6px 8px;border:1px solid #a9bdd1;border-radius:6px;
+  background:#f4f8fc;color:#365a77;cursor:pointer;text-align:left}
+.modern-animation-storyboard-card:hover{background:#e8f2fb}
+.modern-animation-storyboard-card.is-active{border-color:#2578c6;box-shadow:inset 0 0 0 1px #2578c6;background:#e9f4ff}
+.modern-animation-storyboard-card:focus-visible{outline:2px solid #2578c6;outline-offset:2px}
+.modern-animation-storyboard-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.modern-animation-storyboard-time{font-variant-numeric:tabular-nums;color:#466681}
+.modern-studio-editor-details>summary{cursor:pointer;font-weight:600;color:#365a77;margin:6px 0}
 .modern-animation-playback-diagnostics{font-size:11px;line-height:1.5;color:#456680;
   overflow-wrap:anywhere}
 .modern-animation-playback-controls input[type=range]{flex:1;min-width:130px}

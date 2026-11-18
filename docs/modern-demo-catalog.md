@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 4A.1 (Paused Keyframe Rendering)**, 2026-11-19. Catalog,
+Status: **patch 4A.2 (Horizontal Storyboard)**, 2026-11-19. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. Next: 4A.2 (horizontal Storyboard beside playback), 4B (thumbnail capture), then 4C (thumbnail persistence) before Presentation Mode; browser acceptance remains open.
+Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Next: 4B (thumbnail capture), then 4C (thumbnail persistence) before Presentation Mode; browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -175,7 +175,7 @@ record the split, and do not mark complete on implementation alone.
 | 4 — Compare Playback | Implemented; browser gate open | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 4A — Keyframe Navigation | Implemented; browser gate open | Click an included compatible keyframe to pause, seek to exact arrival milliseconds and repaint using existing paused-frame lifecycle. Auto-prepare compatible unprepared drafts; excluded/incompatible cards remain editor selections. Read-only navigation does not persist authored changes. |
 | 4A.1 — Paused Keyframe Rendering | Implemented; Opera acceptance open | Fix reported dependence on Play: immediate forced paint for a laid-out stage, deferred layout path otherwise; validate actual rendered time and preserve failure/retry. |
-| 4A.2 — Storyboard | Planned | Horizontal navigation strip beside playback, using shared keyframe selection. Keep detailed editor below, hide redundant editor for read-only demos; preserve Compare width. |
+| 4A.2 — Storyboard | Implemented; Opera acceptance open | Horizontal navigation strip beside playback, using shared keyframe selection. Keep detailed editor below, hide redundant editor for read-only demos; preserve Compare width. |
 | 4B — Keyframe Thumbnail Capture | Planned | Capture only a successfully painted selected keyframe at its exact arrival. Reuse bounded screenshot composition (Scene or both Compare sides), lazy capture on explicit jump, manual refresh and transient cache keyed by visual state; validate History provenance before reuse. No eager whole-project render. |
 | 4C — Keyframe Thumbnail Persistence | Planned | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
@@ -369,3 +369,15 @@ requests. No animation clock start is necessary. The actual Opera failure
 mechanism has not been reproduced here; manual acceptance is required.
 4A.2 will put a shared-selection Storyboard next to playback before adding
 keyframe thumbnails; it is deliberately separate from this correction.
+
+### Horizontal Storyboard (patch 4A.2)
+
+The navigation strip sits directly under the playback controls and displays
+only the prepared active sequence, with original draft numbering and exact
+arrival times from the validated playback timeline. Both editor cards and
+Storyboard buttons invoke the same key-based selection/jump path. Selection
+is revealed horizontally without scrolling the page. Read-only demos do not
+repeat the keyframe list below playback. Owned projects keep the original
+editor, including reorder/delete and excluded frames, in a collapsible panel;
+it reopens when no preview is prepared. No thumbnail capture or persistence
+is introduced yet (4B/4C). Canvas width and physics remain unchanged.

@@ -27,7 +27,7 @@ editing is implemented. Soundly plays synchronized Globe/Flat vacuum Compare
 with Canvas Direct by default; the original Scene JSON is preserved.
 Click a compatible keyframe to pause and jump to its exact arrival time,
 without starting Play; a laid-out preview paints immediately. A horizontal
-Storyboard next to playback is planned before keyframe thumbnail capture
+Storyboard below playback is available, with a collapsible detailed editor. Next: keyframe thumbnail capture
 and persistence, followed by Presentation
 Mode; browser acceptance remains open.
 Original Legacy Demos remain available.

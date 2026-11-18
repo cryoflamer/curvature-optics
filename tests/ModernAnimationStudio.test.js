@@ -1035,3 +1035,45 @@ test('Picker compatibility follows the selected physical channel, Experimental p
   ctx.studioDraft={contract:null};
   assert.equal(ctx.animationPickerVerdict(entry(4,mixed)),null);
 });
+
+
+test('Storyboard uses prepared subsequence arrival times and shared key selection, without editor actions',()=>{
+  const a=experiment(),b=clone(a),c=clone(a);
+  b.scene.camera.Height=45;c.scene.camera.Height=85;
+  let draft=studio.history([1,2,3],[entry(1,a,'First'),entry(2,b,'Excluded'),entry(3,c,'Last')]);
+  draft={...draft,activeFrameKeys:['history-1','history-3']};
+  draft=studio.editFrame(draft,'history-1','holdMs','1.25');
+  draft=studio.editFrame(draft,'history-3','travelMs','3.17');
+  const project=studio.build(draft,'storyboard_test');
+  const {doc,host}=mockDom(),calls=[];
+  editor.renderStoryboard(doc,host,draft,studio.activeFrames(draft),animation.timeline(project),'history-3',(...args)=>calls.push(args));
+  const cards=collect(host,n=>n.tagName==='button');
+  assert.equal(cards.length,2);
+  assert.equal(cards[0]['aria-label'],'Jump to keyframe 1: First · 0.00 s');
+  assert.equal(cards[1]['aria-label'],'Jump to keyframe 3: Last · 4.42 s');
+  assert.equal(cards[1]['aria-pressed'],'true');
+  assert.equal(cards[0]['aria-pressed'],'false');
+  cards[0].listeners.click();assert.deepEqual(calls,[['history-1','storyboard']]);
+  assert.equal(host.hidden,false);
+  editor.renderStoryboard(doc,host,draft,[],[],null,()=>{});assert.equal(host.hidden,true);
+});
+
+test('Storyboard replaces redundant read-only list while owned projects retain collapsible editing',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=45;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom();
+  editor.render(doc,host,draft,studio.inspect(draft),{},true,{readOnly:true,storyboard:true});
+  assert.equal(collect(host,n=>n.className==='modern-studio-filmstrip').length,0);
+  assert.equal(collect(host,n=>n.tagName==='button').length,0);
+  host.children=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{},true,{storyboard:true});
+  const details=collect(host,n=>n.className==='modern-studio-editor-details')[0];
+  assert.equal(details.open,true);
+  assert.equal(collect(details,n=>n.className==='modern-studio-filmstrip').length,1);
+  details.open=false;host.querySelector=()=>details;host.children=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{},true,{storyboard:true});
+  assert.equal(collect(host,n=>n.className==='modern-studio-editor-details')[0].open,false);
+  host.children=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{},false,{storyboard:true});
+  assert.equal(collect(host,n=>n.className==='modern-studio-editor-details')[0].open,true);
+});

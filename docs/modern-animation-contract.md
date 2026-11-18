@@ -11,7 +11,9 @@ Patch 4 uses an explicit catalog `displayMode` override for Camera projects,
 validating both base and contract reference, preserving the source and
 rejecting changes of non-Camera display scope. Scene/Compare adaptation must
 preserve reference equality and valid physical target scope; optional narrative support is a later compatibility
-change.
+change. Patch 4A.2 adds a navigation-only Storyboard using the prepared
+sequence and exact arrival times; draft frame keys remain the shared selection
+identity. Excluded frames are still editable below the player.
 
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can
