@@ -1832,6 +1832,7 @@
         "tests/ForwardRayBundle.test.js",
         "tests/InversePreparedGradient.test.js",
         "tests/ModernAtmosphereDescriptions.test.js",
+        "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernInverseRenderScheduling.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernProfileTransition.test.js",

@@ -472,18 +472,25 @@ additional Legacy-demo migration.
 
 # Experimental Canvas Direct Preview (Animation Studio)
 
-Choose **Playback → Optics → Canvas Direct** to test the Legacy-style fast
-painter while retaining the same Modern animation project. This is a distinct,
-explicitly selected approximation; Auto, Fast, Effective Radius and Accurate
-RK4 are not changed. The choice is stored as an Animation Library preview
-preference, never in a project's camera keyframes or physical scene.
+New Animation Studio live previews now default to **Playback → Optics → Canvas
+Direct**, with thin outlines (≤1 backing pixel) and Auto FPS; an explicitly
+saved quality choice is respected. Canvas Direct is an **approximation** and
+remains separate from Auto, Fast, Effective Radius and Accurate RK4. The
+preview selection is a Library/workspace preference, never a physical scene
+parameter or an exported project's camera keyframe.
 
-Canvas Direct shares the **local effective-radius coefficient** and atmosphere
-eligibility of Effective Radius. For Vacuum, `k=0` and `R_eff=R`. For Standard
-and Temperature lapse on Globe, it uses the local gradient at the current eye
-height. It rejects other profiles and refracted Flat scenes. A moving camera's
-`CameraEast`/`CameraNorth` is handled by rotating/recentring the effective
-sphere around the observer; this is not a translation of the 2D image.
+Canvas Direct derives local effective curvature from the current eye-height
+`n(h)` and `dn(h)` for **all seven existing Modern atmospheric profiles**:
+Vacuum, Standard, Temperature lapse, Profile transition, Inverse temperature,
+Inverse spherical and Exponential occlusion. Globe and Flat both qualify for
+ordinary parameters; Flat can have **positive or negative virtual curvature**
+without changing the authored flat surface. This is **not** physically accurate
+image formation or horizon visibility for engineered/mirage profiles. The
+explicit Effective Radius mode remains restricted to Vacuum, Standard and
+Temperature lapse. Invalid or unrepresentable local preview geometry falls
+back to Accurate, not an invented Vacuum/Standard profile. A moving camera's
+`CameraEast`/`CameraNorth` recenter the virtual geometry on the observer;
+it is not a translation of the 2D image.
 
 Instead of creating physical-ray samples, tessellated fill triangles, validated
 SceneFrame objects, and then painting the result, the new Modern-only renderer:

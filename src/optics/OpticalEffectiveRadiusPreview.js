@@ -21,15 +21,28 @@
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function between(a,b,t){return a.map(function(v,i){return v+(b[i]-v)*t;});}
   function arrival(az,el){var c=Math.cos(el);return [1000*Math.sin(az)*c,1000*Math.cos(az)*c,1000*Math.sin(el)];}
-  function parameters(model,options){
+  function resolveParameters(model,options,interactive){
+    options=options||{};
     if(!model||!(model.rEarth>0)||!(model.Height>=0)||!Number.isFinite(model.Height))
       throw RangeError('Invalid Effective Radius geometry');
     var globe=model.showModel===1,flat=model.showModel===2;
     if(!globe&&!flat)throw RangeError('Effective Radius requires Globe or Flat');
     var kind=options.atmosphere||'vacuum';
-    if(!['vacuum','standard','temperature-lapse'].includes(kind))
+    var simple=['vacuum','standard','temperature-lapse'];
+    var all=simple.concat(['profile-transition','inverse-temperature',
+      'inverse-spherical','exponential-occlusion']);
+    if(!(interactive?all:simple).includes(kind))
       throw RangeError('Effective Radius supports Vacuum, Standard and Temperature lapse only');
-    var atmosphere=tracer.atmosphere(kind,kind==='temperature-lapse'?options.temperatureProfile:undefined);
+    // Canvas Direct uses exactly the existing physical profile's local n(h)
+    // and dn(h); no new ray tracer, atmosphere, or assumed constant k is added.
+    // The explicit Effective Radius mode remains restricted to its qualified set.
+    var profileOptions=kind==='temperature-lapse'?options.temperatureProfile:
+      kind==='profile-transition'?{temperatureProfile:options.temperatureProfile,
+        transitionProfile:options.transitionProfile,occlusionRadius:options.occlusionRadius}:
+      kind==='inverse-temperature'?{temperatureProfile:options.temperatureProfile,
+        inverseProfile:options.inverseProfile,occlusionRadius:options.occlusionRadius}:
+      {occlusionRadius:options.occlusionRadius};
+    var atmosphere=tracer.atmosphere(kind,profileOptions);
     var index=atmosphere.n(model.Height),gradient=atmosphere.dn(model.Height);
     if(!(index>0)||!Number.isFinite(gradient))throw RangeError('Invalid local atmospheric gradient');
     // The tangent-frame approximation subtracts downward ray curvature from
@@ -40,12 +53,13 @@
     // Flat geometry and its curvature are independent of model.rEarth.
     var referenceRadius=globe?model.rEarth:6371000;
     var k=gradient===0?0:-referenceRadius*gradient/index;
-    if(!Number.isFinite(k)||k<=-1||k>=0.95)
+    if(!Number.isFinite(k)||(!interactive&&(k<=-1||k>=0.95)))
       throw RangeError('Local Effective Radius approximation is unsupported at this curvature');
     var curvature=globe?(1-k)/model.rEarth:gradient/index;
-    // Positive virtual curvature on a physical plane would introduce a
-    // horizon/mask; that branch is not yet qualified by the direct painter.
-    if(flat&&curvature>0)
+    // During motion, upward-bending engineered profiles on physical Flat
+    // yield POSITIVE virtual curvature. The direct painter supports this
+    // signed embedding without adding a true physical Flat horizon or RK4.
+    if(!interactive&&flat&&curvature>0)
       throw RangeError('Flat Effective Radius supports downward or zero local ray bending only');
     if(globe&&!(curvature>0))
       throw RangeError('Globe Effective Radius requires positive effective curvature');
@@ -54,6 +68,9 @@
       effectiveRadius:globe?model.rEarth/(1-k):curvature===0?Infinity:1/curvature,
       eye:model.Height,atmosphere:kind,k:k};
   }
+  function parameters(model,options){return resolveParameters(model,options,false);}
+  // Wider, explicitly approximate eligibility for live Canvas Direct only.
+  function canvasDirectParameters(model,options){return resolveParameters(model,options,true);}
   function ray(p,d,h){
     if(!Number.isFinite(d)||!Number.isFinite(h)||d<0||h<0)return {status:'blocked'};
     if(d===0)return {status:'visible',angle:h>=p.eye?Math.PI/2:-Math.PI/2};
@@ -213,5 +230,6 @@
     }
     return Object.freeze({transform:transform,clearCache:function(){}});
   }
-  return Object.freeze({create:create,parameters:parameters,ray:ray});
+  return Object.freeze({create:create,parameters:parameters,
+    canvasDirectParameters:canvasDirectParameters,ray:ray});
 }));

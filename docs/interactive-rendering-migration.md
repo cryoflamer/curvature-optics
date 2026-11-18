@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–3 and signed Flat refraction follow-up complete; Stage 4 (shared interaction pipeline) is next.
+**Status:** Stages 1–3, signed Flat refraction, and all-existing-profile Canvas Direct follow-ups complete; Stage 4 (shared interaction pipeline) is next.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -75,14 +75,19 @@ see also `docs/modern-camera-navigation.md` and `docs/modern-animation-contract.
    optics-neutral geometry using straight rays on an effective sphere/plane
    and approximate horizon masking; it does not trace refracted light paths.
    It must never silently present an approximate result as RK4-accurate.
-2. **Eligibility first.** The current `OpticalEffectiveRadiusPreview.parameters()`
-   accepts Globe and Flat with Vacuum, Standard or Temperature lapse when the
-   local signed-curvature approximation qualifies. It derives a **local observer-height gradient** with
-   `k = -R (dn/dh) / n` and `R_eff = R / (1-k)` for Globe, rejecting unsupported
-   gradients/curvature. On Flat, `C_eff = (dn/dh)/n`: downward refracted
-   rays produce **negative** virtual curvature (not a true negative-radius planet). Other atmospheric models (and invalid inputs) must
-   take an explicit safe fallback; no invented k, vacuum substitution or
-   automatic certification for complex/mirage profiles.
+2. **Eligibility first, for the intended renderer.**
+   `OpticalEffectiveRadiusPreview.parameters()` is the deliberately restricted
+   standalone Effective Radius mode: Vacuum, Standard and Temperature lapse.
+   The **Canvas Direct-only** `canvasDirectParameters()` accepts all seven
+   already-authored Modern profiles and obtains the observer-height `n(h)`,
+   `dn(h)` from the *same existing* `OpticalRayTracer.atmosphere()` profiles.
+   The local approximation is `C_eff = C_surface + (dn/dh)/n` (for Flat,
+   `C_surface = 0`); its dimensionless `k` on Flat is diagnostic only. Both
+   positive and negative virtual Flat curvature are permitted, but **neither**
+   certifies a Flat ground horizon. Unsupported/invalid or unrepresentable
+   local geometry must fail closed; never invent Standard/Vacuum as a substitute
+   or imply physically accurate mirage/visibility reconstruction.
+
 3. **No data-model changes.** Browser-local interactive-preview preferences
    must not mutate authored scenes, the Animation project/History schema,
    experiment URLs, or PNG/video export parameters. Existing saved quality
@@ -134,9 +139,10 @@ new pack until its Git history or a clean application confirms that fact.
   validation was extended to `canvas-direct` and `effective-radius`, matching
   the already-supported Library quality choices. This does not change the
   animation project format or the offline Accurate export pipeline.
-- Before Canvas Direct paints, the preview checks support through the existing
-  effective-radius parameter calculation. Unsupported atmospheres or Flat
-  refraction fall back to Accurate RK4 **without changing the user's selection**;
+- At Stage 2, Canvas Direct checked the restricted effective-radius parameter
+  calculation. The later signed-Flat and all-existing-profile follow-ups replace
+  this with a Canvas Direct-specific local-gradient check. Invalid/unrepresentable
+  geometry still falls back to Accurate RK4 **without changing the user's selection**;
   the actual renderer and fallback reason are displayed. Compare re-renders
   the other side in Accurate rather than presenting mixed-quality A/B frames.
   Errors unrelated to recognized unsupported parameters remain visible.
@@ -162,7 +168,7 @@ new pack until its Git history or a clean application confirms that fact.
   with `opticalQuality: 'canvas-direct'`, `thinOutlines: true` (≤1 backing px),
   and no heavy exact overlays. Scene Pan/Nick and Shift-translate share the
   existing camera interaction calculations and safety bounds.
-- Both Compare sides must qualify under the existing effective-radius
+- Both Compare sides must qualify under the Canvas Direct-specific
   parameters **before either direct frame is drawn**. Default Globe Standard /
   Flat Standard did *not* qualify **at the time of Stage 3**: the existing Fast/CSS
   gesture preview was retained with a UI warning. The signed-curvature
@@ -214,12 +220,14 @@ new pack until its Git history or a clean application confirms that fact.
   embedding. Neither `CurvatureSurfaceGeometry` nor `CurvatureCameraTranslation`
   gains negative *physical* curvature; the RK4 and export paths are unchanged.
 - **Acceptance:** default Globe Standard / Flat Standard Compare may now draw
-  **both** direct preview frames; unsupported profiles still reject *before*
-  drawing either, and release restores the selected accurate/fast result. Flat
+  **both** direct preview frames; cases unrepresentable by the preview must
+  still reject *before* drawing either, and release restores the selected accurate/fast result. Flat
   Vacuum is still exactly flat and is preserved without a negative radius.
 - **Limitations:** this is a **local, single-gradient, nearly horizontal ray
-  approximation**, not a certified mirage or visibility solver. Only a
-  non-positive effective curvature is qualified on Flat. Extremely long
+  approximation**, not a certified mirage or visibility solver. At the time of
+  this signed-Flat patch, only non-positive effective curvature was qualified;
+  the all-existing-profile follow-up below also permits positive virtual Flat
+  curvature. Extremely long
   baselines beyond the local signed embedding's half-turn or anomalous
   gradients still fall back to Accurate. There is **no virtual Flat ground
   horizon mask** for ordinary downward bending; painter/depth-order errors
@@ -232,6 +240,45 @@ new pack until its Git history or a clean application confirms that fact.
   **not** universal optical error guarantees.
 - **Next:** Stage 4 shared wheel, keyboard and camera-sequence pipeline; do not
   treat this follow-up as a completed Stage 4.
+
+## All existing atmosphere profiles — interactive Canvas Direct follow-up (2026-11-18)
+
+- **Scope:** only the existing seven Modern profile identifiers: `vacuum`,
+  `standard`, `temperature-lapse`, `profile-transition`,
+  `inverse-temperature`, `inverse-spherical`, `exponential-occlusion`.
+  No new profile, physics, RK4 ray path, authoring schema, export format,
+  or universal optical accuracy claim. During pointer drag and Animation Studio
+  live preview, a single **local effective curvature** is enough for the fast
+  approximation; after interaction, the existing configured quality is restored.
+- **Implementation:** `canvasDirectParameters()` uses the production
+  `OpticalRayTracer.atmosphere()` for the selected profile at `model.Height`,
+  forwarding the *actual* scene/Compare temperature, transition, inverse and
+  comparison-radius parameters. `C_eff = C_surface + n'(H)/n(H)` is converted to
+  the signed virtual geometry. Positive `C_eff` on physical Flat is legitimate
+  for upward-refracting engineered profiles and is rendered without inventing
+  a physical ground-horizon mask. Shared eligibility is used by Scene/Compare
+  pointer previews and the Animation Studio Canvas Direct renderer, including
+  independent Compare A/B settings. The standalone `effective-radius` quality
+  stays limited to its original three qualified profiles.
+- **Validation:** Globe and Flat were rendered for **all seven** profiles,
+  with finite Canvas paths, ≤1 backing-pixel stroke widths and immutable scene
+  data; the actual `n'(H)/n(H)` was checked against the tracer. The Flat inverse
+  Compare preset, Animation Studio routing and invalid-local-geometry fallback
+  are covered. Three Node regression shards passed **1245/1245 tests**, including
+  export and Legacy checks. The Legacy/Modern isolation snapshot changed by
+  one reviewed test dependency (`ModernCanvasDirectPreview.test.js` importing
+  `OpticalRayTracer.js`), and the audit `--check` passed. The deterministic
+  export and RK4 implementation were not modified.
+- **Limitations:** a single observer-height gradient does **not** reproduce
+  real inversion images, multipath, changing gradients along the ray,
+  visibility or mutual occlusion. Positive virtual Flat curvature does not
+  add a certified horizon, and the Globe painter's whole-object mask is also
+  approximate. Extremely strong gradients or an unrepresentable signed
+  embedding can still reject or revert to Accurate. Check optical appearance
+  and FPS manually in Opera; Node tests alone cannot validate smoothness.
+- **Next:** Stage 4, the shared interaction pipeline for wheel, keyboard and
+  camera sequences. The expanded atmosphere eligibility is a separate Stage 3
+  follow-up, **not** a claim that Stage 4 has been implemented.
 
 ## Required stage-by-stage verification
 

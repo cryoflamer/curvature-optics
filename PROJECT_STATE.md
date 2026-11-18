@@ -1,13 +1,16 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–3/6 complete**, with **signed Flat refraction qualification**; Stage **4 — shared interaction preview pipeline** is
+> Stages **1–3/6 complete**, with **signed Flat and all-seven-profile Canvas Direct** follow-ups; Stage **4 — shared interaction preview pipeline** is
 > next. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates, detailed stage-2 notes and
-> cross-chat handoff. The prior base is `b972890` (Studio defaults compatpatch).
+> cross-chat handoff. This seven-profile follow-up is based on `7cc4926`
+> (signed Flat refraction); read `git log -1` to identify the applied HEAD.
 > Newly created Animation Studio previews now prefer **Canvas Direct** with
 > checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
 > choices in old drafts/Library records are preserved, and newly selected
-> Canvas Direct can now survive workspace autosave. Unsupported refractive
-> atmospheres and unqualified local-gradient cases fall back to Accurate with an explanatory status;
+> Canvas Direct can now survive workspace autosave. It now uses the production
+> `n(h)`, `dn(h)` at observer height for all seven existing Modern atmosphere
+> profiles on Globe and Flat, including positive virtual curvature for Flat
+> inverse profiles. Invalid/unrepresentable geometry still falls back to Accurate;
 > Compare does not silently mix direct/accurate frames. The authored project
 > schema, authoritative Scene/Compare and Accurate PNG/video export are unchanged.
 > Targeted tests: 110/110; wider animation/camera/export regression: 595/595;
@@ -16,12 +19,21 @@
 > **Scene/Compare pointer drags** (Pan/Nick and Shift-translation) through
 > RAF-coalesced Canvas Direct with 1 backing-pixel outlines; live scene
 > physics remains unchanged until release. Both Compare atmospheres must
-> qualify. **Flat Standard now qualifies** using negative virtual curvature;
-> unsupported atmospheres still retain the prior Fast/CSS preview. This signed
+> qualify. **Flat Standard qualifies** using negative virtual curvature;
+> the seven-profile follow-up also covers positive virtual Flat curvature.
+> Invalid/unrepresentable geometry retains a safe fallback. This signed
 > Flat extension was tested against the Accurate Flat RK4 launch angle at
 > representative 1–40 km distances (error under 0.3 µrad in those cases).
 > It is a local preview approximation, not accurate Flat ray tracing.
-> See the signed Flat follow-up in the migration roadmap; Stage 4 is still next.
+> See the signed Flat and all-existing-profile follow-ups in the migration
+> roadmap; Stage 4 (wheel, keyboard and camera sequences) is still next.
+> `OpticalEffectiveRadiusPreview.parameters()` remains deliberately limited to
+> its original three profiles; only `canvasDirectParameters()` was broadened.
+> The live approximation is not an RK4 visibility or mirage reconstruction.
+> Seven-profile regression: 1245/1245 tests across three Node shards, including
+> Modern, Compare, Animation, optics, export and Legacy; Legacy/Modern isolation
+> fixture updated only for a new test import and audit `--check` passed.
+> Manual Opera drag/Playback visuals and measured FPS remain unverified.
 > Release/cancel/failure restore the configured physical renderer. Wheel,
 > keyboard and camera sequences are untouched; Stage 4 covers those paths.
 > Stage 3 pointer/Animation/Compare/isolation suite: 635/635; separate

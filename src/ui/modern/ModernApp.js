@@ -5633,7 +5633,7 @@
     directDragFallbackReason=null;
     var checker=root.CurvatureOpticalEffectiveRadiusPreview;
     var renderer=root.CurvatureMainCanvasRenderer;
-    if(!cameraDirectDrag||!checker||typeof checker.parameters!=='function'||
+    if(!cameraDirectDrag||!checker||typeof checker.canvasDirectParameters!=='function'||
       !renderer||typeof renderer.renderPhysical!=='function')return null;
     var sides=state.mode==='compare'?['A','B']:['Scene'];
     if(state.mode==='compare'&&!state.comparePair&&!prepareCompare())return null;
@@ -5652,7 +5652,7 @@
           canvasDirectOptions:{thinOutlines:true},showCaptions:false,
           includeGeometrySummary:false,deferDecorations:true};
         if(!g||!g.Canvas||!m)throw RangeError('Canvas Direct drag viewport is unavailable');
-        checker.parameters(m,options);
+        checker.canvasDirectParameters(m,options);
         views.push({graph:g,model:m,options:options});
       });
     }catch(error){directDragFallbackReason=error.message;return null;}

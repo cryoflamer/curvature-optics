@@ -199,9 +199,9 @@
       if(typeof graph.UpdateCanvasSize==='function')graph.UpdateCanvasSize();
       var key=fastKey(config),reason=null,result;
       if(config.quality==='canvas-direct'){
-        if(!effectiveRadius||typeof effectiveRadius.parameters!=='function')
+        if(!effectiveRadius||typeof effectiveRadius.canvasDirectParameters!=='function')
           throw Error('Canvas Direct eligibility checker is unavailable');
-        try{effectiveRadius.parameters(config.model,config.options);}
+        try{effectiveRadius.canvasDirectParameters(config.model,config.options);}
         catch(error){
           if(!(error instanceof RangeError))throw error;
           config.quality='accurate';config.options.opticalQuality='accurate';

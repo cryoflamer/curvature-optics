@@ -137,7 +137,7 @@
     }
     function paint(canvas,camera,model,options){
       options=options||{};
-      var began=clock(),params=effective.parameters(model,options);
+      var began=clock(),params=effective.canvasDirectParameters(model,options);
       var geom=geometricModel(model,params),source=objects(model,params),geometryAt=clock();
       var R=params.effectiveRadius,H=model.Height,globe=params.geometry==='globe';
       var east=model.CameraEast||0,north=model.CameraNorth||0;

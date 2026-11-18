@@ -150,7 +150,8 @@ test('Globe and Flat render Vacuum and Standard with independent signed curvatur
   const globe=draw(m,{atmosphere:'standard'});
   assert.ok(globe.refractionK>0&&globe.effectiveRadiusMeters>m.rEarth);
   assert.equal(globe.opticalQuality,'canvas-direct');
-  assert.throws(()=>draw(m,{atmosphere:'inverse-temperature'}),/supports/);
+  assert.equal(draw(m,{atmosphere:'inverse-temperature',occlusionRadius:R}).opticalQuality,
+    'canvas-direct');
   m.showModel=2;m.Update();
   const vacuum=draw(m),standard=draw(m,{atmosphere:'standard'});
   assert.equal(vacuum.opticalQuality,'canvas-direct');
@@ -159,7 +160,10 @@ test('Globe and Flat render Vacuum and Standard with independent signed curvatur
   assert.ok(standard.refractionK>0&&standard.effectiveRadiusMeters<0);
   assert.equal(standard.directStats.horizonMasks,0,
     'downward ray bending on Flat does not invent a geometric horizon');
-  assert.throws(()=>draw(m,{atmosphere:'inverse-temperature'}),/supports/);
+  const inverse=draw(m,{atmosphere:'inverse-temperature',occlusionRadius:R,
+    inverseProfile:{source:'standard',weight:1}});
+  assert.ok(inverse.effectiveRadiusMeters>0,'inverse Flat has positive virtual curvature');
+  assert.equal(inverse.directStats.horizonMasks,0,'Flat does not invent a certified horizon');
 });
 
 test('Flat signed-curvature painter bends object and ground guides in the observer frame',()=>{
@@ -208,7 +212,59 @@ test('Animation Preview routes explicit Canvas Direct without affecting Fast / A
   assert.equal(view.build(snap,'A',{quality:'auto',animationMode:'physical'}).quality,'accurate');
   assert.deepEqual(snap,previous);
 });
-test('Animation Studio rejects unsupported Canvas Direct atmospheres with explicit Accurate fallback',()=>{
+test('Canvas Direct supports all authored atmosphere profiles on Globe and Flat',()=>{
+  const atmospheric=require('../src/optics/OpticalRayTracer');
+  const effective=require('../src/optics/OpticalEffectiveRadiusPreview');
+  const temperatureProfile={temperatureC:12,pressureHpa:980,gradientKPerKm:-12};
+  const common={occlusionRadius:R,temperatureProfile,
+    transitionProfile:{source:'temperature-lapse',weight:.6},
+    inverseProfile:{source:'standard',weight:.7}};
+  const kinds=['vacuum','standard','temperature-lapse','profile-transition',
+    'inverse-temperature','inverse-spherical','exponential-occlusion'];
+  const m=soundly();
+  for(const shape of [1,2]){
+    m.showModel=shape;m.Update();
+    const original=JSON.stringify(m);
+    for(const kind of kinds){
+      const opts={...common,atmosphere:kind},p=effective.canvasDirectParameters(m,opts);
+      const profileOptions=kind==='temperature-lapse'?temperatureProfile:
+        kind==='profile-transition'?{temperatureProfile,transitionProfile:common.transitionProfile,occlusionRadius:R}:
+        kind==='inverse-temperature'?{temperatureProfile,inverseProfile:common.inverseProfile,occlusionRadius:R}:
+        {occlusionRadius:R};
+      const profile=atmospheric.atmosphere(kind,profileOptions),height=m.Height;
+      const expected=(shape===1?1/m.rEarth:0)+profile.dn(height)/profile.n(height);
+      assert.ok(Math.abs(p.effectiveCurvature-expected)<1e-17,`${shape} ${kind} local n'/n`);
+      const g=graph(true),result=renderer.renderPhysical(g.g,m,{...opts,
+        opticalQuality:'canvas-direct',deferDecorations:true,
+        canvasDirectOptions:{thinOutlines:true}});
+      assert.equal(result.opticalQuality,'canvas-direct',`${shape} ${kind}`);
+      assert.ok(result.drawn>=0&&Number.isFinite(result.timings.totalMs));
+      assert.ok(g.stats().events.every(e=>e.type!=='stroke'||e.width<=1));
+      assert.ok(g.stats().paintedPaths.concat(g.stats().strokedPaths.map(points=>({points})))
+        .every(path=>path.points.every(point=>point.every(Number.isFinite))),
+        `${shape} ${kind} finite Canvas paths`);
+      if(shape===2)assert.equal(result.directStats.horizonMasks,0,
+        'Flat approximation never claims a certified horizon');
+    }
+    assert.equal(JSON.stringify(m),original,'renderer leaves the authored model untouched');
+  }
+  assert.throws(()=>effective.parameters(m,{...common,atmosphere:'inverse-spherical'}),
+    /supports/,'explicit Effective Radius mode remains restricted');
+  assert.throws(()=>effective.canvasDirectParameters(m,{atmosphere:'inverse-temperature'}),
+    /occlusionRadius/,'missing profile parameters must not become Vacuum');
+});
+
+test('Canvas Direct signed Flat embedding supports positive and negative virtual curvature',()=>{
+  const eye=12,d=10000,h=20,positive=1/R,negative=-1/R;
+  const plane=direct.flatRefractionPoint(0,d,h,eye,0);
+  const upBending=direct.flatRefractionPoint(0,d,h,eye,positive);
+  const downBending=direct.flatRefractionPoint(0,d,h,eye,negative);
+  assert.ok(upBending[2]<plane[2]);
+  assert.ok(downBending[2]>plane[2]);
+  assert.ok([plane,upBending,downBending].every(row=>row.every(Number.isFinite)));
+});
+
+test('Animation Studio keeps all authored profiles in Canvas Direct and falls back only when unrepresentable',()=>{
   const m=soundly(),base={occlusionRadius:R,preset:'soundly',resetPreset:'soundly'};
   const comparison=compare.preset('globe-flat-vacuum');
   const display={mode:'scene',eyeLevel:false,horizon:false,selected:'A'};
@@ -217,23 +273,31 @@ test('Animation Studio rejects unsupported Canvas Direct atmospheres with explic
   const view=preview.create({Model:FakeModel,renderer:{renderPhysical(_g,_m,options){
     calls.push(options.opticalQuality);return {drawn:5};
   }}});
-  const directScene=experiment.capture(m,{...base,atmosphere:'standard'},comparison,display);
-  assert.equal(view.render(directScene,'A',{Canvas:{}},{quality:'canvas-direct'}).quality,
-    'canvas-direct','Globe Standard remains supported');
-  const unsupported=experiment.capture(m,{...base,atmosphere:'inverse-temperature'},comparison,display);
-  const before=structuredClone(unsupported);
-  const result=view.render(unsupported,'A',{Canvas:{}},{quality:'canvas-direct'});
-  assert.equal(result.requestedQuality,'canvas-direct');
-  assert.equal(result.quality,'accurate');
-  assert.match(result.fallback,/Canvas Direct unavailable.*supports Vacuum, Standard/);
-  assert.equal(calls.at(-1),'accurate');
-  assert.deepEqual(unsupported,before,'fallback does not rewrite authored atmosphere');
+  for(const kind of ['standard','profile-transition','inverse-temperature',
+    'inverse-spherical','exponential-occlusion']){
+    const snapshot=experiment.capture(m,{...base,atmosphere:kind},comparison,display);
+    const before=structuredClone(snapshot);
+    const result=view.render(snapshot,'A',{Canvas:{}},{quality:'canvas-direct'});
+    assert.equal(result.quality,'canvas-direct',kind);
+    assert.equal(result.fallback,null,kind);
+    assert.equal(calls.at(-1),'canvas-direct');
+    assert.deepEqual(snapshot,before,'no atmosphere or project mutation');
+  }
   m.showModel=2;m.Update();
-  const flat=experiment.capture(m,{...base,atmosphere:'standard'},comparison,display);
-  const flatResult=view.render(flat,'A',{Canvas:{}},{quality:'canvas-direct'});
-  assert.equal(flatResult.quality,'canvas-direct');
-  assert.equal(flatResult.fallback,null);
-  assert.equal(view.render(flat,'A',{Canvas:{}},{quality:'accurate'}).fallback,null);
+  for(const kind of ['standard','inverse-spherical','exponential-occlusion']){
+    const snap=experiment.capture(m,{...base,atmosphere:kind},comparison,display);
+    assert.equal(view.render(snap,'A',{Canvas:{}},{quality:'canvas-direct'}).quality,
+      'canvas-direct',`Flat ${kind}`);
+  }
+  // An enormous, but valid, Globe radius makes standard refraction overbend
+  // the surface. An unrepresentable virtual globe must still fail closed.
+  m.showModel=1;m.rEarth=1e13;m.Update();
+  const extreme=experiment.capture(m,{...base,atmosphere:'standard'},comparison,display);
+  const fallback=view.render(extreme,'A',{Canvas:{}},{quality:'canvas-direct'});
+  assert.equal(fallback.requestedQuality,'canvas-direct');
+  assert.equal(fallback.quality,'accurate');
+  assert.match(fallback.fallback,/Canvas Direct unavailable/);
+  assert.equal(calls.at(-1),'accurate');
 });
 
 test('browser script order and Modern-only isolation of Canvas Direct',()=>{

@@ -97,9 +97,9 @@ function harness(options={}){
     CurvatureModernCameraInteraction:interaction,
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
     CurvatureModernCameraCanvasDirectDrag:options.direct?require('../src/ui/modern/ModernCameraCanvasDirectDrag'):null,
-    CurvatureOpticalEffectiveRadiusPreview:options.direct?{parameters(m,spec){
+    CurvatureOpticalEffectiveRadiusPreview:options.direct?{canvasDirectParameters(m,spec){
       if(options.rejectDirect&&options.rejectDirect(m,spec))throw RangeError('Atmosphere unsupported');
-      return require('../src/optics/OpticalEffectiveRadiusPreview').parameters(m,spec);
+      return require('../src/optics/OpticalEffectiveRadiusPreview').canvasDirectParameters(m,spec);
     }}:null,
     CurvatureModernCameraPerspectiveWarp:options.perspective?require('../src/ui/modern/ModernCameraPerspectiveWarp'):null,
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
@@ -589,6 +589,27 @@ test('Canvas Direct: default Globe/Flat Standard Compare now previews both sides
   assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
 });
 
+test('Canvas Direct: Globe/Flat inverse Compare uses both physical profiles during motion',()=>{
+  const h=harness({deferred:true,direct:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const select=h.nodes.get('ModernPairPreset');select.value='flat-inverse';
+  select.listeners.change.call(select);h.flush();
+  const before=h.draws.length,c=h.canvases.B;
+  c.emit('pointerdown',{pointerId:9});
+  c.emit('pointermove',{pointerId:9,clientX:95,clientY:103});h.flush();
+  assert.equal(h.draws.length,before+2);
+  const a=h.draws.at(-2),b=h.draws.at(-1);
+  assert.equal(a.opt.opticalQuality,'canvas-direct');
+  assert.equal(b.opt.opticalQuality,'canvas-direct');
+  assert.equal(a.opt.atmosphere,'standard');
+  assert.equal(b.opt.atmosphere,'inverse-spherical');
+  assert.equal(b.m.showModel,2);
+  assert.equal(b.opt.occlusionRadius,6371000);
+  assert.equal(a.camera.Pan,b.camera.Pan);
+  c.emit('pointerup',{pointerId:9,clientX:95,clientY:103});h.flush();
+  assert.equal(h.draws.at(-2).opt.opticalQuality,'accurate');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
 test('Canvas Direct: Compare rejects an unsupported side without partially drawing A',()=>{
   const h=harness({deferred:true,direct:true,
     rejectDirect:(m,spec)=>m.showModel===2&&spec.atmosphere==='standard'});h.flush();
