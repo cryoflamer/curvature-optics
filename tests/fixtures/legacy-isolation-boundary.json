@@ -643,6 +643,7 @@
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernDemoCatalog.test.js",
         "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
@@ -803,6 +804,7 @@
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernCameraSpline.test.js",
+        "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernDemoCatalog.test.js",
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernTargetIndicator.test.js"
@@ -923,6 +925,7 @@
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernAnimationVideoLayoutOptions.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
+        "tests/ModernDemoCatalog.test.js",
         "tests/ModernTargetIndicator.test.js"
       ],
       "commonJsToolCallers": []
@@ -981,6 +984,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernDemoCatalog.test.js"
       ],
       "commonJsToolCallers": [

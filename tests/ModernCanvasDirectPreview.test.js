@@ -25,7 +25,7 @@ function graph(trackPaths=false){
   const called={beginPath:0,moveTo:0,lineTo:0,closePath:0,fill:0,stroke:0,
     clip:0,clearRect:0,fillRect:0,drawImage:0};
   const fillColors=[],paintedPaths=[],strokedPaths=[],events=[];
-  const ctx={save(){},restore(){},setTransform(){},
+  const ctx={save(){},restore(){},setTransform(){},fillText(){},measureText(){return {width:20};},
     fillRect(){called.fillRect++;},clearRect(){called.clearRect++;},
     beginPath(){called.beginPath++;paths++;if(trackPaths)activePath=[];},
     moveTo(x,y){called.moveTo++;if(trackPaths)activePath.push([x,y]);},
@@ -549,5 +549,28 @@ test('Studio does not hide unrelated RangeErrors or failed authoritative fallbac
     }}});
     assert.throws(()=>studio.render(snapshot,'A',{Canvas:{}},{quality:'canvas-direct'}),/unrelated renderer error/);
     assert.deepEqual(calls,declared?['canvas-direct','accurate']:['canvas-direct']);
+  }
+});
+
+test('the shipped Soundly Compare sequence renders both independent models from one camera sample',()=>{
+  const p=require('../src/animation/ModernDemoCatalog').load()[0].project;
+  const projects=require('../src/animation/ModernAnimationProject');
+  const Model=function(){return model();};
+  const view=preview.create({Model,renderer});
+  const graphs={A:graph().g,B:graph().g};
+  const times=new Set([0,59100,23640]);
+  projects.timeline(p).forEach(f=>{times.add(f.arrivalMs);times.add(f.departureMs);});
+  for(const t of times){
+    const s=projects.sampleAt(p,t);
+    const a=view.render(s,'A',graphs.A,{quality:'canvas-direct'});
+    const b=view.render(s,'B',graphs.B,{quality:'canvas-direct'});
+    assert.notEqual(a.cameraModel,b.cameraModel);
+    assert.equal(a.cameraModel.showModel,1);assert.equal(b.cameraModel.showModel,2);
+    for(const k of Object.keys(s.scene.camera))assert.equal(a.cameraModel[k],b.cameraModel[k],k);
+    for(const side of [a,b]){
+      assert.equal(side.quality,'canvas-direct',`t=${t}: ${side.fallback}`);
+      assert.equal(side.result.previewLod.original,128);
+      assert.equal(side.result.previewLod.selected,128);
+    }
   }
 });

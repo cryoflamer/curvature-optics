@@ -22,7 +22,7 @@ function harness(){
   let observerCallback=null;
   const node=name=>{
     if(!elements.has(name))elements.set(name,{hidden:name!=='ModernAnimationStudioMessage',textContent:'',
-      classList:{add(){}},getBoundingClientRect(){return {width};}});
+      classList:{add(){},toggle(){}},getBoundingClientRect(){return {width};}});
     return elements.get(name);
   };
   const context={

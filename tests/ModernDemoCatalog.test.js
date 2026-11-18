@@ -24,12 +24,18 @@ test('shipped Soundly is the original export, with its complete camera trajector
   const [demo]=catalog.load();
   assert.equal(demo.id,'soundly');
   assert.notEqual(demo.id,demo.project.id);
-  assert.deepEqual(demo.project,library.parsePortable(source)[0].project);
+  const authored=library.parsePortable(source)[0].project;
+  assert.equal(authored.baseExperiment.display.mode,'scene');
+  assert.equal(authored.contract.referenceExperiment.display.mode,'scene');
+  const expected=structuredClone(authored);
+  expected.baseExperiment.display.mode='compare';
+  expected.contract.referenceExperiment.display.mode='compare';
+  assert.deepEqual(demo.project,expected);
   assert.equal(demo.quality,'canvas-direct');
   assert.equal(library.parsePortable(source)[0].quality,'auto');
   assert.equal(demo.project.keyframes.length,9);
   assert.equal(demo.project.interpolation,'spline');
-  assert.equal(demo.project.baseExperiment.display.mode,'scene');
+  assert.equal(demo.project.baseExperiment.display.mode,'compare');
   assert.equal(projects.totalMs(demo.project),59100);
   assert.equal(demo.project.baseExperiment.compare.A.surface,'globe');
   assert.equal(demo.project.baseExperiment.compare.B.surface,'flat');
@@ -157,4 +163,39 @@ test('built-in Auto defaults to Canvas Direct without overwriting explicitly aut
     const data=cloneSource();data.animations[0].quality=quality;
     assert.equal(parse([soundly],()=>JSON.stringify(data))[0].quality,quality==='auto'?'canvas-direct':quality);
   }
+});
+
+test('catalog display override validates scope and preserves all authored camera samples',()=>{
+  const authored=library.parsePortable(source)[0].project;
+  const [demo]=catalog.load();
+  assert.throws(()=>parse([{...soundly,displayMode:'wrong'}]),/Invalid built-in demo display mode/);
+  const nonCamera=cloneSource();
+  const p=nonCamera.animations[0].project;
+  p.mode=p.contract.mode='physical';p.target=p.contract.target={scope:'scene',parameter:'surface.curvature'};
+  p.interpolation='linear';p.keyframes=p.keyframes.map(f=>({...f,value:1/6371000}));
+  assert.throws(()=>parse([{...soundly,displayMode:'compare'}],()=>JSON.stringify(nonCamera)),/Display override requires a Camera project/);
+  const original=parse([soundly])[0].project;
+  assert.deepEqual(original,authored);
+  for(let t=0;t<=59100;t+=100){
+    const expected=projects.sampleAt(authored,t);
+    expected.display.mode='compare';
+    assert.deepEqual(projects.sampleAt(demo.project,t),expected);
+  }
+});
+
+test('Soundly Compare export plans keep both models on the authored timeline',()=>{
+  const [demo]=catalog.load();
+  const p=demo.project;
+  const png=require('../src/animation/ModernAnimationFrameExport').plan(p,{fps:10});
+  const video=require('../src/animation/ModernAnimationVideoPipeline');
+  assert.deepEqual(png.sides,['A','B']);
+  assert.equal(png.timesMs.at(-1),59100);
+  for(const compareLayout of ['side-by-side','separate']){
+    const v=video.plan(p,{fps:25,compareLayout});
+    assert.deepEqual(v.sides,['A','B']);
+    assert.deepEqual(v.outputSides,compareLayout==='separate'?['A','B']:['COMBINED']);
+    assert.equal(v.frames.at(-1).sampleTimeMs,59100);
+  }
+  const [portable]=library.parsePortable(catalog.exportDemo('soundly'));
+  assert.deepEqual(portable.project,p);
 });

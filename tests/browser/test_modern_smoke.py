@@ -150,7 +150,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             };
         }""")
         self.assertEqual(result, {'ids': ['soundly'], 'frames': 9,
-                                  'duration': 59100, 'frozen': True, 'display': 'scene'})
+                                  'duration': 59100, 'frozen': True, 'display': 'compare'})
 
     def test_shipped_demo_catalog_http(self):
         self.open_modern()
@@ -160,6 +160,31 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Local classic script resources must work without fetch(file://).
         self.page.goto((ROOT / 'CurvatureModern.html').as_uri(), wait_until='load', timeout=30000)
         self.assert_shipped_demo_catalog()
+
+    def test_soundly_compare_playback_seek_and_restart(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        stage = self.page.locator('#ModernAnimationPlaybackStage')
+        expect(stage).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · vacuum')
+        expect(self.page.locator('#ModernAnimationPlaybackLabelB')).to_have_text('Model B · Flat · vacuum')
+        expect(self.page.locator('#ModernAnimationPlaybackViewB')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackOptics')).to_have_value('canvas-direct')
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('B: canvas-direct', timeout=30000)
+        seek = self.page.locator('#ModernAnimationPlaybackSeek')
+        seek.evaluate("el => { el.value = 400; el.dispatchEvent(new Event('input', {bubbles:true})); }")
+        expect(diag).to_contain_text('Rendered t=23.64s')
+        self.page.locator('#ModernAnimationPlaybackPlay').click()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback().positionMs > 23640')
+        self.page.locator('#ModernAnimationPlaybackPause').click()
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        self.page.locator('#ModernAnimationPlaybackStop').click()
+        expect(diag).to_contain_text('Rendered t=0.00s')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 0)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
     def test_builtin_demo_readonly_copy_and_reload(self):
         self.open_modern()

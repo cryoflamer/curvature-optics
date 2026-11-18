@@ -22,8 +22,10 @@ presentation mode. The first Soundly portable JSON and read-only catalog now
 ship with Modern; open Soundly from the Built-in Demos card gallery
 in Animation Library, then play or close it with the existing controls. Each
 demo card offers direct copy and portable export. My Projects retains independent
-backup selection and shows inherited covers before thumbnails. Cover editing
-is the next step; browser acceptance remains open.
+backup selection and shows inherited covers before thumbnails. Personal cover
+editing is implemented. Soundly plays synchronized Globe/Flat vacuum Compare
+with Canvas Direct by default; the original Scene JSON is preserved.
+Presentation Mode is next; browser acceptance remains open.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

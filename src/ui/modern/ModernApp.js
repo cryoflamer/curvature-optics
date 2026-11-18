@@ -2279,7 +2279,7 @@
   function cancelStudioInitialPaint(){
     if(studioPreviewLifecycle)studioPreviewLifecycle.cancel();
   }
-  function studioFrameLoading(loading,message){
+  function studioFrameLoading(loading,message,failed){
     // Never leave the previous frame's coordinates visible over a loading notice.
     if(loading&&typeof studioCameraHud!=='undefined'&&studioCameraHud)
       studioCameraHud.hideAll();
@@ -2287,7 +2287,8 @@
       studioTargetIndicator.hideAll();
     ['A','B'].forEach(function(side){
       var notice=newUiEl('ModernAnimationFrameLoading'+side);
-      if(notice){notice.hidden=!loading;if(loading)notice.textContent=message;}
+      if(notice){notice.hidden=!loading;notice.classList.toggle('is-failed',!!failed);
+        if(loading)notice.textContent=message;}
     });
   }
   function scheduleStudioInitialPaint(reason){
@@ -2338,7 +2339,7 @@
             root.CurvatureModernStatusMessage.decorate(ready,'success');}
       },
       failed:function(error){
-        studioFrameLoading(true,'Physical frame unavailable · use Retry frame');
+        studioFrameLoading(true,'Physical frame unavailable · use Retry frame',true);
         var failed=newUiEl('ModernAnimationPlaybackStatus');
         if(failed){failed.textContent='Unable to render frame: '+error.message+' · Retry frame is available.';
           if(root.CurvatureModernStatusMessage)
@@ -2391,7 +2392,14 @@
     if(panels)panels.classList.toggle('is-compare',isCompare);
     var second=newUiEl('ModernAnimationPlaybackViewB');if(second)second.hidden=!isCompare;
     var label=newUiEl('ModernAnimationPlaybackLabelA');
-    if(label)label.textContent=isCompare?'Model A':'Scene';
+    function modelLabel(side){
+      var spec=sampled.compare&&sampled.compare[side];
+      return 'Model '+side+(spec?' · '+(spec.surface==='flat'?'Flat':'Globe')+
+        ' · '+spec.atmosphere:'');
+    }
+    if(label)label.textContent=isCompare?modelLabel('A'):'Scene';
+    var labelB=newUiEl('ModernAnimationPlaybackLabelB');
+    if(labelB)labelB.textContent=modelLabel('B');
     var graphs=root.CurvatureModernAnimationGraphs;
     var thinOutlines=newUiEl('ModernCanvasDirectThinOutlines');
     var renderOptions={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
@@ -2399,16 +2407,24 @@
       animationMode:studioPrepared.mode};
     var begun=profileNow();
     studioPlaybackRenderedAt=null; // Failed or partial frames must not be captured.
-    var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
-    var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
-    // Never display mixed approximate/Accurate optics in Compare when either
-    // side rejects the requested preview (e.g. refracted Flat or unsupported k).
-    if(b&&(a.fallback||b.fallback)&&a.quality!==b.quality&&
-      (a.quality==='accurate'||b.quality==='accurate')){
-      var exactOptions={quality:'accurate',sceneDetail:studioPlaybackDetail,
-        animationMode:studioPrepared.mode};
-      if(a.quality!=='accurate')a=studioPreviewRenderer.render(sampled,'A',graphs.A,exactOptions);
-      if(b.quality!=='accurate')b=studioPreviewRenderer.render(sampled,'B',graphs.B,exactOptions);
+    var a,b;
+    try{
+      a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
+      b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
+      // Never display mixed approximate/Accurate optics in Compare when either
+      // side rejects the requested preview (e.g. refracted Flat or unsupported k).
+      if(b&&(a.fallback||b.fallback)&&a.quality!==b.quality&&
+        (a.quality==='accurate'||b.quality==='accurate')){
+        var exactOptions={quality:'accurate',sceneDetail:studioPlaybackDetail,
+          animationMode:studioPrepared.mode};
+        if(a.quality!=='accurate')a=studioPreviewRenderer.render(sampled,'A',graphs.A,exactOptions);
+        if(b.quality!=='accurate')b=studioPreviewRenderer.render(sampled,'B',graphs.B,exactOptions);
+      }
+    }catch(error){
+      // A succeeded / B failed is not a valid comparison. Cover both stale
+      // or partial canvases until the next successful paired render.
+      studioFrameLoading(true,'Physical frame unavailable · use Retry frame',true);
+      throw error;
     }
     syncStudioCameraHud(a,b,graphs,isCompare);
     var spent=profileNow()-begun; // includes any Accurate redraw after a B fallback

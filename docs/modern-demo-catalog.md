@@ -1,8 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 3A (Project Cover Editor)**, 2026-11-18. Catalog,
+Status: **patch 4 (Compare Playback)**, 2026-11-18. Catalog,
 Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate built-in and personal galleries are implemented. The active next step is patch 4 (Compare Playback); browser acceptance remains open.
+Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. The active next implementation step is patch 5 (Presentation Mode); browser acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -67,7 +67,11 @@ trusted runtime/catalog metadata, not an editable field in imported JSON.
   identify the demo and file; validation is all-or-nothing. Loaded entries
   are deeply frozen and owned, with `id`, `asset`, `project`, `quality`,
   `thumbnail`, `createdAt` and `updatedAt`. Browser-local History IDs are
-  cleared in the runtime project only; original JSON remains unchanged.
+  cleared in the runtime project only; original JSON remains unchanged. Optional manifest `displayMode`
+  (`scene` or `compare`) may explicitly adapt a Camera project. The catalog
+  validates both the owned base and contract reference with the same display
+  mode. Changing a non-Camera project's display scope is rejected; projects
+  without an override retain the authored mode.
 - Static HTTP is the documented normal launch, but local `file://` routing
   is retained where supported. Fetch of a JSON file is unreliable there.
   `tools/build-modern-demo-catalog.js` validates the manifest and actual
@@ -127,8 +131,8 @@ outside current supported playback contracts.
 User-supplied `curvature-animation.json` (2026-11-18, SHA-256
 `1d404662096922477329db126f8eac207bc45785f9cebaf078a56e8db1a214bb`).
 Patch 1 ships this export byte-for-byte as `demos/modern/soundly.json`.
-The SHA-256 and Scene mode are pinned by focused tests; no Compare rewrite or
-new thumbnails have been introduced.
+The SHA-256 and authored Scene mode remain pinned by focused tests. Patch 4
+selects Compare in the catalog manifest, not in the source JSON.
 
 - `Soundly Causeway · Bridge Camera Study`, v2 Camera, spline, Auto quality,
   nine keyframes, 59,100 ms including holds, fixed 128 bridge sections.
@@ -137,7 +141,8 @@ new thumbnails have been introduced.
   pixel matches. Geometry anchored to K12; opposite camera motion approximates
   Legacy bridge relocations. Commentary and redundant transitions omitted.
 - Scene starts Globe/vacuum; dormant Compare is already A Globe/vacuum,
-  B Flat/vacuum. Both reference display modes currently equal `scene`.
+  B Flat/vacuum. Both authored reference display modes equal `scene`; the runtime catalog
+  sets both to `compare`.
 - Patch 0 executed the existing parsePortable, ready and totalMs APIs on the
   original export: valid, ready, 59,100 ms. A detached in-memory copy changing
   both baseExperiment.display.mode and contract.referenceExperiment.display.mode
@@ -167,7 +172,7 @@ record the split, and do not mark complete on implementation alone.
 | 2B — Project Lifecycle integration | Implemented; browser gate open | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
 | 3 — Studio Catalog UI | Implemented; browser gate open | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
 | 3A — Project Cover Editor | Implemented; browser gate open | Upload, capture current frame, replace/remove and portable round-trip for user projects. Cover-first display and thumbnail fallback are already implemented in patch 3. |
-| 4 — Compare Playback | Next | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
+| 4 — Compare Playback | Implemented; browser gate open | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Planned | Optional keyframe title/description or explicit narrative timing if required, deterministic behavior at holds/transitions/seeks, escaped text, old JSON unchanged in behavior, round-trip through Studio/drafts/export and presentation. Decide transition caption policy before implementation. |
 | 7 — Soundly Finalization | Planned | Author final storyboard/captions and catalog presentation, verify both models, source provenance, browser/Opera smoothness, controls, copy/export/reimport; document observed accuracy limits. Tag only after CI/manual acceptance. First completed public demo milestone. |
@@ -286,3 +291,37 @@ and both boundary checks passed. Isolated Chromium decoded and re-encoded
 Soundly's PNG and composited two real canvases. The new full-page browser smoke
 case was attempted but blocked at navigation (ERR_BLOCKED_BY_ADMINISTRATOR);
 CI/Opera acceptance is still required.
+
+
+### Synchronized Soundly comparison (patch 4)
+
+The manifest selects `displayMode: "compare"` for Soundly; the runtime
+project and contract reference are validated together. Open, Create copy and
+portable export use this same detached Compare project. The byte-identical
+Soundly authoring source remains Scene/Auto, with its original description
+(provenance of the globe-only study), camera trajectory, spline and timing.
+A generic Scene/Compare editor toggle is not introduced in this patch; the
+project's authored reference remains locked in the existing editor.
+
+The existing player samples one time for both A/B models and renders within
+one synchronous paint. Labels identify the actual surface and atmosphere.
+Canvas Direct is used by default; the existing paired Accurate fallback is
+retained. If either paint throws, opaque failure notices cover both canvases
+and rendered time stays invalid until a successful retry. A frame cannot be
+captured while the pair is incomplete. PNG/video export remains Accurate,
+with the existing A/B and combined/separate plans and exact endpoint.
+
+Evidence: test every 100 ms of the 59.1 s trajectory against the original
+Camera sample, all keyframe arrival/departure points through the production
+Canvas Direct renderer (mock drawing context), and shared clock, failure,
+retry, export/reimport and fallback regression paths. Isolated Chromium with
+real 800 × 500 canvases and production Studio Preview renderer rendered nine
+selected times (A and B), both Canvas Direct and Accurate. After compositing
+transparent pixels onto white, 0.71–2.57% of pixels differed by more than 20
+in any RGB channel; this includes styling/decorations and is not a bound on
+physical projection error. Sixty separately timed pairs along the trajectory
+had median 13.4 ms and p95 29.0 ms in that environment. This is synchronous
+render cost, not measured live playback FPS, and is not an Opera guarantee.
+Full-page smoke for opening, seeking, play/pause and restart was attempted
+but navigation was blocked (ERR_BLOCKED_BY_ADMINISTRATOR). Manual Opera/CI
+acceptance, actual FPS and broader numerical qualification remain open.

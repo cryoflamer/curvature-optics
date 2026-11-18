@@ -7,8 +7,10 @@ origin/read-only status belongs to trusted catalog/lifecycle metadata rather
 than a new animation mode. Patch 1 ships the validated catalog API and original
 Soundly source; patch 2B connects it to detached Studio playback and independent
 copy/export, without serializing built-ins as editable workspace drafts.
-Scene/Compare adaptation must preserve reference equality and valid physical
-target scope; optional narrative support is a later compatibility
+Patch 4 uses an explicit catalog `displayMode` override for Camera projects,
+validating both base and contract reference, preserving the source and
+rejecting changes of non-Camera display scope. Scene/Compare adaptation must
+preserve reference equality and valid physical target scope; optional narrative support is a later compatibility
 change.
 
 A **contract** is a prospective agreement about which History snapshots may be

@@ -11,7 +11,7 @@ const html=fs.readFileSync(path.join(__dirname,'../CurvatureModern.html'),'utf8'
 
 function rendererHarness(target='60',options={}){
   let time=1000,playing=true,renderCost=14;
-  const paints=[],nodes=new Map();
+  const paints=[],nodes=new Map(),loading=[],samples=[];
   function node(id){
     if(!nodes.has(id))nodes.set(id,{textContent:'',hidden:false,checked:true,
       classList:{toggle(){}}});
@@ -19,7 +19,7 @@ function rendererHarness(target='60',options={}){
   }
   const graph=()=>({Canvas:{width:900,height:600}});
   const graphs={A:graph(),B:graph()};
-  const fakeRenderer={render(sample,side,graph,opts){paints.push(time);time+=renderCost;
+  const fakeRenderer={render(sample,side,graph,opts){paints.push(time);samples.push({sample,side});time+=renderCost;
     return options.render?options.render(side,opts):
       {quality:'canvas-direct',result:{drawn:128},overlays:{}};}};
   const meter=controls.createPreviewFpsMeter();
@@ -36,13 +36,13 @@ function rendererHarness(target='60',options={}){
     studioPlaybackApi:{describeSample:()=>''},
     root:{CurvatureModernAnimationGraphs:graphs},
     profileNow:()=>time,newUiEl:node,attachStudioPreviewGraphs:()=>true,
-    syncStudioCameraHud(){},studioFrameLoading(){}
+    syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); }
   });
   const start=app.indexOf('  function renderStudioPlaybackSample(force){');
   const end=app.indexOf('  function syncStudioQualitySummary(){',start);
   assert.ok(start>0&&end>start,'extract real renderer orchestration');
   vm.runInContext(app.slice(start,end)+'\nthis.paint=renderStudioPlaybackSample;',context);
-  return {context,meter,paints,node,
+  return {context,meter,paints,node,loading,samples,
     frame(at,forced=false){time=at;context.paint(forced);},
     playing(value){playing=value;},
     cost(value){renderCost=value;}};
@@ -139,4 +139,20 @@ test('Compare falls back atomically to Accurate if either side cannot use Canvas
     assert.match(h.node('ModernAnimationPlaybackDiagnostics').textContent,
       /Preview fallback: Canvas Direct unavailable/);
   }
+});
+
+test('paired playback uses one owned sample and masks partial frames on a B failure',()=>{
+  let fail=true;
+  const h=rendererHarness('auto',{compare:true,render(side,opts){
+    if(side==='B'&&fail)throw Error('failed B');
+    return {quality:opts.quality,result:{},overlays:{}};
+  }});
+  assert.throws(()=>h.frame(1000,true),/failed B/);
+  assert.equal(h.context.studioPlaybackRenderedAt,null);
+  assert.equal(h.loading.at(-1),true);
+  assert.strictEqual(h.samples[0].sample,h.samples[1].sample);
+  fail=false;h.frame(1200,true);
+  assert.equal(h.context.studioPlaybackRenderedAt,200);
+  assert.equal(h.loading.at(-1),false);
+  assert.strictEqual(h.samples[2].sample,h.samples[3].sample);
 });

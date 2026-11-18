@@ -1,3 +1,14 @@
+## Modern Demo Catalog — synchronized Compare playback (4)
+
+Soundly opens in Globe/vacuum vs Flat/vacuum Compare with Canvas Direct
+by default. The manifest overrides the Camera display mode on the detached
+validated project and contract; the source JSON and all keyframes remain
+unchanged. Copies and portable export use Compare. Existing shared clock,
+paired fallback and Accurate exports are reused. Both canvases are covered
+by an opaque error notice if a paired paint fails. Isolated real Canvas
+checks passed at nine representative times; full-page browser acceptance
+and actual FPS remain open. Presentation Mode is next.
+
 ## Modern Demo Catalog — project cover editor (3A)
 
 Personal saved projects now support uploading/replacing a bounded raster cover,
@@ -18,13 +29,13 @@ backup selection. Details still inspect physical data. No editable actions on
 built-ins; browser acceptance remains open.
 
 > **Current roadmap — Modern built-in demonstrations (2026-11-18):**
-> Patches 0, 1, 2A, 2B, 3 and 3A implemented; see
+> Patches 0, 1, 2A, 2B, 3, 3A and 4 implemented; see
 > [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
-> Soundly: 9 frames, 59.1 s, spline, Globe/vacuum Scene; Compare reference
-> compatibility was previously validated, synchronized playback is not yet
-> verified. Catalog loading requires no IndexedDB or fetch. Working cover
+> Soundly: 9 frames, 59.1 s, spline, Globe/Flat vacuum Compare; source
+> Scene JSON is preserved. Synchronized sample/render paths are tested;
+> real full-page playback remains to be accepted. Catalog loading requires no IndexedDB or fetch. Working cover
 > rights remain unverified. CI/Opera browser gate is open.
-> **NEXT: patch 4 — Compare Playback.**
+> **NEXT: patch 5 — Presentation Mode (browser acceptance still open).**
 > User reported green CI after the obsolete profiler-test cleanup; tag
 > relocation has not been independently verified. Stage 5D remains deferred;
 > extreme fallback and measured FPS remain open. The Canvas Direct notes

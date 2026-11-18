@@ -36,11 +36,14 @@
       throw Error('Unsupported built-in demo catalog');
     var ids=new Set(),assets=new Set();
     return Object.freeze(manifest.demos.map(function(entry){
-      if(!(shape(entry,'asset,id')||shape(entry,'asset,cover,id'))||typeof entry.id!=='string'||
+      if(!(shape(entry,'asset,id')||shape(entry,'asset,cover,id')||
+        shape(entry,'asset,displayMode,id')||shape(entry,'asset,cover,displayMode,id'))||typeof entry.id!=='string'||
         !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.id)||entry.id.length>80||
         typeof entry.asset!=='string'||
         !/^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/.test(entry.asset)||entry.asset==='catalog.json')
         throw Error('Invalid built-in demo catalog entry');
+      if(entry.displayMode!==undefined&&!['scene','compare'].includes(entry.displayMode))
+        throw Error('Invalid built-in demo display mode');
       if(ids.has(entry.id))throw Error('Duplicate built-in demo ID: '+entry.id);
       if(assets.has(entry.asset))throw Error('Duplicate built-in demo asset: '+entry.asset);
       if(entry.cover!==undefined&&(!shape(entry.cover,'asset,source,status')||
@@ -48,7 +51,8 @@
         typeof entry.cover.source!=='string'||entry.cover.status!=='unverified'))
         throw Error('Invalid built-in demo cover');
       ids.add(entry.id);assets.add(entry.asset);
-      return deepFreeze({id:entry.id,asset:entry.asset,cover:entry.cover?Object.assign({},entry.cover):null});
+      return deepFreeze({id:entry.id,asset:entry.asset,displayMode:entry.displayMode||null,
+        cover:entry.cover?Object.assign({},entry.cover):null});
     }));
   }
   // Atomic validation: the caller gets a complete ordered catalog or an error,
@@ -71,6 +75,16 @@
         project=projects.validate(Object.assign({},project,{keyframes:project.keyframes.map(function(frame){
           return Object.assign({},frame,{sourceSnapshotId:null});
         })}));
+        // A catalog presentation override is explicit and applies only to Camera.
+        // Physical contracts bind their target to the authored display scope.
+        if(entry.displayMode&&entry.displayMode!==project.baseExperiment.display.mode){
+          if(project.mode!=='camera')throw Error('Display override requires a Camera project');
+          var base=Object.assign({},project.baseExperiment,{display:Object.assign({},
+            project.baseExperiment.display,{mode:entry.displayMode})});
+          var variant=Object.assign({},project,{baseExperiment:base});
+          if(project.contract)variant.contract=Object.assign({},project.contract,{referenceExperiment:base});
+          project=projects.validate(variant);
+        }
         return deepFreeze({id:entry.id,asset:entry.asset,project:project,
           cover:entry.cover,quality:item.quality==='auto'?'canvas-direct':item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
           updatedAt:item.updatedAt});

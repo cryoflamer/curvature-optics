@@ -5,6 +5,7 @@
     {
       "id": "soundly",
       "asset": "soundly.json",
+      "displayMode": "compare",
       "cover": {
         "asset": "covers/soundly.png",
         "source": "User-supplied video still found via Google; original source unknown",
