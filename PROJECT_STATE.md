@@ -40,6 +40,13 @@
 > routes; no change to optics, quality preferences, interaction timing or
 > exports. Validation: all 304 Node test files (1766/1766 across seven shards),
 > both static isolation audits and the 136-test refactor closure gate passed.
+> **Browser CI cleanup:** the retired playback profiler smoke test was removed
+> (profiler deletion: `59139bc`); two obsolete manual timing instructions
+> now point to retained Actual FPS telemetry. Other browser smoke tests and
+> independent quality-audit profiling remain intact. Targeted Node tests:
+> 14/14 passed. All nine remaining Chromium smoke tests were attempted locally
+> but navigation was blocked by the environment (`ERR_BLOCKED_BY_ADMINISTRATOR`);
+> GitHub Actions verification remains required before tagging.
 > **NEXT:** manual Opera regression (Scene/Compare pointer, wheel, keyboard,
 > Camera Animation, Studio and unsupported-case fallback). Stage 5D was
 > deferred at the user's request to proceed to cleanup; representative

@@ -460,9 +460,9 @@ saved experiments.
 3. Inspect the low observer-height near-horizon interval and the final four
    reference camera views. Look for gaps, false bridge fills and misplaced
    support outlines. Compare important still frames with Accurate RK4.
-4. Read `frame N ms` in Playback diagnostics, and the frame profiler p50/p95.
-   The status also shows local `k` for Effective Radius. Warm up both modes
-   before judging performance. Node synthetic-Canvas measurements are not
+4. Read the **Actual FPS** output during playback with the same Preview FPS
+   setting. Warm up both modes before judging performance. The temporary
+   playback profiler was removed; Node synthetic-Canvas measurements are not
    proof of browser FPS, and the 20–30 FPS target is not yet validated.
 
 The first patch intentionally changes **only** Animation Playback. Do not
@@ -522,9 +522,9 @@ does not drop the joined Soundly bridge packages in Canvas Direct.
 and camera in Effective Radius and Canvas Direct, including heights 3 m and
 8–11 m, plus the four photo reference frames. Check that the continuous
 bridge deck, foreground supports and horizon mask stay coherent while moving.
-Playback diagnostics provide total frame milliseconds; the frame profiler
-collects cold/warm time and Canvas Direct sample counts. Node/Skia benchmarks
-are diagnostic only and do not establish browser FPS. The target remains
+Use the retained Actual FPS output during playback with the same Preview FPS
+setting. The temporary playback profiler and detailed timing UI were removed.
+Node/Skia benchmarks are diagnostic only and do not establish browser FPS. The target remains
 ≤50 ms/frame, ideally ≤33 ms, on the user's actual browser, not a guarantee.
 
 ### Canvas Direct: Soundly paint-mode and degenerate-edge correction

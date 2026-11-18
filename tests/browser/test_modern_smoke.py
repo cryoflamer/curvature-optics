@@ -143,31 +143,6 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_animation()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
-    def test_playback_profiler_is_opt_in_and_browser_wired(self):
-        self.open_modern()
-        self.open_animation()
-        state = self.page.evaluate("""() => ({
-            available: !!window.CurvatureModernAnimationPlaybackProfiler?.create,
-            checked: document.getElementById('ModernAnimationPlaybackProfileEnabled').checked,
-            text: document.getElementById('ModernAnimationPlaybackProfileReport').textContent,
-        })""")
-        self.assertTrue(state['available'])
-        self.assertFalse(state['checked'])
-        self.assertIn('Enable profiling', state['text'])
-        result = self.page.evaluate("""() => {
-            const toggle = document.getElementById('ModernAnimationPlaybackProfileEnabled');
-            const report = document.getElementById('ModernAnimationPlaybackProfileReport');
-            toggle.checked = true;
-            toggle.dispatchEvent(new Event('change', {bubbles:true}));
-            const on = report.textContent;
-            toggle.checked = false;
-            toggle.dispatchEvent(new Event('change', {bubbles:true}));
-            return {on, off:report.textContent};
-        }""")
-        self.assertIn('Measuring', result['on'])
-        self.assertIn('Enable profiling', result['off'])
-        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
-
     def test_chicago_preset_compare_and_history_return(self):
         self.open_modern()
         preset = self.page.locator('#ModernPreset')
