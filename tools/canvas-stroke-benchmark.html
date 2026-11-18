@@ -26,6 +26,8 @@
         <option value="alternatives">F · Workarounds: stroke vs polygon fill</option>
         <option value="alternatives-scene">G · Workarounds with scene fills</option>
         <option value="ctm-bypass">H · CTM hairline bypass · same physical width</option>
+        <option value="webgl-strokes">I · WebGL2 batched strokes · no scene fills</option>
+        <option value="webgl-scene">J · WebGL2 scene · ordered fills and strokes</option>
         <option value="all">All experiments</option>
       </select></div>
       <div class="field"><label for="warmup">Warm-up frames</label><input type="number" id="warmup" min="2" max="100" value="15"></div>
@@ -42,11 +44,13 @@
       <p>RAF cadence may be limited by display refresh, tab scheduling, thermal state, or browser compositing. Inferred FPS is not the video presentation rate; this tool does not measure GPU work completion. An isolated test that does not reproduce the slowdown does <strong>not</strong> falsify a Curvature-specific interaction.</p>
       <p>F and G compare the native wide <code>stroke()</code>, a single <code>fill()</code> of the union of segment rectangles and internal round joins, and a fast but visibly thinner 1-pixel <code>stroke()</code> control. Each mode keeps the same original polyline, colors, opacity, order, and desired width. Only the rendering method changes. Polygon geometry is rebuilt every frame, so <code>drawMs</code> includes its JavaScript cost.</p>
       <p>H isolates the possible <strong>CTM-based hairline bypass</strong>. For each target width (0.99, 1.005, 1.125, 2.5 backing-store px), the native control uses CTM ×1 and <code>lineWidth = target</code>; the unit-width variant uses CTM ×target and <code>lineWidth = 1</code>; the half-width variant uses CTM ×(2 × target) and <code>lineWidth = 0.5</code>. Coordinates are divided by the exact CTM scale. All three should paint the same physical line geometry. H explicitly tests whether the renderer uses the assigned width or the transformed width to select its fast path; merely changing <code>lineWidth</code> does <em>not</em> guarantee a bypass. Unlike real DPR changes, this is an internal Canvas transform only.</p>
+      <p>I measures a new WebGL2 renderer: a single instanced draw call paints all 1,221 polyline strokes using an analytic screen-space signed-distance outline (butt caps and round internal joins). Each polyline is composited once, avoiding double opacity at translucent joins. The cached mode uploads geometry once; the streaming mode <em>rebuilds the vertex buffer in JavaScript and reuploads it every frame</em>, simulating changing camera geometry. Unlike a native <code>stroke()</code>, this is a custom approximate antialiasing implementation.</p>
+      <p>J renders the background, 1,189 path fills, and 1,221 strokes entirely with WebGL2. A fill-then-stroke fragment is composed for each path instance, preserving per-path painter ordering (including overlaps with later fills), rather than incorrectly putting all lines above all fills. This is an isolated proof of rasterization, <strong>not yet</strong> a Canvas2D/WebGL2 production hybrid. A production split must preserve ordering separately. WebGL2 may use hardware or software drivers; no browser GPU backend is assumed. No <code>readPixels()</code> occurs during sampled frames.</p>
       <p>The pixel comparison below runs <em>after</em> the RAF benchmark and is never included in timing. It compares composited RGB pixels (with a background-aware mask), not vector geometry. Differences may remain from antialiasing even if the shapes are geometrically equivalent. No browser GPU-completion timing is claimed.</p>
     </details>
   </section>
   <section class="panel"><h2>Canvas under test</h2><p class="note">Actual backing store: 1334 × 889 px. CSS display: 1186 × 791 px. The visible scene stays fixed for all repetitions within a mode.</p>
-    <div class="canvas-holder" id="canvas-holder"><canvas id="canvas-default" width="1334" height="889" aria-label="Benchmark drawing"></canvas><canvas id="canvas-read" width="1334" height="889" style="display:none" aria-label="Benchmark drawing with read-frequency hint"></canvas></div>
+    <div class="canvas-holder" id="canvas-holder"><canvas id="canvas-default" width="1334" height="889" aria-label="Benchmark drawing"></canvas><canvas id="canvas-read" width="1334" height="889" style="display:none" aria-label="Benchmark drawing with read-frequency hint"></canvas><canvas id="canvas-webgl" width="1334" height="889" style="display:none" aria-label="WebGL2 batch rendered contours"></canvas></div>
   </section>
   <section class="panel hidden" id="comparison">
     <h2>Visual fidelity · native stroke vs candidate</h2>
@@ -77,16 +81,17 @@
     const method = opts.method || 'stroke';
     const comparison = !!opts.comparison;
     const transformVariant = opts.transformVariant || null;
+    const glUpload = !!opts.glUpload;
     const variantLabel = {native:'native lineWidth',unit:'lineWidth = 1',half:'lineWidth = 0.5'};
     const id = ['w', String(width).replace('.', '_'), geometry, context, 'scale' + String(transform).replace('.', '_'),
       fills ? 'fills' : 'strokes', ...(transformVariant ? ['ctm',transformVariant] : []),
-      ...(comparison ? ['compare',method] : [])].join('-');
-    return {id, width, geometry, context, transform, fills, method, comparison, transformVariant,
+      ...(comparison ? ['compare',method] : []), ...(method === 'webgl' ? [glUpload ? 'streaming' : 'cached'] : [])].join('-');
+    return {id, width, geometry, context, transform, fills, method, comparison, transformVariant, glUpload,
       label: labelWidth(width) + ' px' + (geometry !== 'polyline' ? ' · straight' : '') +
         (context !== 'default' ? ' · read hint' : '') +
         (transformVariant ? ' · ' + variantLabel[transformVariant] + ' · CTM ×' + labelWidth(transform) :
           (transform !== 1 ? ' · transform ×' + transform : '')) +
-        (fills ? ' · fills' : '') + (comparison ? ' · '+({stroke:'native stroke',polygon:'polygon fill',thin:'thin 1 px stroke'}[method] || method) : '')};
+        (fills ? ' · fills' : '') + (comparison ? ' · '+({stroke:'native stroke',polygon:'polygon fill',thin:'thin 1 px stroke',webgl:'WebGL2 ' + (glUpload?'streaming':'cached')}[method] || method) : '')};
   }
   function modesFor(profile) {
     if (profile === 'threshold') return THRESHOLD.map(w => mode(w));
@@ -95,7 +100,7 @@
     if (profile === 'context') return ['default', 'read-frequently'].flatMap(c => [0.99, 1, 1.01, 1.125].map(w => mode(w, {context:c})));
     if (profile === 'scene') return [0.99, 1, 1.01, 1.125, 1.25].map(w => mode(w, {fills:true}));
     if (profile === 'alternatives' || profile === 'alternatives-scene') {
-      const fills = profile === 'alternatives-scene';
+      const fills = profile === 'alternatives-scene' || profile === 'webgl-scene';
       return (fills ? [1.125,2.5] : [1.005,1.125,2.5]).flatMap(width =>
         ['stroke','polygon','thin'].map(method => mode(width,{fills,method,comparison:true})));
     }
@@ -103,9 +108,16 @@
       mode(width,{transformVariant:'native'}),
       mode(width,{transform:width,transformVariant:'unit'}),
       mode(width,{transform:2*width,transformVariant:'half'})]);
+    if (profile === 'webgl-strokes' || profile === 'webgl-scene') {
+      const fills = profile === 'webgl-scene';
+      return (fills ? [1.125,2.5] : [1.005,1.125,2.5]).flatMap(width => [
+        mode(width,{fills,method:'stroke',comparison:true}),
+        mode(width,{fills,method:'webgl',comparison:true}),
+        mode(width,{fills,method:'webgl',glUpload:true,comparison:true})]);
+    }
     if (profile === 'all') {
       const seen = new Set();
-      return ['threshold','geometry','transform','context','scene','alternatives','alternatives-scene','ctm-bypass'].flatMap(modesFor).filter(m => {
+      return ['threshold','geometry','transform','context','scene','alternatives','alternatives-scene','ctm-bypass','webgl-strokes','webgl-scene'].flatMap(modesFor).filter(m => {
         if (seen.has(m.id)) return false;
         seen.add(m.id);
         return true;
@@ -217,6 +229,167 @@
       requestedStrokeWidthPx:m.width, effectiveStrokeWidthPx:actualWidth,
       assignedLineWidth:actualWidth / scale, transformScale:scale, method};
   }
+
+  // One WebGL2 instance per polyline, using seven points and color+opacity.
+  // The same source geometry, colors, fill count, and ordering as paint().
+  // A stroke is shaded as one union, not as overlapping alpha-blended quads.
+  function packWebGLGeometry(pathData = paths) {
+    const stride = 18;
+    const data = new Float32Array(pathData.length*stride);
+    for(let i=0;i<pathData.length;i++) {
+      const pts=pathData[i];
+      if (pts.length!==7) throw Error('WebGL2 renderer needs seven-point polylines');
+      const base=i*stride;
+      for(let j=0;j<7;j++) {data[base+2*j]=pts[j][0];data[base+2*j+1]=pts[j][1];}
+      if(i%19<3) {data[base+14]=189/255;data[base+15]=112/255;data[base+16]=75/255;}
+      data[base+17]=i<33?0.45:1;
+    }
+    return data;
+  }
+  const GL_VERTEX = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 aP0;
+layout(location=1) in vec2 aP1;
+layout(location=2) in vec2 aP2;
+layout(location=3) in vec2 aP3;
+layout(location=4) in vec2 aP4;
+layout(location=5) in vec2 aP5;
+layout(location=6) in vec2 aP6;
+layout(location=7) in vec4 aColor;
+uniform float uWidth;
+out vec2 vPos;
+out vec2 vPts[7];
+out vec4 vColor;
+flat out int vHasFill;
+void main() {
+  vec2 pts[7] = vec2[7](aP0,aP1,aP2,aP3,aP4,aP5,aP6);
+  vec2 lo=pts[0], hi=pts[0];
+  for(int i=0;i<7;i++) { lo=min(lo,pts[i]); hi=max(hi,pts[i]); vPts[i]=pts[i]; }
+  float pad=max(1.0,0.5*uWidth+1.0);
+  lo-=vec2(pad);hi+=vec2(pad);
+  int n=gl_VertexID%6;
+  vec2 uv;
+  if (n==0 || n==3) uv=vec2(0.0,0.0);
+  else if(n==1) uv=vec2(1.0,0.0);
+  else if(n==2 || n==4) uv=vec2(1.0,1.0);
+  else uv=vec2(0.0,1.0);
+  vPos=mix(lo,hi,uv);
+  vColor=aColor;
+  vHasFill=gl_InstanceID<1189?1:0;
+  gl_Position=vec4(2.0*vPos.x/1334.0-1.0,1.0-2.0*vPos.y/889.0,0.0,1.0);
+}`;
+  const GL_FRAGMENT = `#version 300 es
+precision highp float;
+in vec2 vPos;
+in vec2 vPts[7];
+in vec4 vColor;
+flat in int vHasFill;
+uniform float uWidth;
+uniform bool uScene;
+out vec4 fragColor;
+float rectDistance(vec2 p,vec2 a,vec2 b,float radius) {
+  vec2 ab=b-a;float len=max(length(ab),0.00001);
+  vec2 tangent=ab/len, normal=vec2(-tangent.y,tangent.x);
+  vec2 d=vec2(abs(dot(p-a,normal))-radius,max(-dot(p-a,tangent),dot(p-b,tangent)));
+  return length(max(d,vec2(0.0)))+min(max(d.x,d.y),0.0);
+}
+float strokeDistance(vec2 p,float radius) {
+  float d=100000.0;
+  for(int i=0;i<6;i++) d=min(d,rectDistance(p,vPts[i],vPts[i+1],radius));
+  for(int i=1;i<6;i++) d=min(d,length(p-vPts[i])-radius);
+  return d;
+}
+float fillDistance(vec2 p) {
+  float d=100000.0;int winding=0;
+  for(int i=0;i<7;i++) {
+    vec2 a=vPts[i],b=vPts[(i+1)%7],ab=b-a;
+    float t=clamp(dot(p-a,ab)/max(dot(ab,ab),0.0000001),0.0,1.0);
+    d=min(d,length(p-(a+ab*t)));
+    float crossValue=ab.x*(p.y-a.y)-ab.y*(p.x-a.x);
+    if(a.y<=p.y && b.y>p.y && crossValue>0.0) winding++;
+    if(a.y>p.y && b.y<=p.y && crossValue<0.0) winding--;
+  }
+  return winding==0?d:-d;
+}
+void main() {
+  // One fragment per polyline: translucent joins never accumulate opacity.
+  float ink=clamp(0.5-strokeDistance(vPos,uWidth*0.5),0.0,1.0);
+  float strokeAlpha=vColor.a*ink;
+  float fillAlpha=0.0;
+  if (uScene && vHasFill==1) fillAlpha=clamp(0.5-fillDistance(vPos),0.0,1.0);
+  // Fill before stroke for this path, then blend its combined result over
+  // the previous path. This preserves interleaved scene painter ordering.
+  float a=strokeAlpha+(1.0-strokeAlpha)*fillAlpha;
+  if(a<=0.0) discard;
+  vec3 premul=vColor.rgb*strokeAlpha+vec3(219.0/255.0,230.0/255.0,240.0/255.0)*fillAlpha*(1.0-strokeAlpha);
+  fragColor=vec4(premul,a);
+}`;
+  function createWebGLRenderer(canvas, pathData = paths) {
+    const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:false});
+    if(!gl) throw Error('WebGL2 unavailable. Enable WebGL2 in your browser or use a supported GPU configuration.');
+    function shader(type,source) {
+      const obj=gl.createShader(type);
+      gl.shaderSource(obj,source);gl.compileShader(obj);
+      if(!gl.getShaderParameter(obj,gl.COMPILE_STATUS)) {
+        const error=gl.getShaderInfoLog(obj);gl.deleteShader(obj);
+        throw Error('WebGL2 shader compilation failed: '+error);
+      }
+      return obj;
+    }
+    const vertex=shader(gl.VERTEX_SHADER,GL_VERTEX),fragment=shader(gl.FRAGMENT_SHADER,GL_FRAGMENT);
+    const program=gl.createProgram();gl.attachShader(program,vertex);gl.attachShader(program,fragment);
+    gl.linkProgram(program);gl.deleteShader(vertex);gl.deleteShader(fragment);
+    if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error('WebGL2 linking failed: '+gl.getProgramInfoLog(program));
+    const packed=packWebGLGeometry(pathData);
+    const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+    const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+    gl.bufferData(gl.ARRAY_BUFFER,packed,gl.DYNAMIC_DRAW);
+    for(let attribute=0;attribute<8;attribute++) {
+      const size=attribute===7?4:2;
+      gl.enableVertexAttribArray(attribute);
+      gl.vertexAttribPointer(attribute,size,gl.FLOAT,false,72,(attribute===7?14:attribute*2)*4);
+      gl.vertexAttribDivisor(attribute,1);
+    }
+    gl.bindVertexArray(null);
+    gl.useProgram(program);
+    const widthUniform=gl.getUniformLocation(program,'uWidth'),sceneUniform=gl.getUniformLocation(program,'uScene');
+    gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(252/255,253/255,1,1);
+    return {
+      gl,
+      render(m) {
+        if(gl.isContextLost()) throw Error('WebGL2 context lost');
+        gl.viewport(0,0,W,H);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(program);gl.bindVertexArray(vao);
+        gl.uniform1f(widthUniform,m.width);
+        gl.uniform1i(sceneUniform,m.fills?1:0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+        if(m.glUpload) gl.bufferSubData(gl.ARRAY_BUFFER,0,packWebGLGeometry(pathData));
+        gl.drawArraysInstanced(gl.TRIANGLES,0,6,pathData.length);
+        gl.bindVertexArray(null);
+        return {strokeCalls:0,polygonFillCalls:0,polygonLineToCalls:0,polygonArcCalls:0,
+          fillCalls:0,lineToCalls:0,sourceSegments:6*pathData.length,
+          webglDrawCalls:1,webglInstances:pathData.length,webglFillInstances:m.fills?Math.min(FILL_COUNT,pathData.length):0,
+          webglUploadBytes:m.glUpload?packed.byteLength:0,webglCachedGeometry:!m.glUpload,
+          requestedStrokeWidthPx:m.width,effectiveStrokeWidthPx:m.width,assignedLineWidth:m.width,
+          transformScale:1,method:'webgl'};
+      },
+      readPixels() {
+        // Only called after the benchmark; never in a measured RAF callback.
+        const raw=new Uint8Array(W*H*4);
+        gl.finish();gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,raw);
+        if(gl.getError()!==gl.NO_ERROR) throw Error('WebGL2 pixel readback failed');
+        const flipped=new Uint8ClampedArray(raw.length),stride=W*4;
+        for(let y=0;y<H;y++) flipped.set(raw.subarray((H-1-y)*stride,(H-y)*stride),y*stride);
+        return flipped;
+      },
+      metadata(){return {version:gl.getParameter(gl.VERSION),renderer:gl.getParameter(gl.RENDERER),
+        contextAttributes:gl.getContextAttributes(),maxVertexAttribs:gl.getParameter(gl.MAX_VERTEX_ATTRIBS)};}
+    };
+  }
+
   function comparePixels(reference, candidate, background = [252,253,255]) {
     if (reference.length !== candidate.length || reference.length % 4)
       throw Error('RGBA buffers must have matching dimensions');
@@ -341,12 +514,21 @@
       result:$('results'),plot:$('plot'),rows:$('result-rows'),label:$('result-label'),environment:$('environment'),
       comparison:$('comparison'),compareWidth:$('compare-width'),compareMethod:$('compare-method'),
       compareAltLabel:$('compare-alt-label'),compareRun:$('compare-run'),compareStats:$('compare-stats')};
-    const canvases = {default:$('canvas-default'),'read-frequently':$('canvas-read')};
+    const canvases = {default:$('canvas-default'),'read-frequently':$('canvas-read'),webgl:$('canvas-webgl')};
     const contexts = {default:canvases.default.getContext('2d'),
       'read-frequently':canvases['read-frequently'].getContext('2d',{willReadFrequently:true})};
     if (!contexts.default || !contexts['read-frequently']) {
       elements.status.textContent = 'Canvas 2D context unavailable'; elements.run.disabled = true; return;
     }
+    let glRenderer = null;
+    function ensureGL() {
+      if (!glRenderer || glRenderer.gl.isContextLost()) glRenderer=createWebGLRenderer(canvases.webgl);
+      return glRenderer;
+    }
+    canvases.webgl.addEventListener('webglcontextlost',event=>{
+      event.preventDefault();glRenderer=null;
+      elements.status.textContent='WebGL2 context lost. Stop/restart the benchmark after recovery.';
+    });
     let lastResult = null;
     let visibleContext = 'default';
     function selectContext(name) {
@@ -363,6 +545,7 @@
           cssHeight:canvases[visibleContext].getBoundingClientRect().height},
         contextAttributes:Object.fromEntries(Object.entries(contexts).map(([name,ctx]) =>
           [name,typeof ctx.getContextAttributes === 'function' ? ctx.getContextAttributes() : null])),
+        webgl2:glRenderer ? glRenderer.metadata() : null,
         note:'willReadFrequently is a hint, not proof of a software backend; no GPU completion time was measured'};
     }
     function showEnvironment() {
@@ -382,9 +565,10 @@
     const compareCanvases = {reference:$('compare-reference'),polygon:$('compare-polygon'),difference:$('compare-difference')};
     function configureComparison(profile) {
       const ctm = profile === 'ctm-bypass';
-      const widths = ctm ? [0.99,1.005,1.125,2.5] : [1.125,2.5];
+      const webgl = profile === 'webgl-strokes' || profile === 'webgl-scene';
+      const widths = ctm ? [0.99,1.005,1.125,2.5] : webgl ? (profile === 'webgl-strokes' ? [1.005,1.125,2.5] : [1.125,2.5]) : [1.125,2.5];
       const candidates = ctm ? [['unit','CTM-scaled · lineWidth = 1'],['half','CTM-scaled · lineWidth = 0.5']] :
-        [['polygon','Polygon fill']];
+        webgl ? [['webgl','WebGL2 SDF · one instance per polyline']] : [['polygon','Polygon fill']];
       elements.compareWidth.replaceChildren();
       elements.compareMethod.replaceChildren();
       for (const width of widths) elements.compareWidth.add(new Option(width + ' px',String(width)));
@@ -392,7 +576,7 @@
       elements.compareWidth.value = '1.125';
     }
     function calculateComparison(width, profile, candidate) {
-      const fills = profile === 'alternatives-scene';
+      const fills = profile === 'alternatives-scene' || profile === 'webgl-scene';
       const original = mode(width,{method:'stroke',fills,comparison:true});
       let alternate, label, statKey;
       if (profile === 'ctm-bypass') {
@@ -401,6 +585,10 @@
         alternate = mode(width,{method:'stroke',transform:width/desiredAssignedWidth,transformVariant:candidate});
         label = `CTM-scaled · lineWidth = ${desiredAssignedWidth}`;
         statKey = candidate === 'unit' ? 'nativeVsCTMUnitWidth' : 'nativeVsCTMHalfWidth';
+      } else if (profile === 'webgl-strokes' || profile === 'webgl-scene') {
+        if (candidate !== 'webgl') throw Error('Unknown WebGL2 candidate');
+        alternate = mode(width,{method:'webgl',fills,comparison:true});
+        label='WebGL2 · analytic stroke';statKey='nativeVsWebGL2';
       } else {
         if (candidate !== 'polygon') throw Error('Unknown polygon candidate');
         alternate = mode(width,{method:'polygon',fills,comparison:true});
@@ -408,9 +596,16 @@
       }
       const refCtx=compareCanvases.reference.getContext('2d',{willReadFrequently:true});
       const altCtx=compareCanvases.polygon.getContext('2d',{willReadFrequently:true});
-      paint(refCtx,original);paint(altCtx,alternate);
-      const ref=refCtx.getImageData(0,0,W,H), alt=altCtx.getImageData(0,0,W,H);
-      const {heatmap,...stats}=comparePixels(ref.data,alt.data);
+      paint(refCtx,original);
+      let altData;
+      if (alternate.method === 'webgl') {
+        const renderer=ensureGL();renderer.render(alternate);altData=renderer.readPixels();
+        const image=altCtx.createImageData(W,H);image.data.set(altData);altCtx.putImageData(image,0,0);
+      } else {
+        paint(altCtx,alternate);altData=altCtx.getImageData(0,0,W,H).data;
+      }
+      const ref=refCtx.getImageData(0,0,W,H);
+      const {heatmap,...stats}=comparePixels(ref.data,altData);
       const difference=compareCanvases.difference.getContext('2d');
       const image=difference.createImageData(W,H);
       image.data.set(heatmap);
@@ -459,7 +654,10 @@
     const runner = makeRunner({
       requestFrame:cb=>requestAnimationFrame(cb),cancelFrame:id=>cancelAnimationFrame(id),
       now:()=>performance.now(),
-      paint(m) {selectContext(m.context);return paint(contexts[m.context],m);},
+      paint(m) {
+        if(m.method === 'webgl') {selectContext('webgl');return ensureGL().render(m);}
+        selectContext(m.context);return paint(contexts[m.context],m);
+      },
       progress(s) {
         elements.progress.style.width=(s.doneFrames / s.totalFrames * 100).toFixed(1)+'%';
         const m=rotatedModes(s.modes,s.passIndex)[s.modeIndex];
@@ -469,11 +667,13 @@
         lastResult=r;setRunning(false);elements.progress.style.width='100%';
         elements.status.textContent=`Complete: ${r.runs.length} runs, ${r.config.modes.length} modes, ${r.config.passes} passes. JSON downloaded.`;
         renderResults(r);
-        if (['alternatives','alternatives-scene','ctm-bypass'].includes(r.config.profile)) {
+        if (['alternatives','alternatives-scene','ctm-bypass','webgl-strokes','webgl-scene'].includes(r.config.profile)) {
           lastComparisonProfile=r.config.profile;
           configureComparison(r.config.profile);
-          const widths=r.config.profile === 'ctm-bypass' ? [0.99,1.005,1.125,2.5] : [1.125,2.5];
-          const candidates=r.config.profile === 'ctm-bypass' ? ['unit','half'] : ['polygon'];
+          const widths=r.config.profile === 'ctm-bypass' ? [0.99,1.005,1.125,2.5] :
+            r.config.profile === 'webgl-strokes' ? [1.005,1.125,2.5] : [1.125,2.5];
+          const candidates=r.config.profile === 'ctm-bypass' ? ['unit','half'] :
+            r.config.profile.startsWith('webgl-') ? ['webgl'] : ['polygon'];
           for (const width of widths) for (const candidate of candidates)
             calculateComparison(width,r.config.profile,candidate);
           calculateComparison(Number(elements.compareWidth.value),r.config.profile,elements.compareMethod.value);
@@ -494,7 +694,11 @@
       const profile=elements.profile.value;
       lastResult=null;elements.result.classList.add('hidden');elements.comparison.classList.add('hidden');elements.progress.style.width='0%';
       setRunning(true);
-      try {runner.start({profile,warmup,samples,passes,modes:modesFor(profile),environment:environment()});}
+      try {
+        const modes=modesFor(profile);
+        if(modes.some(m=>m.method==='webgl')) ensureGL();
+        runner.start({profile,warmup,samples,passes,modes,environment:environment()});
+      }
       catch(err){setRunning(false);elements.status.textContent='Failed: '+err.message;}
     });
     elements.stop.addEventListener('click',()=>{
@@ -512,7 +716,7 @@
     showEnvironment();
     paint(contexts.default,mode(1));
   }
-  root.CanvasStrokeMicrobenchmark = {modesFor,geometry,paint,fillStrokeOutline,comparePixels,percentile,summary,rotatedModes,makeRunner,constants:{W,H,N,FILL_COUNT}};
+  root.CanvasStrokeMicrobenchmark = {modesFor,geometry,paint,fillStrokeOutline,packWebGLGeometry,createWebGLRenderer,GL_VERTEX,GL_FRAGMENT,comparePixels,percentile,summary,rotatedModes,makeRunner,constants:{W,H,N,FILL_COUNT}};
   if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>

@@ -344,3 +344,52 @@ may internally normalize the CTM before rasterization, making all three
 variants equally slow; in that event, do not adopt this technique in the
 production renderer. This experiment is not a physical DPR or GPU timing test,
 and it changes no Canvas Direct production code.
+
+## WebGL2 stroke rasterization experiment (profiles I/J)
+
+In `tools/canvas-stroke-benchmark.html`, select **I · WebGL2 batched strokes**
+for the pure 1,221-polyline test at requested backing-store widths `1.005`,
+`1.125` and `2.5` px. Select **J · WebGL2 scene** to include the same
+1,189 path fills interleaved with strokes at widths `1.125` and `2.5` px.
+Each width compares **native Canvas2D stroke** against **WebGL2 cached**
+(one geometry upload at initialization) and **WebGL2 streaming** (repacks
+all seven points and color for each polyline and reuploads the entire 88 KiB
+vertex buffer **every measured frame**). Native Canvas2D redraws the same
+geometry every frame. WebGL2 submits one instanced draw per frame.
+
+The WebGL2 vertex shader draws one bounding rectangle per polyline; a fragment
+shader computes the signed distance to the union of six butt-capped segment
+rectangles and five round internal joins. One shader fragment composites each
+polyline's **whole** outline, so translucent joins do not accumulate opacity.
+The backing store and path positions are fixed across both backends. This
+experiment uses an **approximate analytic AA coverage** function; exact Skia
+stroke rasterization is *not* claimed.
+
+For **J**, the shader also computes a nonzero-winding closed-path fill mask,
+composes it *under* its stroke within the same path instance, and blends
+instances in path order. It does **not** put all strokes in a later overlay
+that could incorrectly cover subsequent fills. This is a WebGL2 **full-scene
+proof of concept**, not yet the proposed production hybrid where Canvas2D
+continues to render fills and WebGL2 renders outlines. Preserving the real
+scene's painter order will require its own production integration design.
+
+The page reports RAF cadence (`gapMs`) and CPU-side submission/build time
+(`drawMs`) separately. WebGL2 frame records contain `webglDrawCalls`,
+`webglInstances`, `webglFillInstances`, and `webglUploadBytes`. The renderer
+records generic WebGL context metadata, but this **does not certify hardware
+acceleration**. Context creation, shader compilation, and initial buffer
+allocation are outside measured frames; the streaming upload and repacking
+are included. This does not measure completed GPU time.
+
+After each run, WebGL2 frames are read back **only for visual comparison**,
+not during the benchmark, and compared against native Canvas2D pixels at
+all tested widths. The report stores `visualComparisons[width].nativeVsWebGL2`
+for a composited-foreground difference fraction (>8/255 RGB), mean absolute
+per-channel error, and maximum channel difference. A difference heatmap and
+both images are visible below the benchmark. Run **three rotated passes** in
+Opera to see whether the alternative both speeds up the scene *and* meets
+visual quality expectations. Availability of WebGL2 is required for profiles
+I/J; the independent A–H profiles remain usable when WebGL2 is blocked.
+
+**No production Canvas Direct code was modified.** Test results on a software
+WebGL2 backend do not predict performance on another browser or GPU.

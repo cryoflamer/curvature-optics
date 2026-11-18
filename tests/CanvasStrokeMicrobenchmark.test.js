@@ -264,3 +264,69 @@ test('CTM bypass runs export each transform variant and separate measured widths
   assert.deepEqual(Array.from(r.config.modes,m=>m.transformVariant),['native','unit','half']);
   assert.deepEqual(Array.from(r.config.modes,m=>m.transform),[1,1.125,2.25]);
 });
+
+test('WebGL2 profiles keep matched widths, source fills, and distinct streaming IDs',()=>{
+  for (const profile of ['webgl-strokes','webgl-scene']) {
+    const scene=profile==='webgl-scene';
+    const modes=api.modesFor(profile);
+    const widths=scene?[1.125,2.5]:[1.005,1.125,2.5];
+    assert.equal(modes.length,widths.length*3);
+    assert.equal(new Set(modes.map(m=>m.id)).size,modes.length);
+    assert.ok(modes.every(m=>m.fills===scene && m.comparison && m.geometry==='polyline'));
+    for (const width of widths) {
+      const group=modes.filter(m=>m.width===width);
+      assert.deepEqual(Array.from(group,m=>[m.method,m.glUpload]),
+        [['stroke',false],['webgl',false],['webgl',true]]);
+      assert.ok(group[1].id.includes('cached'));
+      assert.ok(group[2].id.includes('streaming'));
+      for (const m of group) assert.ok(api.modesFor('all').some(x=>x.id===m.id));
+    }
+  }
+  assert.match(html,/id="canvas-webgl"/);
+  assert.match(html,/WebGL2 unavailable/);
+  assert.match(html,/nativeVsWebGL2/);
+});
+
+test('WebGL2 buffer has seven source points and correctly ordered RGB and alpha',()=>{
+  const paths=api.geometry(),buffer=api.packWebGLGeometry(paths);
+  assert.equal(buffer.constructor.name,'Float32Array');
+  assert.equal(buffer.length,1221*18);
+  assert.equal(buffer.byteLength,1221*18*4);
+  for (const i of [0,2,3,18,31,32,33,1188,1189,1220]) {
+    const off=i*18;
+    for(let j=0;j<7;j++) {
+      assert.ok(Math.abs(buffer[off+j*2]-paths[i][j][0])<0.0001);
+      assert.ok(Math.abs(buffer[off+j*2+1]-paths[i][j][1])<0.0001);
+    }
+    const color=i%19<3?[189/255,112/255,75/255]:[0,0,0];
+    for(let k=0;k<3;k++) assert.ok(Math.abs(buffer[off+14+k]-color[k])<1e-7);
+    assert.ok(Math.abs(buffer[off+17]-(i<33?0.45:1))<1e-7);
+  }
+  assert.throws(()=>api.packWebGLGeometry([[[0,0],[1,1]]]),/seven-point/);
+});
+
+test('WebGL2 shader is instanced and composites ordered scene fills without join-overdraw',()=>{
+  assert.match(api.GL_VERTEX,/#version 300 es/);
+  assert.match(api.GL_FRAGMENT,/#version 300 es/);
+  assert.match(api.GL_VERTEX,/gl_InstanceID<1189/);
+  assert.match(api.GL_FRAGMENT,/strokeDistance/);
+  assert.match(api.GL_FRAGMENT,/fillDistance/);
+  assert.match(api.GL_FRAGMENT,/float a=strokeAlpha\+\(1\.0-strokeAlpha\)\*fillAlpha/);
+  assert.match(html,/drawArraysInstanced\(gl\.TRIANGLES,0,6,pathData\.length\)/);
+  assert.match(html,/gl\.bufferSubData\(gl\.ARRAY_BUFFER,0,packWebGLGeometry\(pathData\)\)/);
+  assert.match(html,/gl\.blendFunc\(gl\.ONE,gl\.ONE_MINUS_SRC_ALPHA\)/);
+  assert.match(html,/gl\.readPixels\(0,0,W,H/);
+  assert.match(html,/WebGL2 pixel readback failed/);
+});
+
+test('runner reports WebGL2 modes as comparable samples without GPU-readback inside RAF',()=>{
+  const selected=api.modesFor('webgl-scene').filter(m=>m.width===1.125);
+  const h=scheduledHarness();
+  h.runner.start({warmup:2,samples:10,passes:3,modes:selected,profile:'webgl-scene',environment:{devicePixelRatio:1.5}});
+  for(let i=0;h.runner.running()&&i<1000;i++)h.tick();
+  const r=h.result;
+  assert.ok(r);assert.equal(r.runs.length,9);
+  assert.equal(r.summary[selected[1].id].frames,30);
+  assert.deepEqual(Array.from(r.config.modes,m=>m.method),['stroke','webgl','webgl']);
+  assert.deepEqual(Array.from(r.config.modes,m=>m.glUpload),[false,false,true]);
+});
