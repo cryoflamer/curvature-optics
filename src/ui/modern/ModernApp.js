@@ -4360,7 +4360,7 @@
   // The optical horizon is a *forward-RK4 first-ground-contact diagnostic*.
   // It is neither the renderer's guide clipping distance nor a ready-made
   // geometric horizon law. An unresolved angular boundary draws no line.
-  function drawCompareHorizon(side,g,m,options){
+  function drawCompareHorizon(side,g,m,options,cachedOnly){
     if(!g||!g.Canvas)return; // DOM-free renderer harnesses have no pixel overlay.
     var readout=el('ModernHorizonStatus'+side);
     var detector=root.CurvatureRayHorizon;
@@ -4380,6 +4380,12 @@
         {occlusionRadius:options.occlusionRadius}};
     var key=JSON.stringify(arguments_),cached=state.horizonCache[side];
     if(!cached||cached.key!==key){
+      // Interactive Canvas Direct must never start an RK4 horizon search
+      // inside pointer RAF. Reuse only a diagnosis for identical physics.
+      if(cachedOnly){
+        if(readout)readout.textContent='Traced horizon: pending final redraw';
+        return;
+      }
       var measured;
       try{measured=detector.diagnose(arguments_);}
       catch(error){measured={status:'unresolved',reason:error.message};}
@@ -5649,11 +5655,11 @@
           transitionProfile:spec?spec.transitionProfile:state.transitionProfile,
           inverseProfile:spec?spec.inverseProfile:state.inverseProfile,
           opticalQuality:'canvas-direct',geometryBackend:'canvas',
-          canvasDirectOptions:{thinOutlines:true},showCaptions:false,
-          includeGeometrySummary:false,deferDecorations:true};
+          canvasDirectOptions:{thinOutlines:true},showCaptions:state.captionMode!=='off',
+          captionMode:state.captionMode,includeGeometrySummary:true,deferDecorations:false};
         if(!g||!g.Canvas||!m)throw RangeError('Canvas Direct drag viewport is unavailable');
         checker.canvasDirectParameters(m,options);
-        views.push({graph:g,model:m,options:options});
+        views.push({side:side,graph:g,model:m,options:options});
       });
     }catch(error){directDragFallbackReason=error.message;return null;}
     return views;
@@ -5667,6 +5673,15 @@
       // surface, atmosphere and authored object geometry.
       var frame=Object.assign({},view.model,pose);
       root.CurvatureMainCanvasRenderer.renderPhysical(view.graph,frame,view.options);
+      // Screen-space guides are drawn only after the direct painter. A cached
+      // optical horizon may be reprojected at the new pose, but no RK4 solve
+      // is permitted in the moving RAF callback. On mouseup normal drawing
+      // restores the configured authoritative horizon and presentation.
+      if(view.graph.Canvas&&typeof view.graph.Canvas.getContext==='function'){
+        if(state.compareEyeLevel)drawCompareEyeLevel(view.graph,frame);
+        if(state.compareHorizon&&effectiveOpticalQuality()!=='fast')
+          drawCompareHorizon(view.side,view.graph,frame,view.options,true);
+      }
     });
     updateOpticalQualityStatus('Canvas Direct drag · approximate effective curvature','info');
   }

@@ -128,13 +128,13 @@
       var directSession=directSessions.get(g.Canvas);
       if(!directSession){directSession=directCanvas.create();directSessions.set(g.Canvas,directSession);}
       if(options.forceColdOptics)directSession.clearCache();
-      var directStart=now(),direct;
+      var directStart=now(),direct,decoration=null;
       ctx.save();
       try{
         ctx.setTransform(1,0,0,1,0,0);
         direct=directSession.paint(g.Canvas,camera,m,options);
         if(decorations&&!options.deferDecorations)
-          decorations.draw(g.Canvas,m,camera,
+          decoration=decorations.draw(g.Canvas,m,camera,
           {showCaptions:options.showCaptions!==false,captionMode:options.captionMode,
            includeGeometrySummary:options.includeGeometrySummary===true});
       }finally{ctx.restore();}
@@ -151,7 +151,8 @@
           paintMs:dt.projectionMs+dt.canvasMs,decorationsMs:directEnd-directStart-dt.totalMs,
           geometryMs:dt.geometryMs,strokeCalls:direct.strokeCalls},
         directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
-          horizonMasks:direct.horizonMasks,geometryReused:direct.geometryReused},
+          horizonMasks:direct.horizonMasks,geometryReused:direct.geometryReused,
+          metricGrid:direct.metricGrid,captionCount:decoration?decoration.captionCount:0},
         decorationCamera:options.deferDecorations?camera:null,
         decorationPhysicalGuides:options.deferDecorations?[]:null,
         warning:'Experimental Canvas Direct: straight rays and local effective radius;'+

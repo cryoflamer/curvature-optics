@@ -1504,9 +1504,11 @@
       ],
       "commonJsSourceCallers": [
         "src/geometry/CurvatureGeometryEngine.js",
+        "src/renderers/CurvatureCanvasDirectPreview.js",
         "src/scene/CurvatureIndependentComposition.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCanvasDirectPreview.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
         "tests/PhysicalContinuousScene128.test.js",
         "tests/PhysicalGroundGridOverlay.test.js",

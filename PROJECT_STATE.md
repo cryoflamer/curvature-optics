@@ -1,6 +1,6 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–2/6 complete**, with Stage **3 drag preview implemented but under visual repair**;
-> Stage **4 — shared interaction preview pipeline** is **blocked pending Stage 3 repair B and Opera verification**. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
+> Stages **1–2/6 complete**, with Stage **3 Canvas Direct drag and corrective repairs A/B implemented in source but not yet browser-certified**;
+> Stage **4 — shared interaction preview pipeline** is **blocked pending Stage 3 Opera visual/performance verification**. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates, detailed stage-2 notes and
 > cross-chat handoff. This seven-profile follow-up is based on `7cc4926`
 > (signed Flat refraction); read `git log -1` to identify the applied HEAD.
@@ -56,9 +56,27 @@
 > Inverse temperature. Regression shards: **1248/1248 passed**; static
 > isolation audit `--check` passed with unchanged Legacy/Modern HTML loads.
 > No browser visual parity or measured FPS is claimed.
-> **NEXT: Stage 3 repair B** — restore moving captions, HUD-adjacent markings,
-> eye-level/horizon guides and correct grid during drag without expensive RK4;
-> after that, manual Opera Scene/Compare checks before Stage 4.
+> **Stage 3 corrective repair B — presentation/grid parity (2026-11-18):**
+> Canvas Direct now uses `CurvaturePhysicalWorldGeometry.RINGS` and
+> `guideExtent()` to generate the same distance landmarks (including manual
+> extent) and 24 radial spokes as physical Scene/Compare, plus seven
+> view-aligned spokes and metric labels. The geometry is projected through
+> the local effective-curvature approximation and batched into at most two
+> Canvas strokes (Thin outlines remain capped at one backing pixel), without
+> invoking RK4. Globe uses an *approximate* virtual ground limit; Flat is not
+> assigned an invented certified horizon. The existing full scene decoration
+> module now restores captions, title/description, geometry summary and frame
+> during drag, honoring `captionMode: off`. Eye level is repainted, and an
+> optical horizon uses a matching existing RK4 diagnosis only; changing
+> provisional height avoids a new diagnosis until the accurate settle redraw.
+> Roll still uses the existing eye-level convention and omits the traced
+> horizon: the accurate sloped/curved isoline needs separate guide work.
+> No physical renderer, authoring, History, Legacy or export contracts changed.
+> **NEXT: Manual Opera Scene/Compare drag acceptance** — check signed Flat,
+> two Compare atmospheres, Pan/Nick/Shift, captions, grid, HiDPI and measured
+> motion FPS before unblocking Stage 4. Node regression/isolation results for
+> this repair are recorded in `docs/interactive-rendering-migration.md`.
+
 >
 > **Animation Studio Preview geometry detail (#51, 2026-11-17):**
 > Playback now offers `Full` / `Balanced` / `Performance` Scene detail,

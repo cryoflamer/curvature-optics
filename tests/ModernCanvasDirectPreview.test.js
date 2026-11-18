@@ -307,12 +307,15 @@ test('browser script order and Modern-only isolation of Canvas Direct',()=>{
     html.indexOf('src/app/CurvatureMainCanvasRenderer.js'));
   assert.ok(html.indexOf('src/optics/OpticalEffectiveRadiusPreview.js')<
     html.indexOf('src/renderers/CurvatureCanvasDirectPreview.js'));
+  assert.ok(html.indexOf('src/geometry/CurvaturePhysicalWorldGeometry.js')<
+    html.indexOf('src/renderers/CurvatureCanvasDirectPreview.js'));
   assert.match(html,/value="canvas-direct"/);
   assert.doesNotMatch(code,/\bGraphX3DX\s*\(|\bDrawModel\s*\(/);
   const browser=vm.createContext({CurvatureGeometryEngine:require('../src/geometry/CurvatureGeometryEngine'),
     CurvatureOpticalEffectiveRadiusPreview:require('../src/optics/OpticalEffectiveRadiusPreview'),
     CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
-    CurvatureCanvasProjection:require('../src/renderers/CurvatureCanvasProjection')});
+    CurvatureCanvasProjection:require('../src/renderers/CurvatureCanvasProjection'),
+    CurvaturePhysicalWorldGeometry:require('../src/geometry/CurvaturePhysicalWorldGeometry')});
   vm.runInContext(code,browser);
   assert.equal(typeof browser.CurvatureCanvasDirectPreview.create,'function');
 });
@@ -366,4 +369,80 @@ test('thin outlines cap authored widths without changing paint operations or sce
   assert.equal(restored.drawn,baseResult.drawn);
   const last=thin.stats().events.slice(firstPaintCount).filter(e=>e.type==='stroke');
   assert.deepEqual(last,original,'turning off the cap restores authored widths');
+});
+
+test('Canvas Direct metric grid reuses physical-world landmarks and manual/auto extent without a ray solve',()=>{
+  const physicalWorld=require('../src/geometry/CurvaturePhysicalWorldGeometry');
+  const m=soundly();m.NObjects=[0,0];m.showGrid=1;m.Height=30;
+  m.FocalLengthField=100;m.Nick=-1;
+  m.metricGridExtentKm=10;m.Update();
+  const before=JSON.stringify(m);
+  const expected=physicalWorld.RINGS.filter(d=>d<=10000).length;
+  for(const shape of [1,2]){
+    m.showModel=shape;m.Update();
+    const g=graph(true),r=renderer.renderPhysical(g.g,m,{atmosphere:'vacuum',
+      opticalQuality:'canvas-direct',deferDecorations:true,
+      canvasDirectOptions:{thinOutlines:true}});
+    assert.equal(r.directStats.metricGrid.extentMeters,10000);
+    assert.equal(r.directStats.metricGrid.rings,expected,'same metric radii as physical authoring');
+    assert.equal(r.directStats.metricGrid.spokes,24,'same source meridians');
+    assert.ok(r.directStats.metricGrid.segments>0);
+    assert.ok(r.directStats.metricGrid.labels>=0);
+    assert.ok(r.directStats.strokeCalls<=2,'metric paths are batched, not one Canvas stroke per ring segment');
+    assert.ok(g.stats().events.every(e=>e.type!=='stroke'||e.width<=1),
+      'direct preview strokes remain capped at one backing pixel');
+    assert.ok(g.stats().strokedPaths.every(path=>path.every(p=>p.every(Number.isFinite))));
+  }
+  m.showModel=2;m.metricGridExtentKm=25;m.Update();
+  const e=physicalWorld.guideExtent(m);
+  const extra=renderer.renderPhysical(graph().g,m,{atmosphere:'standard',
+    opticalQuality:'canvas-direct',deferDecorations:true});
+  assert.equal(extra.directStats.metricGrid.extentMeters,e);
+  assert.equal(extra.directStats.metricGrid.rings,physicalWorld.RINGS.filter(d=>d<=e).length+1,
+    'manual nonstandard extent adds its own ring');
+  m.metricGridExtentKm=10;m.showGrid=0;m.Update();
+  const disabled=renderer.renderPhysical(graph().g,m,{atmosphere:'standard',
+    opticalQuality:'canvas-direct',deferDecorations:true});
+  assert.equal(disabled.directStats.metricGrid.segments,0);
+  assert.equal(disabled.directStats.metricGrid.rings,0);
+  const original=JSON.parse(before);
+  assert.deepEqual([m.ObjDist[0],m.ObjDist[1]],[original.ObjDist[0],original.ObjDist[1]],
+    'authored object ranges are unchanged');
+});
+
+test('Flat atmospheric guide geometry bends with local signed refraction and moves with Pan/Nick/Roll',()=>{
+  const m=soundly();m.showModel=2;m.showGrid=1;m.metricGridExtentKm=10;
+  m.NObjects=[0,0];m.Height=5;m.FocalLengthField=100;
+  m.Pan=0;m.Nick=-1;m.Roll=7;m.Update();
+  const g=graph(true),opts={opticalQuality:'canvas-direct',deferDecorations:true};
+  const vacuum=renderer.renderPhysical(g.g,m,{...opts,atmosphere:'vacuum'});
+  const first=g.stats().strokedPaths;
+  const secondGraph=graph(true);
+  const standard=renderer.renderPhysical(secondGraph.g,m,{...opts,atmosphere:'standard'});
+  assert.equal(vacuum.directStats.metricGrid.rings,standard.directStats.metricGrid.rings);
+  assert.notDeepEqual(first,secondGraph.stats().strokedPaths,
+    'real 2D guide paths reflect the distinct optical approximation');
+  m.Pan=1.3;m.Nick=.15;m.Roll=-12;m.CameraEast=12;m.CameraNorth=40;m.Update();
+  const translated=renderer.renderPhysical(graph(true).g,m,{...opts,atmosphere:'standard'});
+  assert.equal(translated.directStats.metricGrid.extentMeters,10000);
+  assert.ok(translated.directStats.metricGrid.segments>0);
+});
+
+test('Canvas Direct reuses full captions, geometry summary and frame without changing the authored model',()=>{
+  const m=soundly();m.DemoText='Test direct preview title';m.Description='Important scene description';
+  m.FrameCol='#00aa00';m.showGrid=0;m.Update();
+  const before=JSON.stringify(m);
+  const labels=[],g=graph();const ctx=g.g.Canvas.getContext('2d');
+  ctx.fillText=text=>labels.push(text);
+  ctx.measureText=text=>({width:text.length*10});
+  const options={atmosphere:'vacuum',opticalQuality:'canvas-direct',
+    showCaptions:true,captionMode:'title-description',includeGeometrySummary:true};
+  const visible=renderer.renderPhysical(g.g,m,options);
+  assert.ok(visible.directStats.captionCount>=3);
+  assert.ok(labels.some(text=>text.includes('Test direct preview title')));
+  assert.ok(labels.some(text=>text.includes('Important scene description')));
+  assert.ok(labels.some(text=>text.includes('bridge support')));
+  const suppressed=renderer.renderPhysical(g.g,m,{...options,captionMode:'off'});
+  assert.equal(suppressed.directStats.captionCount,0);
+  assert.equal(JSON.stringify(m),before);
 });

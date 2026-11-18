@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stages 1–2 complete; Stage 3 pointer previews implemented, with Flat orientation correction A applied and decoration/grid correction B pending. Stage 4 remains blocked until Stage 3 visual validation.
+**Status:** Stages 1–2 complete; Stage 3 pointer previews plus corrective repairs A and B implemented in source. Stage 3 Opera visual/performance acceptance is still pending, so Stage 4 remains blocked.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -122,7 +122,7 @@ new pack until its Git history or a clean application confirms that fact.
 | **1. Plan & inventory** | **Completed in this documentation compatpatch** | This document, `PROJECT_STATE.md` handoff, source-backed interaction inventory; no runtime changes. Verify Markdown links, documented source references, diff and patch application. |
 | **2. Studio defaults** | **Completed** | For *new* Animation Studio live previews, prefer `canvas-direct` and checked Thin outlines (≤1 backing px); keep Auto FPS, actual FPS, opt-out and previously saved explicit choices. Handle unsupported Canvas Direct atmospheres with an honest fallback/status. Regression: new/existing drafts, Prepare/Play/Pause/Seek/Stop, Compare, export unchanged. |
 | **3. Direct camera drag** | **Completed** | Add Canvas Direct previews to Scene and Compare drag (rotate + Shift-translate), preserving all camera/gesture math and pointer cancellation. Bound per-frame work, cache geometry when possible; after release render authoritative optics. Verify A/B independent physical settings and a safe, explicit fallback. Split Scene/Compare into 3a/3b if needed. |
-| **4. Shared interaction pipeline** | **Next** | Consolidate the preview adapter/scheduler across eligible pointer, wheel, keyboard and camera sequence movement. Keep existing movement timings, throttling, settle behavior, no stale RAF, and one ownership boundary; remove only proven-redundant CSS/Fast preview wiring after replacement passes tests. |
+| **4. Shared interaction pipeline** | **Blocked on Stage 3 Opera acceptance** | Consolidate the preview adapter/scheduler across eligible pointer, wheel, keyboard and camera sequence movement. Keep existing movement timings, throttling, settle behavior, no stale RAF, and one ownership boundary; remove only proven-redundant CSS/Fast preview wiring after replacement passes tests. |
 | **5. Effective-curvature qualification** | Planned | Centralize support checks/fallback and validate observer-height gradient, radius, surface and atmospheric changes. Sample representative supported and unsupported profile cases against Accurate for quality warnings; **do not promise pixel/physical equivalence** or globally replace ray tracing. |
 | **6. Cleanup & regression closure** | Planned | Retire superseded interaction code after real usage tests; update docs/tests. Run the full feasible Node suite and Legacy/Modern isolation audit, plus manual Opera/Chromium motion, image and FPS checks. Document any unverified gates rather than claiming success. |
 
@@ -226,11 +226,38 @@ new pack until its Git history or a clean application confirms that fact.
   passed **1248/1248 tests**. Browser rendering and FPS still require user
   verification. The isolation audit's source/HTML
   boundaries are unchanged; only newly added test dependencies were recorded.
-- **Next — repair B:** preserve captions, full presentation markings and
-  proper ground-grid/eye-level/horizon geometry during drag, preferably with
-  the existing screen-space decoration pipeline and without reintroducing
-  RK4 per intermediate frame. Check real Scene/Compare pixels and performance
-  in Opera before unblocking Stage 4 (wheel, keyboard, camera sequence).
+- **Completed in source — repair B:** the painter now uses the same metric
+  distances and the same Auto/manual drawing extent as the physical metric
+  surface. Rings and 24 radial spokes use the Canvas Direct local-curvature
+  projection, with seven camera-aligned supplementary spokes and metric labels.
+  The paths are batched into at most two strokes and remain display-only;
+  globe linework is clipped to the *approximate* local virtual ground horizon,
+  while Flat gains no invented physical horizon. Extremely strong Flat
+  gradients clip only the drawing range to the finite approximation domain.
+  Source grid topology and curved ray paths remain *approximate*, not RK4
+  pixel parity or independent optical visibility.
+- Drag now passes the actual caption-mode preference, geometry summary and
+  frame through existing `CurvatureFullSceneDecorations`; a preference of
+  `off` still hides captions. The configured eye-level line is repainted after
+  each direct frame. A previously resolved optical horizon is drawn at the
+  moving pose *only* if the cached RK4 diagnosis matches the same physics;
+  otherwise the overlay is omitted until the final accurate redraw. No RK4
+  diagnoses occur inside the pointer RAF. The existing Roll convention is
+  respected for the traced-horizon line (omitted when rolled), pending a
+  proper curved/sloped optical isoline in a separate guide-specific change.
+  The live state/History/export paths and selected final optics are untouched.
+- **Verification (automated):** all 303 test files ran in three Node shards,
+  **1735/1735 assertions passed** (558 + 563 + 614). The Legacy/Modern
+  isolation audit `--check` and the independent Modern boundary audit
+  `--check` passed; the frozen isolation fixture was updated only with the
+  explicitly added physical-world grid import and direct-preview test caller.
+  Targeted Canvas Direct / pointer / orientation tests passed after the final
+  drawing-domain guard. These are code regressions, not Opera raster or FPS
+  certification.
+- **Verification gate remains open:** run manual Opera tests for captions,
+  HiDPI thickness, Globe/Flat grid under Pan/Nick/Shift and independent A/B
+  atmospheres; check real FPS on dense scenes before Stage 4.
+
 
 ## Signed Flat refraction follow-up (2026-11-18; completed before Stage 4)
 

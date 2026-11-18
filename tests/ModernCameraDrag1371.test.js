@@ -60,11 +60,13 @@ function harness(options={}){
     'ModernModelFlat','ModernModelRadius','ModernModelAtmosphere',
     'ModernModelOcclusionWrap','ModernModelOcclusion','ModernRecalculateCompare',
     'ModernCompareEyeLevel','ModernCompareHorizon',
-    'ModernOpticalQuality','ModernOpticalQualityStatus'];
+    'ModernOpticalQuality','ModernOpticalQualityStatus',
+    'ModernHorizonStatusScene','ModernHorizonStatusA','ModernHorizonStatusB'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
-  const draws=[],onloads=[],canvases={},graphs={};
+  const draws=[],onloads=[],canvases={},graphs={},guideStrokes=[];
+  let horizonSolves=0;
   const frames=new Map();let frameId=0;
   const zoomTimers=new Map();let zoomTimerId=0;
   function classes(){const set=new Set();return {add:value=>set.add(value),
@@ -74,7 +76,10 @@ function harness(options={}){
   function cancelFrame(id){frames.delete(id);}
   function makeCanvas(name,width=500,height=320){
     const host={appendChild(node){this.child=node;node.parentNode=this;}};
-    const canvas={name,parentNode:host,listeners:{},classList:classes(),style:{transform:'',willChange:''},captures:new Set(),
+    const guideCtx={save(){},restore(){},setTransform(){},beginPath(){},moveTo(){},lineTo(){},
+      stroke(){guideStrokes.push(name);},fillText(){},setLineDash(){}};
+    const canvas={name,width,height,parentNode:host,listeners:{},classList:classes(),style:{transform:'',willChange:''},captures:new Set(),
+      getContext(){return options.guides?guideCtx:null;},
       getBoundingClientRect(){return {width,height};},
       addEventListener(type,fn,settings){this.listeners[type]=fn;
         if(type==='wheel')this.wheelListenerOptions=settings;},
@@ -92,6 +97,8 @@ function harness(options={}){
     ObjSizeType:[0,0],ObjSize:[23,64],ObjSizeVar:[0,0],
     Update(){this.updated=(this.updated||0)+1;}});}
   const window={CurveAppClass:Model,
+    CurvatureRayHorizon:options.guides?{diagnose(){horizonSolves++;return {status:'resolved',
+      angleDegrees:-.1,dipDegrees:.1,tangentDistance:15000,bracketDegrees:[-.11,-.09]};}}:null,
     CurvatureCameraTranslation:require('../src/geometry/CurvatureCameraTranslation'),
     CurvatureModernSceneState:require('../src/ui/modern/ModernSceneState'),
     CurvatureModernCameraInteraction:interaction,
@@ -133,7 +140,8 @@ function harness(options={}){
     graphs[name]=graph;app.registerCompareGraph(name,graph);
   }
   onloads[0]();
-  return {app,window,nodes,draws,canvases,graphs,document,
+  return {app,window,nodes,draws,canvases,graphs,document,guideStrokes,
+    get horizonSolves(){return horizonSolves;},
     flush(){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn());},
     flushZoom(){const callbacks=[...zoomTimers.values()];zoomTimers.clear();callbacks.forEach(fn=>fn());},
     get queuedZoom(){return zoomTimers.size;},
@@ -671,4 +679,37 @@ test('Canvas Direct: explicit Fast quality is respected on release, despite dire
   c.emit('pointerup',{clientX:88,clientY:105});h.flush();
   assert.equal(h.app.getOpticalQuality(),'fast');
   assert.equal(h.draws.at(-1).opt.opticalQuality,'fast');
+});
+
+test('Canvas Direct pointer frames show configured guides but never start new RK4 horizon diagnostics',()=>{
+  const h=harness({deferred:true,direct:true,guides:true});h.flush();
+  assert.equal(h.horizonSolves,1,'accurate Scene startup diagnoses once');
+  const e=h.nodes.get('ModernCompareEyeLevel');e.checked=true;e.listeners.change();h.flush();
+  const c=h.canvases.Scene,before=h.guideStrokes.length,solves=h.horizonSolves;
+  c.emit('pointerdown');c.emit('pointermove',{clientX:115,clientY:120});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  assert.equal(h.draws.at(-1).opt.deferDecorations,false);
+  assert.equal(h.draws.at(-1).opt.includeGeometrySummary,true);
+  assert.equal(h.draws.at(-1).opt.showCaptions,false,"captions-off preference is respected");
+  assert.equal(h.horizonSolves,solves,'cached optical horizon is only reprojected');
+  assert.ok(h.guideStrokes.length>before,'eye-level and cached horizon appear during drag');
+  c.emit('pointerup',{clientX:115,clientY:120});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+
+test('Canvas Direct uses independent A/B cached horizons and skips mismatched physics during Shift drag',()=>{
+  const h=harness({deferred:true,direct:true,guides:true});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const b=h.canvases.B,solves=h.horizonSolves,before=h.guideStrokes.length;
+  b.emit('pointerdown',{shiftKey:true});
+  b.emit('pointermove',{shiftKey:true,clientX:100,clientY:95});h.flush();
+  assert.equal(h.draws.at(-2).opt.opticalQuality,'canvas-direct');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  assert.equal(h.horizonSolves,solves,'Shift changing provisional Height does not trigger RK4');
+  assert.ok(h.nodes.get('ModernHorizonStatusA').textContent.includes('pending final redraw')||
+    h.nodes.get('ModernHorizonStatusB').textContent.includes('pending final redraw'),
+    'a mismatched cached result is not presented as traced for the new observer height');
+  b.emit('pointerup',{shiftKey:true,clientX:100,clientY:95});h.flush();
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+  assert.ok(h.horizonSolves>solves,'authoritative settle updates horizon for the new height');
 });

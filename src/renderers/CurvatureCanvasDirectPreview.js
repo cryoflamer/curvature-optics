@@ -8,13 +8,14 @@
     root.CurvatureGeometryEngine||(typeof require==='function'?require('../geometry/CurvatureGeometryEngine'):null),
     root.CurvatureOpticalEffectiveRadiusPreview||(typeof require==='function'?require('../optics/OpticalEffectiveRadiusPreview'):null),
     root.CurvatureCameraTranslation||(typeof require==='function'?require('../geometry/CurvatureCameraTranslation'):null),
-    root.CurvatureCanvasProjection||(typeof require==='function'?require('./CurvatureCanvasProjection'):null));
+    root.CurvatureCanvasProjection||(typeof require==='function'?require('./CurvatureCanvasProjection'):null),
+    root.CurvaturePhysicalWorldGeometry||(typeof require==='function'?require('../geometry/CurvaturePhysicalWorldGeometry'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureCanvasDirectPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(geometry,effective,translation,viewport){
+}(typeof globalThis!=='undefined'?globalThis:this,function(geometry,effective,translation,viewport,physicalWorld){
   'use strict';
-  if(!geometry||!effective||!translation||!viewport)
-    throw Error('Canvas Direct requires independent Modern geometry, effective radius, translation and projection');
+  if(!geometry||!effective||!translation||!viewport||!physicalWorld)
+    throw Error('Canvas Direct requires Modern geometry, effective radius, translation, projection and metric landmarks');
   function clock(){return typeof performance!=='undefined'&&performance.now?performance.now():Date.now();}
   function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
   function unit(v){var n=Math.hypot(v[0],v[1],v[2]);if(!(n>0))throw RangeError('Degenerate camera');return v.map(function(x){return x/n;});}
@@ -251,6 +252,113 @@
         ctx.globalAlpha=1;canvasMs+=clock()-start;
         projected+=pts.length;drawn+=lines.length;
       }
+      // These are the SAME metric landmarks/extent as the physical ground grid,
+      // but projected through the local effective-curvature approximation. Do
+      // not ask the RK4 ground sampler for each frame or invent a Flat horizon.
+      // Surface guides are observer-centred, as in the physical renderer; the
+      // authored object meshes above retain their separate world placement.
+      function drawMetricGrid(){
+        if(!(model.showGrid&1))return {rings:0,spokes:0,labels:0,segments:0,extentMeters:0};
+        var extent=physicalWorld.guideExtent(model),radii=physicalWorld.RINGS.filter(function(r){return r<=extent;});
+        if(!radii.length||radii[radii.length-1]<extent)radii.push(extent);
+        var horizon=globe?(H>0?R*Math.acos(R/(R+H)):0):Infinity;
+        // A Flat local-gradient preview may have a finite embedding domain;
+        // reaching that limit is NOT a certified optical or ground horizon.
+        var domain=!globe&&params.effectiveCurvature!==0?
+          (Math.PI/2-1e-3)/Math.abs(params.effectiveCurvature):Infinity;
+        var distances=radii.filter(function(d){return d<=Math.min(horizon,domain)+1e-8;});
+        if(globe&&horizon>0&&horizon<extent&&distances[distances.length-1]!==horizon)
+          distances.push(horizon);
+        function point(d,az){
+          var e=d*Math.sin(az),n=d*Math.cos(az);
+          if(!globe)return flatRefractionPoint(e,n,0,H,params.effectiveCurvature);
+          var t=d/R,stretch=t===0?1:Math.sin(t)/t;
+          return [e*stretch,n*stretch,-2*R*Math.sin(t/2)**2-H];
+        }
+        function segment(d0,a0,d1,a1){
+          var p=cameraPoint(point(d0,a0),true),q=cameraPoint(point(d1,a1),true);
+          if(p.z<=c.near&&q.z<=c.near)return false;
+          if(p.z<=c.near){var t=(c.near-p.z)/(q.z-p.z);
+            p={x:p.x+(q.x-p.x)*t,y:p.y+(q.y-p.y)*t,z:c.near};}
+          if(q.z<=c.near){var u=(c.near-q.z)/(p.z-q.z);
+            q={x:q.x+(p.x-q.x)*u,y:q.y+(p.y-q.y)*u,z:c.near};}
+          var clipped=clipScreenSegment(screen(p),screen(q),canvas.width,canvas.height);
+          if(!clipped||Math.hypot(clipped[0][0]-clipped[1][0],clipped[0][1]-clipped[1][1])<1e-5)
+            return false;
+          ctx.moveTo(clipped[0][0],clipped[0][1]);ctx.lineTo(clipped[1][0],clipped[1][1]);
+          return true;
+        }
+        var result={rings:0,spokes:0,labels:0,segments:0,extentMeters:extent,
+          rangeLimited:domain<extent};
+        if(!distances.length)return result;
+        var started=clock(),pixel=camera.pixelTransform&&camera.pixelTransform.contextScale||1;
+        ctx.save();
+        try{
+          ctx.strokeStyle=globe?model.GlobeGridCol:model.FEGridCol;
+          ctx.globalAlpha=.7;ctx.lineWidth=thinOutlines?1:viewport.lineWidth(1,camera);
+          ctx.beginPath();
+          // Ring polygon chords and 24 radial spokes match the physical grid
+          // source topology; a final clipped spoke endpoint is not a horizon
+          // diagnosis. Keep the entire path batched to avoid thousands of
+          // Canvas stroke calls at interactive frame rates.
+          distances.forEach(function(d){
+            if(d===horizon&&globe)return; // clipping boundary, not an authored ring
+            result.rings++;
+            for(var i=0;i<64;i++)if(segment(d,i*2*Math.PI/64,d,(i+1)*2*Math.PI/64))result.segments++;
+          });
+          for(var a=0;a<24;a++){
+            var az=a*2*Math.PI/24,from=0;
+            distances.forEach(function(d){
+              if(d>from&&segment(from,az,d,az))result.segments++;
+              from=d;
+            });
+            if(from>0)result.spokes++;
+          }
+          if(result.segments){ctx.stroke();strokes++;drawn+=result.segments;}
+          // Camera-aligned supplementary spokes/labels are the same sort of
+          // annotation as the physical metricGridOverlay, not surface geometry.
+          var heading=Math.atan2(camera.center[0]-camera.pos[0],camera.center[1]-camera.pos[1]);
+          var fov=Number.isFinite(model.camViewAngle)&&model.camViewAngle>0?
+            model.camViewAngle:Math.PI/6;
+          var separation=Math.min(.07,Math.max(.004,fov/10));
+          ctx.strokeStyle='#345ab4';ctx.globalAlpha=.42;
+          if(typeof ctx.setLineDash==='function')ctx.setLineDash([3*pixel,5*pixel]);
+          ctx.beginPath();var overlaySegments=0;
+          for(var offset=-3;offset<=3;offset++){
+            var az=heading+offset*separation,prev=0;
+            distances.forEach(function(d){
+              if(d>prev&&segment(prev,az,d,az))overlaySegments++;
+              prev=d;
+            });
+          }
+          if(overlaySegments){ctx.stroke();strokes++;drawn+=overlaySegments;}
+          if(typeof ctx.setLineDash==='function')ctx.setLineDash([]);
+          result.segments+=overlaySegments;
+          if(typeof ctx.fillText==='function'){
+            var marks=radii.filter(function(d){return d>=1000&&d!==7500&&d!==12500&&
+              d<=Math.min(horizon,domain);});
+            var candidates=marks.map(function(d){var p=cameraPoint(point(d,heading+2*separation),true);
+              return p.z>c.near?{radius:d,xy:screen(p)}:null;
+            }).filter(Boolean).sort(function(a,b){return b.radius-a.radius;});
+            var shown=[],right=canvas.width-58*pixel;
+            ctx.font=Math.max(10,11*pixel)+'px Arial';ctx.textAlign='left';ctx.textBaseline='middle';
+            candidates.forEach(function(v){
+              var x=v.xy[0],y=v.xy[1];
+              if(y<75*pixel||y>canvas.height-30*pixel||x<5*pixel||x>right||
+                shown.some(function(mark){return Math.abs(y-mark)<19*pixel;}))return;
+              var label=(v.radius/1000)+' km';
+              var width=typeof ctx.measureText==='function'?ctx.measureText(label).width:label.length*7*pixel;
+              if(x+width+8*pixel>canvas.width)return;
+              ctx.globalAlpha=.83;ctx.fillStyle='#fff';
+              if(typeof ctx.fillRect==='function')ctx.fillRect(x+2*pixel,y-8*pixel,width+6*pixel,16*pixel);
+              ctx.globalAlpha=1;ctx.fillStyle='#34509e';ctx.fillText(label,x+5*pixel,y);
+              shown.push(y);result.labels++;
+            });
+          }
+        }finally{ctx.restore();}
+        canvasMs+=clock()-started;
+        return result;
+      }
       function mask(){
         var points=[];
         for(var i=0;i<192;i++){var t=i*2*Math.PI/192;
@@ -281,30 +389,14 @@
       ctx.lineJoin='round';ctx.lineCap='butt';
       layers.forEach(function(layer){layer.far.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',true);});});});
       if(globe&&layers.some(function(layer){return layer.far.length;}))mask();
-      // Metric guide rings replace the very dense legacy latitude/longitude
-      // grid in this *preview only*. They are not physical surfaces or masks.
-      // A handful of 1/2/3/5/10 km circles preserves distance context and
-      // avoids projecting ~13,000 grid vertices per animation frame.
-      if(geom.showGrid&&H>0){
-        [1000,2000,3000,5000,10000].forEach(function(d){
-          if(globe&&d>R*Math.acos(R/(R+H))+1)return;
-          var ring=[];
-          for(var k=0;k<96;k++){
-            var a=k*2*Math.PI/96,t=globe?d/R:0,r=globe?R*Math.sin(t):d;
-            ring.push(globe?[r*Math.cos(a),r*Math.sin(a),R*(Math.cos(t)-1)-H]:
-              flatRefractionPoint(d*Math.cos(a),d*Math.sin(a),0,H,params.effectiveCurvature));
-          }
-          drawPrimitive({type:'polygon',mode:1,points:ring,
-            style:{stroke:globe?geom.GlobeGridCol:geom.FEGridCol,alpha:.7}},'visual-aid',false);
-        });
-      }
+      var metricGrid=drawMetricGrid();
       if(globe&&(geom.showTangent||geom.showData)){
         geometry.globeHorizonGuides(geom,{segments:192}).primitives.forEach(function(p){drawPrimitive(p,'visual-aid',false);});
       }
       layers.forEach(function(layer){layer.near.forEach(function(group){group.primitives.forEach(function(p){drawPrimitive(p,'objects',false);});});});
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
-        sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,
+        sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,metricGrid:metricGrid,
         fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,geometryReused:source.reused,
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},
