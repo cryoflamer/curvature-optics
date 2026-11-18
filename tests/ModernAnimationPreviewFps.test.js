@@ -39,7 +39,7 @@ function rendererHarness(target='60'){
     profileNow:()=>time,newUiEl:node,attachStudioPreviewGraphs:()=>true,
     syncStudioCameraHud(){},studioFrameLoading(){}
   });
-  const start=app.indexOf('  function renderStudioPlaybackSample(force){');
+  const start=app.indexOf('  function renderStudioPlaybackSample(force,benchmark){');
   const end=app.indexOf('  function syncStudioQualitySummary(){',start);
   assert.ok(start>0&&end>start,'extract real renderer orchestration');
   vm.runInContext(app.slice(start,end)+'\nthis.paint=renderStudioPlaybackSample;',context);

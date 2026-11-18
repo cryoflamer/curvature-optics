@@ -216,6 +216,10 @@ button{cursor:pointer}
 .modern-camera-hud-settings-body small{font-size:11px;color:#60768f;line-height:1.4}
 .modern-camera-hud-settings:not([open]) .modern-camera-hud-settings-body{display:none}
 .modern-animation-profiler-body{width:min(525px,calc(100vw - 32px));max-height:70vh;overflow:auto}
+.modern-animation-benchmark-actions{display:flex;gap:6px;flex-wrap:wrap}
+.modern-animation-benchmark-actions button{padding:6px 9px;cursor:pointer;border:1px solid #b8cee3;border-radius:6px;background:#edf5ff;color:#244764}
+.modern-animation-benchmark-actions button:disabled{opacity:.55;cursor:default}
+.modern-animation-benchmark-actions button[hidden]{display:none}
 .modern-camera-hud-settings-body .modern-animation-profiler-report{float:none;display:block;
   white-space:pre-wrap;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;
   color:#23415f;background:#f2f7fc;border:1px solid #d7e5f1;border-radius:5px;

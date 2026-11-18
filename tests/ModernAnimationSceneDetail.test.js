@@ -96,7 +96,7 @@ test('Playback Scene detail selector repaints the current frame without editing 
   let saves=0,stops=0,paints=0,draftSaves=0;
   const context=vm.createContext({
     studioPlaybackDetail:'performance',studioPlaybackQuality:'auto',studioPlayback:{},
-    studioPlaybackLastPaint:0,
+    studioPlaybackLastPaint:0,bindStudioBenchmark(){},
     newUiEl:id=>({ModernAnimationPlaybackDetail:detail,ModernAnimationPlaybackOptics:optics}[id]||null),
     saveApplicationPreferences(){saves++;},saveStudioDraft(){draftSaves++;},
     stopStudioPlayback(clear){assert.equal(clear,false);stops++;},

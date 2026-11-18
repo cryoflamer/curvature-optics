@@ -34,6 +34,7 @@
   var studioPlaybackControlsApi=root.CurvatureModernAnimationPlaybackControls;
   var studioPlaybackProfilerApi=root.CurvatureModernAnimationPlaybackProfiler;
   var studioPlaybackExperimentApi=root.CurvatureModernAnimationPlaybackExperiment;
+  var studioBenchmarkApi=root.CurvatureModernAnimationPlaybackBenchmark;
   var studioPreviewApi=root.CurvatureModernAnimationPreview;
   var studioPreviewLifecycleApi=root.CurvatureModernAnimationPreviewLifecycle;
   var fastCapabilities=root.CurvatureOpticalFastRayField;
@@ -570,6 +571,7 @@
   var studioPlaybackProfileEnabled=false;
   var studioPlaybackProfiler=studioPlaybackProfilerApi?studioPlaybackProfilerApi.create():null;
   var studioPlaybackExperiment=studioPlaybackExperimentApi?studioPlaybackExperimentApi.create():null;
+  var studioBenchmark=null,studioBenchmarkLastReport=null;
   var studioLibraryEntries=[],studioLibraryActive=null,studioLibraryPending=null;
   var studioLibrarySelected='',studioLibraryBusy=false,studioLibraryMessage='',studioLibraryError=false;
   var studioLibraryExpanded=true,studioLibraryRenamingId='',studioHistoryEntries=[];
@@ -2115,6 +2117,7 @@
     return studioPlaybackControls;
   }
   function stopStudioPlayback(clear){
+    if(studioBenchmark&&studioBenchmark.running())studioBenchmark.cancel();
     studioPlaybackFpsMeter.reset();
     if(clear){
       if(studioPreviewNavigation)studioPreviewNavigation.cancel();
@@ -2156,8 +2159,11 @@
     var clock=newUiEl('ModernAnimationPlaybackTime');
     if(clock)clock.textContent=info.time;
     var probe=newUiEl('ModernAnimationPlaybackExperiment');
+    var benchmarking=!!(studioBenchmark&&studioBenchmark.running());
+    var benchRun=newUiEl('ModernAnimationBenchmarkRun');
+    if(benchRun)benchRun.disabled=benchmarking||!ready||studioPlaybackQuality!=='canvas-direct';
     if(probe){
-      probe.disabled=!studioPlaybackProfileEnabled||!studioPlaybackProfiler||
+      probe.disabled=benchmarking||!studioPlaybackProfileEnabled||!studioPlaybackProfiler||
         studioPlaybackQuality!=='canvas-direct';
       probe.value=studioPlaybackExperiment?studioPlaybackExperiment.mode():'normal';
     }
@@ -2280,10 +2286,10 @@
         studioCameraHud.hide('B');
     }else studioCameraHud.hide('B');
   }
-  function renderStudioPlaybackSample(force){
+  function renderStudioPlaybackSample(force,benchmark){
     if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen)return;
     var now=profileNow();
-    var profiling=studioPlaybackProfileEnabled&&!!studioPlaybackProfiler;
+    var profiling=(studioPlaybackProfileEnabled&&!!studioPlaybackProfiler)||!!benchmark;
     if(!studioPlaybackControlsApi.previewFrameAllowed(
       studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force))return;
     // These modes are intentionally limited to opted-in Canvas Direct Playback.
@@ -2293,7 +2299,8 @@
       studioPlaybackQuality==='canvas-direct'&&
       studioPlaybackExperiment?studioPlaybackExperiment.mode():'normal';
     var renderedAt=studioPlayback.status().positionMs;
-    var plan=probeMode==='normal'?
+    var plan=benchmark?{mode:'normal',paint:true,sample:benchmark.sample,timeMs:benchmark.timeMs}:
+      probeMode==='normal'?
       {mode:'normal',paint:true,sample:studioPlayback.sample(),timeMs:renderedAt}:
       studioPlaybackExperiment.plan(function(){return studioPlayback.sample();},renderedAt);
     var sampled=plan.sample;
@@ -2335,11 +2342,13 @@
     var renderOptions={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
       canvasDirectDiagnostics:canvasDirectDiagnostics,animationMode:studioPrepared.mode};
     var begun=profileNow();
-    var a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
-    var b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
+    var a=benchmark&&benchmark.domOnly?benchmark.A:
+      studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
+    var b=benchmark&&benchmark.domOnly?benchmark.B:
+      isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
     // When Model B discovers an unsupported fast configuration, repaint A
     // in Accurate too: a Compare frame must not silently mix approximations.
-    if(b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
+    if(!benchmark&&b&&b.fallback&&a.quality==='fast')a=studioPreviewRenderer.render(sampled,'A',graphs.A,
       {quality:'accurate',sceneDetail:studioPlaybackDetail,animationMode:studioPrepared.mode});
     var rendererEnd=profiling?profileNow():0;
     syncStudioCameraHud(a,b,graphs,isCompare);
@@ -2953,6 +2962,181 @@
       ' · keyframes and timeline preserved.';
       if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
   }
+  // Benchmark is an independent RAF sequence with a single frozen sample.
+  // No animation project, History entry or export settings are modified.
+  function bindStudioBenchmark(){
+    var run=newUiEl('ModernAnimationBenchmarkRun'),cancel=newUiEl('ModernAnimationBenchmarkCancel');
+    var again=newUiEl('ModernAnimationBenchmarkDownload'),note=newUiEl('ModernAnimationBenchmarkStatus');
+    if(!run||!cancel||!studioBenchmarkApi)return;
+    function busy(value){
+      run.disabled=!!value;cancel.hidden=!value;
+      if(again)again.hidden=!!value||!studioBenchmarkLastReport;
+      ['ModernAnimationPlaybackPlay','ModernAnimationPlaybackPause','ModernAnimationPlaybackStop',
+        'ModernAnimationPlaybackSeek','ModernAnimationPlaybackRetry','ModernAnimationPlaybackOptics',
+        'ModernAnimationPlaybackDetail','ModernAnimationPlaybackFps',
+        'ModernAnimationPlaybackInterpolation','ModernAnimationPlaybackProfileEnabled',
+        'ModernAnimationPlaybackExperiment','ModernCanvasDirectFills','ModernCanvasDirectStrokes',
+        'ModernCanvasDirectMask'].forEach(function(id){
+          var element=newUiEl(id);if(element)element.disabled=!!value;
+        });
+      if(!value)syncStudioPlaybackControls();
+    }
+    function download(report){
+      var filename='curvature-playback-benchmark-'+
+        report.createdAt.replace(/[:.]/g,'-')+'.json';
+      downloadHistoryJson(JSON.stringify(report,null,2)+'\n',filename);
+    }
+    function status(message){if(note)note.textContent=message;}
+    function canvasEnvironment(graph,sample,frameMs){
+      var canvas=graph.Canvas,rect=canvas.getBoundingClientRect?
+        canvas.getBoundingClientRect():{width:canvas.clientWidth,height:canvas.clientHeight};
+      return {scene:sample.scene&&sample.scene.title||studioPrepared.name||'Animation Studio',
+        projectId:studioPrepared.id,projectMode:studioPrepared.mode,
+        fixedTimeMs:frameMs,quality:studioPlaybackQuality,detail:studioPlaybackDetail,
+        previewFps:studioPlaybackFps,userAgent:root.navigator&&root.navigator.userAgent||'',
+        devicePixelRatio:root.devicePixelRatio||1,
+        canvas:{width:canvas.width,height:canvas.height,cssWidth:rect.width,cssHeight:rect.height},
+        diagnostics:{fills:!!(!newUiEl('ModernCanvasDirectFills')||newUiEl('ModernCanvasDirectFills').checked),
+          outlines:!!(!newUiEl('ModernCanvasDirectStrokes')||newUiEl('ModernCanvasDirectStrokes').checked),
+          mask:!!(!newUiEl('ModernCanvasDirectMask')||newUiEl('ModernCanvasDirectMask').checked)}};
+    }
+    run.addEventListener('click',function(){
+      if(studioBenchmark&&studioBenchmark.running())return;
+      if(!studioPlayback||!studioPrepared||!animationWorkspaceOpen||
+        studioPlaybackQuality!=='canvas-direct'){
+        status('Prepare a Canvas Direct project in Animation Studio first.');return;
+      }
+      var player=studioPlayback,previousMode=studioPlaybackExperiment?
+        studioPlaybackExperiment.mode():'normal';
+      var wasPlaying=player.status().playing,position=player.status().positionMs;
+      var controls=ensureStudioPlaybackControls();
+      var frameSample=null,frameTime=position,baseline=null,bitmap=null,canvas=null,ctx=null;
+      var bitmapB=null,canvasB=null,ctxB=null;
+      var restored=false;
+      function restore(){
+        if(restored)return;restored=true;
+        if(studioPlaybackExperiment)studioPlaybackExperiment.setMode(previousMode);
+        studioPlaybackFpsMeter.reset();studioPlaybackLastPaint=-Infinity;
+        studioPlaybackNextDue=-Infinity;
+        busy(false);
+        if(studioPlayback!==player||!animationWorkspaceOpen)return;
+        player.seek(position,profileNow());
+        try{renderStudioPlaybackSample(true);}catch(e){status('Preview restore: '+e.message);}
+        if(wasPlaying){player.start(profileNow());controls.schedule();}
+        syncStudioPlaybackControls();
+      }
+      try{
+        controls.halt();
+        cancelStudioInitialPaint();
+        if(studioPlaybackExperiment)studioPlaybackExperiment.setMode('normal');
+        player.seek(position,profileNow());
+        frameTime=player.status().positionMs;frameSample=player.sample();
+        if(!studioPreviewApi||!attachStudioPreviewGraphs())throw Error('Preview graphs unavailable');
+        if(!studioPreviewRenderer)studioPreviewRenderer=studioPreviewApi.create({
+          Model:root.CurveAppClass,renderer:root.CurvatureMainCanvasRenderer,
+          optics:root.CurvaturePhysicalSceneOptics});
+        var graphs=root.CurvatureModernAnimationGraphs;
+        var settings={quality:studioPlaybackQuality,sceneDetail:studioPlaybackDetail,
+          animationMode:studioPrepared.mode,canvasDirectDiagnostics:{
+            fills:!newUiEl('ModernCanvasDirectFills')||newUiEl('ModernCanvasDirectFills').checked,
+            strokes:!newUiEl('ModernCanvasDirectStrokes')||newUiEl('ModernCanvasDirectStrokes').checked,
+            horizonMask:!newUiEl('ModernCanvasDirectMask')||newUiEl('ModernCanvasDirectMask').checked}};
+        // Render once outside measured callbacks. This is also the DOM-only
+        // reference and the immutable bitmap copied into a separate canvas.
+        baseline={A:studioPreviewRenderer.render(frameSample,'A',graphs.A,settings),B:null};
+        if(frameSample.display.mode==='compare')
+          baseline.B=studioPreviewRenderer.render(frameSample,'B',graphs.B,settings);
+        canvas=graphs.A.Canvas;ctx=canvas.getContext('2d');
+        bitmap=document.createElement('canvas');bitmap.width=canvas.width;bitmap.height=canvas.height;
+        var copy=bitmap.getContext('2d');
+        if(!copy)throw Error('Bitmap capture context unavailable');
+        copy.drawImage(canvas,0,0);
+        if(baseline.B){
+          canvasB=graphs.B.Canvas;ctxB=canvasB.getContext('2d');
+          bitmapB=document.createElement('canvas');
+          bitmapB.width=canvasB.width;bitmapB.height=canvasB.height;
+          var otherCopy=bitmapB.getContext('2d');
+          if(!otherCopy)throw Error('Compare bitmap context unavailable');
+          otherCopy.drawImage(canvasB,0,0);
+        }
+        var env=canvasEnvironment(graphs.A,frameSample,frameTime);
+        function renderer(){
+          var a=studioPreviewRenderer.render(frameSample,'A',graphs.A,settings);
+          var b=baseline.B?studioPreviewRenderer.render(frameSample,'B',graphs.B,settings):null;
+          return {A:a,B:b};
+        }
+        function metrics(res,post){
+          var a=res&&res.A&&res.A.result||{},b=res&&res.B&&res.B.result||{},t=a.timings||{},u=b.timings||{};
+          return {rendererMs:res?post:null,postMs:null,
+            projectionMs:Number.isFinite(t.projectionMs)?t.projectionMs+(u.projectionMs||0):null,
+            canvasMs:Number.isFinite(t.canvasMs)?t.canvasMs+(u.canvasMs||0):null,
+            fillCalls:Number.isFinite(a.fillCalls)?a.fillCalls+(b.fillCalls||0):null,
+            strokeCalls:Number.isFinite(a.strokeCalls)?a.strokeCalls+(b.strokeCalls||0):null};
+        }
+        studioBenchmarkLastReport=null;busy(true);
+        studioBenchmark=studioBenchmarkApi.create({
+          requestFrame:function(cb){return requestAnimationFrame(cb);},
+          cancelFrame:function(id){cancelAnimationFrame(id);},now:profileNow,
+          step:function(mode){
+            if(studioPlayback!==player||!animationWorkspaceOpen||document.hidden)
+              throw Error('Benchmark interrupted by workspace or visibility change');
+            var began=profileNow(),results=null,info;
+            if(mode==='normal'){
+              info=renderStudioPlaybackSample(true,{sample:frameSample,timeMs:frameTime});
+              syncStudioPlaybackControls();
+              var diag=info&&info.A;
+              return {rendererMs:info&&info.rendererMs||null,postMs:info&&info.postMs||null,
+                projectionMs:diag&&diag.projectionMs,canvasMs:diag&&diag.canvasMs,
+                fillCalls:baseline.A.result&&baseline.A.result.fillCalls+
+                  (baseline.B&&baseline.B.result.fillCalls||0),
+                strokeCalls:baseline.A.result&&baseline.A.result.strokeCalls+
+                  (baseline.B&&baseline.B.result.strokeCalls||0)};
+            }
+            if(mode==='canvas_only'){
+              results=renderer();
+              info=metrics(results,profileNow()-began);return info;
+            }
+            if(mode==='dom_only'){
+              info=renderStudioPlaybackSample(true,{sample:frameSample,timeMs:frameTime,
+                domOnly:true,A:baseline.A,B:baseline.B});
+              syncStudioPlaybackControls();
+              return {rendererMs:null,postMs:profileNow()-began};
+            }
+            if(mode==='bitmap_replay'){
+              ctx.save();try{ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(bitmap,0,0);}
+              finally{ctx.restore();}
+              if(bitmapB){
+                ctxB.save();try{ctxB.setTransform(1,0,0,1,0,0);ctxB.drawImage(bitmapB,0,0);}
+                finally{ctxB.restore();}
+              }
+              return {rendererMs:profileNow()-began,postMs:null};
+            }
+            if(mode==='compute_only'){
+              player.sample();return {rendererMs:null,postMs:null};
+            }
+            throw Error('Unexpected benchmark mode');
+          },
+          progress:function(state){
+            status('Pass '+state.pass+'/'+state.passes+' · '+state.mode+
+              ' · '+state.measured+'/'+state.total+' measured · '+state.completed+'/15 runs');
+          },
+          completed:function(report){
+            studioBenchmarkLastReport=report;restore();
+            status('Benchmark complete: 15 runs across five modes. JSON downloaded automatically.');
+            try{download(report);}catch(error){status('Benchmark complete, automatic download failed: '+error.message+'. Use Download last JSON.');}
+            if(again)again.hidden=false;
+          },
+          failed:function(error){restore();status('Benchmark failed: '+error.message);},
+          cancelled:function(){restore();status('Benchmark cancelled; Playback restored.');}
+        });
+        studioBenchmark.start({environment:env});
+      }catch(error){restore();status('Benchmark could not start: '+error.message);}
+    });
+    cancel.addEventListener('click',function(){if(studioBenchmark)studioBenchmark.cancel();});
+    if(again)again.addEventListener('click',function(){
+      if(studioBenchmarkLastReport&&!studioBenchmark.running())download(studioBenchmarkLastReport);
+    });
+  }
   function bindStudioPlayback(){
     function playbackNotice(text,kind){
       var status=newUiEl('ModernAnimationPlaybackStatus');
@@ -2968,6 +3152,7 @@
         playbackNotice('Camera interpolation: '+error.message,'error');
       }
     });
+    bindStudioBenchmark();
     var profileToggle=newUiEl('ModernAnimationPlaybackProfileEnabled');
     if(profileToggle)profileToggle.addEventListener('change',function(){
       studioPlaybackProfileEnabled=!!profileToggle.checked;
@@ -3088,6 +3273,7 @@
     bindStudioVideoExport();
     observeStudioPreviewSize();
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
+      if(document.hidden&&studioBenchmark&&studioBenchmark.running())studioBenchmark.cancel();
       controls.visibility(document.hidden);
     });
   }

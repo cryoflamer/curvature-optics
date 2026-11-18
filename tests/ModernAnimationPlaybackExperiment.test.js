@@ -42,7 +42,7 @@ function previewHarness(){
     profileNow:()=>time,newUiEl:ui,attachStudioPreviewGraphs:()=>true,
     syncStudioCameraHud(){},studioFrameLoading(){}
   });
-  const start=app.indexOf('  function renderStudioPlaybackSample(force){');
+  const start=app.indexOf('  function renderStudioPlaybackSample(force,benchmark){');
   const end=app.indexOf('  function syncStudioQualitySummary(){',start);
   assert.ok(start>0&&end>start);
   vm.runInContext(app.slice(start,end)+'\nthis.paint=renderStudioPlaybackSample;',ctx);
@@ -101,6 +101,25 @@ test('real Preview orchestration: Replay redraws identical sample even when time
   assert.equal(h.renders[4].position,43000,'normal preview follows live camera again');
 });
 
+test('benchmark fixed frame can redraw Canvas or replay DOM without a Canvas render',()=>{
+  const h=previewHarness();
+  h.ctx.studioPlaybackProfileEnabled=false;
+  h.ctx.studioPlaybackProfiler=null;
+  const fixed={display:{mode:'scene'},cameraFrame:26000};
+  const first=h.ctx.paint(true,{sample:fixed,timeMs:26000});
+  assert.equal(first.painted,true);
+  assert.equal(h.renders.length,1);
+  assert.equal(first.rendererMs,11);
+  const prior=h.renders.length;
+  const frame={quality:'canvas-direct',result:{drawn:128,timings:{totalMs:11,
+    composeMs:0.2,geometryMs:0,projectionMs:5,canvasMs:4}},overlays:{}};
+  const dom=h.ctx.paint(true,{sample:fixed,timeMs:26000,domOnly:true,A:frame,B:null});
+  assert.equal(dom.painted,true);
+  assert.equal(h.renders.length,prior,'DOM-only cannot call the renderer');
+  assert.equal(dom.rendererMs,0,'DOM-only contains no primary Canvas rendering time');
+  assert.equal(h.ui('ModernAnimationPlaybackDiagnostics').textContent.includes('Canvas Direct'),true);
+});
+
 test('profiler distinguishes compute samples from paints and reports the replay mode',()=>{
   const p=profiler.create({capacity:8,refreshMs:1});p.setEnabled(true);
   p.record({atMs:100,loopMs:4,clockMs:0,syncMs:1,otherMs:0,
@@ -125,7 +144,7 @@ test('opt-in UI exposes diagnostic controls only on the Modern page and before a
   const marker='src/animation/ModernAnimationPlaybackExperiment.js';
   assert.ok(html.indexOf(marker)>html.indexOf('src/animation/ModernAnimationPlaybackProfiler.js'));
   assert.ok(html.indexOf(marker)<html.indexOf('src/ui/modern/ModernApp.js'));
-  assert.match(app,/probe.disabled=!studioPlaybackProfileEnabled/);
+  assert.match(app,/probe.disabled=benchmarking\|\|!studioPlaybackProfileEnabled/);
   assert.match(app,/studioPlaybackQuality!=='canvas-direct'/);
   assert.match(app,/studioPlaybackExperiment.setMode\('normal'\)/);
   assert.match(app,/studioPlaybackExperiment\.clear\(\)/);

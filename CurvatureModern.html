@@ -93,6 +93,7 @@
 <script src="src/animation/ModernAnimationPlaybackControls.js"></script>
 <script src="src/animation/ModernAnimationPlaybackProfiler.js"></script>
 <script src="src/animation/ModernAnimationPlaybackExperiment.js"></script>
+<script src="src/animation/ModernAnimationPlaybackBenchmark.js"></script>
 <script src="src/animation/ModernAnimationDraftAutosave.js?studio-hud-fix=1&amp;compatible-sequences=1&amp;spline-core=1&amp;stash-restore=1"></script>
 <script src="src/animation/ModernAnimationWorkspaceRecovery.js"></script>
 <script src="src/animation/ModernAnimationWorkspaceSwitch.js"></script>
@@ -288,6 +289,12 @@
               <option value="replay">Canvas replay · fixed camera frame</option>
             </select>
             <small id="ModernAnimationPlaybackExperimentNote">Compare modes at the same Soundly segment. Compute only leaves the last pixels on screen; Canvas replay redraws one fixed sample without advancing its camera.</small>
+            <div class="modern-animation-benchmark-actions">
+              <button type="button" id="ModernAnimationBenchmarkRun" title="Run three passes through five fixed-frame modes and download one JSON report">Run benchmark</button>
+              <button type="button" id="ModernAnimationBenchmarkCancel" hidden>Cancel benchmark</button>
+              <button type="button" id="ModernAnimationBenchmarkDownload" hidden>Download last JSON</button>
+            </div>
+            <small id="ModernAnimationBenchmarkStatus" role="status">A fixed camera frame is compared in five modes, three passes; 30 warmup and 120 measured RAF callbacks per mode. Normal uses the fixed sample too.</small>
             <output id="ModernAnimationPlaybackProfileReport" class="modern-animation-profiler-report" aria-live="off">Enable profiling, then Play the animation.</output>
             <small>Recent main-thread p50 / p95 timings. Paint gaps include browser scheduling; Canvas 2D timings exclude deferred compositing. Profiling itself adds some overhead.</small>
           </div>

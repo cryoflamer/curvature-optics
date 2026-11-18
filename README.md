@@ -849,6 +849,32 @@ rasterization/compositing time, and separate p95 values are not additive.
 The profiler never changes optics, frame cap or export; turning it off clears
 its rolling measurements. Browser measurements remain necessary for conclusions.
 
+### One-click Canvas Direct benchmark
+
+Under **Animation Studio → Playback profiler → Run benchmark**, a separate,
+opt-in diagnostic runner pauses the live playhead and freezes one Scene/Compare
+sample at its current position. **Normal (fixed sample)** repeats the full
+preview+HUD/quality/UI path. **Canvas only** repeats the physical Canvas Direct
+renderer without Playback DOM updates. **DOM only** updates the HUD, quality
+report and Playback UI using a pre-rendered result, without repainting the main
+Canvas. **Bitmap replay** redraws an offscreen copy via `drawImage` (and the
+Compare B image if present). **Compute only** re-samples the fixed playhead
+without rendering. These modes are intentionally different from the earlier
+*live* Compute/Replay experiments.
+
+One click runs three passes through all five modes in rotated order: each mode
+has 30 unmeasured warmup RAF callbacks, then 120 measured callbacks. A visible
+progress counter and **Cancel benchmark** are provided. On completion, a single
+`curvature-playback-benchmark-*.json` is automatically downloaded and can be
+retrieved via **Download last JSON**. It includes per-run samples and p50/p95
+for RAF scheduling gaps, callback CPU time and available Canvas Direct timings,
+plus canvas backing/CSS dimensions, DPR, browser user agent and render settings.
+The controls and playback state are restored on completion, cancellation, or
+error; the runner does not edit experiment keyframes, save a project, or change
+PNG/video export quality. Do not mistake synchronous Canvas API timings for
+deferred browser raster/composition time. Run from a representative slow frame
+with Canvas Direct selected and avoid changing the browser window mid-run.
+
 ### Animation performance and pixel parity
 
 After #140.12.120.6 the Animation Studio has a collapsible **Performance & pixel parity**

@@ -57,6 +57,7 @@ function harness(mode='camera'){
     studioEditHistory:null,
     studioPlaybackQuality:'auto',studioPlaybackFps:'auto',
     studioPlaybackFpsMeter:controls.createPreviewFpsMeter(),animationWorkspaceOpen:true,
+    studioBenchmark:null,bindStudioBenchmark(){},
     profileNow:()=>now,document:{hidden:false,addEventListener(){}},
     root:{},
     requestAnimationFrame(fn){const id=queue.size+1;queue.set(id,fn);return id;},
