@@ -1,5 +1,14 @@
 # Modern Animation project contracts — compatibility foundation
 
+**Planned built-in project lifecycle:** see [Modern built-in demonstrations](modern-demo-catalog.md)
+for the agreed catalog, immutable originals, independent copies and acceptance
+roadmap. Built-ins will reuse these contracts and portable project validators;
+origin/read-only status belongs to trusted catalog/lifecycle metadata rather
+than a new animation mode. No built-in runtime is implemented by roadmap
+patch 0. Scene/Compare adaptation must preserve reference equality and valid
+physical target scope; optional narrative support is a later compatibility
+change.
+
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can
 match keywords yet still be rejected by a project's locked scene or physics.

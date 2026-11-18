@@ -15,7 +15,11 @@ storyboards, composite overlays or narrated transitions is certified as
 reproduced. The read-only [storyboard readiness audit](docs/modern-location-migration.md)
 accounts for all **80 source states / 71 transitions** and their native preset
 anchors; the [location checklist](docs/modern-location-migration.md) tracks
-numerical, visual, animation and browser acceptance gates.
+numerical, visual, animation and browser acceptance gates. The agreed next
+implementation path is the [Modern built-in demo catalog roadmap](docs/modern-demo-catalog.md):
+immutable Studio projects, editable copies, synchronized Compare playback and
+presentation mode. Soundly is the first candidate; the catalog is planned,
+not yet shipped. Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one
 of the two illustrative samples. It is a *starting configuration*, not a

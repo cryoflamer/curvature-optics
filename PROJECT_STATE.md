@@ -1,3 +1,16 @@
+> **Current roadmap — Modern built-in demonstrations (2026-11-18):**
+> Patch 0 records the agreed Studio-based architecture and ordered delivery
+> gates in [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
+> Built-ins are shipped immutable projects, separate from My Projects;
+> explicit copies are independent editable named projects. No new demo engine.
+> The supplied Soundly v2 Camera export validates (9 frames, 59.1 s); a
+> detached Compare reference also validates and samples, but browser playback
+> is not yet verified. **NEXT: patch 1 — catalog and original Soundly JSON.**
+> Patch 0 changes documentation only. User reported green CI after the
+> obsolete profiler-test cleanup; tag relocation has not been independently
+> verified. Stage 5D remains deferred; extreme fallback and measured FPS
+> remain open. The Canvas Direct notes below are historical baseline evidence.
+
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
 > Stages **1–3 complete**: after corrective repair C the user reported normal,
 > very fast and smooth Opera interaction (manual observation, no measured FPS).
@@ -46,8 +59,8 @@
 > independent quality-audit profiling remain intact. Targeted Node tests:
 > 14/14 passed. All nine remaining Chromium smoke tests were attempted locally
 > but navigation was blocked by the environment (`ERR_BLOCKED_BY_ADMINISTRATOR`);
-> GitHub Actions verification remains required before tagging.
-> **NEXT:** manual Opera regression (Scene/Compare pointer, wheel, keyboard,
+> GitHub Actions subsequently passed, as reported by the user.
+> **Remaining Canvas Direct validation:** manual Opera regression (Scene/Compare pointer, wheel, keyboard,
 > Camera Animation, Studio and unsupported-case fallback). Stage 5D was
 > deferred at the user's request to proceed to cleanup; representative
 > requalification and measured browser FPS are still open. Stage 5C extreme

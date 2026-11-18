@@ -16,6 +16,14 @@ effect. This plan supersedes the earlier *archive-only product preference* in
 its Legacy-preservation and scientific-evidence gates. Migrated Modern scenes
 are adaptations, not claims of pixel-for-pixel or optical equivalence.
 
+**Current delivery direction (2026-11-18):** the agreed
+[Modern built-in demo catalog roadmap](modern-demo-catalog.md) is now the
+active implementation order. Demonstrations are immutable authored Animation
+Studio projects with editable copies, not a second runtime. Soundly is the
+first candidate. The inventory, source-state mapping and parity gates below
+remain authoritative evidence; the older numbered delivery sequence is
+historical and does not authorize deletion of Legacy.
+
 ## Delivery sequence after Bedford
 
 - [x] **#36 — Preset/experiment navigation:** preserve the outgoing full
@@ -621,7 +629,9 @@ exact preset object-bank anchoring** (including the four variation fields that
 `applyPreset` explicitly clears to zero when absent). It neither constructs
 Modern experiments for the remaining states nor replays any transitions.
 
-### Ordered delivery plan (after caption work #47–49)
+### Historical ordered delivery plan (after caption work #47–49)
+
+Superseded for implementation ordering by the [built-in demo catalog roadmap](modern-demo-catalog.md). The evidence and scope guards remain applicable.
 
 1. **#50 — One bounded storyboard prototype.** Choose *one* existing source
    transition with a simple camera/physical change and review its real `TaskList`.
