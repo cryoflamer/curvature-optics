@@ -1,5 +1,5 @@
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
-> Stages **1–3/6 complete**; Stage **4 — shared interaction preview pipeline** is
+> Stages **1–3/6 complete**, with **signed Flat refraction qualification**; Stage **4 — shared interaction preview pipeline** is
 > next. See [`docs/interactive-rendering-migration.md`](docs/interactive-rendering-migration.md)
 > for the source inventory, acceptance gates, detailed stage-2 notes and
 > cross-chat handoff. The prior base is `b972890` (Studio defaults compatpatch).
@@ -7,7 +7,7 @@
 > checked **Thin outlines ≤ 1 backing pixel** and **Auto FPS**. Explicit quality
 > choices in old drafts/Library records are preserved, and newly selected
 > Canvas Direct can now survive workspace autosave. Unsupported refractive
-> atmospheres/Flat cases fall back to Accurate with an explanatory status;
+> atmospheres and unqualified local-gradient cases fall back to Accurate with an explanatory status;
 > Compare does not silently mix direct/accurate frames. The authored project
 > schema, authoritative Scene/Compare and Accurate PNG/video export are unchanged.
 > Targeted tests: 110/110; wider animation/camera/export regression: 595/595;
@@ -16,7 +16,12 @@
 > **Scene/Compare pointer drags** (Pan/Nick and Shift-translation) through
 > RAF-coalesced Canvas Direct with 1 backing-pixel outlines; live scene
 > physics remains unchanged until release. Both Compare atmospheres must
-> qualify; unsupported Flat refraction retains the prior Fast/CSS preview.
+> qualify. **Flat Standard now qualifies** using negative virtual curvature;
+> unsupported atmospheres still retain the prior Fast/CSS preview. This signed
+> Flat extension was tested against the Accurate Flat RK4 launch angle at
+> representative 1–40 km distances (error under 0.3 µrad in those cases).
+> It is a local preview approximation, not accurate Flat ray tracing.
+> See the signed Flat follow-up in the migration roadmap; Stage 4 is still next.
 > Release/cancel/failure restore the configured physical renderer. Wheel,
 > keyboard and camera sequences are untouched; Stage 4 covers those paths.
 > Stage 3 pointer/Animation/Compare/isolation suite: 635/635; separate

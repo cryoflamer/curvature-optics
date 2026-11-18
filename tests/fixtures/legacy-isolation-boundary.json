@@ -1749,6 +1749,7 @@
         "src/renderers/CurvatureCanvasDirectPreview.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernEffectiveRadiusPreview.test.js"
       ],
@@ -1910,6 +1911,7 @@
         "tests/AtmosphericSceneReliability109.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/InversePreparedGradient.test.js",
+        "tests/ModernEffectiveRadiusPreview.test.js",
         "tests/ModernFastPreview.test.js",
         "tests/OpticalAdaptiveFastRayField.test.js",
         "tests/OpticalContinuousCurvature125.test.js",

@@ -98,9 +98,8 @@ function harness(options={}){
     CurvatureModernCameraDragPreview:require('../src/ui/modern/ModernCameraDragPreview'),
     CurvatureModernCameraCanvasDirectDrag:options.direct?require('../src/ui/modern/ModernCameraCanvasDirectDrag'):null,
     CurvatureOpticalEffectiveRadiusPreview:options.direct?{parameters(m,spec){
-      if(m.showModel===2&&spec.atmosphere!=='vacuum')throw RangeError('Flat refraction unsupported');
       if(options.rejectDirect&&options.rejectDirect(m,spec))throw RangeError('Atmosphere unsupported');
-      return {effectiveRadius:m.rEarth,k:0};
+      return require('../src/optics/OpticalEffectiveRadiusPreview').parameters(m,spec);
     }}:null,
     CurvatureModernCameraPerspectiveWarp:options.perspective?require('../src/ui/modern/ModernCameraPerspectiveWarp'):null,
     CurvatureModernRenderProfiler:require('../src/ui/modern/ModernRenderProfiler'),
@@ -572,18 +571,33 @@ test('Canvas Direct: compatible Compare paints both sides with shared pose and i
   assert.equal(h.draws.at(-2).opt.opticalQuality,'accurate');
   assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
 });
-test('Canvas Direct: Compare rejects a mixed supported/unsupported pair without partial direct frames',()=>{
+test('Canvas Direct: default Globe/Flat Standard Compare now previews both sides',()=>{
   const h=harness({deferred:true,direct:true});h.flush();
   h.nodes.get('ModernCompareTab').listeners.click();h.flush();
   const before=h.draws.length,b=h.canvases.B;
-  // The default Compare pair has Standard atmosphere on both Globe/Flat;
-  // Effective Radius does not support refraction on a Flat surface.
   assert.equal(h.app.getCompareConfig().B.surface,'flat');
   assert.equal(h.app.getCompareConfig().B.atmosphere,'standard');
   b.emit('pointerdown',{pointerId:8});b.emit('pointermove',{pointerId:8,clientX:100,clientY:90});
   h.flush();
+  assert.equal(h.draws.length,before+2);
+  assert.equal(h.draws.at(-2).opt.opticalQuality,'canvas-direct');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'canvas-direct');
+  assert.equal(h.draws.at(-1).opt.atmosphere,'standard');
+  assert.equal(h.draws.at(-1).m.showModel,2);
+  b.emit('pointerup',{pointerId:8,clientX:100,clientY:90});h.flush();
+  assert.equal(h.draws.at(-2).opt.opticalQuality,'accurate');
+  assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
+});
+
+test('Canvas Direct: Compare rejects an unsupported side without partially drawing A',()=>{
+  const h=harness({deferred:true,direct:true,
+    rejectDirect:(m,spec)=>m.showModel===2&&spec.atmosphere==='standard'});h.flush();
+  h.nodes.get('ModernCompareTab').listeners.click();h.flush();
+  const before=h.draws.length,b=h.canvases.B;
+  b.emit('pointerdown',{pointerId:8});b.emit('pointermove',{pointerId:8,clientX:100,clientY:90});
+  h.flush();
   assert.match(h.nodes.get('ModernOpticalQualityStatus').textContent,/Canvas Direct drag unavailable/);
-  assert.equal(h.draws.length,before,'Accurate fallback uses existing CSS drag preview');
+  assert.equal(h.draws.length,before,'unsupported side retains old drag preview');
   b.emit('pointerup',{pointerId:8,clientX:100,clientY:90});h.flush();
   assert.equal(h.draws.at(-1).opt.opticalQuality,'accurate');
 });

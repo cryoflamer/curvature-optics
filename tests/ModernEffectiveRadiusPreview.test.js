@@ -38,8 +38,56 @@ test('local k is derived from the Modern atmosphere; unsupported profiles reject
   assert.equal(v.k,0);assert.equal(v.effectiveRadius,R);
   assert.ok(s.k>0&&s.k<.5);assert.ok(s.effectiveRadius>R);
   assert.ok(t.k>0&&t.k<.5);assert.notEqual(s.k,t.k);
-  assert.throws(()=>effective.parameters(m({showModel:2}),{atmosphere:'standard'}),/Flat/);
+  const flatStandard=effective.parameters(m({showModel:2}),{atmosphere:'standard'});
+  const flatVacuum=effective.parameters(m({showModel:2}),{atmosphere:'vacuum'});
+  const flatLapse=effective.parameters(m({showModel:2}),{atmosphere:'temperature-lapse',
+    temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5}});
+  assert.equal(flatVacuum.effectiveCurvature,0);
+  assert.equal(flatVacuum.effectiveRadius,Infinity);
+  assert.ok(flatStandard.k>0&&flatStandard.effectiveCurvature<0);
+  assert.ok(flatStandard.effectiveRadius<0&&flatLapse.effectiveRadius<0);
+  assert.ok(Math.abs(flatStandard.effectiveCurvature-s.effectiveCurvature+1/R)<1e-15);
+  assert.equal(effective.parameters(m({showModel:2,rEarth:R*2}),{atmosphere:'standard'}).effectiveCurvature,
+    flatStandard.effectiveCurvature,'flat curvature must not depend on unused globe radius');
   assert.throws(()=>effective.parameters(m(),{atmosphere:'inverse-temperature'}),/supports/);
+});
+test('signed Flat effective curvature predicts near-horizontal ray angles close to RK4',()=>{
+  const projection=require('../src/optics/OpticalTargetProjection');
+  const eye=15,model=m({showModel:2,Height:eye});
+  for(const atmosphere of ['standard','temperature-lapse']){
+    const options=atmosphere==='temperature-lapse'?{
+      temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5}}:{};
+    const p=effective.parameters(model,{atmosphere,...options});
+    for(const distance of [1000,5000,10000,20000,40000]){
+      const approximate=effective.ray(p,distance,0);
+      const exact=projection.solve({geometry:'flat',atmosphere,
+        profileOptions:options.temperatureProfile,observerHeight:eye,
+        target:[distance,0],step:500});
+      assert.equal(approximate.status,'visible');
+      assert.equal(exact.status,'visible');
+      assert.ok(Math.abs(approximate.angle-exact.angle)<3e-7,
+        `${atmosphere}, ${distance} m: ${approximate.angle-exact.angle}`);
+    }
+  }
+  const vacuum=effective.parameters(model,{atmosphere:'vacuum'});
+  assert.equal(effective.ray(vacuum,12000,0).angle,Math.atan2(-eye,12000));
+});
+test('signed Flat approximation remains bounded on sampled observer/target heights',()=>{
+  const projection=require('../src/optics/OpticalTargetProjection');
+  for(const atmosphere of ['standard','temperature-lapse']){
+    for(const eye of [5,15,100])for(const height of [0,10,100]){
+      const params=effective.parameters(m({showModel:2,Height:eye}),{atmosphere});
+      for(const distance of [1000,10000,40000]){
+        const preview=effective.ray(params,distance,height);
+        const exact=projection.solve({geometry:'flat',atmosphere,
+          observerHeight:eye,target:[distance,height],step:500});
+        assert.equal(exact.status,'visible');
+        assert.equal(preview.status,'visible');
+        assert.ok(Math.abs(preview.angle-exact.angle)<5e-6,
+          `qualified sample: ${atmosphere} eye=${eye} target=${height} d=${distance}`);
+      }
+    }
+  }
 });
 test('vacuum analytical projection agrees with production and refractive horizon moves farther',()=>{
   const v=effective.parameters(m(),{atmosphere:'vacuum'}),s=effective.parameters(m(),{atmosphere:'standard'});

@@ -1,4 +1,4 @@
-/* Experimental Animation Studio painter: effective sphere + straight-line
+/* Interactive Canvas Direct painter: signed effective curvature + straight-line
  * projection of authored world polygons directly to Canvas 2D. No optical ray
  * sampling, SceneFrame, ear clipping or Legacy/GraphX3DX drawing routines.
  * Horizon masking is intentionally the approximate Legacy painter convention.
@@ -76,6 +76,23 @@
     return {back:back,right:right,up:up,window:window,scale:focal*camera.zoom,
       near:camera.near>0?camera.near:1e-6,pos:camera.pos};
   }
+  // Signed effective surface embedding in the observer's local tangent frame.
+  // Flat with downward-bent rays is represented by an upward-bowed virtual
+  // surface (negative curvature). This is preview-only: physical Flat source
+  // geometry, camera data and accurate RK4 are not modified.
+  function flatRefractionPoint(east,north,height,eye,curvature){
+    var distance=Math.hypot(east,north),angle=curvature*distance;
+    if(!Number.isFinite(angle)||Math.abs(angle)>=Math.PI/2)
+      throw RangeError('Flat effective curvature exceeds local preview range');
+    var stretch=1+curvature*height;
+    if(!(stretch>0))throw RangeError('Flat effective surface height is unsupported');
+    // Stable for tiny curvature and exactly identical to the vacuum plane
+    // when curvature is zero (no subtraction of enormous virtual radii).
+    var sinc=angle===0?1:Math.sin(angle)/angle;
+    var half=angle===0?1:Math.sin(angle/2)/(angle/2);
+    var sag=0.5*curvature*distance*distance*stretch*half*half;
+    return [east*stretch*sinc,north*stretch*sinc,height-eye-sag];
+  }
   // Source geometry is authored at Height=0 and can be reused as the camera
   // moves. Height is subtracted at projection time, not stored in the mesh.
   function geometricModel(model,params){
@@ -136,6 +153,12 @@
       var ctx=canvas.getContext('2d');
       if(!ctx||typeof ctx.beginPath!=='function'||typeof ctx.fill!=='function')throw TypeError('Canvas Direct needs Canvas 2D');
       function cameraPoint(point,local){
+        if(!local&&!globe&&params.effectiveCurvature!==0){
+          var vFlat=flatRefractionPoint(point[0]-east,point[1]-north,point[2],H,
+            params.effectiveCurvature);
+          return {x:dot(vFlat,c.right)-off[0],y:dot(vFlat,c.up)-off[1],
+            z:-dot(vFlat,c.back)-off[2]};
+        }
         var v=local?point:[point[0]-origin[0],point[1]-origin[1],point[2]-origin[2]];
         // Ground guides/masks are observer-local: they are not transformed by
         // the moving object's rigid frame.
@@ -261,7 +284,8 @@
           var ring=[];
           for(var k=0;k<96;k++){
             var a=k*2*Math.PI/96,t=globe?d/R:0,r=globe?R*Math.sin(t):d;
-            ring.push([r*Math.cos(a),r*Math.sin(a),globe?R*(Math.cos(t)-1)-H:-H]);
+            ring.push(globe?[r*Math.cos(a),r*Math.sin(a),R*(Math.cos(t)-1)-H]:
+              flatRefractionPoint(d*Math.cos(a),d*Math.sin(a),0,H,params.effectiveCurvature));
           }
           drawPrimitive({type:'polygon',mode:1,points:ring,
             style:{stroke:globe?geom.GlobeGridCol:geom.FEGridCol,alpha:.7}},'visual-aid',false);
@@ -282,5 +306,6 @@
     }
     return Object.freeze({paint:paint,clearCache:function(){cachedKey=null;cached=null;}});
   }
-  return Object.freeze({create:create,geometricModel:geometricModel});
+  return Object.freeze({create:create,geometricModel:geometricModel,
+    flatRefractionPoint:flatRefractionPoint});
 }));

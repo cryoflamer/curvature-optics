@@ -145,15 +145,54 @@ test('all-near supports do not trigger a false white horizon mask',()=>{
   // away: its geometry is outside the viewport and must not be painted.
   assert.equal(r.directStats.strokeCalls,0);
 });
-test('non-vacuum Globe and Flat Vacuum work; refracted Flat and unsupported profiles reject',()=>{
+test('Globe and Flat render Vacuum and Standard with independent signed curvature',()=>{
   const m=soundly();
-  const r=draw(m,{atmosphere:'standard'});
-  assert.ok(r.refractionK>0&&r.effectiveRadiusMeters>m.rEarth);
-  assert.equal(r.opticalQuality,'canvas-direct');
+  const globe=draw(m,{atmosphere:'standard'});
+  assert.ok(globe.refractionK>0&&globe.effectiveRadiusMeters>m.rEarth);
+  assert.equal(globe.opticalQuality,'canvas-direct');
   assert.throws(()=>draw(m,{atmosphere:'inverse-temperature'}),/supports/);
   m.showModel=2;m.Update();
-  assert.equal(draw(m).opticalQuality,'canvas-direct');
-  assert.throws(()=>draw(m,{atmosphere:'standard'}),/Flat/);
+  const vacuum=draw(m),standard=draw(m,{atmosphere:'standard'});
+  assert.equal(vacuum.opticalQuality,'canvas-direct');
+  assert.equal(vacuum.effectiveRadiusMeters,Infinity);
+  assert.equal(standard.opticalQuality,'canvas-direct');
+  assert.ok(standard.refractionK>0&&standard.effectiveRadiusMeters<0);
+  assert.equal(standard.directStats.horizonMasks,0,
+    'downward ray bending on Flat does not invent a geometric horizon');
+  assert.throws(()=>draw(m,{atmosphere:'inverse-temperature'}),/supports/);
+});
+
+test('Flat signed-curvature painter bends object and ground guides in the observer frame',()=>{
+  const m=soundly();m.showModel=2;m.showGrid=1;m.Update();
+  const params=require('../src/optics/OpticalEffectiveRadiusPreview').parameters(m,{atmosphere:'standard'});
+  const C=params.effectiveCurvature;
+  const eye=m.Height,d=10000,h=23;
+  const vacuum=direct.flatRefractionPoint(0,d,h,eye,0);
+  const refracted=direct.flatRefractionPoint(0,d,h,eye,C);
+  assert.equal(vacuum[1],d);
+  assert.equal(vacuum[2],h-eye);
+  assert.ok(refracted[2]>vacuum[2],'downward-bent rays raise distant objects');
+  assert.ok(Math.abs(refracted[1]-d)<.1,'small-angle lateral correction');
+  const localAngle=Math.atan2(refracted[2],refracted[1]);
+  const ray=require('../src/optics/OpticalEffectiveRadiusPreview').ray(params,d,h);
+  assert.ok(Math.abs(localAngle-ray.angle)<1e-12,
+    'Canvas Direct coordinate warp and Effective Radius ray must agree');
+  const before=JSON.stringify(m),g=graph(true),directOptions={atmosphere:'standard',
+    opticalQuality:'canvas-direct',deferDecorations:true};
+  const first=renderer.renderPhysical(g.g,m,directOptions);
+  assert.ok(first.directStats.strokeCalls>0);
+  assert.equal(first.directStats.horizonMasks,0);
+  const vacuumGraph=graph(true);
+  renderer.renderPhysical(vacuumGraph.g,m,{...directOptions,atmosphere:'vacuum'});
+  assert.notDeepEqual(g.stats().strokedPaths,vacuumGraph.stats().strokedPaths,
+    'Flat Standard must bend the actual Canvas paths, not only return a negative radius');
+  m.CameraEast+=100;m.CameraNorth+=200;m.Update();
+  const second=renderer.renderPhysical(g.g,m,directOptions);
+  assert.equal(second.cacheReused,true,'moving observer does not regenerate authored meshes');
+  assert.equal(JSON.stringify(Array.from(m.ObjDist)),JSON.stringify(Array.from(JSON.parse(before).ObjDist)));
+  const flatVac=direct.flatRefractionPoint(12,45,0,eye,0);
+  assert.deepEqual(flatVac,[12,45,-eye],'vacuum Flat retains its exact plane');
+  assert.throws(()=>direct.flatRefractionPoint(0,1e9,0,eye,C),/preview range/);
 });
 test('Animation Preview routes explicit Canvas Direct without affecting Fast / Accurate / Auto',()=>{
   const m=soundly();const snap=experiment.capture(m,{atmosphere:'vacuum',occlusionRadius:R,preset:'soundly',resetPreset:'soundly'},
@@ -192,8 +231,8 @@ test('Animation Studio rejects unsupported Canvas Direct atmospheres with explic
   m.showModel=2;m.Update();
   const flat=experiment.capture(m,{...base,atmosphere:'standard'},comparison,display);
   const flatResult=view.render(flat,'A',{Canvas:{}},{quality:'canvas-direct'});
-  assert.equal(flatResult.quality,'accurate');
-  assert.match(flatResult.fallback,/Flat surface/);
+  assert.equal(flatResult.quality,'canvas-direct');
+  assert.equal(flatResult.fallback,null);
   assert.equal(view.render(flat,'A',{Canvas:{}},{quality:'accurate'}).fallback,null);
 });
 

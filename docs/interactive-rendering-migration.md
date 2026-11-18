@@ -1,6 +1,6 @@
 # Interactive rendering migration — Canvas Direct
 
-**Status:** Stage 3 — Scene/Compare pointer drag implemented; Stage 4 (shared interaction pipeline) is next.
+**Status:** Stages 1–3 and signed Flat refraction follow-up complete; Stage 4 (shared interaction pipeline) is next.
 **Baseline:** `8e6897f` (Canvas Direct diagnostic cleanup, following Thin outlines).
 **Scope:** Modern Scene, Compare, camera interactions, and Animation Studio live preview.
 **Not in scope:** Legacy Demos, offline PNG/video export, authoritative physical optics,
@@ -76,10 +76,11 @@ see also `docs/modern-camera-navigation.md` and `docs/modern-animation-contract.
    and approximate horizon masking; it does not trace refracted light paths.
    It must never silently present an approximate result as RK4-accurate.
 2. **Eligibility first.** The current `OpticalEffectiveRadiusPreview.parameters()`
-   accepts Globe with Vacuum, Standard or Temperature lapse; Flat with Vacuum
-   only. It derives a **local observer-height gradient** with
+   accepts Globe and Flat with Vacuum, Standard or Temperature lapse when the
+   local signed-curvature approximation qualifies. It derives a **local observer-height gradient** with
    `k = -R (dn/dh) / n` and `R_eff = R / (1-k)` for Globe, rejecting unsupported
-   gradients/curvature. Other atmospheric models (and invalid inputs) must
+   gradients/curvature. On Flat, `C_eff = (dn/dh)/n`: downward refracted
+   rays produce **negative** virtual curvature (not a true negative-radius planet). Other atmospheric models (and invalid inputs) must
    take an explicit safe fallback; no invented k, vacuum substitution or
    automatic certification for complex/mirage profiles.
 3. **No data-model changes.** Browser-local interactive-preview preferences
@@ -163,9 +164,10 @@ new pack until its Git history or a clean application confirms that fact.
   existing camera interaction calculations and safety bounds.
 - Both Compare sides must qualify under the existing effective-radius
   parameters **before either direct frame is drawn**. Default Globe Standard /
-  Flat Standard does *not* qualify (Flat refraction): the existing Fast/CSS
-  gesture preview is retained with a UI warning. A compatible Globe Standard /
-  Globe Vacuum pair draws both viewports at one shared provisional camera pose
+  Flat Standard did *not* qualify **at the time of Stage 3**: the existing Fast/CSS
+  gesture preview was retained with a UI warning. The signed-curvature
+  follow-up below now enables the ordinary Globe Standard / Flat Standard pair.
+  A compatible Globe Standard / Globe Vacuum pair draws both viewports at one shared provisional camera pose
   without replacing their independent physics. Height-dependent curvature is
   rechecked inside each direct paint; an unexpected rendering failure aborts
   the gesture and requests an authoritative redraw, rather than leaving
@@ -188,6 +190,48 @@ new pack until its Git history or a clean application confirms that fact.
   **not** browser verification. Test Scene and Compare manually in Opera with
   supported and unsupported atmospheres, HiDPI, Shimmer and cancellation
   before declaring visual/performance parity.
+
+## Signed Flat refraction follow-up (2026-11-18; completed before Stage 4)
+
+- **Physical reasoning:** the local effective curvature of the surface relative
+  to a nearly horizontal refracted ray is `C_eff = C_surface + (dn/dh)/n`.
+  Consequently a physical **Flat** surface (`C_surface = 0`) under the normal
+  *negative* refractive-index gradient becomes a **negative-curvature virtual
+  surface**, while the authored physical surface stays exactly Flat. This
+  follows the relative-curvature effective-Earth construction; the standard
+  positive-radius globe and negative virtual-curvature flat use the same
+  observer-height atmospheric sampler. References: [American Meteorological
+  Society, effective Earth radius](https://glossary.ametsoc.org/wiki/effective-earth-radius/),
+  [NBS Radio Meteorology](https://www.govinfo.gov/content/pkg/GOVPUB-C13-275c5c72c4680347c482b03045a8698b/pdf/GOVPUB-C13-275c5c72c4680347c482b03045a8698b.pdf).
+- **Implementation:** `OpticalEffectiveRadiusPreview.parameters()` now reports
+  signed `effectiveCurvature` and signed `effectiveRadius` (negative for
+  ordinary refracted Flat). On Flat, the dimensionless `k` uses a fixed nominal
+  radius **only for diagnostic reporting**; physical Flat curvature is
+  independent of the model's unused Globe radius. The analytic Effective
+  Radius ray predictor also handles the signed Flat chord angle. Canvas Direct
+  bends the already-authored Flat object coordinates and approximate guide
+  rings relative to the moving observer using a signed virtual-surface
+  embedding. Neither `CurvatureSurfaceGeometry` nor `CurvatureCameraTranslation`
+  gains negative *physical* curvature; the RK4 and export paths are unchanged.
+- **Acceptance:** default Globe Standard / Flat Standard Compare may now draw
+  **both** direct preview frames; unsupported profiles still reject *before*
+  drawing either, and release restores the selected accurate/fast result. Flat
+  Vacuum is still exactly flat and is preserved without a negative radius.
+- **Limitations:** this is a **local, single-gradient, nearly horizontal ray
+  approximation**, not a certified mirage or visibility solver. Only a
+  non-positive effective curvature is qualified on Flat. Extremely long
+  baselines beyond the local signed embedding's half-turn or anomalous
+  gradients still fall back to Accurate. There is **no virtual Flat ground
+  horizon mask** for ordinary downward bending; painter/depth-order errors
+  are possible. Compare positions, appearance and FPS in Opera separately.
+  Tests compare Flat Standard and temperature-lapse launch angles against
+  production RK4 over 1–40 km; for a ground target viewed from 15 m the
+  difference is under `3e-7` radians (0.3 µrad). An expanded sample of
+  observer heights 5/15/100 m and target heights 0/10/100 m at 1/10/40 km
+  remains under `5e-6` radians (5 µrad). Both thresholds are sample-specific,
+  **not** universal optical error guarantees.
+- **Next:** Stage 4 shared wheel, keyboard and camera-sequence pipeline; do not
+  treat this follow-up as a completed Stage 4.
 
 ## Required stage-by-stage verification
 

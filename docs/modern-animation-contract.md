@@ -423,10 +423,14 @@ cameras are not moved to a new actual Earth model.
 
 `vacuum` uses `k=0` and `R_effective=R`. On Globe, `standard` and
 `temperature-lapse` derive the local `n` and `dn/dh` from the **same Modern
-atmospheric profiles** used by Accurate. Unsupported atmospheres, strongly
-anomalous local gradients and refracted Flat scenes are rejected explicitly
-instead of silently reverting to RK4, Fast, or vacuum. Flat Vacuum uses direct
-straight lines.
+atmospheric profiles** used by Accurate. Flat with Standard or supported
+Temperature lapse now uses **negative signed effective curvature** when rays
+bend downward, rather than pretending refraction is absent. Flat Vacuum still
+uses exact straight lines. Unsupported atmospheres, positive virtual Flat
+curvature, strongly anomalous gradients and out-of-range geometry are rejected
+with an explicit Accurate fallback in the Animation Studio; this is not an
+authoritative physical visibility solver. See
+`docs/interactive-rendering-migration.md` for the signed Flat qualification.
 
 ## Geometry and constraints
 

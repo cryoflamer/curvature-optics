@@ -1,5 +1,6 @@
-/* Experimental Animation Studio preview: straight rays on a locally effective
- * sphere, with non-recursive object projection. Independent of Legacy drawing.
+/* Experimental effective-curvature preview: straight rays on a locally
+ * effective signed surface, with non-recursive object projection.
+ * Independent of Legacy drawing.
  * Not a certified visibility solver, nor a replacement for Accurate optics.
  */
 (function(root,factory){
@@ -28,27 +29,44 @@
     var kind=options.atmosphere||'vacuum';
     if(!['vacuum','standard','temperature-lapse'].includes(kind))
       throw RangeError('Effective Radius supports Vacuum, Standard and Temperature lapse only');
-    if(flat&&kind!=='vacuum')
-      throw RangeError('Effective Radius cannot represent refracted light on a Flat surface');
     var atmosphere=tracer.atmosphere(kind,kind==='temperature-lapse'?options.temperatureProfile:undefined);
     var index=atmosphere.n(model.Height),gradient=atmosphere.dn(model.Height);
     if(!(index>0)||!Number.isFinite(gradient))throw RangeError('Invalid local atmospheric gradient');
-    // A constant-k local approximation: k=-R*(dn/dh)/n. Re=R/(1-k).
-    var k=globe&&gradient!==0?-model.rEarth*gradient/index:0;
+    // The tangent-frame approximation subtracts downward ray curvature from
+    // physical surface curvature: C_eff = C_surface + (dn/dh)/n.
+    // Flat Standard therefore has NEGATIVE effective curvature: it is a
+    // locally concave-up virtual surface viewed with straight rays. Use the
+    // nominal Earth radius only to report dimensionless refraction k on Flat;
+    // Flat geometry and its curvature are independent of model.rEarth.
+    var referenceRadius=globe?model.rEarth:6371000;
+    var k=gradient===0?0:-referenceRadius*gradient/index;
     if(!Number.isFinite(k)||k<=-1||k>=0.95)
       throw RangeError('Local Effective Radius approximation is unsupported at this curvature');
+    var curvature=globe?(1-k)/model.rEarth:gradient/index;
+    // Positive virtual curvature on a physical plane would introduce a
+    // horizon/mask; that branch is not yet qualified by the direct painter.
+    if(flat&&curvature>0)
+      throw RangeError('Flat Effective Radius supports downward or zero local ray bending only');
+    if(globe&&!(curvature>0))
+      throw RangeError('Globe Effective Radius requires positive effective curvature');
     return {geometry:globe?'globe':'flat',radius:model.rEarth,
-      effectiveRadius:globe?model.rEarth/(1-k):Infinity,
+      effectiveCurvature:curvature,
+      effectiveRadius:globe?model.rEarth/(1-k):curvature===0?Infinity:1/curvature,
       eye:model.Height,atmosphere:kind,k:k};
   }
   function ray(p,d,h){
     if(!Number.isFinite(d)||!Number.isFinite(h)||d<0||h<0)return {status:'blocked'};
     if(d===0)return {status:'visible',angle:h>=p.eye?Math.PI/2:-Math.PI/2};
-    if(p.geometry==='flat')return {status:'visible',angle:Math.atan2(h-p.eye,d)};
+    if(p.geometry==='flat'&&p.effectiveCurvature===0)
+      return {status:'visible',angle:Math.atan2(h-p.eye,d)};
     var r=p.effectiveRadius,t=d/r;
-    if(t>=Math.PI/2)return {status:'blocked'};
-    var horizon=r*(Math.acos(r/(r+p.eye))+Math.acos(r/(r+h)));
-    if(d>horizon+0.01)return {status:'blocked'};
+    if(Math.abs(t)>=Math.PI/2)return {status:'blocked'};
+    // A negative virtual curvature on Flat has no ground horizon. The same
+    // signed-circle chord formula gives the local straight-ray elevation.
+    if(p.geometry==='globe'){
+      var horizon=r*(Math.acos(r/(r+p.eye))+Math.acos(r/(r+h)));
+      if(d>horizon+0.01)return {status:'blocked'};
+    }
     var dx=(r+h)*Math.sin(t),dz=h-p.eye-2*(r+h)*Math.sin(t/2)**2;
     return {status:'visible',angle:Math.atan2(dz,dx)};
   }
