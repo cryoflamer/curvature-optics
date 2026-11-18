@@ -1002,6 +1002,20 @@
       refresh.disabled=!frames.some(function(frame){return frame.key===selectedKey;});
       header.appendChild(refresh);
     }
+    if(options.batch){
+      [['Capture all keyframes','missing'],['Regenerate all thumbnails','refresh'],
+       ['Export with thumbnails','export'],['Export without thumbnails','compact']].forEach(function(item){
+        var control=button(doc,item[0],item[0],function(){options.batch(item[1]);});
+        control.className='modern-studio-action';control.disabled=!!options.batchBusy;
+        header.appendChild(control);
+      });
+      if(options.batchBusy){
+        var cancel=button(doc,'Cancel capture','Cancel storyboard capture',options.cancelBatch);
+        cancel.className='modern-studio-action';header.appendChild(cancel);
+      }
+      var status=el(doc,'small','modern-animation-storyboard-status',options.batchStatus||'');
+      status.setAttribute('role','status');header.appendChild(status);
+    }
     host.appendChild(header);
     var list=el(doc,'ol','modern-animation-storyboard-list');
     list.setAttribute('aria-label','Playback keyframes');

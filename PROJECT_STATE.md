@@ -1,3 +1,17 @@
+## Modern Demo Catalog — Complete Storyboard Export (7A)
+
+Narrative Support accepted by user in Opera. Storyboard actions capture missing
+or regenerate all active keyframes using detached fixed-size Canvas graphs,
+current preview optics/detail and paired fallback. No visible playback seek or
+project mutation. Progress and cooperative cancellation between renders; complete
+portable export retains every image independently of the cache or fails explicitly
+within the existing image/file budgets. Compact export omits keyframe images.
+Shipped portable demo assets can carry validated images (display override drops
+incompatible attachments). Existing Library backup remains best-effort cached
+images. Soundly source and vacuum configuration are unchanged; next: Legacy
+narrative and sources (7B), then standard atmosphere and final imagery (7C),
+optional presentation atmosphere toggle (7D). Browser acceptance remains open.
+
 ## Modern Demo Catalog — Narrative Support (6)
 
 Optional plain-text keyframe descriptions (1000 characters, empty omitted in

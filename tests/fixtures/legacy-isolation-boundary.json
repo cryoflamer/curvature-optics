@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 112,
-      "uniqueScripts": 110,
+      "scriptTags": 113,
+      "uniqueScripts": 111,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -216,6 +216,7 @@
         "src/animation/ModernAnimationLibraryActions.js",
         "src/animation/ModernAnimationPreview.js",
         "src/animation/ModernAnimationPreviewLifecycle.js",
+        "src/animation/ModernAnimationStoryboardExport.js",
         "src/animation/ModernAnimationQualityAudit.js",
         "src/animation/ModernAnimationCanvasHud.js",
         "src/animation/ModernAnimationFrameExport.js",
@@ -374,6 +375,7 @@
       "src/animation/ModernAnimationProjectWizard.js",
       "src/animation/ModernAnimationQualityAudit.js",
       "src/animation/ModernAnimationSequences.js",
+      "src/animation/ModernAnimationStoryboardExport.js",
       "src/animation/ModernAnimationStudio.js",
       "src/animation/ModernAnimationStudioEditing.js",
       "src/animation/ModernAnimationVideoCapabilities.js",
@@ -456,7 +458,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 199,
+  "sourceJsCount": 200,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -667,6 +669,7 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
+        "tests/ModernAnimationStoryboardExport.test.js",
         "tests/ModernDemoCatalog.test.js"
       ],
       "commonJsToolCallers": []
@@ -790,6 +793,7 @@
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationProjectWizard.js",
+        "src/animation/ModernAnimationStoryboardExport.js",
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationVideoPipeline.js",
         "src/animation/ModernDemoCatalog.js"
@@ -813,6 +817,7 @@
         "tests/ModernAnimationProjectWizard.test.js",
         "tests/ModernAnimationSequences.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
+        "tests/ModernAnimationStoryboardExport.test.js",
         "tests/ModernAnimationStudio.test.js",
         "tests/ModernAnimationVideoEncoderWorker.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
@@ -857,6 +862,16 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationSequences.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationStoryboardExport.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationStoryboardExport.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1001,6 +1016,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationStoryboardExport.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernDemoCatalog.test.js"
       ],
@@ -3084,6 +3100,7 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationLibrary.js",
+        "src/animation/ModernAnimationStoryboardExport.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernExperimentHistory.js"
       ],

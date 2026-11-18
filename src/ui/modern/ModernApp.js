@@ -611,6 +611,7 @@
     return !rows.length?true:studioThumbnailPersistence?studioThumbnailPersistence.write(rows):false;
   }
   var studioThumbnailProject=null,studioThumbnailExperiments=null;
+  var studioStoryboardJob=null,studioStoryboardStatus='';
   var studioPlaybackQuality='canvas-direct'; // New live previews use the qualified Canvas 2D approximation.
   var studioPlaybackDetail='performance'; // Fast-only viewport preference, not project JSON.
   var studioPlaybackFps='auto'; // Browser-local preview pacing, not export FPS.
@@ -1434,7 +1435,17 @@
     }
   }
   function builtInStudioDemos(){
-    if(!studioDemoEntries&&studioDemoCatalog)studioDemoEntries=studioDemoCatalog.load();
+    if(!studioDemoEntries&&studioDemoCatalog){
+      studioDemoEntries=studioDemoCatalog.load();
+      // Shipped images are disposable cache seeds, never Library records.
+      if(studioKeyframeThumbnails)studioDemoEntries.forEach(function(demo){
+        var frames=studioProjects.frameExperiments(demo.project);
+        demo.keyframeThumbnails.forEach(function(item){
+          if(!studioKeyframeThumbnails.get(frames[item.index]))
+            studioKeyframeThumbnails.put(frames[item.index],item.image,true);
+        });
+      });
+    }
     return studioDemoEntries||[];
   }
   function openBuiltInDemo(id){
@@ -3336,9 +3347,81 @@
   function resolveStudioKeyframe(frame,entries){
     var experiment=studioKeyframeExperiment(frame);
     var image=studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);
+    if(!image&&studioActiveDemo){
+      var index=studioApi.activeFrames(studioDraft).findIndex(function(f){return f.key===frame.key;});
+      var shipped=studioActiveDemo.keyframeThumbnails.find(function(item){return item.index===index;});
+      if(shipped)image=shipped.image;
+    }
     if(!image&&thumbnailApi&&thumbnailApi.historyThumbnail)
       image=thumbnailApi.historyThumbnail(frame,experiment,entries);
     return {name:frame.name,experiment:experiment,thumbnail:image||null};
+  }
+  function studioStoryboardBatch(action){
+    if(studioStoryboardJob||!studioPrepared||!studioPlayback||!animationWorkspaceOpen)return;
+    var api=root.CurvatureModernAnimationStoryboardExport;
+    var prepared=studioPrepared,draft=studioDraft,demo=studioActiveDemo,record=studioLibraryActive;
+    var project;
+    try{project=demo?prepared:studioApi.build(draft,record?record.id:prepared.id);}
+    catch(error){studioStoryboardStatus=error.message;renderAnimationStudio(studioHistoryEntries);return;}
+    var quality=studioPlaybackQuality,detail=studioPlaybackDetail;
+    var frames=studioApi.activeFrames(draft),job={cancelled:false};
+    var thin=newUiEl('ModernCanvasDirectThinOutlines');
+    var options={quality:quality,sceneDetail:detail,animationMode:project.mode,
+      canvasDirectOptions:{thinOutlines:!thin||thin.checked}};
+    function current(){return studioPrepared===prepared&&studioDraft===draft&&animationWorkspaceOpen;}
+    function status(text){
+      studioStoryboardStatus=text;
+      var host=newUiEl('ModernAnimationStoryboard');
+      var node=host&&host.querySelector('.modern-animation-storyboard-status');
+      if(node)node.textContent=text;
+    }
+    function download(lookup,complete){
+      var filename='curvature-animation.json',json;
+      if(demo){filename='curvature-demo-'+demo.id+'.json';
+        json=studioDemoCatalog.exportDemo(demo.id,lookup,{complete:complete,compact:!complete});}
+      else{
+        var now=Date.now();
+        var entry={version:1,id:project.id,project:project,quality:quality,
+          createdAt:now,updatedAt:now,cover:record&&record.cover};
+        json=studioLibrary.exportPortable([entry],lookup,{complete:complete});
+      }
+      downloadHistoryJson(json,filename);
+    }
+    if(action==='compact'){
+      try{download(undefined,false);status('Exported compact project JSON.');}
+      catch(error){status('Export failed: '+error.message);}
+      return;
+    }
+    studioStoryboardJob=job;status('Preparing storyboard…');renderAnimationStudio(studioHistoryEntries);
+    var renderer,graphs;
+    function render(experiment){
+      if(!renderer){
+        renderer=studioPreviewApi.create({Model:root.CurveAppClass,renderer:root.CurvatureMainCanvasRenderer,
+          optics:root.CurvaturePhysicalSceneOptics});
+        graphs={};['A','B'].forEach(function(side){
+          var canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;
+          graphs[side]=api.graphForCanvas(canvas,root.JsGraphX3D,root.JsgCamera);
+        });
+      }
+      return thumbnailApi.capture(document,experiment.display.mode,api.renderPair(renderer,graphs,experiment,options));
+    }
+    return studioThumbnailReady.then(function(){
+      if(!api||!studioKeyframeThumbnails)throw Error('Storyboard capture modules unavailable');
+      return api.collect(project,{refresh:action==='refresh',cancelled:function(){return job.cancelled||!current();},
+        lookup:function(experiment){
+          var cached=studioKeyframeThumbnails.get(experiment);if(cached)return cached;
+          var frame=frames.find(function(f){return JSON.stringify(studioKeyframeExperiment(f))===JSON.stringify(experiment);});
+          return frame?resolveStudioKeyframe(frame,studioHistoryEntries).thumbnail:null;
+        },render:render,put:function(experiment,image){studioKeyframeThumbnails.put(experiment,image);},
+        yieldFrame:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
+        progress:function(n,total){status('Storyboard '+n+' / '+total);}});
+    }).then(function(lookup){
+      if(job.cancelled||!current())throw Error('Storyboard capture cancelled');
+      if(action==='export')download(lookup,true);
+      status(action==='export'?'Exported complete storyboard JSON.':'Storyboard capture complete.');
+    }).catch(function(error){status(error.message);}).finally(function(){
+      studioStoryboardJob=null;renderAnimationStudio(studioHistoryEntries);
+    });
   }
   function captureStudioKeyframeThumbnail(sampled,renderedAt,graphs){
     if(!studioKeyframeThumbnails||!studioKeyframeThumbnails.hasPending())return;
@@ -3495,7 +3578,9 @@
       var storyTimes=studioPrepared?studioProjects.timeline(studioPrepared):[];
       studioUI.renderStoryboard(document,storyboard,studioDraft,storyFrames,storyTimes,studioSelectedKey,selectKeyframe,{
         resolve:function(frame){return resolveStudioKeyframe(frame,entries);},
-        refresh:function(key){selectKeyframe(key,'storyboard',true);}});
+        refresh:function(key){selectKeyframe(key,'storyboard',true);},
+        batch:studioStoryboardBatch,batchBusy:!!studioStoryboardJob,batchStatus:studioStoryboardStatus,
+        cancelBatch:function(){if(studioStoryboardJob)studioStoryboardJob.cancelled=true;}});
     }
     studioUI.render(document,host,studioDraft,assessment,{
       choose:function(){if(!studioActiveDemo)toggleAnimationPicker(!studioPickerOpen);},

@@ -67,6 +67,7 @@
         var items=library.parsePortable(text);
         if(items.length!==1)throw Error('Expected exactly one portable animation');
         var item=items[0],project=item.project;
+        var images=item.keyframeThumbnails||[];
         if(projectIds.has(project.id))throw Error('Duplicate authored project ID: '+project.id);
         if(!projects.ready(project))throw Error('Animation project is not preview-ready');
         projectIds.add(project.id);
@@ -78,6 +79,8 @@
         // A catalog presentation override is explicit and applies only to Camera.
         // Physical contracts bind their target to the authored display scope.
         if(entry.displayMode&&entry.displayMode!==project.baseExperiment.display.mode){
+          // Source images represent the authored view, not the overridden display.
+          images=[];
           if(project.mode!=='camera')throw Error('Display override requires a Camera project');
           var base=Object.assign({},project.baseExperiment,{display:Object.assign({},
             project.baseExperiment.display,{mode:entry.displayMode})});
@@ -87,20 +90,26 @@
         }
         return deepFreeze({id:entry.id,asset:entry.asset,project:project,
           cover:entry.cover,quality:item.quality==='auto'?'canvas-direct':item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
-          updatedAt:item.updatedAt});
+          updatedAt:item.updatedAt,keyframeThumbnails:images});
       }catch(error){
         throw Error('Built-in demo '+entry.id+' ('+entry.asset+'): '+error.message);
       }
     }));
   }
-  function exportDemo(id,lookup){
+  function exportDemo(id,lookup,options){
     var demo=load().find(function(entry){return entry.id===id;});
     if(!demo)throw Error('Unknown built-in demo: '+id);
+    var shipped=new Map();
+    var frames=projects.frameExperiments(demo.project);
+    demo.keyframeThumbnails.forEach(function(item){shipped.set(JSON.stringify(frames[item.index]),item.image);});
+    var resolve=options&&options.compact?undefined:function(experiment){
+      return (lookup&&lookup(experiment))||shipped.get(JSON.stringify(experiment));
+    };
     // Portable records carry the authored project ID, not the catalog identity.
     return library.exportPortable([{version:1,id:demo.project.id,project:demo.project,
       quality:demo.quality,thumbnail:demo.thumbnail,
       cover:demo.cover?bundled().covers[demo.cover.asset]:null,
-      createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],lookup);
+      createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],resolve,options);
   }
   function copyToLibrary(indexedDB,id,now,crypto){
     return Promise.resolve().then(function(){

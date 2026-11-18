@@ -28,6 +28,17 @@ arrived frame owns its explanation through the hold and outgoing transition,
 until the next arrival (including a blank caption). Text is assigned through
 `textContent`, not HTML. No PNG/video caption overlay is introduced.
 
+Step 7A collects every active physical keyframe on detached 480 × 320 canvases
+(per side), reusing valid cached images unless regeneration is requested. The
+current preview quality/detail and paired fallback policy are retained; these
+are preview thumbnails, not Accurate PNG/video exports. Batch results are held
+separately from the evictable cache until export, and the full portable export
+fails explicitly if an image is unavailable or its existing size limits are
+exceeded. Cancel or project change prevents an incomplete download; playback
+and selection are not changed. A compact export omits keyframe images. The
+catalog accepts the existing portable thumbnail attachments only for the
+actual authored display; changing display scope invalidates those images.
+
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can
 match keywords yet still be rejected by a project's locked scene or physics.

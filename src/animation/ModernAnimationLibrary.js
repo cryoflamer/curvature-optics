@@ -130,23 +130,25 @@
     }
     return result;
   }
-  function keyframeImages(project,lookup){
+  function keyframeImages(project,lookup,complete){
     if(typeof lookup!=='function')return undefined;
     var images=[],chars=0;
     projects.frameExperiments(project).forEach(function(experiment,index){
       var image=lookup(experiment);
       if(image&&chars+image.dataUrl.length<=12000000){chars+=image.dataUrl.length;images.push({index:index,image:image});}
+      else if(complete)throw RangeError('Complete storyboard unavailable at keyframe '+(index+1));
     });
     return images.length?images:undefined;
   }
-  function exportPortable(entries,lookup){
+  function exportPortable(entries,lookup,options){
+    if(options&&options.complete&&typeof lookup!=='function')throw RangeError('Complete storyboard lookup required');
     if(!Array.isArray(entries)||!entries.length||entries.length>MAX_PORTABLE_ITEMS)
       throw RangeError('Select 1–'+MAX_PORTABLE_ITEMS+' animations to export');
     var animations=entries.map(function(entry){
       var normalized=normalize(entry);
       return portableItem({project:normalized.project,quality:normalized.quality,
         thumbnail:normalized.thumbnail,cover:normalized.cover,createdAt:normalized.createdAt,
-        updatedAt:normalized.updatedAt,keyframeThumbnails:keyframeImages(normalized.project,lookup)});
+        updatedAt:normalized.updatedAt,keyframeThumbnails:keyframeImages(normalized.project,lookup,options&&options.complete)});
     });
     var result=JSON.stringify({format:PORTABLE_FORMAT,version:PORTABLE_VERSION,
       animations:animations},null,2)+'\n';

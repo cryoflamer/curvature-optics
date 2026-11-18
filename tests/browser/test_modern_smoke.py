@@ -312,6 +312,33 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_soundly_complete_storyboard_export_preserves_playhead(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=0.00s', timeout=30000)
+        story = self.page.locator('#ModernAnimationStoryboard')
+        cards = story.locator('.modern-animation-storyboard-card')
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        before = self.page.evaluate('CurvatureModernApp.getStudioPlayback()')
+        with self.page.expect_download(timeout=60000) as download:
+            story.get_by_role('button', name='Export with thumbnails', exact=True).click()
+        exported = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(len(exported['animations'][0]['keyframeThumbnails']), 9)
+        expect(cards.locator('img')).to_have_count(9)
+        after = self.page.evaluate('CurvatureModernApp.getStudioPlayback()')
+        self.assertEqual(after['positionMs'], before['positionMs'])
+        self.assertEqual(after['playing'], before['playing'])
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        with self.page.expect_download() as download:
+            story.get_by_role('button', name='Export without thumbnails', exact=True).click()
+        compact = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertNotIn('keyframeThumbnails', compact['animations'][0])
+        self.assertEqual(compact['animations'][0]['project'], exported['animations'][0]['project'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_soundly_keyframe_thumbnails_survive_reload_and_copy(self):
         self.open_modern()
         self.open_animation()

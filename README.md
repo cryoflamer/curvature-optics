@@ -36,7 +36,14 @@ layout with the same player, Storyboard, HUD and optional fullscreen. **Open Stu
 returns to editing without resetting playback. The optional **Frame explanation**
 field in Keyframe Editor follows the rendered clock in Presentation Mode, stays
 visible during outgoing travel, and survives draft recovery and project export.
-Next: Soundly Finalization; narrative browser acceptance remains open.
+**Capture all keyframes** fills missing Storyboard images on isolated canvases;
+**Regenerate all thumbnails** refreshes them. **Export with thumbnails** creates
+complete portable JSON for the current prepared project; **Export without
+thumbnails** omits the keyframe images. Progress/cancel are independent of the
+visible playhead. Built-in portable assets can include ready-made thumbnails.
+Library backups still include available cached images. Next: Soundly narrative
+and sources, then standard atmosphere and final imagery. Storyboard batch browser
+acceptance remains open.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one
