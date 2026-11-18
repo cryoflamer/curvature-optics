@@ -241,6 +241,26 @@ Preset captions describe the **subject and question of a scene**, not its origin
 
 In **Scene/Compare → Atmosphere**, select **Temperature gradient · hydrostatic** to control surface temperature (°C), local surface lapse rate (K/km) and pressure (hPa). In Compare, A and B have **independent** temperature atmospheres; atmospheric extinction/haze remains shared. **Display → Show temperature column (0–2 km)** overlays a switchable color column on each temperature-model image. It is a visual altitude legend, not a change to rays or a pixel-aligned height map. The settings and toggle are saved in experiment URLs/JSON. Existing fixed Standard and Legacy optics are unchanged. Read [the model's physics, validity domain and caveats](docs/temperature-gradient-modern.md) before interpreting inversion experiments.
 
+### Measuring Legacy Demos frame rate
+
+The **Demos** tab has a live **Actual Draw FPS** counter (draws during the
+last two wall-clock seconds), **Draw gap p50**, **Draw CPU p50**, and a separate
+**RAF gap p50**. Draw FPS counts completed original GraphX3DX scene draw
+callbacks; RAF cadence is sampled independently and is *not* substituted for
+actual drawn frames. The meters are hosted in the isolated Legacy Demos
+engine and do not modify the standalone Legacy page or its source bundles.
+
+Choose **Soundly**, then click **Run 10s benchmark**. A paused demo starts
+for the recording and is paused again afterward; a running demo continues
+playing. The runner exports `curvature-legacy-benchmark-*.json` automatically,
+with raw draw/RAF samples, p50/p95, Canvas backing/CSS dimensions, DPR,
+user agent and selected demo/step. Use **Cancel** to discard an incomplete
+recording; **Download JSON again** repeats the export. Scripted pauses and
+slow narrative segments count toward the measured 10-second wall-clock FPS:
+compare with Modern's *fixed-camera* benchmark only after checking frame
+content, dimensions and animation activity, not just the headline FPS.
+
+
 ## #140.12.97 — Inverse temperature atmosphere (Modern)
 
 For an engineered exponential ray field, **Atmosphere → Inverse atmosphere · required temperature** derives the dry-hydrostatic `T(h)` and `dT/dh` that would be needed, including a zero-K validity boundary. The surface gradient can be edited directly or via an equivalent transition slider; A/B and experiment URLs are independent and backwards-compatible. Details, equations, warnings, and an Opera test guide: [`docs/inverse-temperature-modern.md`](docs/inverse-temperature-modern.md).

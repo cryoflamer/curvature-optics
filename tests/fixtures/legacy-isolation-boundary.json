@@ -445,6 +445,7 @@
       "src/animation/ModernAnimationWebMMuxer.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
+      "src/diagnostics/LegacyDemoPerformance.js",
       "src/jsg.js",
       "src/jsgx3d.js",
       "src/tabs.js",
@@ -453,7 +454,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 197,
+  "sourceJsCount": 198,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1436,6 +1437,12 @@
       "commonJsTestCallers": [
         "tests/LegacyBrowserReferenceExport.test.js"
       ],
+      "commonJsToolCallers": []
+    },
+    "src/diagnostics/LegacyDemoPerformance.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
     "src/geometry/CurvatureCameraTranslation.js": {

@@ -14,11 +14,13 @@ const host=read('CurvatureDemosHost.html');
 // model, parser-time controls and authored animations share globals.
 test('141.2.79: the dedicated host retains the authored Legacy runtime load order',()=>{
   const exclude=new Set(['src/ui/modern/ModernRoute.js','src/ui/legacy/LegacyDemoEmbed.js',
-    'src/diagnostics/LegacyBrowserReferenceExport.js']);
+    'src/diagnostics/LegacyBrowserReferenceExport.js',
+    'src/diagnostics/LegacyDemoPerformance.js']);
   const baseline=sources(old).filter(src=>!exclude.has(src));
   assert.ok(baseline.length>80);
   assert.deepEqual(sources(host).filter(src=>!['src/ui/legacy/LegacyDemoEmbed.js',
-    'src/ui/legacy/LegacyDemoDomMount.js'].includes(src)),baseline);
+    'src/ui/legacy/LegacyDemoDomMount.js',
+    'src/diagnostics/LegacyDemoPerformance.js'].includes(src)),baseline);
   assert.ok(baseline.includes('src/animation/CurvatureDemos.js'));
   assert.ok(baseline.includes('src/app/CurvatureAppRuntime.js'));
   assert.ok(baseline.includes('src/legacy/GraphX3DX.js'));

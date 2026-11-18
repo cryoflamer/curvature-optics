@@ -84,12 +84,14 @@
   var directHost=!!(root.document&&root.document.documentElement&&
     typeof root.document.documentElement.hasAttribute==='function'&&
     root.document.documentElement.hasAttribute('data-direct-demos-host'));
-  var observers=[],catalogSnapshot=null,stateSnapshot=null,disposed=false;
+  var observers=[],catalogSnapshot=null,stateSnapshot=null,performanceSnapshot=null,disposed=false;
+  var performanceMeter=null,benchmarkAutoStarted=false;
   function notify(type,data){
     if(disposed)return;
     var snapshot=Object.assign({type:type},data);
     if(type==='catalog')catalogSnapshot=snapshot;
     if(type==='state')stateSnapshot=snapshot;
+    if(type==='performance')performanceSnapshot=snapshot;
     observers.slice().forEach(function(observer){
       try{observer(snapshot);}catch(error){
         // Presentation exceptions must not interrupt an authored animation.
@@ -116,12 +118,51 @@
       observers.push(observer);
       if(catalogSnapshot)observer(catalogSnapshot);
       if(stateSnapshot)observer(stateSnapshot);
+      if(performanceSnapshot)observer(performanceSnapshot);
       return function(){
         var index=observers.indexOf(observer);
         if(index>=0)observers.splice(index,1);
       };
     },
-    command:function(action,name){return controller.command(action,name);}
+    command:function(action,name){
+      if(action==='benchmark-start'){
+        var currentState=controller.report();
+        if(!performanceMeter||performanceMeter.running()||!currentState)return false;
+        benchmarkAutoStarted=!currentState.playing;
+        if(benchmarkAutoStarted)controller.command('play');
+        if(!performanceMeter.start(10000)){
+          if(benchmarkAutoStarted)controller.command('pause');
+          benchmarkAutoStarted=false;return false;
+        }
+        notify('benchmark-started',{durationMs:10000});
+        return true;
+      }
+      if(action==='benchmark-cancel'){
+        if(!performanceMeter||!performanceMeter.cancel())return false;
+        if(benchmarkAutoStarted)controller.command('pause');
+        benchmarkAutoStarted=false;
+        notify('benchmark-cancelled',{});
+        return true;
+      }
+      if(performanceMeter&&performanceMeter.running()&&
+         (action==='select'||action==='reset'||action==='pause'||action==='play'||action==='previous'||action==='next')){
+        performanceMeter.cancel();
+        benchmarkAutoStarted=false;
+        notify('benchmark-cancelled',{});
+      }
+      if(performanceMeter&&(action==='select'||action==='reset'))performanceMeter.reset();
+      return controller.command(action,name);
+    },
+    attachPerformance:function(meter){
+      if(disposed||performanceMeter||!meter||typeof meter.start!=='function')return false;
+      performanceMeter=meter;return true;
+    },
+    publishPerformance:function(metrics){notify('performance',metrics);},
+    publishPerformanceReport:function(report){
+      if(benchmarkAutoStarted)controller.command('pause');
+      benchmarkAutoStarted=false;
+      notify('performance-report',{report:report});
+    }
   };
   function origin(){return root.location.origin==='null'?'*':root.location.origin;}
   function post(type,data){
@@ -140,6 +181,7 @@
   root.addEventListener('pagehide',function(){
     disposed=true;
     observers.length=0;
+    if(performanceMeter)performanceMeter.dispose();
     controller.dispose();
   });
 }(window));
