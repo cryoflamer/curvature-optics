@@ -1,0 +1,489 @@
+{
+  "format": "curvature-modern-animations",
+  "version": 1,
+  "animations": [
+    {
+      "project": {
+        "version": 2,
+        "id": "animation_mwkz3gb1_b742a1de58844b4394bdc37b0a5fe697",
+        "name": "Soundly Causeway · Bridge Camera Study",
+        "description": "Modern Camera adaptation of Legacy Soundly states K0, K2, K4, K5, K9, K12, K13, K15 and K16. Four closing keyframes correspond to original Scene 1–4 viewing directions (not a pixel-match to the photographs). Soundly bridge geometry is fixed to Modern preset (Legacy K12), 128 bridge sections, vacuum atmosphere and globe throughout. Legacy bridge relocations are approximated with opposite East/North camera motion; legacy commentary and redundant transitions are omitted.",
+        "mode": "camera",
+        "target": null,
+        "baseExperiment": {
+          "version": 1,
+          "scene": {
+            "camera": {
+              "Height": 200,
+              "FocalLengthField": 38,
+              "Pan": 65,
+              "Nick": -0.85,
+              "Roll": 0,
+              "CameraEast": -2794.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "objects": {
+              "NObjects": [
+                128,
+                0
+              ],
+              "ObjType": [
+                8,
+                3
+              ],
+              "ObjDist": [
+                496,
+                0
+              ],
+              "ObjDeltaDist": [
+                300,
+                100
+              ],
+              "ObjSideType": [
+                0,
+                0
+              ],
+              "ObjSidePos": [
+                55.5,
+                0
+              ],
+              "ObjSideVar": [
+                0,
+                0
+              ],
+              "ObjSizeType": [
+                0,
+                0
+              ],
+              "ObjSize": [
+                1,
+                10
+              ],
+              "ObjSizeVar": [
+                0,
+                0
+              ]
+            },
+            "surface": {
+              "showModel": 1,
+              "rEarth": 6371000
+            },
+            "atmosphere": "vacuum",
+            "occlusionRadius": 6371000,
+            "visibility": {
+              "enabled": false,
+              "rangeKm": 60
+            },
+            "temperatureProfile": {
+              "temperatureC": 15,
+              "pressureHpa": 1013.25,
+              "gradientKPerKm": -6.5
+            },
+            "transitionProfile": {
+              "source": "standard",
+              "weight": 0
+            },
+            "inverseProfile": {
+              "source": "temperature-lapse",
+              "weight": 0
+            },
+            "showGrid": true,
+            "gridExtentKm": 0,
+            "preset": "soundly",
+            "resetPreset": "soundly",
+            "title": "Soundly Causeway · bridge observations",
+            "description": "A causeway with navigation spans and supporting structures for studying perspective and horizon visibility."
+          },
+          "compare": {
+            "A": {
+              "surface": "globe",
+              "radiusKm": 6371,
+              "atmosphere": "vacuum",
+              "occlusionRadius": 6371000,
+              "visibility": {
+                "enabled": false,
+                "rangeKm": 60
+              },
+              "temperatureProfile": {
+                "temperatureC": 15,
+                "pressureHpa": 1013.25,
+                "gradientKPerKm": -6.5
+              },
+              "transitionProfile": {
+                "source": "standard",
+                "weight": 0
+              },
+              "inverseProfile": {
+                "source": "temperature-lapse",
+                "weight": 0
+              }
+            },
+            "B": {
+              "surface": "flat",
+              "radiusKm": 6371,
+              "atmosphere": "vacuum",
+              "occlusionRadius": 6371000,
+              "visibility": {
+                "enabled": false,
+                "rangeKm": 60
+              },
+              "temperatureProfile": {
+                "temperatureC": 15,
+                "pressureHpa": 1013.25,
+                "gradientKPerKm": -6.5
+              },
+              "transitionProfile": {
+                "source": "standard",
+                "weight": 0
+              },
+              "inverseProfile": {
+                "source": "temperature-lapse",
+                "weight": 0
+              }
+            },
+            "preset": "globe-flat-vacuum",
+            "selected": "A"
+          },
+          "display": {
+            "mode": "scene",
+            "eyeLevel": false,
+            "horizon": true,
+            "gpuProbe": false,
+            "probeTargets": 256,
+            "showTemperatureProfile": false,
+            "temperaturePlacement": "outside-right",
+            "captionMode": "title-description"
+          }
+        },
+        "keyframes": [
+          {
+            "sourceSnapshotId": null,
+            "name": "01 · Bridge panorama",
+            "value": {
+              "Height": 200,
+              "FocalLengthField": 38,
+              "Pan": 65,
+              "Nick": -0.85,
+              "Roll": 0,
+              "CameraEast": -2794.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 0,
+            "holdMs": 1000,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "02 · Elevated alignment",
+            "value": {
+              "Height": 900,
+              "FocalLengthField": 650,
+              "Pan": 5.2,
+              "Nick": -0.85,
+              "Roll": 0,
+              "CameraEast": -2794.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 7500,
+            "holdMs": 1000,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "03 · Approach to the bridge",
+            "value": {
+              "Height": 100,
+              "FocalLengthField": 650,
+              "Pan": 3,
+              "Nick": 0,
+              "Roll": 0,
+              "CameraEast": -944.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 5500,
+            "holdMs": 950,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "04 · Low view, hidden spans",
+            "value": {
+              "Height": 3,
+              "FocalLengthField": 650,
+              "Pan": 3,
+              "Nick": 0,
+              "Roll": 0,
+              "CameraEast": -944.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 5000,
+            "holdMs": 1250,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "05 · Zoom along the roadway",
+            "value": {
+              "Height": 8,
+              "FocalLengthField": 2000,
+              "Pan": 0.5,
+              "Nick": 0,
+              "Roll": 0,
+              "CameraEast": -44.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 6000,
+            "holdMs": 1200,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "06 · Observation Scene 1",
+            "value": {
+              "Height": 10.8,
+              "FocalLengthField": 2200,
+              "Pan": 0.45,
+              "Nick": -0.03,
+              "Roll": 0,
+              "CameraEast": 0,
+              "CameraNorth": 0,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 6000,
+            "holdMs": 1700,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "07 · Observation Scene 2",
+            "value": {
+              "Height": 5.5,
+              "FocalLengthField": 3000,
+              "Pan": 0.31,
+              "Nick": 0,
+              "Roll": 0,
+              "CameraEast": 7.100000000000001,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 5000,
+            "holdMs": 1700,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "08 · Observation Scene 3",
+            "value": {
+              "Height": 2.71,
+              "FocalLengthField": 2180,
+              "Pan": -0.07,
+              "Nick": 0.021,
+              "Roll": 0,
+              "CameraEast": 51.2,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 5500,
+            "holdMs": 1800,
+            "easing": "smoothstep"
+          },
+          {
+            "sourceSnapshotId": null,
+            "name": "09 · Observation Scene 4",
+            "value": {
+              "Height": 3.5,
+              "FocalLengthField": 1970,
+              "Pan": -0.37,
+              "Nick": 0.053,
+              "Roll": 0,
+              "CameraEast": 98.5,
+              "CameraNorth": 496,
+              "viewcenterHorizon": 3,
+              "deviceRatio": 1.5
+            },
+            "travelMs": 5500,
+            "holdMs": 2500,
+            "easing": "smoothstep"
+          }
+        ],
+        "contract": {
+          "version": 1,
+          "mode": "camera",
+          "target": null,
+          "referenceExperiment": {
+            "version": 1,
+            "scene": {
+              "camera": {
+                "Height": 200,
+                "FocalLengthField": 38,
+                "Pan": 65,
+                "Nick": -0.85,
+                "Roll": 0,
+                "CameraEast": -2794.5,
+                "CameraNorth": 496,
+                "viewcenterHorizon": 3,
+                "deviceRatio": 1.5
+              },
+              "objects": {
+                "NObjects": [
+                  128,
+                  0
+                ],
+                "ObjType": [
+                  8,
+                  3
+                ],
+                "ObjDist": [
+                  496,
+                  0
+                ],
+                "ObjDeltaDist": [
+                  300,
+                  100
+                ],
+                "ObjSideType": [
+                  0,
+                  0
+                ],
+                "ObjSidePos": [
+                  55.5,
+                  0
+                ],
+                "ObjSideVar": [
+                  0,
+                  0
+                ],
+                "ObjSizeType": [
+                  0,
+                  0
+                ],
+                "ObjSize": [
+                  1,
+                  10
+                ],
+                "ObjSizeVar": [
+                  0,
+                  0
+                ]
+              },
+              "surface": {
+                "showModel": 1,
+                "rEarth": 6371000
+              },
+              "atmosphere": "vacuum",
+              "occlusionRadius": 6371000,
+              "visibility": {
+                "enabled": false,
+                "rangeKm": 60
+              },
+              "temperatureProfile": {
+                "temperatureC": 15,
+                "pressureHpa": 1013.25,
+                "gradientKPerKm": -6.5
+              },
+              "transitionProfile": {
+                "source": "standard",
+                "weight": 0
+              },
+              "inverseProfile": {
+                "source": "temperature-lapse",
+                "weight": 0
+              },
+              "showGrid": true,
+              "gridExtentKm": 0,
+              "preset": "soundly",
+              "resetPreset": "soundly",
+              "title": "Soundly Causeway · bridge observations",
+              "description": "A causeway with navigation spans and supporting structures for studying perspective and horizon visibility."
+            },
+            "compare": {
+              "A": {
+                "surface": "globe",
+                "radiusKm": 6371,
+                "atmosphere": "vacuum",
+                "occlusionRadius": 6371000,
+                "visibility": {
+                  "enabled": false,
+                  "rangeKm": 60
+                },
+                "temperatureProfile": {
+                  "temperatureC": 15,
+                  "pressureHpa": 1013.25,
+                  "gradientKPerKm": -6.5
+                },
+                "transitionProfile": {
+                  "source": "standard",
+                  "weight": 0
+                },
+                "inverseProfile": {
+                  "source": "temperature-lapse",
+                  "weight": 0
+                }
+              },
+              "B": {
+                "surface": "flat",
+                "radiusKm": 6371,
+                "atmosphere": "vacuum",
+                "occlusionRadius": 6371000,
+                "visibility": {
+                  "enabled": false,
+                  "rangeKm": 60
+                },
+                "temperatureProfile": {
+                  "temperatureC": 15,
+                  "pressureHpa": 1013.25,
+                  "gradientKPerKm": -6.5
+                },
+                "transitionProfile": {
+                  "source": "standard",
+                  "weight": 0
+                },
+                "inverseProfile": {
+                  "source": "temperature-lapse",
+                  "weight": 0
+                }
+              },
+              "preset": "globe-flat-vacuum",
+              "selected": "A"
+            },
+            "display": {
+              "mode": "scene",
+              "eyeLevel": false,
+              "horizon": true,
+              "gpuProbe": false,
+              "probeTargets": 256,
+              "showTemperatureProfile": false,
+              "temperaturePlacement": "outside-right",
+              "captionMode": "title-description"
+            }
+          }
+        },
+        "cameraHudAppearance": {
+          "opacity": 90,
+          "position": "top-left",
+          "size": 100
+        },
+        "interpolation": "spline"
+      },
+      "quality": "auto",
+      "thumbnail": null,
+      "createdAt": 1794936916045,
+      "updatedAt": 1794936916045
+    }
+  ]
+}

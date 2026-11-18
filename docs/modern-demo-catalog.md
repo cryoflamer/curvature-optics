@@ -1,7 +1,8 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 0 (architecture and roadmap)**, 2026-11-18. No catalog or
-runtime behavior is implemented by this patch. The active next step is patch 1.
+Status: **patch 1 (built-in demo catalog)**, 2026-11-18. Shipped catalog
+and Soundly source are implemented; lifecycle and UI are not yet connected.
+The active next step is patch 2; browser launch acceptance remains open.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -17,16 +18,17 @@ cannot be edited, renamed, deleted or overwritten. Create copy makes a
 normal independent named project and opens it for editing. Presentation mode
 is another view of the same player, not another playback implementation.
 
-Keep versioned portable JSON in the repository (proposed `demos/modern/`,
+Keep versioned portable JSON in the repository (`demos/modern/`,
 with `catalog.json` and `soundly.json` initially). Use stable semantic paths,
 no patch/version suffixes. Catalog entries have stable demo IDs distinct from
 user project IDs, a relative asset path and only necessary display metadata;
 project name, description, mode and frame count derive from the validated
-project rather than duplicated metadata. Decide the exact manifest schema and
-asset-loading mechanism in patch 1 after checking supported hosting modes.
+project rather than duplicated metadata. The manifest and static-script
+loading mechanism are described below.
 Do not assume a fetch-only design works from every supported launch path.
 No placeholder entries for unimplemented demos. Adding a demo should require
-only a portable JSON file and a declarative catalog entry, not new JS logic.
+only a portable JSON file and a declarative catalog entry, not new JS logic
+(regenerate the shipped data script).
 
 Built-ins must not be seeded into the user's IndexedDB Library or draft
 collection. Their source is the shipped catalog, refreshed on application
@@ -50,6 +52,54 @@ ordinary portable JSON; importing it creates a normal user project under
 existing import semantics, never a new trusted built-in. Export all My
 Projects must not silently include built-ins. Origin/read-only status is
 trusted runtime/catalog metadata, not an editable field in imported JSON.
+
+## Shipped catalog and authoring workflow (patch 1)
+
+- `demos/modern/catalog.json` is a strict manifest: `format` is
+  `curvature-modern-demo-catalog`, `version` is 1 and `demos` is an ordered
+  array of `{ "id": "soundly", "asset": "soundly.json" }` entries. IDs and
+  asset basenames use lowercase letters, digits and hyphens. Paths are local
+  JSON basenames, not URLs or traversal paths. Duplicate demo IDs, assets and
+  authored project IDs are rejected. No placeholder entries are shipped.
+- Each asset contains exactly one portable project (normal library export or
+  accepted standalone project). It must pass `parsePortable` and `ready`;
+  incomplete/Experimental projects cannot be published yet. Asset errors
+  identify the demo and file; validation is all-or-nothing. Loaded entries
+  are deeply frozen and owned, with `id`, `asset`, `project`, `quality`,
+  `thumbnail`, `createdAt` and `updatedAt`. Browser-local History IDs are
+  cleared in the runtime project only; original JSON remains unchanged.
+- Static HTTP is the documented normal launch, but local `file://` routing
+  is retained where supported. Fetch of a JSON file is unreliable there.
+  `tools/build-modern-demo-catalog.js` validates the manifest and actual
+  JSON files and generates `src/animation/ModernDemoCatalogData.js` as a
+  deterministic classic script. It embeds the JSON text, not alternate
+  authored project data. Modern loads it and `ModernDemoCatalog.js` after
+  the library; no fetch, bundler or storage dependency is needed. The same
+  data is used by Node and browsers. Missing or stale source assets fail the
+  generation/check gate; a missing bundled asset fails runtime `load()`.
+- `CurvatureModernDemoCatalog.load()` returns the validated immutable list
+  on demand, or throws. It never calls Library create/import, IndexedDB or
+  draft autosave and has no editor side effects. Patch 2 owns the selection
+  lifecycle, and patch 3 owns the UI. The existing Legacy Demos tab is unchanged.
+
+To publish a new demo: export one finished project from Studio, save the JSON
+under `demos/modern/`, add one stable entry to the manifest, and run:
+
+```sh
+node tools/build-modern-demo-catalog.js
+node tools/build-modern-demo-catalog.js --check
+node --test tests/ModernDemoCatalog.test.js
+```
+
+Commit the JSON, manifest and generated script together. Do not hand-edit
+that script; Node regressions verify exact regeneration from canonical files.
+When intentionally replacing the initial Soundly source, update its pinned
+provenance/acceptance tests and document the change. Current browser smoke
+checks exercise actual HTTP and local-file launch; local Chromium blocks both
+with `ERR_BLOCKED_BY_ADMINISTRATOR`, so these checks await CI or Opera. An
+isolated real Chromium execution of the static scripts in HTML order did
+load Soundly with nine frames, 59,100 ms and frozen project data; this is
+not a full-page navigation or playback test.
 
 ## Current-code audit and integration seams
 
@@ -76,8 +126,9 @@ outside current supported playback contracts.
 
 User-supplied `curvature-animation.json` (2026-11-18, SHA-256
 `1d404662096922477329db126f8eac207bc45785f9cebaf078a56e8db1a214bb`).
-Patch 0 inspects but does not vendor this asset; preserve the supplied export
-for patch 1. Keep an explicit source/provenance note in the catalog or docs.
+Patch 1 ships this export byte-for-byte as `demos/modern/soundly.json`.
+The SHA-256 and Scene mode are pinned by focused tests; no Compare rewrite or
+new thumbnails have been introduced.
 
 - `Soundly Causeway · Bridge Camera Study`, v2 Camera, spline, Auto quality,
   nine keyframes, 59,100 ms including holds, fixed 128 bridge sections.
@@ -111,8 +162,8 @@ record the split, and do not mark complete on implementation alone.
 | Patch | Status | Scope and acceptance |
 | --- | --- | --- |
 | 0 — Architecture & Roadmap | Implemented | Documentation only; inspect current Studio boundaries and validate supplied Soundly export; retain prior migration evidence. |
-| 1 — Built-in Demo Catalog | Next | Ship original Soundly portable JSON and manifest; stable unique IDs, deterministic order, validate with existing APIs, reject invalid/duplicate catalog entries and missing assets with explicit errors, no IndexedDB writes. Test real asset loading and supported launch paths; source data immutable. |
-| 2 — Project Lifecycle | Planned | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
+| 1 — Built-in Demo Catalog | Implemented; browser gate open | Ship original Soundly portable JSON and manifest; stable unique IDs, deterministic order, validate with existing APIs, reject invalid/duplicate catalog entries and missing assets with explicit errors, no IndexedDB writes. Test real asset loading and supported launch paths; source data immutable. |
+| 2 — Project Lifecycle | Next | Open read-only demo, protect all mutation paths (including autosave, shortcuts, Save/Save As, rename/delete), explicit Create copy with new identity and independent owned data; persistence/recovery, storage failure and repeated-copy tests. No implicit duplicate reuse. |
 | 3 — Studio Catalog UI | Planned | Built-in Demos / My Projects categories, existing card style, open/inspect/play/export/copy controls; no editable actions on original. Browser tests for category isolation, copy, reload, keyboard and outgoing unsaved work. No new player. |
 | 4 — Compare Playback | Planned | Audit/extend existing Scene/Compare player as necessary; one clock/sample for A/B, same camera and independent optics, play/pause/seek/restart and exports. Validate detached Soundly Compare variant, preserve original content, verify no stale or mixed-time frames, fallback on unsupported geometry, representative Accurate comparisons and actual browser FPS. First functional demo milestone after manual acceptance. |
 | 5 — Presentation Mode | Planned | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |

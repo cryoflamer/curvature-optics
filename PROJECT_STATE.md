@@ -1,15 +1,18 @@
 > **Current roadmap — Modern built-in demonstrations (2026-11-18):**
-> Patch 0 records the agreed Studio-based architecture and ordered delivery
-> gates in [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
-> Built-ins are shipped immutable projects, separate from My Projects;
-> explicit copies are independent editable named projects. No new demo engine.
-> The supplied Soundly v2 Camera export validates (9 frames, 59.1 s); a
-> detached Compare reference also validates and samples, but browser playback
-> is not yet verified. **NEXT: patch 1 — catalog and original Soundly JSON.**
-> Patch 0 changes documentation only. User reported green CI after the
-> obsolete profiler-test cleanup; tag relocation has not been independently
-> verified. Stage 5D remains deferred; extreme fallback and measured FPS
-> remain open. The Canvas Direct notes below are historical baseline evidence.
+> Patch 0 recorded the architecture; patch 1 ships the immutable catalog API,
+> original Soundly JSON and deterministic classic-script data resource.
+> See [`docs/modern-demo-catalog.md`](docs/modern-demo-catalog.md).
+> Soundly: 9 frames, 59.1 s, spline, Globe/vacuum Scene; Compare reference
+> compatibility was previously validated, synchronized playback is not yet
+> verified. Runtime catalog loading requires no IndexedDB or fetch; the
+> generated resource is checked against the canonical JSON by Node tests.
+> No demo lifecycle or UI integration yet. Browser HTTP/file launch tests
+> were attempted but blocked by local Chromium policy; CI/Opera gate is open.
+> **NEXT: patch 2 — read-only project lifecycle and independent Create copy.**
+> User reported green CI after the obsolete profiler-test cleanup; tag
+> relocation has not been independently verified. Stage 5D remains deferred;
+> extreme fallback and measured FPS remain open. The Canvas Direct notes
+> below are historical baseline evidence.
 
 > **Active implementation roadmap — Canvas Direct interactive migration (2026-11-18):**
 > Stages **1–3 complete**: after corrective repair C the user reported normal,

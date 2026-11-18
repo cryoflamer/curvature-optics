@@ -136,6 +136,30 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Match the visible text and wait for the asynchronous library render.
         expect(self.page.locator('#ModernAnimationLibrary').get_by_text('New project', exact=True)).to_be_visible(timeout=15000)
 
+    def assert_shipped_demo_catalog(self):
+        result = self.page.evaluate("""() => {
+            const demos = window.CurvatureModernDemoCatalog.load();
+            const soundly = demos.find(demo => demo.id === 'soundly');
+            return {
+                ids: demos.map(demo => demo.id),
+                frames: soundly.project.keyframes.length,
+                duration: window.CurvatureModernAnimationProject.totalMs(soundly.project),
+                frozen: Object.isFrozen(demos) && Object.isFrozen(soundly.project.keyframes[0].value),
+                display: soundly.project.baseExperiment.display.mode,
+            };
+        }""")
+        self.assertEqual(result, {'ids': ['soundly'], 'frames': 9,
+                                  'duration': 59100, 'frozen': True, 'display': 'scene'})
+
+    def test_shipped_demo_catalog_http(self):
+        self.open_modern()
+        self.assert_shipped_demo_catalog()
+
+    def test_shipped_demo_catalog_file(self):
+        # Local classic script resources must work without fetch(file://).
+        self.page.goto((ROOT / 'CurvatureModern.html').as_uri(), wait_until='load', timeout=30000)
+        self.assert_shipped_demo_catalog()
+
     def test_navigation_and_studio_bootstrap(self):
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()

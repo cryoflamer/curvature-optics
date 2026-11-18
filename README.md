@@ -18,8 +18,9 @@ anchors; the [location checklist](docs/modern-location-migration.md) tracks
 numerical, visual, animation and browser acceptance gates. The agreed next
 implementation path is the [Modern built-in demo catalog roadmap](docs/modern-demo-catalog.md):
 immutable Studio projects, editable copies, synchronized Compare playback and
-presentation mode. Soundly is the first candidate; the catalog is planned,
-not yet shipped. Original Legacy Demos remain available.
+presentation mode. The first Soundly portable JSON and read-only catalog now
+ship with Modern; Studio lifecycle and gallery integration are still pending.
+Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one
 of the two illustrative samples. It is a *starting configuration*, not a
