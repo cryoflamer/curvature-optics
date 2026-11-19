@@ -162,3 +162,77 @@ for(const truthGeometry of [1,2])test('cross-hypothesis calibration: '+(truthGeo
   assert.equal(rows.length,4);assert.equal(JSON.stringify([train,held,farHeld]),before);
  }
 });
+
+
+// Incorrect correspondences are a photo-authoring problem, not a physical
+// hypothesis comparison. Keep the atmosphere, geometry and pixel raster fixed.
+for(const distant of [false,true])test('incorrect correspondences and residual review: '+(distant?'22 km repeated-depth features':'near spatial'),t=>{
+ const m=distant?{...base,showModel:1,CameraEast:-1500,CameraNorth:-6000,Height:40,
+  Pan:Math.atan2(1500,22000)*180/Math.PI,Nick:-.06,Roll:2,FocalLengthField:200}:{...base,showModel:1};
+ const landmarks=Array.from({length:15},(_,i)=>distant?{id:'wrong'+i,east:140*Math.sin(i*2.2),north:16000+1600*Math.cos(i*1.7),height:45+20*Math.sin(i*1.1)}:
+  {id:'wrong'+i,east:35*Math.sin(i*2.1),north:70*Math.cos(i*1.3),height:50+12*Math.sin(i*3.7)});
+ const options={...opts,atmosphere:distant?'standard':'vacuum',maxCandidates:3,maxIterations:60,
+  bounds:{CameraEast:[-100000,100000],CameraNorth:[-100000,100000],Height:[.001,1000],FocalLengthField:[4,1000]}};
+ const clean=observe(m,landmarks,options),train=clean.slice(0,12),held=clean.slice(12);
+ const normal=gaussian(0x8a44),noisy=train.map(o=>({...o,pixel:o.pixel.map(v=>v+normal())}));
+ const scene={...m,CameraEast:0,CameraNorth:0,Height:1,Pan:0,Nick:0,Roll:0,FocalLengthField:21};
+ const before=JSON.stringify([scene,clean,noisy,held]);
+ const errors=indices=>noisy.map((o,i)=>{
+  if(!indices.includes(i))return {...o,pixel:o.pixel.slice()};
+  // Synthetic depth-shifted copies of the same feature, not measured
+  // Causeway spacing; near case uses another observed landmark's pixels.
+  const pixel=distant?observe(m,[{...o.landmark,north:o.landmark.north+100*(1+i%3)}],options)[0].pixel:
+   train[(i+1)%train.length].pixel;
+  return {...o,pixel:pixel.slice()};
+ });
+ const normResidual=p=>Math.hypot(...p.residual);
+ function row(label,result,bad){
+  if(!result?.evaluation.valid){t.diagnostic(JSON.stringify({scene:distant?'distant':'near',label,valid:false}));return;}
+  const e=result.evaluation;
+  const v=physical.evaluate(m,result.pose,held,options);
+  const ranked=e.points.map(p=>({id:p.id,px:normResidual(p),weight:p.weight})).sort((a,b)=>b.px-a.px);
+  const badIds=bad.map(i=>train[i].landmark.id);
+  const cleanRms=physical.evaluate(m,result.pose,train,options);
+  t.diagnostic(JSON.stringify({scene:distant?'distant':'near',label,...trialMetrics(m,result,v,result.termination??result.status),
+   cleanRmsPx:cleanRms.rmsPx,weightedRmsPx:e.weightedRmsPx,
+   badRanks:badIds.map(id=>ranked.findIndex(p=>p.id===id)+1),topResiduals:ranked.slice(0,4)}));
+  assert.equal(e.points.length,train.length);
+  assert.deepEqual(e.points.map(p=>p.id),train.map(o=>o.landmark.id));
+  assert.ok(ranked.every(p=>Number.isFinite(p.px)&&p.weight>0));
+ }
+ for(const [label,bad] of [['clean',[]],['single',[3]],['multiple',[2,5,8]]]){
+  const obs=errors(bad),snapshot=JSON.stringify(obs);
+  const blind=calibrate(scene,obs,{...options,validation:held});
+  verify(blind,scene,obs,options);
+  const best=blind.candidates[0];
+  row(label+'/blind',best,bad);
+  const local=physical.fit(m,m,obs,options);
+  row(label+'/truth-start-control',local,bad);
+  assert.ok(local.evaluation.valid);
+  if(!bad.length){
+   assert.ok(best?.evaluation.valid);
+   assert.ok(best.evaluation.rmsPx<3);
+  }
+  if(bad.length){
+   // A controlled manual-review experiment, using known injected error
+   // labels only for the comparison. This is not an automatic detector.
+   const manual=obs.map((o,i)=>({...o,weight:bad.includes(i)?.001:1}));
+   const weighted=calibrate(scene,manual,{...options,validation:held});
+   verify(weighted,scene,manual,options);
+   row(label+'/reviewed-weights',weighted.candidates[0],bad);
+   // Two fixed residual-based Huber IRLS passes from the unweighted
+   // blind result; test-only exploratory strategy, no production policy.
+   let current=best;
+   for(let pass=0;pass<2&&current?.evaluation.valid;pass++){
+    const weights=current.evaluation.points.map(p=>Math.min(1,2/Math.max(Number.MIN_VALUE,normResidual(p))));
+    const reweighted=obs.map((o,i)=>({...o,weight:weights[i]}));
+    const next=physical.fit(m,current.pose,reweighted,options);
+    row(label+'/huber-pass-'+(pass+1),next,bad);
+    if(!next.evaluation.valid)break;
+    current=next;
+   }
+  }
+  assert.equal(JSON.stringify(obs),snapshot);
+ }
+ assert.equal(JSON.stringify([scene,clean,noisy,held]),before);
+});

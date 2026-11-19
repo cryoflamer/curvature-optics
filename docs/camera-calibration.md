@@ -586,3 +586,33 @@ quantify Canvas Direct vs Accurate RK4 on real final frames. Finalize narrative,
 cover, timing and imagery only after calibration and source verification. The
 same tool should later support other scenes (mountains, buildings, transmission
 lines, lighthouses) without a Soundly-specific solver.
+
+
+## 8A.4.4a — Incorrect correspondences and manual review
+
+The practical authoring question is whether a wrong photo-to-landmark match
+can visibly distort the camera fit or be identified for manual correction.
+Two deterministic synthetic research tests in `tests/CameraCalibration.test.js`
+hold the physical model fixed: near spatial landmarks in vacuum and distant
+Standard-atmosphere landmarks at approximately 22 km. Each uses 12 training
+points, three untouched validation points, and a reproducible 1 px standard
+deviation coordinate-noise draw. Compare clean/noisy, one wrong match, and
+three wrong matches. Near mismatches use another feature's pixel; distant
+mismatches use synthetic 100–300 m depth-shifted copies of the same feature
+(not measured bridge geometry or spacing).
+
+Record blind candidate and truth-start control results, raw and weighted RMS,
+clean-reference and held-out RMS, pose errors, termination, and ranking of the
+injected wrong matches by residual magnitude. Compare manual review with
+known injected labels (weight 0.001, a diagnostic oracle, not a detector) and
+two test-only Huber-style reweighting passes (2 px residual-norm threshold)
+initialized by the unweighted blind fit. No validation point influences the
+search. No observation is deleted, and the production loss, seed selection,
+solver and API are unchanged. Residual rankings are diagnostic: small
+residuals cannot certify correct identity, and downweighting cannot repair
+a coherent but wrong assignment. No robust-loss production change is
+justified until measured results and practical editor needs are reviewed.
+
+Execution and numerical conclusions are pending CI; no local run was
+available when committing these tests. Review the diagnostic output before
+proceeding to 8A.4.4b (independent renderer parity near the horizon).
