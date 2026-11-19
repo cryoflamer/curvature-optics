@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 113,
-      "uniqueScripts": 111,
+      "scriptTags": 114,
+      "uniqueScripts": 112,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -198,6 +198,7 @@
         "src/animation/ModernAnimationCompatibility.js",
         "src/animation/ModernAnimationContract.js",
         "src/animation/ModernAnimationProject.js",
+        "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationSequences.js",
         "src/animation/ModernAnimationProjectWizard.js",
         "src/animation/ModernAnimationStudioEditing.js",
@@ -355,6 +356,7 @@
       "src/ui/panels/ViewSliders.js"
     ],
     "loadedByModernNotLegacy": [
+      "src/animation/ModernAnimationAtmosphereVariant.js",
       "src/animation/ModernAnimationBackgroundExport.js",
       "src/animation/ModernAnimationBackgroundVideoExport.js",
       "src/animation/ModernAnimationCanvasHud.js",
@@ -458,7 +460,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 200,
+  "sourceJsCount": 201,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -520,6 +522,16 @@
       "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
+    "src/animation/ModernAnimationAtmosphereVariant.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereVariant.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/animation/ModernAnimationBackgroundExport.js": {
       "directHtmlLoads": [
         "modern"
@@ -576,6 +588,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationContract.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationProject.js",
@@ -583,6 +596,7 @@
         "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationContract.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
@@ -596,12 +610,14 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationProject.js",
         "src/animation/ModernAnimationProjectWizard.js",
         "src/animation/ModernAnimationStudio.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationContract.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
@@ -787,6 +803,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationBackgroundExport.js",
         "src/animation/ModernAnimationBackgroundVideoExport.js",
         "src/animation/ModernAnimationFrameExport.js",
@@ -799,6 +816,7 @@
         "src/animation/ModernDemoCatalog.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
@@ -1014,6 +1032,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStoryboardExport.test.js",
@@ -2946,12 +2965,14 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationCompatibility.js",
         "src/animation/ModernAnimationQualityAudit.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernExperimentHistoryFilters.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationQualityAudit.test.js",
         "tests/ModernExperimentHistory.test.js",
         "tests/ModernExperimentHistoryFilters.test.js",
@@ -3015,6 +3036,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationCompatibility.js",
         "src/animation/ModernAnimationContract.js",
         "src/animation/ModernAnimationDraftAutosave.js",
@@ -3031,6 +3053,7 @@
         "tests/AtmosphericVisibility.test.js",
         "tests/CurvatureCameraTranslation.test.js",
         "tests/LegacyModernBoundary.test.js",
+        "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",

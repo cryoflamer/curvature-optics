@@ -41,9 +41,13 @@ visible during outgoing travel, and survives draft recovery and project export.
 complete portable JSON for the current prepared project; **Export without
 thumbnails** omits the keyframe images. Progress/cancel are independent of the
 visible playhead. Built-in portable assets can include ready-made thumbnails.
-Library backups still include available cached images. Next: Soundly narrative
-and sources, then standard atmosphere and final imagery. Storyboard batch browser
-acceptance remains open.
+Library backups still include available cached images. Storyboard batch export
+and filenames have been accepted in Opera. The runtime atmosphere variant
+engine now derives Vacuum/Standard eligibility from the project contract and
+active refraction, without editing the original or adding schema fields. No
+switcher is exposed yet. Next: Studio/Presentation switcher, atmosphere-aware
+export, observation images and sources, Soundly narrative, then standard
+atmosphere and final imagery.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

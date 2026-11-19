@@ -1,3 +1,17 @@
+## Modern Demo Catalog — Atmosphere Variant Engine (7B.1)
+
+After user acceptance of 7A/7A.1, the roadmap was revised to derive atmosphere
+eligibility from existing contracts and active optics, not new author flags.
+The pure engine supports ready Camera and curvature Physical v1/v2 projects
+with fixed Vacuum or Standard atmosphere, requiring equal A/B refraction in
+Compare. It rejects atmosphere-channel, Experimental, incomplete and other
+profile projects. Runtime variants retain all keyframes and timing, validate
+base/reference equality and frame compatibility, and use custom preset status
+for the changed active scope. Original projects remain immutable; no schema,
+UI, storage, export or physics algorithm changes. Soundly remains vacuum.
+Next: 7B.2 switcher and exact-state Storyboard, 7B.3 export routing, 7C reference
+images, 7D narrative, 7E standard atmosphere and finalization (see catalog doc).
+
 ## Modern Demo Catalog — Export Filename Naming (7A.1)
 
 All portable animation JSON exports use the project title (or `curvature-animations` for library-wide backups), local export timestamp including milliseconds, and a `-with-thumbnails` suffix only when the exported payload actually contains keyframe images. Titles and portable schema are unchanged. Diagnostic, History and media exports are unaffected.

@@ -179,9 +179,13 @@ record the split, and do not mark complete on implementation alone.
 | 5 — Presentation Mode | Implemented; user confirmed in Opera | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
 | 6 — Narrative Support | Implemented; user confirmed in Opera | Optional plain-text keyframe description, up to 1000 characters; outgoing caption remains visible until the next arrival, including travel, with explicit source-frame label. Empty next caption clears the text. Synchronize to the last successfully painted time. A bounded panel is shown in Presentation only when the active sequence has explanations. Old JSON remains readable and unchanged; draft checkpoints, Undo/Redo, copies and portable export/import preserve descriptions. Author Soundly captions in step 7; PNG/video overlays are not added by this step. |
 | 7A — Complete Storyboard Export | Implemented; Opera acceptance open | Capture missing or regenerate all active keyframes on isolated fixed-size canvases, with progress/cancel, no playhead changes. Export current prepared project with every thumbnail or a compact JSON without keyframe images. Shipped portable assets may contain validated thumbnails; discard imagery if a catalog display override changes the view. Library backup actions continue to export available cached images. |
-| 7B — Soundly Narrative & Sources | Planned | Adapt Legacy explanations to the actual keyframe sequence, document original observation links and source provenance. |
-| 7C — Soundly Finalization | Planned | Apply standard atmosphere to Globe and Flat; identical profile, not historical weather reconstruction. Verify Canvas Direct vs Accurate RK4, revise captions/hold times, generate complete final storyboard and cover, validate controls, copy/export/reimport and browser performance. Tag only after CI/manual acceptance. |
-| 7D — Presentation Atmosphere Toggle | Planned | Optional synchronized vacuum/standard-atmosphere comparison without changing the authored camera trajectory. |
+| 7A.1 — Export Filename Naming | Implemented; user confirmed in Opera | Shared descriptive timestamped portable JSON filenames. |
+| 7B.1 — Atmosphere Variant Engine | Implemented | Infer eligibility from the active refraction features and animation contract; validate immutable runtime variants. No UI or schema changes. |
+| 7B.2 — Atmosphere Switcher | Planned | Studio and Presentation toggle only for eligible prepared projects. Preserve playhead, selected frame and playback state; repaint paused frames. Make all thumbnail lookup paths exact-state aware, including shipped images. |
+| 7B.3 — Atmosphere-aware Export | Planned | Save and ordinary project JSON retain authored physics; explicit current-variant export, PNG/video and batch captures use effective playback physics. Label resulting files with their atmosphere; reject mismatched attachments. |
+| 7C — Reference Images & Sources | Planned | Optional observation images, source URLs and credits for keyframes; separate from simulation thumbnails. Validate portable assets and document rights/provenance. |
+| 7D — Soundly Narrative | Planned | Adapt Legacy explanations and observation links to actual Compare keyframes, distinguish prediction from observation. |
+| 7E — Soundly Finalization | Planned | Author standard atmosphere on both sides; not historical weather reconstruction. Verify Canvas Direct vs Accurate RK4, revise captions/hold times, generate final storyboard and cover, validate controls, copy/export/reimport and browser performance. Tag only after CI/manual acceptance. |
 | 8+ — Legacy Demo Migration | Planned | Chicago, Canigou, Causeway, Pontchartrain/TransLine, Bedford, Grace, Tensas (order provisional); Curve last as a distinct educational lesson. Reuse Studio; add universal capabilities only when justified by source choreography. One bounded adaptation at a time, with explicit evidence and limitations. |
 
 ## Verification and migration policy
@@ -457,3 +461,41 @@ player, physical state, autosave format or authored fields are introduced.
 ### Portable JSON filenames (7A.1)
 
 Catalog, Storyboard and Animation Library exports share one naming function: a filesystem-safe project title (Unicode letters and digits retained), local timestamp `YYYYMMDD-HHMMSS-mmm`, and `-with-thumbnails` if any keyframe images are included. Library-wide backups use `curvature-animations`. The suffix does not promise completeness for library exports; complete Storyboard export retains its existing guarantee. The JSON content and project name are unchanged.
+
+
+### Atmosphere variants (7B.1–7B.3)
+
+Search filters in the Snapshot Picker and Library are not persisted physics
+permissions. Eligibility comes from the validated project channel and active
+`ModernExperimentFingerprint.features()` refraction. The pure
+`ModernAnimationAtmosphereVariant` engine supports preview-ready Camera and
+curvature-channel Physical projects (v1/v2) with active Vacuum or Standard
+atmosphere. Compare requires `refractionSame`; an equal kind alone is not
+enough. Scene ignores dormant Compare physics and Compare ignores dormant
+Scene physics. Temperature-gradient Physical projects, Experimental projects,
+unfinished drafts, unequal refraction and other atmospheric laws are excluded.
+There is no extra author permission or third mode. Invalid input is rejected
+by the existing project validator.
+
+`inspect(project)` returns `{eligible, reason, authoredMode, modes}`;
+`derive(authoredProject, mode)` returns a validated, frozen project with the
+same ID, timeline, keyframes, narrative, camera and physical channel. Always
+pass the original authored project, never chain overrides. Returning to the
+authored mode restores its exact normalized state. Only the active atmosphere
+kind(s) and the corresponding edited preset status (`custom`) change; inactive
+controls, atmospheric profile parameters, shared visibility and surface geometry
+are preserved. For v2, the reference and base are changed together. The
+result also passes the existing frame compatibility check and contract checks.
+History source IDs remain provenance, not proof of identical frame imagery.
+
+The variant is a temporary playback input, not a new Library record, draft,
+Undo event or saved author setting. Step 7B.2 must keep authored and effective
+projects distinct and reset the selection on a project switch. It must route
+rendering, paused seeks, Storyboard and captures through the effective project;
+shipped thumbnail attachments must be matched by exact frame state, never by
+index alone when the physics differs. Step 7B.3 must route ordinary project
+persistence/export to authored physics and variant/media exports to effective
+physics, with appropriate labels. No UI, export routing or thumbnail lookup
+changes have been made by 7B.1. The existing Soundly asset is still vacuum;
+standard-atmosphere visual/numerical accuracy and Opera acceptance are future
+steps, not implied by project compatibility.

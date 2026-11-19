@@ -39,6 +39,17 @@ and selection are not changed. A compact export omits keyframe images. The
 catalog accepts the existing portable thumbnail attachments only for the
 actual authored display; changing display scope invalidates those images.
 
+Step 7B.1 introduces a runtime-only atmosphere variant engine, without
+changing the contract or portable schema. Eligibility is inferred from the
+validated Camera or curvature Physical channel and active refraction features;
+only preview-ready Vacuum/Standard projects with equal A/B active refraction
+are eligible. Scene and Compare ignore inactive optical controls. Experimental,
+unfinished, atmosphere-channel and other refraction projects are excluded.
+The derived project changes only active atmosphere and edited preset status,
+updates the v2 base and reference together and passes the existing validators.
+The authored project remains the source for saving and ordinary project export.
+See the catalog roadmap for switcher and effective-project export integration.
+
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can
 match keywords yet still be rejected by a project's locked scene or physics.
