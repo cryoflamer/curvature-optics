@@ -1,3 +1,19 @@
+## Modern Demo Catalog — Alternative perspective seeds (8A.2.2)
+
+Issue #6: added `src/calibration/CameraFocalSweep.js`, independent calibrated
+P3P candidate generation over a bounded logarithmic focal sweep with local
+focal refinement. Three deterministic triplets at most, quartic real roots
+checked against original distance equations and all-point positive depth/RMS.
+Retains alternative focal/pose candidates and explicitly declares incomplete
+search. Ten new standalone Node tests passed; both sides of a synthetic
+near-planar 1.5 km bridge at ~10 km recovered with <4e-6 px RMS in noiseless
+fixtures. Adding deterministic +/-0.5 px noise gave 0.444 px RMS but 51 m
+position error, highlighting weak conditioning. Only new standalone tests
+were run; no full repository regression or real-raster test. P4Pf and robust
+subset/global search remain deferred research. Next 8A.2.3: convert perspective
+seeds to the existing physical camera convention and check round-trip parity;
+then physical refinement. No production optics or UI changes.
+
 ## Modern Demo Catalog — Perspective camera seeds (8A.2 baseline)
 
 Issue #6: added `src/calibration/CameraPerspectiveSeed.js`, dependency-free

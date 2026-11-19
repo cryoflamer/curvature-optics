@@ -83,6 +83,48 @@ physical pose conversion, terrain/mesh visibility, refraction or nonlinear
 refinement yet. Next compare and extend initialization for nearly planar and
 distant scenes, then connect candidates to the physical projector. No UI changes.
 
+## Alternative focal sweep (8A.2.2)
+
+`src/calibration/CameraFocalSweep.js` is a second, independent headless
+perspective initializer. It shares the Cartesian-metre, centered original
+pixel, undistorted square-pixel conventions and candidate fields of
+CameraPerspectiveSeed. Call `initialize(observations, {width, height,
+minFocalPx, maxFocalPx, samples})`. Four correspondences are required; the
+three-point pose equations generate solutions and all observations score them.
+Default focal interval is image diagonal/4 to image diagonal*128 pixels,
+with 33 logarithmic samples (2–129 configurable). Equal endpoints allow
+known-focal initialization. No camera location, side or orientation is input.
+
+Select a farthest pair from up to 64 evenly spaced observations, then up to
+three largest-area third points from the full input. For each focal sample
+derive a quartic from the three pairwise distances and unit image bearings.
+Scale distance ratios around unity using the maximum bearing separation to
+reduce cancellation at telephoto angles. Isolate real polynomial roots using
+derivative critical points and bisection, and verify the original distance
+equations and positive ranges. Compute proper rotation from oriented triangle
+bases and translation from the corresponding points. Reject any candidate
+with a nonpositive depth in any observation. Retain distinct candidates,
+rank by original-pixel RMS, refine up to three sampled local minima by 24
+golden-section steps in log focal. Report evaluated focal count and selected
+triplets. This is a finite sampled search, always `complete:false`; it is
+not an exhaustive P4Pf solver. A shared farthest pair can be vulnerable to
+incorrect correspondences; no robust subset selection/RANSAC or final
+nonlinear refinement is implemented. Frontal planar focal/distance ambiguity
+is intentionally retained rather than forced into a unique estimate.
+
+Ten standalone Node tests passed. Independent noiseless spatial recovery
+from both sides achieved RMS 1.40e-6 / 2.45e-6 px; a synthetic 1500 m long,
+8 m wide, 0.02 m height-variation bridge at ~10 km and f=24000 px achieved
+3.76e-6 / 3.61e-6 px from the two sides. Also tested four noncoplanar
+observations, fixed-focal large coordinate offsets, frontal planar ambiguity,
+collinear rejection, deterministic noise, proper rotation and positive depth.
+In the weak bridge fixture with deterministic +/-0.5 px perturbations,
+best seed RMS was 0.444 px, focal 24486.3 px and position error 51.0 m.
+These synthetic results are not measurements of real Causeway geometry or
+physical optics. P4Pf comparison and more general alternative search remain
+research items, not prerequisites for starting physical pose conversion.
+No change to existing DLT module, production optics or UI.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified
