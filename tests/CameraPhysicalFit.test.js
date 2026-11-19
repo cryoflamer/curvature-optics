@@ -158,3 +158,12 @@ test('distant weak geometry: local rank, pixel noise and atmosphere mismatch',t=
   assert.ok(results[2].positionErrorM>results[1].positionErrorM&&results[2].rmsPx<3.3);
   assert.ok(results[3].rmsPx<.02&&Math.abs(results[3].heightErrorM)>5);
 });
+
+test('local fit progress reports valid monotonically improving candidates without changing result',()=>{
+ const m={...base,showModel:2},opt={width,height,method:'canvas-direct'},obs=observe(m,points,opt),initial=perturbed(m);
+ const reports=[],r=fit.fit(m,initial,obs,{...opt,onProgress:p=>reports.push(p)});
+ assert.ok(reports.length>1);assert.equal(reports[0].acceptedSteps,0);
+ assert.ok(reports.every((p,i)=>p.evaluation.valid&&(!i||p.evaluation.cost<reports[i-1].evaluation.cost)));
+ assert.deepEqual(reports.at(-1).pose,r.pose);
+ assert.deepEqual(r,fit.fit(m,initial,obs,opt));
+});

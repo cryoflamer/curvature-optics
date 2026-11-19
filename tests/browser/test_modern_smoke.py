@@ -687,6 +687,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(restored,result['pixel'])
         workspace.locator('#ModernCalibrationFitModel').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        # Fit a single free angle using the real background worker.
+        self.page.evaluate("""() => {
+            for(const n of document.querySelectorAll('#ModernCalibrationFitParameters [data-fit-field]')){
+                n.checked=n.dataset.fitField==='Pan';n.dispatchEvent(new Event('change',{bubbles:true}));
+            }
+        }""")
+        workspace.locator('#ModernCalibrationRunFit').click()
+        expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled(timeout=30000)
+        expect(workspace.locator('#ModernCalibrationStopFit')).to_be_disabled(timeout=30000)
+        fit=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()""")
+        self.assertTrue(fit['evaluation']['valid'])
+        self.assertLessEqual(fit['evaluation']['rmsPx'],fit['initialRmsPx']+1e-8)
+        self.assertEqual(self.page.evaluate("""() => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
+            return JSON.stringify([s.model.Height,s.model.Pan,s.model.FocalLengthField]);
+        }"""),before['pose'])
+        workspace.locator('#ModernCalibrationBestView').click()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
 
     def test_all_workspace_tabs_restore_through_same_preference(self):
         self.open_modern()

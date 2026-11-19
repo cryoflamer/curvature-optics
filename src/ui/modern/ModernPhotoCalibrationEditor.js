@@ -203,6 +203,9 @@
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
     let choices=[],demoRecords=[],catalogToken=0,activeSource=null;
+    const fitFields=["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"],fitLabels=["East (m)","North (m)","Height (m)","Pan (°)","Nick (°)","Roll (°)","Focal field (mm)"];
+    const fitPanel=$('ModernCalibrationFitParameters'),runFit=$('ModernCalibrationRunFit'),stopFit=$('ModernCalibrationStopFit'),bestView=$('ModernCalibrationBestView'),fitStatus=$('ModernCalibrationFitStatus'),fitResult=$('ModernCalibrationFitResult');
+    const fitRaster=doc.createElement('canvas');let fitWorker=null,fitBest=null,fitSignature=null,viewBest=false,paintedFit=null,lastFitPaint=0;
     // IndexedDB keeps original images out of the small localStorage quota.
     // A single atomic record binds the photograph to its fixed scene and pairs.
     let restoring=false,writeQueue=Promise.resolve(),dbPromise=null;
@@ -355,6 +358,8 @@
       updateHint();
     }
     function refreshRows(){
+      if(fitSignature!==null&&fitSignature!==JSON.stringify(rows))invalidateFit('Correspondences changed. Run calibration again.');
+      syncFitControls();
       list.replaceChildren();
       rows.forEach((r,i)=>{
         const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.landmark.id===activePair);
@@ -460,6 +465,7 @@
       clearHover();clearAmbiguity();
     }
     function renderModel(){
+      invalidateFit('Add correspondences or run calibration from the captured camera.');
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
       visibleSpans=new Map();highlightKey=null;ownership=null;hoverObject=null;visibleByObject=new Map();
       hover=[];hoverIndex=0;$('ModernCalibrationHoverTip').hidden=true;clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
@@ -534,6 +540,7 @@
         modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
     }
     function meshDraw(){
+      if(viewBest&&fitBest&&paintedFit){drawFitPreview();return;}
       mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
       if(!modelView||!previewValid)return;
       mesh.drawImage(modelRaster,modelView.x,modelView.y,modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
@@ -628,7 +635,7 @@
     // Legacy manual candidate controls remain as fallback for old hosts.
     pickOptions.onchange=()=>{const p=ambiguous[Number(pickOptions.value)];if(p)selectLandmark(p.landmark);};
     $('ModernCalibrationConfirmPick').onclick=()=>{const p=ambiguous[Number(pickOptions.value)];if(p)chooseModel(p);};
-    $('ModernCalibrationFitModel').onclick=fitModel;
+    $('ModernCalibrationFitModel').onclick=()=>{if(viewBest){meshDraw();return;}fitModel();};
     showLandmarks.onchange=meshDraw;
     function canvasPoint(canvas,e){
       const r=canvas.getBoundingClientRect();
@@ -646,7 +653,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      scene=next;
+      scene=next;syncFitControls();
       const m=scene.model,globe=m.showModel===1;
       $('ModernCalibrationScene').textContent=(m.DemoText||'Current scene')+' · '+(globe?'Globe':'Flat')+' · '+scene.physics.atmosphere;
       populate(bank,[0,1].filter(b=>scene.banks[b].length).map(b=>[b,'Bank '+(b+1)+' · type '+m.ObjType[b]]));
@@ -730,7 +737,7 @@
       modelFrame=null;queuedPointer=null;
     }
     function processModelPointer(p){
-      if(!modelView)return;
+      if(!modelView||viewBest)return;
       if(!modelDrag){hoverAt(p);return;}
       if(Math.hypot(p[0]-modelDrag.start[0],p[1]-modelDrag.start[1])>4)modelDrag.moved=true;
       if(modelDrag.moved){
@@ -753,7 +760,7 @@
       });
     }
     sceneCanvas.addEventListener('pointerdown',e=>{
-      if(!modelView||e.button!==0)return;
+      if(!modelView||viewBest||e.button!==0)return;
       cancelModelFrame();const p=canvasPoint(sceneCanvas,e),hit=modelMarker(p);
       modelDrag={id:e.pointerId,start:p,last:p,moved:false,marker:hit?.id||null};
       sceneCanvas.setPointerCapture(e.pointerId);
@@ -781,11 +788,96 @@
     sceneCanvas.addEventListener('pointercancel',()=>{cancelModelFrame();modelDrag=null;modelGhost=null;clearHover();});
     sceneCanvas.addEventListener('pointerleave',()=>{if(!modelDrag){cancelModelFrame();clearHover();}});
     sceneCanvas.addEventListener('wheel',e=>{
-      if(!modelView)return;e.preventDefault();if(modelDrag)return;cancelModelFrame();
+      if(!modelView)return;e.preventDefault();if(modelDrag||viewBest)return;cancelModelFrame();
       const p=canvasPoint(sceneCanvas,e),base=fit(modelRaster.width,modelRaster.height,sceneCanvas.width,sceneCanvas.height).scale;
       modelView=zoomAt(modelView,...p,Math.exp(-e.deltaY*.0015),base/4,Math.max(16,base*32));
       clearHover();clearAmbiguity();
     },{passive:false});
+    function freeFields(){return Array.from(fitPanel.querySelectorAll('[data-fit-field]')).filter(n=>n.checked).map(n=>n.dataset.fitField);}
+    function syncFitControls(){
+      const free=freeFields();
+      runFit.disabled=!!fitWorker||!record||!scene||!rows.length||!free.length||2*rows.length<free.length;
+      stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
+      for(const field of fitFields){
+        const v=scene?.model[field];
+        fitPanel.querySelector('[data-fit-value="'+field+'"]').textContent=Number.isFinite(v)?'('+Number(v.toPrecision(6))+')':'';
+      }
+      bestView.textContent=viewBest?'Return to initial camera':'Show best camera';
+      $('ModernCalibrationFitNotice').hidden=!viewBest;
+    }
+    function terminateFit(){
+      if(fitWorker){fitWorker.terminate();fitWorker=null;}
+    }
+    function invalidateFit(message){
+      terminateFit();fitBest=null;fitSignature=null;viewBest=false;paintedFit=null;
+      fitResult.textContent='';fitStatus.textContent=message;syncFitControls();
+    }
+    function fitSummary(r){
+      const n=v=>Number.isFinite(v)?v.toFixed(2):'—';
+      fitResult.textContent='Original pixels: RMS '+n(r.initialRmsPx)+' → '+n(r.evaluation.rmsPx)+
+        ' px · weighted RMS '+n(r.evaluation.weightedRmsPx)+' px · '+r.evaluations+' evaluations · '+
+        fitFields.map((k,i)=>fitLabels[i]+': '+(Number.isFinite(r.pose[k])?Number(r.pose[k].toPrecision(7)):'—')).join(' · ');
+    }
+    function paintBest(){
+      if(!fitBest||!record||!scene)return;
+      try{
+        const size=previewSize(record.original.width,record.original.height);
+        fitRaster.width=size.width;fitRaster.height=size.height;
+        const m={...scene.model,...fitBest.pose,viewcenterHorizon:3,geometryRadius:scene.model.rEarth,deviceRatio:size.width/size.height};
+        const camera=env.CurvatureCameraPhysicalPose.photoCamera(m,size.width,size.height);
+        m.camViewAngle=camera.fieldOfViewRadians;
+        renderer.paint(fitRaster,camera,m,{...scene.physics,canvasDirectOptions:{thinOutlines:true}});
+        paintedFit=fitBest;lastFitPaint=Date.now();meshDraw();
+      }catch(error){viewBest=false;paintedFit=null;fitStatus.textContent='Best camera preview unavailable: '+error.message;syncFitControls();meshDraw();}
+    }
+    function drawFitPreview(){
+      mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
+      const v=fit(fitRaster.width,fitRaster.height,sceneCanvas.width,sceneCanvas.height);
+      mesh.drawImage(fitRaster,v.x,v.y,fitRaster.width*v.scale,fitRaster.height*v.scale);
+      const sx=fitRaster.width/record.original.width,sy=fitRaster.height/record.original.height;
+      paintedFit.evaluation.points.forEach((p,i)=>{
+        if(p.predicted&&p.predicted.every(Number.isFinite)){
+          const xy=screenPoint(v,[p.predicted[0]*sx,p.predicted[1]*sy]);
+          if(xy[0]>=0&&xy[0]<sceneCanvas.width&&xy[1]>=0&&xy[1]<sceneCanvas.height)
+            marker(mesh,xy,String(i+1),COLORS[i%COLORS.length]);
+        }
+      });
+    }
+    function receiveFit(r){
+      if(!r.evaluation?.valid)return;
+      if(!fitBest||r.evaluation.cost<=fitBest.evaluation.cost){fitBest=r;fitSummary(r);}
+      syncFitControls();
+      if(viewBest&&Date.now()-lastFitPaint>=500)paintBest();
+    }
+    runFit.onclick=()=>{
+      if(runFit.disabled)return;
+      invalidateFit('Starting Canvas Direct fit…');meshDraw();
+      const free=freeFields(),model=JSON.parse(JSON.stringify(scene.model));
+      const input=JSON.parse(JSON.stringify(rows)),physics=JSON.parse(JSON.stringify(scene.physics));
+      fitSignature=JSON.stringify(rows);
+      try{
+        const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1');fitWorker=worker;
+        worker.onmessage=event=>{
+          if(fitWorker!==worker)return;
+          const data=event.data;
+          if(data.type==='progress'){
+            receiveFit(data.result);fitStatus.textContent='Fitting · '+data.result.acceptedSteps+' accepted steps · RMS '+data.result.evaluation.rmsPx.toFixed(2)+' px';
+          }else if(data.type==='complete'){
+            receiveFit(data.result);terminateFit();
+            fitStatus.textContent=data.result.status+' · '+(data.result.reason||'Complete')+' (local fit; not a uniqueness certificate)';
+            if(fitBest){viewBest=true;paintBest();}syncFitControls();
+          }else if(data.type==='error'){
+            terminateFit();fitStatus.textContent='Fit failed: '+data.message;syncFitControls();
+          }
+        };
+        worker.onerror=event=>{if(fitWorker!==worker)return;terminateFit();fitStatus.textContent='Worker failed: '+(event.message||'Unable to load calibration worker');syncFitControls();};
+        worker.postMessage({model,input,options:{...physics,width:record.original.width,height:record.original.height,freeParameters:free,maxIterations:80}});
+        syncFitControls();
+      }catch(error){terminateFit();fitStatus.textContent='Cannot start fit: '+error.message;syncFitControls();}
+    };
+    stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();};
+    bestView.onclick=()=>{if(!fitBest)return;viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();};
+    fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();});
     add.onclick=savePair;
     $('ModernCalibrationCancelEdit').onclick=()=>{activePair=null;resetPending();refreshRows();photoDraw();meshDraw();};
     $('ModernCalibrationUndo').onclick=undo;
@@ -805,7 +897,8 @@
       }
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
-    mounted={enter,restore:restoreDraft,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    syncFitControls();
+    mounted={enter,restore:restoreDraft,fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};

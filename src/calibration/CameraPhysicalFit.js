@@ -125,7 +125,9 @@
     let current=at(x);const initialRmsPx=current.rmsPx;
     const finish=(status,reason)=>({status,reason,pose:decode(x),method:opts.method,atmosphere:opts.atmosphere,initialRmsPx,
       evaluation:current,iterations,evaluations,acceptedSteps,freeParameters:specs.map(s=>s.k),complete:false});
+    const progress=()=>{if(typeof options.onProgress==='function')options.onProgress({pose:decode(x),evaluation:current,iterations,evaluations,acceptedSteps,initialRmsPx});};
     if(!current.valid)return finish('invalid_initial',current.reason);
+    progress();
     if(!specs.length)return finish('fixed','No free parameters');
     if(2*obs.length<specs.length)return finish('underdetermined','Fewer scalar observations than free parameters');
     for(;iterations<maxIterations;iterations++){
@@ -143,7 +145,7 @@
         movable.forEach((j,i)=>candidate[j]=clamp(x[j]+step[i]*factor,specs[j].lo,specs[j].hi));
         if(norm(candidate.map((v,i)=>v-x[i]))<=stepTolerance)return finish('stalled','Step tolerance without projected gradient convergence');
         const next=at(candidate);
-        if(next.valid&&next.cost<current.cost){x=candidate;current=next;lambda=Math.max(1e-12,lambda/3);acceptedSteps++;accepted=true;break;}
+        if(next.valid&&next.cost<current.cost){x=candidate;current=next;lambda=Math.max(1e-12,lambda/3);acceptedSteps++;accepted=true;progress();break;}
         lambda*=10;
       }
       if(!accepted)return finish('stalled','No decreasing valid damped step');

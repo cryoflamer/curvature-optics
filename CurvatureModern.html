@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -170,6 +170,27 @@
       <button type="button" id="ModernCalibrationUndo" disabled>Undo</button>
       <button type="button" id="ModernCalibrationDeleteSelected" disabled>Delete selected</button>
     </div>
+    <section aria-label="Camera fit" style="margin:12px 0;padding:10px;border:1px solid #c4d6e4;border-radius:6px">
+      <h3>Camera fit · Canvas Direct</h3>
+      <p>Checked parameters are free; unchecked parameters stay at the captured camera values.</p>
+      <div class="modern-calibration-toolbar" id="ModernCalibrationFitParameters">
+        <label><input type="checkbox" data-fit-field="CameraEast" checked> East (m) <span data-fit-value="CameraEast"></span></label>
+        <label><input type="checkbox" data-fit-field="CameraNorth" checked> North (m) <span data-fit-value="CameraNorth"></span></label>
+        <label><input type="checkbox" data-fit-field="Height" checked> Height (m) <span data-fit-value="Height"></span></label>
+        <label><input type="checkbox" data-fit-field="Pan" checked> Pan (°) <span data-fit-value="Pan"></span></label>
+        <label><input type="checkbox" data-fit-field="Nick" checked> Nick (°) <span data-fit-value="Nick"></span></label>
+        <label><input type="checkbox" data-fit-field="Roll" checked> Roll (°) <span data-fit-value="Roll"></span></label>
+        <label><input type="checkbox" data-fit-field="FocalLengthField" checked> Focal field (mm) <span data-fit-value="FocalLengthField"></span></label>
+      </div>
+      <div class="modern-calibration-toolbar">
+        <button type="button" id="ModernCalibrationRunFit" disabled>Run calibration</button>
+        <button type="button" id="ModernCalibrationStopFit" disabled>Stop</button>
+        <button type="button" id="ModernCalibrationBestView" disabled>Show best camera</button>
+        <span id="ModernCalibrationFitStatus" role="status">Add correspondences to fit the camera.</span>
+      </div>
+      <p id="ModernCalibrationFitResult"></p>
+      <p id="ModernCalibrationFitNotice" hidden>Best camera preview is read-only. Return to the initial camera to edit model landmarks. This preview does not change Scene.</p>
+    </section>
     <div class="modern-calibration-grid">
       <section><h3>Original photograph</h3><p>Click to pair · drag marker to edit · drag empty area to pan · wheel to zoom.</p>
         <canvas id="ModernCalibrationPhoto" width="800" height="540" aria-label="Reference photo"></canvas>

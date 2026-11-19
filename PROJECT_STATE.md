@@ -1,3 +1,19 @@
+## 8C.1 — Local Canvas Direct camera fit
+
+The Photo Calibration workspace exposes the seven captured camera parameters,
+with independent free/locked checkboxes. Run invokes the existing bounded
+CameraPhysicalFit local solver in a dedicated worker using original-photo
+pixels and the fixed geometry/atmosphere. Progress reports the initial and
+each accepted weighted least-squares candidate. Stop terminates the worker,
+retaining the latest valid candidate. A separate read-only best camera view
+renders predicted numbered landmarks; return to the initial view to edit.
+Changing correspondences, photo, scene or free parameters invalidates results.
+No Scene or saved keyframe is modified. Result/locks are ephemeral in this
+first integration. Local fit from captured camera only; global reseeding,
+residual overlay, acceptance/export and identifiability assessment follow.
+The Accurate multi-seed calibration API is unchanged. Added progress and
+browser worker regression; CI pending.
+
 ## 8B.6 — Object-first picking
 
 The visible painter identity under the pointer now determines the highlighted

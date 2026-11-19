@@ -466,6 +466,7 @@
       "src/animation/ModernAnimationVideoProbeWorker.js",
       "src/animation/ModernAnimationWebMMuxer.js",
       "src/calibration/CameraCalibration.js",
+      "src/calibration/CameraCalibrationWorker.js",
       "src/calibration/CameraFocalSweep.js",
       "src/calibration/CameraPerspectiveSeed.js",
       "src/calibration/CameraPhysicalFit.js",
@@ -480,38 +481,8 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 213,
+  "sourceJsCount": 214,
   "sourceModules": {
-    "src/ControlPanel.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/DataX.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ModelAnimation.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/NumFormatter.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/Slider.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
     "src/animation/CurvatureAnimations.js": {
       "directHtmlLoads": [
         "legacy"
@@ -1308,6 +1279,12 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/calibration/CameraCalibrationWorker.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
     "src/calibration/CameraFocalSweep.js": {
       "directHtmlLoads": [],
       "commonJsSourceCallers": [
@@ -1432,6 +1409,18 @@
         "tests/ModernTargetDirection.test.js",
         "tests/ModernTargetIndicator.test.js"
       ],
+      "commonJsToolCallers": []
+    },
+    "src/ControlPanel.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/DataX.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
     "src/diagnostics/CurvatureCameraVerification.js": {
@@ -1920,6 +1909,18 @@
       "commonJsTestCallers": [
         "tests/LegacySceneAudit.test.js"
       ],
+      "commonJsToolCallers": []
+    },
+    "src/ModelAnimation.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/NumFormatter.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
     "src/optics/CurvaturePhysicalGroundGuides.js": {
@@ -2752,6 +2753,12 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/Slider.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
     "src/tabs.js": {
       "directHtmlLoads": [],
       "commonJsSourceCallers": [],
@@ -2759,6 +2766,20 @@
       "commonJsToolCallers": []
     },
     "src/ui/ControlPanelX.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/legacy/LegacyDemoDomMount.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/legacy/LegacyDemoEmbed.js": {
       "directHtmlLoads": [
         "legacy"
       ],
@@ -2775,84 +2796,6 @@
       "commonJsToolCallers": []
     },
     "src/ui/ModelAnimationX.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsLineAtmosphereHandlers.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsOverlayControls.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsSceneComparison.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsTestPresets.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsTowerAtmosphereHandlers.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsTowerAuditHandlers.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsTowerFraming.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/OpticsVacuumToggle.js": {
-      "directHtmlLoads": [
-        "legacy"
-      ],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/legacy/LegacyDemoDomMount.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
-      "commonJsToolCallers": []
-    },
-    "src/ui/legacy/LegacyDemoEmbed.js": {
       "directHtmlLoads": [
         "legacy"
       ],
@@ -3549,6 +3492,70 @@
       "commonJsTestCallers": [
         "tests/ModernThumbnailPreview.test.js"
       ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsLineAtmosphereHandlers.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsOverlayControls.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsSceneComparison.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTestPresets.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTowerAtmosphereHandlers.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTowerAuditHandlers.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsTowerFraming.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/ui/OpticsVacuumToggle.js": {
+      "directHtmlLoads": [
+        "legacy"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
     "src/ui/panels/ComputedValuesPanel.js": {
