@@ -1,3 +1,24 @@
+## 8F.2d — Free View and exact optical Reset View
+
+The rectangular magnifier now has Free View, direct drag-to-orbit, wheel
+zoom, standard views, pan and Reset View. The optical crop is retained
+unchanged; reset replays it at the current window dimensions. Select the
+nearest visible owner pixel to the rectangle centre from the existing owner
+raster, then estimate a physical pivot on that owner (planar intersection
+or nearest perspective-correct edge, nearest depth for ties). Empty or
+unavailable ownership explicitly disables orbit, without losing Scene View.
+Free View uses the original rolled camera basis, physical geometry and
+off-axis eye rotated about the pivot; the initial screen alignment is
+geometric, not optical, and anchored at the visible raster seed. No special
+station or scene rules: all authored primitives across both banks are
+retained (budget 100000 primitives / 1000000 vertices, reject above it),
+with original indices and owners. Depth and viewport clip fill polygons
+and original stroke edges separately; painter order remains approximate.
+Free View does not simulate atmosphere or terrain masking. No anchor
+creation or fit/experiment mutation. Headless geometry/viewer tests passed;
+browser orbit/reset regression added, CI pending. User verification on
+Soundly and another scene type required before 8F.3.
+
 ## 8F.2c — Rectangular Scene Magnifier
 
 Photo Calibration Pick: Magnifier accepts a drag rectangle including empty

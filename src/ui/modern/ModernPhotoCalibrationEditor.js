@@ -651,7 +651,7 @@
       clearHover();clearAmbiguity();
     }
     function renderModel(){
-      if(viewer.isCrop())viewer.close();cropSource=null;regionDrag=null;
+      if(viewer.isCrop())viewer.close();cropSource=null;cancelRegion();
       invalidateFit('Add correspondences or run calibration from the captured camera.');
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
       visibleSpans=new Map();ownerSpans=new Map();highlightKey=null;ownership=null;exactOwnership=null;hoverObject=null;visibleByObject=new Map();
@@ -748,7 +748,7 @@
       if(key!==null&&!packages.has(key))return false;
       const changed=selectedObjectKey!==key;
       selectedObjectKey=key;refreshObjectSelection();meshDraw();
-      if(viewer.isOpen()&&changed){if(key===null)viewer.close();else openViewer();}
+      if(viewer.isOpen()&&!viewer.isCrop()&&changed){if(key===null)viewer.close();else openViewer();}
       return true;
     }
     function openViewer(){
@@ -770,8 +770,15 @@
     function cancelRegion(){const d=regionDrag;regionDrag=null;if(d&&sceneCanvas.hasPointerCapture(d.id))sceneCanvas.releasePointerCapture(d.id);}
     function openRegion(region){
       if(!cropSource||!region)return;
-      const source=cropSource;
-      viewer.openCrop(region,canvas=>cropRenderer.paintCrop(canvas,source.camera,source.model,source.options,source.width,source.height,region));
+      const source=cropSource,banks=scene.banks,api=env.CurvatureModernLandmarkViewer;
+      const seed=api.regionSeed(ownerSpans,region),owner=seed&&packages.get(seed.key);
+      const build=owner?()=>{
+        const m=source.model,t=env.CurvatureCameraTranslation;
+        const basis=t.frame(m.CameraEast||0,m.CameraNorth||0,m.Height,m.showModel===1?1/m.rEarth:0);
+        return api.regionGeometry(banks,{owner:owner.owner,primaryIndices:owner.primaryIndices,pixel:seed.pixel,region},source,basis);
+      }:null;
+      viewer.openCrop(region,canvas=>cropRenderer.paintCrop(canvas,source.camera,source.model,source.options,source.width,source.height,region),
+        build,build?'':'No visible geometry in this rectangle; Free View unavailable.');
     }
     pickMode.onchange=()=>{
       cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();

@@ -126,8 +126,8 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -243,11 +243,12 @@
     </div>
     <dialog id="ModernCalibrationViewer" class="modern-reference-dialog modern-landmark-viewer" aria-labelledby="ModernCalibrationViewerTitle">
       <header data-viewer-titlebar tabindex="0" aria-label="Move inspector with arrow keys"><h2 id="ModernCalibrationViewerTitle">Object viewer</h2><button type="button" data-viewer-close autofocus>Close</button></header>
+      <div class="modern-calibration-toolbar" data-viewer-scene-controls style="display:none"><button type="button" data-viewer-free>Free View</button><button type="button" data-viewer-scene-reset>Reset View</button></div>
       <div class="modern-calibration-toolbar" data-viewer-free-controls>
         <button type="button" data-viewer-view="front">Front</button><button type="button" data-viewer-view="back">Back</button>
         <button type="button" data-viewer-view="left">Left</button><button type="button" data-viewer-view="right">Right</button>
         <button type="button" data-viewer-view="top">Top</button><button type="button" data-viewer-view="bottom">Bottom</button>
-        <button type="button" data-viewer-reset>Reset</button>
+        <button type="button" data-viewer-reset>Reset orbit</button>
       </div>
       <div class="modern-calibration-toolbar" data-viewer-free-controls>
         <label>Projection <select data-viewer-projection><option value="orthographic">Orthographic</option><option value="perspective">Perspective</option></select></label>

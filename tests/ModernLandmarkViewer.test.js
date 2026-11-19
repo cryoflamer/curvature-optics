@@ -104,3 +104,47 @@ test('resized raster matches window aspect and bounds backing store size',()=>{
   assert.deepEqual(viewer.rasterSize(3000,1500,3),{width:2048,height:1024});
   assert.deepEqual(viewer.rasterSize(500,250,1),{width:500,height:250});
 });
+
+test('region seed uses visible owners inside a rectangle, not a bridge station or hidden geometry',()=>{
+  const spans=new Map([[7,[[10,10,20]]],[4,[[14,15,20]]],[9,[[30,30,10]]]]);
+  assert.deepEqual(viewer.regionSeed(spans,{x:12,y:9,width:10,height:10}),{key:4,pixel:[17.5,15.5],distance:2.5});
+  assert.equal(viewer.regionSeed(spans,{x:0,y:0,width:5,height:5}),null);
+});
+test('region view preserves a rolled pinhole basis and includes all owners on both banks',()=>{
+  const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[.6,0,.8],sceneSize:1,objectZExtend:0,zoom:1,near:.001}};
+  const observer={origin:[10,20,30],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
+  const owner={kind:'object',bank:0,objectType:3},other={kind:'object',bank:1,objectType:2};
+  const polygon=(o,points)=>({type:'polygon',mode:3,style:{},points,metadata:{landmarkOwner:o,landmarkPrimitive:0}});
+  const banks=[[polygon(owner,[[9,120,29],[11,120,29],[11,120,31],[9,120,31]])],
+    [polygon(other,[[10,220,30],[12,220,30],[10,220,32]])]];
+  const region={x:300,y:200,width:200,height:200},before=JSON.stringify(banks);
+  const g=viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);
+  assert.equal(g.items.length,2);assert.equal(g.items[1].bank,1);assert.deepEqual(g.frame.origin,[10,120,30]);
+  assert.deepEqual(g.eye,[0,0,100]);assert.equal(g.pivotError,0);
+  const initial={...viewer.reset(),projection:'perspective'};
+  const c=viewer.regionCamera(g,initial,800,600),q=g.items[0].points[0],p=c.project(q);
+  assert.ok(Math.abs(p.pixel[0]-(400+g.focal*3*q[0]/100))<1e-8);
+  assert.ok(Math.abs(p.pixel[1]-(300-g.focal*3*q[1]/100))<1e-8);
+  const rotated=viewer.regionCamera(g,viewer.orbit(initial,40,10),800,600);
+  assert.deepEqual(rotated.project([0,0,0]).pixel,[400,300]);
+  assert.ok(Math.hypot(...rotated.project(q).pixel.map((v,i)=>v-p.pixel[i]))>1);
+  for(const item of g.items)for(const [i,pt] of item.points.entries()){
+    const f=g.frame,world=f.origin.map((x,k)=>x+pt[0]*f.x[k]+pt[1]*f.y[k]+pt[2]*f.z[k]);
+    assert.ok(Math.hypot(...world.map((x,k)=>x-banks[item.bank][item.index].points[i][k]))<1e-9);
+  }
+  assert.equal(JSON.stringify(banks),before);
+});
+test('region pivot selects front physical intersection and falls back to perspective-correct edges',()=>{
+  const face=(z)=>({type:'polygon',mode:2,points:[[-4,-4,z],[4,-4,z],[4,4,z],[-4,4,z]]});
+  assert.deepEqual(viewer.regionPivot([face(-20),face(-10)],[400,300],800,600,100,.001),{point:[0,0,-10],distance:0});
+  const hit=viewer.regionPivot([{type:'line',points:[[1,0,-10],[4,0,-20]]}],[415,300],800,600,100,.001);
+  assert.ok(Math.abs(hit.distance)<1e-10);assert.ok(Math.abs(hit.point[0]/-hit.point[2]-.15)<1e-12);
+});
+test('free region painter clips near-plane crossing primitives and keeps every owner available',()=>{
+  const owner={kind:'object',bank:0},geometry={eye:[0,0,10],focal:100,near:.001,seed:[50,50],region:{x:0,y:0,width:100,height:100},
+    items:[{owner,type:'polygon',mode:3,style:{},points:[[-1,-1,0],[1,-1,0],[1,1,15],[-1,1,15]]}]};
+  let fill=0,stroke=0;const record=(...xy)=>assert.ok(xy.every(v=>Number.isFinite(v)&&v>=-2.001&&v<=102.001));
+  const ctx={clearRect(){},fillRect(){},beginPath(){},closePath(){},moveTo:record,lineTo:record,fill(){fill++;},stroke(){stroke++;}};
+  const stats=viewer.drawRegion({width:100,height:100,getContext:()=>ctx},geometry,{...viewer.reset(),projection:'perspective'});
+  assert.equal(stats.count,1);assert.equal(stats.visible,1);assert.equal(fill,1);assert.equal(stroke,1);
+});

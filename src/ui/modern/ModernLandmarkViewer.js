@@ -92,6 +92,160 @@
       ctx.beginPath();ctx.moveTo(...o);ctx.lineTo(...end);ctx.stroke();ctx.fillText(['X','Y','Z'][i],end[0]+4,end[1]-3);});
     return {size:b.size,face:Math.abs(c.toward[2])<1e-3?'edge-on':c.toward[2]<0?'back':'front',count:items.length};
   }
+  // The optical owner raster supplies a visible seed, not an anchor or a
+  // physical depth test. Choose the pixel centre nearest the region centre.
+  function regionSeed(spans,region){
+    const cx=region.x+region.width/2,cy=region.y+region.height/2;
+    let best=null;
+    for(const [key,runs] of spans)for(const [x,y,n] of runs){
+      if(y+.5<region.y||y+.5>=region.y+region.height)continue;
+      const lo=Math.max(x,Math.ceil(region.x-.5)),hi=Math.min(x+n-1,Math.ceil(region.x+region.width-.5)-1);
+      if(lo>hi)continue;
+      const px=clamp(Math.round(cx-.5),lo,hi)+.5,py=y+.5,d=(px-cx)**2+(py-cy)**2;
+      if(!best||d<best.distance||(d===best.distance&&(key<best.key||key===best.key&&(py<best.pixel[1]||py===best.pixel[1]&&px<best.pixel[0]))))
+        best={key,pixel:[px,py],distance:d};
+    }
+    return best;
+  }
+  const add=(a,b)=>a.map((v,i)=>v+b[i]),mul=(a,t)=>a.map(v=>v*t);
+  const lerp=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+  // Geometry used for the pivot is physical, not virtually bent. A
+  // planar polygon hit is preferred; otherwise use its closest projected
+  // edge with perspective-correct interpolation. Never save this as a pick.
+  function regionPivot(items,pixel,width,height,focal,near){
+    const ray=[(pixel[0]-width/2)/focal,(height/2-pixel[1])/focal,-1];
+    const project=p=>[width/2-focal*p[0]/p[2],height/2+focal*p[1]/p[2]];
+    let best=null;
+    function offer(point,distance){
+      if(!finite3(point)||!(point[2]<-near))return;
+      if(!best||distance<best.distance-1e-8||Math.abs(distance-best.distance)<=1e-8&&point[2]>best.point[2])
+        best={point,distance};
+    }
+    for(const p of items){
+      const pts=p.points,polygon=p.type==='polygon';
+      if(polygon&&((p.mode??1)&2)){
+        let normal=null;
+        for(let i=1;i+1<pts.length;i++){const n=cross(sub(pts[i],pts[0]),sub(pts[i+1],pts[0]));if(Math.hypot(...n)>1e-9){normal=unit(n);break;}}
+        if(normal&&pts.every(q=>Math.abs(dot(sub(q,pts[0]),normal))<1e-5)){
+          const den=dot(ray,normal),t=dot(pts[0],normal)/den;
+          if(Number.isFinite(t)&&t>near&&Math.abs(den)>1e-12){
+            const q=mul(ray,t),axis=normal.map(Math.abs).indexOf(Math.max(...normal.map(Math.abs)));
+            const axes=[0,1,2].filter(i=>i!==axis),[u,w]=axes;let inside=false;
+            for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+              const a=pts[i],b=pts[j];
+              if((a[w]>q[w])!==(b[w]>q[w])&&q[u]<(b[u]-a[u])*(q[w]-a[w])/(b[w]-a[w])+a[u])inside=!inside;
+            }
+            if(inside)offer(q,0);
+          }
+        }
+      }
+      for(let i=0;i<(polygon?pts.length:pts.length-1);i++){
+        let a=pts[i],b=pts[(i+1)%pts.length];
+        const limit=-near*1.001;
+        if(a[2]>=limit&&b[2]>=limit)continue;
+        if(a[2]>=limit)a=lerp(a,b,(limit-a[2])/(b[2]-a[2]));
+        if(b[2]>=limit)b=lerp(b,a,(limit-b[2])/(a[2]-b[2]));
+        const A=project(a),B=project(b),d=sub(B,A),den=dot(d,d);
+        const u=den>0?clamp(dot(sub(pixel,A),d)/den,0,1):0;
+        const t=(u/-b[2])/((1-u)/-a[2]+u/-b[2]);
+        offer(lerp(a,b,t),Math.hypot(...sub(lerp(A,B,u),pixel)));
+      }
+    }
+    if(!best)throw Error('No forward physical geometry for the visible owner');
+    return best;
+  }
+  function regionGeometry(banks,selection,source,observer){
+    if(!selection?.owner||!finite3(observer.origin))throw Error('No visible owner in this rectangle');
+    const camera=source.camera,back=unit(sub(camera.pos,camera.center)),right=unit(cross(unit(camera.up),back)),up=cross(back,right);
+    const focal=source.height/camera.sceneSize*(Math.hypot(...sub(camera.center,camera.pos))-camera.objectZExtend)*camera.zoom;
+    const near=camera.near||.001;
+    if(!(focal>0))throw Error('Invalid source focal scale');
+    // Use the captured physical scene, including the observer-relative height
+    // convention. Keep every authored owner from both banks, never station
+    // neighbours or a permanent screen-rectangle cutoff.
+    let count=0,vertices=0;
+    for(const bank of banks)for(const p of bank){count++;vertices+=p.points.length;}
+    if(count>100000||vertices>1000000)throw Error('Free View geometry budget exceeded (100000 primitives / 1000000 vertices)');
+    const observerAxes=[observer.right,observer.forward,observer.up];
+    const toCamera=p=>{const d=sub(p,observer.origin),q=sub(observerAxes.map(a=>dot(d,a)),camera.pos);return [dot(q,right),dot(q,up),dot(q,back)];};
+    const items=[];
+    for(const [bank,primitives] of banks.entries())for(const [index,p] of primitives.entries()){
+      if(!p.metadata?.landmarkOwner||!p.points.every(finite3))continue;
+      items.push({bank,index,primitive:p.metadata.landmarkPrimitive,primary:true,type:p.type,mode:p.mode,style:{...p.style},
+        owner:JSON.parse(JSON.stringify(p.metadata.landmarkOwner)),points:p.points.map(toCamera)});
+    }
+    const indices=new Set(selection.primaryIndices),candidates=items.filter(p=>p.bank===selection.owner.bank&&indices.has(p.index));
+    const hit=regionPivot(candidates,selection.pixel,source.width,source.height,focal,near),pivot=hit.point;
+    const worldAxis=a=>[0,1,2].map(i=>a.reduce((sum,v,j)=>sum+v*observerAxes[j][i],0));
+    const axes=[right,up,back].map(worldAxis);
+    const origin=add(add(observer.origin,worldAxis(camera.pos)),axes.reduce((p,a,i)=>add(p,mul(a,pivot[i])),[0,0,0]));
+    const frame={origin,x:axes[0],y:axes[1],z:axes[2]};
+    return {kind:'region',frame,items:items.map(p=>({...p,points:p.points.map(q=>sub(q,pivot))})),
+      eye:mul(pivot,-1),focal,near,region:{...selection.region},seed:selection.pixel.slice(),pivotError:hit.distance,
+      owner:JSON.parse(JSON.stringify(selection.owner))};
+  }
+  function regionCamera(geometry,state,width,height){
+    const a=state.yaw,p=state.pitch,ca=Math.cos(a),sa=Math.sin(a),cp=Math.cos(p),sp=Math.sin(p);
+    const right=[ca,0,-sa],up=[-sa*sp,cp,-ca*sp],toward=[sa*cp,sp,ca*cp],eye=geometry.eye;
+    const r=geometry.region,scale=Math.min(width/r.width,height/r.height),focal=geometry.focal*scale*state.zoom;
+    const origin=[width/2+(geometry.seed[0]-r.x-r.width/2)*scale+state.pan[0],
+      height/2+(geometry.seed[1]-r.y-r.height/2)*scale+state.pan[1]];
+    // Rotate the original off-axis eye and its rolled basis together around
+    // the physical pivot. At zero orbit the physical direction is unchanged.
+    const near=Math.max(geometry.near,eye[2]*1e-7);
+    function coordinates(q){return [dot(q,right)-eye[0],dot(q,up)-eye[1],eye[2]-dot(q,toward)];}
+    function screen(q){
+      const z=state.projection==='perspective'?q[2]:eye[2];
+      return [origin[0]+focal*(q[0]/z+eye[0]/eye[2]),origin[1]-focal*(q[1]/z+eye[1]/eye[2])];
+    }
+    return {coordinates,screen,near,origin,right,up,toward,project(q){const v=coordinates(q);return v[2]>=near?{pixel:screen(v),depth:v[2]}:null;}};
+  }
+  // Clip in depth and in screen space before handing paths to Canvas.
+  // Fill clipping edges are never painted as authored outlines.
+  function clipPolygon(points,axis,limit,greater){
+    if(!points.length)return [];
+    const result=[];let a=points[points.length-1],inside=p=>greater?p[axis]>=limit:p[axis]<=limit;
+    for(const b of points){if(inside(a)!==inside(b))result.push(lerp(a,b,(limit-a[axis])/(b[axis]-a[axis])));
+      if(inside(b))result.push(b);a=b;}
+    return result;
+  }
+  function clipEdge(a,b,axis,limit,greater){
+    const inside=p=>greater?p[axis]>=limit:p[axis]<=limit;
+    if(!inside(a)&&!inside(b))return null;
+    if(!inside(a))a=lerp(a,b,(limit-a[axis])/(b[axis]-a[axis]));
+    if(!inside(b))b=lerp(b,a,(limit-b[axis])/(a[axis]-b[axis]));
+    return [a,b];
+  }
+  function drawRegion(canvas,geometry,state){
+    const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,c=regionCamera(geometry,state,w,h);
+    ctx.clearRect(0,0,w,h);ctx.fillStyle='#eef4f8';ctx.fillRect(0,0,w,h);
+    const screenBounds=[[0,-2,true],[0,w+2,false],[1,-2,true],[1,h+2,false]],groups=new Map();
+    let visible=0;
+    for(const p of geometry.items){
+      const q=p.points.map(c.coordinates),polygon=p.type==='polygon',mode=polygon?(p.mode??1):1;
+      let fill=polygon&&(mode&2)&&!state.wireframe?clipPolygon(q,2,c.near,true).map(c.screen):[];
+      for(const b of screenBounds)fill=clipPolygon(fill,...b);
+      const edges=[];
+      if((mode&1)||state.wireframe)for(let i=0;i<(polygon?q.length:q.length-1);i++){
+        let edge=clipEdge(q[i],q[(i+1)%q.length],2,c.near,true);
+        if(!edge)continue;edge=edge.map(c.screen);
+        for(const b of screenBounds){if(edge)edge=clipEdge(...edge,...b);}
+        if(edge)edges.push(edge);
+      }
+      if(fill.length<3&&!edges.length)continue;
+      const key=JSON.stringify(p.owner);if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push({p,fill,edges,depth:q.reduce((s,v)=>s+v[2]/q.length,0)});visible++;
+    }
+    const ordered=[...groups.values()].map(g=>({g,depth:g.reduce((s,v)=>s+v.depth/g.length,0)})).sort((a,b)=>b.depth-a.depth).flatMap(v=>v.g);
+    ctx.lineJoin='round';ctx.lineWidth=1;
+    for(const {p,fill,edges} of ordered){
+      ctx.globalAlpha=p.style.alpha??1;
+      if(fill.length>=3){ctx.beginPath();ctx.moveTo(...fill[0]);for(const q of fill.slice(1))ctx.lineTo(...q);ctx.closePath();ctx.fillStyle=p.style.fill||'white';ctx.fill();}
+      if(edges.length){ctx.beginPath();for(const [a,b] of edges){ctx.moveTo(...a);ctx.lineTo(...b);}ctx.strokeStyle=p.style.stroke||'#526b7f';ctx.stroke();}
+    }
+    ctx.globalAlpha=1;
+    return {visible,count:geometry.items.length};
+  }
   // Window geometry is a UI preference, never experiment or camera state.
   const WINDOW_KEY='curvature-landmark-viewer-window-v1';
   function windowRect(request,width,height){
@@ -119,9 +273,16 @@
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
     const env=dialog.ownerDocument.defaultView,frame=dialog.querySelector('[data-viewer-frame]'),titleBar=dialog.querySelector('[data-viewer-titlebar]'),grip=dialog.querySelector('[data-viewer-resize]');
-    let geometry=null,crop=null,state=reset(),drag=null,windowDrag=null,rect=null;
+    let geometry=null,crop=null,free=false,state=reset(),drag=null,windowDrag=null,rect=null;
+    const sceneControls=dialog.querySelector('[data-viewer-scene-controls]'),freeButton=dialog.querySelector('[data-viewer-free]');
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
-    function syncMode(){for(const el of freeControls)el.style.display=crop?'none':'';canvas.style.cursor=crop?'default':'';}
+    function syncMode(){
+      sceneControls.style.display=crop?'':'none';
+      for(const el of freeControls)el.style.display=crop&&!free?'none':'';
+      spans.closest('label').style.display=crop?'none':'';
+      freeButton.disabled=!crop||free||!crop.build;freeButton.title=crop?.reason||'';
+      canvas.style.cursor=crop&&!free&&!crop.build?'default':'';
+    }
     const viewport=()=>[env.innerWidth,env.innerHeight];
     function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
     function saveRect(){if(rect)try{env.localStorage.setItem(WINDOW_KEY,JSON.stringify(rect));}catch(e){/* Optional UI preference. */}}
@@ -138,11 +299,12 @@
     function render(){
       if((!geometry&&!crop)||!dialog.open)return;
       resizeRaster();
-      if(crop){
-        try{const result=crop.paint(canvas);status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · drag a new rectangle to change region';}
+      if(crop&&!free){
+        try{const result=crop.paint(canvas);status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · '+(crop.reason||'drag to orbit or choose Free View');}
         catch(error){status.textContent='Magnifier unavailable: '+error.message;}
         return;
       }
+      if(crop&&free){const r=drawRegion(canvas,geometry,state);status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
@@ -155,7 +317,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();saveRect();geometry=null;crop=null;if(dialog.open)dialog.close();}
+    function close(){stopDrags();saveRect();geometry=null;crop=null;free=false;if(dialog.open)dialog.close();}
     dialog.querySelector('[data-viewer-close]').onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -183,7 +345,16 @@
     windowPointer(titleBar,'move');windowPointer(grip,'resize');
     new env.ResizeObserver(()=>{if(dialog.open)render();}).observe(frame);
     env.addEventListener('resize',()=>{if(dialog.open){stopDrags();applyRect(rect);saveRect();render();}});
-    dialog.querySelector('[data-viewer-reset]').onclick=()=>{state=initialView();sync();};
+    function resetScene(){stopDrags();free=false;state=reset();syncMode();render();}
+    function enterFree(){
+      if(!crop||free)return !!geometry;
+      if(!crop.build)return false;
+      try{if(!geometry)geometry=crop.build();free=true;state={...reset(),projection:'perspective',spans:true};syncMode();sync();return true;}
+      catch(error){crop.reason='Free View unavailable: '+error.message;crop.build=null;free=false;syncMode();render();return false;}
+    }
+    freeButton.onclick=enterFree;
+    dialog.querySelector('[data-viewer-scene-reset]').onclick=resetScene;
+    dialog.querySelector('[data-viewer-reset]').onclick=()=>{if(crop){state={...reset(),projection:'perspective',spans:true};}else state=initialView();sync();};
     dialog.querySelectorAll('[data-viewer-view]').forEach(n=>n.onclick=()=>{state=standardView(state,n.dataset.viewerView);render();});
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
     wire.onchange=()=>{state={...state,wireframe:wire.checked};render();};
@@ -191,32 +362,35 @@
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
     function point(e){const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];}
     canvas.addEventListener('pointerdown',e=>{
-      if(!geometry||drag||windowDrag||![0,1,2].includes(e.button))return;
-      e.preventDefault();canvas.focus({preventScroll:true});drag={id:e.pointerId,last:point(e),pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
+      if((!geometry&&!crop?.build)||drag||windowDrag||![0,1,2].includes(e.button))return;
+      e.preventDefault();canvas.focus({preventScroll:true});drag={id:e.pointerId,last:point(e),css:[e.clientX,e.clientY],pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove',e=>{
-      if(!drag||drag.id!==e.pointerId)return;const p=point(e),d=p.map((v,i)=>v-drag.last[i]);
-      state=drag.pan?pan(state,...d):orbit(state,...d);drag.last=p;render();
+      if(!drag||drag.id!==e.pointerId)return;
+      const css=[e.clientX,e.clientY],delta=sub(css,drag.css);
+      if(crop&&!free){if(Math.hypot(...delta)<3)return;if(!enterFree())return;drag.last=point(e);}
+      const p=point(e),d=crop?delta.map(v=>v*canvas.width/Math.max(1,canvas.clientWidth)):sub(p,drag.last);
+      state=drag.pan?pan(state,...d):orbit(state,...d);drag.last=p;drag.css=css;render();
     });
     const end=e=>{if(drag?.id===e.pointerId)drag=null;};
     for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
-    canvas.addEventListener('wheel',e=>{e.preventDefault();if(!crop&&!drag){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
+    canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag&&(!crop||enterFree())){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
     dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
-    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();saveRect();geometry=null;crop=null;}});
+    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();saveRect();geometry=null;crop=null;free=false;}});
     function show(){if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
     return {open(next,title){
-      stopDrags();crop=null;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
+      stopDrags();crop=null;free=false;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
       show();syncMode();sync();
-    },openCrop(region,paint){
-      stopDrags();geometry=null;crop={region:{...region},paint};heading.textContent='3D Scene Magnifier';
+    },openCrop(region,paint,build=null,reason=''){
+      stopDrags();geometry=null;free=false;crop={region:{...region},paint,build,reason};heading.textContent='3D Scene Magnifier';
       show();syncMode();render();
     },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
-      snapshot:()=>dialog.open?crop?{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
+      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,pan,zoom,camera,draw,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));
