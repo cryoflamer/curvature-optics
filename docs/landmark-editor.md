@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented (CI pending); 8F.2b–c planned before 8F.3. See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented and user-inspected; revised 3D Scene Magnifier stages 8F.2b–d planned before 8F.3 (CI not revalidated here). See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -32,23 +32,36 @@ personal experiment file are added here.
 
 ## Target workflow
 
-1. Select a specific placed object on the main scene; highlight it and show
-   its identity, type and distance. Resolve occlusion and overlapping objects.
-2. Open a movable, modeless isolated 3D viewer of the exact selected object
-   or span, initially framed in the scene-relative view. Orbit, zoom and pan
-   independently of the physical experiment camera; retain photo access.
+1. In Magnifier mode drag a rectangle around any area of the main model
+   scene. No preliminary object or span selection is required.
+2. Open a movable, modeless 3D Scene Magnifier. Initially re-render the
+   selected region in the exact original optical view, at higher sampling
+   scale, with surrounding geometry and normal colors. Keep photo access.
+   Orbit, zoom and pan independently; Reset View restores the initial crop.
 3. Pick a vertex, an arbitrary point on an edge, or an arbitrary point on a
-   surface. Preview and confirm the marker; allow cancel and later editing.
+   surface of any eligible authored owner visible in the magnifier. Reveal
+   owner/primitive identity when needed; preview and confirm the marker;
+   allow cancel and later editing.
 4. Project the fixed geometric anchor back onto the main scene via the
    existing physical landmark projection; pair it with an original-photo pixel.
 5. Edit an existing anchor without discarding the photo pixel, weight or
    Fit/Validation role. Invalidate stale fit results and support Undo.
 
-The isolated viewer has no atmospheric refraction, horizon, or Earth-shape
-simulation. It is a local geometry editor. Main-scene selection and final
-projection must nevertheless respect the selected physical model, optical
-method and visibility. Do not claim accurate occlusion where the current
+Scene View and Free View are distinct: Scene View uses the same optical
+renderer as the main calibration preview, with only the viewport/framing
+changed; Free View is an independent geometric inspection camera without
+atmospheric refraction. Both use real authored geometry and the same
+underlying owner descriptors. Final projection respects the selected physical
+model and optical method. Do not claim accurate occlusion where the current
 renderer/projector cannot certify it.
+
+The isolated object viewer and precise owner selection were useful MVPs,
+but user testing showed that a long road span viewed alone is difficult to
+recognize, even with correct owner identity. The rectangular magnifier
+supersedes mandatory object isolation as the primary workflow. Retain
+the existing object/span identities and legacy vertex path; do not add
+Soundly-specific station/neighbor controls. The generic rectangular region
+is the user-facing selection, not an anchor or a permanent geometry crop.
 
 ## Implementation stages
 
@@ -84,32 +97,74 @@ road span must open that span, not a package with the span hidden. Adjacent
 supports and spans are optional context; no invented thickness. Test both
 Soundly road sides, overlapping owners, support selection and unchanged fit.
 
-### 8F.2b — Modeless movable viewer
+### 8F.2b — Modeless movable magnifier window
 Replace modal behavior with a floating nonblocking inspector. Drag title
 bar, resize, clamp to viewport on open/resize, remember window position and
 size as UI preferences (not portable experiment data). Keep photo and scene
-interactive; update an open inspector on new owner selection. Scope keyboard
-and pointer events to focused controls, release capture on cancellation,
-close on workspace exit or invalid scene replacement. Navigation must not
-change correspondence state or cancel an active fit. Test dragging, resizing,
-reopening, selecting another owner and photo interaction while open.
+interactive. Scope keyboard and pointer events to focused controls, release
+capture on cancellation, close on workspace exit or invalid scene replacement.
+This stage may use the existing object inspector content until 8F.2c is
+implemented. Retain the window infrastructure for rectangular selections.
+Navigation must not change correspondence state or cancel an active fit.
+Test dragging, resizing, reopening and photo interaction while open.
 
-### 8F.2c — Scene-relative initial view and framing
-Open each selected owner in a scene-relative orientation by default, using
-the actual displayed camera basis, including roll, and the selected owner's
-placement. Preserve perspective direction and use off-axis framing or
-equivalent crop/zoom rather than translating the physical camera toward
-the object. Fit selected geometry to available viewport with margins;
-optional context must not hide the selected feature or force excessive
-zoom-out. Provide Scene View to restore this initial orientation/framing
-after orbiting; retain standard views and manual controls. Local viewer
-does not reproduce atmospheric ray bending; explicitly distinguish geometric
-scene-relative framing from exact optical pixel parity. Verify Globe/Flat,
-camera roll, both supports and road spans, resize and unchanged physical
-state. Require user verification of 8F.2a–c on Soundly before 8F.3.
+### 8F.2c — Scene Magnifier: rectangle and exact initial view
+Add an explicit Magnifier mode to Photo Calibration. Drag a rectangle in the
+main model viewport; show the selection while dragging and cancel safely.
+Map the rectangle from CSS/input coordinates through canvas backing pixels
+and existing model pan/zoom to the original projection raster. Normalize
+reverse drags, clip to valid image bounds, reject tiny/empty rectangles.
+Do not require a selected owner, visible vertex, or even an object hit.
+Open/update the modeless window with the selected region as its initial
+Scene View. Re-render actual geometry at the magnified scale with the same
+displayed physical camera (including roll), optical method, Earth model,
+atmosphere, painter ordering, horizon mask and styling as the original view.
+Use an off-axis projection/viewport transform equivalent to crop and uniform
+scale, not a translated camera, changed focal parameter, or enlarged bitmap.
+Preserve aspect ratio; letterbox as needed rather than stretch the image.
+Retain all surrounding geometry intersecting the crop, including multiple
+owners, both banks and partially intersecting primitives. No Soundly-specific
+rules, station windows, or automatic isolation of the initially clicked owner.
+Keep the existing owner identities available for later picking and optional
+hover feedback; do not tint the initial scene by default.
+Audit Canvas Direct projection, clipping, guides, mask, and stroke scaling
+before implementation; a crop transform must not cause a different physical
+camera or atmospheric computation. Test projected coordinates against the
+original affine crop transform, occlusion/painter parity within tolerances,
+Globe/Flat, nonzero roll, atmosphere variants, zoom/pan, resizing, and mixed
+object types. Explicitly report renderer limitations; do not claim physical
+depth or optical accuracy beyond the main renderer's own contract.
+
+### 8F.2d — Independent orbit of the local scene and Reset View
+Enable Free View from the magnified region with an independent local 3D
+camera, orbit, zoom, pan and standard views. Choose a deterministic pivot
+near the visible geometry of the rectangle (review robust depth/owner
+selection rather than assuming a bridge station or a single object);
+provide explicit handling of empty regions or ambiguous depth. Start from
+the scene-relative direction and roll as closely as geometrically possible.
+Use the actual authored physical geometry in a numerically stable local
+frame; keep identities and original primitive indices. The screen rectangle
+is a framing request, not a permanent 3D clipping boundary. Neighboring
+geometry must become available when rotating, panning or zooming out.
+Use generic spatial/visibility bounds with documented resource limits, not
+type-specific adjacency or an arbitrary fixed set of selected owners.
+Free View is a geometric inspection view, without atmospheric ray bending;
+do not imply exact pixel parity with Scene View after rotation. Provide
+Reset View / Scene View to restore the original saved region, physical
+camera, optical settings, magnification and aspect-preserving framing
+exactly (recomputed for current window size). Preserve the saved initial
+view when navigating freely; a new rectangle establishes a new baseline.
+Test multi-object regions, near/far overlap, pivot and frame stability,
+scene reset after orbit/zoom/pan/resize, non-Soundly scene types, and no
+mutation of experiment state. Require user verification on Soundly and
+at least one other scene type before 8F.3.
 
 ### 8F.3 — Local picking
-Ray intersection with actual triangles in the local viewer; nearest visible
+Pick any eligible owner in the magnified region, independent of the initial
+rectangle. In Free View use ray intersection with actual triangles; in
+Scene View resolve against the actual optical projection (not an uncorrected
+straight world ray). Audit this mode-specific inverse mapping before
+implementation and reject ambiguous/unsupported hits explicitly. Nearest visible
 surface, edge and vertex modes, hover preview, fixed marker, snapping
 (including edge midpoint if useful) and local metric-coordinate readout.
 Distinguish a click from orbit drag; allow precise adjustment and cancel.
@@ -131,7 +186,7 @@ diagnostic horizontal range scaling to the new anchors. Keep the camera-only
 objective and existing numerical methods unchanged.
 
 ### 8F.5 — Calibration integration
-Create and edit correspondences with the isolated viewer; update model/photo
+Create and edit correspondences with the 3D Scene Magnifier; update model/photo
 markers, residuals and Fit/Validation groups. Preserve IDs, photo pixels,
 weights and roles when editing an anchor. Cancel active fit and invalidate
 stale results on committed changes; support existing Undo semantics and
@@ -160,7 +215,8 @@ Report negative results and termination status, not just improved training RMS.
 
 ## Principles and non-goals
 
-- Reusable across scene types, not a Soundly-specific tool.
+- Reusable across scene types, not a Soundly-specific tool; no station-based
+  neighborhood or mandatory single-owner selection.
 - Single source of authored geometry; no independent replica of the object.
 - Independent local viewer camera and globally fixed physical anchor.
 - No automatic sliding of anchors during camera optimization.
@@ -174,9 +230,11 @@ Report negative results and termination status, not just improved training RMS.
 ## Definition of done
 
 - [ ] Individual object selection and highlighting are reliable in supported scenes.
-- [ ] Exact support/span selection, modeless window and scene-relative framing
-  are verified on Soundly before local picking.
-- [ ] Isolated viewer navigation leaves the experiment camera unchanged.
+- [ ] Modeless rectangular magnifier re-renders the same initial optical view
+  with independent orbit/pan/zoom and reliable Reset View.
+- [ ] Multi-owner context and the generic workflow are verified on Soundly
+  and another scene type before local picking.
+- [ ] Magnifier navigation leaves the experiment camera unchanged.
 - [ ] Vertex, edge and surface anchors are selectable and physically projected.
 - [ ] Existing correspondences can be refined without losing photo pixels or roles.
 - [ ] Fit, Validation, residuals and stale-result invalidation work for new anchors.

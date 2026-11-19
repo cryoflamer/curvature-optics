@@ -6,11 +6,17 @@ Tracking: #7, related to #6. Next: 8F.1.
 
 ## Subsequent refinement
 
-The original package-selection/modal/front-view MVP has been implemented and
-user-tested. Its usability limitations prompted 8F.2a–c in the current
-[implementation plan](landmark-editor.md), which supersedes the original
-viewer selection and initial-view defaults below. The anchor and projection
-contracts remain unchanged.
+The original package-selection/modal/front-view MVP and precise owner
+selection (8F.2a) have been implemented and user-tested. The agreed primary
+workflow is now a generic 3D Scene Magnifier: rectangle selection, modeless
+window, optical re-rendering of the same crop, independent local geometric
+orbit, and exact reset. See stages 8F.2b–d in the current
+[implementation plan](landmark-editor.md), which supersede the original
+single-owner selection, context and initial-view defaults below. The
+authored owner and fixed anchor contracts remain unchanged. The old
+audit's geometric-only viewer describes Free View, not Scene View; the
+latter must preserve the main optical projection. Mode-specific picking
+must be audited in 8F.3.
 
 ## Source audit and decisions
 

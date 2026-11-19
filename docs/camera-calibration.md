@@ -1,3 +1,24 @@
+## 8F.2 — Revised direction: 3D Scene Magnifier (planned)
+
+User verification after 8F.2a confirmed the need for recognizable scene
+context: even a correctly identified 300 m road span is difficult to
+recognize in isolation. The agreed primary workflow is now a generic
+rectangular region selection on the main model preview, opened in a movable
+modeless magnifier with a fresh higher-scale rendering in the SAME optical
+camera/view. No mandatory object selection or Soundly-specific neighboring
+stations. Free View permits independent rotation, pan and zoom of actual
+local scene geometry, including surrounding owners; Reset View restores
+the saved optical rectangle/framing. Keep existing object/span/primitive
+identities as internal anchor/picking infrastructure and preserve the legacy
+vertex path. No changes to physical camera, fit or observations by navigation.
+
+Next stages: 8F.2b modeless movable/resizable window; 8F.2c rectangle selection
+and optical re-rendering; 8F.2d independent local orbit and exact initial
+view reset. Then verify on Soundly and another scene type before 8F.3.
+Detailed contracts and tests: [landmark editor plan](landmark-editor.md),
+Issue #7. This supersedes earlier single-owner framing and isolation plans.
+Documentation only; no runtime changes or new CI results in this commit.
+
 ## 8F.2a — Exact object/span selection
 
 Object / span mode now has a dedicated owner identity raster, using the same
@@ -12,9 +33,9 @@ selection remains available when the raster is unavailable or ambiguous.
 No physical camera, anchor, JSON or optimizer changes. Five geometry/viewer
 headless tests passed; renderer and browser coverage added, full CI pending.
 8F.2 Chromium CI passed; its remaining architecture/Node failure was the
-reviewed Modern helper inventory, updated here. Next: 8F.2b modeless window.
+reviewed Modern helper inventory, updated here. Next: 8F.2b modeless window, then the revised magnifier stages above.
 
-## 8F.2 follow-up — Viewer usability refinement (planned)
+## Historical 8F.2 follow-up — superseded by Scene Magnifier
 
 User verification of 8F.2 in Soundly revealed that clicking a road span
 opens its support package with spans hidden; the modal dialog obscures
