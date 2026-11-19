@@ -1,3 +1,23 @@
+## 8B.6 — Direct correspondence interaction
+
+Either canvas can provide the first point. A click on the highlighted model
+vertex or the corresponding photo pixel completes a pair automatically. No
+Add pair button or below-canvas confirmation in the normal pointer workflow.
+A hover tooltip shows overlapping candidates; Tab / Shift+Tab cycles them,
+and clicking confirms the highlighted ID. Existing marker clicks select the
+pair; dragging the photo marker changes only original pixels, dragging the
+model marker snaps to a new authored landmark, preserving row order and
+weight. Invalid drops leave the pair unchanged. Drag empty space to pan.
+Inline counter, selection hint, Undo (last 50 row edits in memory), Delete
+selected and keyboard shortcuts (Escape, Delete, Ctrl/Cmd+Z) are available.
+Numeric/manual controls remain as fallback. Committed changes and partially
+chosen model landmark are persisted using the existing draft store. Undo
+history is not persisted. Camera initial guess controls, magnifier and
+verified mesh visibility remain deferred. Restored required Scene/Compare
+tab bindings in isolated Node hosts: newUiEl deliberately returns null in
+hosts without querySelector, which caused the previous navigation regressions.
+Added marker hit test, extended browser pointer test; CI pending.
+
 ## Unified top-level workspace selection and recovery
 
 Scene, Compare, Animation, Photo Calibration and Demos now share one tab

@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -151,7 +151,7 @@
   <section id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle" hidden>
     <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · correspondence editor</p></div><button type="button" id="ModernCalibrationClose">Back to Scene</button></header>
     <p id="ModernCalibrationScene"></p>
-    <p>Click a point on the photograph, then the matching point on the model. Scene geometry and atmosphere are fixed until New session.</p>
+    <p>Click matching points in either order. Drag markers to edit; drag empty areas to pan. Scene geometry and atmosphere are fixed until New session.</p>
     <div class="modern-calibration-toolbar">
       <label>Reference photo <input type="file" id="ModernCalibrationFile" accept="image/png,image/jpeg,image/webp"></label>
       <button type="button" id="ModernCalibrationReset" title="Discard the draft and capture the latest Scene">New session</button>
@@ -164,16 +164,22 @@
     </div>
     <p id="ModernCalibrationSourceStatus" role="status"></p>
     <p id="ModernCalibrationPhotoInfo"></p>
+    <div class="modern-calibration-toolbar modern-calibration-actions">
+      <strong id="ModernCalibrationInlineCount">0 correspondences</strong>
+      <span id="ModernCalibrationActionHint" role="status">Click either image, then its matching point in the other.</span>
+      <button type="button" id="ModernCalibrationUndo" disabled>Undo</button>
+      <button type="button" id="ModernCalibrationDeleteSelected" disabled>Delete selected</button>
+    </div>
     <div class="modern-calibration-grid">
-      <section><h3>Original photograph</h3><p>Click a point · drag to pan · wheel to zoom.</p>
+      <section><h3>Original photograph</h3><p>Click to pair · drag marker to edit · drag empty area to pan · wheel to zoom.</p>
         <canvas id="ModernCalibrationPhoto" width="800" height="540" aria-label="Reference photo"></canvas>
         <div class="modern-calibration-toolbar">
           <label>Pixel X <input id="ModernCalibrationX" type="number" step="any"></label>
           <label>Pixel Y <input id="ModernCalibrationY" type="number" step="any"></label>
         </div>
       </section>
-      <section><h3>Model · Canvas Direct</h3><p>Hover to snap · click to pair · drag to pan · wheel to zoom.</p>
-        <canvas id="ModernCalibrationMesh" width="800" height="540" aria-label="Full model scene"></canvas>
+      <section><h3>Model · Canvas Direct</h3><p>Hover to snap · Tab cycles candidates · click to pair · drag marker to reselect.</p>
+        <div class="modern-calibration-model-wrap"><canvas id="ModernCalibrationMesh" width="800" height="540" aria-label="Full model scene"></canvas><div id="ModernCalibrationHoverTip" hidden></div></div>
         <div class="modern-calibration-toolbar">
           <button type="button" id="ModernCalibrationFitModel">Fit model</button>
           <label><input type="checkbox" id="ModernCalibrationShowLandmarks"> Show landmarks</label>
@@ -1066,7 +1072,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1-captions-47-geometry-summary-50-semantic-49-scene-detail-51&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1&amp;projection-fix=1&amp;presentation-hud=1&amp;adaptive-layout=1&amp;topology=1&amp;content-layout=1&amp;guide-labels=1&amp;presentation-video=1&amp;export-renderer=1&amp;export-preferences=1&amp;photo-workspace=1&amp;workspace-selection=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1-captions-47-geometry-summary-50-semantic-49-scene-detail-51&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1&amp;projection-fix=1&amp;presentation-hud=1&amp;adaptive-layout=1&amp;topology=1&amp;content-layout=1&amp;guide-labels=1&amp;presentation-video=1&amp;export-renderer=1&amp;export-preferences=1&amp;photo-workspace=1&amp;workspace-selection=1&amp;pair-ux=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" class="modern-status-message" role="status" aria-live="polite">Preparing physical scene…</span></div>

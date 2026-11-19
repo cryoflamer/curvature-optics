@@ -654,9 +654,6 @@ class ModernBrowserSmoke(unittest.TestCase):
         model.hover(position={'x':hit['x'],'y':hit['y']})
         expect(workspace.locator('#ModernCalibrationPickStatus')).to_contain_text('Bank')
         model.click(position={'x':hit['x'],'y':hit['y']})
-        conflict=workspace.locator('#ModernCalibrationPickConflict')
-        if conflict.is_visible():
-            workspace.locator('#ModernCalibrationConfirmPick').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
         result=self.page.evaluate("""() => {
             const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
@@ -667,6 +664,20 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertAlmostEqual(result['pixel'][0],600,delta=3)
         self.assertAlmostEqual(result['pixel'][1],450,delta=3)
         self.assertEqual(result['pose'],before['pose'])
+        # Drag the existing photo marker, leaving its model ID and weight intact.
+        photo.scroll_into_view_if_needed()
+        r=photo.bounding_box()
+        x,y=r['x']+r['width']/2,r['y']+r['height']/2
+        self.page.mouse.move(x,y)
+        self.page.mouse.down()
+        self.page.mouse.move(x+30,y+20,steps=5)
+        self.page.mouse.up()
+        moved=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).snapshot().observations[0]""")
+        self.assertEqual(moved['landmark']['id'],result['id'])
+        self.assertGreater(moved['pixel'][0],result['pixel'][0]+10)
+        self.page.keyboard.press('Control+z')
+        restored=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).snapshot().observations[0].pixel""")
+        self.assertEqual(restored,result['pixel'])
         workspace.locator('#ModernCalibrationFitModel').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
 

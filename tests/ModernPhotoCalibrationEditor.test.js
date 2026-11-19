@@ -54,3 +54,9 @@ test('preview raster preserves aspect and model snap is independent of viewport 
   assert.deepEqual(editor.snapCandidates(points,z,...editor.screenPoint(z,[10,20])).map(p=>p.landmark.id),['a']);
   assert.deepEqual(editor.snapCandidates(points,v,0,0),[]);
 });
+
+test('marker hit chooses the closest existing pair and leaves empty space for panning',()=>{
+ const markers=[{id:'a',pixel:[10,10]},{id:'b',pixel:[15,10]}];
+ assert.equal(editor.nearestMarker(markers,[14,10],8).id,'b');
+ assert.equal(editor.nearestMarker(markers,[50,50],8),null);
+});

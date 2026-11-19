@@ -751,7 +751,7 @@
   function syncWorkspaceTabs(){
     var current=currentWorkspaceMode();
     Object.keys(workspaceTabs).forEach(function(mode){
-      var tab=newUiEl(workspaceTabs[mode]);if(!tab)return;
+      var tab=(mode==='scene'||mode==='compare')?el(workspaceTabs[mode]):newUiEl(workspaceTabs[mode]);if(!tab)return;
       tab.classList.toggle('is-active',mode===current);
       tab.setAttribute('aria-pressed',String(mode===current));
     });
@@ -7428,7 +7428,7 @@
     bindCameraHud();
     bindTargetIndicator();
     Object.keys(workspaceTabs).forEach(function(mode){
-      var tab=newUiEl(workspaceTabs[mode]);if(tab)tab.addEventListener('click',function(){setMode(mode);});
+      var tab=(mode==='scene'||mode==='compare')?el(workspaceTabs[mode]):newUiEl(workspaceTabs[mode]);if(tab)tab.addEventListener('click',function(){setMode(mode);});
     });
     var photoTab=newUiEl('ModernPhotoCalibrationOpen'),photoClose=newUiEl('ModernCalibrationClose');
     if(photoClose)photoClose.addEventListener('click',function(){setMode('scene');});

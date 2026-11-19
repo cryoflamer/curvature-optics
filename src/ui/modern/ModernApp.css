@@ -1487,3 +1487,11 @@ button{cursor:pointer}
 .modern-calibration-landmark-menu summary{cursor:pointer;font-weight:600}
 .modern-photo-calibration #ModernCalibrationModelStatus,.modern-photo-calibration #ModernCalibrationPickStatus{font-size:12px;color:#516e85;margin:6px 0;min-height:1.4em}
 .modern-photo-calibration #ModernCalibrationMesh{background:#0b141e}
+
+/* Direct correspondence interaction: no scrolling between the two picks. */
+.modern-calibration-model-wrap{position:relative}
+#ModernCalibrationHoverTip{position:absolute;pointer-events:none;max-width:220px;background:#172534;color:white;border-radius:5px;padding:6px 8px;font-size:12px;z-index:2}
+#ModernCalibrationHoverTip[hidden]{display:none}
+.modern-calibration-actions{margin:12px 0;padding:8px;background:#edf5fc;border-radius:6px}
+#ModernCalibrationActionHint{flex:1;font-size:13px;color:#355b82}
+.modern-photo-calibration tr.is-selected{background:#e3f0fc}
