@@ -1,3 +1,17 @@
+## Modern Demo Catalog — Perspective camera seeds (8A.2 baseline)
+
+Issue #6: added `src/calibration/CameraPerspectiveSeed.js`, dependency-free
+normalized spatial DLT and planar homography with unknown focal length,
+positive-depth filtering, focal bounds and explicit degeneracy diagnostics.
+Input is Cartesian world/image correspondences; output is a perspective seed,
+not a physical camera or exhaustive solution. Nine new Node tests passed
+including both sides, telephoto, frontal/collinear cases and noisy observations.
+Noiseless ordinary cases <=1e-6 px RMS, telephoto <=1e-5 px; noisy seed fixture
+3.058 px RMS. Only the standalone module's tests were run in this session;
+no renderer/whole-repository regression claim. Next: P4Pf/focal-sweep candidate
+generation, weak geometry qualification and physical camera conversion.
+No changes to optics or UI.
+
 ## Modern Demo Catalog — Camera calibration point projection (8A.1)
 
 Issue #6: added headless `src/calibration/CameraLandmarkProjection.js` for

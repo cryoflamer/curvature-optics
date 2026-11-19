@@ -45,6 +45,44 @@ and near-horizon renderer parity, real raster/viewport capture, independent
 calibration intrinsics, portable landmark identity and mesh visibility need
 further qualification before claiming real-photo recovery. No optimizer yet.
 
+## Perspective seeds (8A.2, first implementation)
+
+`src/calibration/CameraPerspectiveSeed.js` is a dependency-free headless
+perspective initializer. Call `initialize(observations, {width, height,
+minFocalPx, maxFocalPx})` with correspondences `{world:[X,Y,Z], pixel:[u,v]}`.
+World coordinates must already be Cartesian metres in one right-handed frame;
+surface-arc coordinates are not interchangeable with Globe Cartesian points.
+Image coordinates use original raster pixels, x right and y down, centered
+principal point, square pixels, rectilinear undistorted lens. The focal bounds
+default to 1 and 1e7 pixels, not millimetres.
+
+The spatial branch uses centered/scaled world coordinates and centered/scaled
+image coordinates with DLT (at least six noncoplanar correspondences).
+The planar branch uses a plane basis and homography (at least four
+noncollinear correspondences); orthogonality and equal column norms constrain
+the unknown focal length. One-sided Jacobi SVD works on design columns without
+forming normal equations. Both projective signs are checked, all retained
+candidates have positive depth for every observation and satisfy focal bounds.
+Outputs contain position, world-to-camera rotation rows, focalPx and Euclidean
+2D residual RMS in original pixels, plus singular-value diagnostics.
+Coincident/collinear world points, insufficient rank and exactly frontal planar
+geometry are explicitly rejected. Near-degenerate noisy scenes can still yield
+poor seeds: a returned candidate is not a certificate of identifiability or
+accuracy. The result always declares complete:false.
+
+Nine independent synthetic Node tests passed: spatial/oblique planar recovery
+from both sides, minimal planar case, telephoto with large coordinate offset,
+frontal/collinear degeneracy, invalid and focal-bounded inputs, and deterministic
+subpixel observation noise. The noiseless ordinary cases recover below 1e-6 px
+RMS; telephoto below 1e-5 px. One noisy spatial fixture (0.5 px sinusoidal
+perturbations per coordinate) has 3.058 px seed RMS before refinement.
+These tests are independent pinhole projections, not physical renderer parity.
+
+This is a first baseline only. No P4Pf, focal sweep, alternate global search,
+physical pose conversion, terrain/mesh visibility, refraction or nonlinear
+refinement yet. Next compare and extend initialization for nearly planar and
+distant scenes, then connect candidates to the physical projector. No UI changes.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified
