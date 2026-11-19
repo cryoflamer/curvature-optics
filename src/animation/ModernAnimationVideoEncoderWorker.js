@@ -7,7 +7,7 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
-  '../ui/modern/ModernSemanticNaming.js?semantic-names=2&atmosphere-export=1&presentation-video=1',
+  '../ui/modern/ModernSemanticNaming.js?semantic-names=2&atmosphere-export=1&presentation-video=1&export-renderer=1',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
@@ -19,9 +19,9 @@ importScripts(
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js',
-  'ModernAnimationPresentationCompositor.js?content-layout=1&guide-labels=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-video=1',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1&presentation-video=1',
+  'ModernAnimationPresentationCompositor.js?content-layout=1&guide-labels=1&export-renderer=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-video=1&export-renderer=1',
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1&presentation-video=1&export-renderer=1',
   'ModernAnimationVideoCapabilities.js',
   'ModernAnimationWebMMuxer.js',
   'ModernAnimationMP4Muxer.js',
@@ -87,7 +87,7 @@ async function maybeFinish(){
     var p=current.plan,manifest={schema:'curvature-animation-'+current.format,version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       cameraInterpolation:p.project.mode==='camera'?(p.project.interpolation||'linear'):null,
-      physicalTarget:p.project.target,codec:current.codec,format:current.format,quality:'accurate',
+      physicalTarget:p.project.target,codec:current.codec,format:current.format,quality:p.renderMethod,
       width:p.outputWidth,height:p.outputHeight,viewWidth:p.width,viewHeight:p.height,
       compareLayout:p.compareLayout,fps:p.fps,frameCount:p.frameCount,
       durationUs:p.durationUs,sides:p.sides.slice(),outputStreams:p.outputSides.length,
@@ -150,7 +150,7 @@ async function init(data){
     if(format!=='webm'&&format!=='mp4')throw RangeError('Unsupported video format');
     var naming=self.CurvatureModernSemanticNaming.exportNames(plan.project,{
       format:format,fps:plan.fps,width:plan.outputWidth,height:plan.outputHeight,
-      compareLayout:plan.compareLayout});
+      compareLayout:plan.compareLayout,renderMethod:plan.renderMethod});
     var codec=format==='mp4'?self.CurvatureModernAnimationVideoCapabilities.h264Codec(
       plan.outputWidth,plan.outputHeight,plan.fps):'vp09.00.10.08';
     var multiplier=data.quality==='high'?2:data.quality==='standard'?1:null;

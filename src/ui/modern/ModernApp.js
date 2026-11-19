@@ -2691,7 +2691,7 @@
     if(cancel)cancel.disabled=!studioFrameExportTask;
     var preview=newUiEl('ModernAnimationFrameExportPreview');
     if(preview)preview.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi;
-    ['Mode','Fps','Size','PresentationSize','Layout','Stability','Narrative','Workers','CameraHud','Target','Destination'].forEach(function(key){
+    ['Renderer','Mode','Fps','Size','PresentationSize','Layout','Stability','Narrative','Workers','CameraHud','Target','Destination'].forEach(function(key){
       var node=newUiEl('ModernAnimationFrameExport'+key);if(node)node.disabled=!!studioFrameExportTask;
     });
     syncStudioVideoExportControls();
@@ -2708,21 +2708,22 @@
   function studioExportProject(id){
     return studioPrepared&&(studioPlayback&&studioPlayback.project||studioPrepared)||studioApi.build(studioDraft,id);
   }
+  function exportRendererLabel(method){return method==='canvas-direct'?'Canvas Direct (approximate)':'Accurate RK4';}
   function studioVideoExportSelection(){
     var project=studioExportProject('studio_video_export');
     var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
     var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
     var format=newUiEl('ModernAnimationVideoExportFormat').value;
     var isCompare=project.baseExperiment.display.mode==='compare';
-    var full=(newUiEl('ModernAnimationVideoExportMode')||{}).value==='presentation',extra={};
+    var full=(newUiEl('ModernAnimationVideoExportMode')||{}).value==='presentation',extra={renderMethod:(newUiEl('ModernAnimationVideoExportRenderer')||{}).value||'accurate'};
     if(full){size=[Number(newUiEl('ModernAnimationVideoExportPresentationSize').value)];size.push(size[0]*9/16);
       extra.presentation={referenceLayout:newUiEl('ModernAnimationVideoExportLayout').value,layoutMode:newUiEl('ModernAnimationVideoExportStability').value,showNarrative:newUiEl('ModernAnimationVideoExportNarrative').checked};}
     var compareLayout=isCompare&&!full?newUiEl('ModernAnimationVideoExportCompareLayout').value:undefined;
     var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],
-      height:size[1],compareLayout:compareLayout,...(full?{presentation:{referenceLayout:'hidden'}}:{})});
+      height:size[1],renderMethod:extra.renderMethod,compareLayout:compareLayout,...(full?{presentation:{referenceLayout:'hidden'}}:{})});
     var names=semanticNaming.exportNames(plan.project,{
       format:format,fps:plan.fps,width:plan.outputWidth,
-      height:plan.outputHeight,compareLayout:plan.compareLayout});
+      height:plan.outputHeight,compareLayout:plan.compareLayout,renderMethod:plan.renderMethod});
     return {plan:plan,format:format,names:names,extra:extra};
   }
   function syncStudioVideoExportLayout(){
@@ -2877,7 +2878,7 @@
       if(lastProfile)downloadHistoryJson(JSON.stringify(lastProfile,null,2),
         'curvature-animation-video-profile.json');
     });
-    ['ModernAnimationVideoExportMode','ModernAnimationVideoExportPresentationSize','ModernAnimationVideoExportLayout','ModernAnimationVideoExportStability','ModernAnimationVideoExportNarrative','ModernAnimationVideoExportCompareLayout','ModernAnimationVideoExportSize',
+    ['ModernAnimationVideoExportRenderer','ModernAnimationVideoExportMode','ModernAnimationVideoExportPresentationSize','ModernAnimationVideoExportLayout','ModernAnimationVideoExportStability','ModernAnimationVideoExportNarrative','ModernAnimationVideoExportCompareLayout','ModernAnimationVideoExportSize',
       'ModernAnimationVideoExportFormat','ModernAnimationVideoExportFps',
       'ModernAnimationVideoExportWorkers'].forEach(function(id){
       var select=newUiEl(id);
@@ -2894,8 +2895,8 @@
         message('Video export modules unavailable. Check the browser console.','error');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
-        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1&presentation-video=1',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1&png-project-fields=1&presentation-video=1',
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1&presentation-video=1&export-renderer=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1&png-project-fields=1&presentation-video=1&export-renderer=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller,cancelled:false};studioVideoExportTask=task;
       syncStudioFrameExportControls();
@@ -2914,7 +2915,7 @@
         var started=profileNow(),lastUiTick=-Infinity,lastRenderTick=-Infinity;
         message('Starting '+codecLabel+' render and encoder workers · '+plan.frameCount+
           ' video intervals · '+plan.outputSides.length+' output stream(s) from '+
-          plan.sides.length+' view(s) · Accurate RK4.');
+          plan.sides.length+' view(s) · '+exportRendererLabel(plan.renderMethod)+'.');
         var extra=selection.extra||{},cameraHud=!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,appearance=studioHudAppearance(),includeTarget=!!(newUiEl('ModernAnimationVideoExportTarget')||{}).checked,selectedTarget=targetIndicatorSelection;
         if(extra.presentation&&extra.presentation.referenceLayout!=='hidden'){
           var demo=studioActiveDemo;message('Collecting original reference photographs…');
@@ -2940,7 +2941,7 @@
             var now=profileNow();
             if(progress&&progress.value===0&&now-lastRenderTick>=250){
               lastRenderTick=now;
-              message(codecLabel+' Accurate RK4: rendered '+info.rendered+' / '+
+              message(codecLabel+' '+exportRendererLabel(plan.renderMethod)+': rendered '+info.rendered+' / '+
                 info.total+' frames · waiting for ordered encoder handoff.');
             }
           },
@@ -3042,7 +3043,7 @@
       var simulation=newUiEl('ModernAnimationFrameExportSimulationSizeControl');if(simulation)simulation.hidden=!!full;
       if(preview)preview.hidden=!full;clearPreview();}
     if(mode)mode.addEventListener('change',syncMode);
-    ['PresentationSize','Layout','Stability','Narrative','CameraHud','Target'].forEach(function(key){var node=newUiEl('ModernAnimationFrameExport'+key);if(node)node.addEventListener('change',clearPreview);});
+    ['Renderer','PresentationSize','Layout','Stability','Narrative','CameraHud','Target'].forEach(function(key){var node=newUiEl('ModernAnimationFrameExport'+key);if(node)node.addEventListener('change',clearPreview);});
     syncMode();
     var progress=newUiEl('ModernAnimationFrameExportProgress');
     function message(text,kind){var node=newUiEl('ModernAnimationFrameExportStatus');
@@ -3062,8 +3063,8 @@
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1',
-        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1',
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1&export-renderer=1',
+        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1&export-renderer=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller,cancelled:false},sink=null,ownedSink=false;
       clearPreview();
@@ -3076,7 +3077,7 @@
         var project=studioExportProject('studio_export');
         var fps=Number(newUiEl('ModernAnimationFrameExportFps').value);
         var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
-        var full=!!(mode&&mode.value==='presentation'),extra={};
+        var full=!!(mode&&mode.value==='presentation'),extra={renderMethod:(newUiEl('ModernAnimationFrameExportRenderer')||{}).value||'accurate'};
         if(previewOnly&&!full)throw Error('Choose Full presentation first');
         var streaming=!previewOnly&&!!destination&&destination.value==='disk'&&typeof root.showSaveFilePicker==='function';
         if(!previewOnly)studioFrameExportApi.checkFrameBudget(project,fps,streaming);
@@ -3094,7 +3095,7 @@
         var workerSelection=newUiEl('ModernAnimationFrameExportWorkers').value;
         var workerCount=workerSelection==='auto'?'auto':Number(workerSelection);
         var startAt=profileNow(),handle=null;
-        var filename=semanticNaming.exportNames(project,{kind:'frames',format:'png',fps:fps,width:size[0],height:size[1]}).filename.replace(/_frames\.zip$/,full?'_presentation_frames.zip':'_frames.zip');
+        var filename=semanticNaming.exportNames(project,{kind:'frames',format:'png',fps:fps,width:size[0],height:size[1],renderMethod:extra.renderMethod}).filename.replace(/_frames\.zip$/,full?'_presentation_frames.zip':'_frames.zip');
         // Picker must run in the original click gesture, before any asset awaits.
         if(streaming){
           try{handle=await root.showSaveFilePicker({suggestedName:filename,types:[{description:'PNG frame ZIP',accept:{'application/zip':['.zip']}}]});}
@@ -3116,12 +3117,12 @@
           try{await sink.abort();}catch(error){sink=null;throw Error('Disk abort failed: '+error.message);}
           sink=null;message('PNG export cancelled; no ZIP committed.','warning');return;}}
         message('Starting background worker pool · 0 / '+plan.timesMs.length+
-          ' timestamps, '+plan.sides.length+' view(s) · Accurate RK4. Cancel is available.');
+          ' timestamps, '+plan.sides.length+' view(s) · '+exportRendererLabel(plan.renderMethod)+'. Cancel is available.');
         var exportPromise=controller.start({project:plan.project,fps:plan.fps,sink:sink,
           width:plan.width,height:plan.height,workerCount:workerCount,
           cameraHud:cameraHud,cameraHudAppearance:cameraHudAppearance,targetIndicator:targetIndicator,targetSelection:selectedTarget,...extra,
           onReady:function(info){
-            message(info.workers+' render worker(s) ready · calculating Accurate RK4 · '+
+            message(info.workers+' render worker(s) ready · calculating '+exportRendererLabel(plan.renderMethod)+' · '+
               info.total+' timestamps. '+(streaming?'Writing ZIP directly to disk.':'ZIP assembly is also in the background.'));
           },
           onProgress:function(info){
@@ -3131,7 +3132,7 @@
             message('Rendered '+info.completed+' / '+info.total+' timestamps · last t='+
               (info.timeMs/1000).toFixed(2)+(streaming?' s (written in order) · elapsed ':' s (out-of-order) · elapsed ')+elapsed.toFixed(1)+
               ' s · estimated remaining '+Math.ceil(remaining)+' s · '+
-              info.workers+' workers · Accurate RK4'+(streaming?' · '+(info.bytesWritten/1048576).toFixed(1)+' MiB written · estimated '+(info.estimatedBytes/1048576).toFixed(1)+' MiB total':''));
+              info.workers+' workers · '+exportRendererLabel(plan.renderMethod)+(streaming?' · '+(info.bytesWritten/1048576).toFixed(1)+' MiB written · estimated '+(info.estimatedBytes/1048576).toFixed(1)+' MiB total':''));
           },
           onPacking:function(){message(streaming?'Finalizing ZIP on disk…':'All PNGs rendered · assembling ZIP in background…');}
         });
@@ -3140,15 +3141,15 @@
         if(previewOnly){
           previewUrl=root.URL.createObjectURL(result.previewBlob);previewImage.src=previewUrl;panel.hidden=false;
           var caption=newUiEl('ModernAnimationFrameExportPreviewCaption'),row=result.manifest.frames[0];
-          previewArchive=result.blob;previewFilename=semanticNaming.exportNames(plan.project,{kind:'frames',format:'png',fps:plan.fps,width:plan.width,height:plan.height}).filename.replace(/_frames\.zip$/,'_presentation_at-'+Math.round(row.timeMs)+'ms.zip');
-          if(caption)caption.textContent='Preview snapshot · '+plan.project.name+' · '+plan.width+' × '+plan.height+' · '+(row.timeMs/1000).toFixed(2)+' s · Accurate RK4'+(row.warnings.length?' · Shortened text: '+row.warnings.join(', '):'');
+          previewArchive=result.blob;previewFilename=semanticNaming.exportNames(plan.project,{kind:'frames',format:'png',fps:plan.fps,width:plan.width,height:plan.height,renderMethod:plan.renderMethod}).filename.replace(/_frames\.zip$/,'_presentation_at-'+Math.round(row.timeMs)+'ms.zip');
+          if(caption)caption.textContent='Preview snapshot · '+plan.project.name+' · '+plan.width+' × '+plan.height+' · '+(row.timeMs/1000).toFixed(2)+' s · '+exportRendererLabel(plan.renderMethod)+(row.warnings.length?' · Shortened text: '+row.warnings.join(', '):'');
           message('Presentation preview ready. Save this frame ZIP to include the PNG and its manifest.','success');return;
         }
         if(!result.streamed){var url=root.URL.createObjectURL(result.blob);
         try{
           var link=document.createElement('a');
           link.href=url;link.download=semanticNaming.exportNames(plan.project,{
-            kind:'frames',format:'png',fps:plan.fps,width:plan.width,height:plan.height}).filename.replace(/_frames\.zip$/,full?'_presentation_frames.zip':'_frames.zip');
+            kind:'frames',format:'png',fps:plan.fps,width:plan.width,height:plan.height,renderMethod:plan.renderMethod}).filename.replace(/_frames\.zip$/,full?'_presentation_frames.zip':'_frames.zip');
           document.body.appendChild(link);link.click();link.remove();
         }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}}
         message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+

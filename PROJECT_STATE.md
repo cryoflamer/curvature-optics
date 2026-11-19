@@ -1,3 +1,19 @@
+## Modern Demo Catalog — Selectable Export Renderer (7D.2.3A)
+
+Issue #3 follow-up: PNG and video exports (Simulation only and Full presentation)
+now offer Accurate RK4 (default) or approximate Canvas Direct independently of
+interactive playback. Both modes use the existing background workers and
+presentation compositor. Canvas Direct capability rejection aborts the export
+instead of falling back to Accurate; source Canvas quality is checked before
+composition/encoding. The selected method is recorded in manifest quality
+(including video profile), presentation footer and progress; approximate export
+filenames include `_canvas-direct`, while prior Accurate names are unchanged.
+Encoder bitrate quality remains a separate setting. No physics or layout solver
+changes. Browser worker tests exercise real Canvas Direct and Accurate PNG and
+video-source Canvas parity across portrait/travel/landscape; actual Canvas Direct
+WebCodecs encoding and full Soundly performance need user verification in Opera.
+Export preference persistence is deferred to #4.
+
 ## Modern Demo Catalog — Full Presentation Video (7D.2.3)
 
 Issue #3: implemented a Full presentation video content mode alongside the

@@ -34,7 +34,7 @@
       aspects[r.id]=r.width/r.height;
       if(r.title!==undefined)metadata[r.id]=photoValues(r).reduce(function(n,v){return n+(v[0]==='source'?2:1);},0);
     });
-    return Object.freeze({project:p,width:width,height:height,times:times,durationMs:projects.totalMs(p),referenceAspects:Object.freeze(aspects),referenceMetadataRows:Object.freeze(metadata),
+    return Object.freeze({project:p,renderMethod:choice(options.renderMethod,['accurate','canvas-direct'],'accurate'),width:width,height:height,times:times,durationMs:projects.totalMs(p),referenceAspects:Object.freeze(aspects),referenceMetadataRows:Object.freeze(metadata),
       sides:Object.freeze(p.baseExperiment.display.mode==='compare'?['A','B']:['A']),
       referenceLayout:choice(options.referenceLayout,['auto','side','below','stacked','wide','hidden'],'side'),
       layoutMode:choice(options.layoutMode,['fixed','dynamic'],'fixed'),
@@ -274,7 +274,7 @@
       expected[side]=Object.freeze({showModel:p.sides.length===2?(spec.surface==='flat'?2:1):spec.surface.showModel,
         atmosphere:spec.atmosphere});
     });
-    return Object.freeze({width:p.width,height:p.height,title:p.project.name,timeMs:timeMs,durationMs:p.durationMs,
+    return Object.freeze({renderMethod:p.renderMethod,width:p.width,height:p.height,title:p.project.name,timeMs:timeMs,durationMs:p.durationMs,
       chapter:(i+1)+' / '+p.times.length+' · '+(t.narrativeTitle||t.name),
       sceneTitle:sample.scene.title,sceneDescription:sample.scene.description,
       topology:g.topology,sceneCaption:g.sceneCaption,cameraHud:g.cameraHud,hudFont:g.hudFont,hudCompact:g.hudCompact,
@@ -295,10 +295,10 @@
       license:r.license||'',sourceUrl:r.sourceUrl||''});
   }
   function source(image,side,frame,target){
-    if(!image||image.quality!=='accurate'||(image.metrics&&image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||
+    if(!image||image.quality!==(frame.renderMethod||'accurate')||(image.metrics&&image.metrics.opticalQuality&&image.metrics.opticalQuality!==(frame.renderMethod||'accurate'))||
       !image.canvas||image.canvas===target||image.canvas.width!==frame.viewSize.width||image.canvas.height!==frame.viewSize.height||
       !image.cameraModel||image.cameraModel.showModel!==frame.expected[side].showModel||image.timeMs!==frame.timeMs)
-      throw RangeError('Presentation '+side+' requires a painted Accurate RK4 view of the planned dimensions');
+      throw RangeError('Presentation '+side+' requires a painted '+(frame.renderMethod==='canvas-direct'?'Canvas Direct':'Accurate RK4')+' view of the planned dimensions');
     return image;
   }
   // Wrap by measured glyph widths, including long URLs and explicit newlines.
@@ -404,7 +404,7 @@
         }else block('No reference at this time',frame.photoBox,16,'400','reference placeholder');
       }
       if(frame.narrative&&frame.caption)block(frame.caption.text,frame.narrative,16,'400','explanation');
-      block('Accurate RK4 · '+clock(frame.timeMs)+' / '+clock(frame.durationMs),
+      block((frame.renderMethod==='canvas-direct'?'Canvas Direct (approximate)':'Accurate RK4')+' · '+clock(frame.timeMs)+' / '+clock(frame.durationMs),
         rect(pad,frame.height-frame.footerHeight+fs(3),frame.width-2*pad,frame.footerHeight-fs(3)),14,'400','timing');
     }finally{ctx.restore();}
     return Object.freeze({canvas:target,warnings:Object.freeze(warnings)});

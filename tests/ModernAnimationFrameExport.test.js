@@ -220,3 +220,13 @@ test('Modern export uses a Web Worker and never does optical painting on the UI 
   assert.match(code,/studioExportProject\(/);
   assert.match(js,/studioApi\.build\(studioDraft,id\)/);
 });
+
+test('explicit Canvas Direct export rejects accurate fallback and retains selected method',async()=>{
+  const p=frames.plan(make(),{width:640,height:360,renderMethod:'canvas-direct'});
+  assert.equal(p.renderMethod,'canvas-direct');
+  assert.throws(()=>frames.plan(make(),{renderMethod:'auto'}),/Invalid export renderer/);
+  await assert.rejects(frames.renderTimestamp(p,0,async()=>({canvas:canvas(640,360),quality:'accurate'})),/Canvas Direct/);
+  const result=await frames.renderTimestamp(p,0,async()=>({canvas:canvas(640,360),quality:'canvas-direct',metrics:{opticalQuality:'canvas-direct'}}));
+  assert.equal(result.entries.length,1);
+  assert.equal(frames.plan(make()).renderMethod,'accurate');
+});

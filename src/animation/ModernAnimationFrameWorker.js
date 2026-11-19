@@ -41,6 +41,7 @@ importScripts(
   '../optics/CurvaturePhysicalGroundGuides.js',
   '../optics/CurvaturePhysicalPolygonFills.js',
   '../optics/CurvaturePhysicalSceneOptics.js',
+  '../optics/OpticalEffectiveRadiusPreview.js',
   '../app/CurvatureModel.js',
   '../app/CurvaturePhysicalCamera.js',
   '../camera/ModernCameraTelemetry.js',
@@ -50,6 +51,7 @@ importScripts(
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   '../app/CurvaturePhysicalCurvature.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
+  '../renderers/CurvatureCanvasDirectPreview.js',
   '../app/CurvatureMainCanvasRenderer.js?projection-fix=1&guide-labels=1',
   '../ui/modern/ModernSceneState.js',
   '../ui/modern/ModernCompareState.js',
@@ -59,13 +61,13 @@ importScripts(
   'ModernAnimationCompatibility.js',
   'ModernAnimationContract.js',
   'ModernAnimationProject.js?project-fields=reference-narrative-1',
-  'ModernAnimationPreview.js?projection-fix=1&presentation-hud=1&guide-labels=1',
+  'ModernAnimationPreview.js?projection-fix=1&presentation-hud=1&guide-labels=1&export-renderer=1',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
-  'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1',
-  'ModernAnimationCompareComposition.js',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1&presentation-video=1'
+  'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&export-renderer=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1&export-renderer=1',
+  'ModernAnimationCompareComposition.js?export-renderer=1',
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1&presentation-video=1&export-renderer=1'
 );
 
 function createGraph(canvas){
@@ -111,7 +113,7 @@ function setup(data,video){
     throw Error('OffscreenCanvas is not available in this browser worker');
   var api=self.CurvatureModernAnimationFrameExport;
   var plan=(video?self.CurvatureModernAnimationVideoPipeline:api).plan(
-    data.project,Object.assign({fps:data.fps,width:data.width,height:data.height,
+    data.project,Object.assign({fps:data.fps,width:data.width,height:data.height,renderMethod:data.renderMethod,
       cameraHud:data.cameraHud===true,
       cameraHudAppearance:data.cameraHudAppearance,
       targetIndicator:data.targetIndicator===true,targetSelection:data.targetSelection},
@@ -132,7 +134,7 @@ function setup(data,video){
     // Reset backing pixels and 2D state independently for every timestamp.
     graph.Canvas.width=dimensions.width;
     graph.Canvas.height=dimensions.height;
-    var report=painter.render(sample,side,graph,{quality:'accurate',animationMode:plan.project.mode,showCaptions:dimensions.showCaptions!==false,guideLabelScale:dimensions.guideLabelScale});
+    var report=painter.render(sample,side,graph,{quality:plan.renderMethod,strictRenderMethod:true,animationMode:plan.project.mode,showCaptions:dimensions.showCaptions!==false,guideLabelScale:dimensions.guideLabelScale});
     return {quality:report.quality,canvas:graph.Canvas,metrics:report.result,
       cameraModel:report.cameraModel};
   }

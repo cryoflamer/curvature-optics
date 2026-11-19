@@ -26,10 +26,10 @@
         B:Object.freeze({x:viewWidth,y:y,width:viewWidth,height:viewHeight})
       })});
   }
-  function view(source,side,dimensions,target){
-    if(!source||source.quality!=='accurate'||
+  function view(source,side,dimensions,target,method){
+    if(!source||source.quality!==method||
       (source.metrics&&source.metrics.opticalQuality&&
-      source.metrics.opticalQuality!=='accurate')||
+      source.metrics.opticalQuality!==method)||
       !source.canvas||source.canvas===target||
       source.canvas.width!==dimensions.viewWidth||
       source.canvas.height!==dimensions.viewHeight||
@@ -62,8 +62,10 @@
       typeof target.getContext!=='function')
       throw TypeError('Fixed-size Compare composition Canvas required');
     var dimensions=layout(target.width/2,target.height/2);
-    var a=view(images&&images.A,'A',dimensions,target);
-    var b=view(images&&images.B,'B',dimensions,target);
+    var method=options.renderMethod||'accurate';
+    if(!['accurate','canvas-direct'].includes(method))throw RangeError('Invalid export renderer');
+    var a=view(images&&images.A,'A',dimensions,target,method);
+    var b=view(images&&images.B,'B',dimensions,target,method);
     var time=timing(options),mode=options.animationMode;
     if(mode!==undefined&&mode!=='camera'&&mode!=='physical')
       throw RangeError('Invalid Compare composition animation mode');
@@ -91,7 +93,7 @@
       ctx.textAlign='left';ctx.textBaseline='top';
       ctx.fillStyle='#d9e8f3';
       ctx.font='600 '+titleSize+'px Arial, sans-serif';
-      ctx.fillText('COMPARE A / B',pad,pad);
+      ctx.fillText('COMPARE A / B'+(method==='canvas-direct'?' · Canvas Direct (approximate)':''),pad,pad);
       ctx.font='600 '+labelSize+'px Arial, sans-serif';
       ctx.fillText(a.label,pad,top-labelSize-pad);
       ctx.fillText(b.label,dimensions.viewWidth+pad,top-labelSize-pad);

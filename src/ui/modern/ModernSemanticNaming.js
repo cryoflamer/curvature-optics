@@ -162,6 +162,7 @@
     if(!Number.isInteger(width)||!Number.isInteger(height)||!Number.isInteger(fps)||
       width<=0||height<=0||fps<=0)throw RangeError('Invalid export dimensions');
     var base=exportStem(project)+atmosphereSuffix(project)+'_'+width+'x'+height+'_'+fps+'fps';
+    if(settings.renderMethod==='canvas-direct')base+='_canvas-direct';
     if(kind==='frames')return {filename:base+'_frames.zip'};
     if(settings.compareLayout==='presentation')return {filename:base+'_presentation.'+format};
     var compare=project&&project.baseExperiment&&project.baseExperiment.display.mode==='compare';

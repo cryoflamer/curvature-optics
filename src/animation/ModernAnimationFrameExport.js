@@ -47,10 +47,15 @@
   function checkFrameBudget(project,fps,streaming){
     return sequenceCount(projects.totalMs(project),exportSettings({fps:fps}).fps,streaming===true);
   }
+  function renderMethod(value){
+    if(value===undefined)return 'accurate';
+    if(!['accurate','canvas-direct'].includes(value))throw RangeError('Invalid export renderer');
+    return value;
+  }
   function plan(project,options){
     options=options||{};
-    var owned=projects.validate(project),appearance=resolveHudAppearance(owned,options),presentation=options.presentation===undefined?null:
-      compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,cameraHud:options.cameraHud===true,cameraHudAppearance:appearance,referenceDimensions:[]}));
+    var method=renderMethod(options.renderMethod),owned=projects.validate(project),appearance=resolveHudAppearance(owned,options),presentation=options.presentation===undefined?null:
+      compositor.plan(owned,Object.assign({},options.presentation,{renderMethod:method,width:options.width,height:options.height,cameraHud:options.cameraHud===true,cameraHudAppearance:appearance,referenceDimensions:[]}));
     var settings=exportSettings(presentation?{fps:options.fps,width:960,height:540}:options);
     var durationMs=projects.totalMs(owned);
     var intervals=options.previewTimeMs===undefined?sequenceCount(durationMs,settings.fps,options.streaming===true)-1:0;
@@ -61,7 +66,7 @@
       var ids=new Set(presentation.referenceLayout==='hidden'?[]:presentation.times.flatMap(function(t){return t.referenceImageIds;}));
       if(records.length!==ids.size||records.some(function(r){return !ids.has(r.id);}))throw Error('Presentation reference originals must match linked IDs');
       if(JSON.stringify(records).length>64*1024*1024)throw RangeError('Presentation reference assets exceed limit');
-      presentation=compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,
+      presentation=compositor.plan(owned,Object.assign({},options.presentation,{renderMethod:method,width:options.width,height:options.height,
         cameraHud:options.cameraHud===true,cameraHudAppearance:appearance,referenceDimensions:records.map(function(r){
           return {id:r.id,width:r.original.width,height:r.original.height,
             title:r.title,author:r.author,license:r.license,sourceUrl:r.sourceUrl};
@@ -80,7 +85,7 @@
     }else for(var i=0;i<=intervals;i++)times.push(i===intervals?durationMs:Math.min(durationMs,1000*i/fps));
     // Endpoint is explicit. For 5 seconds at 25 fps this is 126 PNGs,
     // representing [0, 40, ..., 4960, 5000] milliseconds.
-    return Object.freeze({project:owned,fps:fps,width:width,height:height,
+    return Object.freeze({project:owned,renderMethod:method,fps:fps,width:width,height:height,
       durationMs:durationMs,streaming:options.streaming===true,cameraHud:!!(options&&options.cameraHud===true),
       cameraHudAppearance:appearance,
       targetIndicator:!!(options&&options.targetIndicator===true),
@@ -194,11 +199,12 @@
   function pad(index){return String(index).padStart(5,'0');}
   // Common optical quality + opaque Canvas contract, before either PNG
   // serialization or creation of a VideoFrame. Never use a Fast frame here.
-  function prepareCanvas(image,width,height,showHud,appearance,showTarget,targetSelection){
-    if(!image||image.quality!=='accurate'||(image.metrics&&
-      image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||!image.canvas||
+  function prepareCanvas(image,width,height,showHud,appearance,showTarget,targetSelection,method){
+    method=renderMethod(method);
+    if(!image||image.quality!==method||(image.metrics&&
+      image.metrics.opticalQuality&&image.metrics.opticalQuality!==method)||!image.canvas||
       image.canvas.width!==width||image.canvas.height!==height)
-      throw Error('Export frame is not Accurate RK4 at fixed resolution');
+      throw Error('Export frame is not '+(method==='accurate'?'Accurate RK4':'Canvas Direct')+' at fixed resolution');
     compositeOpaqueWhite(image.canvas);
     if(showHud){
       if(!hud||typeof hud.paint!=='function')throw Error('Camera HUD painter unavailable');
@@ -218,7 +224,7 @@
     for(var side of frame.sides){
       if(cancel&&cancel.cancelled)return null;
       var started=performance.now(),image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time,showCaptions:false,guideLabelScale:p.width/1280});
-      prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,false,p.cameraHudAppearance,p.targetIndicator,p.targetSelection);
+      prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,false,p.cameraHudAppearance,p.targetIndicator,p.targetSelection,p.renderMethod);
       images[side]=Object.assign({},image,{timeMs:time});
       if(image.metrics){var m=image.metrics,t=m.timings||{};renderStats[side]={renderMs:Math.max(0,performance.now()-started),opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
         unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
@@ -252,7 +258,7 @@
       var side=p.sides[j],image=await render(sample,side,{width:p.width,height:p.height,
         index:index,timeMs:time});
       prepareCanvas(image,p.width,p.height,p.cameraHud,p.cameraHudAppearance,
-        p.targetIndicator,p.targetSelection);
+        p.targetIndicator,p.targetSelection,p.renderMethod);
       var bytes=await toPng(image.canvas);
       if(bytes.length<8||bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)
         throw Error('Invalid PNG data from export Canvas');
@@ -298,7 +304,7 @@
     var manifest={schema:'curvature-animation-png-sequence',version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       cameraInterpolation:p.project.mode==='camera'?(p.project.interpolation||'linear'):null,
-      physicalTarget:p.project.target,project:p.project,quality:'accurate',
+      physicalTarget:p.project.target,project:p.project,quality:p.renderMethod,
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
       endpointIncluded:p.previewTimeMs===undefined||p.previewTimeMs===p.durationMs,sides:outputSides(p).slice(),backgroundColor:p.presentation?'#f1f5f9':'#ffffff',
       frameCount:frames.length,frames:frames};
@@ -400,7 +406,7 @@
     graph.UpdateCanvasSize=function(){};graph.ResizeTimer=null;
     return graph;
   }
-  return Object.freeze({plan:plan,checkFrameBudget:checkFrameBudget,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
+  return Object.freeze({plan:plan,checkFrameBudget:checkFrameBudget,exportSettings:exportSettings,renderMethod:renderMethod,prepareCanvas:prepareCanvas,
     resolveHudAppearance:resolveHudAppearance,
     run:run,renderTimestamp:renderTimestamp,renderPresentationCanvas:renderPresentationCanvas,assemble:assemble,outputSides:outputSides,
     zip:zip,streamingArchive:streamingArchive,MAX_STREAM_FRAMES:MAX_STREAM_FRAMES,graphForCanvas:graphForCanvas,

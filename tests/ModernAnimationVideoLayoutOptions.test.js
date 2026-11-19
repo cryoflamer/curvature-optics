@@ -91,7 +91,7 @@ test('Compare selection is wired into both the plan and Worker export start',()=
   assert.match(html,/value="separate"/);
   assert.match(css,/label\[hidden\]\{display:none!important\}/);
   assert.match(app,/newUiEl\('ModernAnimationVideoExportCompareLayout'\)\.value:undefined/);
-  assert.match(app,/height:size\[1\],compareLayout:compareLayout/);
+  assert.match(app,/height:size\[1\],renderMethod:extra.renderMethod,compareLayout:compareLayout/);
   assert.match(app,/compareLayout:plan\.compareLayout/);
   assert.match(app,/addEventListener\('change',syncStudioVideoExportLayout\)/);
 });

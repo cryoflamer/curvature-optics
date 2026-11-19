@@ -331,7 +331,10 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_presentation_png_workers_with_original(self):
         self._presentation_workers_with_original(live_video=False)
 
-    def _presentation_workers_with_original(self, live_video):
+    def test_canvas_direct_presentation_workers(self):
+        self._presentation_workers_with_original(live_video=False, render_method="canvas-direct")
+
+    def _presentation_workers_with_original(self, live_video, render_method="accurate"):
         # Production controller, Studio save/reopen and both real worker sources.
         # Blob URLs substitute only script transport, not the initialization or
         # rendering protocol; a separate full-page test covers the HTTP wiring.
@@ -360,7 +363,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             dependencies = [(path.parent / item.split('?')[0]).resolve().read_text(encoding='utf-8')
                             for item in re.findall(r"'([^']+)'", block.group(1))]
             scripts[name] = {'source': source, 'dependencies': dependencies}
-        result = self.page.evaluate(r"""async ({scripts,liveVideo}) => {
+        result = self.page.evaluate(r"""async ({scripts,liveVideo,renderMethod}) => {
             const projects=CurvatureModernAnimationProject,studio=CurvatureModernAnimationStudio,
                 library=CurvatureModernAnimationLibrary;
             const demo=CurvatureModernDemoCatalog.load().find(d=>d.id==='soundly');
@@ -391,10 +394,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                 for(const project of [reopened,playable]){
                     const previewTimeMs=projects.timeline(project)[4].arrivalMs;
                     let limit;
-                    try{await controller.start({project,width:1280,height:720,fps:25,workerCount:1,
+                    try{await controller.start({project,width:1280,height:720,fps:25,workerCount:1,renderMethod,
                         presentation:{referenceLayout:'side'},referenceImages:[original]});}catch(e){limit=e.message;}
                     if(!limit?.includes('1479 requested; maximum 751'))throw Error('Unexpected sequence limit: '+limit);
-                    const done=await controller.start({project,width:1280,height:720,fps:25,workerCount:1,
+                    const done=await controller.start({project,width:1280,height:720,fps:25,workerCount:1,renderMethod,
                         presentation:{referenceLayout:'auto',layoutMode:'fixed'},referenceImages:[original],previewTimeMs,cameraHud:true});
                     if(done.manifest.presentation.cameraHudPlacement!=='external'||done.manifest.frames[0].warnings.some(w=>w.startsWith('camera')))throw Error('Presentation HUD: '+JSON.stringify(done.manifest.frames[0].warnings));
                     const image=await createImageBitmap(done.previewBlob),canvas=new OffscreenCanvas(image.width,image.height),ctx=canvas.getContext('2d');
@@ -419,7 +422,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const short=projects.validate({...playable,keyframes:frames});
                 const chunks=[],sink={closed:false,aborted:false,async write(part){chunks.push(part.slice());},
                     async close(){this.closed=true;},async abort(){this.aborted=true;}};
-                const settings={project:short,width:1280,height:720,fps:5,workerCount:2,
+                const settings={project:short,width:1280,height:720,fps:5,workerCount:2,renderMethod,
                     presentation:{referenceLayout:'auto',layoutMode:'fixed'},referenceImages:[original,landscape],cameraHud:true};
                 const stream=await controller.start({...settings,sink});
                 const preview=await controller.start({...settings,previewTimeMs:200});
@@ -457,7 +460,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                     streamed:stream.streamed,hasBlob:!!stream.blob,manifest:stream.manifest,zip:data,
                     preview:previewData,previewRow:preview.manifest.frames[0]}};
             }finally{workers.forEach(w=>w.terminate());urls.forEach(u=>URL.revokeObjectURL(u));}
-        }""", {"scripts": scripts, "liveVideo": live_video})
+        }""", {"scripts": scripts, "liveVideo": live_video, "renderMethod": render_method})
         self.assertEqual([f['time'] for f in result['canvasParity']], [0, 200, 400])
         if live_video:
             video = result['video']
@@ -500,6 +503,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 self.assertEqual(base64.b64decode(frame['data'].split(',', 1)[1]), archive.read(f'frames/frame_{index:05d}_presentation.png'))
             manifest = json.loads(archive.read('manifest.json'))
             self.assertEqual(manifest, stream['manifest'])
+            self.assertEqual(manifest['quality'], render_method)
             self.assertEqual(manifest['presentation']['cameraHudPlacement'], 'external')
             self.assertEqual([f['timeMs'] for f in manifest['frames']], [0, 200, 400])
             self.assertEqual([f['referenceId'] for f in manifest['frames']], ['photo', None, 'landscape'])

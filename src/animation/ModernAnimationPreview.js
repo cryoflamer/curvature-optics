@@ -221,6 +221,7 @@
           throw Error('Canvas Direct eligibility checker is unavailable');
         var support=effectiveRadius.canvasDirectSupport(config.model,config.options);
         if(!support.supported){
+          if(options&&options.strictRenderMethod)throw Error('Canvas Direct unavailable: '+support.reason);
           config.quality='accurate';config.options.opticalQuality='accurate';
           config.options.previewLod={stride:1};
           reason='Canvas Direct unavailable: '+support.reason;
@@ -242,6 +243,7 @@
         var directRejected=config.quality==='canvas-direct'&&effectiveRadius.isCanvasDirectUnsupported(error);
         var fastRejected=config.quality==='fast'&&isFastUnsupported(error);
         if(!directRejected&&!fastRejected)throw error;
+        if(options&&options.strictRenderMethod)throw error;
         if(fastRejected){markFastUnsupported(key);fallbackCount++;}
         config.quality='accurate';config.options.opticalQuality='accurate';
         config.options.previewLod={stride:1};

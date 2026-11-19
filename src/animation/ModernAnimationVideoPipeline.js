@@ -85,7 +85,7 @@
       times.push(Object.freeze({index:i,timestampUs:timestampUs,
         durationUs:nextUs-timestampUs,sampleTimeMs:sampleTimeMs}));
     }
-    return Object.freeze({project:owned,fps:settings.fps,width:settings.width,
+    return Object.freeze({project:owned,renderMethod:png.renderMethod(options.renderMethod),fps:settings.fps,width:settings.width,
       height:settings.height,cameraHud:!!(options&&options.cameraHud===true),
       cameraHudAppearance:png.resolveHudAppearance(owned,options),
       targetIndicator:!!(options&&options.targetIndicator===true),
@@ -132,7 +132,7 @@
         var image=await render(sample,side,{width:p.width,height:p.height,index:index,
           timeMs:timing.sampleTimeMs,timestampUs:timing.timestampUs,durationUs:timing.durationUs});
         png.prepareCanvas(image,p.width,p.height,p.cameraHud,p.cameraHudAppearance,
-          p.targetIndicator,p.targetSelection);
+          p.targetIndicator,p.targetSelection,p.renderMethod);
         // A standalone view gets its own VideoFrame. Compare instead retains
         // two independent source canvases until they are composed into one
         // presentation frame, then snapshots only that completed Canvas.
@@ -153,7 +153,7 @@
       if(cancel&&cancel.cancelled){closeFrames(result);return null;}
       if(sources){
         var startComposition=performance.now();
-        var canvas=compose(sources,{timeMs:timing.sampleTimeMs,
+        var canvas=compose(sources,{renderMethod:p.renderMethod,timeMs:timing.sampleTimeMs,
           durationMs:p.durationMs,animationMode:p.project.mode});
         if(!canvas||canvas.width!==p.outputWidth||canvas.height!==p.outputHeight)
           throw Error('Incorrect Compare video composition dimensions');

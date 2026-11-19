@@ -27,8 +27,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1';
-    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1&export-renderer=1';
+    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1&export-renderer=1';
     var active=null;
     function isBusy(){return !!active;}
     function cancel(){
@@ -219,12 +219,12 @@
               };
             })(slot);
           }
-          archive.postMessage({type:'init',projectFieldsRevision:revision,project:plan.project,fps:plan.fps,
+          archive.postMessage({type:'init',projectFieldsRevision:revision,project:plan.project,renderMethod:plan.renderMethod,fps:plan.fps,
             width:plan.width,height:plan.height,workers:count,streaming:!!sink,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
             targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,...extra});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'init',projectFieldsRevision:revision,
-            project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,streaming:!!sink,
+            project:plan.project,renderMethod:plan.renderMethod,fps:plan.fps,width:plan.width,height:plan.height,streaming:!!sink,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
             targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,...extra});});
         }catch(error){finish(error);}

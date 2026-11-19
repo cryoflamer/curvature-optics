@@ -62,7 +62,7 @@ function harness(mode='compare',returnedFilename=null){
         const plan=video.plan(options.project,options);
         const filename=naming.exportNames(plan.project,{format:options.format,
           fps:plan.fps,width:plan.outputWidth,height:plan.outputHeight,
-          compareLayout:plan.compareLayout}).filename;
+          compareLayout:plan.compareLayout,renderMethod:plan.renderMethod}).filename;
         return {cancelled:false,filename:returnedFilename||filename,blob:new Blob(['test']),
           manifest:{frameCount:plan.frameCount,sides:plan.sides,
             outputStreams:plan.outputSides.length,width:plan.outputWidth,
@@ -138,7 +138,7 @@ test('stale encoder ready-message name is rejected before any frame renders',asy
   const plan=video.plan(p,{fps:5,width:640,height:360});
   const expected=naming.exportNames(plan.project,{format:'webm',fps:5,
     width:plan.outputWidth,height:plan.outputHeight,
-    compareLayout:plan.compareLayout}).filename;
+    compareLayout:plan.compareLayout,renderMethod:plan.renderMethod}).filename;
   const created=[];
   class FakeWorker{
     constructor(url){this.url=url;this.terminated=false;this.renderRequests=0;
@@ -205,4 +205,12 @@ test('Full presentation UI selects the final raster and downloads the previewed 
     assert.equal(h.received().presentation.referenceLayout,'hidden');
     assert.equal(h.received().presentation.layoutMode,'fixed');
   }
+});
+
+test('Canvas Direct video filename and worker settings agree',async()=>{
+  const h=harness();h.elements.ModernAnimationVideoExportRenderer={value:'canvas-direct'};
+  h.sync();assert.match(h.elements.ModernAnimationVideoExportFilename.textContent,/_canvas-direct_compare\.webm$/);
+  await h.handlers['ModernAnimationVideoExportStart:click']();
+  assert.equal(h.received().renderMethod,'canvas-direct');
+  assert.match(h.downloads[0],/_canvas-direct_compare\.webm$/);
 });
