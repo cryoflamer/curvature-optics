@@ -978,7 +978,7 @@
       const input=JSON.parse(JSON.stringify(rows)),physics=JSON.parse(JSON.stringify(scene.physics));
       fitSignature=JSON.stringify(rows);
       try{
-        const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1');fitWorker=worker;
+        const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1&vertex-scale=1');fitWorker=worker;
         worker.onmessage=event=>{
           if(fitWorker!==worker)return;
           const data=event.data;

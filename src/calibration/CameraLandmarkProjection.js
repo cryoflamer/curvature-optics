@@ -116,5 +116,29 @@
     }
     return Object.freeze({metric:metric,vertex:vertex});
   }
-  return Object.freeze({create:create});
+  // Characteristic horizontal ranges for the numerical coordinate scale,
+  // measured on the fixed authored physical scene, not from its origin.
+  // Use physical topology (independent of the effective optical radius).
+  function authoredVertexRanges(model,pose,landmarks){
+    if(!landmarks.length)return [];
+    var globe=model.showModel===1,k=globe?1/model.rEarth:0,basis;
+    try{basis=translation.frame(pose.CameraEast,pose.CameraNorth,pose.Height,k);}
+    catch(e){if(!(e instanceof RangeError))throw e;return [];} // evaluator reports invalid initial pose
+    var banks=new Map(),source=Object.assign({},model,{Height:0,geometryRadius:model.rEarth});
+    return landmarks.map(function(p){
+      if(!banks.has(p.bank)){
+        var scene=engine.createObjectSequenceScene(source,p.bank,globe,
+          {opticsNeutral:true,physicalSurface:true,curvature:k});
+        if(scene.metadata.objectCount!==model.NObjects[p.bank]*(model.ObjSideType[p.bank]===1?2:1))
+          throw RangeError('Landmark identities unavailable for truncated object sequence');
+        banks.set(p.bank,scene.primitives);
+      }
+      var primitive=banks.get(p.bank)[p.primitive];
+      if(p.objectType!==model.ObjType[p.bank]||!primitive||!primitive.points[p.vertex])
+        throw RangeError('Landmark does not match authored mesh topology');
+      var w=primitive.points[p.vertex],local=translation.pointAt([w[0],w[1],w[2]-pose.Height],basis);
+      return Math.hypot(local[0],local[1]);
+    });
+  }
+  return Object.freeze({create:create,authoredVertexRanges:authoredVertexRanges});
 }));

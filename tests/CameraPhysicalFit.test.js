@@ -167,3 +167,48 @@ test('local fit progress reports valid monotonically improving candidates withou
  assert.deepEqual(reports.at(-1).pose,r.pose);
  assert.deepEqual(r,fit.fit(m,initial,obs,opt));
 });
+
+ // Minimal numerical regression derived from the exported Soundly experiment.
+ // Original image bytes and unrelated scene UI fields are deliberately omitted.
+ const soundlyScaleModel={showModel:1,rEarth:6371000,rFEarth:10007543,geometryRadius:6371000,
+   viewcenterHorizon:3,deviceRatio:1.5,Height:81.71483549662574,
+   CameraEast:25.297166363716016,CameraNorth:0.02677680352500519,Pan:0.06956533971195081,
+   Nick:-0.2834781657988486,Roll:0,FocalLengthField:1502.629601803156,
+   camViewAngle:0.0287476200221392,ObjType:[8,3],ObjSideType:[0,0],ObjSizeType:[0,0],
+   ObjDist:[496,0],ObjSidePos:[55.5,0],ObjSize:[1,10],ObjDeltaDist:[300,100],
+   ObjSideVar:[0,0],ObjSizeVar:[0,0],NObjects:[128,0]};
+ const soundlyScaleObs=[
+   [988,5,368.3673949569713,269.8072545800749],
+   [1073,3,539.2822929386443,251.90468410014338],
+   [1129,4,286.5330274393734,317.0911786420852],
+   [1052,4,238.56600286405623,299.25711802993465],
+   [1204,4,373.7587185256783,348.14096441007786],
+   [1030,3,415.2643149076943,154.72322373477837],
+   [1279,4,506.5766117483307,399.60831734526266]
+ ].map(([primitive,vertex,x,y])=>({kind:'vertex',landmark:{id:'b0:p'+primitive+':v'+vertex,bank:0,objectType:8,primitive,vertex},pixel:[x,y],weight:1}));
+ const soundlyScaleOpts={width:1176,height:791,method:'canvas-direct',atmosphere:'vacuum',maxIterations:80};
+ test('distant authored Soundly vertices determine horizontal scales independently of scene origin',t=>{
+   const m=soundlyScaleModel,obs=soundlyScaleObs,opt=soundlyScaleOpts,before=JSON.stringify([m,obs]);
+   const d=fit.diagnose(m,m,obs,opt),s=d.parameters.find(p=>p.field==='CameraNorth').scale;
+   assert.ok(s>1200&&s<1400);
+   assert.equal(d.parameters.find(p=>p.field==='CameraEast').scale,s);
+   const r=fit.fit(m,m,obs,opt);
+   assert.ok(Math.abs(r.initialRmsPx-289.7676330971701)<1e-7);
+   assert.ok(r.evaluation.rmsPx<23);assert.ok(r.iterations<30);
+   assert.equal(JSON.stringify([m,obs]),before);
+   const override=fit.diagnose(m,m,obs,{...opt,scales:{CameraEast:25,CameraNorth:40}});
+   assert.equal(override.parameters[0].scale,25);assert.equal(override.parameters[1].scale,40);
+   const locked=fit.fit(m,m,obs,{...opt,freeParameters:['Pan','Nick']});
+   for(const k of fit.fields.filter(k=>!['Pan','Nick'].includes(k)))assert.equal(locked.pose[k],m[k]);
+   t.diagnostic(JSON.stringify({scale:s,initial:r.initialRmsPx,rms:r.evaluation.rmsPx,iterations:r.iterations,evaluations:r.evaluations,status:r.status}));
+ });
+ test('seven authored Soundly vertices recover a known distant camera without manual scales',()=>{
+   const m=soundlyScaleModel,opt=soundlyScaleOpts,known={...m,CameraEast:-16.554238203798526,
+     CameraNorth:3019.06861304069,Height:34.27982954513871,Pan:.5766341660256344,
+     Nick:-.3395515872128389,Roll:5.420573855573862,FocalLengthField:1508.0853738631233};
+   const ev=fit.evaluate(m,known,soundlyScaleObs,opt);assert.ok(ev.valid);
+   const obs=soundlyScaleObs.map((o,i)=>({...o,pixel:ev.points[i].predicted}));
+   const r=fit.fit(m,m,obs,opt);
+   assert.ok(r.evaluation.rmsPx<1e-5);
+   for(const k of fit.fields)assert.ok(Math.abs(r.pose[k]-known[k])<.001,k);
+ });

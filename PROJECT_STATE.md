@@ -1,3 +1,30 @@
+## 8C.3 — Authored-vertex horizontal fit scaling
+
+The exported Soundly experiment reproduced the original RMS exactly:
+289.7676330971701 → 255.05611604565223 px, iteration limit 80,
+1201 evaluations. The vertex-only default used the camera's distance from
+the scene origin (25.3 m), not the distance to the landmarks: a 2.53 m
+horizontal scale coupled to the normalized step cap. The fix measures
+horizontal ranges of the authored vertices in the initial observer's
+physical tangent frame (one geometry build per bank), combines them with
+metric landmark ranges, and takes the median times 0.1 (minimum 1 m).
+Explicit scales and locks are honored; height, angle and log-focal
+defaults, objective, bounds and step cap are unchanged. The same scaling
+is used in local diagnostics. No scene or correspondence is changed.
+
+Headless verification using repository JS: median range 12796.09 m,
+horizontal scale 1279.61 m, RMS 22.20164517678955 px in 13 iterations/
+220 evaluations (stalled at step tolerance, not certified convergence).
+A synthetic camera on the same seven authored vertices recovered all seven
+parameters to within 0.001, RMS 1.64e-9 px in 7 iterations. Explicit scales
+and locks passed. Added both regressions using minimal numeric data, without
+photo bytes. Full Node/browser CI still pending. Remaining real-photo
+residuals are not explained by this fix; #1 is inconsistent with the others
+but an incorrect correspondence has not been established. Next: residual
+overlay and verification of the first landmark, before robust loss or
+multi-start integration. Cache keys bumped for the worker and its imports.
+Previously saved results remain historical; rerun calibration after upgrade.
+
 ## 8C.2 — Portable calibration experiment exchange
 
 Export experiment (JSON) packages format/version, captured full scene/model

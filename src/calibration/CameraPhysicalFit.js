@@ -79,8 +79,13 @@
     const free=options.freeParameters??fields.slice(),bounds=options.bounds??{},scales=options.scales??{};
     if(!Array.isArray(free)||new Set(free).size!==free.length||free.some(k=>!fields.includes(k)))throw RangeError('Invalid free parameters');
     if(!bounds||typeof bounds!=='object'||Array.isArray(bounds)||!scales||typeof scales!=='object'||Array.isArray(scales)||[...Object.keys(bounds),...Object.keys(scales)].some(k=>!fields.includes(k)))throw RangeError('Invalid bounds or scales');
-    const distances=obs.filter(o=>o.kind==='metric').map(o=>Math.hypot(o.landmark.east-base.CameraEast,o.landmark.north-base.CameraNorth)).sort((a,b)=>a-b);
-    const range=distances.length?distances[Math.floor(distances.length/2)]:Math.hypot(base.CameraEast,base.CameraNorth);
+    const distances=obs.filter(o=>o.kind==='metric').map(o=>Math.hypot(o.landmark.east-base.CameraEast,o.landmark.north-base.CameraNorth));
+    // Explicit horizontal scale overrides are honored; avoid extra mesh construction then.
+    if((free.includes('CameraEast')&&scales.CameraEast===undefined)||(free.includes('CameraNorth')&&scales.CameraNorth===undefined)){
+      distances.push(...projection.authoredVertexRanges(model,base,obs.filter(o=>o.kind==='vertex').map(o=>o.landmark)));
+    }
+    const ranges=distances.filter(Number.isFinite).sort((a,b)=>a-b);
+    const range=ranges.length?ranges[Math.floor(ranges.length/2)]:0;
     const defaults={CameraEast:Math.max(1,range*.1),CameraNorth:Math.max(1,range*.1),Height:Math.max(1,Math.min(1000,base.Height*.2)),Pan:1,Nick:1,Roll:1,FocalLengthField:.1};
     const specs=fields.map(k=>{
       const [a,b]=limits[k],user=bounds[k]??[a,b];

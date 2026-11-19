@@ -24,9 +24,9 @@ importScripts(
   '../app/CurvaturePhysicalCamera.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
   '../renderers/CurvatureCanvasDirectPreview.js',
-  'CameraLandmarkProjection.js',
+  'CameraLandmarkProjection.js?vertex-scale=1',
   'CameraPhysicalPose.js',
-  'CameraPhysicalFit.js?progress=1'
+  'CameraPhysicalFit.js?progress=1&vertex-scale=1'
 );
 self.onmessage=event=>{
   try{
