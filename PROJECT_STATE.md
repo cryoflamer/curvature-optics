@@ -1,3 +1,25 @@
+## Modern Demo Catalog — Keyframe References (7C.3)
+
+7C.2 was accepted by the user in Opera. 7C.3 implements optional ordered
+`referenceImageIds` on v1/v2 keyframes and the selected-frame editor: load
+local photographs, attach, reorder, unlink and explicitly show unresolved IDs.
+Links survive Undo/Redo, frame movements, saved/copy projects, local recovery,
+portable JSON (IDs only) and atmosphere variants. No raster bytes enter the
+project, physical state or thumbnail cache. No final Causeway content added.
+Deletion of observations is temporarily disabled, including the storage API,
+because saved projects, all workspace drafts, live Undo/Redo and other tabs
+cannot yet be checked atomically. Unlinking is always available. Reload all
+older open instances after upgrading. Browser storage is not a backup.
+
+**Resume:** read this section, `docs/modern-demo-catalog.md`,
+`docs/reference-images.md`, `docs/camera-calibration.md` and
+`docs/technical-debt.md`. Next: **7C.4 — Reference Presentation**: show actual
+observation image(s), source and metadata in Studio and Presentation with
+painted-clock ownership, explicit missing states and no physics changes.
+7C.5 adds complete portable image transport and revisits safe deletion;
+7D/7E generic demo completion, then 8A–8E camera calibration, 9A–9C actual
+photo calibration, Soundly bridge finalization and other demos.
+
 ## Modern Demo Catalog — Reference Image Library (7C.2)
 
 7C.2 adds a collapsed independent Reference Image Library in Animation Studio.

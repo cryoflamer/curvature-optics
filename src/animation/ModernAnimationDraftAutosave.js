@@ -7,15 +7,17 @@
   var experiment=root.CurvatureModernExperimentState;
   var hud=root.CurvatureModernCameraHud;
   var contracts=root.CurvatureModernAnimationContract;
+  var projects=root.CurvatureModernAnimationProject;
   if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
     hud=require('../ui/modern/ModernCameraHud');
     contracts=require('./ModernAnimationContract');
+    projects=require('./ModernAnimationProject');
   }
-  var api=factory(experiment,hud,contracts);
+  var api=factory(experiment,hud,contracts,projects);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationDraftAutosave=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts,projects){
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
@@ -58,6 +60,7 @@
         travelMs:number(frame.travelMs,i===0?0:200,i===0?0:120000),
         holdMs:number(frame.holdMs,0,120000),easing:frame.easing};
       if(frame.description!==undefined)result.description=string(frame.description,1000);
+      if(frame.referenceImageIds!==undefined){var refs=projects.validateReferenceIds(frame.referenceImageIds);if(refs.length)result.referenceImageIds=refs;}
       return result;
     });
     var active=draft.activeFrameKeys==null?null:draft.activeFrameKeys;

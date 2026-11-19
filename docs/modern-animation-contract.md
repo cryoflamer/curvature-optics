@@ -28,6 +28,16 @@ arrived frame owns its explanation through the hold and outgoing transition,
 until the next arrival (including a blank caption). Text is assigned through
 `textContent`, not HTML. No PNG/video caption overlay is introduced.
 
+Step 7C.3 adds optional ordered `keyframes[].referenceImageIds` to v1 and v2
+projects; see [reference images](reference-images.md). These are authored
+observation IDs (not History IDs, not thumbnail indices). They are preserved
+through checkpoints, Undo/Redo, copies, atmosphere variants and JSON import/
+export; the latter transports IDs only until 7C.5. Library deduplication
+includes references, while frame physics, interpolation and thumbnail identity
+remain unchanged. Unresolved links are valid, explicitly labeled and never
+silently dropped. Empty arrays are omitted. Observation deletion is disabled
+until cross-workspace ownership can be guarded safely.
+
 Step 7A collects every active physical keyframe on detached 480 × 320 canvases
 (per side), reusing valid cached images unless regeneration is requested. The
 current preview quality/detail and paired fallback policy are retained; these

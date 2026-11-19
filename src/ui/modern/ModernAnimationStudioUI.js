@@ -327,6 +327,8 @@
     fileActions.appendChild(importInput);
     row.appendChild(projectActions);row.appendChild(fileActions);
     host.appendChild(row);
+    if(entries.some(function(entry){return entry.project.keyframes.some(function(frame){return !!frame.referenceImageIds;});}))
+      host.appendChild(el(doc,'p','modern-animation-library-note','JSON backups preserve reference IDs only, not original photographs. Keep original files separately.'));
     if((options.duplicateGroups||[]).length){
       action(fileActions,options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
@@ -1024,6 +1026,8 @@
       status.setAttribute('role','status');header.appendChild(status);
     }
     host.appendChild(header);
+    if(frames.some(function(frame){return !!frame.referenceImageIds;}))
+      host.appendChild(el(doc,'p','modern-studio-hint','Storyboard JSON retains reference photograph IDs only; originals are not included yet.'));
     var list=el(doc,'ol','modern-animation-storyboard-list');
     list.setAttribute('aria-label','Playback keyframes');
     var active=null;
@@ -1049,6 +1053,56 @@
       if(card.left<bounds.left)list.scrollLeft+=card.left-bounds.left-4;
       else if(card.right>bounds.right)list.scrollLeft+=card.right-bounds.right+4;
     }
+  }
+  // Selected-frame authoring only. Do not fetch originals or touch the player.
+  function renderReferenceLinks(doc,panel,frame,actions,list){
+    var ids=frame.referenceImageIds||[],rows=null,busy=false;
+    var section=el(doc,'section','modern-studio-reference-links');
+    section.appendChild(el(doc,'strong','','Reference photographs ('+ids.length+')'));
+    section.appendChild(el(doc,'p','modern-studio-hint',
+      'Local observation links only. JSON exports retain IDs, not photographs yet. Unlinking never deletes the original.'));
+    var status=el(doc,'p','modern-studio-hint');status.setAttribute('role','status');
+    var linked=el(doc,'div','modern-studio-reference-list');
+    var tools=el(doc,'div','modern-studio-toolbar');
+    var picker=el(doc,'select','modern-studio-reference-picker');picker.setAttribute('aria-label','Reference photograph to attach');
+    function change(next){if(section.isConnected===false)return;actions.frame(frame.key,'referenceImageIds',next);}
+    function move(i,step){var next=ids.slice(),other=next[i+step];next[i+step]=next[i];next[i]=other;change(next);}
+    var attach=button(doc,'Attach','Attach selected reference photograph',function(){
+      var id=picker.value;if(rows&&rows.some(function(row){return row.id===id;})&&!ids.includes(id)&&ids.length<100)change(ids.concat([id]));
+    });
+    var refresh=button(doc,'Load photographs','Load local reference photographs',load);
+    function paint(){
+      linked.textContent='';picker.textContent='';
+      if(!ids.length)linked.appendChild(el(doc,'p','modern-studio-hint','No reference photographs linked.'));
+      ids.forEach(function(id,i){
+        var row=rows&&rows.find(function(item){return item.id===id;});
+        var item=el(doc,'div','modern-studio-reference-row');
+        var label=el(doc,'span','',row?row.title:rows?'Missing local photograph: '+id:'Unresolved local photograph: '+id);
+        label.title=id;item.appendChild(label);
+        var up=button(doc,'↑','Move reference photograph '+(i+1)+' earlier',function(){move(i,-1);});up.disabled=i===0;item.appendChild(up);
+        var down=button(doc,'↓','Move reference photograph '+(i+1)+' later',function(){move(i,1);});down.disabled=i===ids.length-1;item.appendChild(down);
+        item.appendChild(button(doc,'Unlink','Unlink reference photograph '+(i+1),function(){change(ids.filter(function(x){return x!==id;}));}));
+        linked.appendChild(item);
+      });
+      var placeholder=el(doc,'option','',rows?'Choose a photograph…':'Load the local library first');placeholder.value='';picker.appendChild(placeholder);
+      (rows||[]).filter(function(row){return !ids.includes(row.id);}).forEach(function(row){
+        var option=el(doc,'option','',row.title+' · '+row.id);option.value=row.id;picker.appendChild(option);
+      });
+      picker.value='';picker.disabled=busy||!rows||ids.length>=100;attach.disabled=true;
+      refresh.disabled=busy||typeof list!=='function';
+    }
+    picker.addEventListener('change',function(){attach.disabled=!picker.value||busy||ids.length>=100;});
+    async function load(){
+      if(busy||typeof list!=='function')return;
+      busy=true;refresh.disabled=true;picker.disabled=true;attach.disabled=true;status.textContent='Loading local photographs…';
+      try{var found=await list();if(section.isConnected===false)return;rows=found;
+        status.textContent=rows.length?'Local library loaded.':'No local photographs. Import one in Reference Image Library.';
+      }catch(error){rows=null;status.textContent='Cannot resolve local photographs: '+(error.message||error);}
+      finally{busy=false;if(section.isConnected!==false)paint();}
+    }
+    tools.appendChild(refresh);tools.appendChild(picker);tools.appendChild(attach);
+    section.appendChild(status);section.appendChild(linked);section.appendChild(tools);panel.appendChild(section);paint();
+    if(ids.length)load();
   }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
@@ -1293,7 +1347,9 @@
         }
         fields.appendChild(easing);
       }
-      panel.appendChild(fields);host.appendChild(panel);
+      panel.appendChild(fields);
+      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages);
+      host.appendChild(panel);
     }
     host.appendChild(previewBar(doc,result,actions,prepared,options,true));
     host.appendChild(el(doc,'p','modern-studio-hint',

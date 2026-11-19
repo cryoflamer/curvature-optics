@@ -57,8 +57,11 @@ foundation](docs/reference-images.md) now validates original/thumbnail bytes
 and provenance without coupling observations to simulation physics. The local
 Reference Image Library now imports, stores and edits photographs independently.
 Open its collapsed panel in Animation Studio; keep external original backups.
-Next: 7C.3 keyframe links, then presentation, portable transport and
-generic demo completion. [Camera calibration](docs/camera-calibration.md) is
+7C.2 accepted in Opera. A selected keyframe can now attach, reorder or unlink
+local observation IDs through **Reference photographs**. Photo deletion is
+temporarily disabled to protect references across projects and drafts. JSON
+exports preserve IDs only, not original observation bytes yet. Next: 7C.4
+reference presentation, 7C.5 portable transport and generic demo completion. [Camera calibration](docs/camera-calibration.md) is
 a planned separate research and development stage after infrastructure; final
 Causeway observation frames and other demo migration follow it. See the
 [updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume. Deferred improvements are tracked in the

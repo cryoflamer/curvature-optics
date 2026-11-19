@@ -1476,3 +1476,21 @@ test('Studio imports validated attachments into the shared cache without overwri
   assert.equal(renders,1);
   assert.equal(await ctx.importStudioKeyframeThumbnails(portable),true);assert.equal(writes.length,1);
 });
+
+test('reference links persist in named copies and portable imports without deduplicating unrelated evidence',async()=>{
+  const db=memoryIndexedDB(),d=source();
+  const withA=studio.editFrame(d,d.frames[0].key,'referenceImageIds',['obs_A','obs_B']);
+  const withB=studio.editFrame(d,d.frames[0].key,'referenceImageIds',['obs_C']);
+  const first=await library.create(db,studio.build(withA,'linked_a'),'auto',1000);
+  const copy=await library.create(db,studio.build(studio.fromProject(first.project),'linked_copy'),'auto',1100,null,true);
+  assert.deepEqual(copy.project.keyframes[0].referenceImageIds,['obs_A','obs_B']);
+  const different=await library.create(db,studio.build(withB,'linked_b'),'auto',1200);
+  const incoming=library.parsePortable(library.exportPortable([first,different]));
+  const fresh=memoryIndexedDB();const result=await library.importEntries(fresh,incoming,1300,{randomUUID:(()=>{let n=0;return ()=>('uuid-'+(++n));})()});
+  assert.equal(result.created,2);
+  assert.deepEqual((await library.list(fresh)).map(r=>r.project.keyframes[0].referenceImageIds).sort(),[['obs_A','obs_B'],['obs_C']]);
+  const removed=studio.editFrame(withA,withA.frames[0].key,'referenceImageIds',[]);
+  const updated=await library.update(db,studio.build(removed,first.id),'auto',first.updatedAt,1400);
+  assert.equal(updated.project.keyframes[0].referenceImageIds,undefined);
+  assert.deepEqual((await library.get(db,copy.id)).project.keyframes[0].referenceImageIds,['obs_A','obs_B']);
+});

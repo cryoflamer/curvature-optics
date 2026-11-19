@@ -540,6 +540,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationAtmosphereVariant.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
         "tests/ModernStatusMessageExportUI.test.js"
       ],
@@ -632,6 +633,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationContract.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
@@ -648,6 +650,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationProjectWizard.test.js",
@@ -696,6 +699,7 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
@@ -822,6 +826,7 @@
         "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernAnimationBackgroundExport.js",
         "src/animation/ModernAnimationBackgroundVideoExport.js",
+        "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationFrameExport.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPlayback.js",
@@ -843,6 +848,7 @@
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernAnimationInitialFrame.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationParallelExport.test.js",
@@ -923,6 +929,7 @@
         "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationInitialFrame.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
@@ -1054,6 +1061,7 @@
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationAtmosphereVariant.test.js",
         "tests/ModernAnimationInitialFrame.test.js",
+        "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStoryboardExport.test.js",
         "tests/ModernCanvasDirectPreview.test.js",

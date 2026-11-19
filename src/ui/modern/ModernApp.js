@@ -3809,6 +3809,7 @@
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       resolveFrame:function(frame){return resolveStudioKeyframe(frame,entries);},
+      listReferenceImages:function(){return root.CurvatureModernReferenceImageLibrary.list(root.indexedDB);},
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,

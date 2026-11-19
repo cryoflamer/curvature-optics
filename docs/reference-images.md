@@ -1,7 +1,7 @@
 # Reference images and observation sources
 
-Status: 7C.2 foundation and local Library implemented; links, presentation and
-portable transport are subsequent steps. See [demo roadmap](modern-demo-catalog.md) for order and
+Status: 7C.3 foundation, local Library and keyframe links implemented; presentation and
+portable asset transport are subsequent steps. See [demo roadmap](modern-demo-catalog.md) for order and
 [camera calibration](camera-calibration.md) for the deferred research project.
 
 ## Purpose and boundaries
@@ -97,9 +97,7 @@ Import a local file, select a saved observation, edit its details and click
 uncertainties and notes. Not recorded is distinct from explicit Unknown. No
 EXIF facts are automatically inferred; the original file retains embedded
 metadata. Use **Download original** to retain an external copy, **Refresh** to
-reload the current list, or **Delete observation** after confirmation. There
-are no links in this stage: before 7C.3 enables links it must protect all uses
-from deletion (or disable deletion). The panel is outside the presentation
+reload the current list, or inspect the disabled **Delete observation** control. 7C.2 initially allowed deletion; 7C.3 disables it to protect references. The panel is outside the presentation
 stage. No storage is accessed merely by loading Modern with the panel closed.
 
 `ModernReferenceImageLibrary` uses its own IndexedDB database, version 1,
@@ -112,7 +110,7 @@ browser disk usage); individual limits are unchanged. Lists expose thumbnails
 and dimensions, not originals; a bounded `getAll` is used internally for atomic
 quota checks and listing. Browser quota, decode and transaction errors surface
 in the panel. Browser storage remains local and may be cleared/evicted by the
-browser; external backups are essential. Project exports do not include these
+browser; external backups are essential. Project exports include reference IDs but not these
 assets yet.
 
 `ModernReferenceImageImport` inspects raster header dimensions before decoding,
@@ -127,14 +125,54 @@ parsing or automatic calibration is performed. A browser refusing to decode a
 file rejects ingestion; use supported local image files and document any
 external conversion.
 
+## Keyframe references (7C.3)
+
+Select a keyframe in the editable Keyframe Editor in Animation Studio. Under
+**Reference photographs**, click **Load photographs**, select an existing
+observation and **Attach**. Multiple photos are ordered, using arrow buttons;
+**Unlink** removes only this use. One observation may be attached to any
+number of distinct frames or projects. Read-only demo authoring is disabled.
+The list displays titles when the local library resolves an ID, `Missing
+local photograph` after a successful lookup without a match, and `Unresolved
+local photograph` before lookup or if storage fails. Retry with Load photographs.
+No replacement by title, no automatic remote download. Import a photograph
+first using the independent Reference Image Library.
+
+Both v1 and v2 projects (including unfinished and Experimental v2) accept the
+optional `keyframes[].referenceImageIds` array of up to 100 ordered distinct
+IDs, each matching the observation ID grammar. An empty array is normalized
+to absence. Existing projects with no references remain unchanged. The array
+is owned and frozen. Draft history, reordering, autosave/recovery, library
+save/copy/import and atmosphere variants preserve references; timeline exposes
+IDs for the subsequent presentation panel. Library deduplication includes
+ordered IDs so that different authored evidence is not silently discarded.
+Frame experiments, physical compatibility, exact-state thumbnails and camera
+parameters remain independent of references. A missing local observation does
+not prevent playback or saving, but must be visibly labeled when resolved.
+
+For now JSON backups preserve links only: they are not self-contained photo
+backups. On a different browser, missing IDs remain unresolved; the same ID
+alone does not verify provenance. Full transport/collision reconciliation is
+7C.5. Existing older applications may reject the new optional field; keep
+prior exports. Do not delete original files outside the app. Authored IDs
+stay unchanged when switching atmosphere, including Storyboard variant JSON.
+
+**Deletion safety:** 7C.3 deliberately disables all observation deletion at
+both the UI and storage API, not only deletion from a visible frame. A scan
+of the currently open project is insufficient: other saved projects, inactive
+workspaces, unsaved changes, Undo/Redo and concurrent tabs can cite an image.
+A future durable ownership/transaction strategy must cover these before
+re-enabling deletion; revisit during 7C.5 and 7E. Unlinking and deleting a
+keyframe/project do not delete original image bytes. Reload old open tabs
+when upgrading (pre-7C.3 code cannot enforce this guard). Browser storage
+clearing/eviction is outside application control. This is a conservative
+interim limitation, especially near the library quota.
+
 ## Remaining delivery steps
 
-- 7C.2: implemented as above; browser acceptance pending.
-- 7C.3 (next): optional ordered references by ID on a keyframe, sharing one asset
-  across uses; preserve through editing, copies, Undo/Redo and recovery;
-  define stable ownership/access and handle missing IDs explicitly. Keep
-  metadata out of active physics/compatibility and exact-state cache keys.
-- 7C.4: Studio and Presentation observation panels, original full-size view,
+- 7C.2: implemented as above; accepted in Opera.
+- 7C.3: implemented local ID links as above; Opera acceptance pending.
+- 7C.4 (next): Studio and Presentation observation panels, original full-size view,
   source/author/license, known/unknown facts and clear model-vs-photo labeling.
   Respect painted timeline and selected keyframe; do not change camera or
   atmosphere. Read-only demos cannot edit observation data.

@@ -94,6 +94,18 @@
     }
     return state.validate(result);
   }
+  // Reference IDs are opaque local observation identities, not scene metadata.
+  // Keep the ID grammar aligned with ModernReferenceImage.validId without
+  // loading raster validators into the render workers.
+  function validateReferenceIds(value){
+    if(!Array.isArray(value)||value.length>100)throw RangeError('Invalid keyframe reference IDs (maximum 100)');
+    var result=Array.from(value,function(id){
+      if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(id))throw RangeError('Invalid keyframe reference ID');
+      return id;
+    });
+    if(new Set(result).size!==result.length)throw RangeError('Duplicate keyframe reference ID');
+    return Object.freeze(result);
+  }
   function validate(input){
     // Optional appearance keeps existing v1 projects byte-for-byte compatible.
     var v2=object(input)&&input.version===VERSION_V2;
@@ -129,7 +141,8 @@
         'Animation requires 2–200 keyframes');
     var keyframes=input.keyframes.map(function(frame,index){
       var hasDescription=Object.prototype.hasOwnProperty.call(frame||{},'description');
-      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasDescription?['description']:[]));
+      var hasReferences=Object.prototype.hasOwnProperty.call(frame||{},'referenceImageIds');
+      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasDescription?['description']:[],hasReferences?['referenceImageIds']:[]));
       var source=frame.sourceSnapshotId;
       if(source!==null&&!(Number.isSafeInteger(source)&&source>0)&&
         !(typeof source==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(source)))
@@ -144,6 +157,7 @@
       var result={sourceSnapshotId:source,name:name,value:value,travelMs:travel,
         holdMs:hold,easing:frame.easing};
       if(hasDescription){var caption=text(frame.description,1000,true);if(caption)result.description=caption;}
+      if(hasReferences){var refs=validateReferenceIds(frame.referenceImageIds);if(refs.length)result.referenceImageIds=refs;}
       return result;
     });
     if(mode==='camera'){
@@ -182,6 +196,7 @@
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(mode==='camera'?'smoothstep':'linear'):source.easing};
       if(source.description!==undefined)frame.description=source.description;
+      if(source.referenceImageIds!==undefined)frame.referenceImageIds=source.referenceImageIds;
       return frame;
     });
     var result={version:VERSION,id:options.id,name:options.name||'Animation',
@@ -219,6 +234,7 @@
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(c.mode==='camera'?'smoothstep':'linear'):source.easing};
       if(source.description!==undefined)frame.description=source.description;
+      if(source.referenceImageIds!==undefined)frame.referenceImageIds=source.referenceImageIds;
       return frame;
     });
     var result={version:VERSION_V2,id:options.id,name:options.name||'Animation',
@@ -276,6 +292,7 @@
       ms+=frame.travelMs;var arrivalMs=ms;ms+=frame.holdMs;
       var item={name:frame.name,arrivalMs:arrivalMs,departureMs:ms};
       if(frame.description)item.description=frame.description;
+      if(frame.referenceImageIds)item.referenceImageIds=frame.referenceImageIds;
       return item;
     });
   }
@@ -306,6 +323,6 @@
   }
   return Object.freeze({VERSION:VERSION,VERSION_V2:VERSION_V2,validate:validate,create:create,
     createV2:createV2,ready:ready,frameExperiment:frameExperiment,frameExperiments:frameExperiments,
-    validateHudAppearance:hud.validateAppearance,
+    validateHudAppearance:hud.validateAppearance,validateReferenceIds:validateReferenceIds,
     totalMs:totalMs,timeline:timeline,sampleAt:sampleAt,splineProof:splineProof});
 }));

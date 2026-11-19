@@ -55,7 +55,7 @@ function memoryIndexedDB(){
   }};
 }
 
-test('create, list, reload, and remove preserve independent identity and original bytes',async()=>{
+test('create, list, reload, and protected deletion preserve independent identity and original bytes',async()=>{
   const db=memoryIndexedDB(),input=record();
   const created=await library.create(db,input);input.original.width=90;
   assert.equal(created.revision,1);
@@ -63,18 +63,19 @@ test('create, list, reload, and remove preserve independent identity and origina
   const list=await library.list(db);assert.equal(list.length,1);assert.equal(list[0].original,undefined);
   assert.deepEqual(list[0].thumbnail,raster);
   await library.create(db,record('two'));
-  await library.remove(db,'one',1);
-  assert.equal(await library.get(db,'one'),null);assert.equal((await library.list(db)).length,1);
+  await assert.rejects(library.remove(db,'one',1),/deletion is disabled/);
+  assert.deepEqual((await library.get(db,'one')).record,record());assert.equal((await library.list(db)).length,2);
 });
-test('metadata edit retains original and thumbnail; revision rejects stale writers/deletes',async()=>{
+test('metadata edit retains original and thumbnail; revision rejects stale writers; deletion fails closed',async()=>{
   const db=memoryIndexedDB();await library.create(db,record());
   const row=await library.update(db,'one',1,{title:'New title',cameraMetadata:{pitchDeg:{status:'measured',value:0}}});
   assert.equal(row.revision,2);assert.equal(row.record.title,'New title');assert.deepEqual(row.record.original,raster);
   assert.deepEqual(row.record.thumbnail,raster);assert.equal(row.record.cameraMetadata.pitchDeg.value,0);
   await assert.rejects(library.update(db,'one',1,{title:'Old tab'}),/changed/);
-  await assert.rejects(library.remove(db,'one',1),/changed/);
+  await assert.rejects(library.remove(db,'one',1),/deletion is disabled/);
   assert.equal((await library.get(db,'one')).record.title,'New title');
-  await library.remove(db,'one',2);await assert.rejects(library.update(db,'one',2,{title:'Lost'}),/changed/);
+  await assert.rejects(library.remove(db,'one',2),/deletion is disabled/);
+  assert.equal((await library.get(db,'one')).revision,2);
 });
 test('collision and invalid edit never replace observation bytes',async()=>{
   const db=memoryIndexedDB();await library.create(db,record());

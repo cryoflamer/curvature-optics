@@ -1390,3 +1390,11 @@ button{cursor:pointer}
 .modern-reference-preview img{display:block;width:auto;max-width:100%;max-height:220px;object-fit:contain}
 .modern-reference-fact{border:1px solid #c6d8e9;margin:6px 0;padding:8px}
 .modern-reference-editor[hidden]{display:none}
+
+/* Keyframe observation links; separate from simulated image previews. */
+.modern-studio-reference-links{display:grid;gap:6px;margin-top:10px;padding:10px;border:1px solid #c6d8e9;border-radius:6px;min-width:0}
+.modern-studio-reference-links p{margin:0}
+.modern-studio-reference-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
+.modern-studio-reference-row span{flex:1;min-width:120px;overflow-wrap:anywhere}
+.modern-studio-reference-picker{min-width:0;max-width:100%;flex:1}
+.modern-reference-body button:disabled{opacity:.55;cursor:not-allowed}

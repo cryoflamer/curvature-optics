@@ -73,13 +73,10 @@
       quota(rows.map(function(r){return r.id===id?next:r;}));store.put(next);finish(next);
     });});
   }
-  // No links exist in 7C.2. Before introducing links, route deletion through a
-  // use-site guard (including saved/draft projects), or disable it entirely.
-  function remove(db,id,expected){images.validId(id);revision(expected);
-    return transaction(db,'readwrite',function(store,read,finish){read(store.get(id),function(row){
-      current(row&&normalize(row),expected);store.delete(id);finish(true);
-    });});
-  }
+  // Cross-database workspaces, Undo and other open tabs cannot yet be
+  // enumerated atomically. Fail closed until there is a safe use-site guard.
+  // Keep the API protected even if a stale UI attempts to call it.
+  function remove(){return Promise.reject(Error('Observation deletion is disabled while keyframe links are supported. Unlinking does not delete originals.'));}
   function makeId(crypto){
     var token=typeof crypto.randomUUID==='function'?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),
       function(b){return b.toString(16).padStart(2,'0');}).join('');

@@ -95,6 +95,8 @@
         var item={value:frame.value,travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing};
         // A distinct authored narrative must not be discarded by import deduplication.
         if(frame.description)item.description=frame.description;
+        // Keep projects citing different evidence distinct during import deduplication.
+        if(frame.referenceImageIds)item.referenceImageIds=frame.referenceImageIds;
         return item;
       })});
   }

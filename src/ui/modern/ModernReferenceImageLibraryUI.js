@@ -29,7 +29,7 @@
     function button(text,parent,action){var b=el('button',text,parent);b.type='button';b.addEventListener('click',action);return b;}
     function field(parent,label,tag){var wrap=el('label',undefined,parent);el('span',label,wrap);return el(tag||'input',undefined,wrap);}
     var body=el('div',undefined,host);body.className='modern-reference-body';
-    el('p','Independent observations, stored locally in this browser. Keep external backups of your originals; project links and portable export are not yet available.',body);
+    el('p','Independent observations, stored locally in this browser. Keep external backups of your originals; Keyframes may link to these local originals; portable exports do not yet include their bytes.',body);
     var toolbar=el('div',undefined,body);toolbar.className='modern-reference-toolbar';
     var file=field(toolbar,'Import photograph','input');file.type='file';file.accept='image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp';
     var refresh=button('Refresh',toolbar,function(){if(allowDiscard())run(async function(){await reload(selected&&selected.id);});});
@@ -53,14 +53,13 @@
     });
     var actions=el('div',undefined,editor);actions.className='modern-reference-toolbar';
     var save=el('button','Save details',actions);save.type='submit';
-    var remove=button('Delete observation',actions,function(){
-      if(!selected||!env.confirm('Permanently delete this local observation and original? Keep a backup first.'))return;
-      run(async function(){await library.remove(db,selected.id,selected.revision);dirty=false;await reload(null);},'Observation deleted.');
-    });
+    var remove=el('button','Delete observation',actions);remove.type='button';remove.disabled=true;
+    remove.title='Disabled until all saved, draft and Undo references can be checked safely.';
+    el('p','Deletion is temporarily disabled to protect linked originals in saved projects, drafts and other tabs.',editor);
     function allowDiscard(){return !dirty||env.confirm('Discard unsaved observation metadata changes?');}
     function setBusy(value){busy=value;file.disabled=value;refresh.disabled=value;chooser.disabled=value;
       // Disable the fieldsets and editable controls while a transaction runs.
-      editor.inert=value;save.disabled=value;remove.disabled=value;}
+      editor.inert=value;save.disabled=value;remove.disabled=true;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
       try{await action();status.textContent=message||'Reference Image Library ready.';}
       catch(error){status.textContent='Reference Image Library: '+(error&&error.message||error);}
