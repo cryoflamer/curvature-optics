@@ -4,6 +4,14 @@ Status: completed (design and bounded headless checks, no production code).
 Source baseline: `af6ddd3bbca9879c54aaee7aae45a3ca3775fedd`, branch `built-in-demo`.
 Tracking: #7, related to #6. Next: 8F.1.
 
+## Subsequent refinement
+
+The original package-selection/modal/front-view MVP has been implemented and
+user-tested. Its usability limitations prompted 8F.2a–c in the current
+[implementation plan](landmark-editor.md), which supersedes the original
+viewer selection and initial-view defaults below. The anchor and projection
+contracts remain unchanged.
+
 ## Source audit and decisions
 
 | Existing source | Finding / consequence |

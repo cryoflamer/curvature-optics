@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.2 implemented; 8F.2 CI pending; 8F.3 next after verification. See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a–c refinements planned before 8F.3 (CI status not revalidated here). See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -34,8 +34,9 @@ personal experiment file are added here.
 
 1. Select a specific placed object on the main scene; highlight it and show
    its identity, type and distance. Resolve occlusion and overlapping objects.
-2. Open an isolated 3D viewer of that object's actual authored geometry.
-   Orbit, zoom and pan independently of the physical experiment camera.
+2. Open a movable, modeless isolated 3D viewer of the exact selected object
+   or span, initially framed in the scene-relative view. Orbit, zoom and pan
+   independently of the physical experiment camera; retain photo access.
 3. Pick a vertex, an arbitrary point on an edge, or an arbitrary point on a
    surface. Preview and confirm the marker; allow cancel and later editing.
 4. Project the fixed geometric anchor back onto the main scene via the
@@ -73,6 +74,39 @@ Use the same authored geometry as the main renderer, not a duplicated model.
 Provide orbit, zoom, pan, reset, standard views, orthographic/perspective and
 wireframe display. Keep viewer state separate from physical camera, scene
 physics and calibration result. Support reopening a selected object.
+
+### 8F.2a — Precise object and span selection
+Distinguish actual object owners from individual span owners (endpoint pair,
+role and side). Extend the Canvas Direct ownership pass while preserving
+painter order, terrain masking and legacy vertex selection. Highlight the
+specific selected owner; provide manual owner/ambiguity fallback. A clicked
+road span must open that span, not a package with the span hidden. Adjacent
+supports and spans are optional context; no invented thickness. Test both
+Soundly road sides, overlapping owners, support selection and unchanged fit.
+
+### 8F.2b — Modeless movable viewer
+Replace modal behavior with a floating nonblocking inspector. Drag title
+bar, resize, clamp to viewport on open/resize, remember window position and
+size as UI preferences (not portable experiment data). Keep photo and scene
+interactive; update an open inspector on new owner selection. Scope keyboard
+and pointer events to focused controls, release capture on cancellation,
+close on workspace exit or invalid scene replacement. Navigation must not
+change correspondence state or cancel an active fit. Test dragging, resizing,
+reopening, selecting another owner and photo interaction while open.
+
+### 8F.2c — Scene-relative initial view and framing
+Open each selected owner in a scene-relative orientation by default, using
+the actual displayed camera basis, including roll, and the selected owner's
+placement. Preserve perspective direction and use off-axis framing or
+equivalent crop/zoom rather than translating the physical camera toward
+the object. Fit selected geometry to available viewport with margins;
+optional context must not hide the selected feature or force excessive
+zoom-out. Provide Scene View to restore this initial orientation/framing
+after orbiting; retain standard views and manual controls. Local viewer
+does not reproduce atmospheric ray bending; explicitly distinguish geometric
+scene-relative framing from exact optical pixel parity. Verify Globe/Flat,
+camera roll, both supports and road spans, resize and unchanged physical
+state. Require user verification of 8F.2a–c on Soundly before 8F.3.
 
 ### 8F.3 — Local picking
 Ray intersection with actual triangles in the local viewer; nearest visible
@@ -140,6 +174,8 @@ Report negative results and termination status, not just improved training RMS.
 ## Definition of done
 
 - [ ] Individual object selection and highlighting are reliable in supported scenes.
+- [ ] Exact support/span selection, modeless window and scene-relative framing
+  are verified on Soundly before local picking.
 - [ ] Isolated viewer navigation leaves the experiment camera unchanged.
 - [ ] Vertex, edge and surface anchors are selectable and physically projected.
 - [ ] Existing correspondences can be refined without losing photo pixels or roles.

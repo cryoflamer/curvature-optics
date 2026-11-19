@@ -1,3 +1,16 @@
+## 8F.2 follow-up — Viewer usability refinement (planned)
+
+User verification of 8F.2 in Soundly revealed that clicking a road span
+opens its support package with spans hidden; the modal dialog obscures
+the photo/scene and the default front view requires manual rotation.
+Before 8F.3 implement three bounded commits: 8F.2a exact object/span owner
+selection, 8F.2b modeless movable/resizable inspector with remembered UI
+geometry and live selection, 8F.2c scene-relative initial camera orientation
+(including roll), automatic framing and Scene View reset. Keep geometry,
+physical camera, fit and anchors unchanged by inspection. See the revised
+landmark editor plan and #7. User verification on Soundly is required
+before proceeding to local point picking.
+
 ## 8F.2 — Isolated authored-object viewer
 
 Object mode now opens Inspect object (3D), a modal local Canvas viewer.
@@ -13,7 +26,7 @@ and browser navigation/pose isolation coverage (CI pending).
 8F.1 CI 44611576966 failed on stale static dependency inventory and docs
 count (updated here, reviewed topic exceptions), and a Scene workspace
 restore timeout (not diagnosed or suppressed). Object selection smoke passed.
-Next: 8F.3 indexed triangulation and local picking, after verification.
+Next: 8F.2a–c refinements, then 8F.3 after verification.
 
 ## 8F.1 — Explicit object selection and snapshot owner metadata
 
