@@ -60,3 +60,16 @@ test('marker hit chooses the closest existing pair and leaves empty space for pa
  assert.equal(editor.nearestMarker(markers,[14,10],8).id,'b');
  assert.equal(editor.nearestMarker(markers,[50,50],8),null);
 });
+
+test('raster spatial index preserves exact snap results across zoom and pan',()=>{
+  const points=Array.from({length:8000},(_,i)=>({landmark:{id:String(i)},pixel:[(i*37)%1200,(i*71)%900],worldKey:String(i)}));
+  const index=editor.spatialIndex(points);
+  for(const view of [{x:0,y:0,scale:.4},{x:-200,y:150,scale:3},{x:100,y:-20,scale:16}]){
+    for(const point of points.filter((_,i)=>i%173===0)){
+      const [x,y]=editor.screenPoint(view,point.pixel);
+      const subset=index.query(view,x,y,12);
+      assert.deepEqual(editor.snapCandidates(subset,view,x,y,12,2),editor.snapCandidates(points,view,x,y,12,2));
+    }
+  }
+  assert.ok(index.query({x:0,y:0,scale:1},500,400,10).length<points.length/10);
+});

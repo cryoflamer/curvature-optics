@@ -57,6 +57,26 @@
     }
     return result;
   }
+  // Index in raster coordinates: viewport zoom/pan never invalidates it.
+  function spatialIndex(points,cell=32){
+    const buckets=new Map();
+    for(const p of points){
+      const key=Math.floor(p.pixel[0]/cell)+','+Math.floor(p.pixel[1]/cell);
+      if(!buckets.has(key))buckets.set(key,[]);
+      buckets.get(key).push(p);
+    }
+    return {query(view,x,y,radius){
+      const a=(x-view.x)/view.scale,b=(y-view.y)/view.scale,r=radius/view.scale;
+      const x0=Math.floor((a-r)/cell),x1=Math.floor((a+r)/cell),
+        y0=Math.floor((b-r)/cell),y1=Math.floor((b+r)/cell);
+      if((x1-x0+1)*(y1-y0+1)>buckets.size*2)return points;
+      const found=[];
+      for(let i=x0;i<=x1;i++)for(let j=y0;j<=y1;j++){
+        const bucket=buckets.get(i+','+j);if(bucket)for(const p of bucket)found.push(p);
+      }
+      return found;
+    }};
+  }
   function nearestMarker(markers,p,radius){
     let best=null,distance=radius;
     for(const m of markers){const d=Math.hypot(m.pixel[0]-p[0],m.pixel[1]-p[1]);
@@ -121,6 +141,7 @@
       showLandmarks=$('ModernCalibrationShowLandmarks');
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
+    let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
     const sourcePicker=$('ModernCalibrationSource'),sourceStatus=$('ModernCalibrationSourceStatus'),
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
@@ -382,7 +403,7 @@
       hover=[];clearAmbiguity();meshDraw();
     }
     function renderModel(){
-      projected=[];byLandmark=new Map();previewValid=false;modelView=null;
+      cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
       hover=[];clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
       try{
         const size=previewSize(record?.original.width||sceneCanvas.width,record?.original.height||sceneCanvas.height);
@@ -408,7 +429,7 @@
             }
           }
         }
-        previewValid=true;fitModel();
+        index=spatialIndex(projected);previewValid=true;fitModel();
         modelStatus.textContent='Canvas Direct · '+stats.sourceObjects+' objects · '+projected.length+
           ' in-frame terrain-eligible vertices · mutual occlusion not tested';
       }catch(e){
@@ -429,26 +450,32 @@
         mesh.globalAlpha=1;
       }
       rows.forEach((r,i)=>{
-        const item=modelGhost?.id===r.landmark.id?modelGhost.item:byLandmark.get(r.landmark.id);
-        if(item)marker(mesh,screenPoint(modelView,item.pixel),String(i+1),COLORS[i%COLORS.length],r.landmark.id===activePair);
+        const ghost=modelGhost?.id===r.landmark.id?modelGhost:null;
+        const item=byLandmark.get(r.landmark.id);
+        const pixel=ghost?ghost.pixel:item?screenPoint(modelView,item.pixel):null;
+        if(pixel)marker(mesh,pixel,String(i+1),COLORS[i%COLORS.length],!!ghost||r.landmark.id===activePair);
       });
       const item=byLandmark.get(pendingModel?.id||(editing?selected()?.id:null));
       if(item)marker(mesh,screenPoint(modelView,item.pixel),'+','#009ab3');
       if(hover.length){
         const p=screenPoint(modelView,hover[hoverIndex]?.pixel||hover[0].pixel);
         mesh.strokeStyle='#00a6c5';mesh.lineWidth=2;mesh.beginPath();mesh.arc(p[0],p[1],9,0,Math.PI*2);mesh.stroke();
+        if(modelGhost){
+          mesh.save();mesh.setLineDash([4,4]);mesh.lineWidth=1;mesh.beginPath();
+          mesh.moveTo(...modelGhost.pixel);mesh.lineTo(...p);mesh.stroke();mesh.restore();
+        }
       }
     }
     function hits(p){
       if(!modelView)return [];
       // The canvas may be CSS-scaled. Keep the mouse tolerance in CSS pixels.
       const ratio=sceneCanvas.width/Math.max(1,sceneCanvas.getBoundingClientRect().width);
-      return snapCandidates(projected,modelView,p[0],p[1],10*ratio,2*ratio);
+      return snapCandidates(index.query(modelView,p[0],p[1],10*ratio),modelView,p[0],p[1],10*ratio,2*ratio);
     }
     function clearAmbiguity(){
       ambiguous=[];pickConflict.hidden=true;pickOptions.replaceChildren();
     }
-    function hoverAt(p){
+    function hoverAt(p,draw=true){
       const previous=hover[hoverIndex]?.landmark.id;
       hover=hits(p);hoverIndex=Math.max(0,hover.findIndex(q=>q.landmark.id===previous));
       const item=hover[hoverIndex];
@@ -456,14 +483,14 @@
       tip.hidden=!item;
       if(item){
         tip.textContent=(hover.length>1?'Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · ':'')+
-          'Click highlighted vertex';
+          (modelGhost?'Release to snap':'Click highlighted vertex');
         const r=sceneCanvas.getBoundingClientRect();
         tip.style.left=Math.min(Math.max(0,p[0]*r.width/sceneCanvas.width+12),Math.max(0,r.width-230))+'px';
         tip.style.top=Math.min(Math.max(0,p[1]*r.height/sceneCanvas.height+16),Math.max(0,r.height-42))+'px';
       }
       pickStatus.textContent=item?landmarkLabel(item.landmark)+(hover.length>1?' · '+(hoverIndex+1)+'/'+hover.length:''):
         $('ModernCalibrationActionHint').textContent;
-      meshDraw();
+      if(draw)meshDraw();
     }
     function clearHover(){
       hover=[];hoverIndex=0;$('ModernCalibrationHoverTip').hidden=true;meshDraw();
@@ -596,44 +623,63 @@
     }
     px.oninput=py.oninput=manualPixel;
     bank.onchange=()=>{pendingModel=null;updateObjects();};object.onchange=()=>{pendingModel=null;updateVertices();};vertex.onchange=()=>{pendingModel=null;meshDraw();add.disabled=!pending||!selected();};
-    sceneCanvas.addEventListener('pointerdown',e=>{
-      if(!modelView||e.button!==0)return;
-      const p=canvasPoint(sceneCanvas,e),hit=modelMarker(p);
-      modelDrag={id:e.pointerId,start:p,last:p,moved:false,marker:hit?.id||null};
-      sceneCanvas.setPointerCapture(e.pointerId);
-    });
-    sceneCanvas.addEventListener('pointermove',e=>{
-      const p=canvasPoint(sceneCanvas,e);
+    function cancelModelFrame(){
+      if(modelFrame!==null)env.cancelAnimationFrame(modelFrame);
+      modelFrame=null;queuedPointer=null;
+    }
+    function processModelPointer(p){
+      if(!modelView)return;
       if(!modelDrag){hoverAt(p);return;}
-      if(modelDrag.id!==e.pointerId)return;
       if(Math.hypot(p[0]-modelDrag.start[0],p[1]-modelDrag.start[1])>4)modelDrag.moved=true;
       if(modelDrag.moved){
         if(modelDrag.marker){
-          hoverAt(p);const item=hover[hoverIndex];
-          modelGhost=item?{id:modelDrag.marker,item}:null;meshDraw();
-        }else {
+          modelGhost={id:modelDrag.marker,pixel:p.slice()};
+          hoverAt(p,false);meshDraw();
+        }else{
           modelView.x+=p[0]-modelDrag.last[0];modelView.y+=p[1]-modelDrag.last[1];
           clearHover();clearAmbiguity();
         }
       }
       modelDrag.last=p;
+    }
+    function queueModelPointer(p){
+      queuedPointer=p;
+      if(modelFrame!==null)return;
+      modelFrame=env.requestAnimationFrame(()=>{
+        modelFrame=null;const next=queuedPointer;queuedPointer=null;
+        if(next)processModelPointer(next);
+      });
+    }
+    sceneCanvas.addEventListener('pointerdown',e=>{
+      if(!modelView||e.button!==0)return;
+      cancelModelFrame();const p=canvasPoint(sceneCanvas,e),hit=modelMarker(p);
+      modelDrag={id:e.pointerId,start:p,last:p,moved:false,marker:hit?.id||null};
+      sceneCanvas.setPointerCapture(e.pointerId);
+    });
+    sceneCanvas.addEventListener('pointermove',e=>{
+      if(modelDrag&&modelDrag.id!==e.pointerId)return;
+      const p=canvasPoint(sceneCanvas,e);
+      // Preserve drag intent even if several events arrive between frames.
+      if(modelDrag&&Math.hypot(p[0]-modelDrag.start[0],p[1]-modelDrag.start[1])>4)modelDrag.moved=true;
+      queueModelPointer(p);
     });
     sceneCanvas.addEventListener('pointerup',e=>{
       if(!modelDrag||modelDrag.id!==e.pointerId)return;
-      const action=modelDrag,p=canvasPoint(sceneCanvas,e);modelDrag=null;modelGhost=null;
+      const p=canvasPoint(sceneCanvas,e);cancelModelFrame();processModelPointer(p);
+      const action=modelDrag;modelDrag=null;modelGhost=null;
       if(action.marker){
         if(action.moved){
-          hoverAt(p);const item=hover[hoverIndex],row=rows.find(r=>r.landmark.id===action.marker);
+          hoverAt(p,false);const item=hover[hoverIndex],row=rows.find(r=>r.landmark.id===action.marker);
           if(row&&item)replacePair(action.marker,item.landmark,row.pixel);
           else message('No eligible vertex at drop; correspondence unchanged.');
         }else selectPair(action.marker);
       }else if(!action.moved)pickAt(p);
       meshDraw();
     });
-    sceneCanvas.addEventListener('pointercancel',()=>{modelDrag=null;modelGhost=null;clearHover();});
-    sceneCanvas.addEventListener('pointerleave',()=>{if(!modelDrag)clearHover();});
+    sceneCanvas.addEventListener('pointercancel',()=>{cancelModelFrame();modelDrag=null;modelGhost=null;clearHover();});
+    sceneCanvas.addEventListener('pointerleave',()=>{if(!modelDrag){cancelModelFrame();clearHover();}});
     sceneCanvas.addEventListener('wheel',e=>{
-      if(!modelView)return;e.preventDefault();
+      if(!modelView)return;e.preventDefault();if(modelDrag)return;cancelModelFrame();
       const p=canvasPoint(sceneCanvas,e),base=fit(modelRaster.width,modelRaster.height,sceneCanvas.width,sceneCanvas.height).scale;
       modelView=zoomAt(modelView,...p,Math.exp(-e.deltaY*.0015),base/4,Math.max(16,base*32));
       clearHover();clearAmbiguity();
@@ -663,5 +709,5 @@
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,nearestMarker,pair,upsert,photoChoices,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,nearestMarker,pair,upsert,photoChoices,mount});
 }));

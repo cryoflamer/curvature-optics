@@ -1,3 +1,15 @@
+## 8B.6 — Model marker drag refinement
+
+Model marker preview now follows the pointer continuously, even without a
+nearby vertex. The snap candidate is highlighted separately with a dashed
+connector and committed only at release. Invalid drops preserve the original
+pair. Model pointer updates are coalesced with requestAnimationFrame; pointer
+release processes the final coordinates synchronously. A raster-coordinate
+spatial index narrows candidate searches without changing snap/tie semantics
+or rebuilding on viewport changes. Photo interaction is unchanged. Added
+index equivalence regression coverage; browser smoothness requires manual
+validation. No solver changes.
+
 ## 8B.6 — Direct correspondence interaction
 
 Either canvas can provide the first point. A click on the highlighted model
