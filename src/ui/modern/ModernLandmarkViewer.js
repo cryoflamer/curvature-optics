@@ -181,7 +181,7 @@
     const origin=add(add(observer.origin,worldAxis(camera.pos)),axes.reduce((p,a,i)=>add(p,mul(a,pivot[i])),[0,0,0]));
     const frame={origin,x:axes[0],y:axes[1],z:axes[2]};
     return {kind:'region',frame,items:items.map(p=>({...p,points:p.points.map(q=>sub(q,pivot))})),
-      eye:mul(pivot,-1),focal,near,region:{...selection.region},seed:selection.pixel.slice(),pivotError:hit.distance,
+      eye:pivot.map(x=>x===0?0:-x),focal,near,region:{...selection.region},seed:selection.pixel.slice(),pivotError:hit.distance,
       owner:JSON.parse(JSON.stringify(selection.owner))};
   }
   function regionCamera(geometry,state,width,height){
