@@ -62,8 +62,8 @@ importScripts(
   'ModernAnimationPreview.js?projection-fix=1&presentation-hud=1',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
-  'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1',
+  'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1&topology=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1',
   'ModernAnimationCompareComposition.js',
   'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1'
 );

@@ -36,7 +36,7 @@ function fakeFrame(plan,index){
   }
   const info=plan.presentation?require('../src/animation/ModernAnimationPresentationCompositor').frameAt(plan.presentation,timeMs):null;
   return {row:{index,timeMs,timestampUs:Math.round(timeMs*1000),images,renderStats,
-    ...(info?{referenceId:info.referenceId,referenceCount:info.referenceCount,viewSize:info.viewSize,warnings:[]}: {})},entries};
+    ...(info?{referenceId:info.referenceId,referenceCount:info.referenceCount,topology:info.topology,viewSize:info.viewSize,warnings:[]}: {})},entries};
 }
 class FakeWorker {
   static instances=[];

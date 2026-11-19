@@ -229,7 +229,7 @@
     var result=compositor.paint(adapter.canvas(),frame,images,photo),bytes=await toPng(result.canvas);
     var name='frames/frame_'+pad(index)+'_presentation.png';
     return {row:{index:index,timeMs:time,timestampUs:Math.round(time*1000),images:{presentation:name},
-      referenceId:frame.referenceId,referenceCount:frame.referenceCount,viewSize:frame.viewSize,warnings:result.warnings,renderStats:renderStats},entries:[{name:name,data:bytes}]};
+      referenceId:frame.referenceId,referenceCount:frame.referenceCount,topology:frame.topology,viewSize:frame.viewSize,warnings:result.warnings,renderStats:renderStats},entries:[{name:name,data:bytes}]};
   }
   async function renderTimestamp(p,index,render,cancel,adapter){
     if(!p||!Array.isArray(p.timesMs)||!Number.isInteger(index)||
@@ -271,7 +271,7 @@
         throw Error('Invalid PNG frame index or timestamp');
       if(p.presentation){
         var planned=compositor.frameAt(p.presentation,p.timesMs[index]),row=frame.row;
-        if(row.referenceId!==planned.referenceId||row.referenceCount!==planned.referenceCount||!row.viewSize||
+        if(row.referenceId!==planned.referenceId||row.referenceCount!==planned.referenceCount||row.topology!==planned.topology||!row.viewSize||
           row.viewSize.width!==planned.viewSize.width||row.viewSize.height!==planned.viewSize.height||
           !Array.isArray(row.warnings)||row.warnings.some(function(w){return typeof w!=='string';}))
           throw Error('Invalid presentation frame metadata');

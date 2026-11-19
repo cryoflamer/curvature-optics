@@ -27,7 +27,7 @@ function inside(r,b){assert.ok(r.x>=b.x&&r.y>=b.y&&r.x+r.width<=b.x+b.width+1e-8
 function overlap(a,b){return a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height;}
 
 test('fixed output geometry fits all presets, views and layout modes without overlap',()=>{
-  for(const width of [1280,1920,2560,3840])for(const compare of [true,false])for(const referenceLayout of ['side','below','hidden'])for(const showNarrative of [true,false])for(const layoutMode of ['fixed','dynamic'])for(const cameraHud of [true,false]){
+  for(const width of [1280,1920,2560,3840])for(const compare of [true,false])for(const referenceLayout of ['side','below','hidden','auto','stacked','wide'])for(const showNarrative of [true,false])for(const layoutMode of ['fixed','dynamic'])for(const cameraHud of [true,false]){
     const p=compose.plan(project(compare),{width,referenceLayout,showNarrative,layoutMode,cameraHud,cameraHudAppearance:{size:125,opacity:90,position:'bottom-right'}});
     const f=compose.frameAt(p,0),g=compose.frameAt(p,p.times[1].arrivalMs),h=compose.frameAt(p,p.durationMs);
     for(const frame of [f,g,h]){
@@ -78,7 +78,8 @@ test('painting preserves independent optics pixels, uses original and labels pro
     ['image',a.B.canvas,f.panels.B.viewport.x,f.panels.B.viewport.y,false],
     ['image',p.image,...Object.values(compose.contain(f.photoBox,1,1)),true]]);
   const text=out.calls.filter(c=>c[0]==='text').map(c=>c[1]);
-  for(const label of ['Reference · real observation · 1 / 2','Author: Unknown','License: Unknown','Source: Unknown','An actual observation.'])assert.ok(text.includes(label),label);
+  for(const label of ['Reference · real observation · 1 / 2','Actual photograph','An actual observation.'])assert.ok(text.includes(label),label);
+  assert.ok(!text.some(t=>t.includes(': Unknown')));
   assert.ok(text.some(t=>t.includes('Accurate RK4')));assert.ok(text.some(t=>t.includes(f.expected.A.atmosphere)));
   assert.equal(out.calls.at(-1)[0],'restore');
   const again=target(f);compose.paint(again,f,a,p);assert.deepEqual(again.calls,out.calls);
@@ -161,4 +162,36 @@ test('adaptive shares use original aspect ratios, preserve physical size and sta
   assert.ok(frame(1,4).viewSize.width>frame(4,1).viewSize.width);
   assert.ok(frame(1,4).photo.width<frame(4,1).photo.width);
   assert.throws(()=>compose.plan(raw,{referenceDimensions:[{id:'first',width:0,height:1}]}),/dimensions/);
+});
+
+test('Auto compares complete topologies and keeps Fixed geometry across originals',()=>{
+  const dimensions=[{id:'first',width:501,height:612},{id:'second',width:4000,height:1000},{id:'last',width:1176,height:791}];
+  for(const width of [1280,1920,2560,3840])for(const cameraHud of [true,false])for(const layoutMode of ['fixed','dynamic']){
+    const raw=project(),opts={width,layoutMode,cameraHud,referenceDimensions:dimensions};
+    const p=compose.plan(raw,{...opts,referenceLayout:'auto'});
+    const manual=['side','below','stacked','wide'].map(referenceLayout=>compose.plan(raw,{...opts,referenceLayout}));
+    const frames=[0,p.times[0].departureMs+1,p.times[1].arrivalMs,p.times[3].arrivalMs,p.durationMs].map(t=>compose.frameAt(p,t));
+    for(const f of frames){
+      if(!f.photo){assert.equal(f.topology,'models');continue;}
+      const candidates=manual.map(q=>compose.frameAt(q,f.timeMs));
+      assert.ok(candidates.some(q=>q.topology===f.topology));
+      const ratios=layoutMode==='dynamic'&&f.referenceId?dimensions.filter(d=>d.id===f.referenceId):dimensions;
+      const area=q=>ratios.reduce((sum,d)=>{const b=compose.contain(q.photoBox,d.width,d.height);return sum+b.width*b.height;},0)/ratios.length;
+      assert.ok(area(f)>=0.60*area(candidates[0])-1e-6);
+      const boxes=[...f.sides.map(s=>f.panels[s].viewport),f.photo,f.sceneCaption,f.cameraHud,f.narrative].filter(Boolean);
+      boxes.forEach((b,i)=>{inside(b,{x:0,y:0,width:f.width,height:f.height});boxes.slice(i+1).forEach(c=>assert.ok(!overlap(b,c)));});
+      const different=cameraSources(f);different.B.cameraModel.Nick=.125;
+      const out=target(f);compose.paint(out,f,different,f.referenceId?observation(f.referenceId,{title:'images.jfif',author:'Soundly'}):undefined);
+      const texts=out.calls.filter(c=>c[0]==='text').map(c=>c[1]);
+      assert.ok(!texts.includes('images.jfif'));if(f.referenceId)assert.ok(texts.includes('Author: Soundly'));
+      if(cameraHud){assert.ok(texts.includes('Camera · A'));assert.ok(texts.includes('Camera · B'));}
+    }
+    if(layoutMode==='fixed')for(const f of frames){assert.equal(f.topology,frames[0].topology);assert.deepEqual(f.panels,frames[0].panels);assert.deepEqual(f.photo,frames[0].photo);}
+  }
+  const raw=project();raw.keyframes[0].description='';raw.keyframes[0].narrativeTitle='';
+  const opts={width:1920,cameraHud:true,showNarrative:false,referenceDimensions:dimensions};
+  const stacked=compose.frameAt(compose.plan(raw,{...opts,referenceLayout:'stacked'}),0);
+  assert.equal(stacked.topology,'stacked');assert.equal(stacked.panels.A.panel.x,stacked.panels.B.panel.x);assert.ok(stacked.panels.B.panel.y>stacked.panels.A.panel.y);
+  const wide=compose.frameAt(compose.plan(raw,{...opts,referenceLayout:'wide'}),0);
+  assert.equal(wide.topology,'wide');assert.equal(wide.panels.A.panel.y,wide.panels.B.panel.y);assert.ok(wide.cameraHud.x>=wide.photo.x+wide.photo.width);
 });

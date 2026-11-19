@@ -1,3 +1,25 @@
+## Modern Demo Catalog — Adaptive Presentation Topologies (7D.2.2.3B.2)
+
+Issue #1: the user accepted B.1 on two real Full HD frames at 28.20 and
+35.40 s (672x378 per physical view with different original aspect ratios).
+The PNG export UI now defaults to Auto and offers Side by side, Stacked models
+(Compare), Photo + HUD below, Below, and Hidden. Auto compares complete
+geometries using physical pixels, mean contained original pixels (weight 0.5),
+and empty photo-box area (penalty 0.05); it retains at least 60% of the Side
+mean displayed original area. Fixed caches the same geometry for all frames;
+Dynamic may change on reference transitions. Infeasible manual topologies
+fall back to Side; the selected topology is recorded and validated per frame
+in the PNG manifest. Unknown provenance and filename-like titles are omitted
+from visible output only; all original metadata is retained in the manifest.
+For the supplied Soundly manifest Auto/Fixed plans 736x414 per model with
+Stacked at both timestamps; Auto/Dynamic plans Stacked 736x414 at 28.20 s and
+Photo + HUD below 816x459 at 35.40 s. These are geometry predictions, not
+acceptance of a rendered PNG. No crop, stretching, physics, RK4 or FOV changes.
+
+**Resume:** user acceptance on both actual PNGs, then B.3 (full timeline and
+transition acceptance), C (guide legibility and layout polish), presentation
+video. Explicit crop/cover is deferred until needed. Issue #1 stays open.
+
 ## Modern Demo Catalog — Adaptive Presentation Geometry (7D.2.2.3B.1)
 
 GitHub issue #1 tracks the adaptive layout stages. Full presentation PNG plans

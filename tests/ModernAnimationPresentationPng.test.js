@@ -29,7 +29,7 @@ test('asset identity is exact; hidden layout needs no originals and sequence cap
 });
 
 test('presentation HUD is composed externally, not burned into physical canvases',async()=>{
- const {project,record}=fixture(),p=png.plan(project,{presentation:{},referenceImages:[record],width:1920,height:1080,previewTimeMs:0,cameraHud:true});
+ const {project,record}=fixture(),p=png.plan(project,{presentation:{referenceLayout:'auto'},referenceImages:[record],width:1920,height:1080,previewTimeMs:0,cameraHud:true});
  const f=compositor.frameAt(p.presentation,0),out=canvas(p.width,p.height),photo={width:1,height:1},seen=[];
  const frame=await png.renderTimestamp(p,0,async(sample,side,d)=>{
    const c=canvas(d.width,d.height);seen.push({c,d});
@@ -39,4 +39,5 @@ test('presentation HUD is composed externally, not burned into physical canvases
  },null,{canvas:()=>out,observation:async r=>compositor.observation(r,photo)});
  assert.ok(seen.every(x=>x.d.showCaptions===false));assert.equal(out.calls.length,3);
  assert.equal(png.assemble(p,[frame]).manifest.presentation.cameraHudPlacement,'external');
+ assert.equal(frame.row.topology,f.topology);assert.throws(()=>png.assemble(p,[{...frame,row:{...frame.row,topology:'invalid'}}]),/metadata/);
 });

@@ -190,8 +190,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const photo = api.observation({version:1,id:'photo',title:'Synthetic test raster',
                 original:{dataUrl,width:300,height:400}}, image);
             const results = [];
-            for (const cameraHud of [false,true]) for (const referenceLayout of ['side', 'below', 'hidden']) {
-                const plan = api.plan(project, {width:1280,referenceLayout,layoutMode:'fixed',cameraHud,cameraHudAppearance:{size:125,position:'top-left',opacity:90}});
+            for (const cameraHud of [false,true]) for (const referenceLayout of ['side', 'below', 'hidden', 'auto', 'stacked', 'wide']) {
+                const plan = api.plan(project, {width:1280,referenceLayout,layoutMode:'fixed',referenceDimensions:[{id:'photo',width:300,height:400}],cameraHud,cameraHudAppearance:{size:125,position:'top-left',opacity:90}});
                 for (const time of [0, plan.times[1].arrivalMs]) {
                     const f = api.frameAt(plan,time), views = {};
                     for (const side of f.sides) {
@@ -216,7 +216,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                     }else if(f.photoBox){const r=f.photoBox;
                         results.push({kind:'blank',pixel:pixel(r.x+r.width/2,r.y+r.height/2)});
                     }
-                    if(painted.warnings.length)throw Error(painted.warnings.join(','));
+                    if(painted.warnings.length)throw Error(referenceLayout+' '+f.topology+' HUD='+cameraHud+' '+JSON.stringify(f.sceneCaption)+' '+painted.warnings.join(','));
                 }
             }
             image.close(); return results;
@@ -224,7 +224,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         colors = {'A': [255, 0, 0, 255], 'B': [0, 0, 255, 255],
                   'photo top': [255, 0, 255, 255], 'photo bottom': [0, 255, 0, 255],
                   'blank': [255, 255, 255, 255], 'hud': [232, 239, 245, 255]}
-        self.assertEqual(len(result), 42)
+        self.assertEqual(len(result), 90)
         for item in result:
             self.assertEqual(item['pixel'], colors[item['kind']], item)
 
@@ -381,7 +381,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                         presentation:{referenceLayout:'side'},referenceImages:[original]});}catch(e){limit=e.message;}
                     if(!limit?.includes('1479 requested; maximum 751'))throw Error('Unexpected sequence limit: '+limit);
                     const done=await controller.start({project,width:1280,height:720,fps:25,workerCount:1,
-                        presentation:{referenceLayout:'side',layoutMode:'fixed'},referenceImages:[original],previewTimeMs,cameraHud:true});
+                        presentation:{referenceLayout:'auto',layoutMode:'fixed'},referenceImages:[original],previewTimeMs,cameraHud:true});
                     if(done.manifest.presentation.cameraHudPlacement!=='external'||done.manifest.frames[0].warnings.some(w=>w.startsWith('camera')))throw Error('Presentation HUD: '+JSON.stringify(done.manifest.frames[0].warnings));
                     const image=await createImageBitmap(done.previewBlob),canvas=new OffscreenCanvas(image.width,image.height),ctx=canvas.getContext('2d');
                     ctx.drawImage(image,0,0);
@@ -400,7 +400,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const chunks=[],sink={closed:false,aborted:false,async write(part){chunks.push(part.slice());},
                     async close(){this.closed=true;},async abort(){this.aborted=true;}};
                 const stream=await controller.start({project:short,width:1280,height:720,fps:5,workerCount:2,
-                    presentation:{referenceLayout:'side'},referenceImages:[original],sink,cameraHud:true});
+                    presentation:{referenceLayout:'auto'},referenceImages:[original],sink,cameraHud:true});
                 const zip=new Blob(chunks,{type:'application/zip'}),data=await new Promise(resolve=>{
                     const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(zip);
                 });

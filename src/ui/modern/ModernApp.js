@@ -3049,8 +3049,8 @@
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1',
-        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1',
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1',
+        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller,cancelled:false},sink=null,ownedSink=false;
       clearPreview();
