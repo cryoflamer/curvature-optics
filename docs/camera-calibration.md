@@ -613,6 +613,21 @@ residuals cannot certify correct identity, and downweighting cannot repair
 a coherent but wrong assignment. No robust-loss production change is
 justified until measured results and practical editor needs are reviewed.
 
-Execution and numerical conclusions are pending CI; no local run was
-available when committing these tests. Review the diagnostic output before
-proceeding to 8A.4.4b (independent renderer parity near the horizon).
+Execution completed in CI (see results below).
+
+## 8A.4.4a — Results and authoring decision
+
+CI run 44568506091 passed all three jobs; Node reported 2060 tests, 2059 passed, 0 failed (one not passed). Both new research tests passed.
+
+| Scene / wrong matches | Unweighted training RMS px | Held-out RMS px: unweighted / Huber pass 2 / reviewed | Position error m: unweighted / Huber pass 2 / reviewed | Wrong-match residual ranks (unweighted) |
+| --- | ---: | ---: | ---: | --- |
+| Near / 0 | 0.784 | 1.229 / — / — | 55.7 / — / — | — |
+| Near / 1 | 17.014 | 13.406 / 2.550 / 1.359 | 565 / 131 / 61 | 1 |
+| Near / 3 | 42.181 | 49.149 / 19.815 / 1.566 | 526 / 384 / 9.6 | 2,3,1 |
+| Distant / 0 | 0.963 | 0.831 / — / — | 2347 / — / — | — |
+| Distant / 1 | 1.012 | 1.057 / 1.057 / 0.875 | 3294 / 3294 / 2461 | 3 |
+| Distant / 3 | 1.558 | 3.717 / 3.742 / 0.836 | 5538 / 5941 / 2015 | 11,10,2 |
+
+Blind and truth-start unweighted scores agreed to numerical precision in all six scenarios (near three-error run reached iteration limit; distant truth-start converged while blind stalled at virtually identical scores). Residual magnitude is useful for review, not an identity classifier. The distant clean case already has poor pose conditioning. The reviewed weights use injected labels, not automatic identification; weighted and raw training RMS are not interchangeable. Two Huber passes improved near validation but did not help distant mismatches. This is only one noise realization per scene; no general robustness claim.
+
+Decision: no production robust-loss change now. The editor should show raw residual vectors and rankings, allow manual correction and weighting, retain independent validation, support known-parameter locks and visual whole-scene review. Proceed to bounded 8A.4.4b; revisit robust fitting only if practical authoring needs it. Review termination labels in 8A.4.4c.

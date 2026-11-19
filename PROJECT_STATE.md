@@ -1,3 +1,7 @@
+## 8A.4.4a — Completed; next 8A.4.4b
+
+CI 44568506091 passed all three jobs. Near wrong matches ranked first/top three and manual reviewed weights restored held-out RMS to 1.36/1.57 px. Distant wrong matches can rank 10th/11th; three mismatches give 1.56 px training RMS despite 5.54 km position error. Two Huber passes did not improve distant results; reviewed weights restore held-out RMS to 0.84 px but pose remains ill-conditioned. No production robust-loss change; residual vectors/ranking, manual correction/weights, locks and independent validation belong in editor. Blind and truth-start scores nearly identical, termination differs; review in 8A.4.4c. Full table in docs/camera-calibration.md.
+
 ## 8A.4.4a — Incorrect correspondence qualification (CI pending)
 
 Added two deterministic synthetic research tests in CameraCalibration.test.js: near spatial/vacuum and distant Standard, fixed physics, 1 px noise, one or three incorrect feature matches. Compare unweighted blind recovery, truth-start control, manually reviewed weights using injected labels, and two exploratory Huber reweighting passes. Report residual ranking, pose error, clean-reference and held-out scores without dropping points. No production algorithm changes. Local execution unavailable; review CI diagnostics before advancing to 8A.4.4b. See docs/camera-calibration.md.
