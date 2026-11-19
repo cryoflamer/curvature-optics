@@ -1,3 +1,29 @@
+## 8B.4 — Full-scene model preview and interactive correspondence picking
+
+The Photo Calibration workspace now paints the actual Canvas Direct renderer
+on a detached raster, using the fixed scene and shared photo camera/projector
+convention (Eye-Lvl). The preview has the photo's approximate aspect ratio
+at a bounded 1200-pixel long edge; before photo selection it uses the panel
+aspect. Each canvas has independent pan/zoom/fit, with no changes to camera
+pose. On the photo choose an original pixel, then hover/click a model vertex
+to create a numbered, color-matched pair immediately. The existing table
+supports editing/reselection, weights and deletion; manual bank/object/
+primitive menus remain a fallback. Optional landmark dots make the available
+targets visible. Coincident authored vertices are deduplicated by their
+physical position; distinct nearby 3D candidates require explicit selection.
+The model raster is repainted only when starting a scene or loading a photo;
+pan/zoom and markers operate on the cached raster.
+
+The picking list contains in-frame, terrain-eligible projected authored
+vertices, not depth-tested visibility. Canvas Direct painter ordering/masks
+are approximate and self/mutual occlusion is not certified. No new optics
+algorithm, camera solver, overlay, keyframe scene import, durable draft or
+automatic visibility segmentation. Photo points can be edited via the table;
+direct marker dragging and temporary exclusion remain later refinements.
+Added Node tests for viewport transforms and ambiguity, plus a real Chromium
+pointer-picking test. Previous renderer-path parity tests remain unchanged.
+JS syntax checked; CI pending.
+
 ## 8B.3 — Dedicated Photo Calibration workspace
 
 The former modal is now a peer workspace in the main navigation. It reuses the

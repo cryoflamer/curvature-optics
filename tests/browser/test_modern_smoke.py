@@ -605,6 +605,71 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
         dialog.locator('#ModernCalibrationClose').click()
 
+    def test_photo_calibration_full_scene_picking(self):
+        import base64
+        self.open_modern()
+        self.page.wait_for_function("!document.getElementById('ModernPhotoCalibrationOpen').disabled")
+        self.page.evaluate("""() => {
+            const m=CurvatureModernApp.getModel();
+            Object.assign(m,{Height:12,CameraEast:20,CameraNorth:90,Pan:1.2,Nick:.2,Roll:3,
+                FocalLengthField:110,viewcenterHorizon:3,showModel:1,showGrid:0,
+                ObjType:[3,3],NObjects:[1,0],ObjDist:[1700,0],ObjSidePos:[6,0],ObjSize:[23,64]});
+            m.Update();
+        }""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace.locator('#ModernCalibrationModelStatus')).to_contain_text('Canvas Direct')
+        encoded=self.page.evaluate("""() => {
+            const c=document.createElement('canvas');c.width=1200;c.height=900;
+            c.getContext('2d').fillRect(0,0,1200,900);return c.toDataURL().split(',')[1];
+        }""")
+        workspace.locator('#ModernCalibrationFile').set_input_files(
+            {'name':'reference.png','mimeType':'image/png','buffer':base64.b64decode(encoded)})
+        expect(workspace.locator('#ModernCalibrationStatus')).to_contain_text('1200 × 900')
+        before=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document),p=e.preview();
+            return {valid:p.valid,count:p.points.length,
+              pose:JSON.stringify([e.snapshot().model.Height,e.snapshot().model.Pan,e.snapshot().model.FocalLengthField])};
+        }""")
+        self.assertTrue(before['valid'])
+        self.assertGreater(before['count'],0)
+        photo=workspace.locator('#ModernCalibrationPhoto')
+        photo.click(position={'x':photo.bounding_box()['width']/2,'y':photo.bounding_box()['height']/2})
+        model=workspace.locator('#ModernCalibrationMesh')
+        model.hover()
+        self.page.mouse.wheel(0,-1000)
+        # Actual pointer coordinates are derived from the backing-store viewport,
+        # not from the photo raster or the physical camera parameters.
+        hit=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document),p=e.preview();
+            const c=document.getElementById('ModernCalibrationMesh'),r=c.getBoundingClientRect();
+            const a=CurvatureModernPhotoCalibrationEditor;
+            const candidates=p.points.map(item=>({item,xy:a.screenPoint(p.view,item.pixel)}))
+              .filter(q=>q.xy[0]>12&&q.xy[0]<c.width-12&&q.xy[1]>12&&q.xy[1]<c.height-12);
+            const q=candidates[0];
+            if(!q)throw Error('No candidate in visible model viewport');
+            const hits=a.snapCandidates(p.points,p.view,...q.xy,10*c.width/r.width,2*c.width/r.width);
+            return {x:q.xy[0]*r.width/c.width,y:q.xy[1]*r.height/c.height,ids:hits.map(h=>h.landmark.id)};
+        }""")
+        model.hover(position={'x':hit['x'],'y':hit['y']})
+        expect(workspace.locator('#ModernCalibrationPickStatus')).to_contain_text('Bank')
+        model.click(position={'x':hit['x'],'y':hit['y']})
+        conflict=workspace.locator('#ModernCalibrationPickConflict')
+        if conflict.is_visible():
+            workspace.locator('#ModernCalibrationConfirmPick').click()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        result=self.page.evaluate("""() => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
+            return {id:s.observations[0].landmark.id,pixel:s.observations[0].pixel,
+                pose:JSON.stringify([s.model.Height,s.model.Pan,s.model.FocalLengthField])};
+        }""")
+        self.assertIn(result['id'],hit['ids'])
+        self.assertAlmostEqual(result['pixel'][0],600,delta=3)
+        self.assertAlmostEqual(result['pixel'][1],450,delta=3)
+        self.assertEqual(result['pose'],before['pose'])
+        workspace.locator('#ModernCalibrationFitModel').click()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+
     def test_photo_calibration_existing_originals(self):
         self.open_modern()
         self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")

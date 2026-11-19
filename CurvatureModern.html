@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2&amp;spline-easing=1&amp;preset-navigation=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;atmosphere-switcher=1&amp;reference-library=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;presentation-cleanup=1&amp;photo-workspace=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2&amp;spline-easing=1&amp;preset-navigation=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;atmosphere-switcher=1&amp;reference-library=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;presentation-cleanup=1&amp;photo-workspace=1&amp;scene-picking=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -151,7 +151,7 @@
   <section id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle" hidden>
     <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · correspondence editor</p></div><button type="button" id="ModernCalibrationClose">Back to Scene</button></header>
     <p id="ModernCalibrationScene"></p>
-    <p>Choose a reference pixel and a known model vertex. The source is the retained Scene, and its geometry and atmosphere are fixed until New session.</p>
+    <p>Click a point on the photograph, then the matching point on the model. Scene geometry and atmosphere are fixed until New session.</p>
     <div class="modern-calibration-toolbar">
       <label>Reference photo <input type="file" id="ModernCalibrationFile" accept="image/png,image/jpeg,image/webp"></label>
       <button type="button" id="ModernCalibrationReset" title="Discard the draft and capture the latest Scene">New session</button>
@@ -172,11 +172,23 @@
           <label>Pixel Y <input id="ModernCalibrationY" type="number" step="any"></label>
         </div>
       </section>
-      <section><h3>Model vertex</h3><p>Magnified preview of selected object (Canvas Direct). Select a vertex or click the preview.</p>
-        <label>Bank <select id="ModernCalibrationBank"></select></label>
-        <label>Object <select id="ModernCalibrationObject"></select></label>
-        <label>Vertex <select id="ModernCalibrationVertex"></select></label>
-        <canvas id="ModernCalibrationMesh" width="400" height="340" aria-label="Selected model object"></canvas>
+      <section><h3>Model · Canvas Direct</h3><p>Hover to snap · click to pair · drag to pan · wheel to zoom.</p>
+        <canvas id="ModernCalibrationMesh" width="800" height="540" aria-label="Full model scene"></canvas>
+        <div class="modern-calibration-toolbar">
+          <button type="button" id="ModernCalibrationFitModel">Fit model</button>
+          <label><input type="checkbox" id="ModernCalibrationShowLandmarks"> Show landmarks</label>
+        </div>
+        <p id="ModernCalibrationModelStatus" role="status"></p>
+        <p id="ModernCalibrationPickStatus" aria-live="polite">Click a photo point, then its matching model vertex.</p>
+        <div id="ModernCalibrationPickConflict" class="modern-calibration-toolbar" hidden>
+          <label>Nearby model vertices <select id="ModernCalibrationPickOptions"></select></label>
+          <button type="button" id="ModernCalibrationConfirmPick">Use selected vertex</button>
+        </div>
+        <details class="modern-calibration-landmark-menu"><summary>Landmark menu (manual fallback)</summary>
+          <label>Bank <select id="ModernCalibrationBank"></select></label>
+          <label>Object <select id="ModernCalibrationObject"></select></label>
+          <label>Vertex <select id="ModernCalibrationVertex"></select></label>
+        </details>
         <div class="modern-calibration-toolbar">
           <label>Weight <input id="ModernCalibrationWeight" type="number" min="0.001" step="any" value="1"></label>
           <button type="button" id="ModernCalibrationAdd" disabled>Add pair</button>
@@ -187,7 +199,7 @@
     <p id="ModernCalibrationStatus" role="status"></p>
     <h3 id="ModernCalibrationCount">0 correspondences</h3>
     <table><thead><tr><th>#</th><th>Landmark</th><th>Original pixels</th><th>Weight</th><th>Actions</th></tr></thead><tbody id="ModernCalibrationPairs"></tbody></table>
-    <p>Session-only draft · retained across workspace switches, not page reload. Full-scene picking, camera solving and saving follow in the next stages.</p>
+    <p>Session-only draft · retained across workspace switches, not page reload. Camera solving, overlay and saving follow in the next stages.</p>
   </section>
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>

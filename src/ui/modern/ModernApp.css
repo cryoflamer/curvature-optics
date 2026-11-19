@@ -1480,3 +1480,10 @@ button{cursor:pointer}
 .modern-photo-calibration th,.modern-photo-calibration td { padding:6px; border-bottom:1px solid #dce5ef; }
 .modern-photo-calibration td button { margin-right:6px; }
 @media(max-width:760px){.modern-photo-calibration{width:calc(100% - 20px);padding:12px}.modern-calibration-grid{grid-template-columns:1fr}.modern-app.is-photo-calibration .modern-share-actions{display:none}}
+
+/* Full-scene picking, with a separate viewport transform on each canvas. */
+.modern-photo-calibration #ModernCalibrationPickConflict[hidden]{display:none!important}
+.modern-calibration-landmark-menu{padding:8px 0;color:#355b82}
+.modern-calibration-landmark-menu summary{cursor:pointer;font-weight:600}
+.modern-photo-calibration #ModernCalibrationModelStatus,.modern-photo-calibration #ModernCalibrationPickStatus{font-size:12px;color:#516e85;margin:6px 0;min-height:1.4em}
+.modern-photo-calibration #ModernCalibrationMesh{background:#0b141e}

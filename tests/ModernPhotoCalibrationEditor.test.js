@@ -40,3 +40,17 @@ test('photo choices retain project/frame links and isolate built-in IDs from lib
   assert.equal(choices[2].demoId,'soundly');
   assert.equal(JSON.stringify([local,projects,demos]),before);
 });
+
+test('preview raster preserves aspect and model snap is independent of viewport zoom/pan',()=>{
+  assert.deepEqual(editor.previewSize(4000,3000),{width:1200,height:900});
+  assert.deepEqual(editor.previewSize(800,1200),{width:800,height:1200});
+  const point=(id,pixel,worldKey)=>({landmark:{id},pixel,worldKey});
+  const points=[point('a',[10,20],'1'),point('duplicate',[10,20],'1'),
+    point('b',[10.2,20],'2'),point('far',[50,20],'3')];
+  const v={x:15,y:25,scale:2};
+  const center=editor.screenPoint(v,[10,20]);
+  assert.deepEqual(editor.snapCandidates(points,v,...center).map(p=>p.landmark.id),['a','b']);
+  const z={x:140,y:-5,scale:20};
+  assert.deepEqual(editor.snapCandidates(points,z,...editor.screenPoint(z,[10,20])).map(p=>p.landmark.id),['a']);
+  assert.deepEqual(editor.snapCandidates(points,v,0,0),[]);
+});
