@@ -24,7 +24,9 @@ importScripts(
   '../app/CurvaturePhysicalCamera.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
   '../renderers/CurvatureCanvasDirectPreview.js',
-  'CameraLandmarkProjection.js?vertex-scale=1',
+  'CameraMaterialAnchor.js',
+  'CameraMaterialAnchorResolver.js?projection-bank=1',
+  'CameraLandmarkProjection.js?vertex-scale=1&material-projection=1',
   'CameraPhysicalPose.js',
   'CameraPhysicalFit.js?progress=1&vertex-scale=1'
 );

@@ -1,3 +1,25 @@
+## 8F.4c — Globe optical material anchor projection
+
+8F.4b CI run 44639073304 passed. CameraLandmarkProjection accepts canonical
+Vertex, Edge and Surface descriptors in the existing Globe projection
+paths. Bind each method-specific bank once against physical ordered
+owner/primitive topology; retain a private coordinate snapshot and
+interpolate corresponding authored vertices with the same weights.
+Accurate uses physical Height-subtracted geometry and existing shooting;
+Canvas Direct uses virtual effective-radius geometry at Height=0.
+Explicit invalid_anchor status for invalid signatures/topology or
+degenerate target primitives; terrain and raster statuses unchanged.
+No mutual mesh occlusion claim. Legacy metric/vertex and Flat behavior
+unchanged. Browser/worker dependencies prepared; fit/editor and portable
+schemas not switched. Added focused painter/inverse, Accurate metric,
+bank validation and projection status regressions. All four passed in a
+headless JS harness, including 54 material forward/inverse painter round
+trips. Actual point projection, ray shooting and Canvas Direct modules
+were executed; six unrelated full-scene dependencies were guarded with
+throwing stubs and never accessed (connector call limit). Native Node and
+Chromium full CI pending.
+Next: 8F.4d.
+
 ## 8F.4b — Physical material anchor resolution and legacy parity
 
 8F.4a CI run 44636614904 passed. Added CameraMaterialAnchorResolver:

@@ -12,10 +12,11 @@
     root.CurvatureTargetProjection||require('../optics/OpticalTargetProjection'),
     root.CurvatureOpticalEffectiveRadiusPreview||require('../optics/OpticalEffectiveRadiusPreview'),
     root.CurvatureCanvasDirectPreview||require('../renderers/CurvatureCanvasDirectPreview'),
-    root.CurvatureCanvasProjection||require('../renderers/CurvatureCanvasProjection'));
+    root.CurvatureCanvasProjection||require('../renderers/CurvatureCanvasProjection'),
+    root.CurvatureCameraMaterialAnchorResolver||require('./CameraMaterialAnchorResolver'));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureCameraLandmarkProjection=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(engine,surfaces,translation,silhouette,physical,shoot,effective,direct,viewport){
+}(typeof globalThis!=='undefined'?globalThis:this,function(engine,surfaces,translation,silhouette,physical,shoot,effective,direct,viewport,materialResolver){
   'use strict';
   function sub(a,b){return a.map(function(v,i){return v-b[i];});}
   function dot(a,b){return a.reduce(function(s,v,i){return s+v*b[i];},0);}
@@ -107,14 +108,35 @@
       var w=surface.surfacePoint3(p.east,p.north,p.height);if(!params)w[2]-=eye;
       return fromWorld(id,w);
     }
+    // Physical topology authenticates identity; the method-specific bank
+    // supplies coordinates with the existing Height convention.
+    var resolver=null,materialBanks=new Map();
+    function material(kind,p){
+      var id=idOf(p);
+      if(!globe)return result(id,'invalid_anchor',null,'Material anchors require Globe');
+      var world;
+      try{
+        if(!p.anchor)throw TypeError('Material anchor required');
+        var b=p.anchor.owner&&p.anchor.owner.bank;
+        if(!resolver)resolver=materialResolver.create(m);
+        if(!materialBanks.has(b))materialBanks.set(b,resolver.bindProjectionBank(b,bank(b)));
+        world=materialBanks.get(b).point(kind,p);
+      }catch(error){
+        if(!(error instanceof TypeError||error instanceof RangeError))throw error;
+        return result(id,'invalid_anchor',null,error.message);
+      }
+      return fromWorld(id,world);
+    }
     function vertex(p){
+      if(p&&Object.prototype.hasOwnProperty.call(p,'anchor'))return material('vertex',p);
       var id=idOf(p),primitives=bank(p.bank);
       if(p.objectType!==m.ObjType[p.bank]||!Number.isInteger(p.primitive)||p.primitive<0||
         !Number.isInteger(p.vertex)||p.vertex<0||!primitives[p.primitive]||!primitives[p.primitive].points[p.vertex])
         throw RangeError('Landmark does not match authored mesh topology');
       return fromWorld(id,primitives[p.primitive].points[p.vertex]);
     }
-    return Object.freeze({metric:metric,vertex:vertex});
+    return Object.freeze({metric:metric,vertex:vertex,
+      edge:function(p){return material('edge',p);},surface:function(p){return material('surface',p);}});
   }
   // Characteristic horizontal ranges for the numerical coordinate scale,
   // measured on the fixed authored physical scene, not from its origin.

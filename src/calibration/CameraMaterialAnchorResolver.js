@@ -131,6 +131,34 @@
       }
       return {anchor:a,bank:a.owner.bank,index:i,point:materialPoint(p,a.indices,a.weights)};
     }
+    // Bind by the complete ordered physical topology, retaining a private
+    // target-coordinate snapshot. Never triangulate the virtual mesh anew.
+    function bindProjectionBank(b,primitives){
+      const physical=bank(b);
+      if(!Array.isArray(primitives)||primitives.length!==physical.ids.length)
+        fail('Projection bank topology mismatch');
+      const owned=primitives.map((p,i)=>{
+        const id=primitiveIdentity(p,b);
+        if(JSON.stringify(id)!==JSON.stringify(physical.ids[i]))fail('Projection bank topology mismatch');
+        return {points:p.points.map(q=>q.slice())};
+      });
+      return Object.freeze({point(kind,value){
+        const q=resolveLandmark(kind,value);
+        if(q.bank!==b)fail('Projection bank identity mismatch');
+        const p=owned[q.index],a=q.anchor,pts=a.indices.map(i=>p.points[i]);
+        const d=(u,v)=>u.map((x,i)=>x-v[i]);
+        if(a.kind!=='vertex'){
+          const u=d(pts[1],pts[0]),lu=Math.hypot(...u);
+          if(!(lu>1e-10))fail('Degenerate projected edge');
+          if(a.kind==='surface'){
+            const v=d(pts[2],pts[0]),lv=Math.hypot(...v);
+            const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+            if(!(lv>1e-10)||Math.hypot(...n)<=lu*lv*1e-12)fail('Degenerate projected triangle');
+          }
+        }
+        return materialPoint(p,a.indices,a.weights);
+      }});
+    }
     function upgradeLegacy(value){
       const v=anchor.legacyVertex(value),b=bank(v.bank),id=b.ids[v.primitive];
       if(!id||v.objectType!==id.owner.objectType||v.vertex>=b.physical[v.primitive].points.length)
@@ -147,7 +175,7 @@
       if(hit.index!==q.index)fail('Pick primitive identity mismatch');
       return l;
     }
-    return Object.freeze({signature:b=>bank(b).signature,resolve,resolveLandmark,upgradeLegacy,fromPick});
+    return Object.freeze({signature:b=>bank(b).signature,resolve,resolveLandmark,upgradeLegacy,fromPick,bindProjectionBank});
   }
   return Object.freeze({create,sha256Ascii,LAYOUT,REFERENCE_RADIUS});
 }));

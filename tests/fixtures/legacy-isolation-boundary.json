@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 123,
-      "uniqueScripts": 121,
+      "scriptTags": 125,
+      "uniqueScripts": 123,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -236,6 +236,8 @@
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
+        "src/calibration/CameraMaterialAnchor.js",
+        "src/calibration/CameraMaterialAnchorResolver.js",
         "src/calibration/CameraLandmarkProjection.js",
         "src/calibration/CameraPhysicalPose.js",
         "src/ui/modern/ModernLandmarkViewer.js",
@@ -400,6 +402,8 @@
       "src/animation/ModernReferenceImage.js",
       "src/animation/ModernReferenceImageLibrary.js",
       "src/calibration/CameraLandmarkProjection.js",
+      "src/calibration/CameraMaterialAnchor.js",
+      "src/calibration/CameraMaterialAnchorResolver.js",
       "src/calibration/CameraPhysicalPose.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
@@ -470,8 +474,6 @@
       "src/calibration/CameraCalibration.js",
       "src/calibration/CameraCalibrationWorker.js",
       "src/calibration/CameraFocalSweep.js",
-      "src/calibration/CameraMaterialAnchor.js",
-      "src/calibration/CameraMaterialAnchorResolver.js",
       "src/calibration/CameraPerspectiveSeed.js",
       "src/calibration/CameraPhysicalFit.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
@@ -1340,13 +1342,16 @@
       "commonJsTestCallers": [
         "tests/CameraCalibration.test.js",
         "tests/CameraLandmarkProjection.test.js",
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraPhysicalFit.test.js",
         "tests/CameraPhysicalPose.test.js"
       ],
       "commonJsToolCallers": []
     },
     "src/calibration/CameraMaterialAnchor.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [
         "src/calibration/CameraMaterialAnchorResolver.js"
       ],
@@ -1356,9 +1361,14 @@
       "commonJsToolCallers": []
     },
     "src/calibration/CameraMaterialAnchorResolver.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraLandmarkProjection.js"
+      ],
       "commonJsTestCallers": [
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraMaterialAnchorResolver.test.js"
       ],
       "commonJsToolCallers": []
@@ -1736,6 +1746,7 @@
         "src/ui/modern/ModernLandmarkViewer.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraMaterialAnchorResolver.test.js",
         "tests/CurvatureEarClip.test.js",
         "tests/CurvatureModeSemantics.test.js",
@@ -1762,6 +1773,7 @@
       "commonJsTestCallers": [
         "tests/CameraCalibration.test.js",
         "tests/CameraLandmarkProjection.test.js",
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraMaterialAnchorResolver.test.js",
         "tests/CurvatureBedford.test.js",
         "tests/CurvatureControlledGeometryParity.test.js",
@@ -1844,6 +1856,7 @@
       ],
       "commonJsTestCallers": [
         "tests/CameraLandmarkProjection.test.js",
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraPhysicalFit.test.js",
         "tests/CameraPhysicalPose.test.js",
         "tests/CurvatureCameraTranslation.test.js",
@@ -2358,6 +2371,7 @@
         "src/calibration/CameraLandmarkProjection.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/ModernCanvasDirectAtmosphericParity.test.js",
         "tests/ModernCanvasDirectOrientationParity.test.js",
         "tests/ModernCanvasDirectPreview.test.js"
@@ -3384,6 +3398,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/CameraMaterialAnchorProjection.test.js",
         "tests/ModernLandmarkViewer.test.js"
       ],
       "commonJsToolCallers": []
