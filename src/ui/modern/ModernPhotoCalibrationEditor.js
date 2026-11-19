@@ -349,9 +349,39 @@
       objectPicker=$('ModernCalibrationObjectPicker'),objectControls=$('ModernCalibrationObjectControls'),
       objectSelectionStatus=$('ModernCalibrationObjectSelection'),clearObject=$('ModernCalibrationClearObject');
     let packages=new Map(),selectedObjectKey=null;
-    const viewerButton=$('ModernCalibrationOpenViewer'),viewer=env.CurvatureModernLandmarkViewer.mount($('ModernCalibrationViewer'));
+    const viewerButton=$('ModernCalibrationOpenViewer'),viewer=env.CurvatureModernLandmarkViewer.mount($('ModernCalibrationViewer'),saveMagnifier);
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
-    let cropSource=null,regionDrag=null;
+    let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
+    const MAGNIFIER_KEY='curvature-calibration-magnifier-v1';
+    function newMagnifierSession(){
+      magnifierSessionId=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+      pendingMagnifier=null;
+      try{env.localStorage.removeItem(MAGNIFIER_KEY);}catch(error){/* Optional UI storage. */}
+    }
+    function saveMagnifier(){
+      if(restoring||!magnifierSessionId||pendingMagnifier)return;
+      try{
+        const session=viewer.sessionSnapshot();
+        if(!session||!cropSource){env.localStorage.removeItem(MAGNIFIER_KEY);return;}
+        env.localStorage.setItem(MAGNIFIER_KEY,JSON.stringify({id:magnifierSessionId,source:JSON.stringify(cropSource),session}));
+      }catch(error){/* Optional UI storage. */}
+    }
+    function readMagnifier(){
+      try{
+        const saved=JSON.parse(env.localStorage.getItem(MAGNIFIER_KEY));
+        if(saved?.id===magnifierSessionId&&saved.source===JSON.stringify(cropSource))return saved.session;
+      }catch(error){/* Invalid or unavailable optional UI storage. */}
+      return null;
+    }
+    function restoreMagnifier(){
+      if(workspace.hidden||!pendingMagnifier||!cropSource||viewBest)return;
+      const saved=pendingMagnifier;pendingMagnifier=null;
+      try{
+        const r=saved.region;
+        if(!r||![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.x<0||r.y<0||r.width<=0||r.height<=0||r.x+r.width>cropSource.width+1e-6||r.y+r.height>cropSource.height+1e-6)throw Error('Invalid stored region');
+        pickMode.value='magnifier';openRegion(r);viewer.restoreSession(saved);updateHint();meshDraw();
+      }catch(error){viewer.close();pickStatus.textContent='Magnifier session discarded: '+error.message;}
+    }
     const cropRenderer=env.CurvatureCanvasDirectPreview.create();
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
@@ -393,7 +423,7 @@
     function persist(){
       if(restoring||!scene)return;
       const data=JSON.parse(JSON.stringify({version:1,scene:{model:scene.model,physics:scene.physics},
-        record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),
+        record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),magnifierSessionId,
         weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
@@ -420,6 +450,7 @@
           record=d.record;image=decoded;activeSource=d.activeSource;
         }
         showScene(next);
+        magnifierSessionId=typeof d.magnifierSessionId==='string'?d.magnifierSessionId:magnifierSessionId;
         if(record){photoDetails(record,activeSource);fitPhoto();}
         if(d.view)view=d.view;
         if(d.modelView&&previewValid)modelView=d.modelView;
@@ -432,10 +463,11 @@
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
           try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model),d.fitStatus,!!d.viewBest);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
+        pendingMagnifier=readMagnifier();
         message('Calibration draft restored.');
         $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
-      finally{restoring=false;syncFitControls();}
+      finally{restoring=false;if(scene&&!magnifierSessionId)newMagnifierSession();syncFitControls();restoreMagnifier();}
     }
     async function refreshSources(){
       const token=++catalogToken;
@@ -477,7 +509,7 @@
       if(token!==loadToken)return false;
       if(decoded.naturalWidth!==next.original.width||decoded.naturalHeight!==next.original.height)
         throw Error('Reference image decoded dimensions mismatch');
-      record=next;image=decoded;activeSource=source;rows=[];activePair=null;undoStack=[];resetPending();refreshRows();fitPhoto();renderModel();
+      newMagnifierSession();record=next;image=decoded;activeSource=source;rows=[];activePair=null;undoStack=[];resetPending();refreshRows();fitPhoto();renderModel();
       photoDetails(next,source);
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
       persist();return true;
@@ -766,7 +798,7 @@
     }
     viewerButton.onclick=openViewer;
     // The floating window is fixed-position but owned by this workspace.
-    new env.MutationObserver(()=>{if(workspace.hidden){cancelRegion();viewer.close();}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+    new env.MutationObserver(()=>{if(workspace.hidden){cancelRegion();pendingMagnifier=null;viewer.close();}else restoreMagnifier();}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
     function cancelRegion(){const d=regionDrag;regionDrag=null;if(d&&sceneCanvas.hasPointerCapture(d.id))sceneCanvas.releasePointerCapture(d.id);}
     function openRegion(region){
       if(!cropSource||!region)return;
@@ -937,7 +969,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      cancelRegion();viewer.close();scene=next;selectedObjectKey=null;pickMode.value='vertex';
+      cancelRegion();viewer.close();if(!restoring)newMagnifierSession();scene=next;selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);

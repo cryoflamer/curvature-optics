@@ -317,3 +317,17 @@ test('surface vertex snap considers the whole authored polygon, edge snap only e
   assert.deepEqual(viewer.adjustPoint(mesh,edge,edge.weights,'vertex').indices,[0]);
   assert.deepEqual(viewer.adjustPoint(mesh,{...edge,indices:[3,0]},[.5,.5],'vertex').indices,[0]);
 });
+
+test('stored magnifier view and anchors are validated against authored geometry',()=>{
+  const state={...viewer.reset(),yaw:.3,pitch:-.2,zoom:2,pan:[10,-20],projection:'perspective',wireframe:true};
+  assert.deepEqual(viewer.restoreView(state),state);
+  for(const bad of [{...state,zoom:0},{...state,pan:[NaN,0]},{...state,projection:'other'}]){
+    let rejected=false;try{viewer.restoreView(bad);}catch(e){rejected=true;}assert.ok(rejected);
+  }
+  const f=frameFixture([pickItem([[-2,-2,0],[2,-2,0],[2,2,0],[-2,2,0]],3,0)]);
+  const mesh=f.entries.map(e=>e.entry),hit=viewer.framePick(f,[50,50],'surface').candidates[0];
+  assert.deepEqual(viewer.restorePoint(mesh,hit),hit);
+  for(const bad of [{...hit,indices:[0,0,1]},{...hit,point:[99,0,0]},{...hit,weights:[2,0,-1]}]){
+    let rejected=false;try{viewer.restorePoint(mesh,bad);}catch(e){rejected=true;}assert.ok(rejected);
+  }
+});

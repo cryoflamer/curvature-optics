@@ -199,6 +199,12 @@ Snap vertex uses true metric distance to an edge endpoint or any original
 vertex of the selected polygon, not maximum barycentric weight.
 Keep original indices and weights; no internal triangulation edge as
 authored edge. No committed calibration data until 8F.5.
+#### 8F.3c.1 — Magnifier session persistence (implemented)
+Restore the open crop and local view/selection after reload, bound to the
+captured calibration draft and exact crop source. Validate recovered points
+against regenerated physical geometry. Keep window rect and orbit sensitivity
+as existing UI preferences. Clear on explicit close or experiment replacement.
+No portable experiment schema change.
 #### 8F.3d — Scene View optical picking
 Audit inverse mapping against the actual Canvas Direct projection, including
 effective-radius Globe and signed nonlinear Flat embedding. Resolve material

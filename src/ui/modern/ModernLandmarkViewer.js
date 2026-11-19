@@ -538,7 +538,29 @@
     const scale=Math.min(Math.max(1,Number(dpr)||1),2,2048/Math.max(1,width,height));
     return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
   }
-  function mount(dialog){
+  function restoreView(input){
+    if(!input||![input.yaw,input.pitch,input.zoom,...(Array.isArray(input.pan)?input.pan:[])].every(Number.isFinite)||
+      !Array.isArray(input.pan)||input.pan.length!==2||Math.abs(input.yaw)>Math.PI+1e-9||Math.abs(input.pitch)>Math.PI/2+1e-9||
+      input.zoom<.1||input.zoom>100||input.pan.some(x=>Math.abs(x)>1e8)||!['orthographic','perspective'].includes(input.projection)||
+      typeof input.wireframe!=='boolean'||typeof input.spans!=='boolean')throw Error('Invalid stored viewer camera');
+    return {yaw:input.yaw,pitch:input.pitch,zoom:input.zoom,pan:input.pan.slice(),projection:input.projection,wireframe:input.wireframe,spans:input.spans};
+  }
+  function restorePoint(mesh,hit){
+    if(hit===null||hit===undefined)return null;
+    const e=mesh[hit.order],n={vertex:1,edge:2,surface:3}[hit.kind];
+    if(!e||!n||e.item.bank!==hit.bank||e.item.index!==hit.index||e.item.primitive!==hit.primitive||
+      JSON.stringify(e.item.owner)!==JSON.stringify(hit.owner)||!Array.isArray(hit.indices)||hit.indices.length!==n||
+      !hit.indices.every(i=>Number.isInteger(i)&&i>=0&&i<e.item.points.length)||new Set(hit.indices).size!==n||
+      !Array.isArray(hit.weights)||!finite3(hit.point))throw Error('Stored point topology mismatch');
+    if(hit.kind==='edge'&&!e.edges.some(t=>t.every((i,j)=>i===hit.indices[j])))throw Error('Invalid stored edge');
+    if(hit.kind==='surface'&&!e.triangles.some(t=>t.every((i,j)=>i===hit.indices[j])))throw Error('Invalid stored triangle');
+    const h=adjustPoint(mesh,hit,hit.weights);
+    if(Math.hypot(...sub(h.point,hit.point))>1e-6)throw Error('Stored point geometry changed');
+    // Preserve the original snapshot; the camera-dependent pixel/depth fields
+    // are not used for restored marker projection.
+    return JSON.parse(JSON.stringify(hit));
+  }
+  function mount(dialog,onSessionChange=()=>{}){
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
     const env=dialog.ownerDocument.defaultView,frame=dialog.querySelector('[data-viewer-frame]'),titleBar=dialog.querySelector('[data-viewer-titlebar]'),grip=dialog.querySelector('[data-viewer-resize]');
@@ -547,7 +569,8 @@
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
     const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
       pickChoices=dialog.querySelector('[data-viewer-pick-candidates]'),pickStatus=dialog.querySelector('[data-viewer-pick-status]');
-    let mesh=null,paths=null,pickCache=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null;
+    let mesh=null,paths=null,pickCache=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null,restoringSession=false;
+    function sessionChanged(){if(!restoringSession)onSessionChange();}
     const details=dialog.querySelector('[data-viewer-point-details]'),coords=dialog.querySelector('[data-viewer-point-coords]'),parameters=dialog.querySelector('[data-viewer-point-parameters]'),paramInputs=[...dialog.querySelectorAll('[data-viewer-point-weight]')],confirmButton=dialog.querySelector('[data-viewer-point-confirm]'),cancelButton=dialog.querySelector('[data-viewer-point-cancel]');
     const snaps=[...dialog.querySelectorAll('[data-viewer-point-snap]')];
     function cancelHover(){if(hoverFrame!==null)env.cancelAnimationFrame(hoverFrame);hoverFrame=null;queued=null;hover=null;}
@@ -663,7 +686,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;if(dialog.open)dialog.close();}
+    function close(){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;if(dialog.open)dialog.close();sessionChanged();}
     dialog.querySelector('[data-viewer-close]').onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -731,7 +754,8 @@
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
     dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(staged||hover){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
-    for(const event of ['click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
+    for(const event of ['click','change','input','pointerup','pointercancel','wheel','keydown'])dialog.addEventListener(event,e=>{e.stopPropagation();sessionChanged();});
+    env.addEventListener('pagehide',()=>sessionChanged());
     dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
     function show(){if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
     return {open(next,title){
@@ -739,10 +763,29 @@
       show();syncMode();sync();
     },openCrop(region,paint,build=null,reason=''){
       stopDrags();clearGeometryPick();geometry=null;free=false;crop={region:{...region},paint,build,reason};heading.textContent='3D Scene Magnifier';
-      show();syncMode();render();
+      show();syncMode();render();sessionChanged();
+    },sessionSnapshot(){
+      if(!dialog.open||!crop)return null;
+      return JSON.parse(JSON.stringify({version:1,region:crop.region,free,view:state,raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
+    },restoreSession(saved){
+      if(!crop||saved?.version!==1||typeof saved.free!=='boolean'||!['navigate','vertex','edge','surface'].includes(saved.pickMode))throw Error('Invalid stored magnifier session');
+      restoringSession=true;
+      try{
+        const next=restoreView(saved.view);
+        if(!Array.isArray(saved.raster)||saved.raster.length!==2||!saved.raster.every(n=>Number.isInteger(n)&&n>0&&n<=2048))throw Error('Invalid stored raster');
+        if(saved.free||saved.staged||saved.confirmed){if(!enterFree())throw Error('Stored Free View unavailable');}
+        if(mesh){staged=restorePoint(mesh,saved.staged);confirmed=restorePoint(mesh,saved.confirmed);}
+        choices=mesh&&Array.isArray(saved.choices)&&saved.choices.length<=2500?saved.choices.map(h=>restorePoint(mesh,h)):[];
+        pickChoices.replaceChildren();for(const [i,h] of choices.entries()){if(!h)throw Error('Invalid stored candidate');const n=dialog.ownerDocument.createElement('option');n.value=String(i);n.textContent=describe(h);pickChoices.append(n);}
+        pickChoices.disabled=choices.length<2;pickChoices.value=saved.choice;
+        free=saved.free;state=next;pickMode.value=saved.pickMode;syncMode();resizeRaster();
+        const ratio=Math.min(canvas.width,canvas.height)/Math.min(...saved.raster);state={...next,pan:next.pan.map(x=>x*ratio)};
+        sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});updatePickStatus();
+      }finally{restoringSession=false;}
+      sessionChanged();
     },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
       snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

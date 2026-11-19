@@ -1,3 +1,18 @@
+## 8F.3c.1 — Magnifier session persistence
+
+Store versioned local magnifier session synchronously on UI interactions
+and pagehide, linked to the captured calibration draft ID in IndexedDB
+and exact crop source parameters. Restore after draft geometry and visible
+workspace are ready. Restore region, mode, camera, raster-relative pan,
+wireframe, pick mode, draft/confirmed point, candidate list and unapplied
+numeric inputs. Window rect and sensitivity retain separate preferences.
+Rebuild geometry; validate stored indices, weights and coordinates.
+Close, photo replacement, new capture and import invalidate saved session.
+No portable experiment changes. 26 strict headless tests passed; reload
+browser regression added, CI pending. Previous metric snap CI Node and
+architecture passed; unrelated workspace scene-mode reload smoke test
+timed out. Next: 8F.3d.
+
 ## 8F.3c follow-up — Metric vertex snap
 
 Snap vertex minimizes actual 3D distance: edge endpoints for an edge,
