@@ -27,14 +27,16 @@ const pngHeader=Uint8Array.from([137,80,78,71,13,10,26,10]);
 function fakeFrame(plan,index){
   const timeMs=plan.timesMs[index];
   const images={},entries=[],renderStats={};
-  for(const side of plan.sides){
+  for(const side of frameExport.outputSides(plan)){
     const name='frames/frame_'+String(index).padStart(5,'0')+'_'+side+'.png';
     images[side]=name;
     entries.push({name,data:Uint8Array.from([...pngHeader,index&255,index>>>8,side.charCodeAt(0)])});
     renderStats[side]={opticsMs:5,unresolved:0,fillUnresolved:0,
       budgetExceeded:false,cacheReused:false};
   }
-  return {row:{index,timeMs,timestampUs:Math.round(timeMs*1000),images,renderStats},entries};
+  const info=plan.presentation?require('../src/animation/ModernAnimationPresentationCompositor').frameAt(plan.presentation,timeMs):null;
+  return {row:{index,timeMs,timestampUs:Math.round(timeMs*1000),images,renderStats,
+    ...(info?{referenceId:info.referenceId,referenceCount:info.referenceCount,viewSize:info.viewSize,warnings:[]}: {})},entries};
 }
 class FakeWorker {
   static instances=[];
@@ -75,7 +77,7 @@ class FakeWorker {
           const out=frameExport.assemble(this.plan,this.frames,
             {workers:this.workers,renderElapsedMs:1234});
           if(FakeWorker.wrongManifest)out.manifest.cameraInterpolation='linear';
-          this.emit({type:'complete',blob:out.blob,manifest:out.manifest});
+          this.emit({type:'complete',blob:out.blob,manifest:out.manifest,previewBlob:out.previewBlob});
         }
       });
     }
@@ -244,4 +246,19 @@ test('PNG archive cannot silently report Linear after Spline rendering',async()=
     /incomplete PNG sequence/);
     assert.ok(FakeWorker.instances.every(worker=>worker.terminated));
   }finally{FakeWorker.reset();}
+});
+
+
+test('full presentation controller forwards frozen options, transfers one PNG and returns preview image',async()=>{
+  FakeWorker.reset();const controller=background.create({WorkerCtor:FakeWorker,hardwareConcurrency:8});
+  const result=await controller.start({project:make(),fps:5,width:1280,height:720,workerCount:4,
+    presentation:{referenceLayout:'hidden',layoutMode:'dynamic',showNarrative:false},previewTimeMs:200});
+  assert.equal(result.previewBlob.type,'image/png');assert.equal(result.workers,1);
+  assert.deepEqual(result.manifest.sides,['presentation']);assert.equal(result.manifest.frames[0].timeMs,200);
+  assert.equal(result.manifest.presentation.showNarrative,false);
+  for(const worker of FakeWorker.instances){const init=worker.commands[0];assert.equal(init.previewTimeMs,200);assert.equal(init.presentation.layoutMode,'dynamic');assert.equal(worker.terminated,true);}
+  FakeWorker.reset();const seq=await controller.start({project:make(),fps:5,width:1280,height:720,workerCount:2,
+    presentation:{referenceLayout:'hidden'}});
+  assert.equal(seq.manifest.frameCount,26);assert.ok(seq.manifest.endpointIncluded);
+  assert.ok(seq.manifest.frames.every(f=>Object.keys(f.images).join(',')==='presentation'));
 });

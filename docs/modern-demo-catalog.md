@@ -1,6 +1,6 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **7D.2.1 (Presentation Compositor)**, 2026-11-19.
+Status: **7D.2.2 (Presentation PNG Export)**, 2026-11-19.
 The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
 thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
 are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
@@ -197,7 +197,7 @@ record the split, and do not mark complete on implementation alone.
 | 7D.1.1 — Presentation UI Cleanup | Implemented; acceptance pending | Viewer-only controls; collapsed View settings and Storyboard, hidden author actions and success notices, Retry only for a failed physical frame. Studio controls remain available. |
 | 7D.1.2 — Presentation Resize Fix | Implemented; acceptance pending | Commit reference layout before physical rendering and publish observations only after a successful frame. Compare resize against rendered CSS widths, including pause after live playback. |
 | 7D.2.1 — Presentation Compositor | Implemented | Standalone offline plan, frame geometry and composition, preserving physics pixels and photo aspect ratio. Unit and isolated Chromium pixel tests; no UI or exporter integration yet. |
-| 7D.2.2 — Presentation PNG | Planned | Full presentation vs existing simulation-only PNG, preview/configuration, original decoding, effective project snapshot, provenance/overflow in manifest. |
+| 7D.2.2 — Presentation PNG | Implemented; acceptance pending | Full presentation vs existing simulation-only PNG, preview/configuration, original decoding, effective project snapshot, provenance/overflow in manifest. |
 | 7D.2.3 — Presentation Video | Planned | Reuse compositor for deterministic video time samples, fixed output dimensions, resource/cancellation budgets and provenance reporting. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
 | 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
@@ -587,7 +587,24 @@ It does not replace `ModernAnimationCompareComposition` or existing exports.
   time and atmosphere correctness. Rendering is deterministic within a given
   Canvas/font implementation, not necessarily byte-identical across platforms.
 
-Only the standalone foundation is implemented here: no new buttons or output
-files in the application yet. 7D.2.2 and 7D.2.3 connect the module to PNG/video
-without changing their simulation-only path. No real Soundly photo or calibrated
-camera pose was added.
+### PNG integration (7D.2.2)
+
+Animation Studio → Export PNG frames → Content → Full presentation enables the
+compositor. Simulation only remains the default with unchanged filenames and
+per-view resolution. Full presentation has whole-frame HD, Full HD, QHD and 4K
+presets, fixed/dynamic layout, reference position and explanation visibility;
+HUD/target options are shared. Preview current frame uses the last painted time
+(or zero for an unprepared draft), independently of the sequence frame limit.
+Save this frame ZIP downloads just that PNG and its manifest. Render PNG ZIP
+produces the complete sequence with one composed PNG per timestamp and exact
+endpoint, within the existing 751 timestamps and 192 MiB archive limit. The UI
+never performs the physical render; a worker decodes original assets and paints
+before encoding. Large originals/UHD may reduce worker concurrency. The
+manifest includes complete narrative, observation provenance and dimensions (not
+original data URLs), selected layout, physical sides, actual reference IDs and
+counts, viewport size, optical diagnostics and truncation warnings per frame.
+Hidden reference layout needs no photograph lookup. Other layouts fail on
+missing linked records; the task owns original bytes and settings at launch.
+No photograph stretching/cropping, UI screenshot capture or physical changes.
+Video integration is next (7D.2.3); no real Soundly photo or calibrated pose
+has been added.

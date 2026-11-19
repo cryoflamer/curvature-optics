@@ -40,7 +40,13 @@
       if(active)throw Error('PNG export is already running');
       if(typeof WorkerCtor!=='function')throw Error('Web Workers are unavailable in this browser');
       var plan=frameExport.plan(options.project,options);
+      var extra=plan.presentation?{presentation:{referenceLayout:plan.presentation.referenceLayout,layoutMode:plan.presentation.layoutMode,showNarrative:plan.presentation.showNarrative},referenceImages:plan.referenceImages,previewTimeMs:plan.previewTimeMs}:{};
+      var outputSides=frameExport.outputSides(plan);
       var count=countFor(options.workerCount,settings.hardwareConcurrency,plan.timesMs.length);
+      // Bound simultaneous decoded originals and UHD render surfaces.
+      if(plan.presentation){var pixels=plan.referenceImages.reduce(function(max,r){return Math.max(max,r.original.width*r.original.height);},0);
+        count=Math.min(count,Math.max(1,Math.floor(64000000/Math.max(1,pixels+3*plan.width*plan.height))));}
+
       return new Promise(function(resolve,reject){
         var workers=[],renderers=[],archive=null,done=false;
         var ready=0,archiveReady=false,running=false,nextIndex=0;
@@ -106,10 +112,11 @@
                 value.manifest.cameraInterpolation!==(plan.project.mode==='camera'?
                   (plan.project.interpolation||'linear'):null)||
                 !Array.isArray(value.manifest.sides)||
-                value.manifest.sides.join(',')!==plan.sides.join(','))
+                value.manifest.sides.join(',')!==outputSides.join(',')||
+                (plan.previewTimeMs!==undefined&&(!value.previewBlob||value.previewBlob.type!=='image/png')))
                 fail('Archive worker returned an incomplete PNG sequence');
               else finish(null,{cancelled:false,blob:value.blob,manifest:value.manifest,
-                workers:count});
+                workers:count,previewBlob:value.previewBlob});
             }else if(value.type==='error'){
               fail('PNG archive failed: '+String(value.message||'unknown error'));
             }
@@ -136,7 +143,7 @@
                 }else if(value.type==='frame'){
                   if(!running||current.index===null||value.index!==current.index||
                     !value.frame||!Array.isArray(value.frame.entries)||
-                    value.frame.entries.length!==plan.sides.length){
+                    value.frame.entries.length!==outputSides.length){
                     fail('Renderer returned an unexpected PNG frame');return;
                   }
                   var transfer=[];
@@ -162,11 +169,11 @@
           archive.postMessage({type:'init',project:plan.project,fps:plan.fps,
             width:plan.width,height:plan.height,workers:count,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
-            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection});
+            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,...extra});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'init',
             project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
-            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection});});
+            targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,...extra});});
         }catch(error){finish(error);}
       });
     }

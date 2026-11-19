@@ -11,9 +11,13 @@ importScripts(
   '../ui/modern/ModernExperimentFingerprint.js',
   '../camera/ModernCameraInterpolator.js?spline-core=1',
   'ModernAnimationCompatibility.js',
+  'ModernAnimationContract.js',
   'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-parity=1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1'
+  'ModernReferenceImage.js',
+  'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
+  'ModernAnimationPresentationCompositor.js',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1'
 );
 var archive=null;
 function reportError(error){
@@ -37,7 +41,7 @@ self.onmessage=function(event){
       if(!Number.isInteger(index)||index<0||index>=plan.timesMs.length||
         archive.frames[index]!==undefined||!frame||!frame.row||
         frame.row.index!==index||frame.row.timeMs!==plan.timesMs[index]||
-        !Array.isArray(frame.entries)||frame.entries.length!==plan.sides.length)
+        !Array.isArray(frame.entries)||frame.entries.length!==self.CurvatureModernAnimationFrameExport.outputSides(plan).length)
         throw Error('Duplicate, missing or invalid PNG frame index');
       for(var j=0;j<frame.entries.length;j++){
         var entry=frame.entries[j];
@@ -56,7 +60,7 @@ self.onmessage=function(event){
         self.postMessage({type:'packing',total:archive.count});
         var result=self.CurvatureModernAnimationFrameExport.assemble(plan,archive.frames,
           {workers:archive.workers,renderElapsedMs:performance.now()-archive.start});
-        self.postMessage({type:'complete',blob:result.blob,manifest:result.manifest});
+        self.postMessage({type:'complete',blob:result.blob,manifest:result.manifest,previewBlob:result.previewBlob});
         archive=null;
       }
     }

@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 118,
-      "uniqueScripts": 116,
+      "scriptTags": 119,
+      "uniqueScripts": 117,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -224,6 +224,7 @@
         "src/animation/ModernAnimationStoryboardExport.js",
         "src/animation/ModernAnimationQualityAudit.js",
         "src/animation/ModernAnimationCanvasHud.js",
+        "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernAnimationFrameExport.js",
         "src/animation/ModernAnimationBackgroundExport.js",
         "src/animation/ModernAnimationCompareComposition.js",
@@ -375,6 +376,7 @@
       "src/animation/ModernAnimationPlayback.js",
       "src/animation/ModernAnimationPlaybackControls.js",
       "src/animation/ModernAnimationPresentation.js",
+      "src/animation/ModernAnimationPresentationCompositor.js",
       "src/animation/ModernAnimationPreview.js",
       "src/animation/ModernAnimationPreviewLifecycle.js",
       "src/animation/ModernAnimationProject.js",
@@ -453,7 +455,6 @@
       "src/animation/ModernAnimationArchiveWorker.js",
       "src/animation/ModernAnimationFrameWorker.js",
       "src/animation/ModernAnimationMP4Muxer.js",
-      "src/animation/ModernAnimationPresentationCompositor.js",
       "src/animation/ModernAnimationVideoArchive.js",
       "src/animation/ModernAnimationVideoEncoderWorker.js",
       "src/animation/ModernAnimationVideoProbeWorker.js",
@@ -677,6 +678,7 @@
         "tests/ModernAnimationFrameExport.test.js",
         "tests/ModernAnimationHudConsistency.test.js",
         "tests/ModernAnimationParallelExport.test.js",
+        "tests/ModernAnimationPresentationPng.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationSplineExportParity.test.js",
         "tests/ModernAnimationVideoPipeline.test.js",
@@ -800,10 +802,16 @@
       "commonJsToolCallers": []
     },
     "src/animation/ModernAnimationPresentationCompositor.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationFrameExport.js"
+      ],
       "commonJsTestCallers": [
-        "tests/ModernAnimationPresentationCompositor.test.js"
+        "tests/ModernAnimationBackgroundExport.test.js",
+        "tests/ModernAnimationPresentationCompositor.test.js",
+        "tests/ModernAnimationPresentationPng.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1078,6 +1086,7 @@
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
+        "tests/ModernAnimationPresentationPng.test.js",
         "tests/ModernAnimationStoryboardExport.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
         "tests/ModernDemoCatalog.test.js",
@@ -1104,6 +1113,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationFrameExport.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernReferenceImageLibrary.js",

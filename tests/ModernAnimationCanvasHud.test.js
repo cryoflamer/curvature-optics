@@ -150,7 +150,7 @@ test('worker import order, UI toggles, and source are isolated from Legacy',()=>
     'ModernAnimationVideoExportCameraHud'])assert.ok(html.includes('id="'+id+'"'));
   assert.match(app,/syncStudioCameraHud\(a,b,graphs,isCompare\)/);
   assert.match(app,/cameraHud:!!\(newUiEl\('ModernAnimationVideoExportCameraHud'\)/);
-  assert.match(app,/cameraHud:!!\(newUiEl\('ModernAnimationFrameExportCameraHud'\)/);
+  assert.match(app,/cameraHud=!!\(newUiEl\('ModernAnimationFrameExportCameraHud'\)/);
   assert.doesNotMatch(fs.readFileSync(path.join(root,'CurvatureApp.html'),'utf8'),
     /ModernAnimationCanvasHud|ModernAnimationPlaybackCameraHud/);
   const source=fs.readFileSync(path.join(root,'src/animation/ModernAnimationCanvasHud.js'),'utf8');

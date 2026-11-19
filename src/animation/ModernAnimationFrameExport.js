@@ -11,10 +11,12 @@
     hud=require('./ModernAnimationCanvasHud');
   var target=root.CurvatureModernTargetIndicator;
   if(typeof module==='object'&&module.exports)target=require('../ui/modern/ModernTargetIndicator');
-  var api=factory(projects,hud,target);
+  var compositor=root.CurvatureModernAnimationPresentationCompositor, references=root.CurvatureModernReferenceImage;
+  if(typeof module==='object'&&module.exports){compositor=require('./ModernAnimationPresentationCompositor');references=require('./ModernReferenceImage');}
+  var api=factory(projects,hud,target,compositor,references);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationFrameExport=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,hud,target){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,hud,target,compositor,references){
   'use strict';
   var MAX_FRAMES=751,MAX_ARCHIVE_BYTES=192*1024*1024;
   // Shared sizing/FPS policy for PNG and future video frames. Video has an
@@ -35,20 +37,33 @@
       (project.cameraHudAppearance||hud.normalizeAppearance());
   }
   function plan(project,options){
-    var owned=projects.validate(project),settings=exportSettings(options);
+    options=options||{};
+    var owned=projects.validate(project),presentation=options.presentation===undefined?null:
+      compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height}));
+    var settings=exportSettings(presentation?{fps:options.fps,width:960,height:540}:options);
+    var records=[];
+    if(presentation){
+      if(!Array.isArray(options.referenceImages||[])||(options.referenceImages||[]).length>100)throw RangeError('Invalid presentation reference assets');
+      records=references.validateCollection(options.referenceImages||[]);
+      var ids=new Set(presentation.referenceLayout==='hidden'?[]:presentation.times.flatMap(function(t){return t.referenceImageIds;}));
+      if(records.length!==ids.size||records.some(function(r){return !ids.has(r.id);}))throw Error('Presentation reference originals must match linked IDs');
+      if(JSON.stringify(records).length>64*1024*1024)throw RangeError('Presentation reference assets exceed limit');
+    }else if(options.previewTimeMs!==undefined)throw RangeError('Preview requires full presentation');
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
       throw RangeError('Invalid camera HUD export setting');
     if(options&&options.targetIndicator!==undefined&&typeof options.targetIndicator!=='boolean')
       throw RangeError('Invalid target indicator export setting');
     if(options&&options.targetIndicator===true&&(!target||typeof target.paint!=='function'))
       throw Error('Target indicator painter unavailable');
-    var fps=settings.fps,width=settings.width,height=settings.height;
+    var fps=settings.fps,width=presentation?presentation.width:settings.width,height=presentation?presentation.height:settings.height;
     var durationMs=projects.totalMs(owned);
     var intervals=Math.ceil(durationMs*fps/1000);
-    if(intervals+1>MAX_FRAMES)
+    if(options.previewTimeMs===undefined&&intervals+1>MAX_FRAMES)
       throw RangeError('Too many frames for in-memory PNG export (maximum '+MAX_FRAMES+'). Reduce FPS or animation length.');
     var times=[];
-    for(var i=0;i<=intervals;i++)times.push(i===intervals?durationMs:Math.min(durationMs,1000*i/fps));
+    if(options.previewTimeMs!==undefined){
+      compositor.frameAt(presentation,options.previewTimeMs);times.push(options.previewTimeMs);
+    }else for(var i=0;i<=intervals;i++)times.push(i===intervals?durationMs:Math.min(durationMs,1000*i/fps));
     // Endpoint is explicit. For 5 seconds at 25 fps this is 126 PNGs,
     // representing [0, 40, ..., 4960, 5000] milliseconds.
     var appearance=resolveHudAppearance(owned,options);
@@ -58,6 +73,7 @@
       targetIndicator:!!(options&&options.targetIndicator===true),
       targetSelection:target?target.selection(options&&options.targetSelection):'scene',
       timesMs:Object.freeze(times),
+      ...(presentation?{presentation:presentation,referenceImages:records,previewTimeMs:options.previewTimeMs}:{}),
       sides:Object.freeze(owned.baseExperiment.display.mode==='compare'?['A','B']:['A'])});
   }
   function ascii(value){return new TextEncoder().encode(value);}
@@ -162,10 +178,32 @@
   // runner and parallel workers use the same painting, compositing, PNG
   // encoding and optical-quality checks; a different scheduling order must
   // never select Fast or omit an A/B side.
-  async function renderTimestamp(p,index,render,cancel){
+  function outputSides(p){return p.presentation?['presentation']:p.sides;}
+  async function renderPresentation(p,index,render,cancel,adapter){
+    if(!adapter||typeof adapter.canvas!=='function'||typeof adapter.observation!=='function')throw Error('Presentation export adapter unavailable');
+    var time=p.timesMs[index],frame=compositor.frameAt(p.presentation,time),images={},renderStats={};
+    for(var side of frame.sides){
+      if(cancel&&cancel.cancelled)return null;
+      var image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time});
+      prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,p.cameraHud,p.cameraHudAppearance,p.targetIndicator,p.targetSelection);
+      images[side]=Object.assign({},image,{timeMs:time});
+      if(image.metrics){var m=image.metrics,t=m.timings||{};renderStats[side]={opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
+        unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
+        budgetExceeded:!!m.budgetExceeded,cacheReused:!!m.cacheReused};}
+    }
+    if(cancel&&cancel.cancelled)return null;
+    var photo=frame.referenceId?await adapter.observation(p.referenceImages.find(function(r){return r.id===frame.referenceId;})):null;
+    if(cancel&&cancel.cancelled)return null;
+    var result=compositor.paint(adapter.canvas(),frame,images,photo),bytes=await toPng(result.canvas);
+    var name='frames/frame_'+pad(index)+'_presentation.png';
+    return {row:{index:index,timeMs:time,timestampUs:Math.round(time*1000),images:{presentation:name},
+      referenceId:frame.referenceId,referenceCount:frame.referenceCount,viewSize:frame.viewSize,warnings:result.warnings,renderStats:renderStats},entries:[{name:name,data:bytes}]};
+  }
+  async function renderTimestamp(p,index,render,cancel,adapter){
     if(!p||!Array.isArray(p.timesMs)||!Number.isInteger(index)||
       index<0||index>=p.timesMs.length||typeof render!=='function')
       throw RangeError('Invalid export timestamp or renderer');
+    if(p.presentation)return renderPresentation(p,index,render,cancel,adapter);
     var time=p.timesMs[index],sample=projects.sampleAt(p.project,time);
     var row={index:index,timeMs:time,timestampUs:Math.round(time*1000),images:{}};
     var entries=[];
@@ -201,9 +239,16 @@
       if(!frame||!frame.row||frame.row.index!==index||
         frame.row.timeMs!==p.timesMs[index]||
         frame.row.timestampUs!==Math.round(p.timesMs[index]*1000)||
-        !Array.isArray(frame.entries)||frame.entries.length!==p.sides.length)
+        !Array.isArray(frame.entries)||frame.entries.length!==outputSides(p).length)
         throw Error('Invalid PNG frame index or timestamp');
-      p.sides.forEach(function(side,j){
+      if(p.presentation){
+        var planned=compositor.frameAt(p.presentation,p.timesMs[index]),row=frame.row;
+        if(row.referenceId!==planned.referenceId||row.referenceCount!==planned.referenceCount||!row.viewSize||
+          row.viewSize.width!==planned.viewSize.width||row.viewSize.height!==planned.viewSize.height||
+          !Array.isArray(row.warnings)||row.warnings.some(function(w){return typeof w!=='string';}))
+          throw Error('Invalid presentation frame metadata');
+      }
+      outputSides(p).forEach(function(side,j){
         var entry=frame.entries[j],name='frames/frame_'+pad(index)+'_'+side+'.png';
         if(!entry||entry.name!==name||frame.row.images[side]!==name||
           !(entry.data instanceof Uint8Array)||entry.data.length<8||
@@ -218,8 +263,14 @@
       cameraInterpolation:p.project.mode==='camera'?(p.project.interpolation||'linear'):null,
       physicalTarget:p.project.target,project:p.project,quality:'accurate',
       fps:p.fps,width:p.width,height:p.height,durationMs:p.durationMs,
-      endpointIncluded:true,sides:p.sides.slice(),backgroundColor:'#ffffff',
+      endpointIncluded:p.previewTimeMs===undefined||p.previewTimeMs===p.durationMs,sides:outputSides(p).slice(),backgroundColor:p.presentation?'#f1f5f9':'#ffffff',
       frameCount:frames.length,frames:frames};
+    if(p.presentation){
+      manifest.presentation={referenceLayout:p.presentation.referenceLayout,layoutMode:p.presentation.layoutMode,
+        showNarrative:p.presentation.showNarrative,modelSides:p.sides.slice(),preview:p.previewTimeMs!==undefined,
+        referenceImages:p.referenceImages.map(function(r){var meta=Object.assign({},r);delete meta.thumbnail;
+          meta.original={width:r.original.width,height:r.original.height};return meta;})};
+    }
     if(p.cameraHud){
       manifest.cameraHudIncluded=true;
       manifest.cameraHudAppearance=p.cameraHudAppearance;
@@ -234,7 +285,8 @@
       manifest.renderElapsedMs=Math.round(exportInfo.renderElapsedMs);
     }
     entries.unshift({name:'manifest.json',data:ascii(JSON.stringify(manifest,null,2))});
-    return {cancelled:false,blob:zip(entries),manifest:manifest};
+    return {cancelled:false,blob:zip(entries),manifest:manifest,
+      ...(p.previewTimeMs!==undefined?{previewBlob:new Blob([completed[0].entries[0].data],{type:'image/png'})}:{})};
   }
   // Sequential compatibility runner (also used as a parity reference).
   async function run(settings){
@@ -245,7 +297,7 @@
     for(var i=0;i<p.timesMs.length;i++){
       await yieldUi();
       if(cancel.cancelled)return {cancelled:true,framesCompleted:i,totalFrames:p.timesMs.length};
-      var frame=await renderTimestamp(p,i,settings.render,cancel);
+      var frame=await renderTimestamp(p,i,settings.render,cancel,settings.presentationAdapter);
       if(!frame||cancel.cancelled)
         return {cancelled:true,framesCompleted:i,totalFrames:p.timesMs.length};
       completed.push(frame);
@@ -287,7 +339,7 @@
   }
   return Object.freeze({plan:plan,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
     resolveHudAppearance:resolveHudAppearance,
-    run:run,renderTimestamp:renderTimestamp,assemble:assemble,
+    run:run,renderTimestamp:renderTimestamp,assemble:assemble,outputSides:outputSides,
     zip:zip,graphForCanvas:graphForCanvas,
     compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});
 }));

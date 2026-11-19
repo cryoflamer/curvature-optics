@@ -54,11 +54,16 @@ importScripts(
   '../ui/modern/ModernSceneState.js',
   '../ui/modern/ModernCompareState.js',
   '../ui/modern/ModernExperimentState.js',
+  '../ui/modern/ModernExperimentFingerprint.js',
   '../camera/ModernCameraInterpolator.js?spline-core=1&spline-export=1',
   'ModernAnimationCompatibility.js',
+  'ModernAnimationContract.js',
   'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-export=1&spline-parity=1',
   'ModernAnimationPreview.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1',
+  'ModernReferenceImage.js',
+  'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
+  'ModernAnimationPresentationCompositor.js',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1',
   'ModernAnimationCompareComposition.js',
   'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1'
 );
@@ -102,10 +107,10 @@ function setup(data,video){
       cameraHud:data.cameraHud===true,
       cameraHudAppearance:data.cameraHudAppearance,
       targetIndicator:data.targetIndicator===true,targetSelection:data.targetSelection},
-      video?{compareLayout:data.compareLayout}:{}));
+      video?{compareLayout:data.compareLayout}:{presentation:data.presentation,referenceImages:data.referenceImages,previewTimeMs:data.previewTimeMs}));
   var contexts={};
   plan.sides.forEach(function(side){
-    contexts[side]=createGraph(new OffscreenCanvas(plan.width,plan.height));
+    contexts[side]=createGraph(new OffscreenCanvas(plan.presentation?320:plan.width,plan.presentation?180:plan.height));
   });
   var compositeCanvas=video&&plan.compareLayout==='side-by-side'?
     new OffscreenCanvas(plan.outputWidth,plan.outputHeight):null;
@@ -128,7 +133,22 @@ function setup(data,video){
     return self.CurvatureModernAnimationCompareComposition.paint(compositeCanvas,
       images,timing);
   }
-  return {plan:plan,render:render,compose:compositeCanvas?compose:null,video:!!video};
+  var presentationAdapter=null;
+  if(plan.presentation){
+    var output=new OffscreenCanvas(plan.width,plan.height),cached=null;
+    presentationAdapter={canvas:function(){return output;},observation:async function(record){
+      if(!record)throw Error('Missing original photograph');
+      if(cached&&cached.id===record.id)return cached;
+      if(cached){cached.image.close();cached=null;}
+      var url=record.original.dataUrl,comma=url.indexOf(','),raw=atob(url.slice(comma+1));
+      var bytes=Uint8Array.from(raw,function(c){return c.charCodeAt(0);});
+      var bitmap=await createImageBitmap(new Blob([bytes],{type:url.slice(5,comma-7)}),{imageOrientation:'from-image'});
+      try{cached=self.CurvatureModernAnimationPresentationCompositor.observation(record,bitmap);}
+      catch(error){bitmap.close();throw error;}
+      return cached;
+    }};
+  }
+  return {plan:plan,render:render,compose:compositeCanvas?compose:null,video:!!video,presentationAdapter:presentationAdapter};
 }
 var active=false,parallel=null;
 self.onmessage=async function(event){
@@ -163,7 +183,7 @@ self.onmessage=async function(event){
         videoFrame=null; // Ownership transferred to controller.
       }else{
         var frame=await self.CurvatureModernAnimationFrameExport.renderTimestamp(
-          parallel.plan,data.index,parallel.render);
+          parallel.plan,data.index,parallel.render,null,parallel.presentationAdapter);
         // Transfer PNG buffers instead of copying potentially hundreds of MiB.
         self.postMessage({type:'frame',index:data.index,frame:frame},
           frame.entries.map(function(entry){return entry.data.buffer;}));
@@ -189,6 +209,7 @@ self.onmessage=async function(event){
       targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,
       yieldUi:function(){return new Promise(function(resolve){setTimeout(resolve,0);});},
       render:session.render,
+      ...(plan.presentation?{presentation:data.presentation,referenceImages:data.referenceImages,previewTimeMs:data.previewTimeMs,presentationAdapter:session.presentationAdapter}:{}),
       onProgress:function(info){self.postMessage({type:'progress',completed:info.completed,
         total:info.total,timeMs:info.timeMs,elapsedMs:performance.now()-start});}
     });

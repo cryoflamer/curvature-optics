@@ -220,6 +220,67 @@ class ModernBrowserSmoke(unittest.TestCase):
         for item in result:
             self.assertEqual(item['pixel'], colors[item['kind']], item)
 
+    def test_presentation_png_workers_with_original(self):
+        # Actual render + archive worker sources, with Blob script URLs so the
+        # isolated test does not need application navigation or IndexedDB.
+        self.page.set_content('<!doctype html><html><body></body></html>')
+        scripts = {}
+        for name in ['ModernAnimationFrameWorker.js', 'ModernAnimationArchiveWorker.js']:
+            path = ROOT / 'src/animation' / name
+            source = path.read_text(encoding='utf-8')
+            block = re.search(r'importScripts\((.*?)\);', source, re.S)
+            dependencies = [(path.parent / item.split('?')[0]).resolve().read_text(encoding='utf-8')
+                            for item in re.findall(r"'([^']+)'", block.group(1))]
+            scripts[name] = {'source': source, 'dependencies': dependencies}
+        project = json.loads((ROOT / 'demos/modern/soundly.json').read_text(encoding='utf-8'))['animations'][0]['project']
+        result = self.page.evaluate(r"""async ({project,scripts}) => {
+            project.baseExperiment.display.mode='compare';
+            project.contract.referenceExperiment.display.mode='compare';
+            project.keyframes[0].referenceImageIds=['photo'];
+            project.keyframes[0].description='Observation';
+            const raw=new OffscreenCanvas(3,4),c=raw.getContext('2d');
+            c.fillStyle='#00ff00';c.fillRect(0,0,3,4);
+            c.fillStyle='#ff00ff';c.fillRect(0,0,3,1);
+            const blob=await raw.convertToBlob(),dataUrl=await new Promise(resolve=>{
+                const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(blob);
+            });
+            const original={version:1,id:'photo',title:'Synthetic portrait',author:'Observer',license:'CC BY',original:{dataUrl,width:3,height:4}};
+            const urls=[],workers=[];
+            function url(source){const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;}
+            function make(name){const spec=scripts[name],deps=spec.dependencies.map(url);
+                const source=spec.source.replace(/importScripts\([\s\S]*?\);/,'importScripts('+deps.map(JSON.stringify).join(',')+');');
+                const worker=new Worker(url(source));workers.push(worker);return worker;
+            }
+            function ready(worker,message,type){return new Promise((resolve,reject)=>{
+                worker.onmessage=e=>{if(e.data.type==='error')reject(Error(e.data.message));else if(e.data.type===type)resolve(e.data);};
+                worker.onerror=e=>reject(Error(e.message||'Worker load error'));worker.postMessage(message);
+            });}
+            try{
+                const renderer=make('ModernAnimationFrameWorker.js'),archive=make('ModernAnimationArchiveWorker.js');
+                const options={type:'init',project,width:1280,height:720,fps:5,workers:1,
+                    presentation:{referenceLayout:'side',layoutMode:'fixed'},referenceImages:[original],previewTimeMs:0};
+                const [r,a]=await Promise.all([ready(renderer,options,'ready'),ready(archive,options,'ready')]);
+                const rendered=await ready(renderer,{type:'render',index:0},'frame');
+                const done=await ready(archive,{type:'frame',index:0,frame:rendered.frame},'complete');
+                const image=await createImageBitmap(done.previewBlob),canvas=new OffscreenCanvas(image.width,image.height),ctx=canvas.getContext('2d');
+                ctx.drawImage(image,0,0);
+                const pixels=ctx.getImageData(0,0,image.width,image.height).data;
+                let green=0,magenta=0;for(let i=0;i<pixels.length;i+=4){if(pixels[i]===0&&pixels[i+1]===255&&pixels[i+2]===0)green++;if(pixels[i]===255&&pixels[i+1]===0&&pixels[i+2]===255)magenta++;}
+                const result={width:image.width,height:image.height,green,magenta,ready:[r.total,a.total],sides:done.manifest.sides,
+                    reference:done.manifest.frames[0].referenceId,author:done.manifest.presentation.referenceImages[0].author,
+                    optical: Object.keys(done.manifest.frames[0].renderStats),zip:done.blob.type};image.close();return result;
+            }finally{workers.forEach(w=>w.terminate());urls.forEach(u=>URL.revokeObjectURL(u));}
+        }""", {'project':project,'scripts':scripts})
+        self.assertEqual((result['width'], result['height']), (1280, 720))
+        self.assertGreater(result['green'], 100)
+        self.assertGreater(result['magenta'], 100)
+        self.assertEqual(result['ready'], [1, 1])
+        self.assertEqual(result['sides'], ['presentation'])
+        self.assertEqual(result['reference'], 'photo')
+        self.assertEqual(result['author'], 'Observer')
+        self.assertEqual(result['optical'], ['A', 'B'])
+        self.assertEqual(result['zip'], 'application/zip')
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')

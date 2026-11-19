@@ -1,3 +1,26 @@
+## Modern Demo Catalog — Presentation PNG Export (7D.2.2)
+
+The Studio PNG export section now offers **Simulation only** (unchanged default)
+and **Full presentation** (16:9 HD–4K, fixed/dynamic photo geometry, Side/Below/Hidden,
+optional explanations, existing HUD and target burn-in). The existing render-worker
+pool renders the effective project with Accurate RK4 at each compositor viewport;
+one composite PNG per timestamp is transferred to the archive worker. Preview
+current frame renders a single exact painted timestamp (zero if no prepared frame),
+shows the actual PNG in Studio and permits saving it with its manifest as a ZIP.
+Sequence export retains the 751-frame/192 MiB limits and explicit endpoint. Worker
+count may be reduced for large decoded originals/UHD. The selected project,
+export settings and reference record snapshot are owned for the task; cancellation
+during asset lookup prevents worker launch, then cancels all workers. All linked
+records are required unless photographs are hidden; each worker caches only one
+original ImageBitmap. The manifest preserves full project narrative, reference
+metadata/dimensions (not embedded original bytes), per-frame reference identity,
+count, viewport, diagnostics and text overflow warnings. First photo per hold only.
+No live layout, physics, saved project or video changes.
+
+**Resume:** validate 7D.2.2 in Opera and CI; then 7D.2.3 Presentation Video, reusing
+compositor and preserving simulation-only paths, encoder dimensions, timing,
+provenance and cancellation. Then 7E, 8A–8E and 9A–9C.
+
 ## Modern Demo Catalog — Presentation Compositor (7D.2.1)
 
 The user accepted the Presentation Resize Fix in Opera and approved separating
