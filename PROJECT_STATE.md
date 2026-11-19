@@ -1,3 +1,7 @@
+## 8B.5 — Local calibration draft recovery
+
+The active workspace preference includes Calibration. Explicit shared scene URLs retain priority. A separate IndexedDB record stores the original photograph, fixed scene, correspondences, selection and both viewport transforms. Recovery runs before enabling the calibration tab. New session replaces the draft. Storage errors are shown in the editor. Browser-local only; no cross-device sync. CI pending.
+
 ## 8B.4 — Full-scene model preview and interactive correspondence picking
 
 The Photo Calibration workspace now paints the actual Canvas Direct renderer

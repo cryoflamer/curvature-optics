@@ -6889,8 +6889,7 @@
         var tab=newUiEl(id);if(tab){tab.classList.remove('is-active');tab.setAttribute('aria-pressed','false');}
       });
       animationWorkspaceOpen=false;photoCalibrationWorkspaceOpen=true;syncWorkspaceVisibility();
-      // Deliberately session-only; do not persist this mode in physical URLs
-      // or restore an empty calibration draft at startup.
+      if(remember!==false){workspaceState.mode='calibration';saveApplicationPreferences();}
       return;
     }
     photoCalibrationWorkspaceOpen=false;
@@ -7472,7 +7471,11 @@
       // Only user edits after complete restore are eligible for autosave.
       // Initial model construction must not overwrite either storage copy.
       persistence.ready=true;
-      if(photoTab)photoTab.disabled=false;
+      var editor=root.CurvatureModernPhotoCalibrationEditor&&root.CurvatureModernPhotoCalibrationEditor.mount(document);
+      Promise.resolve(editor&&editor.restore()).then(function(){
+        if(photoTab)photoTab.disabled=false;
+        if(!persistence.explicitUrl&&workspaceState.mode==='calibration')setMode('calibration',false);
+      });
       updateSnapshotSaveAction();
       resetHistoryBaseline();
     }

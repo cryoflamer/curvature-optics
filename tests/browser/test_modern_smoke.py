@@ -670,6 +670,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationFitModel').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
 
+    def test_photo_calibration_reload_restores_draft(self):
+        import base64
+        self.open_modern()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        dialog=self.page.locator('#ModernPhotoCalibration')
+        encoded=self.page.evaluate("""() => {const c=document.createElement('canvas');c.width=100;c.height=80;return c.toDataURL().split(',')[1];}""")
+        dialog.locator('#ModernCalibrationFile').set_input_files(
+            {'name':'reload.png','mimeType':'image/png','buffer':base64.b64decode(encoded)})
+        expect(dialog.locator('#ModernCalibrationStatus')).to_contain_text('100 × 80')
+        dialog.locator('#ModernCalibrationX').fill('25')
+        dialog.locator('#ModernCalibrationY').fill('35')
+        dialog.locator('#ModernCalibrationAdd').click()
+        expect(dialog.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
+        self.page.reload()
+        expect(dialog).to_be_visible()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('25.00, 35.00')
+        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text('100 × 80')
+
     def test_photo_calibration_existing_originals(self):
         self.open_modern()
         self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")

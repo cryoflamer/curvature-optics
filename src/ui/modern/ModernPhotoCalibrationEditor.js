@@ -1,4 +1,4 @@
-/* Session-only photo correspondence editor. No solver or scene mutation. */
+/* Locally persisted photo correspondence editor. No solver or scene mutation. */
 (function(root,factory){
   const api=factory(root);
   if(typeof module==='object'&&module.exports)module.exports=api;
@@ -117,6 +117,69 @@
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
     let choices=[],demoRecords=[],catalogToken=0,activeSource=null;
+    // IndexedDB keeps original images out of the small localStorage quota.
+    // A single atomic record binds the photograph to its fixed scene and pairs.
+    let restoring=false,writeQueue=Promise.resolve(),dbPromise=null;
+    function database(){
+      if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
+        const request=env.indexedDB.open('curvature-photo-calibration',1);
+        request.onupgradeneeded=()=>request.result.createObjectStore('draft');
+        request.onsuccess=()=>resolve(request.result);
+        request.onerror=()=>reject(request.error);
+        request.onblocked=()=>reject(Error('Calibration storage blocked'));
+      });
+      return dbPromise;
+    }
+    async function readDraft(){
+      const db=await database();
+      return new Promise((resolve,reject)=>{
+        const request=db.transaction('draft','readonly').objectStore('draft').get('active');
+        request.onsuccess=()=>resolve(request.result);
+        request.onerror=()=>reject(request.error);
+      });
+    }
+    function persist(){
+      if(restoring||!scene)return;
+      const data=JSON.parse(JSON.stringify({version:1,scene:{model:scene.model,physics:scene.physics},
+        record,activeSource,rows,pending,editing,view,modelView,selected:selected(),
+        weight:weight.value,showLandmarks:showLandmarks.checked}));
+      writeQueue=writeQueue.catch(()=>{}).then(async()=>{
+        const db=await database();
+        await new Promise((resolve,reject)=>{
+          const tx=db.transaction('draft','readwrite');
+          tx.objectStore('draft').put(data,'active');
+          tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('Draft write failed'));
+        });
+        $('ModernCalibrationStorage').textContent='Draft saved in this browser.';
+      }).catch(e=>{$('ModernCalibrationStorage').textContent='Draft not saved: '+e.message;});
+      $('ModernCalibrationStorage').textContent='Saving draft…';
+    }
+    async function restoreDraft(){
+      restoring=true;
+      try{
+        const d=await readDraft();
+        if(!d||d.version!==1)return;
+        const next=prepareScene(d.scene);
+        if(d.record){
+          const decoded=new env.Image();decoded.src=d.record.original.dataUrl;await decoded.decode();
+          if(decoded.naturalWidth!==d.record.original.width||decoded.naturalHeight!==d.record.original.height)throw Error('Stored image dimensions mismatch');
+          rows=d.rows.map(r=>pair(r.landmark,r.pixel,d.record.original.width,d.record.original.height,r.weight));
+          record=d.record;image=decoded;activeSource=d.activeSource;
+        }
+        showScene(next);
+        if(record){photoDetails(record,activeSource);fitPhoto();}
+        if(d.view)view=d.view;
+        if(d.modelView&&previewValid)modelView=d.modelView;
+        showLandmarks.checked=!!d.showLandmarks;
+        if(d.selected)selectLandmark(d.selected);
+        editing=d.editing;weight.value=d.weight||'1';setPixel(d.pending||null);
+        add.textContent=editing?'Update pair':'Add pair';
+        refreshRows();photoDraw();meshDraw();
+        message('Calibration draft restored.');
+        $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
+      }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
+      finally{restoring=false;}
+    }
     async function refreshSources(){
       const token=++catalogToken;
       sourceRefresh.disabled=true;sourceStatus.textContent='Loading available photographs…';
@@ -131,7 +194,7 @@
       demoRecords=demos.status==='fulfilled'?demos.value:[];
       choices=photoChoices(library.status==='fulfilled'?library.value:[],
         projects.status==='fulfilled'?projects.value:[],demoRecords);
-      const previous=sourcePicker.value;
+      const previous=sourcePicker.value||activeSource?.key;
       populate(sourcePicker,[['','Choose an existing photograph…'],...choices.map(c=>[c.key,
         (c.source==='demo'?'Built-in demo':c.links.length?'Saved project':'Reference library')+
         ' · '+c.title+' ('+c.width+' × '+c.height+')'+(c.links.length?' — '+c.links.join('; '):'')])]);
@@ -160,7 +223,7 @@
       record=next;image=decoded;activeSource=source;rows=[];resetPending();refreshRows();fitPhoto();renderModel();
       photoDetails(next,source);
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
-      return true;
+      persist();return true;
     }
     sourcePicker.onchange=()=>{sourceLoad.disabled=!sourcePicker.value;};
     sourceRefresh.onclick=refreshSources;
@@ -397,7 +460,7 @@
         try{showScene(prepareScene(snapshot));}
         catch(e){scene=null;env.alert(e.message);return false;}
       }
-      void refreshSources();
+      void refreshSources();persist();
       return true;
     }
     $('ModernCalibrationReset').onclick=()=>{
@@ -407,7 +470,7 @@
       catch(e){message('Cannot start a new session: '+e.message);return;}
       loadToken++;record=null;image=null;view=null;activeSource=null;rows=[];drag=null;modelDrag=null;file.value='';
       photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=true;resetPending();
-      showScene(next);void refreshSources();
+      showScene(next);persist();void refreshSources();
     };
     file.onchange=async()=>{
       const f=file.files[0];if(!f)return;
@@ -480,7 +543,8 @@
     },{passive:false});
     add.onclick=savePair;
     $('ModernCalibrationCancelEdit').onclick=resetPending;
-    mounted={enter,preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
+    mounted={enter,restore:restoreDraft,preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
