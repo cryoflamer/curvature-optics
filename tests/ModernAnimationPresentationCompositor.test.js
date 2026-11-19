@@ -195,3 +195,30 @@ test('Auto compares complete topologies and keeps Fixed geometry across original
   const wide=compose.frameAt(compose.plan(raw,{...opts,referenceLayout:'wide'}),0);
   assert.equal(wide.topology,'wide');assert.equal(wide.panels.A.panel.y,wide.panels.B.panel.y);assert.ok(wide.cameraHud.x>=wide.photo.x+wide.photo.width);
 });
+
+test('known provenance reserves only visible rows, with Fixed geometry and per-original area protection',()=>{
+  const raw=project(),referenceDimensions=[
+    {id:'first',width:501,height:612,title:'images.jfif'},
+    {id:'second',width:4000,height:1000,title:'Wide view',author:'Author',license:'CC BY',sourceUrl:'https://example.org/'},
+    {id:'last',width:1176,height:791,title:'PR_RealSoundly6.jpg',author:'Soundly'}];
+  for(const width of [1280,1920,2560,3840])for(const cameraHud of [true,false])for(const layoutMode of ['fixed','dynamic']){
+    const opts={width,layoutMode,cameraHud,referenceDimensions,cameraHudAppearance:{size:125,opacity:90,position:'bottom-right'}};
+    const p=compose.plan(raw,{...opts,referenceLayout:'auto'}),side=compose.plan(raw,{...opts,referenceLayout:'side'});
+    assert.equal(p.referenceMetadataRows.first,0);assert.equal(p.referenceMetadataRows.second,5);assert.equal(p.referenceMetadataRows.last,1);
+    for(const layout of ['side','below','stacked','wide','auto']){
+      const q=compose.plan(raw,{...opts,referenceLayout:layout}),first=compose.frameAt(q,0);
+      for(const time of [0,q.times[0].departureMs+1,q.times[3].arrivalMs,q.durationMs]){
+        const f=compose.frameAt(q,time);if(!f.photo)continue;
+        assert.ok(f.photoBox.height>0&&f.photoBox.width>0);inside(f.photoBox,f.photo);inside(f.photoText,f.photo);assert.ok(!overlap(f.photoBox,f.photoText));
+        const step=Math.ceil(Math.round(12*f.scale)*1.22),rows=layoutMode==='fixed'||!f.referenceId?5:p.referenceMetadataRows[f.referenceId];
+        assert.equal(f.photoText.height,rows*step);
+        if(layoutMode==='fixed'){assert.deepEqual(f.photoBox,first.photoBox);assert.deepEqual(f.panels,first.panels);}
+        if(layout==='auto'){
+          const base=compose.frameAt(side,time),considered=layoutMode==='dynamic'&&f.referenceId?referenceDimensions.filter(d=>d.id===f.referenceId):referenceDimensions;
+          for(const d of considered){const a=compose.contain(f.photoBox,d.width,d.height),b=compose.contain(base.photoBox,d.width,d.height);assert.ok(a.width*a.height>=.60*b.width*b.height-1e-6);}
+        }
+        if(f.referenceId){const d=referenceDimensions.find(d=>d.id===f.referenceId),out=target(f);compose.paint(out,f,cameraSources(f),observation(d.id,{title:d.title,author:d.author||'',license:d.license||'',sourceUrl:d.sourceUrl||''}));const labels=out.calls.filter(c=>c[0]==='text').map(c=>c[1]);if(d.author)assert.ok(labels.includes('Author: '+d.author));}
+      }
+    }
+  }
+});

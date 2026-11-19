@@ -63,7 +63,8 @@
       if(JSON.stringify(records).length>64*1024*1024)throw RangeError('Presentation reference assets exceed limit');
       presentation=compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,
         cameraHud:options.cameraHud===true,cameraHudAppearance:appearance,referenceDimensions:records.map(function(r){
-          return {id:r.id,width:r.original.width,height:r.original.height};
+          return {id:r.id,width:r.original.width,height:r.original.height,
+            title:r.title,author:r.author,license:r.license,sourceUrl:r.sourceUrl};
         })}));
     }else if(options.previewTimeMs!==undefined)throw RangeError('Preview requires full presentation');
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')

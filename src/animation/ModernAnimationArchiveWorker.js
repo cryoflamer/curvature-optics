@@ -17,8 +17,8 @@ importScripts(
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
-  'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1&topology=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1'
+  'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1'
 );
 var archive=null;
 function reportError(error){

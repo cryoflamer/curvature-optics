@@ -1,3 +1,29 @@
+## Modern Demo Catalog — Content-aware Photo Geometry (7D.2.2.3B.2.1)
+
+Issue #1: four user PNGs confirmed Auto/Fixed Stacked at both timestamps,
+Auto/Dynamic Stacked at 28.20 s and Photo + HUD below at 35.40 s.
+Photo geometry now uses the same visible provenance fields as painting.
+For validated originals it reserves only the required rows (two for a source
+URL), beneath the contained photo instead of a separate empty column. Fixed
+uses the maximum row count across the linked originals; Dynamic uses the
+current original, or the linked set in a reserved travel panel. Missing
+metadata retains legacy allocation. Infeasible manual layouts fall back to
+Side. Both adaptive share search and Auto topology selection enforce the 60%
+area floor for each original individually relative to their respective
+baselines, rather than a mean-area floor; the objective weights are unchanged.
+For the supplied Soundly manifest at Full HD, Auto/Fixed remains 736x414 per
+model and both contained images gain about 42% area. Auto/Dynamic at 28.20 s
+keeps 736x414 and gains about 62% photo area; at 35.40 s it now chooses Stacked
+736x414 instead of Wide 816x459, with about 4.6x photo area. These are geometry
+predictions, not user visual acceptance. No crop, stretching, physics, RK4 or
+FOV changes. 88 targeted Node tests and two Chromium tests passed (pixel
+composition and real render/archive workers, including streaming).
+
+**Resume:** inspect real PNGs with this commit. HUD column/height optimization,
+scene text sizing, joint width/height search and physical guide readability
+remain separate refinements. Then B.3 full timeline acceptance, C, and
+presentation video. Issue #1 stays open.
+
 ## Modern Demo Catalog — Adaptive Presentation Topologies (7D.2.2.3B.2)
 
 Issue #1: the user accepted B.1 on two real Full HD frames at 28.20 and

@@ -27,13 +27,14 @@
     var times=Object.freeze(projects.timeline(p).map(function(t){
       return Object.freeze(Object.assign({},t,{referenceImageIds:Object.freeze((t.referenceImageIds||[]).slice())}));
     }));
-    var linked=new Set(times.flatMap(function(t){return t.referenceImageIds;})),aspects=Object.create(null);
+    var linked=new Set(times.flatMap(function(t){return t.referenceImageIds;})),aspects=Object.create(null),metadata=Object.create(null);
     (options.referenceDimensions||[]).forEach(function(r){
       if(!r||!linked.has(r.id)||!Number.isFinite(r.width)||!Number.isFinite(r.height)||r.width<=0||r.height<=0)
         throw RangeError('Invalid presentation reference dimensions');
       aspects[r.id]=r.width/r.height;
+      if(r.title!==undefined)metadata[r.id]=photoValues(r).reduce(function(n,v){return n+(v[0]==='source'?2:1);},0);
     });
-    return Object.freeze({project:p,width:width,height:height,times:times,durationMs:projects.totalMs(p),referenceAspects:Object.freeze(aspects),
+    return Object.freeze({project:p,width:width,height:height,times:times,durationMs:projects.totalMs(p),referenceAspects:Object.freeze(aspects),referenceMetadataRows:Object.freeze(metadata),
       sides:Object.freeze(p.baseExperiment.display.mode==='compare'?['A','B']:['A']),
       referenceLayout:choice(options.referenceLayout,['auto','side','below','stacked','wide','hidden'],'side'),
       layoutMode:choice(options.layoutMode,['fixed','dynamic'],'fixed'),
@@ -52,34 +53,74 @@
     else{h=box.height;w=width*(h/height);}
     return rect(box.x+(box.width-w)/2,box.y+(box.height-h)/2,w,h);
   }
+  // Planning and painting use exactly the same visible provenance fields.
+  function photoValues(photo){
+    return [['title',/\.(?:jpe?g|jfif|png|webp)$/i.test(photo.title)?'':photo.title],
+      ['author',photo.author?'Author: '+photo.author:''],['license',photo.license?'License: '+photo.license:''],
+      ['source',photo.sourceUrl?'Source: '+photo.sourceUrl:'']].filter(function(v){return !!v[1];});
+  }
+  function referenceIds(p,r){
+    return p.layoutMode==='dynamic'&&r.ids.length?[r.ids[0]]:Object.keys(p.referenceAspects);
+  }
+  // Fixed reserves only the maximum visible rows of any linked original.
+  // Incomplete metadata (older callers) retains conservative legacy geometry.
+  function metadataRows(p,r){
+    var ids=referenceIds(p,r);
+    if(!ids.length||ids.some(function(id){return p.referenceMetadataRows[id]===undefined;}))return null;
+    return Math.max.apply(null,ids.map(function(id){return p.referenceMetadataRows[id];}));
+  }
+  function photoParts(photo,layout,gap,label,px,rows){
+    var step=Math.ceil(px(12)*1.22),box,text;
+    if(rows!==null){
+      var h=rows*step;
+      box=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-gap-h-(h?gap:0));
+      text=rect(photo.x+gap,photo.y+photo.height-gap-h,photo.width-2*gap,h);
+    }else if(layout==='side'){
+      text=rect(photo.x+gap,photo.y+photo.height-px(88),photo.width-2*gap,px(82));
+      box=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-px(88)-gap);
+    }else if(layout==='stacked'){
+      var provenance=5*step;
+      text=rect(photo.x+gap,photo.y+photo.height-provenance-gap,photo.width-2*gap,provenance);
+      box=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-provenance-2*gap);
+    }else{
+      var bw=Math.floor((photo.width-gap)*(layout==='wide'?0.70:0.55));
+      box=rect(photo.x+gap,photo.y+label,bw-gap,photo.height-label-gap);
+      text=rect(photo.x+bw+gap,photo.y+label,photo.width-bw-2*gap,photo.height-label-gap);
+    }
+    return {photoBox:box,photoText:text};
+  }
+  function areas(box,ratios){
+    return ratios.map(function(r){var w=Math.min(box.width,box.height*r);return w*w/r;});
+  }
+  function sufficient(values,baseline){
+    return values.every(function(v,i){return v>=0.60*baseline[i]-1e-6;});
+  }
   // Score actual contained photo pixels, not the size of an empty photo panel.
   // Preserve at least the previous physical raster size; prefer usable model
   // pixels, then observation pixels, and penalize unused photo-box area.
-  // Keep at least 60% of the legacy mean displayed photo area.
+  // Keep at least 60% of each original's baseline displayed area.
   var shares=new WeakMap();
-  function adaptiveShare(p,layout,body,gap,label,px,metadataHeight,legacy,ratios){
+  function adaptiveShare(p,layout,body,gap,label,px,metadataHeight,legacy,ratios,rows){
     if(!ratios.length)return legacy;
-    var cache=shares.get(p),key=layout+':'+ratios.join(',');
+    var cache=shares.get(p),key=layout+':'+rows+':'+ratios.join(',');
     if(!cache){cache=new Map();shares.set(p,cache);}
     if(cache.has(key))return cache.get(key);
     var side=layout==='side',n=p.sides.length;
     function evaluate(size){
       var mw=side?body.width-size-gap:body.width,mh=side?body.height:body.height-size-gap;
-      var pw=side?size-2*gap:Math.floor((body.width-gap)*0.55)-gap,
-        ph=side?body.height-label-px(88)-gap:size-label-gap;
+      var b=photoParts(rect(0,0,side?size:body.width,side?body.height:size),layout,gap,label,px,rows).photoBox,
+        pw=b.width,ph=b.height;
       var units=Math.floor(Math.min(Math.floor((mw-gap*(n-1))/n)/16,(mh-label-metadataHeight)/9,120));
       if(units<20||pw<=0||ph<=0)return null;
-      var modelArea=n*144*units*units,photoArea=ratios.reduce(function(sum,r){
-        var w=Math.min(pw,ph*r);return sum+w*w/r;
-      },0)/ratios.length;
-      return {units:units,photoArea:photoArea,score:modelArea+0.5*photoArea-0.05*(pw*ph-photoArea)};
+      var modelArea=n*144*units*units,individual=areas(b,ratios),photoArea=individual.reduce(function(a,b){return a+b;},0)/ratios.length;
+      return {units:units,individual:individual,score:modelArea+0.5*photoArea-0.05*(pw*ph-photoArea)};
     }
     var best=legacy,base=evaluate(legacy),score=base?base.score:-Infinity,
       min=side?px(260):label+gap+5*Math.ceil(px(12)*1.22),
       max=side?Math.floor(body.width*0.55):body.height-gap-label-metadataHeight-180;
     for(var size=min;size<=max;size+=Math.max(1,px(8))){
       var v=evaluate(size);
-      if(v&&(!base||(v.units>=base.units&&v.photoArea>=0.60*base.photoArea))&&v.score>score){best=size;score=v.score;}
+      if(v&&(!base||(v.units>=base.units&&sufficient(v.individual,base.individual)))&&v.score>score){best=size;score=v.score;}
     }
     cache.set(key,best);return best;
   }
@@ -87,8 +128,7 @@
   // hold. Dynamic uses only the displayed original, or the linked set during
   // travel with a reserved panel. Missing dimension metadata retains legacy geometry.
   function referenceRatios(p,r){
-    var ids=p.layoutMode==='dynamic'&&r.ids.length?[r.ids[0]]:Object.keys(p.referenceAspects);
-    return ids.map(function(id){return p.referenceAspects[id];}).filter(function(ratio){return Number.isFinite(ratio)&&ratio>0;});
+    return referenceIds(p,r).map(function(id){return p.referenceAspects[id];}).filter(function(ratio){return Number.isFinite(ratio)&&ratio>0;});
   }
   function geometry(p,r,layout,reserve,minArea){
     var s=p.width/1280,px=function(n){return Math.round(n*s);};
@@ -103,26 +143,24 @@
       metadataHeight=sceneHeight+hudHeight;
     var body=rect(pad,header,p.width-2*pad,p.height-header-footer-narrativeHeight-gap),
       models=body,photo=null,photoBox=null,photoText=null;
-    var ratios=referenceRatios(p,r);
+    var ratios=referenceRatios(p,r),rows=metadataRows(p,r);
     if(reserve&&(layout==='wide'||layout==='stacked'))
-      return alternate(p,layout,body,gap,label,px,sceneHeight,hudHeight,hudFont,ratios,minArea);
+      return alternate(p,layout,body,gap,label,px,sceneHeight,hudHeight,hudFont,ratios,minArea,rows);
     if(reserve&&layout==='side'){
-      var w=adaptiveShare(p,layout,body,gap,label,px,metadataHeight,Math.floor((body.width-gap)*0.32),referenceRatios(p,r));
+      var w=adaptiveShare(p,layout,body,gap,label,px,metadataHeight,Math.floor((body.width-gap)*0.32),ratios,rows);
       photo=rect(body.x,body.y,w,body.height);
       models=rect(body.x+w+gap,body.y,body.width-w-gap,body.height);
-      photoText=rect(photo.x+gap,photo.y+photo.height-px(88),photo.width-2*gap,px(82));
-      photoBox=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-px(88)-gap);
+      var parts=photoParts(photo,layout,gap,label,px,rows);photoText=parts.photoText;photoBox=parts.photoBox;
     }else if(reserve){
       // Preserve the reference allocation unless the metadata and minimum
       // physical raster cannot coexist. Never cover a physical pixel with text.
       var h=Math.min(Math.floor((body.height-gap)*0.38),body.height-gap-label-metadataHeight-180);
-      h=adaptiveShare(p,layout,body,gap,label,px,metadataHeight,h,referenceRatios(p,r));
+      h=adaptiveShare(p,layout,body,gap,label,px,metadataHeight,h,ratios,rows);
       photo=rect(body.x,body.y+body.height-h,body.width,h);
       models=rect(body.x,body.y,body.width,body.height-h-gap);
-      var bw=Math.floor((photo.width-gap)*0.55);
-      photoBox=rect(photo.x+gap,photo.y+label,bw-gap,photo.height-label-gap);
-      photoText=rect(photo.x+bw+gap,photo.y+label,photo.width-bw-2*gap,photo.height-label-gap);
+      var parts=photoParts(photo,layout,gap,label,px,rows);photoText=parts.photoText;photoBox=parts.photoBox;
     }
+    if(photoBox&&(photoBox.width<=0||photoBox.height<=0))return null;
     var paneWidth=Math.floor((models.width-gap*(p.sides.length-1))/p.sides.length),
       // Exact 16:9 integer backing pixels, within existing physical export limits.
       units=Math.floor(Math.min(paneWidth/16,(models.height-label-metadataHeight)/9,120)),
@@ -155,7 +193,7 @@
   // Two additional topologies: a wide top model row with metadata beside the
   // photo below, or stacked models with photo and metadata in a side column.
   // Each candidate reserves every label and HUD before sizing physical pixels.
-  function alternate(p,layout,body,gap,label,px,sceneHeight,hudHeight,hudFont,ratios,minArea){
+  function alternate(p,layout,body,gap,label,px,sceneHeight,hudHeight,hudFont,ratios,minArea,metaRows){
     var n=p.sides.length,best=null,bestScore=-Infinity,stack=layout==='stacked';
     if(stack&&n!==2)return null;
     var minPhoto=px(260),minMeta=hudHeight?px(n===2?640:320):minPhoto;
@@ -175,17 +213,10 @@
         photo=rect(body.x,body.y+body.height-bottom,photoWidth,bottom);
         cameraHud=hudHeight?rect(photo.x+photo.width+gap,photo.y,minMeta,hudHeight):null;
       }
-      var step=Math.ceil(px(12)*1.22),provenance=5*step;
-      // Put provenance beside the observation in the lower row.
-      if(!stack){
-        var bw=Math.floor((photo.width-gap)*0.70);
-        photoBox=rect(photo.x+gap,photo.y+label,bw-gap,photo.height-label-gap);
-        photoText=rect(photo.x+bw+gap,photo.y+label,photo.width-bw-2*gap,photo.height-label-gap);
-      }else{
-        photoBox=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-provenance-2*gap);
-        photoText=rect(photo.x+gap,photo.y+photo.height-provenance-gap,photo.width-2*gap,provenance);
-      }
-      if(photo.width<minPhoto||photoBox.width<=0||photoBox.height<px(100)||photoText.height<4*step||
+      var parts=photoParts(photo,layout,gap,label,px,metaRows);
+      photoBox=parts.photoBox;photoText=parts.photoText;
+      if(photo.width<minPhoto||photoBox.width<=0||photoBox.height<px(100)||
+        (metaRows===null&&photoText.height<4*Math.ceil(px(12)*1.22))||
         (cameraHud&&cameraHud.y+cameraHud.height>body.y+body.height))return;
       var columns=stack?1:n,rows=stack?n:1,
         paneWidth=Math.floor((models.width-gap*(columns-1))/columns),
@@ -200,7 +231,7 @@
       });
       var g={topology:layout,panels:panels,viewSize:Object.freeze({width:vw,height:vh}),photo:photo,photoBox:photoBox,
         photoText:photoText,sceneCaption:sceneCaption,cameraHud:cameraHud,hudCompact:false,hudFont:hudFont};
-      if(minArea&&photoScore(g,ratios)<minArea)return;
+      if(minArea&&!sufficient(areas(g.photoBox,ratios),minArea))return;
       var value=score(p,g,ratios);
       if(value>bestScore){best=g;bestScore=value;}
     }
@@ -213,17 +244,17 @@
   // render and archive workers. No per-frame topology search in Fixed mode.
   var geometries=new WeakMap();
   function chooseGeometry(p,r,reserve){
-    var ratios=referenceRatios(p,r),key=(reserve?'1:':'0:')+ratios.join(','),cache=geometries.get(p);
+    var ratios=referenceRatios(p,r),key=(reserve?'1:':'0:')+metadataRows(p,r)+':'+ratios.join(','),cache=geometries.get(p);
     if(!cache){cache=new Map();geometries.set(p,cache);}
     if(cache.has(key))return cache.get(key);
     var layout=p.referenceLayout,g;
     if(!reserve)g=geometry(p,r,'side',false);
     else if(layout==='auto'){
       g=geometry(p,r,'side',true);
-      var baseline=photoScore(g,ratios),value=score(p,g,ratios);
+      var baseline=areas(g.photoBox,ratios),value=score(p,g,ratios);
       if(ratios.length)['below','wide','stacked'].forEach(function(k){
-        var other=geometry(p,r,k,true,0.60*baseline);
-        if(other&&photoScore(other,ratios)>=0.60*baseline&&score(p,other,ratios)>value){g=other;value=score(p,g,ratios);}
+        var other=geometry(p,r,k,true,baseline);
+        if(other&&sufficient(areas(other.photoBox,ratios),baseline)&&score(p,other,ratios)>value){g=other;value=score(p,g,ratios);}
       });
     }else g=geometry(p,r,layout,true)||geometry(p,r,'side',true);
     cache.set(key,g);return g;
@@ -366,9 +397,7 @@
           // Only known provenance is painted; the manifest retains all fields.
           // Reserve distinct rows so a long title cannot hide the source.
           var meta=frame.photoText,step=Math.ceil(fs(12)*1.22);
-          var values=[['title',/\.(?:jpe?g|jfif|png|webp)$/i.test(photo.title)?'':photo.title],
-            ['author',photo.author?'Author: '+photo.author:''],['license',photo.license?'License: '+photo.license:''],
-            ['source',photo.sourceUrl?'Source: '+photo.sourceUrl:'']].filter(function(v){return !!v[1];});
+          var values=photoValues(photo);
           values.forEach(function(v,i){
             block(v[1],rect(meta.x,meta.y+i*step,meta.width,v[0]==='source'?meta.height-i*step:step),12,'400','reference '+v[0]);
           });
