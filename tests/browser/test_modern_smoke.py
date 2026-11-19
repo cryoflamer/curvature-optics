@@ -318,7 +318,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertGreater(row['count'], row['width']*0.15, row)
             self.assertAlmostEqual(row['painted'], row['y'], delta=2, msg=str(row))
 
+    def test_presentation_video_workers_with_original(self):
+        # Real WebCodecs requires a secure origin (localhost qualifies).
+        try:
+            self.page.goto(self.base_url.replace('CurvatureModern.html', 'tests/'))
+        except Exception as error:
+            if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(error):
+                self.skipTest('Browser policy blocks localhost; WebCodecs needs a secure context')
+            raise
+        self._presentation_workers_with_original(live_video=True)
+
     def test_presentation_png_workers_with_original(self):
+        self._presentation_workers_with_original(live_video=False)
+
+    def _presentation_workers_with_original(self, live_video):
         # Production controller, Studio save/reopen and both real worker sources.
         # Blob URLs substitute only script transport, not the initialization or
         # rendering protocol; a separate full-page test covers the HTTP wiring.
@@ -331,7 +344,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                    'ModernAnimationSequences.js', 'ModernAnimationStudio.js', 'ModernAnimationLibrary.js',
                    'ModernDemoCatalogData.js', 'ModernDemoCatalog.js', 'ModernAnimationPresentation.js',
                    'ModernTargetIndicator.js', 'ModernAnimationCanvasHud.js', 'ModernAnimationPresentationCompositor.js',
-                   'ModernAnimationFrameExport.js', 'ModernAnimationBackgroundExport.js'}
+                   'ModernAnimationFrameExport.js', 'ModernAnimationBackgroundExport.js',
+                   'ModernAnimationVideoPipeline.js', 'ModernAnimationBackgroundVideoExport.js'}
         html = (ROOT / 'CurvatureModern.html').read_text(encoding='utf-8')
         for src in re.findall(r'<script src="([^"?]+)(?:\?[^"\n]*)?"', html):
             if Path(src).name in modules:
@@ -339,14 +353,14 @@ class ModernBrowserSmoke(unittest.TestCase):
                 modules.remove(Path(src).name)
         self.assertEqual(modules, set())
         scripts = {}
-        for name in ['ModernAnimationFrameWorker.js', 'ModernAnimationArchiveWorker.js']:
+        for name in ['ModernAnimationFrameWorker.js', 'ModernAnimationArchiveWorker.js', 'ModernAnimationVideoEncoderWorker.js']:
             path = ROOT / 'src/animation' / name
             source = path.read_text(encoding='utf-8')
             block = re.search(r'importScripts\((.*?)\);', source, re.S)
             dependencies = [(path.parent / item.split('?')[0]).resolve().read_text(encoding='utf-8')
                             for item in re.findall(r"'([^']+)'", block.group(1))]
             scripts[name] = {'source': source, 'dependencies': dependencies}
-        result = self.page.evaluate(r"""async scripts => {
+        result = self.page.evaluate(r"""async ({scripts,liveVideo}) => {
             const projects=CurvatureModernAnimationProject,studio=CurvatureModernAnimationStudio,
                 library=CurvatureModernAnimationLibrary;
             const demo=CurvatureModernDemoCatalog.load().find(d=>d.id==='soundly');
@@ -367,9 +381,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             const original={version:1,id:'photo',title:'Synthetic portrait',author:'Observer',license:'CC BY',original:{dataUrl,width:3,height:4}};
             const urls=[],workers=[];
             function url(source){const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;}
-            function WorkerCtor(path){const name=path.split('?')[0].split('/').at(-1),spec=scripts[name],deps=spec.dependencies.map(url);
+            function WorkerCtor(path,probe=''){const name=path.split('?')[0].split('/').at(-1),spec=scripts[name],deps=spec.dependencies.map(url);
                 const source=spec.source.replace(/importScripts\([\s\S]*?\);/,'importScripts('+deps.map(JSON.stringify).join(',')+');');
-                const worker=new Worker(url(source));workers.push(worker);return worker;
+                const worker=new Worker(url(source+probe));workers.push(worker);return worker;
             }
             try{
                 const controller=CurvatureModernAnimationBackgroundExport.create({WorkerCtor});
@@ -415,11 +429,47 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const zip=new Blob(chunks,{type:'application/zip'}),data=await new Promise(resolve=>{
                     const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(zip);
                 });
-                return {previews:results,stream:{closed:sink.closed,aborted:sink.aborted,bytes:stream.bytesWritten,
+                const videoSettings={...settings,fps:10,format:'webm'};
+                // Exercise the actual video renderer and compositor even where WebCodecs
+                // is unavailable: capture the Canvas passed to the VideoFrame constructor.
+                const probe=`self.onmessage=async ({data})=>{try{
+                    const p=setup(data,true),frames=[];
+                    for(const index of [0,2,3]){const frame=await CurvatureModernAnimationVideoPipeline.renderTimestamp(p.plan,index,p.render,class {constructor(canvas){this.canvas=canvas;}close(){}},null,p.compose,p.presentationAdapter);
+                        frames.push({blob:await frame.frames.PRESENTATION.canvas.convertToBlob(),time:frame.sampleTimeMs});}
+                    self.postMessage({frames});
+                }catch(e){self.postMessage({error:String(e.stack||e)});}};`;
+                const renderer=WorkerCtor('ModernAnimationFrameWorker.js',probe);
+                const captured=await new Promise((resolve,reject)=>{renderer.onmessage=e=>e.data.error?reject(Error(e.data.error)):resolve(e.data);renderer.onerror=e=>reject(Error(e.message));renderer.postMessage(videoSettings);});
+                const capturedData=await Promise.all(captured.frames.map(async frame=>({time:frame.time,data:await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(frame.blob);})})));
+                if(capturedData[1].time!==200||capturedData[1].data!==previewData)throw Error('Video Canvas and PNG preview differ');
+                let encodedVideo=null;
+                if(liveVideo){
+                const video=await CurvatureModernAnimationBackgroundVideoExport.create({WorkerCtor}).start(videoSettings);
+                const clip=document.createElement('video'),clipUrl=URL.createObjectURL(video.blob);urls.push(clipUrl);
+                const ready=new Promise((resolve,reject)=>{clip.onloadeddata=resolve;clip.onerror=()=>reject(Error('Video decode failed'));});
+                clip.src=clipUrl;await ready;
+                const decoded=new OffscreenCanvas(clip.videoWidth,clip.videoHeight),dc=decoded.getContext('2d');
+                function colors(){dc.drawImage(clip,0,0);const px=dc.getImageData(0,0,decoded.width,decoded.height).data;let green=0,cyan=0;for(let i=0;i<px.length;i+=4){if(px[i]<50&&px[i+1]>180&&px[i+2]<50)green++;if(px[i]<50&&px[i+1]>180&&px[i+2]>180)cyan++;}return {green,cyan};}
+                const first=colors();await new Promise(resolve=>{clip.onseeked=resolve;clip.currentTime=.35;});const last=colors();clip.removeAttribute('src');clip.load();
+                encodedVideo={filename:video.filename,manifest:video.manifest,type:video.blob.type,width:decoded.width,height:decoded.height,first,last};
+                }
+                return {video:encodedVideo,canvasParity:capturedData,previews:results,stream:{closed:sink.closed,aborted:sink.aborted,bytes:stream.bytesWritten,
                     streamed:stream.streamed,hasBlob:!!stream.blob,manifest:stream.manifest,zip:data,
                     preview:previewData,previewRow:preview.manifest.frames[0]}};
             }finally{workers.forEach(w=>w.terminate());urls.forEach(u=>URL.revokeObjectURL(u));}
-        }""", scripts)
+        }""", {"scripts": scripts, "liveVideo": live_video})
+        self.assertEqual([f['time'] for f in result['canvasParity']], [0, 200, 400])
+        if live_video:
+            video = result['video']
+            self.assertEqual(video['type'], 'video/webm')
+            self.assertTrue(video['filename'].endswith('_presentation.webm'))
+            self.assertEqual((video['width'], video['height']), (1280, 720))
+            self.assertEqual(video['manifest']['frameCount'], 4)
+            self.assertEqual(video['manifest']['durationUs'], 400000)
+            self.assertEqual(video['manifest']['outputStreams'], 1)
+            self.assertEqual(video['manifest']['presentation']['cameraHudPlacement'], 'external')
+            self.assertGreater(video['first']['green'], 100)
+            self.assertGreater(video['last']['cyan'], 100)
         self.assertEqual([item['version'] for item in result['previews']], [2, 1])
         for item in result['previews']:
             self.assertEqual((item['width'], item['height']), (1280, 720))
@@ -446,6 +496,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(archive.namelist(), ['frames/frame_00000_presentation.png',
                                                 'frames/frame_00001_presentation.png',
                                                 'frames/frame_00002_presentation.png', 'manifest.json'])
+            for index, frame in enumerate(result['canvasParity']):
+                self.assertEqual(base64.b64decode(frame['data'].split(',', 1)[1]), archive.read(f'frames/frame_{index:05d}_presentation.png'))
             manifest = json.loads(archive.read('manifest.json'))
             self.assertEqual(manifest, stream['manifest'])
             self.assertEqual(manifest['presentation']['cameraHudPlacement'], 'external')

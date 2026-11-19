@@ -30,8 +30,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1';
-    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1&spline-parity=1&short-endpoint=1&png-project-fields=1';
+    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1&presentation-video=1';
+    var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1&spline-parity=1&short-endpoint=1&png-project-fields=1&presentation-video=1';
     var active=null;
     function cancel(){
       if(!active)return false;
@@ -231,12 +231,12 @@
             height:plan.height,fps:plan.fps,workers:count,quality:quality,format:format,
             frameWindow:window,cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
             targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,
-            compareLayout:plan.compareLayout});
+            compareLayout:plan.compareLayout,...(plan.presentation?{presentation:plan.presentationOptions,referenceImages:plan.referenceImages}: {})});
           renderers.forEach(function(slot){slot.worker.postMessage({type:'video-init',
             project:plan.project,width:plan.width,height:plan.height,fps:plan.fps,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
             targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,
-            compareLayout:plan.compareLayout});});
+            compareLayout:plan.compareLayout,...(plan.presentation?{presentation:plan.presentationOptions,referenceImages:plan.referenceImages}: {})});});
         }catch(error){finish(error);}
       });
     }

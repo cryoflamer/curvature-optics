@@ -63,9 +63,9 @@ importScripts(
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
   'ModernAnimationPresentationCompositor.js?presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1',
   'ModernAnimationCompareComposition.js',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1'
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1&presentation-video=1'
 );
 
 function createGraph(canvas){
@@ -115,7 +115,7 @@ function setup(data,video){
       cameraHud:data.cameraHud===true,
       cameraHudAppearance:data.cameraHudAppearance,
       targetIndicator:data.targetIndicator===true,targetSelection:data.targetSelection},
-      video?{compareLayout:data.compareLayout}:{presentation:data.presentation,referenceImages:data.referenceImages,previewTimeMs:data.previewTimeMs,streaming:data.streaming}));
+      video?{compareLayout:data.compareLayout,presentation:data.presentation,referenceImages:data.referenceImages}:{presentation:data.presentation,referenceImages:data.referenceImages,previewTimeMs:data.previewTimeMs,streaming:data.streaming}));
   var contexts={};
   plan.sides.forEach(function(side){
     contexts[side]=createGraph(new OffscreenCanvas(plan.presentation?320:plan.width,plan.presentation?180:plan.height));
@@ -188,7 +188,7 @@ self.onmessage=async function(event){
       if(parallel.video){
         if(typeof VideoFrame!=='function')throw Error('Worker VideoFrame unavailable');
         videoFrame=await self.CurvatureModernAnimationVideoPipeline.renderTimestamp(
-          parallel.plan,data.index,parallel.render,VideoFrame,null,parallel.compose);
+          parallel.plan,data.index,parallel.render,VideoFrame,null,parallel.compose,parallel.presentationAdapter);
         if(!videoFrame)throw Error('Video frame calculation cancelled unexpectedly');
         self.postMessage({type:'video-frame',index:data.index,frame:videoFrame},
           parallel.plan.outputSides.map(function(side){return videoFrame.frames[side];}));

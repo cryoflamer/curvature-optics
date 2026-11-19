@@ -24,6 +24,7 @@
       !Number.isInteger(height)||height<=0)
       throw RangeError('Invalid video output layout dimensions');
     var isCompare=mode==='compare';
+    if(requestedLayout==='presentation')return Object.freeze({compareLayout:'presentation',outputWidth:width,outputHeight:height,outputSides:Object.freeze(['PRESENTATION']),rawFrameBytes:width*height*4});
     var layout=isCompare?(requestedLayout==null?'side-by-side':requestedLayout):null;
     if(layout!==null&&!['side-by-side','separate'].includes(layout))
       throw RangeError('Unsupported Compare video layout');
@@ -38,7 +39,11 @@
       rawFrameBytes:outputWidth*outputHeight*4*streams});
   }
   function plan(project,options){
-    var owned=projects.validate(project),settings=png.exportSettings(options);
+    options=options||{};
+    var owned=projects.validate(project),full=options.presentation!==undefined;
+    var presentation=full?png.plan(owned,Object.assign({},options,{previewTimeMs:0})):null;
+    var settings=full?presentation:png.exportSettings(options);
+    if(!full&&options.compareLayout==='presentation')throw Error('Presentation settings required');
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
       throw RangeError('Invalid camera HUD export setting');
     if(options&&options.targetIndicator!==undefined&&typeof options.targetIndicator!=='boolean')
@@ -50,7 +55,7 @@
     // two-stream protocol when the user selects separate A/B output.
     var isCompare=owned.baseExperiment.display.mode==='compare';
     var layout=outputLayout(owned.baseExperiment.display.mode,settings.width,
-      settings.height,options&&options.compareLayout);
+      settings.height,full?'presentation':options.compareLayout);
     var totalMs=projects.totalMs(owned),durationUs=Math.round(totalMs*1000);
     if(!Number.isSafeInteger(durationUs)||durationUs<=0)
       throw RangeError('Video animation must have positive finite duration');
@@ -89,7 +94,8 @@
       frameCount:count,sides:Object.freeze(isCompare?['A','B']:['A']),
       outputSides:layout.outputSides,
       outputWidth:layout.outputWidth,outputHeight:layout.outputHeight,
-      compareLayout:layout.compareLayout,frames:Object.freeze(times)});
+      compareLayout:layout.compareLayout,frames:Object.freeze(times),
+      ...(full?{presentation:presentation.presentation,referenceImages:presentation.referenceImages,presentationOptions:options.presentation}: {})});
   }
   function closeFrames(result){
     if(!result||!result.frames)return;
@@ -100,7 +106,7 @@
   }
   // FrameCtor is injectable for tests; normally a dedicated renderer worker
   // passes its own VideoFrame. PNG encoding is intentionally never invoked.
-  async function renderTimestamp(p,index,render,FrameCtor,cancel,compose){
+  async function renderTimestamp(p,index,render,FrameCtor,cancel,compose,adapter){
     if(!p||!Array.isArray(p.frames)||!Number.isInteger(index)||
       index<0||index>=p.frameCount||typeof render!=='function'||
       typeof FrameCtor!=='function')throw RangeError('Invalid video frame request');
@@ -111,6 +117,14 @@
       throw TypeError('Compare video composition callback required');
     try{
       if(cancel&&cancel.cancelled)return null;
+      if(p.presentation){
+        var painted=await png.renderPresentationCanvas(p,index,timing.sampleTimeMs,render,cancel,adapter);
+        if(!painted)return null;
+        if(painted.canvas.width!==p.outputWidth||painted.canvas.height!==p.outputHeight)throw Error('Incorrect presentation video dimensions');
+        result.frames.PRESENTATION=new FrameCtor(painted.canvas,{timestamp:timing.timestampUs,duration:timing.durationUs});
+        result.stats=painted.renderStats;result.stats.compositionMs=painted.compositionMs;
+        return result;
+      }
       var sample=projects.sampleAt(p.project,timing.sampleTimeMs);
       for(var j=0;j<p.sides.length;j++){
         if(cancel&&cancel.cancelled){closeFrames(result);return null;}

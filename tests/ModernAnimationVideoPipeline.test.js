@@ -374,3 +374,20 @@ test('frame Worker actually composes and transfers one synchronized Compare Vide
   assert.equal(posts[1].value.frame.timestampUs,0);
   assert.equal(canvases.length,3);
 });
+
+test('Full presentation retains the video timeline and one final-size raster in Scene and Compare',()=>{
+  const background=require('../src/animation/ModernAnimationBackgroundVideoExport');
+  const naming=require('../src/ui/modern/ModernSemanticNaming');
+  for(const mode of ['scene','compare'])for(const width of [1280,1920,2560,3840]){
+    const p=video.plan(make(mode,59100),{width,height:width*9/16,fps:25,presentation:{referenceLayout:'hidden',layoutMode:'fixed'}});
+    assert.equal(p.frameCount,1478);assert.equal(p.durationUs,59100000);
+    assert.equal(p.frames.at(-1).sampleTimeMs,59100);assert.deepEqual(p.outputSides,['PRESENTATION']);
+    assert.equal(p.outputWidth,width);assert.equal(p.outputHeight,width*9/16);
+    assert.equal(p.sides.length,mode==='compare'?2:1);
+    assert.ok(background.frameWindow(p,4)*p.outputWidth*p.outputHeight*4<=background.MAX_INFLIGHT_RGBA_BYTES);
+    assert.match(naming.exportNames(p.project,{format:'mp4',fps:p.fps,width:p.outputWidth,height:p.outputHeight,compareLayout:p.compareLayout}).filename,/_presentation\.mp4$/);
+  }
+  const raw=structuredClone(make('compare'));raw.keyframes[0].referenceImageIds=['missing'];
+  assert.throws(()=>video.plan(raw,{width:1920,height:1080,presentation:{referenceLayout:'auto'}}),/linked IDs/);
+  assert.throws(()=>video.plan(raw,{width:1920,height:1080,compareLayout:'presentation'}),/Presentation settings required/);
+});

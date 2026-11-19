@@ -187,3 +187,22 @@ test('video preview and actual worker request use the selected atmospheric varia
   assert.equal(h.context.studioPrepared.baseExperiment.compare.A.atmosphere,'vacuum');
   assert.equal(preview,'Export filename: '+h.downloads[0]);
 });
+
+test('Full presentation UI selects the final raster and downloads the previewed presentation filename',async()=>{
+  for(const mode of ['scene','compare']){
+    const h=harness(mode),e=h.elements;
+    e.ModernAnimationVideoExportMode={value:'presentation'};
+    e.ModernAnimationVideoExportPresentationSize={value:'1920'};
+    e.ModernAnimationVideoExportLayout={value:'hidden'};
+    e.ModernAnimationVideoExportStability={value:'fixed'};
+    e.ModernAnimationVideoExportNarrative={checked:true};
+    h.sync();const preview=e.ModernAnimationVideoExportFilename.textContent;
+    assert.equal(e.ModernAnimationVideoExportCompareLayoutControl.hidden,true);
+    assert.match(preview,/_1920x1080_25fps_presentation\.webm$/);
+    assert.match(e.ModernAnimationVideoExportLayoutInfo.textContent,/1 × 1920×1080 WEBM video/);
+    await h.handlers['ModernAnimationVideoExportStart:click']();
+    assert.equal(preview,'Export filename: '+h.downloads[0]);
+    assert.equal(h.received().presentation.referenceLayout,'hidden');
+    assert.equal(h.received().presentation.layoutMode,'fixed');
+  }
+});

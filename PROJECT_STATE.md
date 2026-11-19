@@ -1,3 +1,28 @@
+## Modern Demo Catalog — Full Presentation Video (7D.2.3)
+
+Issue #3: implemented a Full presentation video content mode alongside the
+existing simulation-only export. Video and PNG share the exact Accurate RK4
+presentation Canvas painter (no PNG encode/decode round trip for video),
+including original linked photographs, captions, external HUD, narrative,
+Auto/manual layouts, Fixed/Dynamic sizing and the presentation guide style.
+The output is one fixed 16:9 raster (HD through 4K) for Scene and Compare;
+internal viewports can adapt without changing the coded dimensions. Existing
+video timing, explicit final sample, bounded RGBA worker queue, VP9/WebM and
+H.264/MP4 muxers and codec checks are reused. Filename preview and download
+use the `_presentation` suffix. Missing original photos remain a hard error.
+The mode defaults to simulation-only for backwards compatibility.
+
+539 animation/guide Node tests passed, including UI filename parity, timing,
+4K RGBA budget and mocked encoder tests for both containers. Chromium rendered
+three video-source Canvases (portrait, travel, landscape), byte-identical when
+PNG-encoded to their corresponding PNG archive entries. Real WebCodecs
+encode/decode browser test is installed but was skipped here: managed Chromium
+blocks localhost navigation and WebCodecs requires a secure context. No actual
+VP9/H.264 presentation file has been validated in this environment. User
+acceptance in Opera is pending; start with WebM, 720p, 5 fps, Auto + Fixed,
+then Full HD 25 fps. Existing 192 MiB compressed muxer limit still applies.
+No physics/FOV/layout algorithm changes. Further layout optimization: #2.
+
 ## Modern Demo Catalog — Readable Presentation Guides (7D.2.2.3C)
 
 Full presentation PNG exports now pass an explicit guide-label scale derived

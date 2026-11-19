@@ -2714,14 +2714,16 @@
     var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
     var format=newUiEl('ModernAnimationVideoExportFormat').value;
     var isCompare=project.baseExperiment.display.mode==='compare';
-    var compareLayout=isCompare?
-      newUiEl('ModernAnimationVideoExportCompareLayout').value:undefined;
+    var full=(newUiEl('ModernAnimationVideoExportMode')||{}).value==='presentation',extra={};
+    if(full){size=[Number(newUiEl('ModernAnimationVideoExportPresentationSize').value)];size.push(size[0]*9/16);
+      extra.presentation={referenceLayout:newUiEl('ModernAnimationVideoExportLayout').value,layoutMode:newUiEl('ModernAnimationVideoExportStability').value,showNarrative:newUiEl('ModernAnimationVideoExportNarrative').checked};}
+    var compareLayout=isCompare&&!full?newUiEl('ModernAnimationVideoExportCompareLayout').value:undefined;
     var plan=studioVideoExportPlan.plan(project,{fps:fps,width:size[0],
-      height:size[1],compareLayout:compareLayout});
+      height:size[1],compareLayout:compareLayout,...(full?{presentation:{referenceLayout:'hidden'}}:{})});
     var names=semanticNaming.exportNames(plan.project,{
       format:format,fps:plan.fps,width:plan.outputWidth,
       height:plan.outputHeight,compareLayout:plan.compareLayout});
-    return {plan:plan,format:format,names:names};
+    return {plan:plan,format:format,names:names,extra:extra};
   }
   function syncStudioVideoExportLayout(){
     var selector=newUiEl('ModernAnimationVideoExportCompareLayout');
@@ -2733,7 +2735,10 @@
     var mode=first&&first.experiment&&first.experiment.display&&
       first.experiment.display.mode;
     var isCompare=mode==='compare';
-    label.hidden=!isCompare;
+    var full=(newUiEl('ModernAnimationVideoExportMode')||{}).value==='presentation';
+    label.hidden=!isCompare||full;
+    ['PresentationSize','Layout','Stability','Narrative'].forEach(function(key){var node=newUiEl('ModernAnimationVideoExport'+key+'Control');if(node)node.hidden=!full;});
+    var simulation=newUiEl('ModernAnimationVideoExportSimulationSizeControl');if(simulation)simulation.hidden=full;
     if(mode!=='scene'&&!isCompare){
       info.textContent='Add compatible keyframes to preview the video output.';
       if(filename)filename.textContent='Export filename: add compatible keyframes first.';
@@ -2741,9 +2746,10 @@
     }
     try{
       var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
+      if(full){size=[Number(newUiEl('ModernAnimationVideoExportPresentationSize').value)];size.push(size[0]*9/16);}
       var format=newUiEl('ModernAnimationVideoExportFormat').value.toUpperCase();
       var layout=studioVideoExportPlan.outputLayout(mode,size[0],size[1],
-        isCompare?selector.value:undefined);
+        full?'presentation':isCompare?selector.value:undefined);
       var workerValue=newUiEl('ModernAnimationVideoExportWorkers').value;
       var workers=studioBackgroundExportApi.countFor(
         workerValue==='auto'?'auto':Number(workerValue),
@@ -2871,7 +2877,7 @@
       if(lastProfile)downloadHistoryJson(JSON.stringify(lastProfile,null,2),
         'curvature-animation-video-profile.json');
     });
-    ['ModernAnimationVideoExportCompareLayout','ModernAnimationVideoExportSize',
+    ['ModernAnimationVideoExportMode','ModernAnimationVideoExportPresentationSize','ModernAnimationVideoExportLayout','ModernAnimationVideoExportStability','ModernAnimationVideoExportNarrative','ModernAnimationVideoExportCompareLayout','ModernAnimationVideoExportSize',
       'ModernAnimationVideoExportFormat','ModernAnimationVideoExportFps',
       'ModernAnimationVideoExportWorkers'].forEach(function(id){
       var select=newUiEl(id);
@@ -2879,7 +2885,7 @@
     });
     cancel.addEventListener('click',function(){
       if(!studioVideoExportTask)return;
-      studioVideoExportTask.controller.cancel();
+      studioVideoExportTask.cancelled=true;studioVideoExportTask.controller.cancel();
       message('Video export cancelled. All render and encoder workers terminated; no video saved.','warning');
     });
     start.addEventListener('click',async function(){
@@ -2888,10 +2894,10 @@
         message('Video export modules unavailable. Check the browser console.','error');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
-        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1&png-project-fields=1',
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1&presentation-video=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1&png-project-fields=1&presentation-video=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
-      var task={controller:controller};studioVideoExportTask=task;
+      var task={controller:controller,cancelled:false};studioVideoExportTask=task;
       syncStudioFrameExportControls();
       if(progress){progress.max=100;progress.value=0;}
       lastProfile=null;
@@ -2909,13 +2915,20 @@
         message('Starting '+codecLabel+' render and encoder workers · '+plan.frameCount+
           ' video intervals · '+plan.outputSides.length+' output stream(s) from '+
           plan.sides.length+' view(s) · Accurate RK4.');
-        var result=await controller.start({project:plan.project,fps:plan.fps,
+        var extra=selection.extra||{},cameraHud=!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,appearance=studioHudAppearance(),includeTarget=!!(newUiEl('ModernAnimationVideoExportTarget')||{}).checked,selectedTarget=targetIndicatorSelection;
+        if(extra.presentation&&extra.presentation.referenceLayout!=='hidden'){
+          var demo=studioActiveDemo;message('Collecting original reference photographs…');
+          extra.referenceImages=await studioLibrary.collectReferences([{project:plan.project}],function(id){
+            if(task.cancelled)throw Error('Cancelled');
+            if(demo){var record=(demo.referenceImages||[]).find(function(r){return r.id===id;});return Promise.resolve(record?{record:record}:null);}
+            return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+          });
+        }
+        if(task.cancelled)return;
+        var result=await controller.start({project:plan.project,fps:plan.fps,...extra,
           width:plan.width,height:plan.height,workerCount:workers,quality:quality,format:format,
           compareLayout:plan.compareLayout,expectedFilename:selection.names.filename,
-          cameraHud:!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,
-          cameraHudAppearance:studioHudAppearance(),
-          targetIndicator:!!(newUiEl('ModernAnimationVideoExportTarget')||{}).checked,
-          targetSelection:targetIndicatorSelection,
+          cameraHud:cameraHud,cameraHudAppearance:appearance,targetIndicator:includeTarget,targetSelection:selectedTarget,
           onReady:function(info){
             message(info.workers+' render worker(s) · '+codecLabel+' encoder ready · '+
               info.total+' frames · '+info.width+'×'+info.height+' output · reorder window '+info.frameWindow+
@@ -3000,7 +3013,7 @@
             profilePanel.hidden=false;
           }
         }
-      }catch(error){message('Video export failed: '+error.message+' · No partial video saved.','error');}
+      }catch(error){if(!task.cancelled)message('Video export failed: '+error.message+' · No partial video saved.','error');}
       finally{if(studioVideoExportTask===task)studioVideoExportTask=null;
         syncStudioFrameExportControls();}
     });
@@ -3049,8 +3062,8 @@
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1',
-        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1',
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1',
+        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1&presentation-video=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller,cancelled:false},sink=null,ownedSink=false;
       clearPreview();

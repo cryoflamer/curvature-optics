@@ -212,22 +212,29 @@
   // encoding and optical-quality checks; a different scheduling order must
   // never select Fast or omit an A/B side.
   function outputSides(p){return p.presentation?['presentation']:p.sides;}
-  async function renderPresentation(p,index,render,cancel,adapter){
+  async function renderPresentationCanvas(p,index,time,render,cancel,adapter){
     if(!adapter||typeof adapter.canvas!=='function'||typeof adapter.observation!=='function')throw Error('Presentation export adapter unavailable');
-    var time=p.timesMs[index],frame=compositor.frameAt(p.presentation,time),images={},renderStats={};
+    var frame=compositor.frameAt(p.presentation,time),images={},renderStats={};
     for(var side of frame.sides){
       if(cancel&&cancel.cancelled)return null;
-      var image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time,showCaptions:false,guideLabelScale:p.width/1280});
+      var started=performance.now(),image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time,showCaptions:false,guideLabelScale:p.width/1280});
       prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,false,p.cameraHudAppearance,p.targetIndicator,p.targetSelection);
       images[side]=Object.assign({},image,{timeMs:time});
-      if(image.metrics){var m=image.metrics,t=m.timings||{};renderStats[side]={opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
+      if(image.metrics){var m=image.metrics,t=m.timings||{};renderStats[side]={renderMs:Math.max(0,performance.now()-started),opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
         unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
         budgetExceeded:!!m.budgetExceeded,cacheReused:!!m.cacheReused};}
     }
     if(cancel&&cancel.cancelled)return null;
     var photo=frame.referenceId?await adapter.observation(p.referenceImages.find(function(r){return r.id===frame.referenceId;})):null;
     if(cancel&&cancel.cancelled)return null;
-    var result=compositor.paint(adapter.canvas(),frame,images,photo),bytes=await toPng(result.canvas);
+    var startedComposition=performance.now(),result=compositor.paint(adapter.canvas(),frame,images,photo);
+    return {canvas:result.canvas,frame:frame,warnings:result.warnings,renderStats:renderStats,compositionMs:Math.max(0,performance.now()-startedComposition)};
+  }
+  async function renderPresentation(p,index,render,cancel,adapter){
+    var time=p.timesMs[index],result=await renderPresentationCanvas(p,index,time,render,cancel,adapter);
+    if(!result)return null;
+    var frame=result.frame,renderStats=result.renderStats,bytes=await toPng(result.canvas);
+    Object.values(renderStats).forEach(function(s){delete s.renderMs;});
     var name='frames/frame_'+pad(index)+'_presentation.png';
     return {row:{index:index,timeMs:time,timestampUs:Math.round(time*1000),images:{presentation:name},
       referenceId:frame.referenceId,referenceCount:frame.referenceCount,topology:frame.topology,viewSize:frame.viewSize,warnings:result.warnings,renderStats:renderStats},entries:[{name:name,data:bytes}]};
@@ -395,7 +402,7 @@
   }
   return Object.freeze({plan:plan,checkFrameBudget:checkFrameBudget,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
     resolveHudAppearance:resolveHudAppearance,
-    run:run,renderTimestamp:renderTimestamp,assemble:assemble,outputSides:outputSides,
+    run:run,renderTimestamp:renderTimestamp,renderPresentationCanvas:renderPresentationCanvas,assemble:assemble,outputSides:outputSides,
     zip:zip,streamingArchive:streamingArchive,MAX_STREAM_FRAMES:MAX_STREAM_FRAMES,graphForCanvas:graphForCanvas,
     compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});
 }));

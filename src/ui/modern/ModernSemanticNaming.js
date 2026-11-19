@@ -163,6 +163,7 @@
       width<=0||height<=0||fps<=0)throw RangeError('Invalid export dimensions');
     var base=exportStem(project)+atmosphereSuffix(project)+'_'+width+'x'+height+'_'+fps+'fps';
     if(kind==='frames')return {filename:base+'_frames.zip'};
+    if(settings.compareLayout==='presentation')return {filename:base+'_presentation.'+format};
     var compare=project&&project.baseExperiment&&project.baseExperiment.display.mode==='compare';
     if(compare&&settings.compareLayout==='separate')return {
       filename:base+'_compare-separate.zip',

@@ -7,7 +7,7 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
-  '../ui/modern/ModernSemanticNaming.js?semantic-names=2&atmosphere-export=1',
+  '../ui/modern/ModernSemanticNaming.js?semantic-names=2&atmosphere-export=1&presentation-video=1',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernTargetIndicator.js?target-indicator=1',
@@ -17,8 +17,11 @@ importScripts(
   'ModernAnimationContract.js',
   'ModernAnimationProject.js?project-fields=reference-narrative-1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1',
-  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1',
+  'ModernReferenceImage.js',
+  'ModernAnimationPresentation.js',
+  'ModernAnimationPresentationCompositor.js?content-layout=1&guide-labels=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-video=1',
+  'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1&presentation-video=1',
   'ModernAnimationVideoCapabilities.js',
   'ModernAnimationWebMMuxer.js',
   'ModernAnimationMP4Muxer.js',
@@ -95,6 +98,7 @@ async function maybeFinish(){
       peakEncoderQueue:current.peakEncoderQueue,
       encodedBytes:current.encodedBytes,
       elapsedMs:performance.now()-current.start};
+    if(p.presentation)manifest.presentation={referenceLayout:p.presentation.referenceLayout,layoutMode:p.presentation.layoutMode,showNarrative:p.presentation.showNarrative,cameraHudPlacement:p.cameraHud?'external':'hidden',referenceIds:p.referenceImages.map(function(r){return r.id;})};
     if(p.cameraHud){
       manifest.cameraHudIncluded=true;
       manifest.cameraHudAppearance=p.cameraHudAppearance;
@@ -152,7 +156,7 @@ async function init(data){
     var multiplier=data.quality==='high'?2:data.quality==='standard'?1:null;
     if(multiplier===null)throw RangeError('Unsupported video quality preset');
     var bitrate=Math.round(Math.max(400000,Math.min(
-      plan.compareLayout==='side-by-side'?16000000:8000000,
+      plan.compareLayout==='side-by-side'||plan.presentation?16000000:8000000,
       2500000*(plan.outputWidth*plan.outputHeight)/(960*540)*plan.fps/25*multiplier)));
     var config={codec:codec,width:plan.outputWidth,height:plan.outputHeight,
       framerate:plan.fps,bitrate:bitrate};

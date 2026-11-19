@@ -369,3 +369,19 @@ test('short Spline animations encode both endpoints at 5 FPS in WebM and MP4',as
     assert.equal(messages.some(message=>message.type==='error'),false);
   }
 });
+
+test('presentation encoder produces one file with exact timing and layout metadata for both container formats',async()=>{
+  for(const format of ['webm','mp4']){
+    const p=project('compare'),opts={fps:5,width:1280,height:720,presentation:{referenceLayout:'hidden',layoutMode:'dynamic'},cameraHud:true};
+    const plan=video.plan(p,opts),{root,messages,workers}=sandbox();
+    root.onmessage({data:{type:'init',project:p,...opts,quality:'standard',workers:2,frameWindow:4,format}});
+    await tick();assert.equal(messages.at(-1).type,'ready');assert.equal(workers.length,1);
+    assert.equal(workers[0].config.width,1280);assert.equal(workers[0].config.height,720);
+    for(const i of [4,1,0,3,2])root.onmessage({data:{type:'frame',frame:frame(plan,i)}});
+    await tick();await tick();
+    const completed=messages.find(x=>x.type==='complete');assert.ok(completed,JSON.stringify(messages));
+    assert.equal(completed.blob.type,'video/'+format);assert.ok(completed.filename.endsWith('_presentation.'+format));
+    assert.equal(completed.manifest.durationUs,1000000);assert.equal(completed.manifest.outputStreams,1);
+    assert.equal(completed.manifest.presentation.layoutMode,'dynamic');assert.equal(completed.manifest.presentation.cameraHudPlacement,'external');
+  }
+});
