@@ -1495,3 +1495,10 @@ button{cursor:pointer}
 .modern-calibration-actions{margin:12px 0;padding:8px;background:#edf5fc;border-radius:6px}
 #ModernCalibrationActionHint{flex:1;font-size:13px;color:#355b82}
 .modern-photo-calibration tr.is-selected{background:#e3f0fc}
+
+/* Isolated object inspector: independent of the scene canvas viewport. */
+.modern-landmark-viewer{width:min(820px,94vw);max-width:94vw;box-sizing:border-box}
+.modern-landmark-viewer header{justify-content:space-between;margin-bottom:6px}
+.modern-landmark-viewer h2{font-size:1.1rem;margin:0}
+.modern-landmark-viewer canvas{display:block;width:100%;height:auto;max-height:57dvh;object-fit:contain;touch-action:none;cursor:grab;margin:8px 0;border:1px solid #a9c3d9}
+.modern-landmark-viewer canvas:active{cursor:grabbing}

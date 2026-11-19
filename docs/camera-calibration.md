@@ -1,3 +1,20 @@
+## 8F.2 — Isolated authored-object viewer
+
+Object mode now opens Inspect object (3D), a modal local Canvas viewer.
+It uses the selected package's captured authored vertices and placement
+basis; no invented solid thickness. Front/Back/Left/Right/Top/Bottom, orbit,
+pan, zoom, orthographic/perspective, wireframe, reset and optional incoming
+spans are independent of the experiment camera. Local dimensions in metres
+and front/back/edge-on status are displayed. Default is face-on orthographic,
+spans off. Viewer is inspection-only; no changes to observations, fit, JSON,
+optics or picking. Group-depth painter is approximate for overlapping
+surfaces, not a certified depth test. Added three headless checks (passed)
+and browser navigation/pose isolation coverage (CI pending).
+8F.1 CI 44611576966 failed on stale static dependency inventory and docs
+count (updated here, reviewed topic exceptions), and a Scene workspace
+restore timeout (not diagnosed or suppressed). Object selection smoke passed.
+Next: 8F.3 indexed triangulation and local picking, after verification.
+
 ## 8F.1 — Explicit object selection and snapshot owner metadata
 
 Photo Calibration now offers Pick: Vertex / Object. Object mode selects a

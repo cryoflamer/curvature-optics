@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 122,
-      "uniqueScripts": 120,
+      "scriptTags": 123,
+      "uniqueScripts": 121,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -238,6 +238,7 @@
         "src/ui/modern/ModernDemos.js",
         "src/calibration/CameraLandmarkProjection.js",
         "src/calibration/CameraPhysicalPose.js",
+        "src/ui/modern/ModernLandmarkViewer.js",
         "src/ui/modern/ModernPhotoCalibrationEditor.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
@@ -438,6 +439,7 @@
       "src/ui/modern/ModernExperimentState.js",
       "src/ui/modern/ModernExperimentThumbnail.js",
       "src/ui/modern/ModernGpuCapabilities.js",
+      "src/ui/modern/ModernLandmarkViewer.js",
       "src/ui/modern/ModernLocationCatalog.js",
       "src/ui/modern/ModernPerformanceReport.js",
       "src/ui/modern/ModernPhotoCalibrationEditor.js",
@@ -481,7 +483,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 214,
+  "sourceJsCount": 215,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1760,8 +1762,10 @@
         "tests/ModernCausewayPreset.test.js",
         "tests/ModernChicagoPreset.test.js",
         "tests/ModernGracePreset.test.js",
+        "tests/ModernLandmarkViewer.test.js",
         "tests/ModernLocationEvidence.test.js",
         "tests/ModernMountainGeometry.test.js",
+        "tests/ModernPhotoCalibrationEditor.test.js",
         "tests/ModernSoundlyPreset.test.js",
         "tests/ModernTargetDirection.test.js",
         "tests/ModernTensasPreset.test.js",
@@ -3348,6 +3352,16 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernLandmarkViewer.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernLandmarkViewer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernLocationCatalog.js": {
       "directHtmlLoads": [
         "modern"
@@ -3387,6 +3401,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernLandmarkViewer.test.js",
         "tests/ModernPhotoCalibrationEditor.test.js"
       ],
       "commonJsToolCallers": []

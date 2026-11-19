@@ -45,9 +45,10 @@ test('140.12.76: retired chronological migration and patch notes stay out of act
   // for another chronological series of patch diaries.
   for(const name of ['modern-animation-contract.md', 'modern-animation-project-wizard.md',
     'modern-location-migration.md', 'interactive-rendering-migration.md', 'modern-demo-catalog.md',
-    'reference-images.md', 'camera-calibration.md', 'technical-debt.md'])
+    'reference-images.md', 'camera-calibration.md', 'technical-debt.md',
+    'landmark-editor.md', 'landmark-editor-audit.md'])
     assert.ok(names.includes(name), 'required topic-based guide missing: '+name);
-  assert.ok(names.length <= 56, 'a chronological documentation tree was reintroduced');
+  assert.ok(names.length <= 58, 'a chronological documentation tree was reintroduced');
 });
 
 test('140.12.76: current guides, test-backed contracts, and physical evidence survive', () => {
