@@ -1,3 +1,11 @@
+## Photo authoring priority — proceed directly to 8B
+
+Decision: deliver a minimal end-to-end photo-to-camera editor before further numerical research. 8A.4.4a is complete. Remaining renderer parity/Direct-versus-Accurate qualification (8A.4.4b) and termination diagnostics (8A.4.4c) are deferred technical debt, not prerequisites for 8B. Retain existing tests and investigate concrete failures as needed; do not relax assertions merely to pass CI.
+
+Use the existing calibration API and supported optical methods; Canvas Direct is acceptable for practical authoring, with Accurate optional when needed. Geometry and atmosphere are fixed inputs during estimation. No requirement to benchmark or refine RK4 before UI work.
+
+8B MVP: load a local reference photo, preserve original raster coordinates through zoom/pan, select known scene landmarks and pair them with image pixels, edit/delete pairs. Then 8C invokes the existing solver with optional known-parameter locks; 8D shows projection overlay/residuals and lets the user accept a candidate; 8E saves accepted pose/focal length as a normal demo experiment or Studio keyframe. Prefer a usable vertical slice over exhaustive controls. Validate on a real photograph and prioritize issues exposed by actual authoring. A good image match does not guarantee unique physical pose.
+
 ## 8A.4.4b — Production renderer parity (CI pending)
 
 Four new cases in CameraLandmarkProjection.test.js: Globe vacuum near horizon, Globe partially hidden vacuum/Standard tower at 22 km, Flat Standard portrait telephoto. Independent photo-camera reconstruction, default Accurate renderer field/step vs 200 m calibration shooting; 16 preselected vertices per case, nearest same-authored-primitive painter endpoint and recorded Canvas command coordinates, 1 px landmark tolerance. Report status/coverage and errors; no production changes. Local checkout unavailable, execution pending CI. Review before convergence work (8A.4.4c).
