@@ -22,12 +22,18 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(state,compat,camera,hud,contracts){
   'use strict';
   var VERSION=1,VERSION_V2=2,MAX_FRAMES=200,MAX_TIME=120000;
+  // Wire compatibility, not a persisted JSON version. Keep the shared script
+  // URL and this revision in sync whenever accepted project fields change.
+  var FIELDS_REVISION='reference-narrative-1';
   var POSE=['Height','FocalLengthField','Pan','Nick','Roll',
     'CameraEast','CameraNorth','viewcenterHorizon','deviceRatio'];
   function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
-  function shape(value,keys){
-    if(!object(value)||Object.keys(value).sort().join(',')!==keys.slice().sort().join(','))
-      throw RangeError('Invalid animation project fields');
+  function shape(value,keys,where){
+    if(!object(value))throw RangeError('Invalid animation project fields ('+where+': expected object)');
+    var actual=Object.keys(value),missing=keys.filter(function(k){return !actual.includes(k);}),
+      extra=actual.filter(function(k){return !keys.includes(k);});
+    if(missing.length||extra.length)throw RangeError('Invalid animation project fields ('+where+
+      (missing.length?'; missing '+missing.join(', '):'')+(extra.length?'; unexpected '+extra.join(', '):'')+')');
   }
   function text(value,max,empty){
     if(typeof value!=='string'||value.length>max||(!empty&&!value.trim()))
@@ -46,7 +52,7 @@
     return value;
   }
   function pose(value){
-    shape(value,POSE);
+    shape(value,POSE,'camera pose');
     var copy={};POSE.forEach(function(k){copy[k]=value[k];});
     camera.interpolate(copy,copy,0,'linear');
     return copy;
@@ -113,7 +119,7 @@
     var hasInterpolation=Object.prototype.hasOwnProperty.call(input||{},'interpolation');
     shape(input,['version','id','name','description','mode','target','baseExperiment',
       'keyframes'].concat(v2?['contract']:[],hasHud?['cameraHudAppearance']:[],
-      hasInterpolation?['interpolation']:[]));
+      hasInterpolation?['interpolation']:[]),'project');
     if(input.version!==VERSION&&!v2)throw RangeError('Unsupported animation project version');
     var id=text(input.id,80,false),name=text(input.name,120,false);
     if(!/^[A-Za-z0-9_-]+$/.test(id))throw RangeError('Invalid animation project ID');
@@ -143,7 +149,7 @@
       var hasTitle=Object.prototype.hasOwnProperty.call(frame||{},'narrativeTitle');
       var hasDescription=Object.prototype.hasOwnProperty.call(frame||{},'description');
       var hasReferences=Object.prototype.hasOwnProperty.call(frame||{},'referenceImageIds');
-      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasTitle?['narrativeTitle']:[],hasDescription?['description']:[],hasReferences?['referenceImageIds']:[]));
+      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasTitle?['narrativeTitle']:[],hasDescription?['description']:[],hasReferences?['referenceImageIds']:[]),'keyframe '+(index+1));
       var source=frame.sourceSnapshotId;
       if(source!==null&&!(Number.isSafeInteger(source)&&source>0)&&
         !(typeof source==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(source)))
@@ -326,7 +332,7 @@
     }
     return at(frames[frames.length-1].value);
   }
-  return Object.freeze({VERSION:VERSION,VERSION_V2:VERSION_V2,validate:validate,create:create,
+  return Object.freeze({VERSION:VERSION,VERSION_V2:VERSION_V2,FIELDS_REVISION:FIELDS_REVISION,validate:validate,create:create,
     createV2:createV2,ready:ready,frameExperiment:frameExperiment,frameExperiments:frameExperiments,
     validateHudAppearance:hud.validateAppearance,validateReferenceIds:validateReferenceIds,
     totalMs:totalMs,timeline:timeline,sampleAt:sampleAt,splineProof:splineProof});

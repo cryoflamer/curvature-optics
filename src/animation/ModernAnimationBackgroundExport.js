@@ -27,8 +27,8 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1';
-    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1&spline-parity=1';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1';
+    var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1';
     var active=null;
     function isBusy(){return !!active;}
     function cancel(){
@@ -39,6 +39,8 @@
     function start(options){
       if(active)throw Error('PNG export is already running');
       if(typeof WorkerCtor!=='function')throw Error('Web Workers are unavailable in this browser');
+      var revision=projects&&projects.FIELDS_REVISION;
+      if(!revision)throw Error('PNG project fields revision unavailable. Reload the page and retry.');
       var plan=frameExport.plan(options.project,options);
       var extra=plan.presentation?{presentation:{referenceLayout:plan.presentation.referenceLayout,layoutMode:plan.presentation.layoutMode,showNarrative:plan.presentation.showNarrative},referenceImages:plan.referenceImages,previewTimeMs:plan.previewTimeMs}:{};
       var outputSides=frameExport.outputSides(plan);
@@ -91,6 +93,7 @@
             if(done)return;
             var value=event&&event.data||{};
             if(value.type==='ready'){
+              if(value.projectFieldsRevision!==revision){fail('PNG archive project fields revision mismatch (stale Worker scripts). Reload the page and retry.');return;}
               if(archiveReady||value.total!==plan.timesMs.length){
                 fail('Archive worker returned an invalid ready message');return;
               }
@@ -130,6 +133,7 @@
                 if(done)return;
                 var value=event&&event.data||{};
                 if(value.type==='ready'){
+                  if(value.projectFieldsRevision!==revision){fail('PNG renderer project fields revision mismatch (stale Worker scripts). Reload the page and retry.');return;}
                   if(current.ready||value.total!==plan.timesMs.length||
                     value.sides!==plan.sides.length){
                     fail('Renderer returned an invalid ready message');return;
@@ -166,11 +170,11 @@
               };
             })(slot);
           }
-          archive.postMessage({type:'init',project:plan.project,fps:plan.fps,
+          archive.postMessage({type:'init',projectFieldsRevision:revision,project:plan.project,fps:plan.fps,
             width:plan.width,height:plan.height,workers:count,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
             targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,...extra});
-          renderers.forEach(function(slot){slot.worker.postMessage({type:'init',
+          renderers.forEach(function(slot){slot.worker.postMessage({type:'init',projectFieldsRevision:revision,
             project:plan.project,fps:plan.fps,width:plan.width,height:plan.height,
             cameraHud:plan.cameraHud,cameraHudAppearance:plan.cameraHudAppearance,
             targetIndicator:plan.targetIndicator,targetSelection:plan.targetSelection,...extra});});

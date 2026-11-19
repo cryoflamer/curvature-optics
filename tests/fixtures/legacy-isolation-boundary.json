@@ -947,6 +947,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
+        "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationCanvasHud.test.js",
         "tests/ModernAnimationCompatibilityDiagnostics.test.js",
         "tests/ModernAnimationDraftAutosave.test.js",
@@ -1083,6 +1084,7 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationAtmosphereVariant.test.js",
+        "tests/ModernAnimationBackgroundExport.test.js",
         "tests/ModernAnimationInitialFrame.test.js",
         "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",

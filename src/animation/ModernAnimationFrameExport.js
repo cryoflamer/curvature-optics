@@ -36,11 +36,23 @@
       hud.validateAppearance(options.cameraHudAppearance):
       (project.cameraHudAppearance||hud.normalizeAppearance());
   }
+  function sequenceCount(durationMs,fps){
+    var count=Math.ceil(durationMs*fps/1000)+1;
+    if(count>MAX_FRAMES)throw RangeError('Too many frames for in-memory PNG export ('+count+
+      ' requested; maximum '+MAX_FRAMES+'). Reduce FPS or animation length.');
+    return count;
+  }
+  // UI preflight before loading possibly very large original photographs.
+  function checkFrameBudget(project,fps){
+    return sequenceCount(projects.totalMs(project),exportSettings({fps:fps}).fps);
+  }
   function plan(project,options){
     options=options||{};
     var owned=projects.validate(project),presentation=options.presentation===undefined?null:
       compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height}));
     var settings=exportSettings(presentation?{fps:options.fps,width:960,height:540}:options);
+    var durationMs=projects.totalMs(owned);
+    var intervals=options.previewTimeMs===undefined?sequenceCount(durationMs,settings.fps)-1:0;
     var records=[];
     if(presentation){
       if(!Array.isArray(options.referenceImages||[])||(options.referenceImages||[]).length>100)throw RangeError('Invalid presentation reference assets');
@@ -56,10 +68,6 @@
     if(options&&options.targetIndicator===true&&(!target||typeof target.paint!=='function'))
       throw Error('Target indicator painter unavailable');
     var fps=settings.fps,width=presentation?presentation.width:settings.width,height=presentation?presentation.height:settings.height;
-    var durationMs=projects.totalMs(owned);
-    var intervals=Math.ceil(durationMs*fps/1000);
-    if(options.previewTimeMs===undefined&&intervals+1>MAX_FRAMES)
-      throw RangeError('Too many frames for in-memory PNG export (maximum '+MAX_FRAMES+'). Reduce FPS or animation length.');
     var times=[];
     if(options.previewTimeMs!==undefined){
       compositor.frameAt(presentation,options.previewTimeMs);times.push(options.previewTimeMs);
@@ -337,7 +345,7 @@
     graph.UpdateCanvasSize=function(){};graph.ResizeTimer=null;
     return graph;
   }
-  return Object.freeze({plan:plan,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
+  return Object.freeze({plan:plan,checkFrameBudget:checkFrameBudget,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
     resolveHudAppearance:resolveHudAppearance,
     run:run,renderTimestamp:renderTimestamp,assemble:assemble,outputSides:outputSides,
     zip:zip,graphForCanvas:graphForCanvas,

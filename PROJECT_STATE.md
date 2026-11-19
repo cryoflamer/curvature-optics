@@ -1,3 +1,31 @@
+## Modern Demo Catalog — PNG Export Regression Fix (7D.2.2.1)
+
+The user's edited Soundly copy failed with `PNG archive failed: Invalid animation
+project fields`. The page and importScripts used independent, stale cache keys for
+the same project validator: the old validator (before ordered reference IDs) rejects
+both edited V1 playback and V2 saved copies with exactly that message. The actual
+Opera cache was not available, so this is a reproduced failure mechanism, not a
+claim about the specific cached bytes in the user's browser. Use a shared
+`project-fields=reference-narrative-1` URL for page and all export workers, refresh
+the worker entrypoints and schema-dependent Studio scripts, and require matching
+project-fields revisions in PNG init/ready before dispatch. Persisted versions and
+strict field allowlists are unchanged; error messages now identify project/keyframe/
+pose and unexpected or missing fields. The existing video encoder also loads the
+V2 contract before the shared validator (no new video functionality).
+
+PNG sequence preflight now reports the requested count (Soundly at 25 FPS: 1479,
+maximum 751) before original lookup or worker allocation. Current-frame preview
+remains exempt. Mocked coordinator coverage includes saved V2 and rebuilt V1,
+both export modes, full sequence, originals, captions and revision mismatch.
+The isolated Chromium regression uses the production coordinator, edited Studio
+copy reconstructed from a normalized library record and real Accurate RK4 render
+and archive workers; Blob transport substitutes script URLs only. The full HTTP
+browser smoke case also exercises Create copy, photograph attachment, preview and
+ZIP save. No physics, JSON schema or layout changes.
+
+**Resume:** confirm the PNG fix on the user's existing edited copy in Opera and CI
+before proceeding to 7D.2.3 Presentation Video. Then 7E, 8A–8E and 9A–9C.
+
 ## Modern Demo Catalog — Presentation PNG Export (7D.2.2)
 
 The Studio PNG export section now offers **Simulation only** (unchanged default)

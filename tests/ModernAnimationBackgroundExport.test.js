@@ -43,21 +43,24 @@ class FakeWorker {
   static paused=false;
   static errorAt=-1;
   static staleSpline=false;
+  static staleRole=null;
   static wrongManifest=false;
   static reset(){FakeWorker.instances=[];FakeWorker.paused=false;FakeWorker.errorAt=-1;
-    FakeWorker.staleSpline=false;FakeWorker.wrongManifest=false;}
+    FakeWorker.staleSpline=false;FakeWorker.staleRole=null;FakeWorker.wrongManifest=false;}
   constructor(url){this.url=url;this.terminated=false;this.commands=[];
     this.isArchive=url.split('?')[0].endsWith('ModernAnimationArchiveWorker.js');
     FakeWorker.instances.push(this);}
   postMessage(value){
     if(this.terminated)throw Error('Message sent to terminated worker');
-    this.commands.push(value);
+    this.commands.push(structuredClone(value));
     if(value.type==='init'){
-      this.plan=frameExport.plan(value.project,value);
+      assert.equal(value.projectFieldsRevision,project.FIELDS_REVISION);
+      this.plan=frameExport.plan(structuredClone(value.project),value);
       if(this.isArchive){this.frames=new Array(this.plan.timesMs.length);this.total=0;
         this.workers=value.workers;}
       queueMicrotask(()=>this.emit({type:'ready',total:this.plan.timesMs.length,
         sides:this.plan.sides.length,
+        projectFieldsRevision:FakeWorker.staleRole===(this.isArchive?'archive':'renderer')?undefined:project.FIELDS_REVISION,
         splineProof:FakeWorker.staleSpline?undefined:project.splineProof(this.plan.project)}));
     }else if(value.type==='render'){
       if(FakeWorker.paused)return;
@@ -261,4 +264,67 @@ test('full presentation controller forwards frozen options, transfers one PNG an
     presentation:{referenceLayout:'hidden'}});
   assert.equal(seq.manifest.frameCount,26);assert.ok(seq.manifest.endpointIncluded);
   assert.ok(seq.manifest.frames.every(f=>Object.keys(f.images).join(',')==='presentation'));
+});
+
+
+test('PNG rejects an outdated worker before dispatching any render jobs',async()=>{
+  for(const role of ['archive','renderer']){
+    FakeWorker.reset();FakeWorker.staleRole=role;
+    await assert.rejects(background.create({WorkerCtor:FakeWorker}).start({
+      project:make(),fps:5,width:640,height:360,workerCount:2}),/project fields revision mismatch/);
+    assert.ok(FakeWorker.instances.every(w=>w.terminated));
+    assert.ok(FakeWorker.instances.every(w=>!w.commands.some(c=>c.type==='render')));
+  }
+  FakeWorker.reset();
+});
+
+test('edited Soundly copy passes both PNG worker initializations without losing linked originals or narrative',async()=>{
+  const catalog=require('../src/animation/ModernDemoCatalog'),studio=require('../src/animation/ModernAnimationStudio');
+  const source=catalog.load()[0].project;
+  let draft=studio.fromProject(project.validate({...source,id:'soundly_copy',name:source.name+' (copy)'}));
+  const key=draft.frames[4].key;
+  draft=studio.editFrame(draft,key,'referenceImageIds',['photo']);
+  draft=studio.editFrame(draft,key,'narrativeTitle','Real observation');
+  draft=studio.editFrame(draft,key,'description','Observed bridge');
+  const photo={version:1,id:'photo',title:'Observation',original:{width:1,height:1,dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII='}};
+  // Exercise saved V2 reload and playable V1 build, as Studio does.
+  const saved=studio.buildSaved(draft,'soundly_copy');
+  const playable=studio.build(studio.fromProject(saved),'soundly_copy');
+  assert.equal(saved.version,2);assert.equal(playable.version,1);
+  for(const edited of [saved,playable]){
+    FakeWorker.reset();
+    const api=background.create({WorkerCtor:FakeWorker});
+    assert.throws(()=>api.start({project:edited,fps:25,width:1280,height:720,presentation:{},referenceImages:[photo]}),/1479 requested; maximum 751/);
+    assert.equal(FakeWorker.instances.length,0);
+    const time=project.timeline(edited)[4].arrivalMs;
+    const result=await api.start({project:edited,fps:25,width:1280,height:720,presentation:{},referenceImages:[photo],previewTimeMs:time});
+    assert.equal(result.manifest.frames[0].referenceId,'photo');
+    assert.equal(result.manifest.project.keyframes[4].narrativeTitle,'Real observation');
+    assert.equal(result.manifest.project.keyframes[4].description,'Observed bridge');
+    assert.equal(result.manifest.project.version,edited.version);
+    for(const worker of FakeWorker.instances)assert.deepEqual(worker.commands[0].project,edited);
+    FakeWorker.reset();
+    const sim=await api.start({project:edited,fps:5,width:640,height:360,workerCount:4});
+    assert.equal(sim.manifest.frameCount,297);assert.deepEqual(sim.manifest.sides,['A','B']);
+    assert.equal(sim.manifest.project.keyframes[4].referenceImageIds[0],'photo');
+    FakeWorker.reset();
+    const full=await api.start({project:edited,fps:5,width:1280,height:720,workerCount:4,presentation:{},referenceImages:[photo]});
+    assert.equal(full.manifest.frameCount,297);assert.deepEqual(full.manifest.sides,['presentation']);
+    assert.ok(full.manifest.frames.some(f=>f.referenceId==='photo'));
+    assert.equal(full.manifest.frames.at(-1).timeMs,59100);
+  }
+});
+
+test('page and every export worker use the same versioned project validator',()=>{
+  const root=path.resolve(__dirname,'..'),revision=project.FIELDS_REVISION;
+  const url='ModernAnimationProject.js?project-fields='+revision;
+  for(const file of ['CurvatureModern.html','src/animation/ModernAnimationFrameWorker.js',
+    'src/animation/ModernAnimationArchiveWorker.js','src/animation/ModernAnimationVideoEncoderWorker.js']){
+    const source=fs.readFileSync(path.join(root,file),'utf8');
+    assert.deepEqual(source.match(/ModernAnimationProject\.js\?[^"']+/g),[url],file);
+    if(file.endsWith('Worker.js'))assert.ok(source.includes('ModernAnimationContract.js')&&source.indexOf('ModernAnimationContract.js')<source.indexOf(url),file);
+  }
+  const input=structuredClone(require('../src/animation/ModernDemoCatalog').load()[0].project);
+  input.keyframes[4].badField=true;
+  assert.throws(()=>project.validate(input),/Invalid animation project fields.*keyframe 5.*unexpected badField/);
 });

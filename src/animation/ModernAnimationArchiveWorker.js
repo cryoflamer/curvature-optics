@@ -12,12 +12,12 @@ importScripts(
   '../camera/ModernCameraInterpolator.js?spline-core=1',
   'ModernAnimationCompatibility.js',
   'ModernAnimationContract.js',
-  'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-parity=1',
+  'ModernAnimationProject.js?project-fields=reference-narrative-1',
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
   'ModernAnimationPresentationCompositor.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1'
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1'
 );
 var archive=null;
 function reportError(error){
@@ -29,12 +29,15 @@ self.onmessage=function(event){
   try{
     if(data.type==='init'){
       if(archive)throw Error('PNG archive worker already initialized');
+      var revision=self.CurvatureModernAnimationProject.FIELDS_REVISION;
+      if(data.projectFieldsRevision!==undefined&&data.projectFieldsRevision!==revision)
+        throw Error('PNG project fields revision mismatch (stale Worker scripts). Reload the page and retry.');
       var plan=self.CurvatureModernAnimationFrameExport.plan(data.project,data);
       if(!Number.isInteger(data.workers)||data.workers<1||data.workers>4)
         throw RangeError('Invalid render worker count');
       archive={plan:plan,workers:data.workers,frames:new Array(plan.timesMs.length),
         count:0,bytes:0,start:performance.now()};
-      self.postMessage({type:'ready',total:plan.timesMs.length});
+      self.postMessage({type:'ready',total:plan.timesMs.length,projectFieldsRevision:revision});
     }else if(data.type==='frame'){
       if(!archive)throw Error('PNG archive worker was not initialized');
       var index=data.index,frame=data.frame,plan=archive.plan;

@@ -58,12 +58,12 @@ importScripts(
   '../camera/ModernCameraInterpolator.js?spline-core=1&spline-export=1',
   'ModernAnimationCompatibility.js',
   'ModernAnimationContract.js',
-  'ModernAnimationProject.js?studio-hud-fix=1&spline-core=1&spline-export=1&spline-parity=1',
+  'ModernAnimationProject.js?project-fields=reference-narrative-1',
   'ModernAnimationPreview.js',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
   'ModernAnimationPresentationCompositor.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1',
   'ModernAnimationCompareComposition.js',
   'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1'
 );
@@ -157,9 +157,13 @@ self.onmessage=async function(event){
   if(data.type==='init'||data.type==='video-init'){
     if(active||parallel){self.postMessage({type:'error',message:'Worker already initialized'});return;}
     try{
+      var revision=data.type==='init'?self.CurvatureModernAnimationProject.FIELDS_REVISION:undefined;
+      if(data.type==='init'&&data.projectFieldsRevision!==undefined&&data.projectFieldsRevision!==revision)
+        throw Error('PNG project fields revision mismatch (stale Worker scripts). Reload the page and retry.');
       parallel=setup(data,data.type==='video-init');
       self.postMessage({type:'ready',total:parallel.video?parallel.plan.frameCount:parallel.plan.timesMs.length,
         sides:parallel.plan.sides.length,
+        ...(data.type==='init'?{projectFieldsRevision:revision}:{}),
         splineProof:parallel.plan.project.interpolation==='spline'?
           self.CurvatureModernAnimationProject.splineProof(parallel.plan.project):null});
     }catch(error){self.postMessage({type:'error',message:errorMessage(error)});}

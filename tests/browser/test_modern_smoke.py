@@ -221,9 +221,25 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(item['pixel'], colors[item['kind']], item)
 
     def test_presentation_png_workers_with_original(self):
-        # Actual render + archive worker sources, with Blob script URLs so the
-        # isolated test does not need application navigation or IndexedDB.
+        # Production controller, Studio save/reopen and both real worker sources.
+        # Blob URLs substitute only script transport, not the initialization or
+        # rendering protocol; a separate full-page test covers the HTTP wiring.
         self.page.set_content('<!doctype html><html><body></body></html>')
+        modules = {'ModernExperimentState.js', 'ModernExperimentFingerprint.js',
+                   'ModernCameraHud.js', 'ModernCameraInterpolator.js', 'ModernCameraTelemetry.js',
+                   'ModernCameraSequence.js', 'ModernSemanticNaming.js', 'ModernExperimentThumbnail.js',
+                   'ModernAnimationCompatibility.js', 'ModernAnimationContract.js', 'ModernAnimationProject.js',
+                   'ModernAnimationAtmosphereVariant.js', 'ModernReferenceImage.js', 'ModernReferenceImageLibrary.js',
+                   'ModernAnimationSequences.js', 'ModernAnimationStudio.js', 'ModernAnimationLibrary.js',
+                   'ModernDemoCatalogData.js', 'ModernDemoCatalog.js', 'ModernAnimationPresentation.js',
+                   'ModernTargetIndicator.js', 'ModernAnimationCanvasHud.js', 'ModernAnimationPresentationCompositor.js',
+                   'ModernAnimationFrameExport.js', 'ModernAnimationBackgroundExport.js'}
+        html = (ROOT / 'CurvatureModern.html').read_text(encoding='utf-8')
+        for src in re.findall(r'<script src="([^"?]+)(?:\?[^"\n]*)?"', html):
+            if Path(src).name in modules:
+                self.page.add_script_tag(content=(ROOT / src).read_text(encoding='utf-8'))
+                modules.remove(Path(src).name)
+        self.assertEqual(modules, set())
         scripts = {}
         for name in ['ModernAnimationFrameWorker.js', 'ModernAnimationArchiveWorker.js']:
             path = ROOT / 'src/animation' / name
@@ -232,12 +248,18 @@ class ModernBrowserSmoke(unittest.TestCase):
             dependencies = [(path.parent / item.split('?')[0]).resolve().read_text(encoding='utf-8')
                             for item in re.findall(r"'([^']+)'", block.group(1))]
             scripts[name] = {'source': source, 'dependencies': dependencies}
-        project = json.loads((ROOT / 'demos/modern/soundly.json').read_text(encoding='utf-8'))['animations'][0]['project']
-        result = self.page.evaluate(r"""async ({project,scripts}) => {
-            project.baseExperiment.display.mode='compare';
-            project.contract.referenceExperiment.display.mode='compare';
-            project.keyframes[0].referenceImageIds=['photo'];
-            project.keyframes[0].description='Observation';
+        result = self.page.evaluate(r"""async scripts => {
+            const projects=CurvatureModernAnimationProject,studio=CurvatureModernAnimationStudio,
+                library=CurvatureModernAnimationLibrary;
+            const demo=CurvatureModernDemoCatalog.load().find(d=>d.id==='soundly');
+            const copy=projects.validate({...demo.project,id:'soundly_copy',name:demo.project.name+' (copy)'});
+            let draft=studio.fromProject(copy),key=draft.frames[4].key;
+            draft=studio.editFrame(draft,key,'referenceImageIds',['photo']);
+            draft=studio.editFrame(draft,key,'narrativeTitle','Real observation');
+            draft=studio.editFrame(draft,key,'description','Observation');
+            const saved=library.record(studio.buildSaved(draft,copy.id),'canvas-direct',copy.id,1,1);
+            const reopened=library.normalize(JSON.parse(JSON.stringify(saved))).project;
+            const playable=studio.build(studio.fromProject(reopened),copy.id);
             const raw=new OffscreenCanvas(3,4),c=raw.getContext('2d');
             c.fillStyle='#00ff00';c.fillRect(0,0,3,4);
             c.fillStyle='#ff00ff';c.fillRect(0,0,3,1);
@@ -247,39 +269,45 @@ class ModernBrowserSmoke(unittest.TestCase):
             const original={version:1,id:'photo',title:'Synthetic portrait',author:'Observer',license:'CC BY',original:{dataUrl,width:3,height:4}};
             const urls=[],workers=[];
             function url(source){const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;}
-            function make(name){const spec=scripts[name],deps=spec.dependencies.map(url);
+            function WorkerCtor(path){const name=path.split('?')[0].split('/').at(-1),spec=scripts[name],deps=spec.dependencies.map(url);
                 const source=spec.source.replace(/importScripts\([\s\S]*?\);/,'importScripts('+deps.map(JSON.stringify).join(',')+');');
                 const worker=new Worker(url(source));workers.push(worker);return worker;
             }
-            function ready(worker,message,type){return new Promise((resolve,reject)=>{
-                worker.onmessage=e=>{if(e.data.type==='error')reject(Error(e.data.message));else if(e.data.type===type)resolve(e.data);};
-                worker.onerror=e=>reject(Error(e.message||'Worker load error'));worker.postMessage(message);
-            });}
             try{
-                const renderer=make('ModernAnimationFrameWorker.js'),archive=make('ModernAnimationArchiveWorker.js');
-                const options={type:'init',project,width:1280,height:720,fps:5,workers:1,
-                    presentation:{referenceLayout:'side',layoutMode:'fixed'},referenceImages:[original],previewTimeMs:0};
-                const [r,a]=await Promise.all([ready(renderer,options,'ready'),ready(archive,options,'ready')]);
-                const rendered=await ready(renderer,{type:'render',index:0},'frame');
-                const done=await ready(archive,{type:'frame',index:0,frame:rendered.frame},'complete');
-                const image=await createImageBitmap(done.previewBlob),canvas=new OffscreenCanvas(image.width,image.height),ctx=canvas.getContext('2d');
-                ctx.drawImage(image,0,0);
-                const pixels=ctx.getImageData(0,0,image.width,image.height).data;
-                let green=0,magenta=0;for(let i=0;i<pixels.length;i+=4){if(pixels[i]===0&&pixels[i+1]===255&&pixels[i+2]===0)green++;if(pixels[i]===255&&pixels[i+1]===0&&pixels[i+2]===255)magenta++;}
-                const result={width:image.width,height:image.height,green,magenta,ready:[r.total,a.total],sides:done.manifest.sides,
-                    reference:done.manifest.frames[0].referenceId,author:done.manifest.presentation.referenceImages[0].author,
-                    optical: Object.keys(done.manifest.frames[0].renderStats),zip:done.blob.type};image.close();return result;
+                const controller=CurvatureModernAnimationBackgroundExport.create({WorkerCtor});
+                const results=[];
+                for(const project of [reopened,playable]){
+                    const previewTimeMs=projects.timeline(project)[4].arrivalMs;
+                    let limit;
+                    try{await controller.start({project,width:1280,height:720,fps:25,workerCount:1,
+                        presentation:{referenceLayout:'side'},referenceImages:[original]});}catch(e){limit=e.message;}
+                    if(!limit?.includes('1479 requested; maximum 751'))throw Error('Unexpected sequence limit: '+limit);
+                    const done=await controller.start({project,width:1280,height:720,fps:25,workerCount:1,
+                        presentation:{referenceLayout:'side',layoutMode:'fixed'},referenceImages:[original],previewTimeMs});
+                    const image=await createImageBitmap(done.previewBlob),canvas=new OffscreenCanvas(image.width,image.height),ctx=canvas.getContext('2d');
+                    ctx.drawImage(image,0,0);
+                    const pixels=ctx.getImageData(0,0,image.width,image.height).data;
+                    let green=0,magenta=0;for(let i=0;i<pixels.length;i+=4){if(pixels[i]===0&&pixels[i+1]===255&&pixels[i+2]===0)green++;if(pixels[i]===255&&pixels[i+1]===0&&pixels[i+2]===255)magenta++;}
+                    results.push({width:image.width,height:image.height,green,magenta,version:done.manifest.project.version,
+                        time:done.manifest.frames[0].timeMs,sides:done.manifest.sides,reference:done.manifest.frames[0].referenceId,
+                        author:done.manifest.presentation.referenceImages[0].author,title:done.manifest.project.keyframes[4].narrativeTitle,
+                        optical:Object.keys(done.manifest.frames[0].renderStats),zip:done.blob.type});image.close();
+                }
+                return results;
             }finally{workers.forEach(w=>w.terminate());urls.forEach(u=>URL.revokeObjectURL(u));}
-        }""", {'project':project,'scripts':scripts})
-        self.assertEqual((result['width'], result['height']), (1280, 720))
-        self.assertGreater(result['green'], 100)
-        self.assertGreater(result['magenta'], 100)
-        self.assertEqual(result['ready'], [1, 1])
-        self.assertEqual(result['sides'], ['presentation'])
-        self.assertEqual(result['reference'], 'photo')
-        self.assertEqual(result['author'], 'Observer')
-        self.assertEqual(result['optical'], ['A', 'B'])
-        self.assertEqual(result['zip'], 'application/zip')
+        }""", scripts)
+        self.assertEqual([item['version'] for item in result], [2, 1])
+        for item in result:
+            self.assertEqual((item['width'], item['height']), (1280, 720))
+            self.assertGreater(item['green'], 100)
+            self.assertGreater(item['magenta'], 100)
+            self.assertEqual(item['time'], 28200)
+            self.assertEqual(item['sides'], ['presentation'])
+            self.assertEqual(item['reference'], 'photo')
+            self.assertEqual(item['author'], 'Observer')
+            self.assertEqual(item['title'], 'Real observation')
+            self.assertEqual(item['optical'], ['A', 'B'])
+            self.assertEqual(item['zip'], 'application/zip')
 
     def test_reference_image_library_roundtrip(self):
         import base64
@@ -458,6 +486,22 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(ref_panel.locator('img')).to_be_hidden()
         editor.locator('.modern-studio-keyframe').first.click()
         expect(ref_panel.locator('img')).to_be_visible()
+        # Real Studio copy, reference import/attachment and HTTP worker imports.
+        export = self.page.locator('#ModernAnimationFrameExportStart').locator('xpath=ancestor::details[1]')
+        if export.get_attribute('open') is None:
+            export.locator('summary').click()
+        self.page.locator('#ModernAnimationFrameExportMode').select_option('presentation')
+        self.page.locator('#ModernAnimationFrameExportPresentationSize').select_option('1280')
+        self.page.locator('#ModernAnimationFrameExportFps').select_option('25')
+        self.page.locator('#ModernAnimationFrameExportStart').click()
+        status = self.page.locator('#ModernAnimationFrameExportStatus')
+        expect(status).to_contain_text('1479 requested; maximum 751')
+        self.page.locator('#ModernAnimationFrameExportPreview').click()
+        expect(status).to_contain_text('Presentation preview ready', timeout=120000)
+        expect(self.page.locator('#ModernAnimationFrameExportPreviewImage')).to_be_visible()
+        with self.page.expect_download() as download:
+            self.page.locator('#ModernAnimationFrameExportPreviewSave').click()
+        self.assertTrue(download.value.suggested_filename.endswith('.zip'))
 
     def test_shipped_demo_catalog_http(self):
         self.open_modern()

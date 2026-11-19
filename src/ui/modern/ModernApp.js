@@ -2888,8 +2888,8 @@
         message('Video export modules unavailable. Check the browser console.','error');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
-        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1',
+        rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1&png-project-fields=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};studioVideoExportTask=task;
       syncStudioFrameExportControls();
@@ -3046,8 +3046,8 @@
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1',
-        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1',
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1',
+        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller,cancelled:false};
       clearPreview();
@@ -3062,6 +3062,7 @@
         var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
         var full=!!(mode&&mode.value==='presentation'),extra={};
         if(previewOnly&&!full)throw Error('Choose Full presentation first');
+        if(!previewOnly)studioFrameExportApi.checkFrameBudget(project,fps);
         if(full){
           size=[Number(newUiEl('ModernAnimationFrameExportPresentationSize').value)];size.push(size[0]*9/16);
           extra.presentation={referenceLayout:newUiEl('ModernAnimationFrameExportLayout').value,

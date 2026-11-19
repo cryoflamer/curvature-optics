@@ -24,7 +24,7 @@ function harness(){
     newUiEl:id=>items[id],studioFrameExportTask:null,studioVideoExportTask:null,
     studioDraft:{frames:[{},{},{}]},studioPrepared:null,studioPlayback:null,
     studioApi:{build:()=>project},
-    studioFrameExportApi:{plan:project=>({project,fps:25,width:640,height:360,timesMs:[0,40],sides:['A']})},
+    studioFrameExportApi:{checkFrameBudget(){},plan:project=>({project,fps:25,width:640,height:360,timesMs:[0,40],sides:['A']})},
     studioBackgroundExportApi:{create:()=>({cancel(){},async start(options){runCount++;received=options;
       if(shouldFail)throw Error('worker validation failed');
       return {cancelled:false,blob:new Blob(['zip']),workers:1,
