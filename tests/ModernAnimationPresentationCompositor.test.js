@@ -222,3 +222,45 @@ test('known provenance reserves only visible rows, with Fixed geometry and per-o
     }
   }
 });
+
+test('Soundly full timeline keeps Fixed geometry and Dynamic reference transitions deterministic at HD through 4K',()=>{
+  const raw=project();
+  raw.keyframes.forEach(f=>{delete f.referenceImageIds;});
+  raw.keyframes[4].referenceImageIds=['portrait'];raw.keyframes[5].referenceImageIds=['landscape'];
+  const referenceDimensions=[{id:'portrait',width:501,height:612,title:'images.jfif'},
+    {id:'landscape',width:1176,height:791,title:'PR_RealSoundly6.jpg',author:'Soundly'}];
+  const signature=f=>({topology:f.topology,panels:f.panels,viewSize:f.viewSize,photo:f.photo,photoBox:f.photoBox,
+    photoText:f.photoText,sceneCaption:f.sceneCaption,cameraHud:f.cameraHud,narrative:f.narrative});
+  for(const width of [1280,1920,2560,3840])for(const layoutMode of ['fixed','dynamic']){
+    const opts={width,layoutMode,referenceLayout:'auto',cameraHud:true,referenceDimensions};
+    const p=compose.plan(raw,opts),other=compose.plan(JSON.parse(JSON.stringify(raw)),{...opts,referenceDimensions:referenceDimensions.slice().reverse()});
+    assert.equal(p.durationMs,59100);
+    const sampleTimes=Array.from({length:Math.ceil(p.durationMs/40)+1},(_,i)=>Math.min(i*40,p.durationMs));
+    assert.equal(sampleTimes.length,1479);
+    const times=new Set(sampleTimes);
+    for(const t of p.times)for(const edge of [t.arrivalMs,t.departureMs])for(const delta of [-1,0,1]){
+      if(edge+delta>=0&&edge+delta<=p.durationMs)times.add(edge+delta);
+    }
+    const first=signature(compose.frameAt(p,0)),seen=new Set(),cases=new Map();
+    // Reverse traversal emulates independently scheduled worker jobs.
+    for(const time of [...times].reverse()){
+      const f=compose.frameAt(p,time),g=compose.frameAt(other,time),sig=signature(f);
+      assert.deepEqual(sig,signature(g));
+      const current=p.times.findIndex((t,i)=>time>=t.arrivalMs&&(i===p.times.length-1||time<p.times[i+1].arrivalMs));
+      const t=p.times[current],hold=time<=t.departureMs,ids=t.referenceImageIds;
+      const actualId=hold?(ids[0]||null):null;
+      const reserve=!!(ids.length||(!hold&&p.times[current+1]?.referenceImageIds.length));
+      assert.equal(f.referenceId,actualId);assert.equal(f.referenceCount,hold?ids.length:0);
+      assert.equal(!!f.photo,layoutMode==='fixed'||reserve);
+      if(layoutMode==='fixed')assert.deepEqual(sig,first);
+      else{const key=actualId|| (reserve?'travel-reserved':'no-reference');
+        if(cases.has(key))assert.deepEqual(sig,cases.get(key));else cases.set(key,sig);}
+      const bounds={x:0,y:0,width:f.width,height:f.height},boxes=[...f.sides.map(s=>f.panels[s].viewport),f.photo,f.cameraHud,f.sceneCaption,f.narrative].filter(Boolean);
+      boxes.forEach((b,i)=>{inside(b,bounds);boxes.slice(i+1).forEach(c=>assert.ok(!overlap(b,c)));});
+      assert.equal(f.viewSize.width*9,f.viewSize.height*16);
+      seen.add(actualId);
+    }
+    assert.deepEqual(seen,new Set([null,'portrait','landscape']));
+    if(layoutMode==='dynamic')assert.equal(cases.size,4);
+  }
+});

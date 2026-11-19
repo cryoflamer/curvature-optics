@@ -395,17 +395,29 @@ class ModernBrowserSmoke(unittest.TestCase):
                 // Short sequence from the actual edited project, with a real
                 // photograph at arrival. Use the disk-writer protocol against an
                 // instrumented sink (no native file-picker permissions in CI).
-                const frames=playable.keyframes.slice(4,6).map((f,i)=>({...f,travelMs:i?200:0,holdMs:0}));
+                const frames=playable.keyframes.slice(4,6).map((f,i)=>({...f,travelMs:i?400:0,holdMs:0,
+                    referenceImageIds:[i?'landscape':'photo']}));
+                const wide=new OffscreenCanvas(4,3),wc=wide.getContext('2d');wc.fillStyle='#00ffff';wc.fillRect(0,0,4,3);
+                const wideBlob=await wide.convertToBlob(),wideUrl=await new Promise(resolve=>{
+                    const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(wideBlob);
+                });
+                const landscape={version:1,id:'landscape',title:'Landscape.jpg',original:{dataUrl:wideUrl,width:4,height:3}};
                 const short=projects.validate({...playable,keyframes:frames});
                 const chunks=[],sink={closed:false,aborted:false,async write(part){chunks.push(part.slice());},
                     async close(){this.closed=true;},async abort(){this.aborted=true;}};
-                const stream=await controller.start({project:short,width:1280,height:720,fps:5,workerCount:2,
-                    presentation:{referenceLayout:'auto'},referenceImages:[original],sink,cameraHud:true});
+                const settings={project:short,width:1280,height:720,fps:5,workerCount:2,
+                    presentation:{referenceLayout:'auto',layoutMode:'fixed'},referenceImages:[original,landscape],cameraHud:true};
+                const stream=await controller.start({...settings,sink});
+                const preview=await controller.start({...settings,previewTimeMs:200});
+                const previewData=await new Promise(resolve=>{
+                    const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(preview.previewBlob);
+                });
                 const zip=new Blob(chunks,{type:'application/zip'}),data=await new Promise(resolve=>{
                     const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(zip);
                 });
                 return {previews:results,stream:{closed:sink.closed,aborted:sink.aborted,bytes:stream.bytesWritten,
-                    streamed:stream.streamed,hasBlob:!!stream.blob,manifest:stream.manifest,zip:data}};
+                    streamed:stream.streamed,hasBlob:!!stream.blob,manifest:stream.manifest,zip:data,
+                    preview:previewData,previewRow:preview.manifest.frames[0]}};
             }finally{workers.forEach(w=>w.terminate());urls.forEach(u=>URL.revokeObjectURL(u));}
         }""", scripts)
         self.assertEqual([item['version'] for item in result['previews']], [2, 1])
@@ -432,14 +444,20 @@ class ModernBrowserSmoke(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             self.assertIsNone(archive.testzip())
             self.assertEqual(archive.namelist(), ['frames/frame_00000_presentation.png',
-                                                'frames/frame_00001_presentation.png', 'manifest.json'])
+                                                'frames/frame_00001_presentation.png',
+                                                'frames/frame_00002_presentation.png', 'manifest.json'])
             manifest = json.loads(archive.read('manifest.json'))
             self.assertEqual(manifest, stream['manifest'])
             self.assertEqual(manifest['presentation']['cameraHudPlacement'], 'external')
-            self.assertEqual([f['timeMs'] for f in manifest['frames']], [0, 200])
-            self.assertEqual(manifest['frames'][0]['referenceId'], 'photo')
-            self.assertEqual(manifest['frames'][1]['referenceId'], None)
-            for name in archive.namelist()[:2]:
+            self.assertEqual([f['timeMs'] for f in manifest['frames']], [0, 200, 400])
+            self.assertEqual([f['referenceId'] for f in manifest['frames']], ['photo', None, 'landscape'])
+            self.assertEqual(len({f['topology'] for f in manifest['frames']}), 1)
+            self.assertTrue(all(f['viewSize'] == manifest['frames'][0]['viewSize'] for f in manifest['frames']))
+            for field in ['topology', 'viewSize', 'referenceId', 'timeMs']:
+                self.assertEqual(stream['previewRow'][field], manifest['frames'][1][field])
+            self.assertEqual(base64.b64decode(stream['preview'].split(',', 1)[1]),
+                             archive.read('frames/frame_00001_presentation.png'))
+            for name in archive.namelist()[:3]:
                 self.assertEqual(archive.read(name)[:8], b'\x89PNG\r\n\x1a\n')
 
     def test_reference_image_library_roundtrip(self):

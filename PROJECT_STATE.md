@@ -1,3 +1,31 @@
+## Modern Demo Catalog — Full Timeline Layout Validation (7D.2.2.3B.3)
+
+Issue #1: B.2.1 accepted on the four user-exported Soundly PNGs. The full
+59.10 s project from the supplied preview manifest was checked at every
+25 fps timestamp including the explicit endpoint (1479 positions). With
+Auto/Fixed at Full HD, Stacked 736x414 per physical viewport is invariant,
+including 1405 positions without a displayed photo and 74 with a photo.
+Auto/Dynamic uses 928x522 with no reserved reference (982 positions) and
+Stacked 736x414 with a reserved reference (497 positions). No geometry
+regression was found; the production compositor and optics are unchanged.
+
+A permanent regression test exercises the built-in Soundly timeline with
+portrait/landscape dimensions, four resolutions, Fixed/Dynamic, all 25 fps
+positions and arrival/departure boundaries at +/- 1 ms. Independent plans
+with reversed asset order agree, even when timestamps are visited backwards.
+The Chromium worker test streams a portrait / travel / landscape sequence
+using two workers and verifies that a separately rendered preview at the
+travel timestamp is byte-identical to its archived PNG. 534 animation and
+presentation Node tests and two targeted Chromium tests passed.
+
+This validates the full timeline geometry, not a complete 1479-frame
+physical render of the user's project. Original photo bytes were not in the
+supplied preview ZIP; browser worker tests use synthetic originals. B.3 is
+implemented; final visual acceptance remains with the user. Further layout
+optimization is deferred to #2. Resume with C (physical guide readability),
+then Full Presentation Video Export (7D.2.3). Investigate renderer counters
+unresolved/fillUnresolved separately if needed.
+
 ## Modern Demo Catalog — Content-aware Photo Geometry (7D.2.2.3B.2.1)
 
 Issue #1: four user PNGs confirmed Auto/Fixed Stacked at both timestamps,
