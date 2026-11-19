@@ -1,3 +1,22 @@
+## Modern Demo Catalog — Paired Gaussian calibration sensitivity (8A.4.2)
+
+Issue #6: two research tests in CameraCalibration.test.js, two synthetic
+Globe Standard scenes (near ~670 m, distant ~22 km), 12 fitting and 3
+noiseless held-out points. Paired per-coordinate Gaussian sigma 1/3 px,
+12 local starts at truth and first 4 blind searches per scene/sigma,
+plus 12 known-focal local trials per distant sigma. Explicit equal broad
+physical bounds and finite iteration budget. 88 valid fit/validation
+trials; 26 converged, 61 stalled, one iteration limit. Distant median
+position errors 2246.5/5932.99 m despite held-out RMS 0.613/1.818 px;
+known focal reduces position errors to 199.03/592.49 m. See
+docs/camera-calibration.md for full table, denominators and limitations.
+Small synthetic paired sample, not confidence intervals or global recall
+guarantee. Two new tests, 14/14 CameraCalibration (~151 s), 53/53 other
+four suites, 67 total. No new require edges/fixture changes. Parent
+full CI green; new full CI pending; calibration dependencies verified
+against remote tree. Next 8A.4.3 equal-constraint Globe/Flat and atmosphere
+comparison. No production code/UI changes.
+
 ## Modern Demo Catalog — Local camera conditioning (8A.4.1)
 
 Issue #6: added opt-in CameraPhysicalFit.diagnose using shared weighted

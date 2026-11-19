@@ -51,3 +51,73 @@ test('all fixed parameters evaluate without a supplied or generated seed',()=>{
  assert.equal(r.status,'candidates');assert.equal(r.candidates[0].source,'fixed');assert.equal(r.candidates[0].termination,'fixed');assert.equal(r.candidates[0].evaluation.rmsPx,0);
  assert.throws(()=>calibrate(m,obs,{...opts,method:'canvas-direct'}),/Final method/);
 });
+
+// Reproducible standard-normal coordinate noise, independent between points
+// and coordinates. Reuse draws across sigma and initialization strategies.
+function gaussian(seed){
+ let state=seed>>>0;
+ function uniform(){state=(Math.imul(1664525,state)+1013904223)>>>0;return (state+.5)/4294967296;}
+ return ()=>Math.sqrt(-2*Math.log(uniform()))*Math.cos(2*Math.PI*uniform());
+}
+function quantile(values,q){
+ const a=values.slice().sort((x,y)=>x-y);if(!a.length)return null;
+ const k=(a.length-1)*q,i=Math.floor(k);return a[i]+(a[Math.ceil(k)]-a[i])*(k-i);
+}
+function summarizeTrials(rows){
+ const valid=rows.filter(r=>r.valid),held=valid.filter(r=>Number.isFinite(r.heldOutRmsPx));
+ const counts={};for(const r of rows)counts[r.status]=(counts[r.status]||0)+1;
+ const metrics={};for(const k of ['positionErrorM','heightErrorM','focalErrorPercent','rmsPx','heldOutRmsPx']){
+  const vs=valid.map(r=>r[k]).filter(Number.isFinite);metrics[k]={n:vs.length,median:quantile(vs,.5),p90:quantile(vs,.9)};
+ }
+ // Pixel-recall is not pose recall. Denominators include failed searches.
+ return {trials:rows.length,valid:valid.length,heldValid:held.length,statuses:counts,
+  heldWithin1px:held.filter(r=>r.heldOutRmsPx<=1).length,metrics};
+}
+function trialMetrics(m,result,validation,status){
+ if(!result||!result.evaluation.valid)return {valid:false,status};
+ const p=result.pose;
+ return {valid:true,status,rmsPx:result.evaluation.rmsPx,heldOutRmsPx:validation?.valid?validation.rmsPx:null,
+  positionErrorM:Math.hypot(p.CameraEast-m.CameraEast,p.CameraNorth-m.CameraNorth,p.Height-m.Height),
+  heightErrorM:Math.abs(p.Height-m.Height),focalErrorPercent:100*Math.abs(p.FocalLengthField/m.FocalLengthField-1)};
+}
+for(const distant of [false,true])test('paired Gaussian noise sensitivity and blind recovery: '+(distant?'22 km':'near spatial'),t=>{
+ const m=distant?{...base,showModel:1,CameraEast:-1500,CameraNorth:-6000,Height:40,Pan:Math.atan2(1500,22000)*180/Math.PI,Nick:-.06,Roll:2,FocalLengthField:200}:{...base,showModel:1};
+ const landmarks=Array.from({length:15},(_,i)=>distant?{id:'far'+i,east:140*Math.sin(i*2.2),north:16000+1600*Math.cos(i*1.7),height:45+20*Math.sin(i*1.1)}:
+  {id:'near'+i,east:35*Math.sin(i*2.1),north:70*Math.cos(i*1.3),height:50+12*Math.sin(i*3.7)});
+ const options={...opts,atmosphere:'standard',maxCandidates:3,maxIterations:60,
+  bounds:{CameraEast:[-100000,100000],CameraNorth:[-100000,100000],Height:[.001,1000],FocalLengthField:[4,1000]}};
+ const clean=observe(m,landmarks,options),train=clean.slice(0,12),held=clean.slice(12),before=JSON.stringify(clean);
+ const scene={...m,CameraEast:0,CameraNorth:0,Height:1,Pan:0,Nick:0,Roll:0,FocalLengthField:21};
+ const makeNoise=gaussian(0x8a42),draws=Array.from({length:12},()=>train.map(()=>[makeNoise(),makeNoise()]));
+ for(const sigma of [1,3]){
+  const local=[],blind=[],locked=[];
+  for(const [trial,draw] of draws.entries()){
+   const noisy=train.map((o,i)=>({...o,pixel:o.pixel.map((v,j)=>v+sigma*draw[i][j])}));
+   const a=physical.fit(m,m,noisy,options);
+   const e=physical.evaluate(m,a.pose,held,options);
+   local.push(trialMetrics(m,a,e,a.status));
+   // Fixed first four realizations, independent of their fit results.
+   if(trial<4){
+    const b=calibrate(scene,noisy,{...options,validation:held});
+    const best=b.candidates[0];blind.push(trialMetrics(m,best,best?.validation,best?.termination??b.status));
+   }
+   if(distant){
+    // Conditional sensitivity with externally known focal length, not a blind
+    // reconstruction: starts at truth just like the unconstrained local fit.
+    const c=physical.fit(m,m,noisy,{...options,freeParameters:physical.fields.filter(k=>k!=='FocalLengthField')});
+    assert.equal(c.pose.FocalLengthField,m.FocalLengthField);
+    locked.push(trialMetrics(m,c,physical.evaluate(m,c.pose,held,options),c.status));
+   }
+  }
+  for(const [strategy,rows] of [['local',local],['blind',blind],...(distant?[['known-focal-local',locked]]:[])]){
+   const summary=summarizeTrials(rows);t.diagnostic(JSON.stringify({scene:distant?'distant':'near',sigma,strategy,...summary}));
+   assert.equal(summary.trials,strategy==='blind'?4:12);assert.equal(Object.values(summary.statuses).reduce((s,n)=>s+n,0),summary.trials);
+   assert.ok(summary.valid>0);assert.ok(summary.heldValid<=summary.valid);
+   for(const r of rows.filter(r=>r.valid)){assert.ok(Number.isFinite(r.positionErrorM)&&Number.isFinite(r.rmsPx));}
+  }
+  // The known-truth start is a control, not a requirement imposed on blind
+  // success. Do not count stalled or iteration-limited results as converged.
+  assert.equal(local.filter(r=>r.valid).length,12);
+ }
+ assert.equal(JSON.stringify(clean),before);
+});
