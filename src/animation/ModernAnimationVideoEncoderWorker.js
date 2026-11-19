@@ -7,7 +7,7 @@
 'use strict';
 importScripts(
   '../ui/modern/ModernExperimentState.js',
-  '../ui/modern/ModernSemanticNaming.js?semantic-names=2',
+  '../ui/modern/ModernSemanticNaming.js?semantic-names=2&atmosphere-export=1',
   '../ui/modern/ModernCameraHud.js?studio-hud-fix=1&contrast=1',
   '../camera/ModernCameraTelemetry.js',
   '../ui/modern/ModernTargetIndicator.js?target-indicator=1',

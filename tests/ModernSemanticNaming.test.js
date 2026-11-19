@@ -89,7 +89,7 @@ test('filenames are cross-platform safe, distinguish output format/layout and re
     {id:'video',name:'Нічна рефракція / тест: №1'});
   const p={width:1920,height:1080,fps:30,format:'mp4',compareLayout:'side-by-side'};
   const single=naming.exportNames(project,p);
-  assert.match(single.filename,/nichna-refraktsiia-test-1_1920x1080_30fps_compare\.mp4$/);
+  assert.match(single.filename,/nichna-refraktsiia-test-1-vacuum_1920x1080_30fps_compare\.mp4$/);
   assert.ok(!/[\\/:*?"<>|]/.test(single.filename));
   const separate=naming.exportNames(project,{...p,compareLayout:'separate',width:960});
   assert.match(separate.filename,/_compare-separate\.zip$/);
@@ -100,4 +100,14 @@ test('filenames are cross-platform safe, distinguish output format/layout and re
   const anonymous={...project,name:'Animation study'};
   assert.match(naming.exportStem(anonymous),/pontchartrain-camera-height/);
   assert.equal(naming.slug('../../\\Україна🚀'), 'ukraina');
+});
+
+
+test('atmosphere filename suffix describes active physics, not dormant settings',()=>{
+  const a=snapshot('compare');
+  assert.equal(naming.atmosphereSuffix({baseExperiment:a}),'-vacuum');
+  a.compare.B.atmosphere='standard';assert.equal(naming.atmosphereSuffix({baseExperiment:a}),'');
+  a.compare.A.atmosphere='standard';assert.equal(naming.atmosphereSuffix({baseExperiment:a}),'-standard');
+  a.display.mode='scene';a.scene.atmosphere='vacuum';assert.equal(naming.atmosphereSuffix({baseExperiment:a}),'-vacuum');
+  a.scene.atmosphere='temperature-lapse';assert.equal(naming.atmosphereSuffix({baseExperiment:a}),'');
 });

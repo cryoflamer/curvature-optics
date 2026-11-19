@@ -217,5 +217,6 @@ test('Modern export uses a Web Worker and never does optical painting on the UI 
   assert.match(code,/controller\.start\(/);
   assert.match(code,/controller\.cancel\(/);
   assert.doesNotMatch(code,/api\.run\(|graphForCanvas\(|painter\.render\(|applyExperiment\(|queueHistoryAuto\(/);
-  assert.match(code,/studioApi\.build\(studioDraft/);
+  assert.match(code,/studioExportProject\(/);
+  assert.match(js,/studioApi\.build\(studioDraft,id\)/);
 });

@@ -77,3 +77,38 @@ test('mixed-refraction project hides switch and rejects attempts without replaci
   assert.throws(()=>c.setStudioAtmosphere('vacuum'),/unavailable/);assert.equal(c.studioPlayback,old);
   assert.equal(h.stats().refreshes,0);
 });
+
+
+test('Storyboard exports selected atmosphere with exact matching images, not the authored cache',async()=>{
+  const h=harness(),c=h.ctx,downloads=[],library=require('../src/animation/ModernAnimationLibrary');
+  const oldImage={mode:'compare',width:960,height:320,dataUrl:'data:image/webp;base64,YQ=='};
+  const newImage={...oldImage,dataUrl:'data:image/webp;base64,Yg=='};
+  projects.frameExperiments(c.studioPrepared).forEach(e=>h.cache.put(e,oldImage));
+  c.studioPlayback.seek(20950,1000);c.setStudioAtmosphere('standard');
+  const effective=c.studioPlayback.project;
+  projects.frameExperiments(effective).forEach(e=>h.cache.put(e,newImage));
+  Object.assign(c,{studioLibraryActive:null,animationWorkspaceOpen:true,studioPlaybackQuality:'canvas-direct',
+    studioPlaybackDetail:'full',studioDemoCatalog:require('../src/animation/ModernDemoCatalog'),
+    studioLibrary:library,studioLibraryActionsApi:require('../src/animation/ModernAnimationLibraryActions'),
+    studioThumbnailReady:Promise.resolve(),downloadHistoryJson:(json,name)=>downloads.push({json,name})});
+  c.root.CurvatureModernAnimationStoryboardExport=require('../src/animation/ModernAnimationStoryboardExport');
+  vm.runInContext(app.slice(app.indexOf('  function studioStoryboardBatch('),app.indexOf('  function captureStudioKeyframeThumbnail(')),c);
+  c.studioStoryboardBatch('compact');await c.studioStoryboardBatch('export');
+  assert.equal(downloads.length,2,c.studioStoryboardStatus);
+  for(const [i,d] of downloads.entries()){
+    const [item]=library.parsePortable(d.json);
+    assert.deepEqual(item.project,effective);assert.match(d.name,/-standard-/);
+    if(i){assert.equal(item.keyframeThumbnails.length,9);assert.ok(item.keyframeThumbnails.every(k=>k.image.dataUrl===newImage.dataUrl));}
+    else assert.equal(item.keyframeThumbnails,undefined);
+  }
+  const authored=library.parsePortable(c.studioDemoCatalog.exportDemo('soundly',e=>h.cache.get(e)))[0];
+  assert.deepEqual(authored.project,c.studioPrepared);
+  assert.ok(authored.keyframeThumbnails.every(k=>k.image.dataUrl===oldImage.dataUrl));
+  assert.equal(c.studioPlayback.status().positionMs,20950);
+  assert.equal(c.studioPrepared.baseExperiment.compare.A.atmosphere,'vacuum');
+  // An editable workspace uses just the same physical selection, retaining draft metadata.
+  c.studioActiveDemo=null;c.studioDraft=studio.edit(c.studioDraft,'name','Edited bridge');
+  c.studioStoryboardBatch('compact');
+  const edited=library.parsePortable(downloads.at(-1).json)[0];
+  assert.equal(edited.project.name,'Edited bridge');assert.equal(edited.project.baseExperiment.compare.B.atmosphere,'standard');
+});

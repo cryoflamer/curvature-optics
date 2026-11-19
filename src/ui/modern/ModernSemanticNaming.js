@@ -142,6 +142,17 @@
     if(autoProjectName(preferred))preferred=animation(project);
     return slug(preferred);
   }
+  // Only label a common fixed Vacuum/Standard atmosphere, never mixed A/B
+  // or another atmospheric law. The active display determines the scope.
+  function atmosphereSuffix(project){
+    var base=project&&project.baseExperiment;
+    if(!base||!base.display)return '';
+    var compare=base.display.mode==='compare',a=compare?base.compare&&base.compare.A:base.scene;
+    var mode=a&&a.atmosphere;
+    if(!['vacuum','standard'].includes(mode))return '';
+    if(compare&&(!base.compare.B||base.compare.B.atmosphere!==mode))return '';
+    return '-'+mode;
+  }
   function exportNames(project,settings){
     settings=settings||{};
     var format=settings.format||'mp4',kind=settings.kind||'video';
@@ -150,7 +161,7 @@
     var width=settings.width,height=settings.height,fps=settings.fps;
     if(!Number.isInteger(width)||!Number.isInteger(height)||!Number.isInteger(fps)||
       width<=0||height<=0||fps<=0)throw RangeError('Invalid export dimensions');
-    var base=exportStem(project)+'_'+width+'x'+height+'_'+fps+'fps';
+    var base=exportStem(project)+atmosphereSuffix(project)+'_'+width+'x'+height+'_'+fps+'fps';
     if(kind==='frames')return {filename:base+'_frames.zip'};
     var compare=project&&project.baseExperiment&&project.baseExperiment.display.mode==='compare';
     if(compare&&settings.compareLayout==='separate')return {
@@ -159,5 +170,5 @@
     return {filename:base+(compare?'_compare':'')+'.'+format};
   }
   return Object.freeze({snapshot:snapshot,animation:animation,autoProjectName:autoProjectName,
-    slug:slug,exportStem:exportStem,exportNames:exportNames,styles:Object.freeze(STYLES)});
+    slug:slug,exportStem:exportStem,atmosphereSuffix:atmosphereSuffix,exportNames:exportNames,styles:Object.freeze(STYLES)});
 }));

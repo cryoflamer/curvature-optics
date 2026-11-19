@@ -50,9 +50,11 @@ updates the v2 base and reference together and passes the existing validators.
 The authored project remains the source for saving and ordinary project export.
 Step 7B.2 uses the authored project for the editor and the effective project
 for playback, exact-state thumbnail lookup and detached batch capture. Switches
-never edit the contract. Until 7B.3, return to authored atmosphere for
-Storyboard JSON and media export; Library exports always use authored physics.
-See the catalog roadmap for explicit variant export integration.
+never edit the contract. Step 7B.3 exports the effective variant through
+Storyboard JSON, PNG and video, while Library exports and save always use
+authored physics. A variant JSON is an independently valid project: its base
+and reference agree and its images match the exported physical frames. See
+the catalog roadmap for export routing and naming.
 
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can

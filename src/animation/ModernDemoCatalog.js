@@ -5,16 +5,18 @@
 (function(root,factory){
   var projects=root.CurvatureModernAnimationProject;
   var library=root.CurvatureModernAnimationLibrary;
+  var variants=root.CurvatureModernAnimationAtmosphereVariant;
   var bundled=function(){return root.CurvatureModernDemoCatalogData;};
   if(typeof module==='object'&&module.exports){
     projects=require('./ModernAnimationProject');
     library=require('./ModernAnimationLibrary');
+    variants=require('./ModernAnimationAtmosphereVariant');
     bundled=function(){return require('./ModernDemoCatalogData');};
   }
-  var api=factory(projects,library,bundled);
+  var api=factory(projects,library,bundled,variants);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernDemoCatalog=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,library,bundled){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,library,bundled,variants){
   'use strict';
   var FORMAT='curvature-modern-demo-catalog',VERSION=1;
   function shape(value,keys){
@@ -99,6 +101,8 @@
   function exportDemo(id,lookup,options){
     var demo=load().find(function(entry){return entry.id===id;});
     if(!demo)throw Error('Unknown built-in demo: '+id);
+    var project=options&&options.atmosphere?variants.derive(demo.project,options.atmosphere):demo.project;
+    var changed=JSON.stringify(project)!==JSON.stringify(demo.project);
     var shipped=new Map();
     var frames=projects.frameExperiments(demo.project);
     demo.keyframeThumbnails.forEach(function(item){shipped.set(JSON.stringify(frames[item.index]),item.image);});
@@ -106,8 +110,8 @@
       return (lookup&&lookup(experiment))||shipped.get(JSON.stringify(experiment));
     };
     // Portable records carry the authored project ID, not the catalog identity.
-    return library.exportPortable([{version:1,id:demo.project.id,project:demo.project,
-      quality:demo.quality,thumbnail:demo.thumbnail,
+    return library.exportPortable([{version:1,id:demo.project.id,project:project,
+      quality:options&&options.quality!==undefined?options.quality:demo.quality,thumbnail:changed?null:demo.thumbnail,
       cover:demo.cover?bundled().covers[demo.cover.asset]:null,
       createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],resolve,options);
   }

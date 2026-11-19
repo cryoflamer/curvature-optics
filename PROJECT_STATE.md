@@ -1,3 +1,18 @@
+## Modern Demo Catalog — Atmosphere-aware Export (7B.3)
+
+User confirmed the switcher in Opera. Storyboard exports the selected physical
+variant (complete or compact); Library export and save remain authored. PNG
+and video plans capture effective playback physics at export start, or build
+an unsaved draft when no player is prepared. Worker jobs retain their initial
+project even if the preview changes later. A complete storyboard uses only
+exact-state images and aborts on a workspace/variant change. Built-in variant
+exports retain the cover, omit incompatible record thumbnails, and do not
+modify the demo. Single-project JSON, PNG ZIP, video and separate video ZIP
+entries carry `-vacuum` / `-standard` for common fixed active conditions; mixed
+and custom atmospheres and Library-wide JSON have no common-mode suffix.
+Accurate RK4 remains the media export quality. Soundly is still authored in
+vacuum; next: 7C reference images and sources, 7D narrative, 7E finalization.
+
 ## Modern Demo Catalog — Atmosphere Switcher (7B.2)
 
 Studio and Presentation share a Vacuum/Standard selector, visible only for
@@ -8,10 +23,8 @@ repaints immediately when layout permits. Variant selection resets on new
 preparation, workspace switch or reload; interpolation changes preserve it.
 Storyboard and batch captures use effective frame identity; shipped images
 are accepted only for the exact matching physical frame. In-flight batch jobs
-are cancelled on a variant change. Until 7B.3, Storyboard JSON and PNG/video
-export are disabled while the override differs from authored atmosphere;
-ordinary Library exports remain authored. Soundly remains authored in vacuum.
-Next: 7B.3 explicit variant/media exports, then 7C–7E content and finalization.
+are cancelled on a variant change. At 7B.2, alternative-mode exports were
+temporarily disabled; superseded by 7B.3 above. Soundly remains authored in vacuum.
 
 ## Modern Demo Catalog — Atmosphere Variant Engine (7B.1)
 

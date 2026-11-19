@@ -47,10 +47,13 @@ engine now derives Vacuum/Standard eligibility from the project contract and
 active refraction, without editing the original or adding schema fields. No
 extra author flag is needed. Eligible prepared projects expose the shared
 **Atmosphere** selector in Studio and Presentation; it preserves playback time
-and uses separate exact-state thumbnails. The choice is runtime-only. Until
-variant export is implemented, return to the authored atmosphere for Storyboard
-JSON or PNG/video export. Next: atmosphere-aware export, observation images and
-sources, Soundly narrative, then standard atmosphere and final imagery.
+and uses separate exact-state thumbnails. The choice is runtime-only. Storyboard
+exports the current atmosphere as standalone portable JSON, including matching
+images when requested; PNG and video use the atmosphere selected at export
+start (Accurate RK4). Save and Library backups retain authored physics. Fixed
+Vacuum/Standard single-project filenames include the corresponding suffix.
+Next: observation images and sources, Soundly narrative, then standard
+atmosphere and final imagery.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

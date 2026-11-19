@@ -122,13 +122,13 @@ test('encoder worker Compare A/B encodes a single 1280×720 WebM',async()=>{
     quality:'high',workers:2,frameWindow:4}});
   await tick();
   assert.equal(messages.at(-1).type,'ready');
-  assert.equal(messages.at(-1).filename,'vp9-worker-test_1280x720_5fps_compare.webm');
+  assert.equal(messages.at(-1).filename,'vp9-worker-test-vacuum_1280x720_5fps_compare.webm');
   for(const t of plan.frames)root.onmessage({data:{type:'frame',frame:frame(plan,t.index)}});
   await tick();await tick();
   const complete=messages.find(x=>x.type==='complete');
   assert.ok(complete,'Compare must finish');
   assert.equal(complete.blob.type,'video/webm');
-  assert.equal(complete.filename,'vp9-worker-test_1280x720_5fps_compare.webm');
+  assert.equal(complete.filename,'vp9-worker-test-vacuum_1280x720_5fps_compare.webm');
   assert.equal(complete.manifest.width,1280);
   assert.equal(complete.manifest.height,720);
   assert.equal(complete.manifest.viewWidth,640);
@@ -176,7 +176,7 @@ test('encoder worker H.264 outputs valid MP4 media boxes and selected format',as
   assert.ok(result);
   assert.equal(result.blob.type,'video/mp4');
   assert.equal(result.manifest.format,'mp4');
-  assert.equal(result.filename,'vp9-worker-test_640x360_5fps.mp4');
+  assert.equal(result.filename,'vp9-worker-test-vacuum_640x360_5fps.mp4');
   const bytes=Buffer.from(await result.blob.arrayBuffer());
   for(const tag of ['ftyp','moov','avc1','avcC','stts','stss','mdat'])
     assert.ok(bytes.includes(Buffer.from(tag)),tag);
@@ -196,7 +196,7 @@ test('encoder worker MP4 Compare encodes a single 1280×720 MP4',async()=>{
   assert.equal(result.blob.type,'video/mp4');
   const bytes=Buffer.from(await result.blob.arrayBuffer());
   assert.ok(bytes.includes(Buffer.from('avc1')));
-  assert.equal(result.filename,'vp9-worker-test_1280x720_5fps_compare.mp4');
+  assert.equal(result.filename,'vp9-worker-test-vacuum_1280x720_5fps_compare.mp4');
   assert.equal(result.manifest.sides.length,2);
   assert.equal(result.manifest.outputStreams,1);
   assert.equal(result.manifest.width,1280);
@@ -275,8 +275,8 @@ test('legacy separate Compare layout still produces two independent files when r
   assert.equal(result.manifest.compareLayout,'separate');
   assert.equal(workers.length,2);
   const bytes=Buffer.from(await result.blob.arrayBuffer());
-  assert.ok(bytes.includes(Buffer.from('vp9-worker-test_640x360_5fps_A.webm')));
-  assert.ok(bytes.includes(Buffer.from('vp9-worker-test_640x360_5fps_B.webm')));
+  assert.ok(bytes.includes(Buffer.from('vp9-worker-test-vacuum_640x360_5fps_A.webm')));
+  assert.ok(bytes.includes(Buffer.from('vp9-worker-test-vacuum_640x360_5fps_B.webm')));
 });
 
 test('selected separate Compare layout produces two synchronized video files for MP4 and WebM',async()=>{
@@ -288,7 +288,7 @@ test('selected separate Compare layout produces two synchronized video files for
       format,compareLayout:'separate',quality:'standard',workers:2,frameWindow:4}});
     await tick();
     assert.equal(messages.at(-1).type,'ready');
-    assert.equal(messages.at(-1).filename,'vp9-worker-test_640x360_5fps_compare-separate.zip');
+    assert.equal(messages.at(-1).filename,'vp9-worker-test-vacuum_640x360_5fps_compare-separate.zip');
     for(const t of planned.frames)
       root.onmessage({data:{type:'frame',frame:frame(planned,t.index)}});
     await tick();await tick();
@@ -302,10 +302,10 @@ test('selected separate Compare layout produces two synchronized video files for
     assert.equal(completed.manifest.durationUs,planned.durationUs);
     assert.equal(completed.manifest.frameCount,planned.frameCount);
     assert.equal(completed.manifest.format,format);
-    assert.equal(completed.filename,'vp9-worker-test_640x360_5fps_compare-separate.zip');
+    assert.equal(completed.filename,'vp9-worker-test-vacuum_640x360_5fps_compare-separate.zip');
     const zip=Buffer.from(await completed.blob.arrayBuffer());
-    assert.ok(zip.includes(Buffer.from('vp9-worker-test_640x360_5fps_A.'+format)));
-    assert.ok(zip.includes(Buffer.from('vp9-worker-test_640x360_5fps_B.'+format)));
+    assert.ok(zip.includes(Buffer.from('vp9-worker-test-vacuum_640x360_5fps_A.'+format)));
+    assert.ok(zip.includes(Buffer.from('vp9-worker-test-vacuum_640x360_5fps_B.'+format)));
     assert.ok(zip.includes(Buffer.from('manifest.json')));
     assert.ok(workers.every(encoder=>encoder.closed));
   }

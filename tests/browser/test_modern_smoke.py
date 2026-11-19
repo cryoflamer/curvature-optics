@@ -280,6 +280,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
         self.assertEqual(cards.nth(3).locator('img').count(), 0)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()'), authored)
+        story = self.page.locator('#ModernAnimationStoryboard')
+        with self.page.expect_download(timeout=60000) as download:
+            story.get_by_role('button', name='Export with thumbnails (standard)', exact=True).click()
+        self.assertIn('-standard-', download.value.suggested_filename)
+        variant = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))['animations'][0]
+        self.assertEqual(len(variant['keyframeThumbnails']), 9)
+        self.assertEqual(variant['project']['baseExperiment']['compare']['A']['atmosphere'], 'standard')
+        self.assertEqual(variant['project']['baseExperiment']['compare']['B']['atmosphere'], 'standard')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()'), authored)
         switch.select_option('vacuum')
         expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · vacuum')
         expect(cards.nth(3).locator('img')).to_have_count(1)

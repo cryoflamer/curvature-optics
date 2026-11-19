@@ -53,7 +53,7 @@ function harness(mode='compare',returnedFilename=null){
   const studioDraft={frames:[{experiment:p.baseExperiment},{experiment:p.baseExperiment}]};
   let receivedOptions=null;
   const context=vm.createContext({
-    newUiEl:id=>elements[id],studioDraft,studioPrepared:null,studioAtmosphereOverridden:()=>false,
+    newUiEl:id=>elements[id],studioDraft,studioPrepared:null,studioPlayback:null,
     studioApi:{build:()=>p},semanticNaming:naming,
     studioVideoExportPlan:video,studioBackgroundExportApi:pngBackground,
     studioVideoExportApi:{...background,create:()=>({
@@ -81,7 +81,7 @@ function harness(mode='compare',returnedFilename=null){
     }},
     setTimeout(){}
   });
-  const start=source.indexOf('  function studioVideoExportSelection(){');
+  const start=source.indexOf('  function studioExportProject(id){');
   const stop=source.indexOf('  function syncStudioTargetIndicator(){',start);
   const bindStart=source.indexOf('  function bindStudioVideoExport(){',stop);
   const bindEnd=source.indexOf('  function bindStudioFrameExport(){',bindStart);
@@ -91,13 +91,13 @@ function harness(mode='compare',returnedFilename=null){
   context.syncStudioFrameExportControls=()=>{};
   vm.runInContext(script,context,{filename:'ModernApp.js:video-ui'});
   context.bind();
-  return {elements,handlers,downloads,sync:context.sync,received:()=>receivedOptions};
+  return {elements,handlers,downloads,sync:context.sync,received:()=>receivedOptions,context,project:p};
 }
 
 test('the visible unsaved draft filename updates for FPS, size, format and Compare ZIP entries',()=>{
   const h=harness(),e=h.elements;
   const filename=e.ModernAnimationVideoExportFilename;
-  assert.match(filename.textContent,/pontchartrain-camera-height-1-85-15-m_1280x720_25fps_compare\.webm/);
+  assert.match(filename.textContent,/pontchartrain-camera-height-1-85-15-m-vacuum_1280x720_25fps_compare\.webm/);
   e.ModernAnimationVideoExportFps.value='30';
   h.handlers['ModernAnimationVideoExportFps:change']();
   assert.match(filename.textContent,/_1280x720_30fps_compare\.webm/);
@@ -172,4 +172,18 @@ test('cache-busted main and imported naming scripts are wired to the actual enco
   assert.match(source,/ModernAnimationVideoEncoderWorker\.js\?semantic-export=2/);
   assert.match(worker,/ModernSemanticNaming\.js\?semantic-names=2/);
   assert.match(html,/id="ModernAnimationVideoExportFilename"/);
+});
+
+
+test('video preview and actual worker request use the selected atmospheric variant',async()=>{
+  const h=harness(),variants=require('../src/animation/ModernAnimationAtmosphereVariant');
+  const effective=variants.derive(h.project,'standard');
+  h.context.studioPrepared=h.project;h.context.studioPlayback={project:effective};
+  h.sync();const preview=h.elements.ModernAnimationVideoExportFilename.textContent;
+  assert.match(preview,/-standard_/);
+  await h.handlers['ModernAnimationVideoExportStart:click']();
+  assert.equal(h.received().project.baseExperiment.compare.A.atmosphere,'standard');
+  assert.equal(h.received().project.baseExperiment.compare.B.atmosphere,'standard');
+  assert.equal(h.context.studioPrepared.baseExperiment.compare.A.atmosphere,'vacuum');
+  assert.equal(preview,'Export filename: '+h.downloads[0]);
 });

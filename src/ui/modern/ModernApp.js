@@ -2669,7 +2669,7 @@
     var start=newUiEl('ModernAnimationFrameExportStart');
     var cancel=newUiEl('ModernAnimationFrameExportCancel');
     var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
-    if(start)start.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi||studioAtmosphereOverridden();
+    if(start)start.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi;
     if(cancel)cancel.disabled=!studioFrameExportTask;
     syncStudioVideoExportControls();
     var status=newUiEl('ModernAnimationFrameExportStatus');
@@ -2682,8 +2682,11 @@
   }
   // One owned project, one output plan and one naming call for both the UI
   // preview and the actual export. No saved Animation Library entry required.
+  function studioExportProject(id){
+    return studioPrepared&&(studioPlayback&&studioPlayback.project||studioPrepared)||studioApi.build(studioDraft,id);
+  }
   function studioVideoExportSelection(){
-    var project=studioPrepared||studioApi.build(studioDraft,'studio_video_export');
+    var project=studioExportProject('studio_video_export');
     var size=newUiEl('ModernAnimationVideoExportSize').value.split('x').map(Number);
     var fps=Number(newUiEl('ModernAnimationVideoExportFps').value);
     var format=newUiEl('ModernAnimationVideoExportFormat').value;
@@ -2745,7 +2748,7 @@
     var cancel=newUiEl('ModernAnimationVideoExportCancel');
     var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
     if(start)start.disabled=!!studioVideoExportTask||!!studioFrameExportTask||
-      !ready||!studioVideoExportApi||!studioVideoExportPlan||studioAtmosphereOverridden();
+      !ready||!studioVideoExportApi||!studioVideoExportPlan;
     if(cancel)cancel.disabled=!studioVideoExportTask;
     syncStudioVideoExportLayout();
     var status=newUiEl('ModernAnimationVideoExportStatus');
@@ -2857,13 +2860,13 @@
       message('Video export cancelled. All render and encoder workers terminated; no video saved.','warning');
     });
     start.addEventListener('click',async function(){
-      if(studioVideoExportTask||studioFrameExportTask||studioAtmosphereOverridden())return;
+      if(studioVideoExportTask||studioFrameExportTask)return;
       if(!studioVideoExportApi||!studioVideoExportPlan){
         message('Video export modules unavailable. Check the browser console.','error');return;
       }
       var controller=studioVideoExportApi.create({WorkerCtor:root.Worker,
         rendererUrl:'src/animation/ModernAnimationFrameWorker.js?compare-layout=1&spline-export=1&spline-parity=1&short-endpoint=1',
-        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1',
+        encoderUrl:'src/animation/ModernAnimationVideoEncoderWorker.js?semantic-export=2&spline-parity=1&short-endpoint=1&atmosphere-export=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
       var task={controller:controller};studioVideoExportTask=task;
       syncStudioFrameExportControls();
@@ -2996,7 +2999,7 @@
       message('PNG export cancelled. Render and archive workers terminated; no ZIP saved.','warning');
     });
     start.addEventListener('click',async function(){
-      if(studioFrameExportTask||studioAtmosphereOverridden())return;
+      if(studioFrameExportTask||studioVideoExportTask)return;
       if(!studioFrameExportApi||!studioBackgroundExportApi){
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
@@ -3011,7 +3014,7 @@
       try{
         // Export is independent of Playback's Prepare button: a valid draft
         // can be exported directly, even after an edit invalidated playback.
-        var project=studioPrepared||studioApi.build(studioDraft,'studio_export');
+        var project=studioExportProject('studio_export');
         var fps=Number(newUiEl('ModernAnimationFrameExportFps').value);
         var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
         var plan=studioFrameExportApi.plan(project,{fps:fps,width:size[0],height:size[1]});
@@ -3124,7 +3127,7 @@
       if(!host.hidden)select.value=studioAtmosphereMode(studioPlayback.project);}
     var note=newUiEl('ModernAnimationAtmosphereNote');
     var text=studioAtmosphereOverridden()?
-      'Preview override · authored project unchanged. Return to authored atmosphere for Storyboard/PNG/video export.':'Authored atmosphere';
+      'Preview override · authored project unchanged. Storyboard/PNG/video export uses this atmosphere.':'Authored atmosphere';
     if(note&&note.textContent!==text)note.textContent=text;
   }
   function setStudioAtmosphere(value){
@@ -3431,8 +3434,10 @@
     var api=root.CurvatureModernAnimationStoryboardExport;
     var prepared=studioPrepared,player=studioPlayback,draft=studioDraft,demo=studioActiveDemo,record=studioLibraryActive;
     var overridden=studioAtmosphereOverridden(),project;
-    if(overridden&&(action==='export'||action==='compact'))return;
-    try{project=overridden?player.project:demo?prepared:studioApi.build(draft,record?record.id:prepared.id);}
+    try{
+      project=demo?prepared:studioApi.build(draft,record?record.id:prepared.id);
+      if(overridden)project=root.CurvatureModernAnimationAtmosphereVariant.derive(project,studioAtmosphereMode(player.project));
+    }
     catch(error){studioStoryboardStatus=error.message;renderAnimationStudio(studioHistoryEntries);return;}
     var quality=studioPlaybackQuality,detail=studioPlaybackDetail;
     var frames=studioApi.activeFrames(draft),job={cancelled:false};
@@ -3449,7 +3454,8 @@
     function download(lookup,complete){
       var json;
       if(demo){
-        json=studioDemoCatalog.exportDemo(demo.id,lookup,{complete:complete,compact:!complete});}
+        json=studioDemoCatalog.exportDemo(demo.id,lookup,{complete:complete,compact:!complete,
+          atmosphere:overridden?studioAtmosphereMode(project):undefined,quality:quality});}
       else{
         var now=Date.now();
         var entry={version:1,id:project.id,project:project,quality:quality,
@@ -3651,7 +3657,7 @@
         resolve:function(frame){return resolveStudioKeyframe(frame,entries);},
         refresh:function(key){selectKeyframe(key,'storyboard',true);},
         batch:studioStoryboardBatch,batchBusy:!!studioStoryboardJob,batchStatus:studioStoryboardStatus,
-        exportDisabled:studioAtmosphereOverridden(),
+        exportVariant:studioAtmosphereOverridden()?studioAtmosphereMode(studioPlayback.project):null,
         cancelBatch:function(){if(studioStoryboardJob)studioStoryboardJob.cancelled=true;}});
     }
     studioUI.render(document,host,studioDraft,assessment,{

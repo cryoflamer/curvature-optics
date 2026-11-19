@@ -1008,8 +1008,12 @@
         var control=button(doc,item[0],item[0],function(){options.batch(item[1]);});
         control.className='modern-studio-action';
         var exportAction=item[1]==='export'||item[1]==='compact';
-        control.disabled=!!options.batchBusy||!!(exportAction&&options.exportDisabled);
-        if(exportAction&&options.exportDisabled)control.title='Return to authored atmosphere to export';
+        control.disabled=!!options.batchBusy;
+        if(exportAction&&options.exportVariant){
+          var label=item[0]+' ('+options.exportVariant+')';
+          control.textContent=label;control.title=label+' · authored project unchanged';
+          control.setAttribute('aria-label',label);
+        }
         header.appendChild(control);
       });
       if(options.batchBusy){

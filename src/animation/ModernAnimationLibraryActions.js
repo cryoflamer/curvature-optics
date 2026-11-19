@@ -3,10 +3,12 @@
  * UI state, and the effects of rename/delete/save on working workspaces.
  */
 (function(root,factory){
-  var api=factory();
+  var naming=root.CurvatureModernSemanticNaming;
+  if(typeof module==='object'&&module.exports)naming=require('../ui/modern/ModernSemanticNaming');
+  var api=factory(naming);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationLibraryActions=api;
-}(typeof window!=='undefined'?window:globalThis,function(){
+}(typeof window!=='undefined'?window:globalThis,function(naming){
   'use strict';
   // Name the actual portable payload, including cached (possibly partial) images.
   // Local time is intentional: filenames sort naturally in the user's downloads.
@@ -21,7 +23,7 @@
     var stamp=pad(date.getFullYear(),4)+pad(date.getMonth()+1)+pad(date.getDate())+'-'+
       pad(date.getHours())+pad(date.getMinutes())+pad(date.getSeconds())+'-'+pad(date.getMilliseconds(),3);
     var images=entries.some(function(entry){return Array.isArray(entry.keyframeThumbnails)&&entry.keyframeThumbnails.length>0;});
-    return slug+'-'+stamp+(images?'-with-thumbnails':'')+'.json';
+    return slug+(!all&&entries.length===1?naming.atmosphereSuffix(entries[0].project):'')+'-'+stamp+(images?'-with-thumbnails':'')+'.json';
   }
   function create(options){
     if(!options||typeof options.library!=='function'||

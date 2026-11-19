@@ -526,10 +526,14 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernDemoCatalog.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
-        "tests/ModernAnimationAtmosphereVariant.test.js"
+        "tests/ModernAnimationAtmosphereVariant.test.js",
+        "tests/ModernAnimationVideoFilenamePreview.test.js",
+        "tests/ModernStatusMessageExportUI.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -683,6 +687,7 @@
         "src/animation/ModernDemoCatalog.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
@@ -697,6 +702,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryActions.test.js",
         "tests/ModernAnimationProjectWizard.test.js"
@@ -892,6 +898,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationStoryboardExport.test.js"
       ],
       "commonJsToolCallers": []
@@ -1042,7 +1049,8 @@
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationStoryboardExport.test.js",
         "tests/ModernCanvasDirectPreview.test.js",
-        "tests/ModernDemoCatalog.test.js"
+        "tests/ModernDemoCatalog.test.js",
+        "tests/ModernStatusMessageExportUI.test.js"
       ],
       "commonJsToolCallers": [
         "tools/build-modern-demo-catalog.js"
@@ -3256,12 +3264,14 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationLibraryActions.js",
         "src/animation/ModernAnimationStudio.js",
         "src/ui/modern/ModernExperimentHistory.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationVideoFilenamePreview.test.js",
-        "tests/ModernSemanticNaming.test.js"
+        "tests/ModernSemanticNaming.test.js",
+        "tests/ModernStatusMessageExportUI.test.js"
       ],
       "commonJsToolCallers": []
     },
