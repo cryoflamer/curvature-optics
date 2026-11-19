@@ -1,3 +1,18 @@
+## 8F.0 — Landmark editor architecture audit completed
+
+See [8F.0 audit](landmark-editor-audit.md), Issue #7. The current
+Canvas Direct identity raster already supports object ownership/highlights.
+Local geometry is planar polygon/line data with affine placement; connected
+road spans need their own two-endpoint identity. Chosen design: independent
+local Canvas 2D viewer with pure 3D camera/picking, no invented geometry.
+The audit specifies snapshot-scoped owner/topology guards, fixed edge/surface
+anchors, projection/range integration and migration. Bounded repository-JS
+checks: one rejected fill among sampled local geometries; Soundly 128 objects,
+1558 primitives and 254 road quads have matching ordered topology across four
+geometry variants. No production changes, no browser/full test runs.
+Next: 8F.1 reuse object-identity selection and add stable metadata/descriptor;
+do not start viewer or new anchor schemas yet.
+
 ## 8F — 3D Landmark Editor (planned, next priority)
 
 Issue #7, related to Camera Calibration #6. The real-photo experiments after
