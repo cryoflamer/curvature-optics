@@ -1,3 +1,19 @@
+## 8F.3b — Free View point picking UI
+
+Free View now offers Navigate / Vertex / Edge / Surface, hover preview,
+click-to-stage, explicit candidate list and Clear point. Three CSS pixels
+distinguish orbit drag from click. Scene View remains navigation-only.
+Topology cached per region; actual clipped painter paths/order shared with
+screen-bounds picking and conservative fill-visibility reconciliation.
+Geometric depth conflicts and invalid later fills block picks; coplanar
+candidates remain explicit. Wireframe permits hidden vertex/edge inspection,
+not surface picking. Pointer hover coalesced by animation frame; bounded
+overlap work rejects oversized queries. Staged points are local only,
+not correspondences; marker/precise adjustment remains 8F.3c. No optical
+inverse or experiment schema changes. Twenty-one strict headless tests
+passed; browser regression added (CI pending). Previous 8F.3a CI passed.
+Manual cross-scene qualification remains outstanding. Next: 8F.3c.
+
 ## 8F.3a — Mathematical local picking core
 
 User approved the slower orbit in 8F.2e. Split 8F.3 into a–d: mathematical

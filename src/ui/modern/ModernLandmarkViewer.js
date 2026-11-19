@@ -357,12 +357,11 @@
     if(!inside(b))b=lerp(b,a,(limit-b[axis])/(a[axis]-b[axis]));
     return [a,b];
   }
-  function drawRegion(canvas,geometry,state){
-    const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,c=regionCamera(geometry,state,w,h);
-    ctx.clearRect(0,0,w,h);ctx.fillStyle='#eef4f8';ctx.fillRect(0,0,w,h);
+  function regionPaths(geometry,state,w,h){
+    const c=regionCamera(geometry,state,w,h);
     const screenBounds=[[0,-2,true],[0,w+2,false],[1,-2,true],[1,h+2,false]],groups=new Map();
     let visible=0;
-    for(const p of geometry.items){
+    for(const [order,p] of geometry.items.entries()){
       const q=p.points.map(c.coordinates),polygon=p.type==='polygon',mode=polygon?(p.mode??1):1;
       let fill=polygon&&(mode&2)&&!state.wireframe?clipPolygon(q,2,c.near,true).map(c.screen):[];
       for(const b of screenBounds)fill=clipPolygon(fill,...b);
@@ -375,9 +374,14 @@
       }
       if(fill.length<3&&!edges.length)continue;
       const key=JSON.stringify(p.owner);if(!groups.has(key))groups.set(key,[]);
-      groups.get(key).push({p,fill,edges,depth:q.reduce((s,v)=>s+v[2]/q.length,0)});visible++;
+      groups.get(key).push({p,order,fill,edges,depth:q.reduce((s,v)=>s+v[2]/q.length,0)});visible++;
     }
     const ordered=[...groups.values()].map(g=>({g,depth:g.reduce((s,v)=>s+v.depth/g.length,0)})).sort((a,b)=>b.depth-a.depth).flatMap(v=>v.g);
+    return {camera:c,ordered,visible,count:geometry.items.length};
+  }
+  function drawRegion(canvas,geometry,state,paths=regionPaths(geometry,state,canvas.width,canvas.height)){
+    const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,{ordered,visible,count}=paths;
+    ctx.clearRect(0,0,w,h);ctx.fillStyle='#eef4f8';ctx.fillRect(0,0,w,h);
     ctx.lineJoin='round';ctx.lineWidth=1;
     for(const {p,fill,edges} of ordered){
       ctx.globalAlpha=p.style.alpha??1;
@@ -385,7 +389,80 @@
       if(edges.length){ctx.beginPath();for(const [a,b] of edges){ctx.moveTo(...a);ctx.lineTo(...b);}ctx.strokeStyle=p.style.stroke||'#526b7f';ctx.stroke();}
     }
     ctx.globalAlpha=1;
-    return {visible,count:geometry.items.length};
+    return {visible,count};
+  }
+  // Nonzero winding matches Canvas fill(), including invalid authored fills.
+  // Use a narrow boundary tolerance for snapped perimeter points.
+  function containsFill(points,p){
+    let winding=0;
+    for(let i=0;i<points.length;i++){
+      const a=points[i],b=points[(i+1)%points.length],d=sub(b,a),q=sub(p,a),n=dot(d,d);
+      if(n>0&&Math.hypot(...sub(q,mul(d,clamp(dot(q,d)/n,0,1))))<=1e-6)return true;
+      const side=d[0]*q[1]-d[1]*q[0];
+      if(a[1]<=p[1]&&b[1]>p[1]&&side>0)winding++;
+      if(a[1]>p[1]&&b[1]<=p[1]&&side<0)winding--;
+    }
+    return winding!==0;
+  }
+  function pathBounds(path){
+    const points=path.fill.concat(...path.edges);
+    if(!points.length)return null;
+    let x=Infinity,y=Infinity,X=-Infinity,Y=-Infinity;
+    for(const p of points){x=Math.min(x,p[0]);y=Math.min(y,p[1]);X=Math.max(X,p[0]);Y=Math.max(Y,p[1]);}
+    return {x,y,X,Y};
+  }
+  function inBounds(b,p,r=0){return b&&p[0]>=b.x-r&&p[0]<=b.X+r&&p[1]>=b.y-r&&p[1]<=b.Y+r;}
+  // Cache the topology separately from the view paths. Filter to projected
+  // screen bounds before ray/edge queries; explicitly stop pathological
+  // overlap rather than return an incomplete candidate list.
+  function pickFrame(mesh,paths){
+    const entries=paths.ordered.map((path,rank)=>({path,rank,bounds:pathBounds(path),entry:mesh[path.order]}));
+    return {camera:paths.camera,entries,byOrder:new Map(entries.map(e=>[e.path.order,e]))};
+  }
+  function framePick(frame,pixel,kind,{radius=8,wireframe=false}={}){
+    const matches=frame.entries.filter(e=>inBounds(e.bounds,pixel,radius));
+    const work=matches.reduce((n,e)=>n+e.entry.item.points.length+e.entry.triangles.length,0);
+    if(work>30000||matches.length>2500)return {candidates:[],reason:'Too much overlapping geometry; zoom in or rotate.',blocked:true};
+    // Restrict geometry to the local screen neighbourhood, including all
+    // fills which could occlude a snapped pixel inside that neighbourhood.
+    const nearby=matches.map(e=>e.entry);
+    // Bound the quadratic snapped-depth stage independently.
+    if(kind!=='surface'&&work*work>4000000)return {candidates:[],reason:'Too much overlapping geometry for snapping; zoom in or rotate.',blocked:true};
+    const result=pickRegion(nearby,frame.camera,pixel,kind,{radius,wireframe});
+    const visible=[],blocked=[];
+    for(const h of result.candidates){
+      const current=frame.byOrder.get(h.order);
+      if(!current)continue;
+      // The actual fill painter is authoritative for whether a candidate is
+      // exposed on screen. A later fill on the same plane is an explicit
+      // ambiguity, but a depth-conflicting or invalid later fill blocks it.
+      let conflict=false;
+      if(!wireframe)for(let i=matches.length-1;i>=0;i--){
+        const p=matches[i];
+        if(p.rank<=current.rank||!inBounds(p.bounds,h.pixel)||p.path.fill.length<3||!containsFill(p.path.fill,h.pixel))continue;
+        if(!p.entry.triangles.length){conflict=true;break;}
+        const front=surfaceHits([p.entry],frame.camera,h.pixel)[0];
+        if(!front||Math.abs(front.depth-h.depth)>depthTolerance(h.depth)){conflict=true;break;}
+      }
+      if(conflict)blocked.push(h);else visible.push(h);
+    }
+    // An invalid fill under the cursor must not silently look like a valid
+    // transparent surface. The user can rotate or enable wireframe.
+    const invalid=matches.some(p=>p.path.fill.length>=3&&!p.entry.triangles.length&&inBounds(p.bounds,pixel)&&containsFill(p.path.fill,pixel));
+    if(kind==='surface'&&invalid&&!visible.length)return {candidates:[],reason:'Surface unavailable: invalid or overlapping authored fill.',blocked:true};
+    visible.sort((a,b)=>kind==='surface'?frame.byOrder.get(b.order).rank-frame.byOrder.get(a.order).rank:
+      a.distance-b.distance||a.depth-b.depth||frame.byOrder.get(b.order).rank-frame.byOrder.get(a.order).rank);
+    // Expose near-equal snap candidates rather than every feature in radius.
+    const choices=kind==='surface'?visible:visible.filter(h=>h.distance<=visible[0].distance+1.5);
+    return {candidates:choices,reason:!choices.length&&blocked.length?'Painter and geometric depth disagree; rotate or use wireframe.':
+      !choices.length&&kind==='surface'&&wireframe?'Surface picking requires filled view.':'',blocked:!choices.length&&!!blocked.length};
+  }
+  function drawPickMarker(canvas,hit,camera,color){
+    if(!hit)return;
+    const p=camera.project(hit.point);if(!p)return;
+    const ctx=canvas.getContext('2d');ctx.save();ctx.lineWidth=2;ctx.strokeStyle=color;ctx.fillStyle=color;
+    ctx.beginPath();ctx.arc(...p.pixel,5,0,2*Math.PI);ctx.stroke();
+    ctx.beginPath();ctx.arc(...p.pixel,2,0,2*Math.PI);ctx.fill();ctx.restore();
   }
   // Window geometry is a UI preference, never experiment or camera state.
   const WINDOW_KEY='curvature-landmark-viewer-window-v1';
@@ -417,6 +494,36 @@
     let geometry=null,crop=null,free=false,state=reset(),drag=null,windowDrag=null,rect=null;
     const sceneControls=dialog.querySelector('[data-viewer-scene-controls]'),freeButton=dialog.querySelector('[data-viewer-free]');
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
+    const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
+      pickChoices=dialog.querySelector('[data-viewer-pick-candidates]'),pickStatus=dialog.querySelector('[data-viewer-pick-status]');
+    let mesh=null,paths=null,pickCache=null,hover=null,staged=null,choices=[],hoverFrame=null,queued=null;
+    function cancelHover(){if(hoverFrame!==null)env.cancelAnimationFrame(hoverFrame);hoverFrame=null;queued=null;hover=null;}
+    function clearPick(){cancelHover();staged=null;choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;pickStatus.textContent='';}
+    function clearGeometryPick(){clearPick();mesh=null;paths=null;pickCache=null;pickMode.value='navigate';}
+    function pickActive(){return !!crop&&free&&pickMode.value!=='navigate';}
+    function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
+    function updatePickStatus(message=''){pickStatus.textContent=message||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
+    function markers(){if(paths&&pickActive()){drawPickMarker(canvas,staged,paths.camera,'#b83d18');drawPickMarker(canvas,hover,paths.camera,'#008ab1');}}
+    function redrawMarkers(){if(!paths||!free)return;drawRegion(canvas,geometry,state,paths);markers();}
+    function query(css){
+      if(!pickActive()||!pickCache)return {candidates:[],reason:''};
+      const r=canvas.getBoundingClientRect(),sx=canvas.width/Math.max(1,r.width),sy=canvas.height/Math.max(1,r.height);
+      return framePick(pickCache,[(css[0]-r.left)*sx,(css[1]-r.top)*sy],pickMode.value,{radius:8*Math.max(sx,sy),wireframe:state.wireframe});
+    }
+    function queueHover(css){
+      queued=css;if(hoverFrame!==null)return;
+      hoverFrame=env.requestAnimationFrame(()=>{hoverFrame=null;const p=queued;queued=null;if(!p||!pickActive()||drag)return;
+        const result=query(p);hover=result.candidates[0]||null;redrawMarkers();
+        updatePickStatus(result.reason||(hover?'Hover: '+describe(hover)+(result.candidates.length>1?' · '+result.candidates.length+' candidates':''):''));});
+    }
+    function stageAt(css){
+      cancelHover();const result=query(css);choices=result.candidates;staged=choices[0]||null;
+      pickChoices.replaceChildren();for(const [i,h] of choices.entries()){const option=dialog.ownerDocument.createElement('option');option.value=String(i);option.textContent=describe(h);pickChoices.append(option);}
+      pickChoices.disabled=choices.length<2;updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
+    }
+    pickMode.onchange=()=>{clearPick();syncMode();render();};
+    pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;updatePickStatus();redrawMarkers();};
+    dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{clearPick();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
     let sensitivity=DEFAULT_SENSITIVITY;
     try{const saved=env.localStorage.getItem(SENSITIVITY_KEY);if(saved!==null)sensitivity=orbitSensitivity(JSON.parse(saved));}catch(e){/* Optional UI preference. */}
@@ -432,7 +539,8 @@
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
       spans.closest('label').style.display=crop?'none':'';
       freeButton.disabled=!crop||free||!crop.build;freeButton.title=crop?.reason||'';
-      canvas.style.cursor=crop&&!free&&!crop.build?'default':'';
+      pickControls.style.display=crop&&free?'':'none';
+      canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build?'default':'';
     }
     const viewport=()=>[env.innerWidth,env.innerHeight];
     function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
@@ -455,7 +563,7 @@
         catch(error){status.textContent='Magnifier unavailable: '+error.message;}
         return;
       }
-      if(crop&&free){const r=drawRegion(canvas,geometry,state);status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
+      if(crop&&free){cancelHover();paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
@@ -468,7 +576,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();saveRect();geometry=null;crop=null;free=false;if(dialog.open)dialog.close();}
+    function close(){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;if(dialog.open)dialog.close();}
     dialog.querySelector('[data-viewer-close]').onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -496,11 +604,11 @@
     windowPointer(titleBar,'move');windowPointer(grip,'resize');
     new env.ResizeObserver(()=>{if(dialog.open)render();}).observe(frame);
     env.addEventListener('resize',()=>{if(dialog.open){stopDrags();applyRect(rect);saveRect();render();}});
-    function resetScene(){stopDrags();free=false;state=reset();syncMode();render();}
+    function resetScene(){stopDrags();clearPick();paths=null;pickCache=null;free=false;state=reset();syncMode();render();}
     function enterFree(){
       if(!crop||free)return !!geometry;
       if(!crop.build)return false;
-      try{if(!geometry)geometry=crop.build();free=true;state={...reset(),projection:'perspective',spans:true};syncMode();sync();return true;}
+      try{if(!geometry)geometry=crop.build();if(!mesh)mesh=preparePick(geometry.items);free=true;state={...reset(),projection:'perspective',spans:true};syncMode();sync();return true;}
       catch(error){crop.reason='Free View unavailable: '+error.message;crop.build=null;free=false;syncMode();render();return false;}
     }
     freeButton.onclick=enterFree;
@@ -508,41 +616,46 @@
     dialog.querySelector('[data-viewer-reset]').onclick=()=>{if(crop){state={...reset(),projection:'perspective',spans:true};}else state=initialView();sync();};
     dialog.querySelectorAll('[data-viewer-view]').forEach(n=>n.onclick=()=>{state=standardView(state,n.dataset.viewerView);render();});
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
-    wire.onchange=()=>{state={...state,wireframe:wire.checked};render();};
+    wire.onchange=()=>{clearPick();state={...state,wireframe:wire.checked};render();};
     spans.onchange=()=>{state={...state,spans:spans.checked,pan:[0,0],zoom:1};render();};
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
     canvas.addEventListener('pointerdown',e=>{
       if((!geometry&&!crop?.build)||drag||windowDrag||![0,1,2].includes(e.button))return;
-      e.preventDefault();canvas.focus({preventScroll:true});drag={id:e.pointerId,css:[e.clientX,e.clientY],pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();canvas.focus({preventScroll:true});cancelHover();drag={id:e.pointerId,css:[e.clientX,e.clientY],start:[e.clientX,e.clientY],moved:false,pan:e.button!==0||e.shiftKey,button:e.button};canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove',e=>{
-      if(!drag||drag.id!==e.pointerId)return;
-      const css=[e.clientX,e.clientY],delta=sub(css,drag.css);
-      if(crop&&!free){if(Math.hypot(...delta)<3)return;if(!enterFree())return;}
+      const css=[e.clientX,e.clientY];
+      if(!drag){if(pickActive())queueHover(css);return;}
+      if(drag.id!==e.pointerId)return;
+      if(!drag.moved&&Math.hypot(...sub(css,drag.start))<3)return;
+      drag.moved=true;const delta=sub(css,drag.css);
+      if(crop&&!free&&!enterFree())return;
       // Orbit uses CSS pixels only. Pan still maps into backing-store pixels.
       const r=canvas.getBoundingClientRect();
       state=drag.pan?pan(state,delta[0]*canvas.width/Math.max(1,r.width),delta[1]*canvas.height/Math.max(1,r.height)):orbit(state,...delta,sensitivity);
       drag.css=css;render();
     });
+    canvas.addEventListener('pointerup',e=>{if(drag?.id!==e.pointerId)return;const d=drag;drag=null;if(!d.moved&&Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])<3&&!d.pan&&d.button===0&&pickActive())stageAt([e.clientX,e.clientY]);});
     const end=e=>{if(drag?.id===e.pointerId)drag=null;};
-    for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
+    for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
+    canvas.addEventListener('pointerleave',()=>{cancelHover();if(pickActive()&&!drag){redrawMarkers();updatePickStatus();}});
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag&&(!crop||enterFree())){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
-    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();}e.stopPropagation();});
+    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
-    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();saveRect();geometry=null;crop=null;free=false;}});
+    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
     function show(){if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
     return {open(next,title){
-      stopDrags();crop=null;free=false;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
+      stopDrags();clearGeometryPick();crop=null;free=false;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
       show();syncMode();sync();
     },openCrop(region,paint,build=null,reason=''){
-      stopDrags();geometry=null;free=false;crop={region:{...region},paint,build,reason};heading.textContent='3D Scene Magnifier';
+      stopDrags();clearGeometryPick();geometry=null;free=false;crop={region:{...region},paint,build,reason};heading.textContent='3D Scene Magnifier';
       show();syncMode();render();
     },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
-      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
+      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

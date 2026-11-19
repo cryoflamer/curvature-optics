@@ -807,6 +807,33 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.mouse.up()
         fast=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
         self.assertAlmostEqual(fast['view']['yaw'],.12,delta=.005)
+        viewer.locator('[data-viewer-reset]').click()
+        pick_mode=viewer.locator('[data-viewer-pick-mode]')
+        pick_mode.select_option('vertex')
+        # Find a visible vertex by actual mouse clicks in the rendered crop.
+        # Wireframe permits explicit inspection of hidden authored edges.
+        viewer.locator('[data-viewer-wire]').check()
+        r=canvas.bounding_box()
+        staged=None
+        for fy in [.5,.4,.6,.3,.7]:
+            for fx in [.5,.4,.6,.3,.7]:
+                self.page.mouse.click(r['x']+r['width']*fx,r['y']+r['height']*fy)
+                staged=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().staged")
+                if staged:
+                    break
+            if staged:
+                break
+        # A miss is legitimate on sparse geometry; verify the actual click
+        # does not move the camera even when it cannot stage a point.
+        picked=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
+        self.assertEqual(picked['view']['yaw'],0)
+        if staged:
+            self.assertEqual(staged['kind'],'vertex')
+            self.assertEqual(len(staged['indices']),1)
+        viewer.locator('[data-viewer-pick-clear]').click()
+        self.assertIsNone(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().staged"))
+        pick_mode.select_option('navigate')
+        viewer.locator('[data-viewer-wire]').uncheck()
         viewer.locator('[data-viewer-zoom="0.8"]').click()
         viewer.locator('[data-viewer-scene-reset]').click()
         expect(viewer.locator('[data-viewer-status]')).to_contain_text('same optical camera')

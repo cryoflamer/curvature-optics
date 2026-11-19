@@ -237,3 +237,36 @@ test('authored mixed bridge and non-bridge geometry has indexed surface coverage
     for(const e of meshes)for(const t of e.triangles)assert.ok(t.every(i=>Number.isInteger(i)&&i>=0&&i<e.item.points.length));
   }
 });
+
+function frameFixture(items,wireframe=false){
+  const geometry={eye:[0,0,10],focal:100,near:.001,seed:[50,50],region:{x:0,y:0,width:100,height:100},items};
+  const paths=viewer.regionPaths(geometry,{...viewer.reset(),projection:'perspective',wireframe},100,100);
+  return viewer.pickFrame(viewer.preparePick(items),paths);
+}
+test('frame picker rejects painter/depth disagreement and invalid foreground fills',()=>{
+  const square=z=>[[-2,-2,z],[2,-2,z],[2,2,z],[-2,2,z]];
+  const front=pickItem(square(2),2,0),rear=pickItem(square(0),2,1);
+  let f=frameFixture([front,rear]);
+  assert.equal(viewer.framePick(f,[50,50],'surface').candidates[0].index,0);
+  // Reverse the actual painter order to simulate group-depth inconsistency.
+  const ordered=f.entries.slice().reverse().map(e=>e.path);
+  f=viewer.pickFrame(viewer.preparePick([front,rear]),{camera:f.camera,ordered});
+  const mismatch=viewer.framePick(f,[50,50],'surface');
+  assert.equal(mismatch.candidates.length,0);assert.ok(mismatch.blocked);
+  const invalid=pickItem([[-3,-3,3],[3,-3,3],[3,3,4],[-3,3,3]],2,2);
+  f=frameFixture([rear,invalid]);
+  assert.equal(viewer.framePick(f,[50,50],'surface').candidates.length,0);
+});
+test('frame picker supports coplanar ambiguity, wireframe and bounded screen work',()=>{
+  const face=pickItem([[-2,-2,0],[2,-2,0],[2,2,0],[-2,2,0]],3,0),other={...face,index:1,owner:{kind:'object',bank:0,index:1}};
+  const f=frameFixture([face,other]);
+  assert.deepEqual(viewer.framePick(f,[50,50],'surface').candidates.map(h=>h.index),[1,0]);
+  assert.equal(viewer.framePick(f,[70,70],'vertex',{radius:2}).candidates.length,2);
+  const wire=frameFixture([face,other],true);
+  assert.equal(viewer.framePick(wire,[50,50],'surface',{wireframe:true}).candidates.length,0);
+  assert.ok(viewer.framePick(wire,[70,50],'edge',{wireframe:true}).candidates.length>0);
+  assert.ok(viewer.containsFill([[0,0],[10,0],[10,10],[0,10]],[0,5]));
+  assert.ok(!viewer.containsFill([[0,0],[10,0],[10,10],[0,10]],[12,5]));
+  const crowded={...f,entries:Array.from({length:2501},()=>f.entries[0])};
+  assert.ok(viewer.framePick(crowded,[50,50],'surface').blocked);
+});
