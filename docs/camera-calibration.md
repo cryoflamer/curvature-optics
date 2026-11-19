@@ -1,3 +1,16 @@
+## Approved Photo Calibration Workspace design
+
+The existing 8B/8B.2 modal is a prototype, not the final interaction model. Build a dedicated workspace alongside Scene, Compare and Animation Studio. The goal is a usable photo-to-camera authoring workflow, not determining Earth's shape or atmosphere.
+
+1. Select an original photo from existing project/keyframe links, built-in demos, Reference Image Library or local upload. Offer the associated keyframe's scene and camera as the initial context when available; otherwise use current Scene. Explicitly select and freeze geometry and atmosphere for fitting. Preserve original raster and provenance.
+2. Two full-scene panels: original photograph and actual model renderer (Canvas Direct acceptable). Independent viewport zoom/pan/fit must not alter physical camera parameters. Model picking uses authored landmark IDs and projected visible vertices, with hover snapping and disambiguation for coincident points. Primitive/vertex menus are fallback, not primary interaction.
+3. Pair a photo click with a model landmark click; matching numbered/color markers on both panels and an editable list. Support moving photo points, reselecting model landmarks, deletion, temporary exclusion and weights. Preserve original photo pixels. Recommend diverse points across objects and heights; six to ten is a starting suggestion, not a universal sufficiency guarantee.
+4. Collapsible camera parameter controls: East, North, Height, Pan, Pitch, Roll, focal length; initial values from scene or explicitly accepted photo metadata, optional locks. Run existing solver with progress, cancellation and best candidate preview. Keep original scene untouched until acceptance.
+5. Side-by-side and overlay modes; align model projection with original raster, adjustable opacity, optional point markers and residual vectors. Assess entire model including unused landmarks. Allow edits and reruns; good pixel fit alone does not guarantee unique physical pose.
+6. Accept camera explicitly; apply to Scene, save a normal experiment or update a selected keyframe with explicit consent. Retain correspondence data and photo identity/provenance for later editing; persistence format to be designed, not yet implemented.
+
+Implementation order: 8B.3 dedicated workspace and lifecycle using existing photo sources; 8B.4 full-scene rendering and interactive landmark picking; 8C solver controls/progress/cancel; 8D overlay and residual review; 8E acceptance and persistence. Prefer a minimal usable vertical slice and real-photo validation over exhaustive controls. Further numerical qualification (8A.4.4b/c) stays deferred technical debt. This is a design decision, not a claim that these features already exist.
+
 ## 8B.2 — Existing reference originals in the photo editor
 
 Photo calibration now offers a read-only source picker covering local Reference
