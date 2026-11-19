@@ -1710,7 +1710,8 @@
         "src/diagnostics/CurvatureVisibilityVerification.js",
         "src/diagnostics/CurvatureWorldTopologyAudit.js",
         "src/optics/CurvaturePhysicalPolygonFills.js",
-        "src/renderers/CurvatureFrameRenderer.js"
+        "src/renderers/CurvatureFrameRenderer.js",
+        "src/ui/modern/ModernLandmarkViewer.js"
       ],
       "commonJsTestCallers": [
         "tests/CurvatureEarClip.test.js",

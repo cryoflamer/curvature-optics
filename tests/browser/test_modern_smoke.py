@@ -829,6 +829,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertAlmostEqual(result['pixel'][0],600,delta=3)
         self.assertAlmostEqual(result['pixel'][1],450,delta=3)
         self.assertEqual(result['pose'],before['pose'])
+        # The modeless-window test above zoomed the photo at an off-centre point.
+        # Restore its framing before addressing the original centre marker.
+        workspace.locator('#ModernCalibrationFit').click()
         # Drag the existing photo marker, leaving its model ID and weight intact.
         photo.scroll_into_view_if_needed()
         r=photo.bounding_box()

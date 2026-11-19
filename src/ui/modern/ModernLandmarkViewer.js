@@ -1,9 +1,9 @@
 /* Isolated authored-geometry inspection. No optical or calibration state. */
 (function(root,factory){
-  const api=factory();
+  const api=factory(root.CurvatureEarClip||(typeof require==='function'?require('../../geometry/CurvatureEarClip'):null));
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.CurvatureModernLandmarkViewer=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(){
+}(typeof globalThis!=='undefined'?globalThis:this,function(earClip){
   'use strict';
   const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
   const sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -200,7 +200,146 @@
       const z=state.projection==='perspective'?q[2]:eye[2];
       return [origin[0]+focal*(q[0]/z+eye[0]/eye[2]),origin[1]-focal*(q[1]/z+eye[1]/eye[2])];
     }
-    return {coordinates,screen,near,origin,right,up,toward,project(q){const v=coordinates(q);return v[2]>=near?{pixel:screen(v),depth:v[2]}:null;}};
+    function ray(pixel){
+      const u=(pixel[0]-origin[0])/focal-eye[0]/eye[2],v=(origin[1]-pixel[1])/focal-eye[1]/eye[2];
+      const perspective=state.projection==='perspective';
+      const start=add(add(mul(right,eye[0]+(perspective?0:u*eye[2])),mul(up,eye[1]+(perspective?0:v*eye[2]))),mul(toward,eye[2]));
+      const direction=perspective?add(add(mul(right,u),mul(up,v)),mul(toward,-1)):mul(toward,-1);
+      // Parameter t is forward camera depth, not Euclidean range.
+      return {origin:start,direction,near};
+    }
+    return {coordinates,screen,ray,near,origin,right,up,toward,perspective:state.projection==='perspective',
+      project(q){const v=coordinates(q);return v[2]>=near?{pixel:screen(v),depth:v[2]}:null;}};
+  }
+  // Picking uses the canonical physical authored geometry, not rendered
+  // pixels, synthetic thickness, clipped vertices, or EarClip ordinals.
+  function indexedTriangles(item){
+    const pts=item.points,fail=reason=>({triangles:[],reason});
+    if(item.type!=='polygon'||!((item.mode??1)&2))return fail('not-filled');
+    if(!Array.isArray(pts)||pts.length<3||!pts.every(finite3))return fail('invalid-coordinate');
+    if(!earClip)throw Error('EarClip required for indexed surface picking');
+    const origin=pts[0],relative=pts.map(p=>sub(p,origin));
+    let longest=relative[0],scale=0;
+    for(const p of relative){const n=Math.hypot(...p);if(n>scale){scale=n;longest=p;}}
+    if(!(scale>0))return fail('zero-area');
+    const axis=unit(longest),scaled=relative.map(p=>mul(p,1/scale));
+    let normal=null,area=0;
+    for(const p of scaled){const n=cross(axis,p),a=Math.hypot(...n);if(a>area){normal=n;area=a;}}
+    if(!(area>1e-9))return fail('zero-area');
+    normal=unit(normal);
+    // Relative tolerance plus a small absolute allowance for physical
+    // placement arithmetic (metres). Reject nonplanar filled primitives.
+    if(relative.some(p=>Math.abs(dot(p,normal))>Math.max(1e-7,scale*1e-9)))return fail('nonplanar');
+    const y=cross(normal,axis);
+    let points=scaled.map((p,i)=>[dot(p,axis),dot(p,y),i]);
+    // Remove only duplicate consecutive points (including closure), retaining
+    // the first authored index. Backtracking collinear edges are not simple.
+    const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+    points=points.filter((p,i)=>i===0||dist(p,points[i-1])>1e-9);
+    if(points.length>1&&dist(points[0],points.at(-1))<=1e-9)points.pop();
+    if(points.length<3)return fail('zero-area');
+    for(let i=0;i<points.length;i++){
+      const a=points[(i+points.length-1)%points.length],b=points[i],c=points[(i+1)%points.length];
+      const u=sub(b.slice(0,2),a.slice(0,2)),w=sub(c.slice(0,2),b.slice(0,2));
+      if(Math.abs(u[0]*w[1]-u[1]*w[0])<=1e-9&&dot(u,w)<-1e-12)return fail('backtracking-edge');
+    }
+    const result=earClip.triangulate(points);
+    if(result.reason)return fail(result.reason);
+    return {triangles:result.triangles.map(t=>t.map(p=>p[2])),reason:null};
+  }
+  function preparePick(items){
+    return items.map((item,order)=>{
+      const pts=item.points,valid=Array.isArray(pts)&&pts.every(finite3),edges=[];
+      if(valid)for(let i=0;i<(item.type==='polygon'?pts.length:pts.length-1);i++){
+        const j=(i+1)%pts.length;
+        if(Math.hypot(...sub(pts[i],pts[j]))>1e-10)edges.push([i,j]);
+      }
+      const mesh=valid?indexedTriangles(item):{triangles:[],reason:'invalid-coordinate'};
+      return {item,order,valid,edges,...mesh};
+    });
+  }
+  function rayTriangle(ray,a,b,c){
+    const e=sub(b,a),f=sub(c,a),p=cross(ray.direction,f),det=dot(e,p);
+    const bound=Math.hypot(...e)*Math.hypot(...f)*Math.hypot(...ray.direction);
+    if(!(bound>0)||Math.abs(det)<=bound*1e-12)return null;
+    const d=sub(ray.origin,a),u=dot(d,p)/det,q=cross(d,e),v=dot(ray.direction,q)/det,t=dot(f,q)/det;
+    if(!Number.isFinite(t)||t<(ray.near??0)||u< -1e-9||v< -1e-9||u+v>1+1e-9)return null;
+    const weights=[1-u-v,u,v].map(x=>clamp(x,0,1)),sum=weights.reduce((x,y)=>x+y,0);
+    const normalized=weights.map(x=>x/sum);
+    return {depth:t,weights:normalized,point:[0,1,2].map(i=>normalized[0]*a[i]+normalized[1]*b[i]+normalized[2]*c[i])};
+  }
+  function pickDescriptor(entry,kind,indices,weights,point,depth,pixel,distance){
+    // Snapshot identity; stable serialized schema/topology guard belongs
+    // to 8F.4. Preserve original indices, never triangulated local ordinals.
+    const item=entry.item;
+    return {kind,bank:item.bank,index:item.index,primitive:item.primitive,owner:item.owner,
+      indices,weights,point,depth,pixel,distance,order:entry.order};
+  }
+  function surfaceHits(mesh,camera,pixel){
+    const ray=camera.ray(pixel),hits=[];
+    for(const entry of mesh){
+      const pts=entry.item.points;
+      let best=null;
+      for(const indices of entry.triangles){
+        const h=rayTriangle(ray,...indices.map(i=>pts[i]));
+        if(h&&(!best||h.depth<best.depth-1e-8))
+          best=pickDescriptor(entry,'surface',indices,h.weights,h.point,h.depth,pixel.slice(),0);
+      }
+      if(best)hits.push(best); // one candidate per authored primitive
+    }
+    return hits.sort((a,b)=>a.depth-b.depth||b.order-a.order);
+  }
+  function edgeHit(camera,pixel,a,b){
+    // Clip before projection; carry the original segment parameter through
+    // the near-plane clipping and perspective-correct interpolation.
+    const z0=camera.coordinates(a)[2],z1=camera.coordinates(b)[2],near=camera.near;
+    if(z0<near&&z1<near)return null;
+    let lo=0,hi=1;
+    if(z0<near)lo=(near-z0)/(z1-z0);
+    if(z1<near)hi=(near-z0)/(z1-z0);
+    const qa=camera.coordinates(lerp(a,b,lo)),qb=camera.coordinates(lerp(a,b,hi));
+    qa[2]=Math.max(near,qa[2]);qb[2]=Math.max(near,qb[2]);
+    const A=camera.screen(qa),B=camera.screen(qb),d=sub(B,A),den=dot(d,d);
+    if(!(den>1e-12))return null; // projected zero-length edge is ambiguous
+    const w=clamp(dot(sub(pixel,A),d)/den,0,1);
+    const t=camera.perspective?(w/qb[2])/((1-w)/qa[2]+w/qb[2]):w;
+    const u=lo+(hi-lo)*t,point=lerp(a,b,u),xy=lerp(A,B,w);
+    return {t:u,point,depth:camera.coordinates(point)[2],pixel:xy,distance:Math.hypot(...sub(pixel,xy))};
+  }
+  function depthTolerance(z){return Math.max(1e-7,Math.abs(z)*1e-9);}
+  function pickRegion(mesh,camera,pixel,kind,{radius=8,wireframe=false}={}){
+    if(!['vertex','edge','surface'].includes(kind)||!Array.isArray(pixel)||pixel.length!==2||!pixel.every(Number.isFinite)||!Number.isFinite(radius)||radius<0)
+      throw RangeError('Invalid local pick');
+    const rejected=mesh.filter(e=>e.reason&&e.reason!=='not-filled').map(e=>({bank:e.item.bank,index:e.item.index,reason:e.reason}));
+    let hits=[];
+    if(kind==='surface'){
+      if(!wireframe)hits=surfaceHits(mesh,camera,pixel);
+      if(hits.length){const depth=hits[0].depth;
+        hits=hits.filter(h=>h.depth<=depth+depthTolerance(depth)).sort((a,b)=>b.order-a.order);}
+    }else{
+      for(const entry of mesh){
+        if(!entry.valid)continue;
+        const pts=entry.item.points;
+        if(kind==='vertex')for(const [i,p] of pts.entries()){
+          const q=camera.project(p);if(!q)continue;
+          const d=Math.hypot(...sub(pixel,q.pixel));
+          if(d<=radius)hits.push(pickDescriptor(entry,kind,[i],[1],p.slice(),q.depth,q.pixel,d));
+        }
+        else for(const indices of entry.edges){
+          const h=edgeHit(camera,pixel,...indices.map(i=>pts[i]));
+          if(h&&h.distance<=radius)hits.push(pickDescriptor(entry,kind,indices,[1-h.t,h.t],h.point,h.depth,h.pixel,h.distance));
+        }
+      }
+      // Test visibility at the snapped point, not merely the mouse position.
+      // Wireframe has no filled occluders. Invalid fills are reported, not
+      // silently certified as absent. Painter parity remains a UI concern.
+      if(!wireframe)hits=hits.filter(h=>{
+        const front=surfaceHits(mesh,camera,h.pixel)[0];
+        return !front||h.depth<=front.depth+depthTolerance(front.depth);
+      });
+      hits.sort((a,b)=>a.distance-b.distance||a.depth-b.depth||b.order-a.order);
+    }
+    return {candidates:hits,rejected,visibility:'geometric-only'};
   }
   // Clip in depth and in screen space before handing paths to Canvas.
   // Fill clipping edges are never painted as authored outlines.
@@ -405,5 +544,5 @@
       snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

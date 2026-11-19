@@ -141,6 +141,19 @@ No optimizing anchor coordinates: all anchors fixed for fit and diagnose.
 
 ## 4. Triangulation, selection and projection
 
+8F.3a implementation: physical local points are scaled in a stable plane;
+EarClip carries the original integer vertex index as its third coordinate.
+The adapter does not modify EarClip or its legacy callers. Near clipping
+for edges preserves the original parameter; perspective screen interpolation
+is corrected by reciprocal camera depth. Free View unprojection uses its
+actual off-axis rolled camera and forward-depth parameter. Coplanar hits
+are returned as distinct primitive candidates; the default ordering is
+reverse authored item order within the depth tie, not certified painter
+parity. Invalid fills are reported separately, so visibility is explicitly
+geometric-only; UI reconciliation and interaction belong to 8F.3b/c.
+Scene View inverse remains a separate audited stage (8F.3d).
+
+
 For planar authored filled polygons (mode & 2), triangulate in their own
 plane, using existing conservative EarClip logic with an index-preserving
 adapter or extension. Retain original index mapping after duplicate/collinear

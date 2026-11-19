@@ -161,3 +161,79 @@ test('orbit sensitivity defaults to quarter speed and depends only on CSS motion
   assert.equal(viewer.orbit(s,0,100000).pitch,Math.PI/2);
   assert.deepEqual(s,viewer.reset());
 });
+
+const pickItem=(points,mode=3,index=0,type='polygon')=>({points,mode,index,type,bank:0,primitive:index,owner:{kind:'object',bank:0,index},style:{}});
+function pickCamera(projection='perspective',eye=[0,0,10],state={}){
+  return viewer.regionCamera({eye,focal:100,near:.001,seed:[50,50],region:{x:0,y:0,width:100,height:100}},
+    {...viewer.reset(),projection,...state},100,100);
+}
+test('indexed concave planar fill retains original indices after closure and collinear cleanup',()=>{
+  const p=pickItem([[0,0,0],[1,0,0],[2,0,0],[2,2,0],[1,1,0],[0,2,0],[0,0,0]]);
+  const before=JSON.stringify(p),r=viewer.indexedTriangles(p);
+  assert.equal(r.reason,null);assert.equal(r.triangles.length,3);
+  assert.ok(r.triangles.flat().every(i=>Number.isInteger(i)&&i>=0&&i<6&&i!==1));
+  let area=0;
+  for(const [a,b,c] of r.triangles.map(t=>t.map(i=>p.points[i])))area+=Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))/2;
+  assert.ok(Math.abs(area-3)<1e-10);assert.equal(JSON.stringify(p),before);
+  const q=pickItem(p.points.map(([x,y])=>[10000+x,20000+y,30000+x+y]));
+  assert.equal(viewer.indexedTriangles(q).reason,null);
+});
+test('invalid and wire-only fills cannot create surfaces; authored edges survive',()=>{
+  const square=[[0,0,0],[2,0,0],[2,2,0],[0,2,0]];
+  const items=[pickItem(square,1),pickItem([[0,0,0],[2,2,0],[0,2,0],[2,0,0]]),
+    pickItem([[0,0,0],[2,0,0],[2,2,1],[0,2,0]]),pickItem([[0,0,0],[2,0,0],[1,0,0],[2,2,0],[0,2,0]])];
+  const mesh=viewer.preparePick(items);
+  assert.deepEqual(mesh.map(e=>e.reason),['not-filled','self-intersection','nonplanar','backtracking-edge']);
+  assert.ok(mesh.every(e=>!e.triangles.length&&e.edges.length>=4));
+  assert.deepEqual(mesh[0].edges,[[0,1],[1,2],[2,3],[3,0]]);
+});
+test('off-axis rolled orbit ray inverts perspective and orthographic screens',()=>{
+  for(const projection of ['perspective','orthographic']){
+    const c=pickCamera(projection,[1,-2,10],{yaw:.3,pitch:.2,pan:[7,-3],zoom:1.4}),p=[.2,-.4,1],q=c.project(p),ray=c.ray(q.pixel);
+    assert.ok(Math.hypot(...p.map((v,i)=>v-ray.origin[i]-ray.direction[i]*q.depth))<1e-10);
+  }
+});
+test('surface picks use front depth, preserve barycentric coordinates and expose coplanar ambiguity',()=>{
+  const square=z=>[[-2,-2,z],[2,-2,z],[2,2,z],[-2,2,z]];
+  const mesh=viewer.preparePick([pickItem(square(0),3,0),pickItem(square(2),3,1),pickItem(square(2),3,2)]);
+  const c=pickCamera(),r=viewer.pickRegion(mesh,c,[55,48],'surface');
+  assert.deepEqual(r.candidates.map(h=>h.index),[2,1]);
+  const h=r.candidates[0];
+  assert.ok(h.weights.every(w=>w>=0));assert.ok(Math.abs(h.weights.reduce((a,b)=>a+b,0)-1)<1e-12);
+  assert.ok(Math.abs(h.point[2]-2)<1e-10);
+  for(let k=0;k<3;k++)assert.ok(Math.abs(h.point[k]-h.indices.reduce((sum,i,j)=>sum+h.weights[j]*mesh[2].item.points[i][k],0))<1e-10);
+  assert.ok(Math.hypot(...c.project(h.point).pixel.map((v,i)=>v-[55,48][i]))<1e-10);
+  assert.equal(viewer.pickRegion(mesh,c,[55,48],'surface',{wireframe:true}).candidates.length,0);
+});
+test('edge picking recovers the original perspective parameter, not screen interpolation',()=>{
+  const c=pickCamera(),a=[0,0,0],b=[2,0,5],point=[.5,0,1.25],pixel=c.project(point).pixel;
+  const h=viewer.edgeHit(c,pixel,a,b);
+  assert.ok(Math.abs(h.t-.25)<1e-12);assert.ok(h.distance<1e-10);
+  const near=viewer.edgeHit(c,[60,50],[0,0,0],[1,0,11]);
+  assert.ok(near&&near.t>=0&&near.t<=1&&near.depth>=c.near-1e-10);
+  const mesh=viewer.preparePick([pickItem([a,b],1,0,'line')]);
+  const edge=viewer.pickRegion(mesh,c,pixel,'edge').candidates[0];
+  assert.deepEqual(edge.indices,[0,1]);assert.ok(Math.abs(edge.weights[1]-.25)<1e-12);
+});
+test('snapped hidden vertices and edges are rejected at their own pixel, wireframe allows them',()=>{
+  const c=pickCamera(),front=pickItem([[-2,-2,2],[2,-2,2],[2,2,2],[-2,2,2]],2,0);
+  const rear=pickItem([[0,0,0],[1,0,0]],1,1,'line');
+  const mesh=viewer.preparePick([front,rear]);
+  for(const kind of ['vertex','edge']){
+    const solid=viewer.pickRegion(mesh,c,[50,50],kind,{radius:2});
+    assert.equal(solid.candidates.length,0);
+    const wire=viewer.pickRegion(mesh,c,[50,50],kind,{radius:2,wireframe:true});
+    assert.equal(wire.candidates[0].index,1);
+  }
+});
+test('authored mixed bridge and non-bridge geometry has indexed surface coverage',()=>{
+  for(const globe of [true,false]){
+    const m={...model,ObjType:[8,3],NObjects:[4,3]};
+    const banks=[0,1].map(b=>geometry.createObjectSequenceScene(m,b,globe,{opticsNeutral:true,physicalSurface:true,curvature:globe?1/m.geometryRadius:0}).primitives);
+    const items=banks.flatMap((bank,b)=>bank.map((p,i)=>({...p,bank:b,index:i,primitive:p.metadata.landmarkPrimitive,owner:p.metadata.landmarkOwner})));
+    const meshes=viewer.preparePick(items);
+    assert.ok(meshes.some(e=>e.item.owner.kind==='span'&&e.triangles.length));
+    assert.ok(meshes.some(e=>e.item.bank===1&&e.triangles.length));
+    for(const e of meshes)for(const t of e.triangles)assert.ok(t.every(i=>Number.isInteger(i)&&i>=0&&i<e.item.points.length));
+  }
+});

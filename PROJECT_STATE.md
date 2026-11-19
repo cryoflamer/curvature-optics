@@ -1,3 +1,23 @@
+## 8F.3a — Mathematical local picking core
+
+User approved the slower orbit in 8F.2e. Split 8F.3 into a–d: mathematical
+core, Free View picking UI, marker/snaps/adjustment, optical Scene View
+inverse. Added pure region camera unprojection, indexed planar EarClip
+adapter, ray/triangle barycentric intersections, original-edge candidates
+with perspective-correct parameters (including near clipping), vertex and
+edge snapping, front-depth filtering and coplanar candidate enumeration.
+Original owner/primitive/vertex identities preserved; no new serialized
+descriptor yet. Invalid/nonplanar/wire-only fills cannot generate surface
+hits. Rejected fills are reported, not certified as transparent; geometric
+visibility is not painter parity. No UI changes, no optical inverse, camera
+fit or JSON change. Nineteen headless viewer tests passed with strict
+comparisons, including mixed bridge/non-bridge physical geometry on Globe
+and Flat. Updated reviewed dependency fixture for existing EarClip import.
+Previous 8F.2e Node and architecture CI passed; browser test failed after
+off-centre photo zoom left its framing changed. Restore fit before existing
+centre-marker drag assertion (not a production fix); CI pending. Cross-scene
+manual verification remains outstanding. Next: 8F.3b.
+
 ## 8F.2e — Orbit sensitivity refinement
 
 User verification of Free View on Soundly found mouse orbit too fast.
