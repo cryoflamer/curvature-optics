@@ -152,6 +152,74 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result, {'ids': ['soundly'], 'frames': 9,
                                   'duration': 59100, 'frozen': True, 'display': 'compare'})
 
+    def test_offline_presentation_compositor_pixels(self):
+        # Deliberately no navigation or live app: the compositor is a standalone
+        # consumer of exact-size physical pixels and decoded observation assets.
+        self.page.set_content('<!doctype html><html><body></body></html>')
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationPresentation.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernAnimationPresentationCompositor.js',
+        ]:
+            self.page.add_script_tag(content=(ROOT / script).read_text(encoding='utf-8'))
+        project = json.loads((ROOT / 'demos/modern/soundly.json').read_text(encoding='utf-8'))['animations'][0]['project']
+        result = self.page.evaluate("""async project => {
+            const api = CurvatureModernAnimationPresentationCompositor;
+            project.baseExperiment.display.mode = 'compare';
+            project.contract.referenceExperiment.display.mode = 'compare';
+            project.keyframes[0].referenceImageIds = ['photo'];
+            project.keyframes[0].description = 'An observation';
+            const raw = new OffscreenCanvas(300, 400), ctx = raw.getContext('2d');
+            ctx.fillStyle = '#00ff00'; ctx.fillRect(0, 0, 300, 400);
+            ctx.fillStyle = '#ff00ff'; ctx.fillRect(0, 0, 300, 100);
+            const blob = await raw.convertToBlob(), image = await createImageBitmap(blob);
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader(); reader.onload = () => resolve(reader.result);
+                reader.onerror = reject; reader.readAsDataURL(blob);
+            });
+            const photo = api.observation({version:1,id:'photo',title:'Synthetic test raster',
+                original:{dataUrl,width:300,height:400}}, image);
+            const results = [];
+            for (const referenceLayout of ['side', 'below', 'hidden']) {
+                const plan = api.plan(project, {width:1280,referenceLayout,layoutMode:'fixed'});
+                for (const time of [0, plan.times[1].arrivalMs]) {
+                    const f = api.frameAt(plan,time), views = {};
+                    for (const side of f.sides) {
+                        const canvas = new OffscreenCanvas(f.viewSize.width,f.viewSize.height), c=canvas.getContext('2d');
+                        c.fillStyle = side==='A'?'#ff0000':'#0000ff'; c.fillRect(0,0,canvas.width,canvas.height);
+                        views[side]={canvas,quality:'accurate',timeMs:time,cameraModel:{showModel:f.expected[side].showModel}};
+                    }
+                    const out=new OffscreenCanvas(f.width,f.height), painted=api.paint(out,f,views,f.referenceId?photo:null);
+                    const pixel=(x,y)=>Array.from(out.getContext('2d').getImageData(Math.floor(x),Math.floor(y),1,1).data);
+                    for (const side of f.sides) {
+                        const v=f.panels[side].viewport;
+                        results.push({kind:side,pixel:pixel(v.x+v.width/2,v.y+v.height/2)});
+                    }
+                    if(f.referenceId){const r=api.contain(f.photoBox,300,400);
+                        results.push({kind:'photo top',pixel:pixel(r.x+r.width/2,r.y+r.height/8)});
+                        results.push({kind:'photo bottom',pixel:pixel(r.x+r.width/2,r.y+r.height*.75)});
+                    }else if(f.photoBox){const r=f.photoBox;
+                        results.push({kind:'blank',pixel:pixel(r.x+r.width/2,r.y+r.height/2)});
+                    }
+                    if(painted.warnings.length)throw Error(painted.warnings.join(','));
+                }
+            }
+            image.close(); return results;
+        }""", project)
+        colors = {'A': [255, 0, 0, 255], 'B': [0, 0, 255, 255],
+                  'photo top': [255, 0, 255, 255], 'photo bottom': [0, 255, 0, 255],
+                  'blank': [255, 255, 255, 255]}
+        self.assertEqual(len(result), 18)
+        for item in result:
+            self.assertEqual(item['pixel'], colors[item['kind']], item)
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')

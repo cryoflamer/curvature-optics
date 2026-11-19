@@ -1,6 +1,6 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **7D.1.2 (Presentation Resize Fix)**, 2026-11-19.
+Status: **7D.2.1 (Presentation Compositor)**, 2026-11-19.
 The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
 thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
 are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
@@ -196,7 +196,9 @@ record the split, and do not mark complete on implementation alone.
 | 7D.1 — Narrative UI | Implemented; acceptance pending | Optional presentation title (120 characters), independent of the technical frame name; chapter selector jumps to exact arrival, pauses playback, and selects the storyboard frame. Optional explanation visibility is session-local; the title and explanation are synchronized to the painted clock. Reference and narrative panels share the presentation sizing budget. Older projects remain readable. |
 | 7D.1.1 — Presentation UI Cleanup | Implemented; acceptance pending | Viewer-only controls; collapsed View settings and Storyboard, hidden author actions and success notices, Retry only for a failed physical frame. Studio controls remain available. |
 | 7D.1.2 — Presentation Resize Fix | Implemented; acceptance pending | Commit reference layout before physical rendering and publish observations only after a successful frame. Compare resize against rendered CSS widths, including pause after live playback. |
-| 7D.2 — Presentation Export | Planned | Include optional narrative and real photographs in PNG/video exports, retaining accurate optics and explicit provenance. No final Soundly photo matching yet. |
+| 7D.2.1 — Presentation Compositor | Implemented | Standalone offline plan, frame geometry and composition, preserving physics pixels and photo aspect ratio. Unit and isolated Chromium pixel tests; no UI or exporter integration yet. |
+| 7D.2.2 — Presentation PNG | Planned | Full presentation vs existing simulation-only PNG, preview/configuration, original decoding, effective project snapshot, provenance/overflow in manifest. |
+| 7D.2.3 — Presentation Video | Planned | Reuse compositor for deterministic video time samples, fixed output dimensions, resource/cancellation budgets and provenance reporting. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
 | 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
 | 8B — Control Point Editor | Planned | Link image pixels to model landmarks, select calibration vs held-out validation points. |
@@ -536,3 +538,56 @@ No portable schema changes.
 Soundly is still authored in vacuum; standard-atmosphere visual/numerical
 accuracy is not implied by project compatibility. The user accepted 7B.3 in
 Opera; final scientific/photographic qualification remains open.
+
+
+### Offline full-presentation compositor (7D.2.1)
+
+`src/animation/ModernAnimationPresentationCompositor.js` is a browser/worker
+compatible Canvas 2D module with CommonJS tests. It is intentionally not loaded
+by the application or frame worker yet; PNG integration will introduce the
+entrypoint. It is independent of DOM, DPR, live stage size, optics and codecs.
+It does not replace `ModernAnimationCompareComposition` or existing exports.
+
+- `plan(effectiveProject, options)` owns an immutable validated project and
+  timeline. `width` is 1280/1920/2560/3840 (default 1920); output height is
+  width × 9/16. `referenceLayout`: `side` (default), `below`, `hidden`;
+  `layoutMode`: `fixed` (default) or `dynamic`; `showNarrative`: boolean (default
+  true). Pass the effective atmosphere variant, not the live authoring state.
+- `frameAt(plan, timeMs)` supplies the exact sampled experiment, expected model
+  and atmosphere per side, panel layout, common `viewSize`, chapter, caption and
+  reference ID. Render each side at that size, not at the output size. Viewports
+  are integer 16:9, within the current 320×180 to 1920×1080 physics export
+  envelope. Fixed layout reserves space throughout only when the project has
+  references; dynamic follows existing hold/adjacent-travel reservation. Title
+  and caption obey outgoing narrative semantics; photos never persist into
+  travel. The first linked photo is selected deterministically and the total
+  count is labeled. Selecting/rotating additional linked photos is deferred.
+- `observation(record, decodedOriginal)` structurally validates the observation
+  and verifies display dimensions. Decode the original bytes (including EXIF
+  orientation), not the thumbnail; keep the decoded image immutable/alive
+  until export completes. The adapter owns decoding/identity and disposal;
+  dimensions alone do not prove raster identity. `contain` preserves the entire
+  photograph with aspect-correct scaling and letterboxing, no crop or warp.
+- `paint(target, frame, views, observationOrNull)` accepts a distinct dedicated
+  Canvas/OffscreenCanvas with the planned output dimensions. For every side,
+  the caller supplies the separately rendered `canvas`, `quality: 'accurate'`,
+  `cameraModel`, optional metrics and `timeMs` stamp of the completed render of
+  `frame.sample`; the API checks these tags, dimensions and expected geometry,
+  not the physics itself. Render optional camera HUD/target into each physical
+  view before composing. Copy these pixels 1:1, opaque white backing, photo
+  image scaled without distortion; never stretch models to fill empty space.
+  Missing/wrong/stale original or mismatched model/timestamp rejects the frame.
+  No controls, grid of thumbnails, live CSS or screenshot capture is involved.
+- Results include `{canvas, warnings}`. Text wraps using Canvas font metrics;
+  overflow is marked with an ellipsis and field-specific warning. Author,
+  license and source have separate reserved rows, with unknown values explicit.
+  Full provenance (especially long source URLs and complete explanations) must
+  remain in the future export manifest; the integration must surface overflow
+  and not treat truncated text as complete. The caller also owns the effective
+  time and atmosphere correctness. Rendering is deterministic within a given
+  Canvas/font implementation, not necessarily byte-identical across platforms.
+
+Only the standalone foundation is implemented here: no new buttons or output
+files in the application yet. 7D.2.2 and 7D.2.3 connect the module to PNG/video
+without changing their simulation-only path. No real Soundly photo or calibrated
+camera pose was added.

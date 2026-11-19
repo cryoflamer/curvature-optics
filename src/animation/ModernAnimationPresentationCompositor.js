@@ -1,0 +1,182 @@
+/* Offline presentation geometry and painting. No DOM, clock, optics or encoding.
+ * The caller renders Accurate RK4 at frame.viewSize before composing; model
+ * pixels are copied 1:1. Observation decoding belongs to the caller. */
+(function(root,factory){
+  var projects=root.CurvatureModernAnimationProject,presentation=root.CurvatureModernAnimationPresentation,
+    references=root.CurvatureModernReferenceImage;
+  if(typeof module==='object'&&module.exports){
+    projects=require('./ModernAnimationProject');presentation=require('./ModernAnimationPresentation');
+    references=require('./ModernReferenceImage');
+  }
+  var api=factory(projects,presentation,references);
+  if(typeof module==='object'&&module.exports)module.exports=api;
+  root.CurvatureModernAnimationPresentationCompositor=api;
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,presentation,references){
+  'use strict';
+  function rect(x,y,width,height){return Object.freeze({x:x,y:y,width:width,height:height});}
+  function choice(value,allowed,fallback){
+    if(value===undefined)return fallback;
+    if(!allowed.includes(value))throw RangeError('Unsupported presentation layout option');return value;
+  }
+  function plan(project,options){
+    options=options||{};
+    var p=projects.validate(project),width=choice(options.width,[1280,1920,2560,3840],1920),height=width*9/16;
+    if(options.height!==undefined&&options.height!==height)throw RangeError('Presentation output must be 16:9');
+    var times=Object.freeze(projects.timeline(p).map(function(t){
+      return Object.freeze(Object.assign({},t,{referenceImageIds:Object.freeze((t.referenceImageIds||[]).slice())}));
+    }));
+    return Object.freeze({project:p,width:width,height:height,times:times,durationMs:projects.totalMs(p),
+      sides:Object.freeze(p.baseExperiment.display.mode==='compare'?['A','B']:['A']),
+      referenceLayout:choice(options.referenceLayout,['side','below','hidden'],'side'),
+      layoutMode:choice(options.layoutMode,['fixed','dynamic'],'fixed'),
+      showNarrative:choice(options.showNarrative,[true,false],true),
+      hasReferences:times.some(function(t){return !!t.referenceImageIds.length;}),
+      hasNarrative:times.some(function(t){return !!(t.description||t.narrativeTitle);})});
+  }
+  function contain(box,width,height){
+    if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)
+      throw RangeError('Invalid raster dimensions');
+    var w,h;
+    if(box.width/width<=box.height/height){w=box.width;h=height*(w/width);}
+    else{h=box.height;w=width*(h/height);}
+    return rect(box.x+(box.width-w)/2,box.y+(box.height-h)/2,w,h);
+  }
+  function frameAt(p,timeMs){
+    if(!Number.isFinite(timeMs)||timeMs<0||timeMs>p.durationMs)throw RangeError('Invalid presentation time');
+    var r=presentation.referencesAt(p.times,timeMs),i=0;
+    while(i+1<p.times.length&&timeMs>=p.times[i+1].arrivalMs)i++;
+    var reserve=p.referenceLayout!=='hidden'&&p.hasReferences&&(p.layoutMode==='fixed'||r.reserve);
+    var s=p.width/1280,px=function(n){return Math.round(n*s);};
+    var pad=px(14),gap=px(10),label=px(26),header=px(66),footer=px(30),
+      narrativeHeight=p.showNarrative&&p.hasNarrative?px(112):0;
+    var body=rect(pad,header,p.width-2*pad,p.height-header-footer-narrativeHeight-gap),
+      models=body,photo=null,photoBox=null,photoText=null;
+    if(reserve&&p.referenceLayout==='side'){
+      var w=Math.floor((body.width-gap)*0.32);
+      photo=rect(body.x,body.y,w,body.height);
+      models=rect(body.x+w+gap,body.y,body.width-w-gap,body.height);
+      photoText=rect(photo.x+gap,photo.y+photo.height-px(88),photo.width-2*gap,px(82));
+      photoBox=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-px(88)-gap);
+    }else if(reserve){
+      var h=Math.floor((body.height-gap)*0.38);
+      photo=rect(body.x,body.y+body.height-h,body.width,h);
+      models=rect(body.x,body.y,body.width,body.height-h-gap);
+      var bw=Math.floor((photo.width-gap)*0.55);
+      photoBox=rect(photo.x+gap,photo.y+label,bw-gap,photo.height-label-gap);
+      photoText=rect(photo.x+bw+gap,photo.y+label,photo.width-bw-2*gap,photo.height-label-gap);
+    }
+    var paneWidth=Math.floor((models.width-gap*(p.sides.length-1))/p.sides.length),
+      // Exact 16:9 integer backing pixels, within existing physical export limits.
+      units=Math.floor(Math.min(paneWidth/16,(models.height-label)/9,120)),
+      vw=units*16,vh=units*9;
+    if(vw<320||vh<180)throw RangeError('Presentation leaves insufficient physical viewport space');
+    var panels={};p.sides.forEach(function(side,j){
+      var panel=rect(models.x+j*(paneWidth+gap),models.y,paneWidth,models.height);
+      panels[side]=Object.freeze({panel:panel,viewport:rect(panel.x+Math.floor((paneWidth-vw)/2),
+        panel.y+label+Math.floor((panel.height-label-vh)/2),vw,vh)});
+    });
+    var t=p.times[i],caption=p.showNarrative?presentation.narrativeAt(p.times,timeMs):null,
+      sample=projects.sampleAt(p.project,timeMs),expected={};
+    p.sides.forEach(function(side){
+      var spec=p.sides.length===2?sample.compare[side]:sample.scene;
+      expected[side]=Object.freeze({showModel:p.sides.length===2?(spec.surface==='flat'?2:1):spec.surface.showModel,
+        atmosphere:spec.atmosphere});
+    });
+    return Object.freeze({width:p.width,height:p.height,title:p.project.name,timeMs:timeMs,durationMs:p.durationMs,
+      chapter:(i+1)+' / '+p.times.length+' · '+(t.narrativeTitle||t.name),
+      sample:sample,expected:Object.freeze(expected),sides:p.sides,viewSize:Object.freeze({width:vw,height:vh}),panels:Object.freeze(panels),
+      referenceId:reserve&&r.ids.length?r.ids[0]:null,referenceCount:reserve?r.ids.length:0,
+      photo:photo,photoBox:photoBox,photoText:photoText,caption:caption?Object.freeze(caption):null,
+      narrative: narrativeHeight?rect(pad,body.y+body.height+gap,body.width,narrativeHeight-gap):null,
+      pad:pad,labelHeight:label,footerHeight:footer,scale:s});
+  }
+  // Call once per decoded original, not for every video timestamp. The caller
+  // must decode record.original (never a thumbnail) and retain ownership until
+  // export completes. Display dimensions include EXIF orientation.
+  function observation(record,image){
+    var r=references.validate(record),w=image&&(image.naturalWidth===undefined?image.width:image.naturalWidth),
+      h=image&&(image.naturalHeight===undefined?image.height:image.naturalHeight);
+    if(w!==r.original.width||h!==r.original.height)throw RangeError('Decoded original dimensions do not match reference');
+    return Object.freeze({id:r.id,image:image,width:w,height:h,title:r.title,author:r.author||'',
+      license:r.license||'',sourceUrl:r.sourceUrl||''});
+  }
+  function source(image,side,frame,target){
+    if(!image||image.quality!=='accurate'||(image.metrics&&image.metrics.opticalQuality&&image.metrics.opticalQuality!=='accurate')||
+      !image.canvas||image.canvas===target||image.canvas.width!==frame.viewSize.width||image.canvas.height!==frame.viewSize.height||
+      !image.cameraModel||image.cameraModel.showModel!==frame.expected[side].showModel||image.timeMs!==frame.timeMs)
+      throw RangeError('Presentation '+side+' requires a painted Accurate RK4 view of the planned dimensions');
+    return image;
+  }
+  // Wrap by measured glyph widths, including long URLs and explicit newlines.
+  // Overflow is visible and reported to the caller; no silent omission.
+  function textBlock(ctx,text,box,size,weight,color,warnings,key){
+    var lineHeight=Math.ceil(size*1.22),maxLines=Math.floor(box.height/lineHeight),lines=[],line='';
+    ctx.font=weight+' '+size+'px Arial, sans-serif';ctx.fillStyle=color;
+    var fits=function(t){return ctx.measureText(t).width<=box.width;};
+    String(text).split(/\r?\n/).forEach(function(paragraph){
+      line='';paragraph.split(/\s+/).forEach(function(word){
+        if(!word)return;
+        if(line&&fits(line+' '+word)){line+=' '+word;return;}
+        if(fits(word)){if(line)lines.push(line);line=word;return;}
+        if(line)line+=' ';
+        Array.from(word).forEach(function(ch){if(line&&!fits(line+ch)){lines.push(line);line='';}line+=ch;});
+      });lines.push(line);
+    });
+    if(lines.length>maxLines){
+      warnings.push(key);lines=lines.slice(0,maxLines);
+      if(lines.length){var last=Array.from(lines[lines.length-1]);while(last.length&&!fits(last.join('')+'…'))last.pop();lines[lines.length-1]=last.join('')+'…';}
+    }
+    lines.forEach(function(t,i){ctx.fillText(t,box.x,box.y+i*lineHeight);});
+  }
+  function clock(ms){return (ms/1000).toFixed(2)+' s';}
+  function paint(target,frame,images,photo){
+    if(!target||target.width!==frame.width||target.height!==frame.height||typeof target.getContext!=='function')
+      throw RangeError('Presentation target dimensions do not match frame');
+    var sources=frame.sides.map(function(side){return source(images&&images[side],side,frame,target);});
+    if(new Set(sources.map(function(v){return v.canvas;})).size!==sources.length)throw RangeError('Presentation views must be independent');
+    if(frame.referenceId){
+      if(!photo||photo.id!==frame.referenceId||!photo.image||photo.image===target||sources.some(function(v){return v.canvas===photo.image;})||
+        (photo.image.naturalWidth===undefined?photo.image.width:photo.image.naturalWidth)!==photo.width||
+        (photo.image.naturalHeight===undefined?photo.image.height:photo.image.naturalHeight)!==photo.height)
+        throw RangeError('Missing or mismatched presentation original: '+frame.referenceId);
+    }else if(photo)throw RangeError('Unexpected presentation original outside its reference interval');
+    var ctx=target.getContext('2d');if(!ctx)throw Error('Canvas 2D presentation unavailable');
+    var s=frame.scale,pad=frame.pad,fs=function(n){return Math.round(n*s);},warnings=[];
+    function block(text,b,size,weight,key){textBlock(ctx,text,b,fs(size),weight,'#192e43',warnings,key);}
+    function fill(b,c){ctx.fillStyle=c;ctx.fillRect(b.x,b.y,b.width,b.height);}
+    ctx.save();try{
+      ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
+      ctx.textAlign='left';ctx.textBaseline='top';
+      fill(rect(0,0,frame.width,frame.height),'#f1f5f9');
+      block(frame.title,rect(pad,fs(7),frame.width-2*pad,fs(29)),22,'600','title');
+      block(frame.chapter,rect(pad,fs(36),frame.width-2*pad,fs(23)),17,'400','chapter');
+      frame.sides.forEach(function(side,i){
+        var b=frame.panels[side],v=sources[i];fill(b.panel,'#ffffff');
+        fill(rect(b.panel.x,b.panel.y,b.panel.width,frame.labelHeight),'#dce8f2');
+        block((frame.sides.length===2?'Model '+side+' · ':'Model · ')+(v.cameraModel.showModel===1?'Globe':'Flat')+' · '+frame.expected[side].atmosphere,
+          rect(b.panel.x+fs(6),b.panel.y+fs(3),b.panel.width-fs(12),frame.labelHeight-fs(3)),16,'600','model');
+        ctx.imageSmoothingEnabled=false;ctx.drawImage(v.canvas,b.viewport.x,b.viewport.y);
+      });
+      if(frame.photo){
+        fill(frame.photo,'#ffffff');fill(rect(frame.photo.x,frame.photo.y,frame.photo.width,frame.labelHeight),'#dce8f2');
+        block('Reference · real observation'+(frame.referenceCount>1?' · 1 / '+frame.referenceCount:''),rect(frame.photo.x+fs(6),frame.photo.y+fs(3),frame.photo.width-fs(12),frame.labelHeight-fs(3)),16,'600','reference label');
+        if(photo){
+          var b=contain(frame.photoBox,photo.width,photo.height);ctx.imageSmoothingEnabled=true;
+          ctx.drawImage(photo.image,b.x,b.y,b.width,b.height);
+          // Reserve distinct rows so even a very long title/author cannot hide
+          // the license or source. Include at least two lines for the URL.
+          var meta=frame.photoText,step=Math.ceil(fs(12)*1.22);
+          [photo.title,'Author: '+(photo.author||'Unknown'),'License: '+(photo.license||'Unknown'),
+            'Source: '+(photo.sourceUrl||'Unknown')].forEach(function(value,i){
+            block(value,rect(meta.x,meta.y+i*step,meta.width,i===3?meta.height-3*step:step),12,'400','reference '+['title','author','license','source'][i]);
+          });
+        }else block('No reference at this time',frame.photoBox,16,'400','reference placeholder');
+      }
+      if(frame.narrative&&frame.caption)block(frame.caption.text,frame.narrative,16,'400','explanation');
+      block('Accurate RK4 · '+clock(frame.timeMs)+' / '+clock(frame.durationMs),
+        rect(pad,frame.height-frame.footerHeight+fs(3),frame.width-2*pad,frame.footerHeight-fs(3)),14,'400','timing');
+    }finally{ctx.restore();}
+    return Object.freeze({canvas:target,warnings:Object.freeze(warnings)});
+  }
+  return Object.freeze({plan:plan,frameAt:frameAt,contain:contain,observation:observation,paint:paint});
+}));

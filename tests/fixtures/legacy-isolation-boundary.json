@@ -453,6 +453,7 @@
       "src/animation/ModernAnimationArchiveWorker.js",
       "src/animation/ModernAnimationFrameWorker.js",
       "src/animation/ModernAnimationMP4Muxer.js",
+      "src/animation/ModernAnimationPresentationCompositor.js",
       "src/animation/ModernAnimationVideoArchive.js",
       "src/animation/ModernAnimationVideoEncoderWorker.js",
       "src/animation/ModernAnimationVideoProbeWorker.js",
@@ -468,7 +469,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 205,
+  "sourceJsCount": 206,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -789,10 +790,20 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationPresentationCompositor.js",
         "src/ui/modern/ModernAnimationStudioUI.js"
       ],
       "commonJsTestCallers": [
-        "tests/ModernAnimationPresentation.test.js"
+        "tests/ModernAnimationPresentation.test.js",
+        "tests/ModernAnimationPresentationCompositor.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationPresentationCompositor.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationPresentationCompositor.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -832,6 +843,7 @@
         "src/animation/ModernAnimationFrameExport.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPlayback.js",
+        "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernAnimationProjectWizard.js",
         "src/animation/ModernAnimationStoryboardExport.js",
         "src/animation/ModernAnimationStudio.js",
@@ -855,6 +867,7 @@
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationParallelExport.test.js",
         "tests/ModernAnimationPlayback.test.js",
+        "tests/ModernAnimationPresentationCompositor.test.js",
         "tests/ModernAnimationProject.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationProjectWizard.test.js",
@@ -1092,10 +1105,12 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationLibrary.js",
+        "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernReferenceImageLibrary.js",
         "src/ui/modern/ModernReferenceImageImport.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernAnimationPresentationCompositor.test.js",
         "tests/ModernReferenceImage.test.js"
       ],
       "commonJsToolCallers": []

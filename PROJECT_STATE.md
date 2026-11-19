@@ -1,3 +1,25 @@
+## Modern Demo Catalog — Presentation Compositor (7D.2.1)
+
+The user accepted the Presentation Resize Fix in Opera and approved separating
+full-presentation composition from export integration. New standalone
+`ModernAnimationPresentationCompositor` plans 16:9 output, fixed/dynamic
+reference layout, Scene/Compare view sizes and frame-time content; it paints
+independent Accurate RK4 inputs 1:1 and contains the decoded original without
+crop/stretch. Frame identity and atmosphere labels follow the sampled effective
+project; caller must render that exact sample and tag completed inputs with its
+clock. Original decoding and lifecycle are caller responsibilities. Text is
+bounded with visible ellipses and explicit overflow warnings; provenance has
+independent rows. Default fixed layout, side photo, 1920x1080, explanation on;
+first linked photo per hold (count shown). No app script, UI, PNG/video pipeline,
+project schema or physical algorithm changes. Unit geometry/ownership tests and
+isolated real Chromium canvas pixel test added.
+
+**Resume:** 7D.2.2 PNG integration, configuration/preview, frozen effective
+project plus original decoding/lookup and complete provenance/overflow reporting
+in export manifest; then 7D.2.3 video integration, including fixed-size encoding,
+resource budgets and cancellation. Keep existing simulation-only exports intact.
+Then 7E, 8A–8E and 9A–9C. See `docs/modern-demo-catalog.md` compositor contract.
+
 ## Modern Demo Catalog — Presentation Resize Fix (7D.1.2)
 
 Prepare the reference panel geometry for the requested sample before either
