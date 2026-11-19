@@ -296,3 +296,24 @@ test('fixed point visibility distinguishes hidden, outside and wireframe points'
   assert.equal(viewer.markerVisibility(f,{...h,point:[100,0,0]},100,100,false),'out of view');
   assert.equal(viewer.markerVisibility(f,{order:1,point:[0,0,2]},100,100,false),'visible');
 });
+
+test('vertex snap minimizes physical distance rather than barycentric weight',()=>{
+  const item=pickItem([[0,0,0],[100,0,0],[0,1,0]],3,0),mesh=viewer.preparePick([item]);
+  const hit={kind:'surface',bank:0,index:0,order:0,indices:[0,1,2],weights:[.4,.35,.25]};
+  const h=viewer.adjustPoint(mesh,hit,hit.weights,'vertex');
+  // The largest weight can belong to the distant end of a long edge.
+  const q=viewer.adjustPoint(mesh,hit,[.3,.4,.3],'vertex');
+  assert.deepEqual(h.indices,[0]);
+  assert.deepEqual(q.indices,[0]);
+  assert.deepEqual(q.point,[0,0,0]);
+  assert.deepEqual(q.weights,[1]);
+});
+test('surface vertex snap considers the whole authored polygon, edge snap only endpoints',()=>{
+  const item=pickItem([[0,0,0],[10,0,0],[10,10,0],[0,10,0],[0,1,0]],3,0),mesh=viewer.preparePick([item]);
+  const h={kind:'surface',bank:0,index:0,order:0,indices:[0,1,3],weights:[.85,.05,.1]};
+  const q=viewer.adjustPoint(mesh,h,h.weights,'vertex');
+  assert.deepEqual(q.indices,[4]);assert.deepEqual(q.point,[0,1,0]);
+  const edge={...h,kind:'edge',indices:[0,3],weights:[.9,.1]};
+  assert.deepEqual(viewer.adjustPoint(mesh,edge,edge.weights,'vertex').indices,[0]);
+  assert.deepEqual(viewer.adjustPoint(mesh,{...edge,indices:[3,0]},[.5,.5],'vertex').indices,[0]);
+});

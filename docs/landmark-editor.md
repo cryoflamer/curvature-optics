@@ -195,6 +195,8 @@ of an occluded feature. Stage candidate separately from correspondences.
 #### 8F.3c — Marker, snapping and precise adjustment (implemented)
 Persistent local marker across navigation, metric coordinates, midpoint
 and endpoint/boundary snaps, precise adjustment, explicit confirm/cancel.
+Snap vertex uses true metric distance to an edge endpoint or any original
+vertex of the selected polygon, not maximum barycentric weight.
 Keep original indices and weights; no internal triangulation edge as
 authored edge. No committed calibration data until 8F.5.
 #### 8F.3d — Scene View optical picking

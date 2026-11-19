@@ -1,3 +1,11 @@
+## 8F.3c follow-up — Metric vertex snap
+
+Snap vertex minimizes actual 3D distance: edge endpoints for an edge,
+all original authored polygon vertices for a surface, lowest original
+index for exact ties. Barycentric weights are not a distance metric.
+25 strict headless viewer tests passed; previous 8F.3c full CI passed.
+No calibration or optical inverse change. Next: 8F.3d.
+
 ## 8F.3c — Local point adjustment and confirmation
 
 Free View draft and confirmed local point remain fixed through camera

@@ -466,7 +466,17 @@
       throw Error('Weights must be nonnegative and sum to one');
     const sum=w.reduce((a,b)=>a+b,0);w=w.map(x=>x/sum);
     if(snap==='vertex'){
-      const i=w.indexOf(Math.max(...w));indices=[indices[i]];w=[1];kind='vertex';
+      const point=indices.reduce((p,i,j)=>add(p,mul(e.item.points[i],w[j])),[0,0,0]);
+      // On an edge use only its endpoints; on a surface use every original
+      // vertex of its authored polygon, not just this triangulation simplex.
+      // Equal distances are resolved by the lowest original vertex index.
+      const candidates=kind==='surface'?e.item.points.map((_,i)=>i):indices;
+      let best=null;
+      for(const i of candidates){
+        const distance=Math.hypot(...sub(e.item.points[i],point));
+        if(!best||distance<best.distance||distance===best.distance&&i<best.index)best={index:i,distance};
+      }
+      indices=[best.index];w=[1];kind='vertex';
     }else if(snap==='midpoint'){
       if(kind!=='edge')throw Error('Select an authored edge first');
       w=[.5,.5];
