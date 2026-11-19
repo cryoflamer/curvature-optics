@@ -1,3 +1,23 @@
+## 8F.1 — Explicit object selection and snapshot owner metadata
+
+Photo Calibration now offers Pick: Vertex / Object. Object mode selects a
+painted package without a nearby vertex, holds its highlight after pointer
+leave, and provides an independent manual selector and clear action. The
+selected descriptor reports bank/type/station/column, representative
+horizontal range (first authored object vertex, physical initial tangent
+frame), incoming spans and identity-pass visibility. No photo is required;
+object selection does not mutate pending pixels, correspondences, camera or
+fit. Best-camera view remains read-only. Selection is transient per captured
+scene; Vertex mode and its existing pair workflow remain the default.
+Geometry metadata identifies full-sequence object owners, local primitive
+ordinals and span endpoint/side identities; painter indices/order, coordinates
+and draw modes remain unchanged. Truncated sequences have no new owner.
+Topology signature and persistent anchors remain 8F.4/8F.6 work.
+Headless JavaScript checks: two new unit cases and exact pre/post geometry
+comparison (all ten types, Globe/Flat, excluding only new metadata).
+Node/browser CI pending; additional Chromium selection and fit preservation
+smoke coverage added. Next: 8F.2 isolated viewer.
+
 ## 8F.0 — Landmark editor architecture audit completed
 
 See [8F.0 audit](docs/landmark-editor-audit.md), Issue #7. The current

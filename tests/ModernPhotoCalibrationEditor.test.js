@@ -170,3 +170,43 @@ test('v1 migrates to Fit; v2 preserves held-out points and validates results aga
   assert.throws(()=>check({...v2,version:1}),/version 2/);
   assert.throws(()=>check({...v2,observations:[{...b,included:true},a]}),/stored fit/);
 });
+
+
+test('snapshot object and span owners retain authored indices and endpoint columns',()=>{
+  const geometry=require('../src/geometry/CurvatureGeometryEngine');
+  const m={geometryRadius:6371000,Height:0,NObjects:[4,4],ObjDist:[1000,1200],ObjDeltaDist:[300,300],
+    ObjSidePos:[55,50],ObjSideVar:[20,20],ObjSideType:[1,1],ObjSize:[1,1],ObjSizeVar:[0,0],
+    ObjSizeType:[0,0],ObjType:[8,7]};
+  for(const bank of [0,1]){
+    const globe=geometry.createObjectSequenceScene(m,bank,true,{opticsNeutral:true,physicalSurface:true,curvature:1/m.geometryRadius});
+    const flat=geometry.createObjectSequenceScene(m,bank,false,{opticsNeutral:true,physicalSurface:true,curvature:0});
+    assert.deepEqual(globe.primitives.map(p=>p.metadata),flat.primitives.map(p=>p.metadata));
+    const packages=editor.objectPackages(bank===0?[globe.primitives,[]]:[[],globe.primitives]);
+    assert.equal(packages.size,8);
+    for(const pkg of packages.values()){
+      assert.equal(pkg.owner.bank,bank);
+      assert.equal(pkg.owner.stationIndex,3-Math.floor(pkg.placedIndex/2));
+      assert.equal(pkg.owner.column,pkg.placedIndex%2+1);
+      const owned=pkg.primitiveIndices.map(i=>globe.primitives[i]).filter(p=>p.metadata.landmarkOwner.kind==='object');
+      assert.deepEqual(owned.map(p=>p.metadata.landmarkPrimitive),owned.map((_,i)=>i));
+      for(const span of pkg.spanOwners){
+        assert.equal(span.from.column,span.to.column);
+        assert.equal(span.from.stationIndex,span.to.stationIndex+1);
+        assert.deepEqual(span.to,pkg.owner);
+        if(span.role.endsWith('-road'))assert.ok([-1,1].includes(span.side));
+      }
+    }
+  }
+  const truncated=geometry.createObjectSequenceScene({...m,ObjDist:[21000000,1200],ObjDeltaDist:[10000000,300]},0,true,{opticsNeutral:true});
+  assert.equal(editor.objectPackages([truncated.primitives,[]]).size,0);
+});
+test('object package selection is independent of nearby correspondence vertices',()=>{
+  const owner={kind:'object',bank:0,objectType:8,stationIndex:0,column:0};
+  const banks=[[{points:[[0,0,0]],metadata:{placedObjectIndex:0,landmarkOwner:owner,landmarkPackage:owner,landmarkPrimitive:0}}],[]];
+  const packages=editor.objectPackages(banks,()=>123);
+  assert.equal(packages.get(1).rangeMetres,123);
+  const raster=editor.ownershipRaster(new Map([[1,[[0,0,20]]]]),20,1);
+  const hit=editor.visiblePick(raster,[],{x:0,y:0,scale:1},10,0.5);
+  assert.equal(hit.candidates.length,0);
+  assert.deepEqual(packages.get(hit.key).owner,owner);
+});

@@ -658,6 +658,22 @@ class ModernBrowserSmoke(unittest.TestCase):
             }
             throw Error('No painter-visible candidate in model viewport');
         }""")
+        # Object selection is navigation, not an implicit correspondence edit.
+        pending_before=workspace.locator('#ModernCalibrationX').input_value(),workspace.locator('#ModernCalibrationY').input_value()
+        mode=workspace.locator('#ModernCalibrationPickMode')
+        mode.select_option('object')
+        model.click(position={'x':hit['x'],'y':hit['y']})
+        selected=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()")
+        self.assertEqual(selected['owner']['bank'],0)
+        self.assertEqual(selected['owner']['stationIndex'],0)
+        expect(workspace.locator('#ModernCalibrationObjectSelection')).to_contain_text('horizontal range')
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
+        self.assertEqual((workspace.locator('#ModernCalibrationX').input_value(),workspace.locator('#ModernCalibrationY').input_value()),pending_before)
+        workspace.locator('#ModernCalibrationClearObject').click()
+        self.assertIsNone(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()"))
+        workspace.locator('#ModernCalibrationObjectPicker').select_option(str(selected['key']))
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()"),selected)
+        mode.select_option('vertex')
         model.hover(position={'x':hit['x'],'y':hit['y']})
         expect(workspace.locator('#ModernCalibrationPickStatus')).to_contain_text('Bank')
         model.click(position={'x':hit['x'],'y':hit['y']})
@@ -724,6 +740,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""),before['pose'])
         workspace.locator('#ModernCalibrationBestView').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        # Navigating objects must not invalidate a completed physical fit.
+        mode.select_option('object')
+        workspace.locator('#ModernCalibrationObjectPicker').select_option(str(selected['key']))
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()"),fit)
+        mode.select_option('vertex')
         # Real exported file, import into the draft, then check the solver input.
         with self.page.expect_download() as info:
             workspace.locator('#ModernCalibrationExportExperiment').click()

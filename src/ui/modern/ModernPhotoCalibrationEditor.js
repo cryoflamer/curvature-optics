@@ -91,6 +91,26 @@
     const index=banks[landmark.bank]?.[landmark.primitive]?.metadata?.placedObjectIndex;
     return Number.isInteger(index)&&index>=0?index*2+landmark.bank+1:null;
   }
+  // The RGB key identifies a painted package, not a persistent anchor.
+  // Only full authored sequences provide snapshot-scoped owner descriptors.
+  function objectPackages(banks,rangeOf=()=>null){
+    const packages=new Map(),invalid=new Set();
+    for(let bank=0;bank<banks.length;bank++)for(const [primitive,p] of banks[bank].entries()){
+      const m=p.metadata,owner=m?.landmarkPackage,placed=m?.placedObjectIndex;
+      if(!owner||owner.kind!=='object'||owner.bank!==bank||!Number.isInteger(placed)||placed<0)continue;
+      const key=placed*2+bank+1;
+      if(!packages.has(key))packages.set(key,{key,placedIndex:placed,owner,primitiveIndices:[],spanOwners:[],rangeMetres:null});
+      const pkg=packages.get(key);
+      if(JSON.stringify(pkg.owner)!==JSON.stringify(owner)){invalid.add(key);continue;}
+      pkg.primitiveIndices.push(primitive);
+      if(m.landmarkOwner?.kind==='span')pkg.spanOwners.push(m.landmarkOwner);
+      else if(pkg.rangeMetres===null&&p.points?.length){
+        const r=rangeOf(p.points[0]);if(Number.isFinite(r))pkg.rangeMetres=r;
+      }
+    }
+    for(const key of invalid)packages.delete(key);
+    return packages;
+  }
   function identitySpans(data,width,height){
     const result=new Map();
     for(let y=0;y<height;y++){
@@ -288,7 +308,11 @@
     const modelRaster=doc.createElement('canvas'),renderer=env.CurvatureCanvasDirectPreview.create(),
       modelStatus=$('ModernCalibrationModelStatus'),pickStatus=$('ModernCalibrationPickStatus'),
       pickConflict=$('ModernCalibrationPickConflict'),pickOptions=$('ModernCalibrationPickOptions'),
-      showLandmarks=$('ModernCalibrationShowLandmarks');
+      showLandmarks=$('ModernCalibrationShowLandmarks'),pickMode=$('ModernCalibrationPickMode'),
+      objectPicker=$('ModernCalibrationObjectPicker'),objectControls=$('ModernCalibrationObjectControls'),
+      objectSelectionStatus=$('ModernCalibrationObjectSelection'),clearObject=$('ModernCalibrationClearObject');
+    let packages=new Map(),selectedObjectKey=null;
+    const objectMode=()=>pickMode.value==='object';
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
@@ -504,7 +528,7 @@
       refreshResidualTable();
     }
     function updateHint(){
-      const text=editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
+      const text=objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
         pending?'Photo point selected. Click a model vertex.':
         pendingModel?'Model vertex selected. Click a photo point.':
         activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
@@ -643,8 +667,37 @@
         projected=[];byLandmark.clear();modelView=null;meshDraw();
         modelStatus.textContent='Model preview unavailable: '+e.message+'; the landmark menu remains available.';
       }
+      refreshObjectSelection();
     }
+    function packageLabel(pkg){
+      return objectLabel(pkg.key)+' · type '+pkg.owner.objectType+' · station '+(pkg.owner.stationIndex+1)+
+        (pkg.owner.column?' · column '+pkg.owner.column:'');
+    }
+    function refreshObjectSelection(){
+      const pkg=packages.get(selectedObjectKey);
+      objectControls.hidden=!objectMode();
+      pickMode.disabled=viewBest;
+      objectPicker.disabled=viewBest||!packages.size;
+      clearObject.disabled=viewBest||selectedObjectKey===null;
+      objectPicker.value=pkg?String(pkg.key):'';
+      objectSelectionStatus.textContent=pkg?
+        packageLabel(pkg)+(pkg.rangeMetres===null?'':' · approx. horizontal range '+pkg.rangeMetres.toFixed(1)+' m')+
+        ' · '+pkg.spanOwners.length+' incoming spans'+(visibleSpans.has(pkg.key)?'':' · not visible in identity pass'):
+        'No object selected. Click a visible object or choose from the object list.';
+    }
+    function selectObject(key){
+      if(viewBest)return false;
+      if(key!==null&&!packages.has(key))return false;
+      selectedObjectKey=key;refreshObjectSelection();meshDraw();return true;
+    }
+    pickMode.onchange=()=>{
+      cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();
+      refreshObjectSelection();updateHint();meshDraw();
+    };
+    objectPicker.onchange=()=>selectObject(objectPicker.value?Number(objectPicker.value):null);
+    clearObject.onclick=()=>{clearHover();selectObject(null);};
     function highlightedObject(){
+      if(objectMode())return hoverObject??selectedObjectKey;
       if(hoverObject!==null||modelGhost)return hoverObject;
       const landmark=pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
       return landmark&&scene?objectKey(landmark,scene.banks):null;
@@ -669,7 +722,7 @@
       drawObjectHighlight();
       // By default reveal only the eligible vertices of the hovered object.
       // The explicit checkbox still shows all painter-visible candidates.
-      const dots=showLandmarks.checked?projected.filter(p=>p.painterVisible):visibleByObject.get(highlightedObject())||[];
+      const dots=showLandmarks.checked?projected.filter(p=>p.painterVisible):objectMode()?[]:visibleByObject.get(highlightedObject())||[];
       if(dots.length){
         mesh.fillStyle='#006f92';mesh.globalAlpha=.85;
         for(const item of dots){
@@ -706,7 +759,7 @@
     }
     function hoverAt(p,draw=true){
       const previous=hover[hoverIndex]?.landmark.id;
-      const result=inspectPick(p);hoverObject=result.key;hover=result.candidates;
+      const result=inspectPick(p);hoverObject=result.key;hover=objectMode()?[]:result.candidates;
       hoverIndex=Math.max(0,hover.findIndex(q=>q.landmark.id===previous));
       const item=hover[hoverIndex];
       const tip=$('ModernCalibrationHoverTip');
@@ -714,13 +767,13 @@
       if(hoverObject!==null){
         tip.textContent=item?(hover.length>1?'Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · ':'')+
           landmarkLabel(item.landmark)+' · '+(modelGhost?'Release to snap':'Click highlighted vertex'):
-          objectLabel(hoverObject)+' · Move to a marked vertex';
+          objectLabel(hoverObject)+(objectMode()?' · Click to select object':' · Move to a marked vertex');
         const r=sceneCanvas.getBoundingClientRect();
         tip.style.left=Math.min(Math.max(0,p[0]*r.width/sceneCanvas.width+12),Math.max(0,r.width-230))+'px';
         tip.style.top=Math.min(Math.max(0,p[1]*r.height/sceneCanvas.height+16),Math.max(0,r.height-42))+'px';
       }
       pickStatus.textContent=item?landmarkLabel(item.landmark)+(hover.length>1?' · '+(hoverIndex+1)+'/'+hover.length:''):
-        hoverObject!==null?objectLabel(hoverObject)+' · Move to a marked vertex':$('ModernCalibrationActionHint').textContent;
+        hoverObject!==null?objectLabel(hoverObject)+(objectMode()?' · Click to select object':' · Move to a marked vertex'):objectMode()?'Select a visible object or use the object list.':$('ModernCalibrationActionHint').textContent;
       if(draw)meshDraw();
     }
     function clearHover(){
@@ -750,6 +803,11 @@
     }
     function pickAt(p){
       hoverAt(p);
+      if(objectMode()){
+        if(hoverObject===null)pickStatus.textContent='No visible object here. Zoom in or use the object list.';
+        else if(!selectObject(hoverObject))pickStatus.textContent='Stable object identity unavailable; choose another object.';
+        return;
+      }
       const item=hover[hoverIndex];
       if(!item){pickStatus.textContent=hoverObject!==null?'Move to a visible vertex of '+objectLabel(hoverObject):'No visible object here. Zoom in or use the landmark menu.';return;}
       chooseModel(item);
@@ -775,8 +833,14 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      scene=next;syncFitControls();
+      scene=next;selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
+      let rangeOf=()=>null;
+      try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);
+        rangeOf=p=>{const q=t.pointAt(p,basis);return Math.hypot(q[0],q[1]);};}catch(error){/* Range is optional. */}
+      packages=objectPackages(scene.banks,rangeOf);
+      populate(objectPicker,[['','Choose an object…'],...[...packages.values()].map(p=>[p.key,packageLabel(p)])]);
+      syncFitControls();
       $('ModernCalibrationScene').textContent=(m.DemoText||'Current scene')+' · '+(globe?'Globe':'Flat')+' · '+scene.physics.atmosphere;
       populate(bank,[0,1].filter(b=>scene.banks[b].length).map(b=>[b,'Bank '+(b+1)+' · type '+m.ObjType[b]]));
       updateObjects();refreshRows();renderModel();
@@ -883,7 +947,7 @@
     }
     sceneCanvas.addEventListener('pointerdown',e=>{
       if(!modelView||viewBest||e.button!==0)return;
-      cancelModelFrame();const p=canvasPoint(sceneCanvas,e),hit=modelMarker(p);
+      cancelModelFrame();const p=canvasPoint(sceneCanvas,e),hit=objectMode()?null:modelMarker(p);
       modelDrag={id:e.pointerId,start:p,last:p,moved:false,marker:hit?.id||null};
       sceneCanvas.setPointerCapture(e.pointerId);
     });
@@ -930,7 +994,7 @@
       }
       bestView.textContent=viewBest?'Return to initial camera':'Show best camera';
       $('ModernCalibrationFitNotice').hidden=!viewBest;
-      residualMode.disabled=!fitBest;
+      residualMode.disabled=!fitBest;refreshObjectSelection();
     }
     function exportExperiment(){
       if(!scene||!record)throw Error('Load a photograph first');
@@ -1139,6 +1203,10 @@
     $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(activePair);
     doc.addEventListener('keydown',e=>{
       if(workspace.hidden||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
+      if(objectMode()){
+        if(e.key==='Escape'&&!viewBest){e.preventDefault();clearHover();selectObject(null);}
+        return;
+      }
       if(e.key==='Tab'&&hover.length>1){
         e.preventDefault();hoverIndex=(hoverIndex+(e.shiftKey?-1:1)+hover.length)%hover.length;
         $('ModernCalibrationHoverTip').textContent='Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · Click highlighted vertex';
@@ -1153,11 +1221,11 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

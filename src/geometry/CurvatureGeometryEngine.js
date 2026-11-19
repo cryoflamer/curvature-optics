@@ -961,6 +961,20 @@
     // All of its authored primitives share one depth/order key; grouping by
     // polygon alone would paint the whole bank's strokes over nearer fills.
     var previousByColumn=new Map();
+    // Snapshot-scoped geometric identities, independent of painter ordinals.
+    // Truncated sequences keep legacy rendering but cannot supply new owners.
+    var full=entries.length===model.NObjects[objIx]*(model.ObjSideType[objIx]===1?2:1);
+    function owner(entry){
+      if(!full)return null;
+      var m=entry.scene.metadata;
+      return {kind:'object',bank:objIx,objectType:model.ObjType[objIx],
+        stationIndex:m.total-1-m.drawn,column:m.column||0,drawn:m.drawn,total:m.total};
+    }
+    function spanMetadata(previous,current,role,side){
+      return {landmarkOwner:full?{kind:'span',bank:objIx,objectType:model.ObjType[objIx],
+        from:owner(previous),to:owner(current),role:role,side:side}:null,
+        landmarkPackage:owner(current),landmarkPrimitive:0};
+    }
     entries.forEach(function(entry,placedIndex){
       var column=entry.scene.metadata.column||0;
       if(model.ObjType[objIx]===6&&model.ObjSideType[objIx]!==2){
@@ -973,7 +987,7 @@
           // for each column; never bridge between two different rows.
           var road=bridgeRoad(previous.params,entry.params,entry.hidden);
           road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
-            objectBank:objIx,column:column});
+            objectBank:objIx,column:column},spanMetadata(previous,entry,'bridge-road',null));
           primitives.push(road);
         }
         previousByColumn.set(column,entry);
@@ -984,7 +998,7 @@
           [-1,1].forEach(function(side){
             var road=soundlyRoad(previousSoundly,entry,side,entry.hidden);
             road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
-              objectBank:objIx,column:column});primitives.push(road);
+              objectBank:objIx,column:column},spanMetadata(previousSoundly,entry,'soundly-road',side));primitives.push(road);
           });
         }
         previousByColumn.set(column,entry);
@@ -998,19 +1012,20 @@
           if(entry.scene.metadata.drawn<=8){
             var ground=tensasStrip(previousTensas,entry,entry.hidden,'tensas-shore');
             ground.metadata=Object.assign({},ground.metadata,{placedObjectIndex:placedIndex,
-              objectBank:objIx,column:column});primitives.push(ground);
+              objectBank:objIx,column:column},spanMetadata(previousTensas,entry,'tensas-shore',null));primitives.push(ground);
           }
           (model.ObjSidePos[objIx]<0?[-1,1]:[1,-1]).forEach(function(edge){
             var road=tensasStrip(previousTensas,entry,entry.hidden,'tensas-road',edge);
             road.metadata=Object.assign({},road.metadata,{placedObjectIndex:placedIndex,
-              objectBank:objIx,column:column});primitives.push(road);
+              objectBank:objIx,column:column},spanMetadata(previousTensas,entry,'tensas-road',edge));primitives.push(road);
           });
         }
         previousByColumn.set(column,entry);
       }
-      entry.scene.primitives.forEach(function(p){
+      entry.scene.primitives.forEach(function(p,localIndex){
         primitives.push(Object.assign({},p,{metadata:Object.assign({},p.metadata,{
-          placedObjectIndex:placedIndex,objectBank:objIx})}));
+          placedObjectIndex:placedIndex,objectBank:objIx,landmarkOwner:owner(entry),
+          landmarkPackage:owner(entry),landmarkPrimitive:localIndex})}));
       });
     });
     return contract.createScene('legacy',primitives,{generator:'CurvatureGeometryEngine',
