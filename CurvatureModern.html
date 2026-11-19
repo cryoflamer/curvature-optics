@@ -124,6 +124,9 @@
 <script src="src/ui/modern/ModernAnimationStudioUI.js?status-messages=2&amp;compatible-sequences=1&amp;thumbnail-preview=1&amp;preview-navigation=1&amp;library-card-state=2&amp;stash-restore=1&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;studio-undo-focus=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;png-project-fields=1"></script>
 <script src="src/ui/modern/ModernSessionAutosave.js"></script>
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
+<script src="src/calibration/CameraLandmarkProjection.js"></script>
+<script src="src/calibration/CameraPhysicalPose.js"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -136,7 +139,7 @@
       <button class="modern-tab" id="ModernAnimationTab" type="button" aria-pressed="false">Animation</button>
       <button class="modern-tab" id="ModernDemosTab" type="button" aria-pressed="false">Demos</button>
     </nav>
-    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
+    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><button type="button" class="modern-ghost-button" id="ModernPhotoCalibrationOpen">Photo calibration</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
   <!-- GraphX3DX needs parser-time document.writeln and a positive initial width.
        Move these independent canvases into Animation when its tab opens. -->
@@ -144,6 +147,40 @@
     <script src="src/ui/modern/ModernAnimationPreviewGraph.js" data-animation-side="A"></script>
     <script src="src/ui/modern/ModernAnimationPreviewGraph.js" data-animation-side="B"></script>
   </div>
+  <dialog id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle">
+    <header><h2 id="ModernCalibrationTitle">Photo calibration · correspondences</h2><button type="button" id="ModernCalibrationClose">Close</button></header>
+    <p id="ModernCalibrationScene"></p>
+    <p>Choose a reference pixel and a known model vertex. The scene is fixed until New session.</p>
+    <div class="modern-calibration-toolbar">
+      <label>Reference photo <input type="file" id="ModernCalibrationFile" accept="image/png,image/jpeg,image/webp"></label>
+      <button type="button" id="ModernCalibrationReset">New session</button>
+      <button type="button" id="ModernCalibrationFit">Fit photo</button>
+    </div>
+    <div class="modern-calibration-grid">
+      <section><h3>Original photograph</h3><p>Click a point · drag to pan · wheel to zoom.</p>
+        <canvas id="ModernCalibrationPhoto" width="800" height="540" aria-label="Reference photo"></canvas>
+        <div class="modern-calibration-toolbar">
+          <label>Pixel X <input id="ModernCalibrationX" type="number" step="any"></label>
+          <label>Pixel Y <input id="ModernCalibrationY" type="number" step="any"></label>
+        </div>
+      </section>
+      <section><h3>Model vertex</h3><p>Magnified preview of selected object (Canvas Direct). Select a vertex or click the preview.</p>
+        <label>Bank <select id="ModernCalibrationBank"></select></label>
+        <label>Object <select id="ModernCalibrationObject"></select></label>
+        <label>Vertex <select id="ModernCalibrationVertex"></select></label>
+        <canvas id="ModernCalibrationMesh" width="400" height="340" aria-label="Selected model object"></canvas>
+        <div class="modern-calibration-toolbar">
+          <label>Weight <input id="ModernCalibrationWeight" type="number" min="0.001" step="any" value="1"></label>
+          <button type="button" id="ModernCalibrationAdd" disabled>Add pair</button>
+          <button type="button" id="ModernCalibrationCancelEdit">Clear selection</button>
+        </div>
+      </section>
+    </div>
+    <p id="ModernCalibrationStatus" role="status"></p>
+    <h3 id="ModernCalibrationCount">0 correspondences</h3>
+    <table><thead><tr><th>#</th><th>Landmark</th><th>Original pixels</th><th>Weight</th><th>Actions</th></tr></thead><tbody id="ModernCalibrationPairs"></tbody></table>
+    <p>Session-only draft. Camera solving and saving follow in the next stages.</p>
+  </dialog>
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryReturnToAnimation" hidden>Return to Animation Studio</button><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>

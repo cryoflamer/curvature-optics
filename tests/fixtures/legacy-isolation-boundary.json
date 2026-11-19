@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 119,
-      "uniqueScripts": 117,
+      "scriptTags": 122,
+      "uniqueScripts": 120,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -236,6 +236,9 @@
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
+        "src/calibration/CameraLandmarkProjection.js",
+        "src/calibration/CameraPhysicalPose.js",
+        "src/ui/modern/ModernPhotoCalibrationEditor.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernApp.js",
@@ -395,6 +398,8 @@
       "src/animation/ModernDemoCatalogData.js",
       "src/animation/ModernReferenceImage.js",
       "src/animation/ModernReferenceImageLibrary.js",
+      "src/calibration/CameraLandmarkProjection.js",
+      "src/calibration/CameraPhysicalPose.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
       "src/camera/ModernCameraTelemetry.js",
@@ -435,6 +440,7 @@
       "src/ui/modern/ModernGpuCapabilities.js",
       "src/ui/modern/ModernLocationCatalog.js",
       "src/ui/modern/ModernPerformanceReport.js",
+      "src/ui/modern/ModernPhotoCalibrationEditor.js",
       "src/ui/modern/ModernReferenceImageImport.js",
       "src/ui/modern/ModernReferenceImageLibraryUI.js",
       "src/ui/modern/ModernRenderProfiler.js",
@@ -461,10 +467,8 @@
       "src/animation/ModernAnimationWebMMuxer.js",
       "src/calibration/CameraCalibration.js",
       "src/calibration/CameraFocalSweep.js",
-      "src/calibration/CameraLandmarkProjection.js",
       "src/calibration/CameraPerspectiveSeed.js",
       "src/calibration/CameraPhysicalFit.js",
-      "src/calibration/CameraPhysicalPose.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/diagnostics/LegacyDemoPerformance.js",
@@ -476,7 +480,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 212,
+  "sourceJsCount": 213,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1316,7 +1320,9 @@
       "commonJsToolCallers": []
     },
     "src/calibration/CameraLandmarkProjection.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [
         "src/calibration/CameraPhysicalFit.js"
       ],
@@ -1352,13 +1358,16 @@
       "commonJsToolCallers": []
     },
     "src/calibration/CameraPhysicalPose.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [
         "src/calibration/CameraCalibration.js",
         "src/calibration/CameraPhysicalFit.js"
       ],
       "commonJsTestCallers": [
         "tests/CameraCalibration.test.js",
+        "tests/CameraLandmarkProjection.test.js",
         "tests/CameraPhysicalFit.test.js",
         "tests/CameraPhysicalPose.test.js"
       ],
@@ -2507,6 +2516,7 @@
         "src/scene/CurvatureFullSceneDecorations.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraLandmarkProjection.test.js",
         "tests/CurvatureCanvasProjection.test.js",
         "tests/CurvatureRenderingFixes.test.js",
         "tests/CurvatureStrokePreview.test.js",
@@ -2615,6 +2625,7 @@
         "tests/AdaptiveTowerPrism112.test.js",
         "tests/AtmosphericSceneReliability109.test.js",
         "tests/AtmosphericVisibility.test.js",
+        "tests/CameraLandmarkProjection.test.js",
         "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvatureControlledGeometryParity.test.js",
         "tests/CurvatureFullComposition.test.js",
@@ -3360,6 +3371,16 @@
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernPerformanceDiagnostics1401.test.js",
         "tests/OpticalColdWarm1403.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernPhotoCalibrationEditor.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernPhotoCalibrationEditor.test.js"
       ],
       "commonJsToolCallers": []
     },

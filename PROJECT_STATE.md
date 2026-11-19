@@ -1,3 +1,23 @@
+## 8B — First photo correspondence editor
+
+Open a Modern Scene and choose **Photo calibration** in the header. The modal
+captures an independent scene snapshot with fixed geometry and supported
+atmosphere (Vacuum, Standard, Temperature lapse). Import a local PNG/JPEG/WebP
+using the existing reference-image ingestion code; decoded orientation and
+original raster dimensions are retained. Click, drag, wheel/fit or enter
+original pixel coordinates numerically. Select a bank, far-to-near placed
+object and authored primitive vertex, either via its ID menu or magnified
+Canvas Direct object preview. Add, edit, weight and delete unique landmark
+pairs. The preview is not a full rendered scene and coincident points may
+need the ID menu. The draft survives closing/reopening the modal in the
+session; New session intentionally discards it after confirmation. No solver,
+persistent draft, existing-library import or experiment/keyframe save yet.
+
+Node tests cover coordinates and pair editing; Chromium smoke covers local
+photo import and editing. The static dependency inventory includes the new
+Modern-only scripts and the previously omitted 8A.4.4b test require edges.
+Local execution unavailable; CI pending.
+
 ## Photo authoring priority — proceed directly to 8B
 
 Decision: deliver a minimal end-to-end photo-to-camera editor before further numerical research. 8A.4.4a is complete. Remaining renderer parity/Direct-versus-Accurate qualification (8A.4.4b) and termination diagnostics (8A.4.4c) are deferred technical debt, not prerequisites for 8B. Retain existing tests and investigate concrete failures as needed; do not relax assertions merely to pass CI.

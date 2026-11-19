@@ -7451,7 +7451,12 @@
   }
   if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
   else root.addEventListener('load',bind);
-  root.CurvatureModernApp={getModel:function(){return model;},getMode:function(){return state.demosActive?'demos':state.mode;},
+  root.CurvatureModernApp={getModel:function(){return model;},
+    getPhotoCalibrationScene:function(){
+      var copy=Object.assign({},model);
+      Object.keys(copy).forEach(function(k){if(Array.isArray(copy[k]))copy[k]=copy[k].slice();});
+      return {model:copy,physics:{atmosphere:state.atmosphere,temperatureProfile:Object.assign({},state.temperatureProfile)}};
+    },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:function(){return animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;},
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     getPresetSelection:function(){return state.scenePresetSelection;},

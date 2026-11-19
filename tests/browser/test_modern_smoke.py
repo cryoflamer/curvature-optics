@@ -554,6 +554,36 @@ class ModernBrowserSmoke(unittest.TestCase):
             for name in archive.namelist()[:3]:
                 self.assertEqual(archive.read(name)[:8], b'\x89PNG\r\n\x1a\n')
 
+    def test_photo_calibration_correspondence_editor(self):
+        import base64
+        self.open_modern()
+        self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        dialog = self.page.locator('#ModernPhotoCalibration')
+        expect(dialog).to_be_visible()
+        encoded = self.page.evaluate("""() => {
+            const c=document.createElement('canvas');c.width=100;c.height=80;
+            c.getContext('2d').fillRect(0,0,100,80);return c.toDataURL().split(',')[1];
+        }""")
+        dialog.locator('#ModernCalibrationFile').set_input_files(
+            {'name':'reference.png','mimeType':'image/png','buffer':base64.b64decode(encoded)})
+        expect(dialog.locator('#ModernCalibrationStatus')).to_contain_text('100 × 80')
+        dialog.locator('#ModernCalibrationX').fill('25.5')
+        dialog.locator('#ModernCalibrationY').fill('40.25')
+        dialog.locator('#ModernCalibrationAdd').click()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('25.50, 40.25')
+        dialog.get_by_role('button',name='Edit',exact=True).click()
+        dialog.locator('#ModernCalibrationX').fill('33')
+        dialog.locator('#ModernCalibrationAdd').click()
+        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('33.00, 40.25')
+        dialog.locator('#ModernCalibrationClose').click()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        dialog.get_by_role('button',name='Delete',exact=True).click()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
+        dialog.locator('#ModernCalibrationClose').click()
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
