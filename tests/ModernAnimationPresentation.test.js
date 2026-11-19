@@ -5,20 +5,21 @@ const api=require('../src/animation/ModernAnimationPresentation');
 function harness(){
   const listeners={},doc={body:null,activeElement:null,fullscreenElement:null,addEventListener(k,f){listeners[k]=f;}};
   function node(parent){
-    const attrs={},classes=new Set();
+    const attrs={},classes=new Set(),events={};
     const n={parentElement:parent,children:[],inert:false,hidden:true,isConnected:true,style:{overflow:'auto'},tabIndex:0,
       classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c)},
       setAttribute(k,v){attrs[k]=v;},removeAttribute(k){delete attrs[k];},getAttribute:k=>attrs[k],
+      addEventListener(k,fn){events[k]=fn;},click(){if(events.click)events.click();},
       focus(){doc.activeElement=n;},getClientRects(){return [1];},querySelectorAll(){return n.children;}};
     if(parent)parent.children.push(n);return n;
   }
-  doc.body=node(null);const app=node(doc.body),side=node(doc.body),workspace=node(app),editor=node(workspace),stage=node(workspace),header=node(app),bar=node(stage),exit=node(stage),canvas=node(stage);
+  doc.body=node(null);const app=node(doc.body),side=node(doc.body),workspace=node(app),editor=node(workspace),stage=node(workspace),header=node(app),bar=node(stage),exit=node(stage),canvas=node(stage),settings=node(stage),storyboard=node(stage);
   side.inert=true;header.focus();let ready=true,resize=0,sync=0,errors=0;
   stage.requestFullscreen=()=>{doc.fullscreenElement=stage;listeners.fullscreenchange();return Promise.resolve();};
   doc.exitFullscreen=()=>{doc.fullscreenElement=null;listeners.fullscreenchange();return Promise.resolve();};
-  const controller=api.create({document:doc,stage,bar,exitButton:exit,ready:()=>ready,
+  const controller=api.create({document:doc,stage,bar,exitButton:exit,ready:()=>ready,disclosures:[settings,null,storyboard],
     sync(){sync++;},resize(){resize++;},fullscreenError(){errors++;}});
-  return {doc,stage,bar,exit,canvas,header,editor,side,controller,listeners,stats:()=>({resize,sync,errors}),setReady(v){ready=v;}};
+  return {doc,stage,bar,exit,canvas,header,editor,side,settings,storyboard,controller,listeners,stats:()=>({resize,sync,errors}),setReady(v){ready=v;}};
 }
 test('presentation retains mounted stage and restores background state and focus',()=>{
   const h=harness(),parent=h.stage.parentElement;h.setReady(false);assert.equal(h.controller.enter(),false);h.setReady(true);
@@ -29,6 +30,17 @@ test('presentation retains mounted stage and restores background state and focus
   assert.equal(h.editor.inert,false);assert.equal(h.header.inert,false);assert.equal(h.side.inert,true);
   assert.equal(h.doc.activeElement,h.header);assert.equal(h.doc.body.style.overflow,'auto');assert.equal(h.bar.hidden,true);
   assert.deepEqual(h.stats(),{resize:2,sync:2,errors:0});
+});
+test('viewer disclosures are independent, reset on exit and do not affect the mounted player',()=>{
+  const h=harness(),expanded=node=>node.getAttribute('aria-expanded');
+  h.settings.click();assert.equal(expanded(h.settings),undefined);
+  h.controller.enter();assert.equal(expanded(h.settings),'false');assert.equal(expanded(h.storyboard),'false');
+  h.settings.click();assert.equal(expanded(h.settings),'true');assert.equal(expanded(h.storyboard),'false');
+  h.storyboard.click();assert.equal(expanded(h.storyboard),'true');
+  h.settings.click();assert.equal(expanded(h.settings),'false');assert.equal(expanded(h.storyboard),'true');
+  assert.equal(h.canvas.parentElement,h.stage);assert.equal(h.controller.isActive(),true);
+  h.controller.leave();assert.equal(expanded(h.storyboard),'false');
+  h.controller.enter();assert.equal(expanded(h.settings),'false');assert.equal(expanded(h.storyboard),'false');
 });
 test('fullscreen uses the same element, Escape exits presentation after native fullscreen',async()=>{
   const h=harness();h.controller.enter();await h.controller.fullscreen();assert.equal(h.doc.fullscreenElement,h.stage);

@@ -1,3 +1,19 @@
+## Modern Demo Catalog — Presentation UI Cleanup (7D.1.1)
+
+Presentation hides all Storyboard author actions (single/batch capture,
+regeneration, JSON export, cancellation and author hints), routine success and
+progress notices, and Retry unless the physical failure overlay is visible.
+Warnings and errors, actual optics quality, photograph inspection and playback
+remain available. View settings (atmosphere, photo layout, HUD, target and
+explanations) and Storyboard are independent collapsed disclosures by default;
+Open Studio restores the full author interface and Create copy stays in the
+library. The same mounted controls, timeline and player are shared. The
+viewport sizing budget accounts for expanded disclosures; controls remain
+visible in fullscreen (no idle timer). No project, physics or export changes.
+
+**Resume:** validate in Opera and CI, then 7D.2 Presentation Export. Continue
+7E, 8A–8E and 9A–9C as below.
+
 ## Modern Demo Catalog — Narrative UI (7D.1)
 
 An optional `narrativeTitle` (120 characters, plain text) is independent of the

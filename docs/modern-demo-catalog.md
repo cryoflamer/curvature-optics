@@ -1,6 +1,6 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **7D.1 (Narrative UI)**, 2026-11-19.
+Status: **7D.1.1 (Presentation UI Cleanup)**, 2026-11-19.
 The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
 thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
 are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
@@ -194,6 +194,7 @@ record the split, and do not mark complete on implementation alone.
 | 7C.4 — Reference Presentation | Implemented; Opera acceptance pending | Thumbnail picker and linked previews; original/provenance dialog; Side by side, Below, Hidden; resizable divider; painted hold ownership, no photos during travel. Overlay deferred until calibration. |
 | 7C.5 — Reference Export & Import | Implemented; acceptance pending | Version 2 envelope for linked assets, ID collision remap, original and metadata retention in both Storyboard options, read-only catalog resolution and copy. Existing unlinked v1 unchanged; safe deletion deferred. |
 | 7D.1 — Narrative UI | Implemented; acceptance pending | Optional presentation title (120 characters), independent of the technical frame name; chapter selector jumps to exact arrival, pauses playback, and selects the storyboard frame. Optional explanation visibility is session-local; the title and explanation are synchronized to the painted clock. Reference and narrative panels share the presentation sizing budget. Older projects remain readable. |
+| 7D.1.1 — Presentation UI Cleanup | Implemented; acceptance pending | Viewer-only controls; collapsed View settings and Storyboard, hidden author actions and success notices, Retry only for a failed physical frame. Studio controls remain available. |
 | 7D.2 — Presentation Export | Planned | Include optional narrative and real photographs in PNG/video exports, retaining accurate optics and explicit provenance. No final Soundly photo matching yet. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
 | 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
@@ -466,12 +467,16 @@ captured image.
 ### Presentation view
 The Presentation button on a prepared preview opens a viewport-filling,
 viewer-only layout of the same mounted stage. Play, Pause, Stop, seek,
-Storyboard, camera HUD and target visibility remain available; editing and
-export controls are hidden. The project title and the last painted keyframe
+chapter navigation and optional Storyboard remain available; editing, capture
+and export controls are hidden. View settings groups atmosphere, photograph
+layout, camera HUD, target direction and explanation visibility. Both
+disclosures start collapsed on each entry. Retry is shown only for a failed
+physical frame; routine status notices are hidden, warnings and errors remain. The project title and the last painted keyframe
 or transition identify the image; the actual optics quality remains visible.
 Fullscreen is optional (browser permission); Escape after exiting native
 fullscreen, or Open Studio, restores the ordinary layout and focus without
-resetting the playhead. Create copy exits into the existing durable copy flow.
+resetting the playhead. Create copy is available in the Studio library, not
+in the viewer. Fullscreen retains accessible controls without an idle timer.
 Resize uses the existing paused repaint or live playback path. No additional
 player, physical state, autosave format or authored fields are introduced.
 

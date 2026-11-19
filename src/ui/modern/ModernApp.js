@@ -3207,7 +3207,6 @@
     if(narrative)root.CurvatureModernAnimationPresentation.syncNarrative(narrative,
       newUiEl('ModernAnimationPresentationNarrativeLabel'),newUiEl('ModernAnimationPresentationNarrativeText'),
       studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt,!visibility||visibility.checked);
-    var copy=newUiEl('ModernAnimationPresentationCopy');if(copy)copy.hidden=!studioActiveDemo;
     var fullscreen=newUiEl('ModernAnimationPresentationFullscreen'),stage=newUiEl('ModernAnimationPlaybackStage');
     if(fullscreen){fullscreen.hidden=!stage.requestFullscreen||document.fullscreenEnabled===false;
       fullscreen.textContent=document.fullscreenElement===stage?'Exit fullscreen':'Fullscreen';}
@@ -3219,11 +3218,12 @@
     studioPresentation=root.CurvatureModernAnimationPresentation.create({document:document,stage:stage,bar:bar,exitButton:exit,
       ready:function(){return animationWorkspaceOpen&&!!studioPrepared&&!!studioPlayback;},
       sync:syncStudioPresentation,
+      disclosures:[newUiEl('ModernAnimationPresentationSettingsToggle'),newUiEl('ModernAnimationPresentationStoryboardToggle')],
       resize:function(){
         studioPlaybackLastPaint=-Infinity;
         if(studioPlayback&&animationWorkspaceOpen&&!studioPlayback.status().playing)scheduleStudioInitialPaint('resized');
       },fullscreenError:function(error){
-        var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Fullscreen unavailable: '+error.message;
+        modernStatus(newUiEl('ModernAnimationPlaybackStatus'),'Fullscreen unavailable: '+error.message,'warning');
       }});
     var navigation=newUiEl('ModernAnimationNarrativeNavigation');
     if(navigation)navigation.addEventListener('change',function(){
@@ -3242,10 +3242,6 @@
     enter.addEventListener('click',function(){studioPresentation.enter();});
     exit.addEventListener('click',function(){studioPresentation.leave();});
     var full=newUiEl('ModernAnimationPresentationFullscreen');if(full)full.addEventListener('click',function(){studioPresentation.fullscreen();});
-    var copy=newUiEl('ModernAnimationPresentationCopy');if(copy)copy.addEventListener('click',function(){
-      if(!studioActiveDemo)return;
-      var id=studioActiveDemo.id;studioPresentation.leave();copyBuiltInDemo(id);
-    });
   }
   function bindStudioPlayback(){
     function playbackNotice(text,kind){

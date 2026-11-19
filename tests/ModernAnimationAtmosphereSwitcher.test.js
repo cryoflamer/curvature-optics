@@ -34,7 +34,10 @@ function harness(project=demo.project){
   return {ctx,nodes,cache,now:v=>{now=v;},stats:()=>({paints,scheduled,cancelled,initial,refreshes})};
 }
 test('shared controls remain outside author-only layout; runtime switch retains authored project and paused time',()=>{
-  assert.match(html,/<div class="modern-animation-playback-controls">\s*<label id="ModernAnimationAtmosphereControl" hidden>/);
+  assert.match(html,/<div id="ModernAnimationPresentationSettings" class="modern-animation-view-settings">\s*<label id="ModernAnimationAtmosphereControl" hidden>/);
+  const shared=html.slice(html.indexOf('id="ModernAnimationPresentationSettings"'),html.indexOf('class="modern-animation-author-controls"'));
+  assert.match(shared,/id="ModernAnimationAtmosphere"/);assert.match(shared,/id="ModernAnimationPlaybackCameraHud"/);
+  assert.match(shared,/id="ModernAnimationTargetToggle"/);
   const h=harness(),c=h.ctx,original=c.studioPrepared,draft=c.studioDraft,key=c.studioSelectedKey;
   c.studioPlayback.seek(20950,1000);const before=c.studioPlayback.sample().scene.camera;
   assert.equal(h.nodes.ModernAnimationAtmosphere.value,'vacuum');

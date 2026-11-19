@@ -1091,11 +1091,15 @@ test('Storyboard renders captured and missing thumbnails with an independent ref
   const project=studio.build(draft,'storyboard_thumbs'),{doc,host}=mockDom(),calls=[];
   const image={dataUrl:'data:image/webp;base64,YQ==',width:960,height:300,mode:'compare'};
   editor.renderStoryboard(doc,host,draft,draft.frames,animation.timeline(project),'history-2',
-    (...args)=>calls.push(args),{resolve:f=>({...f,thumbnail:f.key==='history-1'?image:null}),refresh:key=>calls.push(['refresh',key])});
+    (...args)=>calls.push(args),{resolve:f=>({...f,thumbnail:f.key==='history-1'?image:null}),refresh:key=>calls.push(['refresh',key]),batch:action=>calls.push(['batch',action]),batchBusy:true,cancelBatch:()=>calls.push(['cancel'])});
   const cards=collect(host,n=>n.className.includes('modern-animation-storyboard-card'));
   assert.equal(collect(cards[0],n=>n.tagName==='img')[0].src,image.dataUrl);
   assert.equal(collect(cards[1],n=>n.className==='modern-storyboard-no-image').length,1);
   collect(host,n=>n.className.includes('modern-animation-storyboard-capture'))[0].listeners.click();
+  const author=collect(host,n=>n.className.includes('modern-animation-author-only'));
+  assert.equal(author.filter(n=>n.tagName==='button').length,6);
+  assert.equal(author.filter(n=>n.className.includes('modern-animation-storyboard-status')).length,1);
+  assert.ok(cards.every(n=>!n.className.includes('modern-animation-author-only')));
   cards[1].listeners.click();assert.deepEqual(calls,[['refresh','history-2'],['history-2','storyboard']]);
 });
 

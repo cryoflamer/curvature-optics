@@ -397,10 +397,45 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationPlaybackOptics')).not_to_be_visible()
         expect(self.page.locator('#ModernAnimationPlaybackQuality')).to_be_visible()
         self.assertTrue(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
-        cards = self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')
+        story = self.page.locator('#ModernAnimationStoryboard')
+        cards = story.locator('.modern-animation-storyboard-card')
+        settings = self.page.locator('#ModernAnimationPresentationSettingsToggle')
+        toggle = self.page.locator('#ModernAnimationPresentationStoryboardToggle')
+        expect(story).to_be_hidden()
+        expect(self.page.locator('#ModernAnimationPlaybackRetry')).to_be_hidden()
+        expect(self.page.locator('#ModernAnimationPlaybackStatus')).to_be_hidden()
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_hidden()
+        settings.click()
+        expect(settings).to_have_attribute('aria-expanded', 'true')
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
+        settings.click()
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_hidden()
+        toggle.click()
+        expect(toggle).to_have_attribute('aria-expanded', 'true')
+        expect(cards).to_have_count(9)
+        for name in ('Capture all keyframes', 'Regenerate all thumbnails', 'Export with thumbnails', 'Export without thumbnails'):
+            author_action = story.get_by_text(name, exact=True)
+            expect(author_action).to_have_count(1)
+            expect(author_action).to_be_hidden()
+        expect(story.locator('.modern-animation-author-only').first).to_be_hidden()
         cards.nth(3).click()
         expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
         expect(self.page.locator('#ModernAnimationPresentationFrame')).to_contain_text('4 / 9')
+        toggle.click()
+        expect(story).to_be_hidden()
+        # Exercise the conditional recovery chrome without changing the renderer.
+        self.assertTrue(stage.evaluate("""el => {
+            const notice = el.querySelector('#ModernAnimationFrameLoadingA');
+            const status = el.querySelector('#ModernAnimationPlaybackStatus');
+            const old = status.getAttribute('data-status-kind'), hidden = notice.hidden;
+            notice.classList.add('is-failed'); notice.hidden = false;
+            status.setAttribute('data-status-kind', 'warning');
+            const visible = id => getComputedStyle(el.querySelector('#'+id)).display !== 'none';
+            const result = visible('ModernAnimationPlaybackRetry') && visible('ModernAnimationPlaybackStatus');
+            notice.classList.remove('is-failed'); notice.hidden = hidden;
+            if (old === null) status.removeAttribute('data-status-kind'); else status.setAttribute('data-status-kind', old);
+            return result;
+        }"""))
         self.page.set_viewport_size({'width': 1200, 'height': 800})
         expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
         self.page.keyboard.press('Escape')
@@ -408,6 +443,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
         self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
+        expect(story.get_by_role('button', name='Export without thumbnails', exact=True)).to_be_visible()
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackRetry')).to_be_visible()
+        expect(settings).to_be_hidden()
+        self.page.locator('#ModernAnimationPresent').click()
+        expect(story).to_be_hidden()
+        self.page.locator('#ModernAnimationPresentationExit').click()
 
     def test_soundly_atmosphere_switch_preserves_authored_project_and_playhead(self):
         self.open_modern()
@@ -422,6 +464,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         authored = self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()')
         expect(switch).to_have_value('vacuum')
         self.page.locator('#ModernAnimationPresent').click()
+        self.page.locator('#ModernAnimationPresentationSettingsToggle').click()
         expect(switch).to_be_visible()
         switch.select_option('standard')
         expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · standard', timeout=30000)
@@ -430,6 +473,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
         self.assertEqual(cards.nth(3).locator('img').count(), 0)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()'), authored)
+        self.page.locator('#ModernAnimationPresentationExit').click()
         story = self.page.locator('#ModernAnimationStoryboard')
         with self.page.expect_download(timeout=60000) as download:
             story.get_by_role('button', name='Export with thumbnails (standard)', exact=True).click()
@@ -442,7 +486,6 @@ class ModernBrowserSmoke(unittest.TestCase):
         switch.select_option('vacuum')
         expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · vacuum')
         expect(cards.nth(3).locator('img')).to_have_count(1)
-        self.page.keyboard.press('Escape')
         expect(switch).to_have_value('vacuum')
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
@@ -474,6 +517,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(text).to_have_text(literal)
         expect(text.locator('b')).to_have_count(0)
         expect(self.page.locator('#ModernAnimationPresentationNarrativeLabel')).to_have_text('4 / 9 · Real observation')
+        self.page.locator('#ModernAnimationPresentationSettingsToggle').click()
         visibility = self.page.get_by_label('Show explanations')
         visibility.uncheck()
         expect(narrative).not_to_be_visible()

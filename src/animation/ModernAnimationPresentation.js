@@ -159,9 +159,15 @@
   function create(options){
     var doc=options.document,stage=options.stage,bar=options.bar,active=false;
     var previousFocus=null,previousOverflow='',blocked=[];
+    var disclosures=(options.disclosures||[]).filter(Boolean);
+    function closeDisclosures(){disclosures.forEach(function(button){button.setAttribute('aria-expanded','false');});}
+    disclosures.forEach(function(button){button.addEventListener('click',function(){
+      if(!active)return;
+      button.setAttribute('aria-expanded',button.getAttribute('aria-expanded')==='true'?'false':'true');
+    });});
     function enter(){
       if(active||!options.ready())return false;
-      active=true;previousFocus=doc.activeElement;
+      active=true;closeDisclosures();previousFocus=doc.activeElement;
       previousOverflow=doc.body.style.overflow;doc.body.style.overflow='hidden';
       // Keep the one stage mounted. Disable every sibling on its ancestor path.
       for(var node=stage;node&&node!==doc.body;node=node.parentElement){
@@ -176,7 +182,7 @@
     }
     function leave(){
       if(!active)return false;
-      active=false;
+      active=false;closeDisclosures();
       if(doc.fullscreenElement===stage&&doc.exitFullscreen){
         try{Promise.resolve(doc.exitFullscreen()).catch(options.fullscreenError);}catch(error){options.fullscreenError(error);}
       }

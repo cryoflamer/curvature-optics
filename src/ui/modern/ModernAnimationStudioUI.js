@@ -1002,7 +1002,7 @@
     header.appendChild(el(doc,'small','',frames.length+' of '+draft.frames.length+' · Click to pause and jump'));
     if(options.refresh){
       var refresh=button(doc,'Capture thumbnail','Capture selected keyframe thumbnail',function(){options.refresh(selectedKey);});
-      refresh.className='modern-studio-action modern-animation-storyboard-capture';
+      refresh.className='modern-studio-action modern-animation-storyboard-capture modern-animation-author-only';
       refresh.disabled=!frames.some(function(frame){return frame.key===selectedKey;});
       header.appendChild(refresh);
     }
@@ -1010,7 +1010,7 @@
       [['Capture all keyframes','missing'],['Regenerate all thumbnails','refresh'],
        ['Export with thumbnails','export'],['Export without thumbnails','compact']].forEach(function(item){
         var control=button(doc,item[0],item[0],function(){options.batch(item[1]);});
-        control.className='modern-studio-action';
+        control.className='modern-studio-action modern-animation-author-only';
         var exportAction=item[1]==='export'||item[1]==='compact';
         control.disabled=!!options.batchBusy;
         if(exportAction&&options.exportVariant){
@@ -1022,14 +1022,14 @@
       });
       if(options.batchBusy){
         var cancel=button(doc,'Cancel capture','Cancel storyboard capture',options.cancelBatch);
-        cancel.className='modern-studio-action';header.appendChild(cancel);
+        cancel.className='modern-studio-action modern-animation-author-only';header.appendChild(cancel);
       }
-      var status=el(doc,'small','modern-animation-storyboard-status',options.batchStatus||'');
+      var status=el(doc,'small','modern-animation-storyboard-status modern-animation-author-only',options.batchStatus||'');
       status.setAttribute('role','status');header.appendChild(status);
     }
     host.appendChild(header);
     if(frames.some(function(frame){return !!frame.referenceImageIds;}))
-      host.appendChild(el(doc,'p','modern-studio-hint','Both Storyboard JSON options include linked original photographs and metadata. Only simulated keyframe thumbnails are optional.'));
+      host.appendChild(el(doc,'p','modern-studio-hint modern-animation-author-only','Both Storyboard JSON options include linked original photographs and metadata. Only simulated keyframe thumbnails are optional.'));
     var list=el(doc,'ol','modern-animation-storyboard-list');
     list.setAttribute('aria-label','Playback keyframes');
     var active=null;
