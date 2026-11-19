@@ -631,3 +631,34 @@ CI run 44568506091 passed all three jobs; Node reported 2060 tests, 2059 passed,
 Blind and truth-start unweighted scores agreed to numerical precision in all six scenarios (near three-error run reached iteration limit; distant truth-start converged while blind stalled at virtually identical scores). Residual magnitude is useful for review, not an identity classifier. The distant clean case already has poor pose conditioning. The reviewed weights use injected labels, not automatic identification; weighted and raw training RMS are not interchangeable. Two Huber passes improved near validation but did not help distant mismatches. This is only one noise realization per scene; no general robustness claim.
 
 Decision: no production robust-loss change now. The editor should show raw residual vectors and rankings, allow manual correction and weighting, retain independent validation, support known-parameter locks and visual whole-scene review. Proceed to bounded 8A.4.4b; revisit robust fitting only if practical authoring needs it. Review termination labels in 8A.4.4c.
+
+
+## 8A.4.4b — Production Accurate renderer / photo camera parity
+
+The previous authored-landmark tests used the renderer's captured camera.
+New tests independently reconstruct the centered photo camera from the same
+pose and original raster, and compare against the actual production Accurate
+Canvas painter (default shared optical field and default renderer RK4 step,
+versus individual 200 m shooting in calibration). Four fixed scenes:
+Globe vacuum near the geometric horizon (12.3 km), Globe vacuum partially
+hidden tower (22 km), Globe Standard distant telephoto (22 km), and Flat
+Standard portrait telephoto (22 km). A translated, rolled Eye-Lvl camera,
+400 mm FocalLengthField and a single 23 m authored tower are used.
+
+Select 16 authored stroke vertices stratified by height before projection;
+report every selected status, compare visible landmarks to nearest projected
+stroke endpoint **from the same authored primitive** using the renderer's
+optical source command index, and confirm those reference coordinates
+actually reached the Canvas stroke commands. Require nonvacuous coverage,
+no missing same-source stroke for selected visible points, <=1 px maximum
+landmark error, and <=1e-5 px reference-to-Canvas coordinate error; explicit
+mixed blocked/visible coverage for the partially hidden Globe towers.
+Blocked/indeterminate points must not supply pixel residuals. This is a
+Canvas command-coordinate audit, not a browser raster/image comparison;
+same-primitive nearest matching does not certify the exact endpoint identity,
+nor does it establish mesh self-occlusion or behavior at every grazing ray.
+
+No production changes. Local execution could not be performed because the
+test environment cannot resolve github.com and has no repository checkout.
+CI results and actual measured errors are pending; do not advance to 8A.4.4c
+before reviewing them.

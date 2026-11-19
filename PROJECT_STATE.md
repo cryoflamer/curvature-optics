@@ -1,3 +1,7 @@
+## 8A.4.4b — Production renderer parity (CI pending)
+
+Four new cases in CameraLandmarkProjection.test.js: Globe vacuum near horizon, Globe partially hidden vacuum/Standard tower at 22 km, Flat Standard portrait telephoto. Independent photo-camera reconstruction, default Accurate renderer field/step vs 200 m calibration shooting; 16 preselected vertices per case, nearest same-authored-primitive painter endpoint and recorded Canvas command coordinates, 1 px landmark tolerance. Report status/coverage and errors; no production changes. Local checkout unavailable, execution pending CI. Review before convergence work (8A.4.4c).
+
 ## 8A.4.4a — Completed; next 8A.4.4b
 
 CI 44568506091 passed all three jobs. Near wrong matches ranked first/top three and manual reviewed weights restored held-out RMS to 1.36/1.57 px. Distant wrong matches can rank 10th/11th; three mismatches give 1.56 px training RMS despite 5.54 km position error. Two Huber passes did not improve distant results; reviewed weights restore held-out RMS to 0.84 px but pose remains ill-conditioned. No production robust-loss change; residual vectors/ranking, manual correction/weights, locks and independent validation belong in editor. Blind and truth-start scores nearly identical, termination differs; review in 8A.4.4c. Full table in docs/camera-calibration.md.

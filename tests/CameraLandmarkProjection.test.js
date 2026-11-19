@@ -86,3 +86,94 @@ for(const type of [8,9])for(const surface of ['flat','globe'])for(const method o
     }
   });
 }
+
+
+// Exercise the *production* Accurate renderer rather than generating the
+// reference pixels with the calibration projector. Its shared optical field
+// and default integration step intentionally differ from individual shooting.
+const photoPose=require('../src/calibration/CameraPhysicalPose');
+const composition=require('../src/scene/CurvatureIndependentComposition');
+const strokePreview=require('../src/renderers/CurvatureStrokePreview');
+
+for(const scenario of [
+  {name:'Globe vacuum near geometric horizon',surface:'globe',atmosphere:'vacuum',distance:12300,w:1920,h:1080},
+  {name:'Globe vacuum partially hidden tower',surface:'globe',atmosphere:'vacuum',distance:22000,w:1920,h:1080,partial:true},
+  {name:'Globe Standard distant telephoto',surface:'globe',atmosphere:'standard',distance:22000,w:1920,h:1080,partial:true},
+  {name:'Flat Standard portrait telephoto',surface:'flat',atmosphere:'standard',distance:22000,w:1200,h:1600}
+])test('Accurate authoring parity: '+scenario.name,t=>{
+  const {surface,atmosphere,distance,w,h}=scenario;
+  const globe=surface==='globe',m=model(surface);
+  Object.assign(m,{Height:12,CameraEast:-25,CameraNorth:90,Pan:.1,Nick:-.075,Roll:3,
+    deviceRatio:w/h,FocalLengthField:400,NObjects:[1,0],ObjDist:[distance,0],
+    ObjSize:[23,10],ObjSizeVar:[0,0],ObjSideType:[0,0],ObjSidePos:[20,0],ObjSideVar:[0,0]});
+  m.Update();
+  const g=graph(w,h);
+  let opticalScene;
+  const rendered=renderer.renderPhysical(g,m,{atmosphere,opticalQuality:'accurate',
+    geometryBackend:'canvas2d',captureProjection:true,deferDecorations:true,
+    geometryAudit:{onCamera(){},onUnresolved(){},onScene(scene){opticalScene=scene;}}});
+  assert.equal(rendered.geometryBackend,'Canvas 2D');
+  assert.equal(rendered.opticalQuality,'accurate');
+  assert.ok(opticalScene&&g.points.length>0);
+  assert.ok(!rendered.budgetExceeded);
+  // Do NOT pass the renderer camera into calibration: the user's accepted
+  // pose must independently reconstruct the photo camera at the raster size.
+  const session=landmarks.create(m,photoPose.photoCamera(m,w,h),w,h,{atmosphere,method:'accurate'});
+  const authored=composition.composeOpticalMain({...m,geometryRadius:m.rEarth},globe,{physicalWorld:true});
+  const bank=authored.ranges.find(r=>r.role==='objects'&&r.name==='objects-0');
+  assert.ok(bank&&bank.count>0);
+  // Recover the painter's exact stroke coordinates indexed by original
+  // authored command, not by the closest unrelated tower or ground guide.
+  const sourceByCommand=new Map(opticalScene.primitives.filter(p=>p.metadata?.kind==='physical-object-stroke')
+    .map(p=>[p.commandIndex,p.metadata.opticalSourceIndex]));
+  const bySource=new Map();
+  for(const s of strokePreview.build(opticalScene,rendered.projectionCamera,w,h).segments){
+    const id=sourceByCommand.get(s.commandIndex);
+    if(id===undefined)continue;
+    if(!bySource.has(id))bySource.set(id,[]);
+    bySource.get(id).push(...s.points.map(p=>p.slice(0,2)));
+  }
+  const all=[];
+  for(let i=bank.start;i<bank.end;i++){
+    const p=authored.scene.primitives[i];
+    if(!(p.mode&1)||p.points.length<2)continue;
+    for(let j=0;j<p.points.length;j++){
+      const v=p.points[j],prev=p.points[(j+p.points.length-1)%p.points.length],next=p.points[(j+1)%p.points.length];
+      if(Math.hypot(...prev.map((x,k)=>x-v[k]))===0&&Math.hypot(...next.map((x,k)=>x-v[k]))===0)continue;
+      all.push({primitive:i-bank.start,vertex:j,command:p.commandIndex,z:v[2]});
+    }
+  }
+  assert.ok(all.length>=16);
+  // Fixed height-stratified selection, made before inspecting projection
+  // results: include the lowest and highest authored stroke vertices.
+  all.sort((a,b)=>a.z-b.z||a.primitive-b.primitive||a.vertex-b.vertex);
+  const selected=Array.from({length:16},(_,i)=>all[Math.round(i*(all.length-1)/15)]);
+  const count={},errors=[],paintErrors=[],missing=[];
+  const distancePx=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  for(const v of selected){
+    const p=session.vertex({id:v.primitive+':'+v.vertex,bank:0,objectType:3,primitive:v.primitive,vertex:v.vertex});
+    count[p.status]=(count[p.status]||0)+1;
+    if(p.status!=='visible'){
+      if(p.status!=='out_of_frame')assert.equal(p.pixel,null);
+      continue;
+    }
+    const candidates=bySource.get(v.command)||[];
+    if(!candidates.length){missing.push(p.id);continue;}
+    const nearest=candidates.reduce((a,b)=>distancePx(p.pixel,a)<=distancePx(p.pixel,b)?a:b);
+    errors.push(distancePx(p.pixel,nearest));
+    paintErrors.push(Math.min(...g.points.map(q=>distancePx(q,nearest))));
+  }
+  const maxError=errors.length?Math.max(...errors):null,maxPaint=paintErrors.length?Math.max(...paintErrors):null;
+  t.diagnostic(JSON.stringify({scenario:scenario.name,raster:[w,h],rendererStep:rendered.step,
+    landmarkStep:200,statuses:count,compared:errors.length,missing,
+    rmsPx:errors.length?Math.hypot(...errors)/Math.sqrt(errors.length):null,maxErrorPx:maxError,
+    maxCanvasEndpointErrorPx:maxPaint,unresolved:rendered.unresolved,groundHorizon:rendered.groundHorizon}));
+  assert.ok(errors.length>=3,'nonvacuous visible endpoint comparison');
+  assert.equal(missing.length,0,'visible selected vertices must have same-source rendered strokes');
+  assert.ok(maxError<=1,'photo-to-renderer mismatch: '+maxError+' px');
+  assert.ok(maxPaint<=1e-5,'projected reference must reach actual Canvas stroke commands');
+  if(scenario.partial)assert.ok(count.blocked>0&&count.visible>0,'partially visible tower must exercise both statuses');
+  // This audit does not prove the identity of a particular clipped segment
+  // endpoint or absence of mesh occlusion; same-primitive nearest endpoint
+  // and actual submitted Canvas paths are the limited reference.
+});
