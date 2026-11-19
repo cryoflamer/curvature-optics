@@ -125,6 +125,47 @@ physical optics. P4Pf comparison and more general alternative search remain
 research items, not prerequisites for starting physical pose conversion.
 No change to existing DLT module, production optics or UI.
 
+## Physical pose bridge (8A.2.3)
+
+`src/calibration/CameraPhysicalPose.js` converts a perspective candidate
+into a physical Eye-Lvl camera without mutating the supplied scene model.
+`fromPerspective(seed, model, width, height)` returns `pose` (CameraEast,
+CameraNorth, Height, Pan, Nick, Roll, FocalLengthField, deviceRatio,
+viewcenterHorizon), a centered full-canvas `camera` snapshot accepted by
+CameraLandmarkProjection, actual focalPx and diagonalEquivalentMm.
+`toPerspective(model, width, height)` performs the inverse;
+`photoCamera(model, width, height)` creates the calibration snapshot.
+The model must supply showModel (Globe=1 or Flat=2), rEarth and rFEarth.
+Globe positions are Cartesian relative to the scene-origin tangent plane
+before conversion; height is radial altitude and East/North are arc metres.
+Transport orientation via the existing CurvatureCameraTranslation local basis.
+The world-to-camera rotation is proper, with x right, y down, z forward.
+Invalid or unrepresentable poses throw explicitly: no physical-domain clipping.
+
+The calibration raster is centered with square pixels and no lens distortion.
+Use the established full-canvas fallback scale (height/screenSize).
+For raster aspect r=width/height the physical camera has a historical
+sceneSize factor max(1,r/1.5). Consequently its FocalLengthField is
+43.2*focalPx/hypot(width,height)*max(1,r/1.5), distinct from the nominal
+diagonalEquivalentMm in wide rasters. This preserves actual calibration pixel
+scale without changing production FOV semantics. It is not the EXIF focal
+length; actual GraphX3DX viewport margins/crop and real raster registration
+remain separate qualification work. No browser renderer settings are changed.
+
+15 new deterministic tests plus both previous seed suites: 34 passed.
+Round trips on Globe and Flat at 3:2, 2:3 and 16:9; Accurate and Canvas Direct
+vacuum landmark projection versus independent pinhole equations; full
+recovery from physical projector observations through DLT/P3P on both sides.
+Maximum sampled vacuum round-trip error ~2.55e-13 px; fitted DLT maximum
+~6.89e-12 px and fitted P3P maximum ~1.009e-6 px. Also negative tangent z
+with positive radial height, wide-raster focal scaling, domain rejection,
+and refracted landmark round-trip at ~22 km (Standard and Temperature lapse,
+both methods and geometries), maximum ~1.03e-12 px. The latter tests pose
+conversion invariance, not recovery of a refracted unknown camera. Tested
+dependencies were checked against the current remote tree by blob SHA.
+No full repo or browser raster regression was run. Next 8A.3: physical
+residuals, constraints and bounded nonlinear optimization, using these seeds.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified

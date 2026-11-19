@@ -1,3 +1,19 @@
+## Modern Demo Catalog — Physical camera pose bridge (8A.2.3)
+
+Issue #6: added `src/calibration/CameraPhysicalPose.js` to convert Cartesian
+perspective seeds to physical East/North/Height and Pan/Nick/Roll, with
+reversible conversion, proper rotation validation and explicit domain rejection.
+Preserves focal pixel scale for original centered full-canvas raster, including
+legacy 3:2 aspect scaling; does not change production camera/FOV or claim
+exact registration to GraphX3DX viewport margins. 15 new tests; 34/34 with
+the previous two seed suites. Sampled vacuum projection round-trip within
+~2.55e-13 px; DLT/P3P recovered physical camera on both sides with maximum
+errors ~6.89e-12 / 1.009e-6 px. Refracted projection invariance at ~22 km
+(Standard/Temperature lapse, Globe/Flat, both methods) within ~1.03e-12 px,
+not a refracted unknown-pose fit. Dependencies checked by remote blob SHA,
+no full repo/browser regression. Next 8A.3 bounded physical optimization.
+No production optics or UI changes.
+
 ## Modern Demo Catalog — Alternative perspective seeds (8A.2.2)
 
 Issue #6: added `src/calibration/CameraFocalSweep.js`, independent calibrated
