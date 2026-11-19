@@ -1,3 +1,7 @@
+## Deferred persistence architecture consolidation
+
+TD-003 in [technical debt](docs/technical-debt.md) tracks the full application state persistence/recovery audit and lifecycle unification, beyond the completed shared workspace selection. Deferred until the photo-to-camera workflow is usable and validated. No runtime changes; 8C remains next.
+
 ## Unified top-level workspace selection and recovery
 
 Scene, Compare, Animation, Photo Calibration and Demos now share one tab

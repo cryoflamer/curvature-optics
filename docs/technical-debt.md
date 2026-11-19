@@ -41,3 +41,11 @@ Priorities are provisional until the proposed investigation is complete.
   geometry of real bridge supports or other physical scene objects.
 - Deferred: research is needed to distinguish visualization debt from physical
   correctness issues. If it affects trustworthy physical outputs, reprioritize.
+
+## TD-003 — Unified application state persistence and recovery
+
+- Status: open; category: architecture / persistence; priority: medium (provisional).
+- Problem: top-level workspace navigation is unified, but physical working sessions, application preferences, Animation Studio drafts and Photo Calibration drafts have evolved separate persistence and recovery lifecycles. Ordering, URL precedence, failure handling and reset semantics require a cross-workspace audit.
+- Expected: a consistent recovery contract, with predictable startup ordering, latest-user-action precedence, explicit link handling, autosave/checkpoint guarantees, schema migration, error reporting and recovery/reset behavior. Preserve original photographs, authored projects and experiment evidence; do not conflate saved projects with transient drafts or preferences.
+- Direction: inventory existing stores, ownership, dependencies and lifecycle hooks; define a shared orchestration API and recovery state machine; retain appropriate localStorage/IndexedDB stores rather than mandate a single database. Migrate incrementally with backward compatibility and tests for reload, partial failures, competing writes, explicit URLs and reset across all workspaces.
+- Deferred: complete the end-to-end photo-to-camera workflow (8C–8E) and real-photo validation first. Triage concrete data-loss or correctness bugs immediately; the broader architectural consolidation is not a prerequisite for calibration.
