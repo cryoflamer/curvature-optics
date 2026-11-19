@@ -15,16 +15,17 @@
     if(!finite3(plane.origin)||!finite3(plane.xAxis)||!finite3(plane.yAxis))throw Error('Invalid object frame');
     const x=unit(plane.xAxis),z=unit(cross(x,plane.yAxis)),y=cross(z,x);
     const frame={origin:plane.origin.slice(),x,y,z};
+    const primary=new Set(pkg.primaryIndices||pkg.primitiveIndices.filter(i=>primitives[i].metadata.landmarkOwner?.kind==='object'));
     const items=pkg.primitiveIndices.map(index=>{
       const p=primitives[index];
       if(!p||!p.metadata?.landmarkOwner||!p.points.every(finite3))throw Error('Object geometry unavailable');
       const points=p.points.map(v=>{const d=sub(v,frame.origin);return [dot(d,x),dot(d,y),dot(d,z)];});
-      return {index,type:p.type,mode:p.mode,style:{...p.style},owner:JSON.parse(JSON.stringify(p.metadata.landmarkOwner)),points};
+      return {index,primary:primary.has(index),type:p.type,mode:p.mode,style:{...p.style},owner:JSON.parse(JSON.stringify(p.metadata.landmarkOwner)),points};
     });
-    if(!items.some(p=>p.owner.kind==='object'))throw Error('Object has no authored primitives');
-    return {frame,items};
+    if(!items.some(p=>p.primary))throw Error('Selected owner has no authored primitives');
+    return {frame,items,ownerKind:pkg.owner.kind};
   }
-  function visibleItems(geometry,spans){return geometry.items.filter(p=>spans||p.owner.kind!=='span');}
+  function visibleItems(geometry,spans){return geometry.items.filter(p=>spans||(p.primary??p.owner.kind!=='span'));}
   function bounds(items){
     const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
     for(const p of items)for(const v of p.points)for(let i=0;i<3;i++){lo[i]=Math.min(lo[i],v[i]);hi[i]=Math.max(hi[i],v[i]);}
@@ -68,7 +69,7 @@
     // Sort packages (the support plane and each span) by mean view depth.
     const groups=new Map();
     for(const v of projected){
-      const key=v.p.owner.kind==='object'?'object':JSON.stringify(v.p.owner);
+      const key=JSON.stringify(v.p.owner);
       if(!groups.has(key))groups.set(key,[]);
       groups.get(key).push(v);
     }
@@ -79,7 +80,7 @@
       const polygon=p.type==='polygon',mode=polygon?(p.mode??1):1;
       ctx.beginPath();ctx.moveTo(...q[0].pixel);for(const v of q.slice(1))ctx.lineTo(...v.pixel);
       if(polygon)ctx.closePath();
-      ctx.globalAlpha=p.style.alpha??1;
+      ctx.globalAlpha=(p.style.alpha??1)*(p.primary===false?.45:1);
       if(polygon&&(mode&2)&&!state.wireframe){ctx.fillStyle=p.style.fill||'white';ctx.fill();}
       if((mode&1)||state.wireframe){ctx.strokeStyle=p.style.stroke||'#526b7f';ctx.stroke();}
     }
@@ -99,11 +100,12 @@
       if(!geometry)return;
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
-        (r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
+        (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
     }
+    function initialView(){const s=reset();return geometry?.ownerKind==='span'?standardView(s,'top'):s;}
     function sync(){projection.value=state.projection;wire.checked=state.wireframe;spans.checked=state.spans;render();}
     dialog.querySelector('[data-viewer-close]').onclick=()=>dialog.close();
-    dialog.querySelector('[data-viewer-reset]').onclick=()=>{state=reset();sync();};
+    dialog.querySelector('[data-viewer-reset]').onclick=()=>{state=initialView();sync();};
     dialog.querySelectorAll('[data-viewer-view]').forEach(n=>n.onclick=()=>{state=standardView(state,n.dataset.viewerView);render();});
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
     wire.onchange=()=>{state={...state,wireframe:wire.checked};render();};
@@ -126,7 +128,7 @@
     for(const event of ['keydown','click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
     dialog.addEventListener('close',()=>{drag=null;geometry=null;});
     return {open(next,title){
-      geometry=next;state=reset();drag=null;heading.textContent=title;spans.disabled=!next.items.some(p=>p.owner.kind==='span');
+      geometry=next;state=initialView();drag=null;heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
       if(!dialog.open)dialog.showModal();sync();
     },close(){if(dialog.open)dialog.close();},isOpen:()=>dialog.open,snapshot:()=>dialog.open?JSON.parse(JSON.stringify(state)):null};
   }

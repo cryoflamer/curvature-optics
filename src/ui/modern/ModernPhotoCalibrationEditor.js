@@ -111,6 +111,32 @@
     for(const key of invalid)packages.delete(key);
     return packages;
   }
+  // One selection per actual owner; context is explicitly not the selected
+  // geometry. Keep transient raster key separate from owner descriptor.
+  function ownerSelections(banks,keyOf,rangeOf=()=>null){
+    const packages=objectPackages(banks,rangeOf),result=new Map();
+    const ownerID=o=>JSON.stringify(o);
+    const byOwner=new Map([...packages.values()].map(p=>[ownerID(p.owner),p]));
+    for(const pkg of packages.values()){
+      const b=pkg.owner.bank,primitives=banks[b];
+      const primaryIndices=pkg.primitiveIndices.filter(i=>primitives[i].metadata.landmarkOwner?.kind==='object');
+      if(!primaryIndices.length)continue;
+      result.set(pkg.key,{...pkg,primaryIndices,packageOwner:pkg.owner});
+      for(const i of pkg.primitiveIndices){
+        const p=primitives[i],owner=p.metadata.landmarkOwner;
+        if(owner?.kind!=='span')continue;
+        const key=keyOf(b,pkg.placedIndex,owner),from=byOwner.get(ownerID(owner.from));
+        if(key===null||!from||ownerID(owner.to)!==ownerID(pkg.owner))continue;
+        const context=from.primitiveIndices.filter(j=>primitives[j].metadata.landmarkOwner?.kind==='object');
+        const center=p.points.reduce((a,v)=>a.map((x,k)=>x+v[k]/p.points.length),[0,0,0]);
+        const range=rangeOf(center);
+        result.set(key,{key,placedIndex:pkg.placedIndex,owner,packageOwner:pkg.owner,
+          primaryIndices:[i],primitiveIndices:[i,...context,...primaryIndices],
+          spanOwners:[],rangeMetres:Number.isFinite(range)?range:null});
+      }
+    }
+    return result;
+  }
   function identitySpans(data,width,height){
     const result=new Map();
     for(let y=0;y<height;y++){
@@ -318,7 +344,7 @@
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
     const identityRaster=doc.createElement('canvas'),highlightRaster=doc.createElement('canvas');
-    let visibleSpans=new Map(),highlightKey=null,ownership=null,hoverObject=null,visibleByObject=new Map();
+    let visibleSpans=new Map(),ownerSpans=new Map(),highlightKey=null,ownership=null,exactOwnership=null,hoverObject=null,visibleByObject=new Map();
     const sourcePicker=$('ModernCalibrationSource'),sourceStatus=$('ModernCalibrationSourceStatus'),
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
@@ -614,7 +640,7 @@
     function renderModel(){
       invalidateFit('Add correspondences or run calibration from the captured camera.');
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
-      visibleSpans=new Map();highlightKey=null;ownership=null;hoverObject=null;visibleByObject=new Map();
+      visibleSpans=new Map();ownerSpans=new Map();highlightKey=null;ownership=null;exactOwnership=null;hoverObject=null;visibleByObject=new Map();
       hover=[];hoverIndex=0;$('ModernCalibrationHoverTip').hidden=true;clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
       try{
         const size=previewSize(record?.original.width||sceneCanvas.width,record?.original.height||sceneCanvas.height);
@@ -640,6 +666,14 @@
           for(const key of visibleSpans.keys())if(!validKeys.has(key))visibleSpans.delete(key);
           ownership=ownershipRaster(visibleSpans,size.width,size.height);
         }catch(error){visibleSpans=new Map();console.warn('Calibration object highlight unavailable:',error);}
+        // Keep the legacy package mask; owner selection uses a separate pass
+        // with identical painter order and masks, not nearest-vertex inference.
+        try{
+          renderer.paint(identityRaster,camera,m,{...scene.physics,canvasDirectOptions:{thinOutlines:true,landmarkOwnerPass:true}});
+          ownerSpans=identitySpans(identityRaster.getContext('2d').getImageData(0,0,size.width,size.height).data,size.width,size.height);
+          for(const key of ownerSpans.keys())if(!packages.has(key))ownerSpans.delete(key);
+          exactOwnership=ownershipRaster(ownerSpans,size.width,size.height);
+        }catch(error){ownerSpans=new Map();console.warn('Calibration owner picking unavailable:',error);}
         const projection=env.CurvatureCameraLandmarkProjection.create(m,camera,size.width,size.height,
           {...scene.physics,method:'canvas-direct'});
         for(let b=0;b<2;b++){
@@ -671,6 +705,11 @@
       refreshObjectSelection();
     }
     function packageLabel(pkg){
+      if(pkg.owner.kind==='span'){
+        const o=pkg.owner;
+        return 'Bank '+(o.bank+1)+' · '+o.role+(o.side===null?'':' · side '+(o.side<0?'−':'+'))+
+          ' · stations '+(o.from.stationIndex+1)+' → '+(o.to.stationIndex+1)+(o.to.column?' · column '+o.to.column:'');
+      }
       return objectLabel(pkg.key)+' · type '+pkg.owner.objectType+' · station '+(pkg.owner.stationIndex+1)+
         (pkg.owner.column?' · column '+pkg.owner.column:'');
     }
@@ -684,8 +723,8 @@
       objectPicker.value=pkg?String(pkg.key):'';
       objectSelectionStatus.textContent=pkg?
         packageLabel(pkg)+(pkg.rangeMetres===null?'':' · approx. horizontal range '+pkg.rangeMetres.toFixed(1)+' m')+
-        ' · '+pkg.spanOwners.length+' incoming spans'+(visibleSpans.has(pkg.key)?'':' · not visible in identity pass'):
-        'No object selected. Click a visible object or choose from the object list.';
+        (pkg.owner.kind==='span'?' · individual span':' · '+pkg.spanOwners.length+' incoming spans')+(ownerSpans.has(pkg.key)?'':' · not visible in identity pass'):
+        'No owner selected. Click a visible object or span, or choose from the list.';
     }
     function selectObject(key){
       if(viewBest)return false;
@@ -699,7 +738,7 @@
         const entries=engine.objectSequence({...m,geometryRadius:m.rEarth},b,globe,
           {opticsNeutral:true,physicalSurface:true,curvature:globe?1/m.rEarth:0});
         const entry=entries[pkg.placedIndex];
-        if(!entry||entry.scene.metadata.drawn!==pkg.owner.drawn||(entry.scene.metadata.column||0)!==pkg.owner.column)
+        if(!entry||entry.scene.metadata.drawn!==pkg.packageOwner.drawn||(entry.scene.metadata.column||0)!==pkg.packageOwner.column)
           throw Error('Selected object no longer matches the authored sequence');
         const local=env.CurvatureModernLandmarkViewer.localGeometry(scene.banks[b],pkg,engine.towerPlacement(entry.params));
         viewer.open(local,packageLabel(pkg));
@@ -719,14 +758,15 @@
     }
     function drawObjectHighlight(){
       const key=highlightedObject();
-      if(key!==highlightKey){
-        highlightKey=key;
+      const spans=objectMode()?ownerSpans:visibleSpans,cacheKey=(objectMode()?'owner:':'package:')+key;
+      if(cacheKey!==highlightKey){
+        highlightKey=cacheKey;
         const ctx=highlightRaster.getContext('2d');
         ctx.clearRect(0,0,highlightRaster.width,highlightRaster.height);
         ctx.fillStyle='rgba(0,168,220,0.72)';
-        for(const [x,y,width] of visibleSpans.get(key)||[])ctx.fillRect(x,y,width,1);
+        for(const [x,y,width] of spans.get(key)||[])ctx.fillRect(x,y,width,1);
       }
-      if(visibleSpans.has(key))mesh.drawImage(highlightRaster,modelView.x,modelView.y,
+      if(spans.has(key))mesh.drawImage(highlightRaster,modelView.x,modelView.y,
         modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
     }
     function meshDraw(){
@@ -768,13 +808,20 @@
       const ratio=sceneCanvas.width/Math.max(1,sceneCanvas.getBoundingClientRect().width);
       return visiblePick(ownership,index.query(modelView,p[0],p[1],10*ratio),modelView,p[0],p[1],10*ratio,2*ratio);
     }
+    function inspectOwner(p){
+      if(!modelView)return null;
+      const ratio=sceneCanvas.width/Math.max(1,sceneCanvas.getBoundingClientRect().width);
+      const key=ownerAt(exactOwnership,(p[0]-modelView.x)/modelView.scale,(p[1]-modelView.y)/modelView.scale,Math.min(3,4*ratio/modelView.scale));
+      return packages.has(key)?key:null;
+    }
+    function hoverLabel(key){return objectMode()?packageLabel(packages.get(key)):objectLabel(key);}
     function objectLabel(key){return 'Bank '+((key-1)%2+1)+' · Object '+(Math.floor((key-1)/2)+1)+' (far-to-near)';}
     function clearAmbiguity(){
       ambiguous=[];pickConflict.hidden=true;pickOptions.replaceChildren();
     }
     function hoverAt(p,draw=true){
       const previous=hover[hoverIndex]?.landmark.id;
-      const result=inspectPick(p);hoverObject=result.key;hover=objectMode()?[]:result.candidates;
+      const result=objectMode()?{key:inspectOwner(p),candidates:[]}:inspectPick(p);hoverObject=result.key;hover=result.candidates;
       hoverIndex=Math.max(0,hover.findIndex(q=>q.landmark.id===previous));
       const item=hover[hoverIndex];
       const tip=$('ModernCalibrationHoverTip');
@@ -782,13 +829,13 @@
       if(hoverObject!==null){
         tip.textContent=item?(hover.length>1?'Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · ':'')+
           landmarkLabel(item.landmark)+' · '+(modelGhost?'Release to snap':'Click highlighted vertex'):
-          objectLabel(hoverObject)+(objectMode()?' · Click to select object':' · Move to a marked vertex');
+          hoverLabel(hoverObject)+(objectMode()?' · Click to select owner':' · Move to a marked vertex');
         const r=sceneCanvas.getBoundingClientRect();
         tip.style.left=Math.min(Math.max(0,p[0]*r.width/sceneCanvas.width+12),Math.max(0,r.width-230))+'px';
         tip.style.top=Math.min(Math.max(0,p[1]*r.height/sceneCanvas.height+16),Math.max(0,r.height-42))+'px';
       }
       pickStatus.textContent=item?landmarkLabel(item.landmark)+(hover.length>1?' · '+(hoverIndex+1)+'/'+hover.length:''):
-        hoverObject!==null?objectLabel(hoverObject)+(objectMode()?' · Click to select object':' · Move to a marked vertex'):objectMode()?'Select a visible object or use the object list.':$('ModernCalibrationActionHint').textContent;
+        hoverObject!==null?hoverLabel(hoverObject)+(objectMode()?' · Click to select owner':' · Move to a marked vertex'):objectMode()?'Select a visible object or use the object list.':$('ModernCalibrationActionHint').textContent;
       if(draw)meshDraw();
     }
     function clearHover(){
@@ -853,8 +900,8 @@
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);
         rangeOf=p=>{const q=t.pointAt(p,basis);return Math.hypot(q[0],q[1]);};}catch(error){/* Range is optional. */}
-      packages=objectPackages(scene.banks,rangeOf);
-      populate(objectPicker,[['','Choose an object…'],...[...packages.values()].map(p=>[p.key,packageLabel(p)])]);
+      packages=ownerSelections(scene.banks,env.CurvatureGeometryEngine.landmarkOwnerKey,rangeOf);
+      populate(objectPicker,[['','Choose an object or span…'],...[...packages.values()].map(p=>[p.key,packageLabel(p)])]);
       syncFitControls();
       $('ModernCalibrationScene').textContent=(m.DemoText||'Current scene')+' · '+(globe?'Globe':'Flat')+' · '+scene.physics.atmosphere;
       populate(bank,[0,1].filter(b=>scene.banks[b].length).map(b=>[b,'Bank '+(b+1)+' · type '+m.ObjType[b]]));
@@ -1236,11 +1283,11 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),viewerState:()=>viewer.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

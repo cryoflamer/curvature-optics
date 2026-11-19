@@ -1,3 +1,19 @@
+## 8F.2a — Exact object/span selection
+
+Object / span mode now has a dedicated owner identity raster, using the same
+Canvas Direct painter order and horizon mask. The separate legacy package
+raster, vertex IDs and correspondence workflow remain unchanged. Each support
+and each individual incoming road/shore span has its own transient color key
+and snapshot owner descriptor. The selected owner alone opens in the viewer;
+adjacent context is optional (both endpoint supports for a span, incoming
+spans for an object), drawn faded. A selected span defaults to Top so its
+surface is visible; scene-relative framing belongs to 8F.2c. Manual owner
+selection remains available when the raster is unavailable or ambiguous.
+No physical camera, anchor, JSON or optimizer changes. Five geometry/viewer
+headless tests passed; renderer and browser coverage added, full CI pending.
+8F.2 Chromium CI passed; its remaining architecture/Node failure was the
+reviewed Modern helper inventory, updated here. Next: 8F.2b modeless window.
+
 ## 8F.2 follow-up — Viewer usability refinement (planned)
 
 User verification of 8F.2 in Soundly revealed that clicking a road span

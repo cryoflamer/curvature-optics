@@ -17,7 +17,7 @@
 <script src="src/geometry/CurvatureSurfaceGeometry.js"></script>
 <script src="src/geometry/CurvaturePhysicalWorldGeometry.js?v=adaptive-grid-42"></script>
 <script src="src/geometry/CurvatureCameraTranslation.js"></script>
-<script src="src/geometry/CurvatureGeometryEngine.js?v=bridge-42&amp;tensas-44=1&amp;soundly-45=1&amp;landmark-owners=1"></script>
+<script src="src/geometry/CurvatureGeometryEngine.js?v=bridge-42&amp;tensas-44=1&amp;soundly-45=1&amp;landmark-owners=1&amp;precise-selection=1"></script>
 <script src="src/renderers/CurvatureCanvasProjection.js"></script>
 <script src="src/renderers/CurvaturePerspectivePreview.js"></script>
 <script src="src/renderers/CurvatureViewportReference.js"></script>
@@ -50,7 +50,7 @@
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/renderers/CurvatureAtmosphericVisibility.js?v=140.12.91"></script>
-<script src="src/renderers/CurvatureCanvasDirectPreview.js?object-highlight=1"></script>
+<script src="src/renderers/CurvatureCanvasDirectPreview.js?object-highlight=1&amp;owner-pass=1"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;tensas-44=1&amp;soundly-45=1-captions-48&amp;projection-fix=1&amp;guide-labels=1"></script>
 <script src="src/ui/modern/ModernLocationCatalog.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1"></script>
 <script src="src/ui/modern/ModernSceneState.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1&amp;semantic-captions=49"></script>
@@ -126,8 +126,8 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -215,10 +215,10 @@
         <div class="modern-calibration-toolbar">
           <button type="button" id="ModernCalibrationFitModel">Fit model</button>
           <label><input type="checkbox" id="ModernCalibrationShowLandmarks"> Show landmarks</label>
-          <label>Pick <select id="ModernCalibrationPickMode"><option value="vertex">Vertex</option><option value="object">Object</option></select></label>
+          <label>Pick <select id="ModernCalibrationPickMode"><option value="vertex">Vertex</option><option value="object">Object / span</option></select></label>
         </div>
         <div id="ModernCalibrationObjectControls" hidden>
-          <div class="modern-calibration-toolbar"><label>Select object <select id="ModernCalibrationObjectPicker"></select></label>
+          <div class="modern-calibration-toolbar"><label>Select object / span <select id="ModernCalibrationObjectPicker"></select></label>
           <button type="button" id="ModernCalibrationClearObject" disabled>Clear object</button>
           <button type="button" id="ModernCalibrationOpenViewer" disabled>Inspect object (3D)</button></div>
           <p id="ModernCalibrationObjectSelection" role="status"></p>
@@ -252,7 +252,7 @@
       <div class="modern-calibration-toolbar">
         <label>Projection <select data-viewer-projection><option value="orthographic">Orthographic</option><option value="perspective">Perspective</option></select></label>
         <label><input type="checkbox" data-viewer-wire> Wireframe</label>
-        <label><input type="checkbox" data-viewer-spans> Incoming spans</label>
+        <label><input type="checkbox" data-viewer-spans> Adjacent context</label>
         <button type="button" data-viewer-zoom="1.25" aria-label="Zoom in">+</button><button type="button" data-viewer-zoom="0.8" aria-label="Zoom out">−</button>
       </div>
       <canvas width="800" height="520" aria-label="Isolated authored object"></canvas>

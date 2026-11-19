@@ -46,3 +46,40 @@ test('wireframe and spans change only the local draw commands',()=>{
   fills=0;strokes=0;assert.equal(viewer.draw(canvas,g,{...s,wireframe:true,spans:true}).count,2);
   assert.equal(fills,0);assert.ok(strokes>=5);assert.equal(JSON.stringify(g),before);
 });
+
+test('precise owner keys distinguish both road sides and support, including two banks and columns',()=>{
+  for(const type of [6,7,8,9]){
+    const m={...model,ObjType:[type,type],NObjects:[4,4],ObjSideType:[1,1],ObjSideVar:[20,20]};
+    const banks=[0,1].map(b=>geometry.createObjectSequenceScene(m,b,true,{opticsNeutral:true,physicalSurface:true,curvature:1/m.geometryRadius}).primitives);
+    const owners=editor.ownerSelections(banks,geometry.landmarkOwnerKey);
+    for(const [b,primitives] of banks.entries())for(const [i,p] of primitives.entries()){
+      const md=p.metadata,key=geometry.landmarkOwnerKey(b,md.placedObjectIndex,md.landmarkOwner);
+      const selected=owners.get(key);
+      assert.ok(selected);assert.deepEqual(selected.owner,md.landmarkOwner);assert.ok(selected.primaryIndices.includes(i));
+      if(md.landmarkOwner.kind==='span'){
+        assert.equal(selected.primaryIndices.length,1);
+        assert.ok(selected.primitiveIndices.length>1);
+        const entry=geometry.objectSequence(m,b,true,{opticsNeutral:true,physicalSurface:true,curvature:1/m.geometryRadius})[selected.placedIndex];
+        const local=viewer.localGeometry(primitives,selected,geometry.towerPlacement(entry.params));
+        assert.equal(viewer.visibleItems(local,false).length,1);
+        assert.equal(viewer.visibleItems(local,false)[0].index,i);
+        assert.ok(viewer.bounds(viewer.visibleItems(local,false)).size[2]>100);
+        assert.ok(viewer.visibleItems(local,true).length>1);
+        assert.ok(viewer.visibleItems(local,true).filter(q=>!q.primary).every(q=>q.owner.kind==='object'));
+      }
+    }
+  }
+});
+test('exact ownership raster keeps a clicked road separate from its support and other road',()=>{
+  const m={...model,Height:0};
+  const b=geometry.createObjectSequenceScene(m,0,true,{opticsNeutral:true,physicalSurface:true,curvature:1/m.geometryRadius}).primitives;
+  const owners=editor.ownerSelections([b,[]],geometry.landmarkOwnerKey);
+  const pkg=[...owners.values()].filter(p=>p.placedIndex===1);
+  const support=pkg.find(p=>p.owner.kind==='object'),roads=pkg.filter(p=>p.owner.kind==='span');
+  assert.equal(roads.length,2);
+  const rgb=id=>[id&255,id>>>8,1+(((id&255)*31+(id>>>8)*17)%254),255];
+  const spans=editor.identitySpans(new Uint8ClampedArray([...rgb(support.key),...rgb(roads[0].key),...rgb(roads[1].key),0,0,0,255]),4,1);
+  const raster=editor.ownershipRaster(spans,4,1);
+  for(const [x,p] of [support,...roads].entries())assert.deepEqual(owners.get(editor.ownerAt(raster,x+.5,.5)).owner,p.owner);
+  assert.equal(editor.ownerAt(raster,3.5,.5),null);
+});

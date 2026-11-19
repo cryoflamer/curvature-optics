@@ -574,3 +574,17 @@ test('the shipped Soundly Compare sequence renders both independent models from 
     }
   }
 });
+
+test('separate owner identity pass paints Soundly road sides without changing package paint order',()=>{
+  const m=soundly(),before=JSON.stringify(m),base=graph(true),exact=graph(true);
+  const opts={atmosphere:'vacuum',opticalQuality:'canvas-direct',deferDecorations:true};
+  renderer.renderPhysical(base.g,m,{...opts,canvasDirectOptions:{objectIdentityPass:true,thinOutlines:true}});
+  renderer.renderPhysical(exact.g,m,{...opts,canvasDirectOptions:{landmarkOwnerPass:true,thinOutlines:true}});
+  const a=base.stats().paintedPaths,b=exact.stats().paintedPaths;
+  assert.deepEqual(a.map(p=>p.points),b.map(p=>p.points));
+  const colors=new Set(b.map(p=>p.color));
+  const roadColors=new Set(a.flatMap((p,i)=>p.color!==b[i].color?[b[i].color]:[]));
+  assert.ok(roadColors.size>2,'separate road IDs must be painted');
+  assert.ok(colors.has('#000000'),'same terrain mask');
+  assert.equal(JSON.stringify(m),before);
+});

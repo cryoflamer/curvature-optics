@@ -114,7 +114,9 @@
     model.geometryRadius,model.ObjType,model.NObjects,model.ObjDist,model.ObjDeltaDist,model.ObjSideType,
     model.ObjSidePos,model.ObjSideVar,model.ObjSizeType,model.ObjSize,model.ObjSizeVar]);}
   function objectIdentityColor(bank,index){
-    var n=index*2+bank+1;
+    return identityColor(index*2+bank+1);
+  }
+  function identityColor(n){
     if(!Number.isInteger(n)||n<1||n>65535)return '#000000';
     var r=n&255,g=(n>>>8)&255,b=1+((r*31+g*17)%254);
     return 'rgb('+r+','+g+','+b+')';
@@ -165,7 +167,8 @@
       // the accurate physical presentation. Haze changes only painted object
       // colors, never the optical geometry, metric grid, masks or labels.
       var haze=visibility.validate(options.visibility);
-      var identityPass=!!(options.canvasDirectOptions&&options.canvasDirectOptions.objectIdentityPass);
+      var ownerPass=!!(options.canvasDirectOptions&&options.canvasDirectOptions.landmarkOwnerPass);
+      var identityPass=ownerPass||!!(options.canvasDirectOptions&&options.canvasDirectOptions.objectIdentityPass);
       var began=clock(),params=effective.canvasDirectParameters(model,options);
       var geom=geometricModel(model,params),source=objects(model,params),geometryAt=clock();
       var R=params.effectiveRadius,H=model.Height,globe=params.geometry==='globe';
@@ -433,7 +436,10 @@
             return colors.get(color);
           };
         }
-        group.primitives.forEach(function(p){drawPrimitive(p,'objects',far,tint);});
+        group.primitives.forEach(function(p){
+          var color=ownerPass?identityColor(geometry.landmarkOwnerKey(bank,group.index,p.metadata&&p.metadata.landmarkOwner)):null;
+          drawPrimitive(p,'objects',far,ownerPass?function(){return color;}:tint);
+        });
       }
       // Painter order: far objects, one white disk, surface/horizon guides,
       // then near objects. Guides are never occlusion masks.
@@ -460,6 +466,6 @@
     }
     return Object.freeze({paint:paint,clearCache:function(){cachedKey=null;cached=null;}});
   }
-  return Object.freeze({create:create,objectIdentityColor:objectIdentityColor,geometricModel:geometricModel,
+  return Object.freeze({create:create,objectIdentityColor:objectIdentityColor,identityColor:identityColor,geometricModel:geometricModel,
     flatRefractionPoint:flatRefractionPoint});
 }));

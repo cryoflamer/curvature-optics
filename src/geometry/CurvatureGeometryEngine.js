@@ -954,6 +954,22 @@
       throw new RangeError('Only transmission towers (ObjType 3) are supported');
     return objectSequence(model,objIx,globe);
   }
+  // Separate transient RGB keys for geometry owners. The existing package
+  // key remains unchanged for vertex picking. ObjectSequence caps each
+  // bank at 500 stations (at most 1000 placed instances).
+  function landmarkOwnerKey(bank,index,owner){
+    if((bank!==0&&bank!==1)||!Number.isInteger(index)||index<0||index>=1000||!owner||owner.bank!==bank)return null;
+    var packageKey=index*2+bank+1;
+    if(owner.kind==='object')return packageKey;
+    if(owner.kind!=='span')return null;
+    var slot;
+    if(owner.role==='bridge-road'||owner.role==='tensas-shore')slot=0;
+    else if(owner.role==='soundly-road'||owner.role==='tensas-road'){
+      if(owner.side!==-1&&owner.side!==1)return null;
+      slot=owner.side===-1?1:2;
+    }else return null;
+    return 4096+(packageKey-1)*4+slot;
+  }
   function createObjectSequenceScene(model,objIx,globe,options){
     var entries=objectSequence(model,objIx,globe,options);
     var primitives=[];
@@ -1286,5 +1302,5 @@
       throw new RangeError('Only transmission towers (ObjType 3) are supported');
     return createObjectHorizonComposition(model,objIx,globe,options);
   }
-  return {globeHorizonGuides:globeHorizonGuides,globeSurfaceGuides:globeSurfaceGuides,flatSurfaceGuides:flatSurfaceGuides,objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
+  return {landmarkOwnerKey:landmarkOwnerKey,globeHorizonGuides:globeHorizonGuides,globeSurfaceGuides:globeSurfaceGuides,flatSurfaceGuides:flatSurfaceGuides,objectHorizonPartition:objectHorizonPartition,createHorizonPartitionedObjectScenes:createHorizonPartitionedObjectScenes,createObjectHorizonComposition:createObjectHorizonComposition,objectSequence:objectSequence,createObjectSequenceScene:createObjectSequenceScene,localBedford:localBedford,localMRod:localMRod,localShip:localShip,localObject:localObject,createPlacedObjectScene:createPlacedObjectScene,localTowerType1:localTowerType1,localTowerType2:localTowerType2,localTower:localTower,createPlacedTowerScene:createPlacedTowerScene,placeOnPlane:placeOnPlane,createTowerType2Scene:createTowerType2Scene,towerPlacement:towerPlacement,createPlacedTowerType2Scene:createPlacedTowerType2Scene,towerSequence:towerSequence,createTowerSequenceScene:createTowerSequenceScene,towerHorizonPartition:towerHorizonPartition,createHorizonPartitionedTowerScenes:createHorizonPartitionedTowerScenes,horizonCircle:horizonCircle,createHorizonScenes:createHorizonScenes,createTowerHorizonComposition:createTowerHorizonComposition};
 }));
