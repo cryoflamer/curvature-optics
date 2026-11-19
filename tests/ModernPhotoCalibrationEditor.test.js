@@ -101,3 +101,18 @@ test('visible object takes priority over overlapping or closer hidden landmarks'
  assert.equal(editor.ownerAt(raster,5,-1,3),null);
  assert.deepEqual(editor.visiblePick(null,points,view,5,2.5).candidates,[],'no unsafe global fallback');
 });
+
+test('experiment exchange preserves original pixels, locked fields and result identity',()=>{
+ const model={showModel:1,rEarth:6371000,rFEarth:10007543,CameraEast:0,CameraNorth:0,Height:10,Pan:1,Nick:0,Roll:0,FocalLengthField:50};
+ for(const k of ['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos','ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'])model[k]=[1,0];
+ const landmark={id:'b0:p0:v0',bank:0,objectType:1,primitive:0,vertex:0};
+ const observation=editor.pair(landmark,[11,22],100,80,2);
+ const input={format:'curvature-photo-calibration',version:1,scene:{model,physics:{atmosphere:'vacuum'}},referenceImage:{original:{width:100,height:80}},referenceSource:null,observations:[observation],
+ fit:{method:'canvas-direct',maxIterations:80,freeParameters:['Pan'],result:null}};
+ const check=x=>editor.validateExperiment(x,r=>r);
+ const out=check(input);assert.deepEqual(out.observations,input.observations);assert.deepEqual(out.fit.freeParameters,['Pan']);
+ assert.throws(()=>check({...input,version:2}),/format/);
+ assert.throws(()=>check({...input,observations:[observation,observation]}),/Duplicate/);
+ assert.throws(()=>check({...input,fit:{...input.fit,freeParameters:['Height','Height']}}),/free camera/);
+ assert.throws(()=>check({...input,fit:{...input.fit,result:{evaluation:{valid:true}}}}),/stored fit/);
+});

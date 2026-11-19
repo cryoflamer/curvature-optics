@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -154,6 +154,9 @@
     <p>Click matching points in either order. Drag markers to edit; drag empty areas to pan. Scene geometry and atmosphere are fixed until New session.</p>
     <div class="modern-calibration-toolbar">
       <label>Reference photo <input type="file" id="ModernCalibrationFile" accept="image/png,image/jpeg,image/webp"></label>
+      <button type="button" id="ModernCalibrationExportExperiment" disabled>Export experiment (JSON)</button>
+      <button type="button" id="ModernCalibrationImportExperiment">Import experiment (JSON)</button>
+      <input type="file" id="ModernCalibrationExperimentFile" accept=".json,application/json" hidden>
       <button type="button" id="ModernCalibrationReset" title="Discard the draft and capture the latest Scene">New session</button>
       <button type="button" id="ModernCalibrationFit">Fit photo</button>
     </div>
@@ -162,6 +165,7 @@
       <button type="button" id="ModernCalibrationUsePhoto" disabled>Use original</button>
       <button type="button" id="ModernCalibrationRefreshPhotos">Refresh photos</button>
     </div>
+    <p id="ModernCalibrationExchangeStatus" role="status"></p>
     <p id="ModernCalibrationSourceStatus" role="status"></p>
     <p id="ModernCalibrationPhotoInfo"></p>
     <div class="modern-calibration-toolbar modern-calibration-actions">

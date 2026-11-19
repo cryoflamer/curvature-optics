@@ -1,3 +1,20 @@
+## 8C.2 — Portable calibration experiment exchange
+
+Export experiment (JSON) packages format/version, captured full scene/model
+and atmosphere, original embedded reference asset and provenance, authored
+observations (original pixels and weights), free parameters, Canvas Direct
+fit configuration and latest valid fit (pose, residuals, objective, progress
+and termination status). Running exports are explicitly marked. Import
+validates the version, asset, dimensions, scene, topology, free fields and
+fit/observation consistency before confirming replacement of the calibration
+draft. No Scene, reference library or saved project is modified. Import does
+not rerun the optimizer. Fit result and free fields are now saved in the
+local draft after completion/stop and ordinary editor changes. Old drafts
+remain readable; prior ephemeral fit may need rerunning once after upgrade.
+The previous isolation inventory was reordered by locale instead of lexical
+sort; restored audit ordering. Added round-trip browser download/import test
+and validation unit test. Browser/Node CI pending.
+
 ## 8C.1 — Local Canvas Direct camera fit
 
 The Photo Calibration workspace exposes the seven captured camera parameters,

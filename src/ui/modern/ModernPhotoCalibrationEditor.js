@@ -178,6 +178,61 @@
     }
     return choices;
   }
+  const CAMERA_FIELDS=Object.freeze(["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"]), EXPERIMENT_FORMAT='curvature-photo-calibration', EXPERIMENT_VERSION=1;
+  const jsonCopy=value=>JSON.parse(JSON.stringify(value));
+  function validatedFreeFields(free){
+    if(!Array.isArray(free)||new Set(free).size!==free.length||free.some(k=>!CAMERA_FIELDS.includes(k)))
+      throw Error('Invalid free camera parameters');
+    return CAMERA_FIELDS.filter(k=>free.includes(k));
+  }
+  function validateFitResult(result,rows,free,model){
+    if(result===null||result===undefined)return null;
+    const r=jsonCopy(result),v=r?.evaluation;
+    if(!v?.valid||!r.pose||CAMERA_FIELDS.some(k=>!Number.isFinite(r.pose[k]))||
+      CAMERA_FIELDS.some(k=>!free.includes(k)&&r.pose[k]!==model[k])||
+      ![r.initialRmsPx,v.rmsPx,v.weightedRmsPx,v.cost,r.evaluations,r.acceptedSteps].every(n=>Number.isFinite(n)&&n>=0)||
+      !Array.isArray(v.points)||v.points.length!==rows.length)
+      throw Error('Invalid stored fit result');
+    for(const [i,p] of v.points.entries()){
+      const row=rows[i];
+      if(p.id!==row.landmark.id||p.weight!==row.weight||
+        !Array.isArray(p.observed)||p.observed.length!==2||p.observed.some((n,j)=>n!==row.pixel[j])||
+        !Array.isArray(p.predicted)||p.predicted.length!==2||!p.predicted.every(Number.isFinite))
+        throw Error('Stored fit result does not match observations');
+    }
+    return r;
+  }
+  function validateExperiment(input,validateReference){
+    if(!input||input.format!==EXPERIMENT_FORMAT||input.version!==EXPERIMENT_VERSION)
+      throw Error('Unsupported calibration experiment format/version');
+    const m=input.scene?.model,physics=input.scene?.physics;
+    if(!m||![1,2].includes(m.showModel)||!Number.isFinite(m.rEarth)||m.rEarth<=0||
+      !Number.isFinite(m.rFEarth)||m.rFEarth<=0||CAMERA_FIELDS.some(k=>!Number.isFinite(m[k]))||
+      !['vacuum','standard','temperature-lapse'].includes(physics?.atmosphere))
+      throw Error('Invalid captured scene or atmosphere');
+    for(const k of ['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos','ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar']){
+      if(!Array.isArray(m[k])||m[k].length!==2||!m[k].every(Number.isFinite))throw Error('Invalid scene field '+k);
+    }
+    if(m.NObjects.some(n=>!Number.isInteger(n)||n<0||n>10000))throw Error('Invalid object count');
+    const record=validateReference(input.referenceImage);
+    if(!Array.isArray(input.observations)||input.observations.length>10000)throw Error('Invalid observations');
+    const observations=input.observations.map(r=>{
+      if(r.kind!=='vertex')throw Error('Expected authored vertex observation');
+      return pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight);
+    });
+    if(new Set(observations.map(r=>r.landmark.id)).size!==observations.length)throw Error('Duplicate landmark ID');
+    const freeParameters=validatedFreeFields(input.fit?.freeParameters);
+    if(input.fit.method!=='canvas-direct'||input.fit.maxIterations!==80)throw Error('Unsupported fit configuration');
+    const result=validateFitResult(input.fit.result,observations,freeParameters,m);
+    const referenceSource=input.referenceSource&&typeof input.referenceSource==='object'?
+      jsonCopy(input.referenceSource):null;
+    if(referenceSource&&(!Array.isArray(referenceSource.links)||referenceSource.links.some(x=>typeof x!=='string')))
+      throw Error('Invalid photo provenance');
+    return {format:EXPERIMENT_FORMAT,version:EXPERIMENT_VERSION,scene:jsonCopy(input.scene),
+      referenceImage:record,referenceSource,observations,fit:{method:'canvas-direct',maxIterations:80,freeParameters,
+        result,status:typeof input.fit.status==='string'?input.fit.status.slice(0,1000):'Imported fit',
+        running:input.fit.running===true}};
+  }
   let mounted=null;
   function mount(doc){
     const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
@@ -203,8 +258,9 @@
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
     let choices=[],demoRecords=[],catalogToken=0,activeSource=null;
-    const fitFields=["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"],fitLabels=["East (m)","North (m)","Height (m)","Pan (°)","Nick (°)","Roll (°)","Focal field (mm)"];
+    const fitFields=CAMERA_FIELDS,fitLabels=["East (m)","North (m)","Height (m)","Pan (°)","Nick (°)","Roll (°)","Focal field (mm)"];
     const fitPanel=$('ModernCalibrationFitParameters'),runFit=$('ModernCalibrationRunFit'),stopFit=$('ModernCalibrationStopFit'),bestView=$('ModernCalibrationBestView'),fitStatus=$('ModernCalibrationFitStatus'),fitResult=$('ModernCalibrationFitResult');
+    const exportButton=$('ModernCalibrationExportExperiment'),importButton=$('ModernCalibrationImportExperiment'),importFile=$('ModernCalibrationExperimentFile'),exchangeStatus=$('ModernCalibrationExchangeStatus');
     const fitRaster=doc.createElement('canvas');let fitWorker=null,fitBest=null,fitSignature=null,viewBest=false,paintedFit=null,lastFitPaint=0;
     // IndexedDB keeps original images out of the small localStorage quota.
     // A single atomic record binds the photograph to its fixed scene and pairs.
@@ -231,7 +287,8 @@
       if(restoring||!scene)return;
       const data=JSON.parse(JSON.stringify({version:1,scene:{model:scene.model,physics:scene.physics},
         record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),
-        weight:weight.value,showLandmarks:showLandmarks.checked}));
+        weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
+        fitBest,fitStatus:fitStatus.textContent,viewBest}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
         const db=await database();
         await new Promise((resolve,reject)=>{
@@ -264,10 +321,13 @@
         editing=d.editing;pendingModel=d.pendingModel||null;activePair=d.activePair||null;weight.value=d.weight||'1';setPixel(d.pending||null);
         add.textContent=editing?'Update pair':'Add pair';
         refreshRows();photoDraw();meshDraw();
+        if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
+          try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model),d.fitStatus,!!d.viewBest);}
+          catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
         message('Calibration draft restored.');
         $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
-      finally{restoring=false;}
+      finally{restoring=false;syncFitControls();}
     }
     async function refreshSources(){
       const token=++catalogToken;
@@ -294,7 +354,7 @@
     function photoDetails(next,source){
       photoInfo.replaceChildren();
       const label=doc.createElement('span');
-      label.textContent=(source?.source==='demo'?'Built-in demo · ':source?.source==='library'?'Reference library · ':'Local file · ')+
+      label.textContent=(source?.imported?'Imported experiment · ':source?.source==='demo'?'Built-in demo · ':source?.source==='library'?'Reference library · ':'Local file · ')+
         next.title+(next.author?' · '+next.author:'')+' · '+next.original.width+' × '+next.original.height+' px'+
         (source?.links.length?' · '+source.links.join('; '):'');
       photoInfo.append(label);
@@ -794,8 +854,11 @@
       clearHover();clearAmbiguity();
     },{passive:false});
     function freeFields(){return Array.from(fitPanel.querySelectorAll('[data-fit-field]')).filter(n=>n.checked).map(n=>n.dataset.fitField);}
+    function applyFreeFields(free){for(const n of fitPanel.querySelectorAll('[data-fit-field]'))n.checked=free.includes(n.dataset.fitField);syncFitControls();}
     function syncFitControls(){
       const free=freeFields();
+      exportButton.disabled=!record||!scene;
+      importButton.disabled=restoring;
       runFit.disabled=!!fitWorker||!record||!scene||!rows.length||!free.length||2*rows.length<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
       for(const field of fitFields){
@@ -805,6 +868,65 @@
       bestView.textContent=viewBest?'Return to initial camera':'Show best camera';
       $('ModernCalibrationFitNotice').hidden=!viewBest;
     }
+    function exportExperiment(){
+      if(!scene||!record)throw Error('Load a photograph first');
+      return jsonCopy({format:EXPERIMENT_FORMAT,version:EXPERIMENT_VERSION,
+        scene:{model:scene.model,physics:scene.physics},referenceImage:record,referenceSource:activeSource,
+        observations:rows,fit:{method:'canvas-direct',maxIterations:80,freeParameters:freeFields(),
+          result:fitBest,status:fitStatus.textContent,running:!!fitWorker}});
+    }
+    function restoreFit(result,status,show){
+      fitBest=result;fitSignature=result?JSON.stringify(rows):null;viewBest=!!(show&&result);
+      if(result){fitSummary(result);if(viewBest)paintBest();}
+      if(typeof status==='string'&&status)fitStatus.textContent=status;
+      syncFitControls();meshDraw();
+    }
+    async function importExperiment(input){
+      // All decoding and topology checks precede replacement of the existing draft.
+      const data=validateExperiment(input,env.CurvatureModernReferenceImage.validate);
+      const next=prepareScene(data.scene);
+      for(const row of data.observations){
+        const l=row.landmark;
+        if(l.objectType!==next.model.ObjType[l.bank]||!next.banks[l.bank]?.[l.primitive]?.points[l.vertex]||
+          l.id!=='b'+l.bank+':p'+l.primitive+':v'+l.vertex)throw Error('Landmark topology mismatch: '+l.id);
+      }
+      const width=data.referenceImage.original.width,height=data.referenceImage.original.height;
+      env.CurvatureCameraPhysicalPose.photoCamera({...next.model,viewcenterHorizon:3},width,height);
+      if(data.fit.result)env.CurvatureCameraPhysicalPose.photoCamera({...next.model,...data.fit.result.pose,viewcenterHorizon:3},width,height);
+      const token=++loadToken,decoded=new env.Image();
+      decoded.src=data.referenceImage.original.dataUrl;await decoded.decode();
+      if(token!==loadToken)throw Error('Import superseded');
+      if(decoded.naturalWidth!==width||decoded.naturalHeight!==height)throw Error('Embedded photo dimensions mismatch');
+      if((record||rows.length)&&!env.confirm('Replace the current calibration draft with this experiment?'))return false;
+      invalidateFit('Importing calibration experiment…');cancelModelFrame();
+      drag=null;modelDrag=null;photoGhost=null;modelGhost=null;activePair=null;undoStack=[];
+      record=data.referenceImage;image=decoded;rows=data.observations;
+      activeSource={...(data.referenceSource||{}),key:null,links:data.referenceSource?.links||[],imported:true};
+      view=null;resetPending();sourcePicker.value='';sourceLoad.disabled=true;
+      showScene(next);photoDetails(record,activeSource);fitPhoto();
+      applyFreeFields(data.fit.freeParameters);
+      restoreFit(data.fit.result,data.fit.running?'Imported interrupted fit · best saved candidate only':data.fit.status,!!data.fit.result);
+      message('Calibration experiment imported.');persist();return true;
+    }
+    exportButton.onclick=()=>{
+      try{
+        const data=exportExperiment(),blob=new env.Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+        const url=env.URL.createObjectURL(blob),a=doc.createElement('a');
+        a.href=url;a.download='calibration-'+record.id+'.json';doc.body.append(a);a.click();a.remove();
+        env.setTimeout(()=>env.URL.revokeObjectURL(url),30000);
+        exchangeStatus.textContent='Experiment exported · original photo embedded.';
+      }catch(error){exchangeStatus.textContent='Export failed: '+error.message;}
+    };
+    importButton.onclick=()=>importFile.click();
+    importFile.onchange=async()=>{
+      const f=importFile.files[0];if(!f)return;
+      try{
+        if(f.size>40*1024*1024)throw Error('Experiment file exceeds 40 MiB');
+        const ok=await importExperiment(JSON.parse(await f.text()));
+        exchangeStatus.textContent=ok?'Experiment imported.':'Import cancelled.';
+      }catch(error){exchangeStatus.textContent='Import failed: '+error.message;}
+      finally{importFile.value='';}
+    };
     function terminateFit(){
       if(fitWorker){fitWorker.terminate();fitWorker=null;}
     }
@@ -865,7 +987,7 @@
           }else if(data.type==='complete'){
             receiveFit(data.result);terminateFit();
             fitStatus.textContent=data.result.status+' · '+(data.result.reason||'Complete')+' (local fit; not a uniqueness certificate)';
-            if(fitBest){viewBest=true;paintBest();}syncFitControls();
+            if(fitBest){viewBest=true;paintBest();}syncFitControls();persist();
           }else if(data.type==='error'){
             terminateFit();fitStatus.textContent='Fit failed: '+data.message;syncFitControls();
           }
@@ -875,7 +997,7 @@
         syncFitControls();
       }catch(error){terminateFit();fitStatus.textContent='Cannot start fit: '+error.message;syncFitControls();}
     };
-    stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();};
+    stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();persist();};
     bestView.onclick=()=>{if(!fitBest)return;viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();};
     fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();});
     add.onclick=savePair;
@@ -898,11 +1020,11 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,mount});
 }));

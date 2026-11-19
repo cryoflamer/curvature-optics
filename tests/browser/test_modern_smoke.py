@@ -705,6 +705,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""),before['pose'])
         workspace.locator('#ModernCalibrationBestView').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        # Real exported file, import into the draft, then check the solver input.
+        with self.page.expect_download() as info:
+            workspace.locator('#ModernCalibrationExportExperiment').click()
+        download=info.value
+        with open(download.path(),encoding='utf-8') as stream:
+            exported=json.load(stream)
+        self.assertEqual(exported['fit']['freeParameters'],['Pan'])
+        self.assertEqual(exported['fit']['result'],fit)
+        self.assertEqual(exported['referenceImage']['original']['width'],1200)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        workspace.locator('#ModernCalibrationExperimentFile').set_input_files(str(download.path()))
+        expect(workspace.locator('#ModernCalibrationExchangeStatus')).to_have_text('Experiment imported.')
+        after=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+        self.assertEqual(after['observations'],exported['observations'])
+        self.assertEqual(after['scene'],exported['scene'])
+        self.assertEqual(after['fit']['result'],exported['fit']['result'])
+        self.assertEqual(after['referenceImage'],exported['referenceImage'])
+        self.assertEqual(after['fit']['freeParameters'],['Pan'])
 
     def test_all_workspace_tabs_restore_through_same_preference(self):
         self.open_modern()
