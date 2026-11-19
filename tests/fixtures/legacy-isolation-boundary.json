@@ -788,7 +788,9 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernAnimationStudioUI.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernAnimationPresentation.test.js"
       ],

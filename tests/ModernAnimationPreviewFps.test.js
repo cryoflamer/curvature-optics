@@ -36,7 +36,7 @@ function rendererHarness(target='60',options={}){
     studioPlaybackApi:{describeSample:()=>''},
     root:{CurvatureModernAnimationGraphs:graphs},
     profileNow:()=>time,newUiEl:node,attachStudioPreviewGraphs:()=>true,
-    syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); },
+    syncStudioReferences(){},syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); },
     captureStudioKeyframeThumbnail(sample,time,graphs){if(options.capture)options.capture(sample,time,graphs);}
   });
   const start=app.indexOf('  function renderStudioPlaybackSample(force){');

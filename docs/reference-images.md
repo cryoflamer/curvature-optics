@@ -1,7 +1,7 @@
 # Reference images and observation sources
 
-Status: 7C.3 foundation, local Library and keyframe links implemented; presentation and
-portable asset transport are subsequent steps. See [demo roadmap](modern-demo-catalog.md) for order and
+Status: 7C.4 foundation, local Library, keyframe links and presentation implemented;
+portable asset transport is the next step. See [demo roadmap](modern-demo-catalog.md) for order and
 [camera calibration](camera-calibration.md) for the deferred research project.
 
 ## Purpose and boundaries
@@ -168,15 +168,49 @@ when upgrading (pre-7C.3 code cannot enforce this guard). Browser storage
 clearing/eviction is outside application control. This is a conservative
 interim limitation, especially near the library quota.
 
+## Reference presentation (7C.4)
+
+The selected-frame editor's **Load photographs** action shows a scrollable
+thumbnail gallery of unlinked local observations. Select a thumbnail then
+**Attach**; linked rows retain the thumbnail, reorder and Unlink actions.
+Click a linked thumbnail to open the original, dimensions, provenance,
+license, recorded metadata with status/uncertainty, source and download.
+Missing images/thumbnails have labeled placeholders; no automatic remote
+fetch. The editor does not load originals until explicit inspection.
+
+Studio and Presentation share the same playback stage and independent viewer
+layout: **Side by side** (reference to the left of Scene or Globe/Flat),
+**Below**, or **Hidden**. Previous/next follows the authored ID order and
+starts at the first photo on entering another hold. The divider is adjustable
+by pointer or keyboard arrows (20–60%; below uses viewport-height units).
+The original is displayed with contain fitting, preserving aspect ratio and
+without cropping. Viewer layout and divider sizes last for the current page
+session only; they do not change camera, FOV, project or atmosphere. The
+original details dialog also works within the fullscreen stage.
+
+Reference ownership is checked against the **painted** timestamp, never the
+advancing playhead or selected editor card. A photo is valid at its keyframe
+arrival and hold; during travel it is removed immediately (no stale fade),
+with space reserved when either adjacent keyframe has observations. A zero-hold
+frame can be inspected by jumping to its arrival. A frame without references
+and travel between unrelated frames do not reserve space. Failed/unpainted
+frames do not show an observation. In-flight reads are invalidated on frame,
+choice or project change and hiding; repeated paints in one hold do not read
+storage repeatedly. A missing/error observation is not substituted with a
+simulation. Metadata is reread on observation navigation or original inspection.
+
+This is a UI-only comparison, not an assertion of camera registration. No
+automatic calibration or pixel-aligned overlay yet; the latter is planned after
+8A–8E. Existing PNG/video exports still render only simulations, and portable
+JSON still retains IDs only until 7C.5. Do not claim a match merely because a
+photograph is associated with a keyframe.
+
 ## Remaining delivery steps
 
 - 7C.2: implemented as above; accepted in Opera.
-- 7C.3: implemented local ID links as above; Opera acceptance pending.
-- 7C.4 (next): Studio and Presentation observation panels, original full-size view,
-  source/author/license, known/unknown facts and clear model-vs-photo labeling.
-  Respect painted timeline and selected keyframe; do not change camera or
-  atmosphere. Read-only demos cannot edit observation data.
-- 7C.5: self-contained portable bundle with each referenced asset at most
+- 7C.3: implemented local ID links as above; accepted in Opera.
+- 7C.4: implemented as above; Opera acceptance pending.
+- 7C.5 (next): self-contained portable bundle with each referenced asset at most
   once, validated links, quotas and collision policy. Existing v1/v2 projects
   remain readable. Complete and compact storyboard export distinguish
   observation assets from optional simulated thumbnails; never silently discard

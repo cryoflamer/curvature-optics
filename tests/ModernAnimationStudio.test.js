@@ -1112,15 +1112,17 @@ test('reference editor lists shared photographs, labels missing IDs, and issues 
   const {doc,host}=mockDom(),calls=[];
   const actions={frame:(...args)=>calls.push(args),edit(){},select(){},prepare(){}};
   editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-2',
-    listReferenceImages:async()=>[{id:'photo_A',title:'Photo A'},{id:'photo_B',title:'Photo B'}]});
+    listReferenceImages:async()=>[{id:'photo_A',title:'Photo A',thumbnail:{dataUrl:'data:image/png;base64,YQ=='}},{id:'photo_B',title:'Photo B',thumbnail:{dataUrl:'data:image/png;base64,Yg=='}}]});
   await Promise.resolve();await Promise.resolve();
   const section=collect(host,n=>n.className==='modern-studio-reference-links')[0];
   assert.ok(collect(section,n=>n.textContent==='Missing local photograph: missing').length);
   assert.ok(collect(section,n=>n.textContent==='Photo A').length);
-  const picker=collect(section,n=>n.tagName==='select')[0];
-  assert.ok(picker.children.some(n=>n.value==='photo_B'));
-  assert.ok(!picker.children.some(n=>n.value==='photo_A'));
-  picker.value='photo_B';picker.listeners.change();
+  const picker=collect(section,n=>n.className==='modern-studio-reference-gallery')[0];
+  const choice=collect(picker,n=>n['aria-label']==='Select photograph Photo B')[0];
+  assert.ok(choice);assert.ok(!collect(picker,n=>n['aria-label']==='Select photograph Photo A').length);
+  assert.ok(collect(choice,n=>n.tagName==='img').some(n=>n.src==='data:image/png;base64,Yg=='));
+  assert.ok(collect(section,n=>n.tagName==='img').some(n=>n.src==='data:image/png;base64,YQ=='));
+  choice.listeners.click();assert.equal(choice['aria-pressed'],'true');
   const attach=collect(section,n=>n.textContent==='Attach')[0];assert.equal(attach.disabled,false);attach.listeners.click();
   assert.deepEqual(calls.pop(),['history-2','referenceImageIds',['missing','photo_A','photo_B']]);
   const unlink=collect(section,n=>n['aria-label']==='Unlink reference photograph 1')[0];unlink.listeners.click();

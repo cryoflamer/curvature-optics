@@ -51,7 +51,7 @@ function harness(mode='camera'){
   const context=vm.createContext({
     studioActiveDemo:null,newUiEl:id=>elements[id]||null,
     studioDraft:draft,studioPrepared:prepared,studioPlayback:playback.create(prepared),
-    studioPresentation:null,studioPlaybackControls:null,studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
+    studioPresentation:null,studioReferences:null,studioPlaybackControls:null,studioPlaybackLastPaint:0,studioPlaybackRenderedAt:null,
     studioPlaybackControlsApi:controls,
     studioApi:studio,studioPlaybackApi:playback,studioRestorePreviewPending:false,
     studioEditHistory:null,

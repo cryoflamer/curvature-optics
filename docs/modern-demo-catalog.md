@@ -1,6 +1,6 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **7C.3 (Keyframe References)**, 2026-11-19.
+Status: **7C.4 (Reference Presentation)**, 2026-11-19.
 The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
 thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
 are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
@@ -190,9 +190,9 @@ record the split, and do not mark complete on implementation alone.
 | 7B.3 — Atmosphere-aware Export | Implemented; user confirmed in Opera | Save and ordinary project JSON retain authored physics; explicit current-variant export, PNG/video and batch captures use effective playback physics. Label resulting files with their atmosphere; reject mismatched attachments. |
 | 7C.1 — Reference Image Foundation & Roadmap | Implemented | Independent owned validated observation records with original/optional thumbnail and provenance, status-aware acquisition facts, revised docs. No storage, UI, project schema or transport changes. |
 | 7C.2 — Reference Image Library | Implemented; user confirmed in Opera | Upload and decode, original bytes, durable independent storage, metadata editor, quota and deletion policies. |
-| 7C.3 — Keyframe References | Implemented; Opera acceptance pending | Ordered shared IDs, attach/reorder/unlink, missing-ID labels, copy/Undo/Redo/recovery, IDs-only JSON. Fail-closed observation deletion until safe cross-workspace guard. |
-| 7C.4 — Reference Presentation | Planned; next | Observation panel in Studio and Presentation with original view, authorship, source and metadata; distinguish prediction and observation. |
-| 7C.5 — Reference Export & Import | Planned | Validated portable references and deduplicated assets, size limits, catalog/copy/import compatibility; compact vs full thumbnail options must not silently strip observations. |
+| 7C.3 — Keyframe References | Implemented; Opera accepted | Ordered shared IDs, attach/reorder/unlink, missing-ID labels, copy/Undo/Redo/recovery, IDs-only JSON. Fail-closed observation deletion until safe cross-workspace guard. |
+| 7C.4 — Reference Presentation | Implemented; Opera acceptance pending | Thumbnail picker and linked previews; original/provenance dialog; Side by side, Below, Hidden; resizable divider; painted hold ownership, no photos during travel. Overlay deferred until calibration. |
+| 7C.5 — Reference Export & Import | Planned; next | Validated portable references and deduplicated assets, size limits, catalog/copy/import compatibility; compact vs full thumbnail options must not silently strip observations. |
 | 7D — Narrative | Planned | Complete generic narrative and sequencing capabilities beyond existing step 6 only as justified; no final Soundly photo matching yet. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
 | 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |

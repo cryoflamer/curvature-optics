@@ -66,3 +66,57 @@ test('Narration follows painted time, including holds, travel, reverse seeks and
   api.syncNarrative(panel,label,body,times,NaN);assert.equal(body.textContent,'');
   api.syncNarrative(panel,label,body,[{name:'Old',arrivalMs:0,departureMs:10}],0);assert.equal(panel.hidden,true);
 });
+
+test('observations are only valid at painted arrivals and holds; adjacent travel reserves empty space',()=>{
+  const times=[{name:'Photo A',arrivalMs:0,departureMs:100,referenceImageIds:['a','b']},
+    {name:'No photo',arrivalMs:300,departureMs:400},
+    {name:'Photo C',arrivalMs:600,departureMs:600,referenceImageIds:['c']},
+    {name:'No photo',arrivalMs:800,departureMs:900},
+    {name:'No photo II',arrivalMs:1000,departureMs:1100}];
+  const at=t=>api.referencesAt(times,t);
+  assert.deepEqual(at(NaN),{index:-1,ids:[],reserve:false});
+  for(const t of [0,100])assert.deepEqual(at(t),{index:0,ids:['a','b'],reserve:true});
+  for(const t of [101,299,401,599,601,799])assert.deepEqual(at(t),{index:-1,ids:[],reserve:true});
+  assert.deepEqual(at(300),{index:1,ids:[],reserve:false});
+  assert.deepEqual(at(600),{index:2,ids:['c'],reserve:true});
+  assert.deepEqual(at(950),{index:-1,ids:[],reserve:false});
+  assert.deepEqual(at(0),{index:0,ids:['a','b'],reserve:true});
+});
+function referenceHarness(){
+  function node(){const attrs={},classes=new Set(),events={};return {hidden:true,disabled:false,textContent:'',value:'',
+    classList:{toggle(k,v){if(v)classes.add(k);else classes.delete(k);},contains:k=>classes.has(k)},
+    style:{setProperty(k,v){this[k]=v;}},setAttribute(k,v){attrs[k]=v;},getAttribute:k=>attrs[k],removeAttribute(k){delete this[k];},
+    addEventListener(k,cb){events[k]=cb;},emit(k,event={}){events[k](event);}};}
+  const nodes=Object.fromEntries(['panel','panels','control','splitter','select','image','status','title','view','prev','next','meta'].map(k=>[k,node()]));
+  nodes.select.value='side';const pending=[];
+  const controller=api.createReferences({...nodes,get:id=>new Promise((resolve,reject)=>pending.push({id,resolve,reject}))});
+  const p={},times=[{arrivalMs:0,departureMs:100,referenceImageIds:['a','b']},{arrivalMs:300,departureMs:500,referenceImageIds:['c']},{arrivalMs:800,departureMs:900}];
+  const sync=t=>controller.sync(p,times,t),flush=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
+  const record=id=>({record:{title:id,author:'Observer',original:{dataUrl:'data:image/png;base64,'+id}}});
+  return {nodes,pending,sync,flush,record,controller};
+}
+test('viewer ignores stale async loads, keeps original bytes, supports ordering and avoids per-tick reads',async()=>{
+  const h=referenceHarness(),n=h.nodes;h.sync(0);await h.flush();assert.equal(h.pending[0].id,'a');
+  h.sync(50);await h.flush();assert.equal(h.pending.length,1);
+  n.next.emit('click');await h.flush();assert.equal(h.pending[1].id,'b');
+  h.pending[1].resolve(h.record('b'));await h.flush();assert.equal(n.image.src,'data:image/png;base64,b');
+  h.pending[0].resolve(h.record('a'));await h.flush();assert.equal(n.title.textContent,'b');
+  h.sync(150);assert.equal(n.image.hidden,true);assert.equal(n.image.src,undefined);assert.equal(n.panel.hidden,false);
+  h.sync(300);await h.flush();assert.equal(h.pending[2].id,'c');
+  h.sync(800);h.pending[2].resolve(h.record('c'));await h.flush();assert.equal(n.panel.hidden,true);assert.equal(n.image.hidden,true);
+  h.sync(0);await h.flush();h.pending[3].resolve(null);await h.flush();assert.match(n.status.textContent,/Missing local photograph: a/);
+});
+test('viewer layout and keyboard splitter are independent of reference selection and hide invalidates reads',async()=>{
+  const h=referenceHarness(),n=h.nodes;h.sync(0);await h.flush();
+  n.select.value='below';n.select.emit('change');await h.flush();assert.equal(h.pending.length,1);
+  assert.equal(n.panels.classList.contains('has-reference-below'),true);
+  n.splitter.emit('keydown',{key:'ArrowUp',preventDefault(){}});
+  assert.equal(n.panels.style['--reference-height'],'34dvh');
+  n.select.value='hidden';n.select.emit('change');h.pending[0].resolve(h.record('a'));await h.flush();
+  assert.equal(n.image.hidden,true);assert.equal(n.panel.hidden,true);assert.equal(n.control.hidden,false);
+  n.select.value='side';n.select.emit('change');await h.flush();assert.equal(h.pending[1].id,'a');
+  h.pending[1].reject(Error('storage offline'));await h.flush();assert.match(n.status.textContent,/storage offline/);
+  n.splitter.emit('keydown',{key:'ArrowRight',preventDefault(){}});
+  assert.equal(n.panels.style['--reference-share'],'35%');
+  h.controller.sync(null,null,NaN);assert.equal(n.panel.hidden,true);assert.equal(n.control.hidden,true);
+});

@@ -582,7 +582,7 @@
     studioUI.createPreviewNavigation(root,document):null;
   var studioPlayback=null;
   var studioPlaybackControls=null;
-  var studioPresentation=null,studioPresentationProject=null,studioPresentationTimes=null;
+  var studioPresentation=null,studioPresentationProject=null,studioPresentationTimes=null,studioReferences=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
   var studioThumbnailPersistence=thumbnailApi&&thumbnailApi.createKeyframePersistence&&root.indexedDB?
@@ -2301,6 +2301,7 @@
     syncStudioHudAppearance();
     syncStudioAtmosphereControl();
     syncStudioFrameExportControls();
+    syncStudioReferences();
     if(!ready)return;
     syncStudioPresentation();
     var info=studioPlaybackControlsApi.describe(studioPlayback.status(),studioPlaybackRenderedAt);
@@ -2483,6 +2484,7 @@
       // A succeeded / B failed is not a valid comparison. Cover both stale
       // or partial canvases until the next successful paired render.
       studioFrameLoading(true,'Physical frame unavailable · use Retry frame',true);
+      syncStudioReferences();
       throw error;
     }
     syncStudioCameraHud(a,b,graphs,isCompare);
@@ -2554,6 +2556,7 @@
     // This timestamp always corresponds to the pixels just drawn. The
     // playback clock may advance during synchronous Accurate rendering.
     studioPlaybackRenderedAt=renderedAt;
+    syncStudioReferences();
     studioPlaybackNextDue=studioPlaybackControlsApi.nextPreviewDue(
       studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force);
     studioPlaybackLastPaint=now;
@@ -3160,6 +3163,24 @@
   // Benchmarks use an independent RAF sequence: traditional profiles freeze
   // the sample, while pipeline and moving-width profiles advance it. Neither
   // changes the authored project, History or export settings.
+  function syncStudioReferences(){
+    if(!studioReferences)return;
+    var project=studioPrepared&&studioPlayback?studioPrepared:null;
+    if(studioPresentationProject!==project){
+      studioPresentationProject=project;studioPresentationTimes=project?studioProjects.timeline(project):null;
+    }
+    studioReferences.sync(project,studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
+  }
+  function bindStudioReferences(){
+    var api=root.CurvatureModernAnimationPresentation;
+    if(!api||!newUiEl('ModernAnimationReferencePanel'))return;
+    function reference(s){return newUiEl('ModernAnimationReference'+s);}
+    studioReferences=api.createReferences({document:document,stage:newUiEl('ModernAnimationPlaybackStage'),
+      panels:newUiEl('ModernAnimationPlaybackPanels'),panel:reference('Panel'),splitter:reference('Splitter'),
+      select:reference('Layout'),control:reference('Control'),image:reference('Image'),status:reference('Status'),
+      title:reference('Title'),meta:reference('Meta'),view:reference('View'),prev:reference('Prev'),next:reference('Next'),
+      get:function(id){return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);}});
+  }
   function syncStudioPresentation(){
     if(!studioPresentation||!studioPresentation.isActive()||!studioPrepared||!studioPlayback)return;
     if(studioPresentationProject!==studioPrepared){
@@ -3293,6 +3314,7 @@
     if(retry)retry.addEventListener('click',function(){
       if(studioPlayback){stopStudioPlayback(false);scheduleStudioInitialPaint('retry');}
     });
+    bindStudioReferences();
     bindStudioPresentation();
     bindStudioQualityAudit();
     bindStudioCameraHud();
@@ -3810,6 +3832,7 @@
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       resolveFrame:function(frame){return resolveStudioKeyframe(frame,entries);},
       listReferenceImages:function(){return root.CurvatureModernReferenceImageLibrary.list(root.indexedDB);},
+      getReferenceImage:function(id){return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);},
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,

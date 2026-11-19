@@ -1,3 +1,27 @@
+## Modern Demo Catalog — Reference Presentation (7C.4)
+
+7C.3 was accepted by the user in Opera. The selected-frame editor now shows
+thumbnail choices and linked thumbnails, with explicit original inspection
+and provenance/metadata. The existing playback stage shares a real-photo
+panel in Studio and Presentation: Side by side (default), Below, Hidden,
+previous/next photograph and pointer/keyboard resizing. Photos follow the
+completed physical frame during arrivals/holds only; travel next to a linked
+frame reserves the panel but removes the observation immediately to avoid
+misleading comparison. Empty unrelated frames and projects have no panel.
+The full original is fit without crop; layout, size and photo choice are
+viewer-only, not authored or persisted. No physics, authored demos, camera
+pose, portable transport or PNG/video composition changes. Missing local
+IDs/errors are explicit; no remote auto-fetch. Overlay comparison is deferred
+until calibration. Safe deletion remains disabled.
+
+**Resume:** read this section, `docs/modern-demo-catalog.md`,
+`docs/reference-images.md`, `docs/camera-calibration.md` and
+`docs/technical-debt.md`. Next: **7C.5 — Reference Export & Import**, including
+portable originals/metadata, deduplication, collision/size policy and revisiting
+reference deletion safety. Then 7D/7E generic demo completion, 8A–8E camera
+calibration, 9A–9C real Causeway calibration and final demos. Historical next
+steps below are superseded. Verify 7C.4 in Opera before continuing.
+
 ## Modern Demo Catalog — Keyframe References (7C.3)
 
 7C.2 was accepted by the user in Opera. 7C.3 implements optional ordered

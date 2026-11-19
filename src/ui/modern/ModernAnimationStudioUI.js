@@ -12,10 +12,12 @@
     statusMessages=require('./ModernStatusMessage');
     thumbnailApi=require('./ModernExperimentThumbnail');
   }
-  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi);
+  var refs=root.CurvatureModernAnimationPresentation;
+  if(typeof module==='object'&&module.exports)refs=require('../../animation/ModernAnimationPresentation');
+  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi){
+}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
@@ -1054,8 +1056,8 @@
       else if(card.right>bounds.right)list.scrollLeft+=card.right-bounds.right+4;
     }
   }
-  // Selected-frame authoring only. Do not fetch originals or touch the player.
-  function renderReferenceLinks(doc,panel,frame,actions,list){
+  // Selected-frame authoring only. Originals load only on explicit inspection.
+  function renderReferenceLinks(doc,panel,frame,actions,list,get){
     var ids=frame.referenceImageIds||[],rows=null,busy=false;
     var section=el(doc,'section','modern-studio-reference-links');
     section.appendChild(el(doc,'strong','','Reference photographs ('+ids.length+')'));
@@ -1064,44 +1066,56 @@
     var status=el(doc,'p','modern-studio-hint');status.setAttribute('role','status');
     var linked=el(doc,'div','modern-studio-reference-list');
     var tools=el(doc,'div','modern-studio-toolbar');
-    var picker=el(doc,'select','modern-studio-reference-picker');picker.setAttribute('aria-label','Reference photograph to attach');
+    var picker=el(doc,'div','modern-studio-reference-gallery');picker.setAttribute('role','group');picker.setAttribute('aria-label','Reference photograph to attach');
+    var selectedId='',choices=[];
+    function thumb(row){
+      var visual=el(doc,'span','modern-reference-thumb');
+      if(row&&row.thumbnail){var img=el(doc,'img');img.src=row.thumbnail.dataUrl;img.alt=row.title;img.loading='lazy';visual.appendChild(img);}
+      else visual.textContent='No thumbnail';
+      return visual;
+    }
+    function inspect(id){if(refs&&get)refs.showReference(doc,section,id,get);}
+    function pick(id){selectedId=id;choices.forEach(function(c){c.button.setAttribute('aria-pressed',String(c.id===id));});attach.disabled=!id||busy||ids.length>=100;}
     function change(next){if(section.isConnected===false)return;actions.frame(frame.key,'referenceImageIds',next);}
     function move(i,step){var next=ids.slice(),other=next[i+step];next[i+step]=next[i];next[i]=other;change(next);}
     var attach=button(doc,'Attach','Attach selected reference photograph',function(){
-      var id=picker.value;if(rows&&rows.some(function(row){return row.id===id;})&&!ids.includes(id)&&ids.length<100)change(ids.concat([id]));
+      var id=selectedId;if(rows&&rows.some(function(row){return row.id===id;})&&!ids.includes(id)&&ids.length<100)change(ids.concat([id]));
     });
     var refresh=button(doc,'Load photographs','Load local reference photographs',load);
     function paint(){
-      linked.textContent='';picker.textContent='';
+      linked.textContent='';picker.textContent='';choices=[];
       if(!ids.length)linked.appendChild(el(doc,'p','modern-studio-hint','No reference photographs linked.'));
       ids.forEach(function(id,i){
         var row=rows&&rows.find(function(item){return item.id===id;});
         var item=el(doc,'div','modern-studio-reference-row');
         var label=el(doc,'span','',row?row.title:rows?'Missing local photograph: '+id:'Unresolved local photograph: '+id);
-        label.title=id;item.appendChild(label);
+        var visual=button(doc,'','View original photograph '+(i+1),function(){inspect(id);});
+        visual.className+=' modern-reference-thumb-button';visual.appendChild(thumb(row));visual.disabled=!row||typeof get!=='function';
+        item.appendChild(visual);label.title=id;item.appendChild(label);
         var up=button(doc,'↑','Move reference photograph '+(i+1)+' earlier',function(){move(i,-1);});up.disabled=i===0;item.appendChild(up);
         var down=button(doc,'↓','Move reference photograph '+(i+1)+' later',function(){move(i,1);});down.disabled=i===ids.length-1;item.appendChild(down);
         item.appendChild(button(doc,'Unlink','Unlink reference photograph '+(i+1),function(){change(ids.filter(function(x){return x!==id;}));}));
         linked.appendChild(item);
       });
-      var placeholder=el(doc,'option','',rows?'Choose a photograph…':'Load the local library first');placeholder.value='';picker.appendChild(placeholder);
-      (rows||[]).filter(function(row){return !ids.includes(row.id);}).forEach(function(row){
-        var option=el(doc,'option','',row.title+' · '+row.id);option.value=row.id;picker.appendChild(option);
+      var candidates=(rows||[]).filter(function(row){return !ids.includes(row.id);});
+      if(!candidates.length)picker.appendChild(el(doc,'p','modern-studio-hint',rows?'No unlinked photographs.':'Load the local library first'));
+      candidates.forEach(function(row){
+        var option=button(doc,'','Select photograph '+row.title,function(){pick(row.id);});
+        option.className+=' modern-reference-choice';choices.push({id:row.id,button:option});option.disabled=busy||ids.length>=100;
+        option.appendChild(thumb(row));option.appendChild(el(doc,'span','',row.title));option.title=row.id;picker.appendChild(option);
       });
-      picker.value='';picker.disabled=busy||!rows||ids.length>=100;attach.disabled=true;
-      refresh.disabled=busy||typeof list!=='function';
+      pick('');refresh.disabled=busy||typeof list!=='function';
     }
-    picker.addEventListener('change',function(){attach.disabled=!picker.value||busy||ids.length>=100;});
     async function load(){
       if(busy||typeof list!=='function')return;
-      busy=true;refresh.disabled=true;picker.disabled=true;attach.disabled=true;status.textContent='Loading local photographs…';
+      busy=true;refresh.disabled=true;choices.forEach(function(c){c.button.disabled=true;});attach.disabled=true;status.textContent='Loading local photographs…';
       try{var found=await list();if(section.isConnected===false)return;rows=found;
         status.textContent=rows.length?'Local library loaded.':'No local photographs. Import one in Reference Image Library.';
       }catch(error){rows=null;status.textContent='Cannot resolve local photographs: '+(error.message||error);}
       finally{busy=false;if(section.isConnected!==false)paint();}
     }
-    tools.appendChild(refresh);tools.appendChild(picker);tools.appendChild(attach);
-    section.appendChild(status);section.appendChild(linked);section.appendChild(tools);panel.appendChild(section);paint();
+    tools.appendChild(refresh);tools.appendChild(attach);
+    section.appendChild(status);section.appendChild(linked);section.appendChild(tools);section.appendChild(picker);panel.appendChild(section);paint();
     if(ids.length)load();
   }
   function render(doc,host,draft,result,actions,prepared,options){
@@ -1348,7 +1362,7 @@
         fields.appendChild(easing);
       }
       panel.appendChild(fields);
-      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages);
+      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage);
       host.appendChild(panel);
     }
     host.appendChild(previewBar(doc,result,actions,prepared,options,true));
