@@ -8,6 +8,43 @@ all existing Soundly frames before a reusable tool exists. Read
 [reference images](reference-images.md) and the [demo roadmap](modern-demo-catalog.md)
 when resuming in a new session.
 
+## Initial headless point projector (8A.1)
+
+`src/calibration/CameraLandmarkProjection.js` exposes
+`create(model, camera, width, height, {method, atmosphere, temperatureProfile, step})`.
+`camera` is the physical projection snapshot returned by `renderPhysical` with
+`captureProjection: true` (observer-local origin, Eye-Lvl, captured raster
+transform). A standalone snapshot without `pixelTransform` uses the existing
+centered full-canvas convention. Do not substitute thumbnail or CSS dimensions.
+`metric({id,east,north,height})` uses authored surface-arc metres from the scene
+origin and altitude above the model surface; `vertex({id,bank,objectType,primitive,vertex})`
+resolves zero-based mesh indices on a fixed authored scene. IDs are supplied by
+the caller; changing topology or scene geometry invalidates mesh references.
+Truncated object sequences are rejected rather than reassigning indices.
+
+Accurate reuses physical placement and observer recentering, the analytic
+vacuum sampler or exact forward-branch RK4 shooting (default step 200 m), and
+the physical arrival direction. Canvas Direct reuses its effective Globe
+placement or signed Flat embedding, not the Accurate point's straight chord.
+Results expose `{id,method,status,pixel,reason,meshOcclusion}`. `visible` means
+in-frame and terrain-eligible, NOT verified mesh visibility; `out_of_frame`
+retains finite pixel coordinates. `blocked`, `indeterminate`, `solver_failed`,
+`behind_camera`, `near_plane` carry no pixel. Do not drop invalid observations
+from a fit. No implicit fallback. Initial support is Vacuum, Standard and
+Temperature lapse only; engineered profiles and vertical/multipath exact
+shooting outside the forward branch are not qualified. The direct terrain
+check is approximate, not a certificate of its painter's horizon mask.
+
+Tests compare 40 selected visible endpoints with actual renderer Canvas path
+coordinates (mock recording context), including translated and rolled cameras,
+Globe/Flat, both methods, all three atmospheres for towers, portrait Causeway
+object types 8/9 under Standard. Max sampled endpoint error 0.000191 px;
+analytic Flat pixels, out-of-frame, behind, hidden, grazing and invalid inputs
+also tested. This is a baseline, not a general subpixel guarantee: far/telephoto
+and near-horizon renderer parity, real raster/viewport capture, independent
+calibration intrinsics, portable landmark identity and mesh visibility need
+further qualification before claiming real-photo recovery. No optimizer yet.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified

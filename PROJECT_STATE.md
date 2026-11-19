@@ -1,3 +1,20 @@
+## Modern Demo Catalog — Camera calibration point projection (8A.1)
+
+Issue #6: added headless `src/calibration/CameraLandmarkProjection.js` for
+metric landmarks and authored mesh vertices on a fixed scene topology. It
+uses camera snapshots and the actual physical and effective-radius geometry
+paths, analytic vacuum or point-to-point RK4, and continuous backing pixels.
+Initial scope: Globe/Flat, Vacuum/Standard/Temperature lapse, eye-level camera.
+Statuses distinguish blocked, grazing, behind/near-plane, out-of-frame and
+failed solves; no mesh-occlusion or global multipath certification. No UI,
+optimizer or production renderer changes. 22 new tests, 148 targeted tests
+passed; 40 sampled painter-path endpoints differed by at most 0.000191 px
+(mock Canvas path coordinates, not a browser raster comparison). See
+`docs/camera-calibration.md` for the contract and remaining qualification.
+Issue #4 accepted/closed; #5 encoding research deferred. Next: 8A.2 perspective
+initialization with unknown location/focal length, after extending the
+projection qualification as needed for distant and near-horizon landmarks.
+
 ## Modern Demo Catalog — Export preferences (#4)
 
 PNG and video preferences are independently stored in browser-local versioned keys.
