@@ -39,13 +39,15 @@ test('140.12.76: retired chronological migration and patch notes stay out of act
     assert.ok(!names.includes(name), `superseded documentation is back: ${name}`);
   }
   // The Animation v2 guides, location checklist, and the active topic-based
-  // interactive-rendering migration plan and built-in demo catalog roadmap
+  // interactive-rendering migration plan, built-in demo catalog roadmap,
+  // and the reference image / calibration topic contracts
   // are bounded exceptions, not permission
   // for another chronological series of patch diaries.
   for(const name of ['modern-animation-contract.md', 'modern-animation-project-wizard.md',
-    'modern-location-migration.md', 'interactive-rendering-migration.md', 'modern-demo-catalog.md'])
+    'modern-location-migration.md', 'interactive-rendering-migration.md', 'modern-demo-catalog.md',
+    'reference-images.md', 'camera-calibration.md'])
     assert.ok(names.includes(name), 'required topic-based guide missing: '+name);
-  assert.ok(names.length <= 53, 'a chronological documentation tree was reintroduced');
+  assert.ok(names.length <= 55, 'a chronological documentation tree was reintroduced');
 });
 
 test('140.12.76: current guides, test-backed contracts, and physical evidence survive', () => {

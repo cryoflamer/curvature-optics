@@ -1,8 +1,13 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **patch 4C (Keyframe Thumbnail Persistence)**, 2026-11-19. Catalog,
-Soundly, covers, read-only activation, copy and portable export are implemented.
-Separate galleries and cover editing are implemented. Soundly now opens in synchronized Globe/Flat Compare. Keyframe navigation now requests an immediate paused paint when the stage has layout. A horizontal Storyboard now sits below playback controls. Lazy keyframe thumbnails are implemented. Persistent keyframe thumbnails and portable attachments are implemented. Presentation Mode and optional keyframe narratives are implemented; user confirmed Presentation Mode in Opera. Narrative Support was accepted in Opera. Complete Storyboard Export is implemented; browser acceptance remains open. Next: Soundly Narrative & Sources.
+Status: **7C.1 (Reference Image Foundation & Roadmap)**, 2026-11-19.
+The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
+thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
+are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
+is implemented; UI, storage and transport follow. Finish the generic demo
+mechanism before Camera Calibration, then use the new tool to author final
+Soundly observations. See [reference images](reference-images.md) and
+[camera calibration](camera-calibration.md) for the design and research plan.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -177,16 +182,27 @@ record the split, and do not mark complete on implementation alone.
 | 4B — Keyframe Thumbnail Capture | Implemented; Opera acceptance open | Capture only a successfully painted selected keyframe at its exact arrival. Reuse bounded screenshot composition (Scene or both Compare sides), lazy capture on explicit jump, manual refresh and transient cache keyed by visual state; validate History provenance before reuse. No eager whole-project render. |
 | 4C — Keyframe Thumbnail Persistence | Implemented; Opera acceptance open | Separate bounded IndexedDB thumbnail cache, restore, duplicate and optional portable JSON attachments with size limits; prune unused entries. Never put raster payloads into LocalStorage draft checkpoints or physical fingerprints. Built-ins remain immutable. |
 | 5 — Presentation Mode | Implemented; user confirmed in Opera | Viewer-focused layout, timeline, play/pause/restart, fullscreen, title/current frame and optional camera HUD, open Studio/Create copy. Same player and project, no second timeline or engine; test resize, keyboard/fullscreen exit and lifecycle. |
-| 6 — Narrative Support | Implemented; user confirmed in Opera | Optional plain-text keyframe description, up to 1000 characters; outgoing caption remains visible until the next arrival, including travel, with explicit source-frame label. Empty next caption clears the text. Synchronize to the last successfully painted time. A bounded panel is shown in Presentation only when the active sequence has explanations. Old JSON remains readable and unchanged; draft checkpoints, Undo/Redo, copies and portable export/import preserve descriptions. Author Soundly captions in step 7; PNG/video overlays are not added by this step. |
+| 6 — Narrative Support | Implemented; user confirmed in Opera | Optional plain-text keyframe description, up to 1000 characters; outgoing caption remains visible until the next arrival, including travel, with explicit source-frame label. Empty next caption clears the text. Synchronize to the last successfully painted time. A bounded panel is shown in Presentation only when the active sequence has explanations. Old JSON remains readable and unchanged; draft checkpoints, Undo/Redo, copies and portable export/import preserve descriptions. Author final Soundly captions after calibration in 9B; PNG/video overlays are not added by this step. |
 | 7A — Complete Storyboard Export | Implemented; Opera acceptance open | Capture missing or regenerate all active keyframes on isolated fixed-size canvases, with progress/cancel, no playhead changes. Export current prepared project with every thumbnail or a compact JSON without keyframe images. Shipped portable assets may contain validated thumbnails; discard imagery if a catalog display override changes the view. Library backup actions continue to export available cached images. |
 | 7A.1 — Export Filename Naming | Implemented; user confirmed in Opera | Shared descriptive timestamped portable JSON filenames. |
 | 7B.1 — Atmosphere Variant Engine | Implemented | Infer eligibility from the active refraction features and animation contract; validate immutable runtime variants. No UI or schema changes. |
 | 7B.2 — Atmosphere Switcher | Implemented; user confirmed in Opera | Studio and Presentation toggle only for eligible prepared projects. Preserve playhead, selected frame and playback state; repaint paused frames. Make all thumbnail lookup paths exact-state aware, including shipped images. |
-| 7B.3 — Atmosphere-aware Export | Implemented; Opera acceptance open | Save and ordinary project JSON retain authored physics; explicit current-variant export, PNG/video and batch captures use effective playback physics. Label resulting files with their atmosphere; reject mismatched attachments. |
-| 7C — Reference Images & Sources | Planned | Optional observation images, source URLs and credits for keyframes; separate from simulation thumbnails. Validate portable assets and document rights/provenance. |
-| 7D — Soundly Narrative | Planned | Adapt Legacy explanations and observation links to actual Compare keyframes, distinguish prediction from observation. |
-| 7E — Soundly Finalization | Planned | Author standard atmosphere on both sides; not historical weather reconstruction. Verify Canvas Direct vs Accurate RK4, revise captions/hold times, generate final storyboard and cover, validate controls, copy/export/reimport and browser performance. Tag only after CI/manual acceptance. |
-| 8+ — Legacy Demo Migration | Planned | Chicago, Canigou, Causeway, Pontchartrain/TransLine, Bedford, Grace, Tensas (order provisional); Curve last as a distinct educational lesson. Reuse Studio; add universal capabilities only when justified by source choreography. One bounded adaptation at a time, with explicit evidence and limitations. |
+| 7B.3 — Atmosphere-aware Export | Implemented; user confirmed in Opera | Save and ordinary project JSON retain authored physics; explicit current-variant export, PNG/video and batch captures use effective playback physics. Label resulting files with their atmosphere; reject mismatched attachments. |
+| 7C.1 — Reference Image Foundation & Roadmap | Implemented | Independent owned validated observation records with original/optional thumbnail and provenance, status-aware acquisition facts, revised docs. No storage, UI, project schema or transport changes. |
+| 7C.2 — Reference Image Library | Planned; next | Upload and decode, original bytes, durable independent storage, metadata editor, quota and deletion policies. |
+| 7C.3 — Keyframe References | Planned | Optional shared references by ID; preserve across authoring, copy, Undo/Redo, recovery; no physical coupling. |
+| 7C.4 — Reference Presentation | Planned | Observation panel in Studio and Presentation with original view, authorship, source and metadata; distinguish prediction and observation. |
+| 7C.5 — Reference Export & Import | Planned | Validated portable references and deduplicated assets, size limits, catalog/copy/import compatibility; compact vs full thumbnail options must not silently strip observations. |
+| 7D — Narrative | Planned | Complete generic narrative and sequencing capabilities beyond existing step 6 only as justified; no final Soundly photo matching yet. |
+| 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
+| 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
+| 8B — Control Point Editor | Planned | Link image pixels to model landmarks, select calibration vs held-out validation points. |
+| 8C — Camera Optimization | Planned | Fixed/free parameters, bounded numerical optimization, residual and convergence diagnostics. |
+| 8D — Uncertainty & Validation | Planned | Sensitivity, degeneracy, uncertainty and independent validation of predictions. |
+| 8E — Studio Integration | Planned | Save accepted camera as normal experiment/keyframe; calibration evidence schema based on research. |
+| 9A — Causeway Calibration | Planned | Source and verify actual bridge photographs, metadata and rights; calibrate new observation poses, not forced matches to Legacy. |
+| 9B — Soundly Causeway Finalization | Planned | Final narrative, frames/holds, photo references, cover and verification; standard atmosphere as scenario, Canvas Direct vs Accurate RK4, exports and Opera acceptance. |
+| 9C — Legacy Demo Migration | Planned | Chicago, Canigou, Causeway, Pontchartrain/TransLine, Bedford, Grace, Tensas (order provisional); Curve last as a distinct educational lesson. Reuse Studio; one bounded adaptation at a time. |
 
 ## Verification and migration policy
 
@@ -511,4 +527,5 @@ names and separate video entries add the suffix before dimensions. Mixed or
 custom atmosphere and Library-wide exports have no common-mode suffix.
 No portable schema changes.
 Soundly is still authored in vacuum; standard-atmosphere visual/numerical
-accuracy and Opera acceptance are not implied by project compatibility.
+accuracy is not implied by project compatibility. The user accepted 7B.3 in
+Opera; final scientific/photographic qualification remains open.

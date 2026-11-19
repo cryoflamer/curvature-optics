@@ -1,3 +1,34 @@
+## Modern Demo Catalog — Reference Image Foundation & Roadmap (7C.1)
+
+7B.3 was accepted by the user in Opera. The roadmap has been revised: finish
+reusable demo infrastructure first (7C.1–7C.5, 7D narrative, 7E integration),
+then build Camera Calibration (8A research, 8B landmark editor, 8C optimizer,
+8D uncertainty/held-out validation, 8E Studio integration), then calibrate real
+Causeway images (9A), finalize Soundly (9B), and migrate other demos (9C).
+Earlier prospective next steps below are historical, not the current plan.
+
+7C.1 adds `ModernReferenceImage.js`: independent immutable observation records,
+original raster bytes and optional thumbnail, stable IDs, plain-text provenance,
+HTTP(S) citation, measured/reported/estimated/unknown metadata and optional
+uncertainties. Structural size, type, signature and ID validation only; full
+decode and storage are next. No raster enters projects, History/thumbnail
+cache, LocalStorage or the portable envelope in this step. No changes to
+physics or authored Soundly assets. No photographs were added.
+
+**Resume in a new chat:** read this section, `docs/modern-demo-catalog.md`
+(current staged acceptance table), `docs/reference-images.md` (record and
+future Library/link/transport contracts), and `docs/camera-calibration.md`
+(methodology and deferred research). The next compatch is **7C.2 — Reference
+Image Library**, not the calibration optimizer. Preserve the original bytes
+separately from disposable simulation captures; link by stable IDs later.
+Soundly is the two-road Causeway bridge, not the transmission-line experiment.
+Its present Legacy-derived camera frames are explanatory rather than calibrated
+photographic matches. Create new observation poses after source verification
+and numerical calibration. Use calibration vs held-out validation landmarks,
+lock known camera facts, document assumptions and uncertainties; compare the
+same camera across models and atmospheres without retuning to the held-out
+features. Standard atmosphere is not reconstructed weather.
+
 ## Modern Demo Catalog — Atmosphere-aware Export (7B.3)
 
 User confirmed the switcher in Opera. Storyboard exports the selected physical
@@ -11,7 +42,7 @@ modify the demo. Single-project JSON, PNG ZIP, video and separate video ZIP
 entries carry `-vacuum` / `-standard` for common fixed active conditions; mixed
 and custom atmospheres and Library-wide JSON have no common-mode suffix.
 Accurate RK4 remains the media export quality. Soundly is still authored in
-vacuum; next: 7C reference images and sources, 7D narrative, 7E finalization.
+vacuum; the user subsequently accepted 7B.3 in Opera. See 7C.1 above for the current roadmap.
 
 ## Modern Demo Catalog — Atmosphere Switcher (7B.2)
 
