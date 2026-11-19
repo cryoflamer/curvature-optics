@@ -217,6 +217,72 @@ The next atomic step is multiseed orchestration and comparative objective
 evaluation before the wider 8A.4 qualification. No UI or production optics
 changes.
 
+## Multi-seed calibration orchestration (8A.3.2)
+
+`src/calibration/CameraCalibration.js` exposes
+`calibrate(model, observations, options)`. It takes the same metric or
+authored vertex observations as CameraPhysicalFit; no initial camera
+location, orientation or focal length is required. The scene hypothesis
+and atmosphere are fixed per run. Metric and authored mesh points are
+converted into model-specific Cartesian coordinates (optics-neutral
+physical geometry at zero observer height); the DLT/homography and P3P
+focal sweep generators operate on those coordinates and original image
+pixels. The current camera is not an implicit starting pose.
+
+Options include width, height, atmosphere, temperatureProfile, step,
+minFocalPx, maxFocalPx, samples, maxCandidates (1–32, default 8),
+useApproximate (default true), initialPoses (optional explicit seeds),
+freeParameters, fixedParameters, bounds, scales, maxIterations and
+validation. Focal sweep bounds constrain perspective initialization, not
+the final fit; use physical bounds for that. Locked values must be explicit;
+the original scene pose is not a prior. Seeds outside user bounds or the
+physical camera domain are rejected, not clamped. For a small observation
+set a supplied pose can be refined with enough parameters locked; when
+all parameters are locked the fixed pose can be evaluated directly.
+The search selects a bounded number of distinct candidates, prioritizing
+a representative of each source, then low perspective RMS with pose
+diversity (2% of scene span or at least 1 m, 2 degrees, log focal 0.1).
+This is a heuristic allocation, not proof of a global minimum.
+
+Each selected seed is scored with Accurate. For non-vacuum conditions an
+optional Canvas Direct local fit proposes a new starting pose, which must
+be rescored with Accurate and improve the valid Accurate objective (or
+recover a previously invalid seed) before it can replace the initial pose.
+The subsequent Accurate fit cannot worsen that score. Do not directly
+compare approximate RMS with exact RMS to select a final result. Final
+candidates are ranked by the same weighted Accurate cost, with solver
+termination and per-observation details. Invalid candidates are not
+accepted. The result reports generation counts, rejected and omitted
+seeds, attempts, candidate poses and evaluations, and always complete:false;
+no_seed differs from no_valid_fit. Identical final minima may appear more
+than once; distinct alternatives are not collapsed to one estimate.
+Held-out validation observations must have separate landmark IDs and are
+evaluated only after the ranking is fixed, with no influence on the fit.
+
+12 new integration tests passed; 58/58 combined with the prior three
+initialization/pose suites and local fit suite. Unknown vacuum cameras on
+both sides of Globe and Flat recovered in the four synthetic fixtures
+with RMS below 4.2e-12 px. On a noiseless ~22 km Standard Globe scene three
+starts (one DLT, two P3P) achieved Accurate RMS 1.6536–1.6567e-11 px,
+with parameter errors below 0.1 in their respective units for the best
+candidate. The DLT initial Accurate RMS was 5.9834 px. The approximate
+fit RMS was 0.002348 px; its Accurate rescoring was 0.0019044 px.
+The authored bridge mesh test uses 28 vertices, best RMS 1.3332e-11 px.
+A frontal vertical plane deliberately retained four accurate fits at
+distances 242.84, 248.72, 328.54, 389.17 m with different equivalent focal
+fields and RMS no greater than 1.03e-12 px. These are synthetic consistency
+tests, not real-photo or independent physical-model verification.
+Changing held-out image pixels left calibration attempts and ranking
+unchanged. Explicit locks, no-seed/invalid-fit states, limits and
+determinism were also exercised. 30 existing dependency/test hashes
+checked against the remote parent. No full repository or browser tests.
+Next 8A.4: numerical conditioning, identifiability and noise/atmosphere
+sensitivity, distinct-minimum analysis, then editor UI. The pipeline is
+synchronous, has no worker cancellation, P4Pf/RANSAC or exhaustive search;
+strong refraction, difficult visibility, unknown lens/crop or incorrectly
+identified geometry may prevent successful recovery. No production optics
+or UI changes.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified

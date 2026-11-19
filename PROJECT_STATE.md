@@ -1,3 +1,22 @@
+## Modern Demo Catalog — Multi-seed camera calibration (8A.3.2)
+
+Issue #6: added `src/calibration/CameraCalibration.js`, unifying perspective
+DLT/homography and P3P sweep, physical pose conversion, bounded diverse
+seed selection, optional Canvas Direct proposals and Accurate fitting.
+All final candidates scored by the same Accurate weighted objective;
+approximate proposals accepted only after Accurate rescoring. Metric and
+authored vertex correspondence inputs, explicit locks/bounds, distinct
+no-seed/no-valid-fit states, and held-out evaluation after ranking.
+12 new integration tests; 58/58 with seed, pose and local fit suites.
+~22 km Standard Globe synthetic scene: three starts converged to
+1.654e-11 px RMS; 28 authored bridge vertices reached 1.333e-11 px RMS.
+Four distinct focal/distance solutions reproduced a frontal vertical
+plane within 1.03e-12 px; no unique answer asserted. Noiseless synthetic
+consistency, not photo accuracy. 30 dependency/test blobs verified against
+remote parent. No full repo/browser regression or UI/production optics
+changes. Finite synchronous search, not exhaustive. Next 8A.4: conditioning,
+uncertainty, noise and atmospheric sensitivity, then 8B editor.
+
 ## Modern Demo Catalog — Local physical camera fit (8A.3 baseline)
 
 Issue #6: added `src/calibration/CameraPhysicalFit.js` with explicit weighted
