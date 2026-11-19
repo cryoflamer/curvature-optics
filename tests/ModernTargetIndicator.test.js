@@ -126,7 +126,8 @@ test('browser/worker dependency order and UI controls are complete',()=>{
   assert.match(app,/function updateTargetIndicator\(override\)/);
   assert.match(app,/function syncStudioTargetIndicator\(\)/);
   assert.match(app,/updateTargetIndicator\(override\);/);
-  assert.match(app,/targetIndicator:!!\(newUiEl\('ModernAnimationVideoExportTarget'\)/);
+  assert.match(app,/includeTarget=!!\(newUiEl\('ModernAnimationVideoExportTarget'\)\|\|\{\}\)\.checked/);
+  assert.match(app,/targetIndicator:includeTarget,targetSelection:selectedTarget/);
   assert.doesNotMatch(read('CurvatureApp.html'),/ModernTargetIndicator|ModernTargetDirection/);
 });
 

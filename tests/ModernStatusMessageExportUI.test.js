@@ -18,7 +18,8 @@ function harness(picker){
     removeAttribute(name){delete this.attrs[name];}};
   items.ModernAnimationFrameExportSize.value='640x360';
   items.ModernAnimationFrameExportWorkers.value='1';
-  items.ModernAnimationFrameExportDestination={value:'disk',options:[{disabled:false}]};
+  items.ModernAnimationFrameExportDestination={value:'disk',options:[{value:'disk',disabled:false},{value:'memory',disabled:false}],
+    addEventListener(type,fn){handlers['ModernAnimationFrameExportDestination:'+type]=fn;}};
   const project=require('../src/animation/ModernDemoCatalog').load()[0].project;
   let shouldFail=true,runCount=0,received,download;
   const context=vm.createContext({

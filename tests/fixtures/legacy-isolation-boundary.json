@@ -459,6 +459,12 @@
       "src/animation/ModernAnimationVideoEncoderWorker.js",
       "src/animation/ModernAnimationVideoProbeWorker.js",
       "src/animation/ModernAnimationWebMMuxer.js",
+      "src/calibration/CameraCalibration.js",
+      "src/calibration/CameraFocalSweep.js",
+      "src/calibration/CameraLandmarkProjection.js",
+      "src/calibration/CameraPerspectiveSeed.js",
+      "src/calibration/CameraPhysicalFit.js",
+      "src/calibration/CameraPhysicalPose.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
       "src/diagnostics/CurvatureSeparationAudit.js",
       "src/diagnostics/LegacyDemoPerformance.js",
@@ -470,7 +476,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 206,
+  "sourceJsCount": 212,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -570,7 +576,8 @@
       "commonJsTestCallers": [
         "tests/ModernAnimationBackgroundVideoExport.test.js",
         "tests/ModernAnimationVideoFilenamePreview.test.js",
-        "tests/ModernAnimationVideoLayoutOptions.test.js"
+        "tests/ModernAnimationVideoLayoutOptions.test.js",
+        "tests/ModernAnimationVideoPipeline.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1182,6 +1189,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/CameraLandmarkProjection.test.js",
         "tests/CurvatureMainCanvasRenderer.test.js",
         "tests/CurvaturePhysicalSceneOptics108.test.js",
         "tests/CurvaturePhysicalTowerCanvas107.test.js",
@@ -1217,10 +1225,12 @@
       ],
       "commonJsSourceCallers": [
         "src/app/CurvatureMainCanvasRenderer.js",
+        "src/calibration/CameraPhysicalPose.js",
         "src/camera/ModernCameraTelemetry.js",
         "src/camera/ModernTargetDirection.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraLandmarkProjection.test.js",
         "tests/ModernAngularGuide.test.js",
         "tests/ModernCameraPerspectiveWarp1374.test.js",
         "tests/ModernCameraTelemetry.test.js",
@@ -1284,6 +1294,74 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraCalibration.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CameraCalibration.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraFocalSweep.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraCalibration.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraFocalSweep.test.js",
+        "tests/CameraPhysicalPose.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraLandmarkProjection.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraPhysicalFit.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraCalibration.test.js",
+        "tests/CameraLandmarkProjection.test.js",
+        "tests/CameraPhysicalFit.test.js",
+        "tests/CameraPhysicalPose.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraPerspectiveSeed.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraCalibration.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraPerspectiveSeed.test.js",
+        "tests/CameraPhysicalFit.test.js",
+        "tests/CameraPhysicalPose.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraPhysicalFit.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraCalibration.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraCalibration.test.js",
+        "tests/CameraPhysicalFit.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraPhysicalPose.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraCalibration.js",
+        "src/calibration/CameraPhysicalFit.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CameraCalibration.test.js",
+        "tests/CameraPhysicalFit.test.js",
+        "tests/CameraPhysicalPose.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/camera/ModernCameraInterpolator.js": {
@@ -1590,6 +1668,8 @@
       ],
       "commonJsSourceCallers": [
         "src/app/CurvatureMainCanvasRenderer.js",
+        "src/calibration/CameraLandmarkProjection.js",
+        "src/calibration/CameraPhysicalPose.js",
         "src/camera/ModernTargetDirection.js",
         "src/renderers/CurvatureCanvasDirectPreview.js"
       ],
@@ -1628,6 +1708,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/calibration/CameraCalibration.js",
+        "src/calibration/CameraLandmarkProjection.js",
         "src/camera/ModernTargetDirection.js",
         "src/optics/OpticalTowerSilhouette.js",
         "src/renderers/CurvatureCanvasDirectPreview.js",
@@ -1635,6 +1717,8 @@
         "src/scene/CurvatureIndependentComposition.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraCalibration.test.js",
+        "tests/CameraLandmarkProjection.test.js",
         "tests/CurvatureBedford.test.js",
         "tests/CurvatureControlledGeometryParity.test.js",
         "tests/CurvatureFlatSurfaceGuides.test.js",
@@ -1699,6 +1783,9 @@
       ],
       "commonJsSourceCallers": [
         "src/app/CurvaturePhysicalCamera.js",
+        "src/calibration/CameraCalibration.js",
+        "src/calibration/CameraLandmarkProjection.js",
+        "src/calibration/CameraPhysicalPose.js",
         "src/diagnostics/CurvaturePhysicalSanity.js",
         "src/geometry/CurvaturePhysicalWorldGeometry.js",
         "src/optics/CurvaturePhysicalGroundGuides.js",
@@ -1710,6 +1797,9 @@
         "src/optics/OpticalTowerSilhouette.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraLandmarkProjection.test.js",
+        "tests/CameraPhysicalFit.test.js",
+        "tests/CameraPhysicalPose.test.js",
         "tests/CurvatureCameraTranslation.test.js",
         "tests/CurvatureSurfaceGeometry124.test.js",
         "tests/InversePreparedGradient.test.js",
@@ -1865,6 +1955,7 @@
       ],
       "commonJsSourceCallers": [
         "src/app/CurvatureMainCanvasRenderer.js",
+        "src/calibration/CameraLandmarkProjection.js",
         "src/optics/OpticalEffectiveRadiusPreview.js"
       ],
       "commonJsTestCallers": [
@@ -1925,6 +2016,7 @@
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationPreview.js",
         "src/app/CurvatureMainCanvasRenderer.js",
+        "src/calibration/CameraLandmarkProjection.js",
         "src/renderers/CurvatureCanvasDirectPreview.js"
       ],
       "commonJsTestCallers": [
@@ -2085,6 +2177,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/calibration/CameraLandmarkProjection.js",
         "src/diagnostics/CurvaturePhysicalSanity.js",
         "src/optics/CurvaturePhysicalGroundGuides.js",
         "src/optics/OpticalSharedRayField.js"
@@ -2169,6 +2262,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/calibration/CameraLandmarkProjection.js",
         "src/optics/CurvaturePhysicalPolygonFills.js",
         "src/optics/CurvaturePhysicalSceneOptics.js",
         "src/optics/OpticalEffectiveRadiusPreview.js",
@@ -2214,7 +2308,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/app/CurvatureMainCanvasRenderer.js"
+        "src/app/CurvatureMainCanvasRenderer.js",
+        "src/calibration/CameraLandmarkProjection.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernCanvasDirectAtmosphericParity.test.js",
@@ -2230,6 +2325,7 @@
       ],
       "commonJsSourceCallers": [
         "src/app/CurvatureMainCanvasRenderer.js",
+        "src/calibration/CameraLandmarkProjection.js",
         "src/renderers/CurvatureCanvasDirectPreview.js",
         "src/renderers/CurvatureFilledPreview.js",
         "src/renderers/CurvatureLegacyOrderPreview.js",
@@ -3363,6 +3459,7 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationVideoFilenamePreview.test.js",
+        "tests/ModernAnimationVideoPipeline.test.js",
         "tests/ModernSemanticNaming.test.js",
         "tests/ModernStatusMessageExportUI.test.js"
       ],

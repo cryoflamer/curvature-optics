@@ -1,3 +1,20 @@
+## CI repair after multi-seed calibration
+
+GitHub CI logs for bf87738 reported seven Node failures and one Chromium
+video smoke failure; the architecture gate also stopped at the stale
+isolation fixture. Calibration suites themselves passed. Updated the static
+isolation inventory to 212 modules and reviewed the literal require changes;
+updated the PNG destination test control to support preference binding
+and the target indicator source assertion to follow the current export
+handoff. The video smoke test now separately checks source-frame colors,
+seeks to the middle of the first and last coded intervals, waits for decoded
+current-frame readiness and reports color diagnostics without relaxing the
+existing thresholds. The exact decoder failure has not been reproduced
+locally; this is a test synchronization/diagnostic change, not a verified
+production encoder repair. Production optics, export implementation and CI
+gates are unchanged. Full current-tree regression and browser results must
+be confirmed by GitHub CI before resuming 8A.4.
+
 ## Modern Demo Catalog — Multi-seed camera calibration (8A.3.2)
 
 Issue #6: added `src/calibration/CameraCalibration.js`, unifying perspective

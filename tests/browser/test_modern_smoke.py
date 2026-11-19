@@ -448,13 +448,49 @@ class ModernBrowserSmoke(unittest.TestCase):
                 let encodedVideo=null;
                 if(liveVideo){
                 const video=await CurvatureModernAnimationBackgroundVideoExport.create({WorkerCtor}).start(videoSettings);
+                function colors(source,width,height){
+                    const decoded=new OffscreenCanvas(width,height),dc=decoded.getContext('2d');
+                    dc.drawImage(source,0,0);
+                    const px=dc.getImageData(0,0,width,height).data;
+                    let green=0,cyan=0;for(let i=0;i<px.length;i+=4){
+                        if(px[i]<50&&px[i+1]>180&&px[i+2]<50)green++;
+                        if(px[i]<50&&px[i+1]>180&&px[i+2]>180)cyan++;
+                    }return {green,cyan};
+                }
+                const sourceColors=[];
+                for(const i of [0,2]){
+                    const image=await createImageBitmap(captured.frames[i].blob);
+                    try{sourceColors.push(colors(image,image.width,image.height));}finally{image.close();}
+                }
                 const clip=document.createElement('video'),clipUrl=URL.createObjectURL(video.blob);urls.push(clipUrl);
-                const ready=new Promise((resolve,reject)=>{clip.onloadeddata=resolve;clip.onerror=()=>reject(Error('Video decode failed'));});
-                clip.src=clipUrl;await ready;
-                const decoded=new OffscreenCanvas(clip.videoWidth,clip.videoHeight),dc=decoded.getContext('2d');
-                function colors(){dc.drawImage(clip,0,0);const px=dc.getImageData(0,0,decoded.width,decoded.height).data;let green=0,cyan=0;for(let i=0;i<px.length;i+=4){if(px[i]<50&&px[i+1]>180&&px[i+2]<50)green++;if(px[i]<50&&px[i+1]>180&&px[i+2]>180)cyan++;}return {green,cyan};}
-                const first=colors();await new Promise(resolve=>{clip.onseeked=resolve;clip.currentTime=.35;});const last=colors();clip.removeAttribute('src');clip.load();
-                encodedVideo={filename:video.filename,manifest:video.manifest,type:video.blob.type,width:decoded.width,height:decoded.height,first,last};
+                clip.muted=true;clip.preload='auto';clip.playsInline=true;
+                document.body.appendChild(clip);
+                // loadeddata is not a presentation fence. Explicitly seek to
+                // the middle of each intended coded interval and wait for
+                // seek completion and current-frame availability.
+                function event(name,action){
+                    return new Promise((resolve,reject)=>{
+                        let timeout;
+                        function cleanup(){clearTimeout(timeout);clip.removeEventListener(name,done);clip.removeEventListener('error',failed);}
+                        function done(){cleanup();resolve();}
+                        function failed(){cleanup();reject(Error('Video '+name+' failed: '+(clip.error?.message||'decode error')));}
+                        clip.addEventListener(name,done);clip.addEventListener('error',failed);
+                        timeout=setTimeout(()=>{cleanup();reject(Error('Timed out waiting for video '+name));},10000);
+                        action();
+                    });
+                }
+                try{
+                    await event('loadeddata',()=>{clip.src=clipUrl;});
+                    async function sample(time){
+                        await event('seeked',()=>{clip.currentTime=time;});
+                        if(clip.seeking||clip.readyState<HTMLMediaElement.HAVE_CURRENT_DATA||Math.abs(clip.currentTime-time)>.001)
+                            throw Error('Decoded frame is not ready at '+time+' s');
+                        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+                        return colors(clip,clip.videoWidth,clip.videoHeight);
+                    }
+                    const first=await sample(.05),last=await sample(.35);
+                    encodedVideo={filename:video.filename,manifest:video.manifest,type:video.blob.type,width:clip.videoWidth,height:clip.videoHeight,first,last,sourceColors};
+                }finally{clip.removeAttribute('src');clip.load();clip.remove();}
                 }
                 return {video:encodedVideo,canvasParity:capturedData,previews:results,stream:{closed:sink.closed,aborted:sink.aborted,bytes:stream.bytesWritten,
                     streamed:stream.streamed,hasBlob:!!stream.blob,manifest:stream.manifest,zip:data,
@@ -471,8 +507,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(video['manifest']['durationUs'], 400000)
             self.assertEqual(video['manifest']['outputStreams'], 1)
             self.assertEqual(video['manifest']['presentation']['cameraHudPlacement'], 'external')
-            self.assertGreater(video['first']['green'], 100)
-            self.assertGreater(video['last']['cyan'], 100)
+            self.assertGreater(video['sourceColors'][0]['green'], 100, video['sourceColors'])
+            self.assertGreater(video['sourceColors'][1]['cyan'], 100, video['sourceColors'])
+            self.assertGreater(video['first']['green'], 100, video)
+            self.assertGreater(video['last']['cyan'], 100, video)
         self.assertEqual([item['version'] for item in result['previews']], [2, 1])
         for item in result['previews']:
             self.assertEqual((item['width'], item['height']), (1280, 720))
