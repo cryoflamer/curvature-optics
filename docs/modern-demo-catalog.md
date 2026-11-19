@@ -181,7 +181,7 @@ record the split, and do not mark complete on implementation alone.
 | 7A — Complete Storyboard Export | Implemented; Opera acceptance open | Capture missing or regenerate all active keyframes on isolated fixed-size canvases, with progress/cancel, no playhead changes. Export current prepared project with every thumbnail or a compact JSON without keyframe images. Shipped portable assets may contain validated thumbnails; discard imagery if a catalog display override changes the view. Library backup actions continue to export available cached images. |
 | 7A.1 — Export Filename Naming | Implemented; user confirmed in Opera | Shared descriptive timestamped portable JSON filenames. |
 | 7B.1 — Atmosphere Variant Engine | Implemented | Infer eligibility from the active refraction features and animation contract; validate immutable runtime variants. No UI or schema changes. |
-| 7B.2 — Atmosphere Switcher | Planned | Studio and Presentation toggle only for eligible prepared projects. Preserve playhead, selected frame and playback state; repaint paused frames. Make all thumbnail lookup paths exact-state aware, including shipped images. |
+| 7B.2 — Atmosphere Switcher | Implemented | Studio and Presentation toggle only for eligible prepared projects. Preserve playhead, selected frame and playback state; repaint paused frames. Make all thumbnail lookup paths exact-state aware, including shipped images. |
 | 7B.3 — Atmosphere-aware Export | Planned | Save and ordinary project JSON retain authored physics; explicit current-variant export, PNG/video and batch captures use effective playback physics. Label resulting files with their atmosphere; reject mismatched attachments. |
 | 7C — Reference Images & Sources | Planned | Optional observation images, source URLs and credits for keyframes; separate from simulation thumbnails. Validate portable assets and document rights/provenance. |
 | 7D — Soundly Narrative | Planned | Adapt Legacy explanations and observation links to actual Compare keyframes, distinguish prediction from observation. |
@@ -489,13 +489,17 @@ result also passes the existing frame compatibility check and contract checks.
 History source IDs remain provenance, not proof of identical frame imagery.
 
 The variant is a temporary playback input, not a new Library record, draft,
-Undo event or saved author setting. Step 7B.2 must keep authored and effective
-projects distinct and reset the selection on a project switch. It must route
-rendering, paused seeks, Storyboard and captures through the effective project;
-shipped thumbnail attachments must be matched by exact frame state, never by
-index alone when the physics differs. Step 7B.3 must route ordinary project
-persistence/export to authored physics and variant/media exports to effective
-physics, with appropriate labels. No UI, export routing or thumbnail lookup
-changes have been made by 7B.1. The existing Soundly asset is still vacuum;
-standard-atmosphere visual/numerical accuracy and Opera acceptance are future
-steps, not implied by project compatibility.
+Undo event or saved author setting. Step 7B.2 keeps `studioPrepared` authored
+and `studioPlayback.project` effective. The shared selector appears only for
+eligible prepared projects. It preserves the current time, selected frame,
+play/pause state and presentation layout, cancels stale paint/capture work,
+and redraws via the existing layout-aware preview lifecycle. New preparation,
+workspace switch and reload reset to authored physics; interpolation edits
+preserve the current compatible override. Storyboard and batch capture use
+effective frame identities; shipped images must match the exact frame state.
+A pending batch is cancelled when the player changes. Until 7B.3, Storyboard
+JSON and PNG/video export are disabled when viewing a non-authored atmosphere,
+with an explanation beside the selector; Library exports remain authored.
+Step 7B.3 will provide explicit variant/media exports with appropriate names.
+Soundly is still authored in vacuum; standard-atmosphere visual/numerical
+accuracy and Opera acceptance are not implied by project compatibility.

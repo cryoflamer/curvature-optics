@@ -1,3 +1,18 @@
+## Modern Demo Catalog — Atmosphere Switcher (7B.2)
+
+Studio and Presentation share a Vacuum/Standard selector, visible only for
+eligible prepared projects. The authored `studioPrepared` stays untouched;
+`studioPlayback.project` owns the effective variant. Switching retains the
+selected keyframe, current clock, playback state and authored settings, and
+repaints immediately when layout permits. Variant selection resets on new
+preparation, workspace switch or reload; interpolation changes preserve it.
+Storyboard and batch captures use effective frame identity; shipped images
+are accepted only for the exact matching physical frame. In-flight batch jobs
+are cancelled on a variant change. Until 7B.3, Storyboard JSON and PNG/video
+export are disabled while the override differs from authored atmosphere;
+ordinary Library exports remain authored. Soundly remains authored in vacuum.
+Next: 7B.3 explicit variant/media exports, then 7C–7E content and finalization.
+
 ## Modern Demo Catalog — Atmosphere Variant Engine (7B.1)
 
 After user acceptance of 7A/7A.1, the roadmap was revised to derive atmosphere

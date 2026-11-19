@@ -1006,7 +1006,10 @@
       [['Capture all keyframes','missing'],['Regenerate all thumbnails','refresh'],
        ['Export with thumbnails','export'],['Export without thumbnails','compact']].forEach(function(item){
         var control=button(doc,item[0],item[0],function(){options.batch(item[1]);});
-        control.className='modern-studio-action';control.disabled=!!options.batchBusy;
+        control.className='modern-studio-action';
+        var exportAction=item[1]==='export'||item[1]==='compact';
+        control.disabled=!!options.batchBusy||!!(exportAction&&options.exportDisabled);
+        if(exportAction&&options.exportDisabled)control.title='Return to authored atmosphere to export';
         header.appendChild(control);
       });
       if(options.batchBusy){

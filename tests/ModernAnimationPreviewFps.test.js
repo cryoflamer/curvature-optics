@@ -25,7 +25,7 @@ function rendererHarness(target='60',options={}){
   const meter=controls.createPreviewFpsMeter();
   const context=vm.createContext({
     studioPlayback:{status:()=>({playing,positionMs:time-1000,durationMs:100000}),
-      sample:()=>({display:{mode:options.compare?'compare':'scene'}})},
+      sample:()=>({display:{mode:options.compare?'compare':'scene'},scene:{atmosphere:'vacuum'}})},
     studioPrepared:{mode:'camera',id:'fps_test'},animationWorkspaceOpen:true,
     studioPlaybackFps:target,studioPlaybackLastPaint:-Infinity,studioPlaybackNextDue:-Infinity,
     studioPlaybackRenderedAt:null,

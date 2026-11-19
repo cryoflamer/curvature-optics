@@ -2299,6 +2299,7 @@
       interpolation.value=studioDraft&&studioDraft.interpolation==='spline'?'spline':'linear';
     }
     syncStudioHudAppearance();
+    syncStudioAtmosphereControl();
     syncStudioFrameExportControls();
     if(!ready)return;
     syncStudioPresentation();
@@ -2375,7 +2376,7 @@
         studioFrameLoading(true,'Rendering physical frame at '+(position/1000).toFixed(2)+' s…');
         var status=newUiEl('ModernAnimationPlaybackStatus');
         if(status){status.textContent=(reason==='restored'?'Restored project · ':'')+
-          'Rendering the '+(reason==='keyframe'?'selected keyframe':(position===0?'first':'saved')+' frame')+' (playback paused)…';
+          'Rendering the '+(reason==='keyframe'?'selected keyframe':reason==='atmosphere'?'atmosphere variant':(position===0?'first':'saved')+' frame')+' (playback paused)…';
           if(root.CurvatureModernStatusMessage)
             root.CurvatureModernStatusMessage.decorate(status,'info');}
       },
@@ -2455,7 +2456,7 @@
       return 'Model '+side+(spec?' · '+(spec.surface==='flat'?'Flat':'Globe')+
         ' · '+spec.atmosphere:'');
     }
-    if(label)label.textContent=isCompare?modelLabel('A'):'Scene';
+    if(label)label.textContent=isCompare?modelLabel('A'):'Scene · '+sampled.scene.atmosphere;
     var labelB=newUiEl('ModernAnimationPlaybackLabelB');
     if(labelB)labelB.textContent=modelLabel('B');
     var graphs=root.CurvatureModernAnimationGraphs;
@@ -2668,7 +2669,7 @@
     var start=newUiEl('ModernAnimationFrameExportStart');
     var cancel=newUiEl('ModernAnimationFrameExportCancel');
     var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
-    if(start)start.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi;
+    if(start)start.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi||studioAtmosphereOverridden();
     if(cancel)cancel.disabled=!studioFrameExportTask;
     syncStudioVideoExportControls();
     var status=newUiEl('ModernAnimationFrameExportStatus');
@@ -2744,7 +2745,7 @@
     var cancel=newUiEl('ModernAnimationVideoExportCancel');
     var ready=!!(studioDraft&&studioDraft.frames&&studioDraft.frames.length>=2);
     if(start)start.disabled=!!studioVideoExportTask||!!studioFrameExportTask||
-      !ready||!studioVideoExportApi||!studioVideoExportPlan;
+      !ready||!studioVideoExportApi||!studioVideoExportPlan||studioAtmosphereOverridden();
     if(cancel)cancel.disabled=!studioVideoExportTask;
     syncStudioVideoExportLayout();
     var status=newUiEl('ModernAnimationVideoExportStatus');
@@ -2856,7 +2857,7 @@
       message('Video export cancelled. All render and encoder workers terminated; no video saved.','warning');
     });
     start.addEventListener('click',async function(){
-      if(studioVideoExportTask||studioFrameExportTask)return;
+      if(studioVideoExportTask||studioFrameExportTask||studioAtmosphereOverridden())return;
       if(!studioVideoExportApi||!studioVideoExportPlan){
         message('Video export modules unavailable. Check the browser console.','error');return;
       }
@@ -2995,7 +2996,7 @@
       message('PNG export cancelled. Render and archive workers terminated; no ZIP saved.','warning');
     });
     start.addEventListener('click',async function(){
-      if(studioFrameExportTask)return;
+      if(studioFrameExportTask||studioAtmosphereOverridden())return;
       if(!studioFrameExportApi||!studioBackgroundExportApi){
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
@@ -3068,7 +3069,9 @@
     if((studioDraft.interpolation||'linear')===value)return;
     var updatedDraft=studioApi.edit(studioDraft,'interpolation',value);
     var updatedProject=studioApi.build(updatedDraft,studioPrepared.id);
-    var updatedPlayback=studioPlaybackApi.create(updatedProject);
+    var effective=studioAtmosphereOverridden()?root.CurvatureModernAnimationAtmosphereVariant.derive(
+      updatedProject,studioAtmosphereMode(studioPlayback.project)):updatedProject;
+    var updatedPlayback=studioPlaybackApi.create(effective);
     var now=profileNow(),previous=studioPlayback.status(),wasPlaying=previous.playing;
     if(wasPlaying)previous=studioPlayback.pause(now);
     updatedPlayback.seek(previous.positionMs,now);
@@ -3090,6 +3093,66 @@
     if(status){status.textContent='Camera interpolation: '+(value==='spline'?'Smooth · Spline':'Linear')+
       ' · keyframes and timeline preserved.';
       if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'info');}
+  }
+  // The prepared project remains authored; the player owns the effective variant.
+  // Never persist a viewer override or derive from an already overridden project.
+  function studioAtmosphereMode(project){
+    if(!project)return null;
+    var base=project.baseExperiment;
+    return base.display.mode==='compare'?base.compare.A.atmosphere:base.scene.atmosphere;
+  }
+  function studioAtmosphereOverridden(){
+    return !!(studioPrepared&&studioPlayback&&studioPlayback.project&&
+      studioAtmosphereMode(studioPrepared)!==studioAtmosphereMode(studioPlayback.project));
+  }
+  function studioAtmosphereEligibility(){
+    var api=root.CurvatureModernAnimationAtmosphereVariant;
+    if(!api||!studioPrepared||!studioPlayback)return null;
+    if(studioAtmosphereEligibility.project!==studioPrepared){
+      studioAtmosphereEligibility.result=api.inspect(studioPrepared);
+      studioAtmosphereEligibility.project=studioPrepared;
+    }
+    return studioAtmosphereEligibility.result;
+  }
+  function syncStudioAtmosphereControl(){
+    var host=newUiEl('ModernAnimationAtmosphereControl');
+    if(!host)return;
+    var select=newUiEl('ModernAnimationAtmosphere');
+    var eligibility=studioAtmosphereEligibility();
+    host.hidden=!(eligibility&&eligibility.eligible);
+    if(select){select.disabled=host.hidden;
+      if(!host.hidden)select.value=studioAtmosphereMode(studioPlayback.project);}
+    var note=newUiEl('ModernAnimationAtmosphereNote');
+    var text=studioAtmosphereOverridden()?
+      'Preview override · authored project unchanged. Return to authored atmosphere for Storyboard/PNG/video export.':'Authored atmosphere';
+    if(note&&note.textContent!==text)note.textContent=text;
+  }
+  function setStudioAtmosphere(value){
+    var eligibility=studioAtmosphereEligibility();
+    if(!eligibility||!eligibility.eligible)throw Error('Atmosphere switching is unavailable for this project');
+    if(!eligibility.modes.includes(value))throw RangeError('Unknown atmosphere variant');
+    if(value===studioAtmosphereMode(studioPlayback.project))return;
+    // Validate first; an invalid request must not interrupt the existing clock.
+    var variant=root.CurvatureModernAnimationAtmosphereVariant.derive(studioPrepared,value);
+    var player=studioPlaybackApi.create(variant),now=profileNow();
+    var previous=studioPlayback.status(),wasPlaying=previous.playing;
+    if(wasPlaying)previous=studioPlayback.pause(now);
+    player.seek(previous.positionMs,now);
+    if(wasPlaying&&previous.positionMs<previous.durationMs)player.start(now);
+    cancelStudioInitialPaint();ensureStudioPlaybackControls().cancel();
+    if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();
+    if(studioStoryboardJob)studioStoryboardJob.cancelled=true;
+    studioStoryboardStatus='';
+    studioPlayback=player;studioPlaybackLastPaint=-Infinity;studioPlaybackRenderedAt=null;
+    studioPlaybackFpsMeter.reset();studioLastQualityFrame=null;studioLastParity=null;
+    if(studioQualityAudit)studioQualityAudit.clear();
+    if(studioPreviewRenderer&&studioPreviewRenderer.resetFastFailures)studioPreviewRenderer.resetFastFailures();
+    // Rebuild both frame galleries from effective physical identities before painting.
+    renderAnimationStudio(studioHistoryEntries);syncStudioPlaybackControls();
+    if(player.status().playing){
+      try{renderStudioPlaybackSample(true);syncStudioPlaybackControls();}
+      finally{ensureStudioPlaybackControls().schedule();}
+    }else scheduleStudioInitialPaint('atmosphere');
   }
   // Benchmarks use an independent RAF sequence: traditional profiles freeze
   // the sample, while pipeline and moving-width profiles advance it. Neither
@@ -3140,6 +3203,11 @@
       if(root.CurvatureModernStatusMessage)
         root.CurvatureModernStatusMessage.decorate(status,kind||'info');
     }
+    var atmosphere=newUiEl('ModernAnimationAtmosphere');
+    if(atmosphere)atmosphere.addEventListener('change',function(){
+      try{setStudioAtmosphere(atmosphere.value);}
+      catch(error){syncStudioPlaybackControls();playbackNotice('Atmosphere: '+error.message,'error');}
+    });
     var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
     if(interpolation)interpolation.addEventListener('change',function(){
       try{setStudioPreviewInterpolation(interpolation.value);}
@@ -3334,11 +3402,12 @@
   // entries or Library writes are implied by navigation.
   function studioKeyframeExperiment(frame){
     if(studioPrepared&&studioProjects.frameExperiments){
-      if(studioThumbnailProject!==studioPrepared){
+      var effective=studioPlayback&&studioPlayback.project||studioPrepared;
+      if(studioThumbnailProject!==effective){
         var active=studioApi.activeFrames(studioDraft);
-        var experiments=studioProjects.frameExperiments(studioPrepared);
+        var experiments=studioProjects.frameExperiments(effective);
         studioThumbnailExperiments=new Map(active.map(function(f,i){return [f.key,experiments[i]];}));
-        studioThumbnailProject=studioPrepared;
+        studioThumbnailProject=effective;
       }
       return studioThumbnailExperiments.get(frame.key)||frame.experiment;
     }
@@ -3350,7 +3419,8 @@
     if(!image&&studioActiveDemo){
       var index=studioApi.activeFrames(studioDraft).findIndex(function(f){return f.key===frame.key;});
       var shipped=studioActiveDemo.keyframeThumbnails.find(function(item){return item.index===index;});
-      if(shipped)image=shipped.image;
+      if(shipped&&JSON.stringify(studioProjects.frameExperiment(studioActiveDemo.project,index))===
+        JSON.stringify(experiment))image=shipped.image;
     }
     if(!image&&thumbnailApi&&thumbnailApi.historyThumbnail)
       image=thumbnailApi.historyThumbnail(frame,experiment,entries);
@@ -3359,16 +3429,17 @@
   function studioStoryboardBatch(action){
     if(studioStoryboardJob||!studioPrepared||!studioPlayback||!animationWorkspaceOpen)return;
     var api=root.CurvatureModernAnimationStoryboardExport;
-    var prepared=studioPrepared,draft=studioDraft,demo=studioActiveDemo,record=studioLibraryActive;
-    var project;
-    try{project=demo?prepared:studioApi.build(draft,record?record.id:prepared.id);}
+    var prepared=studioPrepared,player=studioPlayback,draft=studioDraft,demo=studioActiveDemo,record=studioLibraryActive;
+    var overridden=studioAtmosphereOverridden(),project;
+    if(overridden&&(action==='export'||action==='compact'))return;
+    try{project=overridden?player.project:demo?prepared:studioApi.build(draft,record?record.id:prepared.id);}
     catch(error){studioStoryboardStatus=error.message;renderAnimationStudio(studioHistoryEntries);return;}
     var quality=studioPlaybackQuality,detail=studioPlaybackDetail;
     var frames=studioApi.activeFrames(draft),job={cancelled:false};
     var thin=newUiEl('ModernCanvasDirectThinOutlines');
     var options={quality:quality,sceneDetail:detail,animationMode:project.mode,
       canvasDirectOptions:{thinOutlines:!thin||thin.checked}};
-    function current(){return studioPrepared===prepared&&studioDraft===draft&&animationWorkspaceOpen;}
+    function current(){return studioPrepared===prepared&&studioPlayback===player&&studioDraft===draft&&animationWorkspaceOpen;}
     function status(text){
       studioStoryboardStatus=text;
       var host=newUiEl('ModernAnimationStoryboard');
@@ -3580,6 +3651,7 @@
         resolve:function(frame){return resolveStudioKeyframe(frame,entries);},
         refresh:function(key){selectKeyframe(key,'storyboard',true);},
         batch:studioStoryboardBatch,batchBusy:!!studioStoryboardJob,batchStatus:studioStoryboardStatus,
+        exportDisabled:studioAtmosphereOverridden(),
         cancelBatch:function(){if(studioStoryboardJob)studioStoryboardJob.cancelled=true;}});
     }
     studioUI.render(document,host,studioDraft,assessment,{

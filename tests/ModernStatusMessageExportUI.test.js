@@ -22,7 +22,7 @@ function harness(){
   let shouldFail=true,runCount=0;
   const context=vm.createContext({
     newUiEl:id=>items[id],studioFrameExportTask:null,studioVideoExportTask:null,
-    studioDraft:{frames:[{},{},{}]},studioPrepared:null,
+    studioDraft:{frames:[{},{},{}]},studioPrepared:null,studioAtmosphereOverridden:()=>false,
     studioApi:{build:()=>project},
     studioFrameExportApi:{plan:()=>({project,fps:25,width:640,height:360,timesMs:[0,40],sides:['A']})},
     studioBackgroundExportApi:{create:()=>({cancel(){},async start(){runCount++;

@@ -1370,3 +1370,8 @@ button{cursor:pointer}
 .modern-animation-playback.is-presenting:has(.modern-animation-presentation-narrative:not([hidden])) .modern-animation-playback-panels{width:min(100%,max(320px,calc((100dvh - 368px) * 1.5)))}
 .modern-animation-playback.is-presenting:has(.modern-animation-presentation-narrative:not([hidden])) .modern-animation-playback-panels.is-compare{width:min(100%,max(320px,calc((100dvh - 368px) * 3)))}
 @media(max-width:680px){.modern-animation-playback.is-presenting:has(.modern-animation-presentation-narrative:not([hidden])) .modern-animation-playback-panels.is-compare{width:100%}}
+
+/* Shared viewer atmosphere control; hidden for ineligible contracts. */
+#ModernAnimationAtmosphereControl{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+#ModernAnimationAtmosphereControl[hidden]{display:none!important}
+#ModernAnimationAtmosphereNote{max-width:340px;color:#587087}

@@ -45,9 +45,12 @@ Library backups still include available cached images. Storyboard batch export
 and filenames have been accepted in Opera. The runtime atmosphere variant
 engine now derives Vacuum/Standard eligibility from the project contract and
 active refraction, without editing the original or adding schema fields. No
-switcher is exposed yet. Next: Studio/Presentation switcher, atmosphere-aware
-export, observation images and sources, Soundly narrative, then standard
-atmosphere and final imagery.
+extra author flag is needed. Eligible prepared projects expose the shared
+**Atmosphere** selector in Studio and Presentation; it preserves playback time
+and uses separate exact-state thumbnails. The choice is runtime-only. Until
+variant export is implemented, return to the authored atmosphere for Storyboard
+JSON or PNG/video export. Next: atmosphere-aware export, observation images and
+sources, Soundly narrative, then standard atmosphere and final imagery.
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

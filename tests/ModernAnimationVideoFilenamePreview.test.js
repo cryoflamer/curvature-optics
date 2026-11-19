@@ -53,7 +53,7 @@ function harness(mode='compare',returnedFilename=null){
   const studioDraft={frames:[{experiment:p.baseExperiment},{experiment:p.baseExperiment}]};
   let receivedOptions=null;
   const context=vm.createContext({
-    newUiEl:id=>elements[id],studioDraft,studioPrepared:null,
+    newUiEl:id=>elements[id],studioDraft,studioPrepared:null,studioAtmosphereOverridden:()=>false,
     studioApi:{build:()=>p},semanticNaming:naming,
     studioVideoExportPlan:video,studioBackgroundExportApi:pngBackground,
     studioVideoExportApi:{...background,create:()=>({

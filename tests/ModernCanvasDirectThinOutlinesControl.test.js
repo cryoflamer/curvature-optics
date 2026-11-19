@@ -25,7 +25,7 @@ function harness(){
     studioPlaybackRenderedAt:28100,profileNow:()=>1000,
     studioPlaybackControlsApi:{describe:()=>({seek:'475',time:'28.1 / 59.1 s',playing:false})},
     ensureStudioPlaybackControls:()=>({play(){},pause(){},stop(){},seek(){},visibility(){}}),
-    syncStudioHudAppearance(){},syncStudioFrameExportControls(){},
+    syncStudioHudAppearance(){},syncStudioFrameExportControls(){},syncStudioAtmosphereControl(){},
     saveApplicationPreferences(){stats.prefs++;},saveStudioDraft(){stats.save++;},renderStudioLibrary(){},
     renderStudioPlaybackSample(force){assert.equal(force,true);stats.render++;},
     stopStudioPlayback(){stats.stop++;},

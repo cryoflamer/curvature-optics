@@ -45,7 +45,7 @@
       // animation tick (an off-screen/idle preview may delay RAF callbacks).
       // Newly exposed or zero-width stages keep the normal layout wait.
       var width=options.width('A');
-      if(reason==='keyframe'&&width!==null&&width>=2){paint();return;}
+      if((reason==='keyframe'||reason==='atmosphere')&&width!==null&&width>=2){paint();return;}
       frame=options.requestFrame(function(){
         if(generation===token)next();
       });
