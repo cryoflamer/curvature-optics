@@ -3200,9 +3200,13 @@
     if(frame)frame.textContent=root.CurvatureModernAnimationPresentation.frameLabel(
       studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt)||'Rendering frame…';
     var narrative=newUiEl('ModernAnimationPresentationNarrative');
+    var navigation=newUiEl('ModernAnimationNarrativeNavigation'),visibility=newUiEl('ModernAnimationNarrativeVisible');
+    var visibilityControl=newUiEl('ModernAnimationNarrativeVisibilityControl');
+    if(visibilityControl)visibilityControl.hidden=!studioPresentationTimes.some(function(t){return !!(t.narrativeTitle||t.description);});
+    if(navigation)root.CurvatureModernAnimationPresentation.syncNavigation(document,navigation,studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
     if(narrative)root.CurvatureModernAnimationPresentation.syncNarrative(narrative,
       newUiEl('ModernAnimationPresentationNarrativeLabel'),newUiEl('ModernAnimationPresentationNarrativeText'),
-      studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
+      studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt,!visibility||visibility.checked);
     var copy=newUiEl('ModernAnimationPresentationCopy');if(copy)copy.hidden=!studioActiveDemo;
     var fullscreen=newUiEl('ModernAnimationPresentationFullscreen'),stage=newUiEl('ModernAnimationPlaybackStage');
     if(fullscreen){fullscreen.hidden=!stage.requestFullscreen||document.fullscreenEnabled===false;
@@ -3221,6 +3225,20 @@
       },fullscreenError:function(error){
         var status=newUiEl('ModernAnimationPlaybackStatus');if(status)status.textContent='Fullscreen unavailable: '+error.message;
       }});
+    var navigation=newUiEl('ModernAnimationNarrativeNavigation');
+    if(navigation)navigation.addEventListener('change',function(){
+      if(!studioPresentation.isActive()||!studioPlayback)return;
+      var target=root.CurvatureModernAnimationPresentation.navigationTarget(studioPresentationTimes,navigation.value);
+      if(target===null)return;
+      var frame=studioApi.activeFrames(studioDraft)[Number(navigation.value)];
+      if(!frame)return;
+      // Keep the storyboard and editor selection consistent with an explicit jump.
+      studioSelectedKey=frame.key;studioDiagnosticTransition=null;
+      navigateStudioKeyframe(frame.key,false);
+      renderAnimationStudio(studioHistoryEntries);
+    });
+    var visibility=newUiEl('ModernAnimationNarrativeVisible');
+    if(visibility)visibility.addEventListener('change',function(){syncStudioPresentation();});
     enter.addEventListener('click',function(){studioPresentation.enter();});
     exit.addEventListener('click',function(){studioPresentation.leave();});
     var full=newUiEl('ModernAnimationPresentationFullscreen');if(full)full.addEventListener('click',function(){studioPresentation.fullscreen();});

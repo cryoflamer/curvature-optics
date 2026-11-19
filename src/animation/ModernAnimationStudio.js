@@ -54,7 +54,7 @@
     if(left.length!==right.length||left.some(function(key,i){return key!==right[i];}))return false;
     for(var i=0;i<a.frames.length;i++){
       var x=a.frames[i],y=b.frames[i];
-      for(var field of ['key','sourceSnapshotId','name','description','travelMs','holdMs','easing','experiment'])
+      for(var field of ['key','sourceSnapshotId','name','narrativeTitle','description','travelMs','holdMs','easing','experiment'])
         if(x[field]!==y[field])return false;
       if(JSON.stringify(x.referenceImageIds||[])!==JSON.stringify(y.referenceImageIds||[]))return false;
     }
@@ -97,6 +97,7 @@
         travelMs:i===0?0:before&&before.travelMs?before.travelMs:5000,
         holdMs:before?before.holdMs:0,
         easing:before?before.easing:'linear'};
+      if(before&&before.narrativeTitle!==undefined)frame.narrativeTitle=before.narrativeTitle;
       if(before&&before.description!==undefined)frame.description=before.description;
       if(before&&before.referenceImageIds)frame.referenceImageIds=before.referenceImageIds;
       return frame;
@@ -136,6 +137,7 @@
         name:frame.name,experiment:legacy?projects.sampleAt(project,arrivals[i].arrivalMs):
           projects.frameExperiment(project,i),
         travelMs:frame.travelMs,holdMs:frame.holdMs,easing:frame.easing};
+      if(frame.narrativeTitle!==undefined)result.narrativeTitle=frame.narrativeTitle;
       if(frame.description!==undefined)result.description=frame.description;
       if(frame.referenceImageIds)result.referenceImageIds=frame.referenceImageIds;
       return result;
@@ -177,6 +179,9 @@
     if(!frame)throw RangeError('Unknown Studio frame');
     if(property==='name'){
       frame.name=cleanText(value,120);
+    }else if(property==='narrativeTitle'){
+      var heading=cleanText(value,120);
+      if(heading)frame.narrativeTitle=heading;else delete frame.narrativeTitle;
     }else if(property==='description'){
       var caption=cleanText(value,1000);
       if(caption)frame.description=caption;else delete frame.description;
@@ -343,7 +348,7 @@
     }
     return projects.create(activeFrames(draft).map(function(f){
       return {id:f.sourceSnapshotId===null?undefined:f.sourceSnapshotId,
-        name:f.name,description:f.description,referenceImageIds:f.referenceImageIds,experiment:f.experiment,travelMs:f.travelMs,
+        name:f.name,narrativeTitle:f.narrativeTitle,description:f.description,referenceImageIds:f.referenceImageIds,experiment:f.experiment,travelMs:f.travelMs,
         holdMs:f.holdMs,easing:f.easing};
     }),Object.assign({id:id,name:draft.name,description:draft.description,
       mode:result.mode,target:result.target,interpolation:draft.interpolation||'linear'},
@@ -355,7 +360,7 @@
   function buildSaved(draft,id){
     if(!draft.contract)return build(draft,id); // preserve untouched V1 exports
     return projects.createV2(draft.contract,draft.frames.map(function(f){
-      return {sourceSnapshotId:f.sourceSnapshotId,name:f.name,description:f.description,referenceImageIds:f.referenceImageIds,experiment:f.experiment,
+      return {sourceSnapshotId:f.sourceSnapshotId,name:f.name,narrativeTitle:f.narrativeTitle,description:f.description,referenceImageIds:f.referenceImageIds,experiment:f.experiment,
         travelMs:f.travelMs,holdMs:f.holdMs,easing:f.easing};
     }),{id:id,name:draft.name,description:draft.description,
       interpolation:draft.interpolation||'linear',

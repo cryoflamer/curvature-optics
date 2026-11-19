@@ -120,3 +120,23 @@ test('viewer layout and keyboard splitter are independent of reference selection
   assert.equal(n.panels.style['--reference-share'],'35%');
   h.controller.sync(null,null,NaN);assert.equal(n.panel.hidden,true);assert.equal(n.control.hidden,true);
 });
+
+
+test('Chapter list follows painted timeline, title-only frames and visibility without mutating data',()=>{
+  const times=[{name:'A',narrativeTitle:'<b>First</b>',arrivalMs:0,departureMs:100},
+    {name:'B',description:'Explanation',arrivalMs:300,departureMs:500}];
+  const doc={createElement(){return {};}};
+  const select={children:[],replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
+  api.syncNavigation(doc,select,times,NaN);assert.equal(select.value,'');
+  assert.deepEqual(select.children.map(n=>n.textContent),['Rendering frame…','1 · <b>First</b>','2 · B']);
+  const options=select.children;
+  api.syncNavigation(doc,select,times,200);assert.equal(select.value,'0');assert.equal(select.children,options);
+  api.syncNavigation(doc,select,times,300);assert.equal(select.value,'1');
+  assert.equal(api.navigationTarget(times,'0'),0);assert.equal(api.navigationTarget(times,'1'),300);
+  for(const bad of ['',null,'-1','1.5','2'])assert.equal(api.navigationTarget(times,bad),null);
+  assert.deepEqual(api.narrativeAt(times,100),{label:'1 / 2 · <b>First</b>',text:''});
+  const panel={},label={},body={};
+  api.syncNarrative(panel,label,body,times,100,false);assert.equal(panel.hidden,true);
+  api.syncNarrative(panel,label,body,times,100,true);assert.equal(panel.hidden,false);
+  assert.equal(label.textContent,'1 / 2 · <b>First</b>');
+});

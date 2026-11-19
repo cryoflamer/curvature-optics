@@ -21,15 +21,30 @@
   // even when the destination has no description. The painted clock is authoritative.
   function narrativeAt(times,position){
     var i=frameIndex(times,position);
-    if(i<0||!times[i].description)return null;
-    return {label:(i+1)+' / '+times.length+' · '+times[i].name,text:times[i].description};
+    if(i<0||!(times[i].description||times[i].narrativeTitle))return null;
+    return {label:(i+1)+' / '+times.length+' · '+(times[i].narrativeTitle||times[i].name),text:times[i].description||''};
   }
-  function syncNarrative(panel,label,body,times,position){
+  function syncNarrative(panel,label,body,times,position,visible){
     var caption=narrativeAt(times,position);
-    panel.hidden=!times||!times.some(function(t){return !!t.description;});
+    panel.hidden=visible===false||!times||!times.some(function(t){return !!(t.description||t.narrativeTitle);});
     var nextLabel=caption?caption.label:'',nextText=caption?caption.text:'';
-    if(label.textContent!==nextLabel)label.textContent=nextLabel;
+    if(label.textContent!==nextLabel){label.textContent=nextLabel;body.scrollTop=0;}
     if(body.textContent!==nextText){body.textContent=nextText;body.scrollTop=0;}
+  }
+  // Navigation uses the prepared timeline, with no clock or project mutation.
+  function syncNavigation(doc,select,times,position){
+    if(select.__times!==times){
+      select.__times=times;select.replaceChildren();
+      var placeholder=element(doc,'option','Rendering frame…',select);placeholder.value='';placeholder.disabled=true;
+      (times||[]).forEach(function(t,i){
+        var option=element(doc,'option',(i+1)+' · '+(t.narrativeTitle||t.name),select);option.value=String(i);
+      });
+    }
+    var i=frameIndex(times,position);select.value=i<0?'':String(i);
+  }
+  function navigationTarget(times,value){
+    if(typeof value!=='string'||!/^\d+$/.test(value))return null;
+    var t=times&&times[Number(value)];return t?t.arrivalMs:null;
   }
   // Observation identity follows completed physical pixels, never the advancing
   // clock. A zero-duration hold is visible only at its exact arrival.
@@ -193,5 +208,5 @@
     doc.addEventListener('fullscreenchange',function(){if(active){options.sync();options.resize();}});
     return Object.freeze({enter:enter,leave:leave,fullscreen:fullscreen,isActive:function(){return active;}});
   }
-  return Object.freeze({create:create,frameLabel:frameLabel,narrativeAt:narrativeAt,syncNarrative:syncNarrative,referencesAt:referencesAt,createReferences:createReferences,showReference:showReference});
+  return Object.freeze({create:create,frameLabel:frameLabel,narrativeAt:narrativeAt,syncNarrative:syncNarrative,syncNavigation:syncNavigation,navigationTarget:navigationTarget,referencesAt:referencesAt,createReferences:createReferences,showReference:showReference});
 }));

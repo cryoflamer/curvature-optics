@@ -59,6 +59,7 @@
         experiment:experiment.validate(frame.experiment),
         travelMs:number(frame.travelMs,i===0?0:200,i===0?0:120000),
         holdMs:number(frame.holdMs,0,120000),easing:frame.easing};
+      if(frame.narrativeTitle!==undefined)result.narrativeTitle=string(frame.narrativeTitle,120);
       if(frame.description!==undefined)result.description=string(frame.description,1000);
       if(frame.referenceImageIds!==undefined){var refs=projects.validateReferenceIds(frame.referenceImageIds);if(refs.length)result.referenceImageIds=refs;}
       return result;

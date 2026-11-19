@@ -205,6 +205,8 @@ test('Studio fields persist valid in-progress edits on input before focus leaves
   assert.deepEqual(calls.at(-1),['liveEdit','name','New draft before F5']);
   names[1].value='Renamed frame';names[1].listeners.input();
   assert.deepEqual(calls.at(-1),['liveFrame','history-2','name','Renamed frame']);
+  names[2].value='Chapter title';names[2].listeners.input();
+  assert.deepEqual(calls.at(-1),['liveFrame','history-2','narrativeTitle','Chapter title']);
   const number=controls.find(n=>n.type==='number');
   number.value='6.2';number.listeners.input();
   assert.deepEqual(calls.at(-1),['liveFrame','history-2','travelMs','6.2']);
@@ -270,8 +272,8 @@ test('Studio thumbnail filmstrip uses saved History images, selected-only contro
   assert.match(cards[1].children[2].textContent,/Camera 75 m/);
   assert.equal(collect(host,n=>n.className==='modern-studio-selected-frame').length,1);
   assert.equal(collect(host,n=>n.className==='modern-studio-frame-fields').length,1);
-  assert.equal(collect(host,n=>n.className==='modern-studio-field').length,7,
-    'three global fields plus four selected keyframe fields');
+  assert.equal(collect(host,n=>n.className==='modern-studio-field').length,8,
+    'three global fields plus five selected keyframe fields');
   const change=collect(host,n=>n.className==='modern-studio-frame-fields')[0];
   change.children[0].children[1].value='Renamed';
   change.children[0].children[1].listeners.change();

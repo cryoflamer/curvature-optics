@@ -199,3 +199,36 @@ test('Optional narrative survives V1/V2 Studio edits, Undo, checkpoints and port
     assert.throws(()=>studio.editFrame(original,key,'description','x'.repeat(1001)),/text/);
   }
 });
+
+
+test('Presentation titles are optional, survive V1/V2 roundtrips and are independent of physics and names',()=>{
+  const a=scene(),b=copy(a);b.scene.camera.Height=75;
+  const title='  <b>Observation</b>  ';
+  for(const origin of [projects.create([a,b],opts('heading_v1')),
+    projects.createV2(contracts.create(a,{mode:'camera'}),[a,b],opts('heading_v2'))]){
+    const original=studio.fromProject(origin),key=original.frames[1].key;
+    const edited=studio.editFrame(original,key,'narrativeTitle',title);
+    const history=studio.createEditHistory();studio.recordEdit(history,original,edited,key);
+    assert.equal(studio.stepEditHistory(history,edited,key,'undo').draft.frames[1].narrativeTitle,undefined);
+    assert.equal(studio.stepEditHistory(history,original,key,'redo').draft.frames[1].narrativeTitle,title);
+    const restored=checkpoint(edited).draft;
+    assert.equal(restored.frames[1].narrativeTitle,title);
+    const project=studio.buildSaved(restored,origin.id);
+    assert.equal(project.keyframes[1].narrativeTitle,title.trim());
+    assert.equal(project.keyframes[1].name,origin.keyframes[1].name);
+    assert.deepEqual(projects.frameExperiments(project),projects.frameExperiments(origin));
+    assert.equal(projects.timeline(project)[1].narrativeTitle,title.trim());
+    assert.notEqual(library.fingerprint(project),library.fingerprint(origin));
+    const wire=library.exportPortable([library.record(project,'canvas-direct',project.id,1,2)]);
+    const reopened=library.parsePortable(wire)[0].project;
+    assert.equal(reopened.keyframes[1].narrativeTitle,title.trim());
+    const cleared=studio.editFrame(studio.fromProject(reopened),key,'narrativeTitle','');
+    const rebuilt=studio.buildSaved(cleared,origin.id);
+    assert.equal(rebuilt.keyframes[1].narrativeTitle,undefined);
+    assert.equal(library.fingerprint(rebuilt),library.fingerprint(origin));
+    for(const bad of [null,123,'x'.repeat(121)]){
+      const invalid=copy(project);invalid.keyframes[1].narrativeTitle=bad;
+      assert.throws(()=>projects.validate(invalid),/text/);
+    }
+  }
+});

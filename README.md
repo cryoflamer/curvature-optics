@@ -65,7 +65,7 @@ with a resizable divider and ordered photo navigation. Photo deletion is
 temporarily disabled to protect references across projects and drafts. JSON
 exports now include all linked originals and metadata once per bundle, including
 compact Storyboard exports. Unlinked observations are not exported. Conflicting
-IDs are safely remapped on import. Next: 7D/7E generic demo completion. [Camera calibration](docs/camera-calibration.md) is
+IDs are safely remapped on import. Presentation titles, chapter navigation and explanation visibility are available (7D.1). Next: 7D.2 presentation export and 7E generic demo finalization. [Camera calibration](docs/camera-calibration.md) is
 a planned separate research and development stage after infrastructure; final
 Causeway observation frames and other demo migration follow it. See the
 [updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume. Deferred improvements are tracked in the

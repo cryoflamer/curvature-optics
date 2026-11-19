@@ -140,9 +140,10 @@
       throw RangeError(v2?'Animation project allows 0–200 keyframes':
         'Animation requires 2–200 keyframes');
     var keyframes=input.keyframes.map(function(frame,index){
+      var hasTitle=Object.prototype.hasOwnProperty.call(frame||{},'narrativeTitle');
       var hasDescription=Object.prototype.hasOwnProperty.call(frame||{},'description');
       var hasReferences=Object.prototype.hasOwnProperty.call(frame||{},'referenceImageIds');
-      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasDescription?['description']:[],hasReferences?['referenceImageIds']:[]));
+      shape(frame,['sourceSnapshotId','name','value','travelMs','holdMs','easing'].concat(hasTitle?['narrativeTitle']:[],hasDescription?['description']:[],hasReferences?['referenceImageIds']:[]));
       var source=frame.sourceSnapshotId;
       if(source!==null&&!(Number.isSafeInteger(source)&&source>0)&&
         !(typeof source==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(source)))
@@ -156,6 +157,7 @@
           applyValue(baseExperiment,mode,target,frame.value),target);
       var result={sourceSnapshotId:source,name:name,value:value,travelMs:travel,
         holdMs:hold,easing:frame.easing};
+      if(hasTitle){var heading=text(frame.narrativeTitle,120,true);if(heading)result.narrativeTitle=heading;}
       if(hasDescription){var caption=text(frame.description,1000,true);if(caption)result.description=caption;}
       if(hasReferences){var refs=validateReferenceIds(frame.referenceImageIds);if(refs.length)result.referenceImageIds=refs;}
       return result;
@@ -195,6 +197,7 @@
         travelMs:i===0?0:(source.travelMs===undefined?5000:source.travelMs),
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(mode==='camera'?'smoothstep':'linear'):source.easing};
+      if(source.narrativeTitle!==undefined)frame.narrativeTitle=source.narrativeTitle;
       if(source.description!==undefined)frame.description=source.description;
       if(source.referenceImageIds!==undefined)frame.referenceImageIds=source.referenceImageIds;
       return frame;
@@ -233,6 +236,7 @@
         travelMs:i===0?0:(source.travelMs===undefined?5000:source.travelMs),
         holdMs:source.holdMs===undefined?0:source.holdMs,
         easing:source.easing===undefined?(c.mode==='camera'?'smoothstep':'linear'):source.easing};
+      if(source.narrativeTitle!==undefined)frame.narrativeTitle=source.narrativeTitle;
       if(source.description!==undefined)frame.description=source.description;
       if(source.referenceImageIds!==undefined)frame.referenceImageIds=source.referenceImageIds;
       return frame;
@@ -291,6 +295,7 @@
     return p.keyframes.map(function(frame){
       ms+=frame.travelMs;var arrivalMs=ms;ms+=frame.holdMs;
       var item={name:frame.name,arrivalMs:arrivalMs,departureMs:ms};
+      if(frame.narrativeTitle)item.narrativeTitle=frame.narrativeTitle;
       if(frame.description)item.description=frame.description;
       if(frame.referenceImageIds)item.referenceImageIds=frame.referenceImageIds;
       return item;

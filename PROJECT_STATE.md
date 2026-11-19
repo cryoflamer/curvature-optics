@@ -1,3 +1,24 @@
+## Modern Demo Catalog — Narrative UI (7D.1)
+
+An optional `narrativeTitle` (120 characters, plain text) is independent of the
+technical keyframe name and optional description. V1/V2 projects, Studio drafts,
+Undo/Redo, checkpoints, portable bundles and deduplication retain it. Empty titles
+are omitted; old projects and the shipped Soundly source remain unchanged.
+Presentation has a chapter selector over the prepared active timeline, using the
+presentation title or falling back to the technical name. Explicit jumps pause
+and select the corresponding frame; automatic chapter/caption display follows
+painted time. Show explanations hides the bounded narrative panel (including
+its heading) without changing authored data; the session-local preference is not
+exported. Photo layouts share the viewport budget with narrative. No PNG/video
+composition changes or calibration yet.
+
+**Resume:** validate 7D.1 in Opera and CI, then 7D.2 Presentation Export (optional
+photos and narrative in PNG/video), 7E infrastructure finalization, 8A–8E camera
+calibration and 9A–9C real demos. Read `docs/modern-demo-catalog.md`,
+`docs/reference-images.md`, `docs/camera-calibration.md`, `docs/technical-debt.md`.
+Historical next steps below are superseded. Keep reference deletion fail-closed
+until safe cross-workspace ownership is established.
+
 ## Modern Demo Catalog — Reference Export & Import (7C.5)
 
 Portable envelopes stay v1 without reference links; linked exports use v2 with
