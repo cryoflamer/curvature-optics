@@ -330,7 +330,7 @@
     row.appendChild(projectActions);row.appendChild(fileActions);
     host.appendChild(row);
     if(entries.some(function(entry){return entry.project.keyframes.some(function(frame){return !!frame.referenceImageIds;});}))
-      host.appendChild(el(doc,'p','modern-animation-library-note','JSON backups preserve reference IDs only, not original photographs. Keep original files separately.'));
+      host.appendChild(el(doc,'p','modern-animation-library-note','JSON backups include all linked original photographs and metadata. Unlinked observations are not included. Keep original files separately.'));
     if((options.duplicateGroups||[]).length){
       action(fileActions,options.showDuplicates?'Hide duplicates':'Find duplicates ('+options.duplicateGroups.length+')',
         'Review identical saved animations without deleting anything',actions.toggleDuplicates,options.busy);
@@ -1029,7 +1029,7 @@
     }
     host.appendChild(header);
     if(frames.some(function(frame){return !!frame.referenceImageIds;}))
-      host.appendChild(el(doc,'p','modern-studio-hint','Storyboard JSON retains reference photograph IDs only; originals are not included yet.'));
+      host.appendChild(el(doc,'p','modern-studio-hint','Both Storyboard JSON options include linked original photographs and metadata. Only simulated keyframe thumbnails are optional.'));
     var list=el(doc,'ol','modern-animation-storyboard-list');
     list.setAttribute('aria-label','Playback keyframes');
     var active=null;

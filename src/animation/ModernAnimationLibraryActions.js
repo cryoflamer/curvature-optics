@@ -56,10 +56,19 @@
           return entry.id===options.selected();
         });
         if(!entries.length)throw Error('Select a saved animation first');
-        var json=api.exportPortable(entries,options.keyframeThumbnail);
-        options.download(json,exportFilename(json,undefined,all));
-        options.notice('Exported '+entries.length+' complete animation'+
-          (entries.length===1?'':'s')+' to portable JSON.',false);
+        function download(assets){
+          var json=api.exportPortable(entries,options.keyframeThumbnail,{referenceImages:assets});
+          options.download(json,exportFilename(json,undefined,all));
+          options.notice('Exported '+entries.length+' complete animation'+
+            (entries.length===1?'':'s')+' to portable JSON.',false);
+        }
+        if(api.referenceIds&&api.referenceIds(entries).length){
+          options.setBusy(true);options.notice('Collecting original reference photographs…',false);
+          return api.collectReferences(entries,options.getReferenceImage).then(download).catch(function(error){
+            options.notice('Animation export failed: '+error.message,true);
+          }).then(finishBusy);
+        }
+        download([]);
       }catch(error){options.notice('Animation export failed: '+error.message,true);}
     }
     function importFile(file){
@@ -70,8 +79,14 @@
       }
       options.setBusy(true);options.notice('Checking animation JSON…',false);
       return Promise.resolve().then(function(){return file.text();}).then(function(contents){
-        var entries=api.parsePortable(contents);
-        return api.importEntries(indexedDB(),entries,undefined,options.crypto()).then(function(result){
+        var bundle=api.parseBundle?api.parseBundle(contents):{animations:api.parsePortable(contents),referenceImages:[]};
+        var entries=bundle.animations;
+        var linked=api.referenceIds&&api.referenceIds(entries).length;
+        if(linked&&!bundle.referenceImages.length)throw Error('Legacy JSON contains only reference IDs. Re-export with originals from the source browser.');
+        var prepared=linked?Promise.resolve().then(function(){return options.importReferenceImages(bundle.referenceImages);}).then(function(mapping){
+          return entries.map(function(entry){return api.remapReferences(entry,mapping);});
+        }):Promise.resolve(entries);
+        return prepared.then(function(resolved){return api.importEntries(indexedDB(),resolved,undefined,options.crypto());}).then(function(result){
           if(!options.importKeyframeThumbnails)return result;
           return Promise.resolve().then(function(){return options.importKeyframeThumbnails(entries);})
             .then(function(ok){if(ok===false)result.thumbnailWarning=true;return result;},

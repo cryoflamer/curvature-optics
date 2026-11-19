@@ -63,8 +63,9 @@ Linked thumbnails open original details. Studio and Presentation show the real
 photograph at painted keyframe holds in Side by side, Below or Hidden layouts,
 with a resizable divider and ordered photo navigation. Photo deletion is
 temporarily disabled to protect references across projects and drafts. JSON
-exports preserve IDs only, not original observation bytes yet. Next: 7C.5
-portable transport and generic demo completion. [Camera calibration](docs/camera-calibration.md) is
+exports now include all linked originals and metadata once per bundle, including
+compact Storyboard exports. Unlinked observations are not exported. Conflicting
+IDs are safely remapped on import. Next: 7D/7E generic demo completion. [Camera calibration](docs/camera-calibration.md) is
 a planned separate research and development stage after infrastructure; final
 Causeway observation frames and other demo migration follow it. See the
 [updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume. Deferred improvements are tracked in the
@@ -865,10 +866,16 @@ saved screenshots, chosen Optics quality and the saved dates; they are **not
 video files** and do not include playback frames. The named library is kept
 separately from the working draft and Scene/Compare.
 
-The portable envelope is `format: "curvature-modern-animations"`, `version: 1`,
-with an `animations` array. The import validates every entry before any write;
+The portable envelope is `format: "curvature-modern-animations"`, with an
+`animations` array. Version 1 is retained without photo links; version 2 includes
+`referenceImages` containing each linked original and metadata exactly once.
+The import validates every entry before any write;
 unsupported versions, corrupt or oversized files and invalid physics are
-rejected. Inside **one IndexedDB transaction**, imports compare the same
+rejected. For linked bundles, the observation transaction validates quota and
+remaps conflicting IDs before the separate project transaction. If the latter
+fails, imported observations remain for a retry. Old linked ID-only files
+require re-export from the source browser. See [reference transport](docs/reference-images.md#portable-transport-7c5).
+Inside **one IndexedDB project transaction**, imports compare the same
 semantic fingerprint as Save As, skipping identical existing projects and
 repetitions within the file. Imported projects receive fresh **local** IDs
 rather than overwriting the original ID, and dates, names, descriptions,

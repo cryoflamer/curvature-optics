@@ -147,3 +147,24 @@ test('library scripts and collapsed panel are isolated to Modern, before Studio 
   assert.match(modern,/<details id="ModernReferenceImageLibrary"[^>]*><summary>Reference Image Library/);
   assert.ok(modern.indexOf('id="ModernReferenceImageLibrary"')<modern.indexOf('id="ModernAnimationPlaybackStage"'));
 });
+
+test('portable observations are imported atomically, conflicts remapped and repeated imports reused',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record('one'));
+  let n=0;const crypto={randomUUID:()=>String(++n)};
+  const assets=[{...record('one'),title:'Different provenance'},record('two')];
+  const first=await library.importAssets(db,assets,crypto);
+  assert.notEqual(first.get('one'),'one');assert.equal(first.get('two'),'two');
+  assert.deepEqual((await library.get(db,'one')).record,record('one'));
+  assert.equal((await library.get(db,first.get('one'))).record.title,'Different provenance');
+  assert.deepEqual(await library.importAssets(db,assets,crypto),first);
+  assert.equal((await library.list(db)).length,3);
+  await assert.rejects(library.importAssets(db,Array.from({length:100},(_,i)=>record('new_'+i)),crypto),/limit/);
+  assert.equal((await library.list(db)).length,3);
+});
+
+test('portable raster verification checks headers, actual decode and original dimensions without re-encoding',async()=>{
+  assert.deepEqual(await importer.verify(record(),fakeEnv()),record());
+  await assert.rejects(importer.verify({...record(),original:{...raster,width:2}},fakeEnv()),/header dimensions/);
+  await assert.rejects(importer.verify(record(),fakeEnv(2,1)),/decoded dimensions/);
+  await assert.rejects(importer.verify(record(),fakeEnv(1,1,true)),/Decode failed/);
+});

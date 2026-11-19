@@ -215,6 +215,48 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(links).to_contain_text('Reference photographs (0)')
         self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 1)
 
+    def test_reference_portable_bundle_import_and_export(self):
+        self.open_modern()
+        self.open_animation()
+        # A complete synthetic bundle from another browser, with a conflicting local ID.
+        wire = self.page.evaluate("""async () => {
+            const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC';
+            const original = {dataUrl: png, width: 1, height: 1};
+            const asset = {version: 1, id: 'portable_photo', title: 'Imported observation',
+                           author: 'Observer', original};
+            await CurvatureModernReferenceImageLibrary.create(indexedDB, {...asset, title: 'Local observation'});
+            const draft = structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            draft.keyframes[0].referenceImageIds = [asset.id];
+            draft.keyframes[1].referenceImageIds = [asset.id];
+            const entry = CurvatureModernAnimationLibrary.record(draft, 'auto', draft.id, 1, 1);
+            return CurvatureModernAnimationLibrary.exportPortable([entry], undefined, {referenceImages: [asset]});
+        }""")
+        library = self.page.locator('#ModernAnimationLibrary')
+        def import_bundle():
+            library.get_by_label('Import animation JSON file').set_input_files({
+                'name': 'portable.json', 'mimeType': 'application/json', 'buffer': wire.encode('utf-8')})
+        import_bundle()
+        expect(library.get_by_text('My Projects · 1', exact=True)).to_be_visible()
+        result = self.page.evaluate("""async () => {
+            const projects = await CurvatureModernAnimationLibrary.list(indexedDB);
+            const ids = projects[0].project.keyframes.slice(0, 2).map(f => f.referenceImageIds[0]);
+            return {ids, incoming: (await CurvatureModernReferenceImageLibrary.get(indexedDB, ids[0])).record,
+                local: (await CurvatureModernReferenceImageLibrary.get(indexedDB, 'portable_photo')).record};
+        }""")
+        self.assertEqual(result['ids'][0], result['ids'][1])
+        self.assertNotEqual(result['ids'][0], 'portable_photo')
+        self.assertEqual(result['local']['title'], 'Local observation')
+        self.assertEqual(result['incoming']['title'], 'Imported observation')
+        with self.page.expect_download() as download:
+            library.get_by_text('Export all', exact=True).click()
+        exported = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(exported['version'], 2)
+        self.assertEqual(exported['referenceImages'], [result['incoming']])
+        import_bundle()
+        expect(library).to_contain_text('Imported 0 animations; 1 already present')
+        self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 2)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_soundly_reference_presentation_layout(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')

@@ -53,6 +53,35 @@
       quota(rows.concat([row]));store.add(row);finish(row);
     });});
   }
+  // One transaction plans every mapping and checks quota before adding any row.
+  // Same ID and complete normalized content reuse the original; conflicting
+  // metadata or bytes are imported as an independent observation. Repeated
+  // imports reuse an earlier remapping instead of creating more copies.
+  function importAssets(db,records,crypto){
+    var incoming=images.validateCollection(records);
+    return transaction(db,'readwrite',function(store,read,finish){read(store.getAll(),function(raw){
+      var rows=raw.map(normalize),byId=new Map(rows.map(function(r){return [r.id,r];})),added=[],mapping=new Map();
+      var reserved=new Set(incoming.map(function(r){return r.id;})),used=new Set();
+      function content(r){var copy=Object.assign({},r);delete copy.id;return JSON.stringify(copy);}
+      incoming.forEach(function(record){
+        var id=record.id,existing=byId.get(id);
+        if(existing&&content(existing.record)!==content(record)){
+          var match=rows.find(function(r){return !reserved.has(r.id)&&!used.has(r.id)&&content(r.record)===content(record);});
+          if(match)id=match.id;
+          else{
+            var attempts=0;do{if(++attempts>100)throw Error('Cannot allocate reference image ID');id=makeId(crypto);}
+            while(byId.has(id)||reserved.has(id));
+          }
+        }
+        if(!byId.has(id)){
+          var row=normalize({id:id,revision:1,record:Object.assign({},record,{id:id})});
+          rows.push(row);byId.set(id,row);added.push(row);
+        }
+        mapping.set(record.id,id);used.add(id);
+      });
+      quota(rows);added.forEach(function(row){store.add(row);});finish(mapping);
+    });});
+  }
   function edited(record,metadata){
     if(!metadata||typeof metadata!=='object'||Array.isArray(metadata)||
       Object.keys(metadata).some(function(k){return !editable.includes(k);}))throw RangeError('Only observation metadata can be edited');
@@ -83,5 +112,5 @@
     return images.validId('reference_'+token);
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
-    list:list,get:get,create:create,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota});
+    list:list,get:get,create:create,importAssets:importAssets,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota});
 }));

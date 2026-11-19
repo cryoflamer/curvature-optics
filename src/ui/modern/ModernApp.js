@@ -1585,6 +1585,11 @@
       download:downloadHistoryJson,
       keyframeThumbnail:function(experiment){return studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);},
       importKeyframeThumbnails:importStudioKeyframeThumbnails,
+      getReferenceImage:function(id){return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);},
+      importReferenceImages:async function(records){
+        for(var record of records)await root.CurvatureModernReferenceImageImport.verify(record,root);
+        return root.CurvatureModernReferenceImageLibrary.importAssets(root.indexedDB,records,root.crypto);
+      },
       confirm:function(message){return typeof root.confirm!=='function'||root.confirm(message);},
       fail:function(message){studioLibraryMessage=message;studioLibraryError=true;},
       refreshState:applyStudioLibraryRefresh,
@@ -1629,7 +1634,7 @@
   }
   function exportNamedAnimations(all){
     var actions=studioLibraryActions();
-    if(actions)return studioThumbnailReady.then(function(){actions.exportEntries(all);});
+    if(actions)return studioThumbnailReady.then(function(){return actions.exportEntries(all);});
     else studioLibraryNotice('Animation Library actions module failed to load.',true);
   }
   function importNamedAnimations(file){
@@ -3179,7 +3184,11 @@
       panels:newUiEl('ModernAnimationPlaybackPanels'),panel:reference('Panel'),splitter:reference('Splitter'),
       select:reference('Layout'),control:reference('Control'),image:reference('Image'),status:reference('Status'),
       title:reference('Title'),meta:reference('Meta'),view:reference('View'),prev:reference('Prev'),next:reference('Next'),
-      get:function(id){return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);}});
+      get:function(id){
+        if(studioActiveDemo){var record=(studioActiveDemo.referenceImages||[]).find(function(r){return r.id===id;});
+          return Promise.resolve(record?{record:record,revision:1}:null);}
+        return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+      }});
   }
   function syncStudioPresentation(){
     if(!studioPresentation||!studioPresentation.isActive()||!studioPrepared||!studioPlayback)return;
@@ -3482,12 +3491,19 @@
         var now=Date.now();
         var entry={version:1,id:project.id,project:project,quality:quality,
           createdAt:now,updatedAt:now,cover:record&&record.cover};
+        if(studioLibrary.referenceIds([entry]).length)return studioLibrary.collectReferences([entry],function(id){
+          return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+        }).then(function(assets){
+          if(!current())throw Error('Storyboard export cancelled');
+          var result=studioLibrary.exportPortable([entry],lookup,{complete:complete,referenceImages:assets});
+          downloadHistoryJson(result,studioLibraryActionsApi.exportFilename(result));
+        });
         json=studioLibrary.exportPortable([entry],lookup,{complete:complete});
       }
       downloadHistoryJson(json,studioLibraryActionsApi.exportFilename(json));
     }
     if(action==='compact'){
-      try{download(undefined,false);status('Exported compact project JSON.');}
+      try{var pending=download(undefined,false);if(pending)return pending.then(function(){status('Exported compact project JSON.');}).catch(function(error){status('Export failed: '+error.message);});status('Exported compact project JSON.');}
       catch(error){status('Export failed: '+error.message);}
       return;
     }
@@ -3516,8 +3532,8 @@
         progress:function(n,total){status('Storyboard '+n+' / '+total);}});
     }).then(function(lookup){
       if(job.cancelled||!current())throw Error('Storyboard capture cancelled');
-      if(action==='export')download(lookup,true);
-      status(action==='export'?'Exported complete storyboard JSON.':'Storyboard capture complete.');
+      if(action==='export')return Promise.resolve(download(lookup,true)).then(function(){status('Exported complete storyboard JSON.');});
+      status('Storyboard capture complete.');
     }).catch(function(error){status(error.message);}).finally(function(){
       studioStoryboardJob=null;renderAnimationStudio(studioHistoryEntries);
     });

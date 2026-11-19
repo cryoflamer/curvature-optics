@@ -1,7 +1,6 @@
 # Reference images and observation sources
 
-Status: 7C.4 foundation, local Library, keyframe links and presentation implemented;
-portable asset transport is the next step. See [demo roadmap](modern-demo-catalog.md) for order and
+Status: 7C.5 foundation, local Library, keyframe links, presentation and portable asset transport implemented. See [demo roadmap](modern-demo-catalog.md) for order and
 [camera calibration](camera-calibration.md) for the deferred research project.
 
 ## Purpose and boundaries
@@ -150,11 +149,11 @@ Frame experiments, physical compatibility, exact-state thumbnails and camera
 parameters remain independent of references. A missing local observation does
 not prevent playback or saving, but must be visibly labeled when resolved.
 
-For now JSON backups preserve links only: they are not self-contained photo
-backups. On a different browser, missing IDs remain unresolved; the same ID
-alone does not verify provenance. Full transport/collision reconciliation is
-7C.5. Existing older applications may reject the new optional field; keep
-prior exports. Do not delete original files outside the app. Authored IDs
+7C.3–7C.4 JSON backups preserved links only. Starting with 7C.5, new linked
+exports include originals and metadata (see transport below). Older linked
+ID-only files can be parsed but cannot be safely restored into a named project;
+re-export them from the original browser. Existing older applications may reject
+new formats; keep prior exports. Do not delete original files outside the app. Authored IDs
 stay unchanged when switching atmosphere, including Storyboard variant JSON.
 
 **Deletion safety:** 7C.3 deliberately disables all observation deletion at
@@ -162,7 +161,7 @@ both the UI and storage API, not only deletion from a visible frame. A scan
 of the currently open project is insufficient: other saved projects, inactive
 workspaces, unsaved changes, Undo/Redo and concurrent tabs can cite an image.
 A future durable ownership/transaction strategy must cover these before
-re-enabling deletion; revisit during 7C.5 and 7E. Unlinking and deleting a
+re-enabling deletion. 7C.5 retains the guard; revisit during 7E. Unlinking and deleting a
 keyframe/project do not delete original image bytes. Reload old open tabs
 when upgrading (pre-7C.3 code cannot enforce this guard). Browser storage
 clearing/eviction is outside application control. This is a conservative
@@ -201,22 +200,57 @@ simulation. Metadata is reread on observation navigation or original inspection.
 
 This is a UI-only comparison, not an assertion of camera registration. No
 automatic calibration or pixel-aligned overlay yet; the latter is planned after
-8A–8E. Existing PNG/video exports still render only simulations, and portable
-JSON still retains IDs only until 7C.5. Do not claim a match merely because a
+8A–8E. Existing PNG/video exports still render only simulations. Portable
+JSON includes linked originals from 7C.5. Do not claim a match merely because a
 photograph is associated with a keyframe.
+
+## Portable transport (7C.5)
+
+The `curvature-modern-animations` envelope remains v1 for projects without
+references; linked projects use envelope v2 with a top-level `referenceImages`
+array. Nested project schema and local observation records are unchanged.
+Every distinct linked ID must have exactly one validated asset; unreferenced,
+duplicate or missing entries are rejected. A shared photo is stored once per
+bundle even across projects. Original and optional thumbnail bytes, title,
+license, provenance, camera facts and uncertainty are preserved. Missing
+originals block export with an explicit error. Both compact and complete
+Storyboard JSON include observations; only simulated keyframe thumbnails differ.
+Library exports retain authored state, Storyboard exports selected atmosphere.
+Unlinked observations are not included even in Export all. Keep external originals.
+
+The initial aggregate bounds are 100 observations, 64 Mi characters of serialized
+reference data, 80 million characters for whole JSON (the file picker also checks
+bytes), and the existing original/thumbnail raster limits. These are application
+limits, not a guarantee of available browser memory or disk quota.
+
+Import validates the envelope, links and all raster headers/decoded dimensions
+before writes. The observation transaction checks quota and resolves all IDs:
+identical same-ID records are reused; conflicts preserve the existing record
+and remap incoming links to an independent observation. A repeated unchanged
+import reuses its remapping. Complete normalized content, including metadata,
+is compared; conflicting provenance is not merged. Then the separate animation
+transaction creates or deduplicates projects using remapped IDs, clears History
+IDs and leaves the active draft unchanged. The two databases cannot share an
+atomic transaction: if the animation write fails after observations commit,
+the imported observations remain available; retry safely reuses unchanged assets.
+No project is committed with missing imported evidence. A legacy ID-only linked
+file is rejected at live import, rather than silently associating unrelated local
+IDs; export it again from the browser containing the originals.
+
+Catalog v2 assets are frozen, self-contained and resolved directly from the
+shipped bundle during read-only playback, without local observation writes.
+Create copy imports its observations using the same collision policy. Built-in
+assets undergo structural validation at catalog generation; validate their image
+content and publication rights before shipping. Existing Soundly remains unchanged.
+No photography is added here. PNG/video composition and safe deletion remain deferred.
 
 ## Remaining delivery steps
 
 - 7C.2: implemented as above; accepted in Opera.
 - 7C.3: implemented local ID links as above; accepted in Opera.
 - 7C.4: implemented as above; Opera acceptance pending.
-- 7C.5 (next): self-contained portable bundle with each referenced asset at most
-  once, validated links, quotas and collision policy. Existing v1/v2 projects
-  remain readable. Complete and compact storyboard export distinguish
-  observation assets from optional simulated thumbnails; never silently discard
-  evidence. Save/Library exports use authored state; Storyboard uses selected
-  variant with the same references. Stage schema and catalog changes here or
-  at the first point required by links; test import/copy/reload/all launch paths.
+- 7C.5: implemented as above; cross-browser acceptance pending. Safe deletion
+  remains blocked pending a durable cross-workspace ownership strategy.
 - 7D–7E: generic narrative/presentation completion, with independent visual
   and numeric verification and browser acceptance; defer final photo-matched
   Soundly authoring until after calibration tooling (9A–9B).

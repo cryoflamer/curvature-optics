@@ -32,7 +32,7 @@ Step 7C.3 adds optional ordered `keyframes[].referenceImageIds` to v1 and v2
 projects; see [reference images](reference-images.md). These are authored
 observation IDs (not History IDs, not thumbnail indices). They are preserved
 through checkpoints, Undo/Redo, copies, atmosphere variants and JSON import/
-export; the latter transports IDs only until 7C.5. Library deduplication
+export; from 7C.5 linked portable exports also carry originals and metadata. Library deduplication
 includes references, while frame physics, interpolation and thumbnail identity
 remain unchanged. Unresolved links are valid, explicitly labeled and never
 silently dropped. Empty arrays are omitted. Observation deletion is disabled
@@ -151,8 +151,10 @@ true **only** for a valid Camera/Physical project with at least two frames.
 unfinished or Experimental project instead of fabricating a video.
 
 Animation Library's **record/database schema remains version 1**, and its
-portable **bundle envelope also remains version 1**; either can now carry
-nested project v1 or v2 records. Standalone v1/v2 JSON is accepted on import.
+portable **bundle envelope remains version 1 without observations**, while 7C.5
+uses envelope version 2 for linked observation assets. Either can carry nested
+project v1 or v2 records. Standalone v1/v2 JSON is accepted without unresolved
+photo links; see [reference transport](reference-images.md#portable-transport-7c5).
 The importer validates the entire payload before writing, creates fresh local
 IDs, clears source History IDs and uses revision checks and content-aware
 fingerprints. Rename, Save As, JSON backup and import retain v2 contracts.

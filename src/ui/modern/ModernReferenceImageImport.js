@@ -34,6 +34,19 @@
     var chunks=[];for(var i=0;i<bytes.length;i+=32768)chunks.push(String.fromCharCode.apply(null,bytes.subarray(i,i+32768)));
     return 'data:image/'+type+';base64,'+btoa(chunks.join(''));
   }
+  async function verify(record,env){
+    record=images.validate(record);
+    for(var raster of [record.original,record.thumbnail].filter(Boolean)){
+      var raw=atob(raster.dataUrl.split(',')[1]),bytes=Uint8Array.from(raw,function(c){return c.charCodeAt(0);});
+      var header=inspect(bytes),image=new env.Image();
+      if(!raster.dataUrl.startsWith('data:image/'+header.type+';'))throw Error('Image MIME mismatch');
+      if(!((raster.width===header.width&&raster.height===header.height)||(raster.width===header.height&&raster.height===header.width)))
+        throw Error('Reference image header dimensions mismatch');
+      image.src=raster.dataUrl;await image.decode();
+      if(image.naturalWidth!==raster.width||image.naturalHeight!==raster.height)throw Error('Reference image decoded dimensions mismatch');
+    }
+    return record;
+  }
   async function ingest(file,id,env){
     if(!file||!Number.isSafeInteger(file.size)||file.size<=0||file.size>images.MAX_ORIGINAL_BYTES)
       throw RangeError('Select a PNG, JPEG or WebP image up to 20 MiB');
@@ -54,5 +67,5 @@
       original:{dataUrl:url,width:w,height:h},thumbnail:{dataUrl:thumbnail,width:canvas.width,height:canvas.height}});
     canvas.width=canvas.height=0;return record;
   }
-  return Object.freeze({inspect:inspect,dataUrl:dataUrl,ingest:ingest});
+  return Object.freeze({inspect:inspect,dataUrl:dataUrl,ingest:ingest,verify:verify});
 }));

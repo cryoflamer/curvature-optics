@@ -13,10 +13,11 @@
     variants=require('./ModernAnimationAtmosphereVariant');
     bundled=function(){return require('./ModernDemoCatalogData');};
   }
-  var api=factory(projects,library,bundled,variants);
+  var assets=typeof module==='object'&&module.exports?require('./ModernReferenceImageLibrary'):root.CurvatureModernReferenceImageLibrary;
+  var api=factory(projects,library,bundled,variants,assets);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernDemoCatalog=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,library,bundled,variants){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,library,bundled,variants,assets){
   'use strict';
   var FORMAT='curvature-modern-demo-catalog',VERSION=1;
   function shape(value,keys){
@@ -66,7 +67,8 @@
       try{
         var text=readAsset(entry.asset);
         if(typeof text!=='string')throw Error('Missing asset: '+entry.asset);
-        var items=library.parsePortable(text);
+        var bundle=library.parseBundle(text),items=bundle.animations;
+        if(library.referenceIds(items).length&&!bundle.referenceImages.length)throw Error('Built-in demo requires embedded reference originals');
         if(items.length!==1)throw Error('Expected exactly one portable animation');
         var item=items[0],project=item.project;
         var images=item.keyframeThumbnails||[];
@@ -92,7 +94,7 @@
         }
         return deepFreeze({id:entry.id,asset:entry.asset,project:project,
           cover:entry.cover,quality:item.quality==='auto'?'canvas-direct':item.quality,thumbnail:item.thumbnail,createdAt:item.createdAt,
-          updatedAt:item.updatedAt,keyframeThumbnails:images});
+          updatedAt:item.updatedAt,keyframeThumbnails:images,referenceImages:bundle.referenceImages});
       }catch(error){
         throw Error('Built-in demo '+entry.id+' ('+entry.asset+'): '+error.message);
       }
@@ -113,7 +115,7 @@
     return library.exportPortable([{version:1,id:demo.project.id,project:project,
       quality:options&&options.quality!==undefined?options.quality:demo.quality,thumbnail:changed?null:demo.thumbnail,
       cover:demo.cover?bundled().covers[demo.cover.asset]:null,
-      createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],resolve,options);
+      createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],resolve,Object.assign({},options,{referenceImages:demo.referenceImages}));
   }
   function copyToLibrary(indexedDB,id,now,crypto){
     return Promise.resolve().then(function(){
@@ -121,8 +123,12 @@
       if(!demo)throw Error('Unknown built-in demo: '+id);
       var project=projects.validate(Object.assign({},demo.project,{
         id:library.makeId(crypto,now),name:demo.project.name.slice(0,113)+' (copy)'}));
-      return library.create(indexedDB,project,demo.quality,now,demo.thumbnail,true,
-        demo.cover?bundled().covers[demo.cover.asset]:null);
+      function save(resolved){return library.create(indexedDB,resolved,demo.quality,now,demo.thumbnail,true,
+        demo.cover?bundled().covers[demo.cover.asset]:null);}
+      if(!demo.referenceImages.length)return save(project);
+      return assets.importAssets(indexedDB,demo.referenceImages,crypto).then(function(mapping){
+        return save(library.remapReferences({project:project},mapping).project);
+      });
     });
   }
   function load(){

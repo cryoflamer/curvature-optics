@@ -11,14 +11,15 @@
     thumbnails=require('../ui/modern/ModernExperimentThumbnail');
     compatibility=require('./ModernAnimationCompatibility');
   }
-  var api=factory(projects,thumbnails,compatibility);
+  var images=typeof module==='object'&&module.exports?require('./ModernReferenceImage'):root.CurvatureModernReferenceImage;
+  var api=factory(projects,thumbnails,compatibility,images);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationLibrary=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,thumbnails,compatibility){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,thumbnails,compatibility,images){
   'use strict';
   var VERSION=1,DATABASE='curvature-modern-animation-library',STORE='projects';
   var PORTABLE_FORMAT='curvature-modern-animations',PORTABLE_VERSION=1;
-  var MAX_PORTABLE_ITEMS=200,MAX_PORTABLE_LENGTH=50000000;
+  var MAX_PORTABLE_ITEMS=200,MAX_PORTABLE_LENGTH=80000000;
   function validId(id){
     if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(id))
       throw RangeError('Invalid animation library ID');
@@ -142,6 +143,38 @@
     });
     return images.length?images:undefined;
   }
+  function referenceIds(entries){
+    var ids=new Set();entries.forEach(function(entry){entry.project.keyframes.forEach(function(frame){
+      (frame.referenceImageIds||[]).forEach(function(id){ids.add(id);});
+    });});return Array.from(ids);
+  }
+  function checkedAssets(entries,assets){
+    var ids=referenceIds(entries);
+    if(!Array.isArray(assets)||assets.length>100)throw RangeError('Invalid portable reference assets');
+    var records=images.validateCollection(assets),byId=new Map(records.map(function(record){return [record.id,record];}));
+    if(ids.length!==records.length||ids.some(function(id){return !byId.has(id);}))
+      throw RangeError('Portable reference assets must match all keyframe links exactly');
+    if(JSON.stringify(records).length>64*1024*1024)throw RangeError('Portable reference assets exceed limit');
+    return records;
+  }
+  // A missing original is an export error, not permission to strip evidence.
+  async function collectReferences(entries,get){
+    var ids=referenceIds(entries),records=[];
+    for(var id of ids){
+      var row=await get(id);
+      if(!row||!row.record||row.record.id!==id)throw Error('Missing reference photograph: '+id);
+      records.push(row.record);
+    }
+    return checkedAssets(entries,records);
+  }
+  function remapReferences(entry,mapping){
+    var project=projects.validate(Object.assign({},entry.project,{keyframes:entry.project.keyframes.map(function(frame){
+      if(!frame.referenceImageIds)return frame;
+      return Object.assign({},frame,{referenceImageIds:frame.referenceImageIds.map(function(id){
+        if(!mapping.has(id))throw Error('Unresolved reference photograph: '+id);return mapping.get(id);
+      })});
+    })}));return Object.assign({},entry,{project:project});
+  }
   function exportPortable(entries,lookup,options){
     if(options&&options.complete&&typeof lookup!=='function')throw RangeError('Complete storyboard lookup required');
     if(!Array.isArray(entries)||!entries.length||entries.length>MAX_PORTABLE_ITEMS)
@@ -152,12 +185,15 @@
         thumbnail:normalized.thumbnail,cover:normalized.cover,createdAt:normalized.createdAt,
         updatedAt:normalized.updatedAt,keyframeThumbnails:keyframeImages(normalized.project,lookup,options&&options.complete)});
     });
-    var result=JSON.stringify({format:PORTABLE_FORMAT,version:PORTABLE_VERSION,
-      animations:animations},null,2)+'\n';
+    var payload={format:PORTABLE_FORMAT,version:PORTABLE_VERSION,animations:animations};
+    if(referenceIds(animations).length){
+      payload.version=2;payload.referenceImages=checkedAssets(animations,options&&options.referenceImages);
+    }else if(options&&options.referenceImages&&options.referenceImages.length)throw RangeError('Unreferenced portable assets');
+    var result=JSON.stringify(payload,null,2)+'\n';
     if(result.length>MAX_PORTABLE_LENGTH)throw RangeError('Animation JSON export is too large');
     return result;
   }
-  function parsePortable(text){
+  function parseBundle(text){
     if(typeof text!=='string'||text.length>MAX_PORTABLE_LENGTH)
       throw RangeError('Animation JSON file too large');
     var value=JSON.parse(text);
@@ -165,14 +201,20 @@
     // interoperability; a portable bundle is the canonical export format.
     if(value&&(value.version===projects.VERSION||value.version===projects.VERSION_V2)&&
       Array.isArray(value.keyframes)&&value.baseExperiment)
-      return [portableItem({project:value,quality:'auto'})];
+      return {animations:[portableItem({project:value,quality:'auto'})],referenceImages:[]};
     if(!value||typeof value!=='object'||Array.isArray(value)||
-      Object.keys(value).sort().join(',')!=='animations,format,version'||
-      value.format!==PORTABLE_FORMAT||value.version!==PORTABLE_VERSION||
+      value.format!==PORTABLE_FORMAT||![1,2].includes(value.version)||
+      Object.keys(value).sort().join(',')!==(value.version===2?'animations,format,referenceImages,version':'animations,format,version')||
       !Array.isArray(value.animations)||!value.animations.length||
       value.animations.length>MAX_PORTABLE_ITEMS)
       throw RangeError('Unsupported animation JSON format');
-    return value.animations.map(portableItem);
+    var entries=value.animations.map(portableItem);
+    return {animations:entries,referenceImages:value.version===2?checkedAssets(entries,value.referenceImages):[]};
+  }
+  function parsePortable(text){
+    var bundle=parseBundle(text);
+    if(bundle.referenceImages.length)throw Error('Reference bundle requires parseBundle');
+    return bundle.animations;
   }
   // A single IndexedDB transaction checks all existing projects and adds
   // new ones. Duplicate animations, including repetitions inside the file,
@@ -387,6 +429,7 @@
     thumbnailMatchesFirstFrame:thumbnailMatchesFirstFrame,sameFirstFrame:sameFirstFrame,
     PORTABLE_FORMAT:PORTABLE_FORMAT,PORTABLE_VERSION:PORTABLE_VERSION,
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
-    exportPortable:exportPortable,parsePortable:parsePortable,importEntries:importEntries,
+    exportPortable:exportPortable,parsePortable:parsePortable,parseBundle:parseBundle,referenceIds:referenceIds,
+    collectReferences:collectReferences,remapReferences:remapReferences,importEntries:importEntries,
     list:list,get:get,create:create,update:update,rename:rename,setCover:setCover,remove:remove});
 }));

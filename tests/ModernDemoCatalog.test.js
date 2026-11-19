@@ -225,3 +225,21 @@ test('Soundly portable attachments and independent copies use the same exact Com
   assert.deepEqual(cache.get(projects.frameExperiments(clone)[3]),image);
   assert.deepEqual(item.project,demo.project);
 });
+
+test('read-only catalog accepts complete observation bundles and exports their originals without storage',()=>{
+  const payload=cloneSource();payload.animations[0].project.keyframes[0].referenceImageIds=['photo'];
+  assert.throws(()=>parse([soundly],()=>JSON.stringify(payload)),/embedded reference originals/);
+  const original={dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC',width:1,height:1};
+  payload.version=2;payload.referenceImages=[{version:1,id:'photo',title:'Bridge photo',original}];
+  const context=vm.createContext({CurvatureModernAnimationProject:projects,CurvatureModernAnimationLibrary:library,
+    CurvatureModernDemoCatalogData:{manifest:manifest([soundly]),assets:{'soundly.json':JSON.stringify(payload)},covers:{}}});
+  Object.defineProperty(context,'indexedDB',{get(){throw Error('Must not write during read-only catalog playback');}});
+  vm.runInContext(fs.readFileSync(path.join(root,'src/animation/ModernDemoCatalog.js'),'utf8'),context);
+  const api=context.CurvatureModernDemoCatalog,demo=api.load()[0];
+  assert.ok(Object.isFrozen(demo.referenceImages[0]));
+  assert.equal(demo.referenceImages[0].original.dataUrl,original.dataUrl);
+  const exported=library.parseBundle(api.exportDemo('soundly',null,{compact:true}));
+  assert.deepEqual(exported.referenceImages,payload.referenceImages);
+  assert.deepEqual(exported.animations[0].project.keyframes[0].referenceImageIds,['photo']);
+  assert.equal(exported.animations[0].keyframeThumbnails,undefined);
+});

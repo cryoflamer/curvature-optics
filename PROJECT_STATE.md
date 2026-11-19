@@ -1,3 +1,23 @@
+## Modern Demo Catalog — Reference Export & Import (7C.5)
+
+Portable envelopes stay v1 without reference links; linked exports use v2 with
+one complete `referenceImages` asset per linked ID. Compact/complete Storyboard
+and Library selected/all exports retain original bytes and provenance; missing
+originals fail explicitly. Import verifies raster headers and browser decode,
+then imports observation assets with quota checks and collision remapping before
+committing remapped named projects. No overwrite or wrong-ID association. Legacy
+linked ID-only imports require re-export at the source. Separate stores mean a
+failed project commit may leave observations present for retry. Read-only catalog
+assets resolve from the shipped bundle; create copy imports/remaps those assets.
+Soundly source unchanged. No PNG/video photo rendering. No safe deletion yet.
+
+**Resume:** validate 7C.5 in Opera and CI, then 7D/7E generic narrative and demo
+infrastructure, 8A–8E Camera Calibration, 9A–9C real Causeway calibration and final
+demos. Read `docs/reference-images.md`, `docs/modern-demo-catalog.md`,
+`docs/camera-calibration.md` and `docs/technical-debt.md`. Historical next steps
+below are superseded. Revisit deletion at 7E; do not weaken protection until a
+safe cross-workspace ownership strategy exists.
+
 ## Modern Demo Catalog — Reference Presentation (7C.4)
 
 7C.3 was accepted by the user in Opera. The selected-frame editor now shows

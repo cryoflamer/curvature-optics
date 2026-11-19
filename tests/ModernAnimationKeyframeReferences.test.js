@@ -71,11 +71,11 @@ test('unfinished/experimental checkpoints retain unresolved IDs without requirin
     assert.throws(()=>autosave.normalize(invalid),/reference/i);
   }
 });
-test('portable JSON roundtrip preserves IDs only, including unknown IDs, without photo payloads',()=>{
+test('legacy ID-only project remains readable but export requires all linked observations',()=>{
   const p=create();const record=library.record(p,'auto',p.id,1000,1000,null);
-  const json=library.exportPortable([record]);
-  const parsed=library.parsePortable(json)[0];
-  assert.deepEqual(parsed.project,p);
-  assert.ok(!json.includes('data:image/'));
+  assert.throws(()=>library.exportPortable([record]),/reference assets/);
+  const legacy=JSON.stringify({format:library.PORTABLE_FORMAT,version:1,animations:[{project:p,quality:'auto'}]});
+  assert.deepEqual(library.parseBundle(legacy),{animations:library.parsePortable(legacy),referenceImages:[]});
+  assert.deepEqual(library.parsePortable(legacy)[0].project,p);
   assert.deepEqual(library.parsePortable(JSON.stringify(p))[0].project,p);
 });
