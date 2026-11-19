@@ -1,3 +1,16 @@
+## 8F — 3D Landmark Editor (planned, next priority)
+
+Issue #7, related to Camera Calibration #6. The real-photo experiments after
+8C.4b motivate improving correspondence authoring before changing the solver.
+Select a placed object in the main scene, inspect its actual geometry with an
+independent orbit camera, and pick a fixed vertex, edge or surface anchor.
+See [the 8F implementation plan](docs/landmark-editor.md) for stages 8F.0–8F.7,
+contracts, tests and the Soundly numerical baseline. Start with 8F.0 (audit).
+Existing 8C.5/8C.6 and 8D/8E identifiers are retained; robust loss and multistart
+are deferred until the improved authoring workflow is evaluated. SVD UI and
+automated influence analysis remain planned. No runtime feature is implemented
+by this documentation change.
+
 ## 8C.4b — Explicit Fit and Validation correspondences
 
 Each correspondence has a persistent Fit checkbox (default on); turning it
@@ -16,7 +29,7 @@ version 1 as all-Fit. Stored solver results are checked against Fit rows only;
 validation diagnostics are reconstructed from the stored pose on import.
 Added pure role/statistics/migration tests and extended Chromium smoke for
 role toggling and Undo. Previous 8C.4a CI passed (44590712939); new CI pending.
-Next: 8C.5 robust loss, after real-photo held-out experiments.
+Next priority superseded by planned 8F (see above).
 
 ## 8C.4a — Photo residual visualization
 
