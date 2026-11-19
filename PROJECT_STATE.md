@@ -1,3 +1,23 @@
+## Modern Demo Catalog — Readable Presentation Guides (7D.2.2.3C)
+
+Full presentation PNG exports now pass an explicit guide-label scale derived
+from the output width (width / 1280), independently of the model viewport.
+Metric distances and certified angular guide labels use semibold 12/18/24/36 px
+at HD/Full HD/QHD/4K, high-contrast translucent white plates, measured bounds
+and spacing checks. Dense ring labels are thinned farthest-first without
+removing or moving the underlying lines. Eye level and traced horizon labels
+prefer opposite sides of their unchanged projected rows with alternate
+placement when near edges; if no non-overlapping placement fits, only the
+label is omitted. No change to interactive or ordinary raster/video guides,
+visibility eligibility, optical solves, projection, FOV, or layout geometry.
+
+560 targeted animation/guide Node tests and three Chromium compositor/worker
+checks passed, including preview/archive PNG parity and projection resize.
+User visual acceptance on real Full HD observation frames is pending. Layout
+optimization remains deferred to #2; renderer unresolved/fillUnresolved is
+separate. Resume with Full Presentation Video Export (7D.2.3), reusing the
+presentation compositor and guide scale rather than changing the optics.
+
 ## Modern Demo Catalog — Full Timeline Layout Validation (7D.2.2.3B.3)
 
 Issue #1: B.2.1 accepted on the four user-exported Soundly PNGs. The full

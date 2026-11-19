@@ -217,7 +217,7 @@
     var time=p.timesMs[index],frame=compositor.frameAt(p.presentation,time),images={},renderStats={};
     for(var side of frame.sides){
       if(cancel&&cancel.cancelled)return null;
-      var image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time,showCaptions:false});
+      var image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time,showCaptions:false,guideLabelScale:p.width/1280});
       prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,false,p.cameraHudAppearance,p.targetIndicator,p.targetSelection);
       images[side]=Object.assign({},image,{timeMs:time});
       if(image.metrics){var m=image.metrics,t=m.timings||{};renderStats[side]={opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,

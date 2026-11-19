@@ -165,7 +165,7 @@
  // Camera-oriented supplementary guides are a PRESENTATION overlay. Reuse
  // already traced metric ground samples; neither ray shooting nor surface
  // geometry depends on the camera heading or narrow field of view.
- function metricGridOverlay(canvas,model,camera,physicalGuides){
+ function metricGridOverlay(canvas,model,camera,physicalGuides,guideLabelScale){
   if(!(model.showGrid&1)||!Array.isArray(physicalGuides)||!physicalGuides.length)
    return {spokes:0,labels:0};
   var meridian=physicalGuides.filter(function(p){return p.metadata&&
@@ -214,6 +214,22 @@
   var candidates=positions.segments.map(function(seg){return {
    x:seg.points[0][0],y:seg.points[0][1],radius:marks[seg.commandIndex].metadata.radius
   };}).sort(function(a,b){return b.radius-a.radius;});
+  // Presentation typography follows the final output scale, not the smaller
+  // model raster. Keep every label at the projected physical ring row.
+  if(guideLabelScale>0){
+   var size=Math.max(12,Math.round(12*guideLabelScale)),pad=Math.ceil(size/4),height=size+2*pad,rows=[];
+   ctx.save();ctx.font='600 '+size+'px Arial';ctx.textAlign='left';ctx.textBaseline='middle';
+   candidates.forEach(function(p){
+    var label=(p.radius/1000)+' km',width=Math.ceil(ctx.measureText(label).width)+2*pad;
+    if(p.y<height/2||p.y>canvas.height-height/2||p.x<0||p.x>canvas.width||width+2*pad>canvas.width||
+       rows.some(function(y){return Math.abs(y-p.y)<height+pad;}))return;
+    var x=Math.max(pad,Math.min(p.x+pad,canvas.width-width-pad));
+    ctx.globalAlpha=.94;ctx.fillStyle='#fff';ctx.fillRect(x,p.y-height/2,width,height);
+    ctx.globalAlpha=1;ctx.fillStyle='#243d86';ctx.fillText(label,x+pad,p.y);
+    rows.push(p.y);
+   });ctx.restore();
+   return {spokes:projected.segments.length,labels:rows.length};
+  }
   var shown=[],right=canvas.width-58*pixel;
   ctx.save();ctx.font=Math.max(10,11*pixel)+'px Arial';ctx.textAlign='left';
   ctx.textBaseline='middle';
@@ -253,7 +269,7 @@
      {kind:'camera-frame',x:0,y:0,width:half,height:canvas.height},
      {kind:'camera-frame',x:canvas.width-half,y:0,width:half,height:canvas.height});
   }
-  var metricOverlay=metricGridOverlay(canvas,model,camera,options.physicalGuides);
+  var metricOverlay=metricGridOverlay(canvas,model,camera,options.physicalGuides,options.guideLabelScale);
   var captionMode=options.captionMode||(options.showCaptions===false?'off':'title-description');
   var captions=captionMode==='off'?[]:demoBounds(canvas,model,camera,{captionMode:captionMode,
    includeGeometrySummary:options.includeGeometrySummary===true});

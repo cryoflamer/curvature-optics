@@ -10,7 +10,7 @@ test('Spline export refreshes browser Worker script and imported sampler cache k
   const worker=read('src/animation/ModernAnimationFrameWorker.js');
   const html=read('CurvatureModern.html');
   assert.match(app,/ModernAnimationFrameWorker\.js\?compare-layout=1&spline-export=1/);
-  assert.match(app,/workerUrl:'src\/animation\/ModernAnimationFrameWorker\.js\?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1'/);
+  assert.match(app,/workerUrl:'src\/animation\/ModernAnimationFrameWorker\.js\?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1&presentation-hud=1&adaptive-layout=1&topology=1&content-layout=1&guide-labels=1'/);
   assert.match(worker,/ModernCameraInterpolator\.js\?spline-core=1&spline-export=1/);
   assert.match(worker,/ModernAnimationProject\.js\?project-fields=reference-narrative-1/);
   assert.match(html,/spline-preview=1&amp;spline-export=1/);

@@ -46,7 +46,7 @@
     var y=pixel&&pixel[1];
     return Number.isFinite(y)&&y>=0&&y<=canvas.height?y:null;
   }
-  function line(graph,model,camera,degrees,color,label,dashed){
+  function line(graph,model,camera,degrees,color,label,dashed,guideLabelScale,occupied){
     var y=angleY(graph,model,camera,degrees);
     if(y===null)return false;
     var canvas=graph.Canvas,ctx=canvas.getContext('2d');
@@ -58,9 +58,26 @@
       if(dashed&&ctx.setLineDash)ctx.setLineDash([7,5]);
       ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
       if(dashed&&ctx.setLineDash)ctx.setLineDash([]);
-      ctx.font=Math.max(11,Math.round(canvas.width/65))+'px Arial, sans-serif';
-      ctx.textBaseline=y<18?'top':'bottom';
-      ctx.fillText(label,8,y<18?y+3:y-4);
+      if(guideLabelScale>0){
+        var size=Math.max(12,Math.round(12*guideLabelScale)),pad=Math.ceil(size/4),height=size+2*pad;
+        ctx.font='600 '+size+'px Arial, sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+        var width=Math.min(Math.ceil(ctx.measureText(label).width)+2*pad,canvas.width-2*pad);
+        var above=y-height-pad,below=y+pad;
+        // Prefer opposite sides of nearly coincident angular lines. If the
+        // preferred box is clipped, try the other side and a second column.
+        var ys=dashed?[below,above]:[above,below],xs=[pad,canvas.width-pad-width],box=null;
+        for(var top of ys)for(var x of xs){
+          if(box||top<0||top+height>canvas.height)continue;
+          var candidate={x:x,y:top,width:width,height:height};
+          if(!occupied.some(function(b){return x<b.x+b.width&&x+width>b.x&&top<b.y+b.height&&top+height>b.y;}))box=candidate;
+        }
+        if(box){ctx.globalAlpha=.94;ctx.fillStyle='#fff';ctx.fillRect(box.x,box.y,width,height);
+          ctx.globalAlpha=1;ctx.fillStyle=color.text;ctx.fillText(label,box.x+pad,box.y+height/2,width-2*pad);occupied.push(box);}
+      }else{
+        ctx.font=Math.max(11,Math.round(canvas.width/65))+'px Arial, sans-serif';
+        ctx.textBaseline=y<18?'top':'bottom';
+        ctx.fillText(label,8,y<18?y+3:y-4);
+      }
     }finally{ctx.restore();}
     return true;
   }
@@ -155,7 +172,7 @@
         occlusionRadius:spec.occlusionRadius,visibility:spec.visibility,
         temperatureProfile:spec.temperatureProfile,transitionProfile:spec.transitionProfile,
         inverseProfile:spec.inverseProfile,interactive:false,geometryBackend:'canvas',
-        opticalQuality:quality,showCaptions:options.showCaptions!==false,canvasDirectOptions:options.canvasDirectOptions,
+        opticalQuality:quality,showCaptions:options.showCaptions!==false,guideLabelScale:options.guideLabelScale,canvasDirectOptions:options.canvasDirectOptions,
         previewLod:{stride:quality==='fast'||quality==='effective-radius'?detailStride:1},
         cacheSession:sessions[side]||undefined}};
     }
@@ -164,9 +181,9 @@
       // Synthetic graph harnesses do not have a Canvas 2D context.
       if(!canvas||typeof canvas.getContext!=='function'||!canvas.getContext('2d'))
         return {eyeLevel:'unavailable',horizon:'unavailable'};
-      var eye='disabled',traced='disabled';
+      var eye='disabled',traced='disabled',occupied=[],guideLabelScale=config.options.guideLabelScale;
       if(display.eyeLevel){
-        eye=line(graph,config.model,camera,0,{stroke:'#159447',text:'#117b3b'},'Eye level · 0°',false)?
+        eye=line(graph,config.model,camera,0,{stroke:'#159447',text:'#117b3b'},'Eye level · 0°',false,guideLabelScale,occupied)?
           'drawn':'outside view';
       }
       if(display.horizon){
@@ -187,7 +204,7 @@
           else if(config.model.Roll!==0)traced='omitted for camera roll';
           else traced=line(graph,config.model,camera,result.angleDegrees,
             {stroke:'#d48313',text:'#ad640a'},
-            'Traced horizon · '+result.angleDegrees.toFixed(4)+'°',true)?
+            'Traced horizon · '+result.angleDegrees.toFixed(4)+'°',true,guideLabelScale,occupied)?
             'drawn · '+result.angleDegrees.toFixed(4)+'°':'outside view';
         }
       }

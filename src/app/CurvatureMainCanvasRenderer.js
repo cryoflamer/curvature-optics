@@ -209,7 +209,7 @@
       // The physical texture must not contain screen-only captions or frames:
       // those belong above the animated atmospheric presentation layer.
       if(decorations&&!options.deferDecorations)decorations.draw(g.Canvas,m,camera,
-        {physicalGuides:opticalFrame.composition.scene.primitives,
+        {physicalGuides:opticalFrame.composition.scene.primitives,guideLabelScale:options.guideLabelScale,
          showCaptions:options.showCaptions!==false,captionMode:options.captionMode,
          includeGeometrySummary:options.includeGeometrySummary===true});
     } finally {ctx.restore();}

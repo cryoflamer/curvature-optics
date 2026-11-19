@@ -59,3 +59,18 @@ test('40: disabled or absent metric grid remains optically and visually unchange
     {spokes:0,labels:0});
   assert.deepEqual(c.text,[]);assert.deepEqual(c.lines,[]);
 });
+
+test('presentation ring labels scale with output pixels without changing physical ring rows or rays',()=>{
+  const {model,physical,camera,guide}=scene('flat'),before=guide.solves(),original=JSON.stringify(physical);
+  for(const scale of [1,1.5,2,3]){
+    const c=canvas(),ctx=c.getContext(),boxes=[],fonts=[];
+    ctx.fillRect=(x,y,w,h)=>boxes.push({x,y,w,h});
+    const fill=ctx.fillText;ctx.fillText=function(t,x,y){fonts.push(this.font);fill(t,x,y);};
+    const result=decorations.metricGridOverlay(c,model,camera,physical,scale);
+    assert.ok(result.labels>0);assert.equal(boxes.length,result.labels);
+    assert.ok(fonts.every(f=>f==='600 '+Math.round(12*scale)+'px Arial'));
+    boxes.forEach((b,i)=>{assert.ok(b.x>=0&&b.y>=0&&b.x+b.w<=c.width&&b.y+b.h<=c.height);
+      assert.equal(c.text[i].y,b.y+b.h/2);boxes.slice(i+1).forEach(a=>assert.ok(a.y+a.h<=b.y||b.y+b.h<=a.y));});
+  }
+  assert.equal(guide.solves(),before);assert.equal(JSON.stringify(physical),original);
+});

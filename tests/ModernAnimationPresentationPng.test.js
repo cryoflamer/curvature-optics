@@ -37,7 +37,7 @@ test('presentation HUD is composed externally, not burned into physical canvases
    return {canvas:c,quality:'accurate',cameraModel:{showModel:f.expected[side].showModel,Height:8,CameraEast:0,CameraNorth:0,
      Pan:0,Nick:0,Roll:0,camViewAngle:0.1,deviceRatio:16/9,viewcenterHorizon:3,rEarth:6371000,rFEarth:10000000}};
  },null,{canvas:()=>out,observation:async r=>compositor.observation(r,photo)});
- assert.ok(seen.every(x=>x.d.showCaptions===false));assert.equal(out.calls.length,3);
+ assert.ok(seen.every(x=>x.d.showCaptions===false&&x.d.guideLabelScale===1.5));assert.equal(out.calls.length,3);
  assert.equal(png.assemble(p,[frame]).manifest.presentation.cameraHudPlacement,'external');
  assert.equal(frame.row.topology,f.topology);assert.throws(()=>png.assemble(p,[{...frame,row:{...frame.row,topology:'invalid'}}]),/metadata/);
 });

@@ -332,10 +332,11 @@ test('Independent animation overlays draw eye-level and certified traced horizon
 
 test('Animation guide rows use the actual captured camera offset, scale and zoom',()=>{
   const e=snapshot();e.display.eyeLevel=true;
-  const rows=[];
+  const rows=[],boxes=[],labels=[];
   class FakeModel {Update(){this.camViewAngle=.25;this.rFEarth=6371000;}}
   const ctx={save(){},restore(){},setTransform(){},setLineDash(){},beginPath(){},
-    moveTo(x,y){rows.push(y);},lineTo(){},stroke(){},fillText(){}};
+    moveTo(x,y){rows.push(y);},lineTo(){},stroke(){},measureText(t){return {width:t.length*9};},
+    fillRect(x,y,w,h){boxes.push({x,y,w,h});},fillText(t,x,y){labels.push({t,x,y,font:this.font});}};
   const graph={Canvas:{width:900,height:600,getContext:()=>ctx}};
   const view=preview.create({Model:FakeModel,renderer:{renderPhysical(g,m,options){
     assert.equal(options.captureProjection,true);
@@ -346,7 +347,11 @@ test('Animation guide rows use the actual captured camera offset, scale and zoom
   }},horizon:{diagnose:()=>({status:'resolved',angleDegrees:-.12})}});
   for(const [width,height] of [[900,600],[416,234],[960,540]]){
     graph.Canvas.width=width;graph.Canvas.height=height;rows.length=0;
-    const report=view.render(e,'A',graph,{quality:'accurate'});
+    boxes.length=0;labels.length=0;
+    const report=view.render(e,'A',graph,{quality:'accurate',guideLabelScale:1.5});
+    assert.equal(boxes.length,2);assert.ok(labels.every(l=>l.font==='600 18px Arial, sans-serif'));
+    for(const b of boxes)assert.ok(b.x>=0&&b.y>=0&&b.x+b.w<=width&&b.y+b.h<=height);
+    assert.ok(boxes[0].y+boxes[0].h<=boxes[1].y||boxes[1].y+boxes[1].h<=boxes[0].y||boxes[0].x+boxes[0].w<=boxes[1].x||boxes[1].x+boxes[1].w<=boxes[0].x);
     assert.equal(report.overlays.eyeLevel,'drawn');
     assert.match(report.overlays.horizon,/drawn/);
     assert.equal(rows.length,2);
