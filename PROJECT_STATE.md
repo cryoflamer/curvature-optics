@@ -1,3 +1,26 @@
+## 8F.3d.1 — Optical picking audit and inverse core
+
+Canvas Direct is not Free View. Globe authors at an effective radius;
+Flat authors at Height=0 with a physical planar basis and maps each
+vertex through the signed nonlinear embedding before drawing straight
+segments and polygon fills. The renderer uses whole-package horizon
+classification, a tangent-disk mask and painter order, not a depth buffer.
+Capture optional original camera-space vertices, exact clipped paths,
+physical identity, actual painter order and pixel transform from the
+production paint pass, including its mask. No change to normal paint.
+Inverse per authored primitive uses optical camera ray and original
+physical topology; carries perspective-correct material weights to the
+physical scene. Globe uses corresponding effective vertices; Flat checks
+the interpolated physical point through the continuous signed embedding.
+Reject round-trip disagreement over 0.1 source pixel instead of inventing
+a match. Distinct surface hits remain explicit. This is only a primitive
+inverse, not a visibility certificate. UI and painter/mask/stroke
+resolution, nonlinear refinement and cross-scene integration follow
+in 8F.3d.2. 28 strict viewer tests passed; renderer capture parity test
+added (CI pending). Previous persistence Node/architecture passed;
+Chromium had the existing Scene tab restore timeout, while user verified
+Magnifier restoration. No portable schema or fit changes.
+
 ## 8F.3c.1 — Magnifier session persistence
 
 Store versioned local magnifier session synchronously on UI interactions

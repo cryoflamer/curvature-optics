@@ -153,12 +153,12 @@
           physicalFlat?{opticsNeutral:true,physicalSurface:true,curvature:0}:
             {opticsNeutral:true});
         var groups=[];
-        scene.primitives.forEach(function(p){
+        scene.primitives.forEach(function(p,sourceIndex){
           var i=p.metadata&&p.metadata.placedObjectIndex;
           if(!Number.isInteger(i))throw Error('Canvas Direct needs source object identity');
-          if(!groups[i])groups[i]={index:i,primitives:[],anchor:null,center:[0,0,0],vertices:0};
+          if(!groups[i])groups[i]={index:i,primitives:[],sourceIndices:[],anchor:null,center:[0,0,0],vertices:0};
           var group=groups[i];
-          group.primitives.push(p);
+          group.primitives.push(p);group.sourceIndices.push(sourceIndex);
           if(!group.anchor)group.anchor=p.points[0];
           // An object's atmospheric range is independent of Pan/Nick/Roll.
           // Cache one representative centre for all its authored vertices;
@@ -222,6 +222,14 @@
       }
       function screen(p){var s=c.scale/p.z,w=c.window;
         return [w.offsetX+w.scaleX*p.x*s,w.offsetY+w.scaleY*p.y*s];}
+      // Capture the real optical camera and submitted painter paths only on
+      // request. The Flat material input uses physical world coordinates
+      // with observer height already subtracted, as in calibration banks.
+      var capture=options.canvasDirectOptions&&options.canvasDirectOptions.capturePicking?{
+        width:canvas.width,height:canvas.height,geometry:params.geometry,curvature:params.effectiveCurvature,
+        near:c.near,fx:c.scale*c.window.scaleX,fy:c.scale*c.window.scaleY,cx:c.window.offsetX,cy:c.window.offsetY,paths:[],
+        flatMaterial:globe?null:function(world){var p=cameraPoint([world[0],world[1],world[2]+H],false);return [p.x,p.y,p.z];}
+      }:null;
       function nearPolygon(points){
         var result=[],near=c.near;
         for(var i=0;i<points.length;i++){
@@ -236,10 +244,11 @@
       var thinOutlines=!!(options.canvasDirectOptions&&options.canvasDirectOptions.thinOutlines);
       var projected=0,drawn=0,strokes=0,fillCalls=0,masked=0;
       var projectionMs=0,canvasMs=0;
-      function drawPrimitive(p,role,far,tint){
+      function drawPrimitive(p,role,far,tint,identity){
         var start=clock(),style=p.style||{},mode=p.type==='line'?1:(p.mode==null?1:p.mode);
         var sourcePoints=p.points,local=role!=='objects';
         var pts=sourcePoints.map(function(point){return cameraPoint(point,local);});
+        var original=capture&&role==='objects'?pts.map(function(q){return [q.x,q.y,q.z];}):null;
         var polygon=p.type==='polygon';
         // Many authored rectangles explicitly repeat their first vertex.
         // Canvas closePath() supplies that edge already; retaining the extra
@@ -274,6 +283,9 @@
         if(!fillPixels&&!lines.length)return;
         start=clock();
         var alpha=identityPass?1:style.alpha==null?1:style.alpha;
+        if(capture&&(role==='objects'||role==='occlusion'))capture.paths.push({role:role,bank:identity&&identity.bank,index:identity&&identity.index,
+          owner:p.metadata&&p.metadata.landmarkOwner,primitive:p.metadata&&p.metadata.landmarkPrimitive,type:p.type,mode:mode,alpha:alpha,
+          points:original,fill:fillPixels||[],edges:lines,strokeWidth:lines.length?(thinOutlines?Math.min(viewport.lineWidth(style.lineWidth,camera),1):viewport.lineWidth(style.lineWidth,camera)):0});
         if(fillPixels){
           ctx.globalAlpha=alpha;
           var fillColor=style.fill||'white';
@@ -448,9 +460,9 @@
             return colors.get(color);
           };
         }
-        group.primitives.forEach(function(p){
+        group.primitives.forEach(function(p,i){
           var color=ownerPass?identityColor(geometry.landmarkOwnerKey(bank,group.index,p.metadata&&p.metadata.landmarkOwner)):null;
-          drawPrimitive(p,'objects',far,ownerPass?function(){return color;}:tint);
+          drawPrimitive(p,'objects',far,ownerPass?function(){return color;}:tint,{bank:bank,index:group.sourceIndices[i]});
         });
       }
       // Painter order: far objects, one white disk, surface/horizon guides,
@@ -470,6 +482,7 @@
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,metricGrid:metricGrid,
+        ...(capture?{picking:capture}:{}),
         fillCalls:fillCalls,strokeCalls:strokes,horizonMasks:masked,geometryReused:source.reused,
         timings:{totalMs:end-began,geometryMs:geometryAt-began,setupMs:setupEnd-geometryAt,
           projectionMs:projectionMs,canvasMs:canvasMs,otherMs:end-setupEnd-projectionMs-canvasMs},

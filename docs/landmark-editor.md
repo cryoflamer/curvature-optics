@@ -212,6 +212,16 @@ coordinates, not interpolated screen pixels. Reject unresolved or ambiguous
 optical hits and verify projection round trips. Do not apply Free View's
 straight ray to refracted optical pixels.
 
+#### 8F.3d.1 — Renderer capture and material inverse (implemented)
+Capture the actual optical camera-space vertices and clipped painter paths,
+including the tangent mask, from Canvas Direct. Use physical topology and
+perspective-correct weights; verify Flat continuous embedding within 0.1 source
+pixel. Reject unresolved chord disagreement. Per-primitive inverse only.
+#### 8F.3d.2 — Optical picking UI and visibility
+Resolve candidates with actual painter order, masks and strokes; validate
+nonlinear Flat refinement and round trips; expose optical markers and reuse
+local editing and session persistence without changing fit or correspondences.
+
 ### 8F.4 — Stable anchors and physical projection
 Proposed logical types: Vertex (primitive + vertex), Edge (stable endpoints +
 t in [0,1]), Surface (stable triangle vertex identities + barycentric weights

@@ -515,6 +515,65 @@
     ctx.beginPath();ctx.arc(...p.pixel,5,0,2*Math.PI);ctx.stroke();
     ctx.beginPath();ctx.arc(...p.pixel,2,0,2*Math.PI);ctx.fill();ctx.restore();
   }
+  // The actual optical camera, not a ray from the physical Free View.
+  function opticalCamera(capture){
+    const {fx,fy,cx,cy,near}=capture;
+    if(![fx,fy,cx,cy,near].every(Number.isFinite)||fx===0||fy===0||near<=0)throw Error('Invalid optical camera');
+    const screen=q=>[cx+fx*q[0]/q[2],cy+fy*q[1]/q[2]];
+    return {near,perspective:true,coordinates:q=>q.slice(),screen,
+      project:q=>finite3(q)&&q[2]>=near?{pixel:screen(q),depth:q[2]}:null,
+      ray:p=>({origin:[0,0,0],direction:[(p[0]-cx)/fx,(p[1]-cy)/fy,1],near})};
+  }
+  function opticalEntry(item,path,order){
+    if(!item||path.role!=='objects'||item.bank!==path.bank||item.index!==path.index||item.primitive!==path.primitive||
+       JSON.stringify(item.owner)!==JSON.stringify(path.owner)||item.type!==path.type||
+       (item.type==='line'?1:item.mode??1)!==path.mode||
+       item.points.length!==path.points?.length||!path.points.every(finite3))return null;
+    const entry=preparePick([item])[0];entry.order=order;
+    return entry;
+  }
+  // Per-primitive inverse, not a visibility certificate. Return material
+  // weights, never screen interpolation. The signed Flat embedding is
+  // independently checked against the chord actually drawn by the renderer.
+  function opticalPrimitivePick(capture,path,item,pixel,kind,{radius=8,tolerance=.1,order=0}={}){
+    const entry=opticalEntry(item,path,order),camera=opticalCamera(capture);
+    if(!entry||!entry.valid)return {candidates:[],reason:'topology mismatch'};
+    if(!['vertex','edge','surface'].includes(kind)||!Array.isArray(pixel)||pixel.length!==2||!pixel.every(Number.isFinite)||
+       !Number.isFinite(radius)||radius<0||!Number.isFinite(tolerance)||tolerance<0||
+       !['flat','globe'].includes(capture.geometry))throw RangeError('Invalid optical pick');
+    if(kind==='surface'&&(!entry.triangles.length||path.fill.length<3||!containsFill(path.fill,pixel)))
+      return {candidates:[],reason:entry.reason||'outside painted fill'};
+    const material=(indices,weights)=>indices.reduce((p,i,j)=>add(p,mul(item.points[i],weights[j])),[0,0,0]);
+    const effectivePoint=(indices,weights)=>indices.reduce((p,i,j)=>add(p,mul(path.points[i],weights[j])),[0,0,0]);
+    const candidates=[];let failed=0;
+    function addHit(indices,weights,paintedPixel){
+      const point=material(indices,weights),effective=effectivePoint(indices,weights);
+      let actual;
+      try{actual=capture.geometry==='flat'?capture.flatMaterial(point):effective;}catch(error){failed++;return;}
+      const projected=camera.project(actual);
+      if(!projected||!projected.pixel.every(Number.isFinite)){failed++;return;}
+      const error=Math.hypot(...sub(projected.pixel,paintedPixel));
+      if(error>tolerance){failed++;return;}
+      const distance=Math.hypot(...sub(pixel,projected.pixel));
+      if(kind!=='surface'&&distance>radius)return;
+      if(projected.pixel[0]<0||projected.pixel[0]>=capture.width||projected.pixel[1]<0||projected.pixel[1]>=capture.height)return;
+      const h=pickDescriptor(entry,kind,indices,weights,point,projected.depth,projected.pixel,distance);
+      candidates.push({...h,roundTripError:error,paintedPixel:paintedPixel.slice()});
+    }
+    if(kind==='vertex'){
+      for(const [i,p] of path.points.entries()){const q=camera.project(p);if(q&&Math.hypot(...sub(pixel,q.pixel))<=radius)addHit([i],[1],q.pixel);}
+    }else if(kind==='edge'){
+      for(const ij of entry.edges){const h=edgeHit(camera,pixel,...ij.map(i=>path.points[i]));if(h&&h.distance<=radius)addHit(ij,[1-h.t,h.t],h.pixel);}
+    }else{
+      const ray=camera.ray(pixel);
+      for(const ijk of entry.triangles){const h=rayTriangle(ray,...ijk.map(i=>path.points[i]));if(h)addHit(ijk,h.weights,pixel);}
+    }
+    candidates.sort((a,b)=>a.distance-b.distance||a.depth-b.depth);
+    // A shared triangulation diagonal can describe the same material point.
+    // Distinct intersections remain explicit instead of choosing arbitrarily.
+    const distinct=kind==='surface'?candidates.filter((h,i)=>!candidates.slice(0,i).some(q=>Math.hypot(...sub(q.point,h.point))<=1e-7)):candidates;
+    return {candidates:distinct,reason:failed?'optical round trip unresolved':'',unresolved:failed,visibility:'primitive-only'};
+  }
   // Window geometry is a UI preference, never experiment or camera state.
   const WINDOW_KEY='curvature-landmark-viewer-window-v1';
   function windowRect(request,width,height){
@@ -787,5 +846,5 @@
       snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

@@ -331,3 +331,38 @@ test('stored magnifier view and anchors are validated against authored geometry'
     let rejected=false;try{viewer.restorePoint(mesh,bad);}catch(e){rejected=true;}assert.ok(rejected);
   }
 });
+
+function opticalFixture(item,points,geometry='globe',flatMaterial=null){
+  const capture={geometry,flatMaterial,width:800,height:600,fx:700,fy:-600,cx:400,cy:300,near:.001};
+  const c=viewer.opticalCamera(capture);
+  const path={role:'objects',bank:item.bank,index:item.index,primitive:item.primitive,owner:item.owner,type:item.type,mode:item.mode,points,fill:points.map(c.screen),edges:[]};
+  return {capture,path,c};
+}
+test('optical inverse recovers material weights from effective geometry, not screen interpolation',()=>{
+  const item=pickItem([[0,0,0],[4,0,0],[0,6,0]],3,0);
+  const {capture,path,c}=opticalFixture(item,[[0,0,10],[8,0,20],[0,9,15]]);
+  const pixel=c.screen([.3*8,.5*9,.2*10+.3*20+.5*15]);
+  const r=viewer.opticalPrimitivePick(capture,path,item,pixel,'surface');
+  assert.equal(r.candidates.length,1);const hit=r.candidates[0];
+  assert.ok(Math.hypot(...hit.point.map((x,i)=>x-[1.2,3,0][i]))<1e-10);
+  assert.ok(hit.roundTripError<1e-10);
+  const edge=c.screen([2,0,12.5]),e=viewer.opticalPrimitivePick(capture,path,item,edge,'edge',{radius:1});
+  assert.equal(e.candidates.length,1);assert.ok(Math.abs(e.candidates[0].weights[1]-.25)<1e-10);
+  assert.deepEqual(viewer.opticalPrimitivePick(capture,path,item,c.screen(path.points[1]),'vertex',{radius:1}).candidates[0].indices,[1]);
+  assert.equal(viewer.opticalPrimitivePick(capture,{...path,index:99},item,pixel,'surface').candidates.length,0);
+  const outside={...capture,fx:1000},outsideCam=viewer.opticalCamera(outside);
+  assert.equal(viewer.opticalPrimitivePick(outside,path,item,outsideCam.screen(path.points[1]),'vertex',{radius:1}).candidates.length,0);
+});
+test('nonlinear Flat chord disagreement is explicitly unresolved',()=>{
+  const item=pickItem([[0,0,0],[4,0,0],[0,4,0]],3,0);
+  const mapping=p=>[p[0],p[1]+.2*p[0]*p[0],20];
+  const {capture,path,c}=opticalFixture(item,item.points.map(mapping),'flat',mapping);
+  const pixel=c.screen([2,1.6,20]);
+  const bad=viewer.opticalPrimitivePick(capture,path,item,pixel,'edge',{radius:1});
+  assert.equal(bad.candidates.length,0);assert.ok(bad.unresolved>0);
+  const vertex=viewer.opticalPrimitivePick(capture,path,item,c.screen(path.points[1]),'vertex',{radius:1});
+  assert.equal(vertex.candidates.length,1);
+  const flat=p=>[p[0],p[1],20],f=opticalFixture(item,item.points.map(flat),'flat',flat);
+  const good=viewer.opticalPrimitivePick(f.capture,f.path,item,f.c.screen([1,1,20]),'surface');
+  assert.equal(good.candidates.length,1);assert.ok(good.candidates[0].roundTripError<1e-10);
+});

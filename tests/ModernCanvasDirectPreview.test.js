@@ -615,3 +615,29 @@ test('magnifier crop bounds and aspect ratio are validated',()=>{
   assert.throws(()=>direct.cropTransform({x:-1,y:0,width:1,height:1},800,500,100,100),/region/);
   assert.throws(()=>direct.cropTransform({x:799,y:0,width:2,height:1},800,500,100,100),/region/);
 });
+
+test('Canvas Direct optional picking capture retains actual clipped paths and authored indices',()=>{
+  const m=soundly();
+  for(const globe of [true,false]){
+    m.showModel=globe?1:2;m.Update();
+    const cam=require('../src/calibration/CameraPhysicalPose').photoCamera({...m,viewcenterHorizon:3},800,500);
+    const g=graph(true),engine=direct.create(),options={atmosphere:'standard',canvasDirectOptions:{thinOutlines:true,capturePicking:true}};
+    const stats=engine.paint(g.g.Canvas,cam,m,options),capture=stats.picking;
+    const authored=[0,1].map(b=>geometry.createObjectSequenceScene({...m,geometryRadius:m.rEarth},b,globe,{opticsNeutral:true,physicalSurface:true,curvature:globe?1/m.rEarth:0}).primitives);
+    const paths=capture.paths.filter(p=>p.role==='objects');
+    assert.ok(paths.length>0);
+    for(const p of paths){
+      const a=authored[p.bank][p.index];assert.ok(a);
+      assert.deepEqual(p.owner,a.metadata.landmarkOwner);
+      assert.equal(p.primitive,a.metadata.landmarkPrimitive);
+      assert.equal(p.points.length,a.points.length);
+      assert.ok(p.points.every(q=>q.every(Number.isFinite)));
+    }
+    const actual=g.stats(),fills=new Set(actual.paintedPaths.map(q=>JSON.stringify(q.points))),strokes=new Set(actual.strokedPaths.map(q=>JSON.stringify(q)));
+    for(const p of capture.paths){
+      if(p.fill.length)assert.ok(fills.has(JSON.stringify(p.fill)));
+      if(p.edges.length)assert.ok(strokes.has(JSON.stringify(p.edges.flat())));
+    }
+    assert.equal(engine.paint(graph().g.Canvas,cam,m,{atmosphere:'standard'}).picking,undefined);
+  }
+});
