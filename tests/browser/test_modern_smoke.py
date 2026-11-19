@@ -670,6 +670,35 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationFitModel').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
 
+    def test_all_workspace_tabs_restore_through_same_preference(self):
+        self.open_modern()
+        tabs={'scene':'ModernSceneTab','compare':'ModernCompareTab',
+              'animation':'ModernAnimationTab','calibration':'ModernPhotoCalibrationOpen',
+              'demos':'ModernDemosTab'}
+        for mode in ['compare','animation','calibration','demos','scene']:
+            with self.subTest(mode=mode):
+                self.page.locator('#'+tabs[mode]).click()
+                self.page.wait_for_function("m => CurvatureModernApp.getWorkspaceMode() === m",arg=mode)
+                self.assertEqual(self.page.evaluate("""() => JSON.parse(localStorage.getItem(
+                    CurvatureModernApplicationPreferences.STORAGE_KEY)).workspace.mode"""),mode)
+                self.page.reload(wait_until='load')
+                self.page.wait_for_function("m => CurvatureModernApp.getWorkspaceMode() === m",arg=mode)
+                for key,tab in tabs.items():
+                    expect(self.page.locator('#'+tab)).to_have_attribute(
+                        'aria-pressed','true' if key==mode else 'false')
+                expect(self.page.locator('#ModernPhotoCalibration')).to_be_visible() if mode=='calibration' else expect(self.page.locator('#ModernPhotoCalibration')).to_be_hidden()
+                expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible() if mode=='animation' else expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+
+    def test_explicit_workspace_link_then_user_choice_survives_reload(self):
+        self.open_modern()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        self.page.goto(self.base_url+'?mode=compare',wait_until='load')
+        self.page.wait_for_function("CurvatureModernApp.getWorkspaceMode() === 'compare'")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("CurvatureModernApp.getWorkspaceMode() === 'animation'")
+        expect(self.page.locator('#ModernAnimationTab')).to_have_attribute('aria-pressed','true')
+
     def test_photo_calibration_reload_restores_draft(self):
         import base64
         self.open_modern()

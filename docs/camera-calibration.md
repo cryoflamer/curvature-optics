@@ -1,3 +1,18 @@
+## Unified top-level workspace selection and recovery
+
+Scene, Compare, Animation, Photo Calibration and Demos now share one tab
+mapping, activation-success preference write, active-tab synchronization
+and startup selection policy. Individual render/Studio/calibration lifecycle
+and draft storage remain separate. The common browser preference is
+`workspace.mode`. New explicit workspace/shared-experiment links retain
+priority on first arrival. A subsequent deliberate tab choice in that same
+history entry survives refresh without changing the public URL; ordinary
+local startup uses the common preference. Startup itself does not remember
+a selection, and late photo draft recovery cannot override a newer user
+navigation. Resetting workspace/application preferences clears the entry
+override. Tests cover all five modes and explicit-mode navigation/reload.
+CI pending.
+
 ## 8B.5 — Local calibration draft recovery
 
 The active workspace preference includes Calibration. Explicit shared scene URLs retain priority. A separate IndexedDB record stores the original photograph, fixed scene, correspondences, selection and both viewport transforms. Recovery runs before enabling the calibration tab. New session replaces the draft. Storage errors are shown in the editor. Browser-local only; no cross-device sync. CI pending.

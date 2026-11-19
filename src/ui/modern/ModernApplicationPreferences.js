@@ -32,6 +32,15 @@
     return Object.freeze(result);
   }
   var TABS=['Camera','Surface','Atmosphere','Objects','Display'];
+  var WORKSPACE_MODES=Object.freeze(['scene','compare','animation','calibration','demos']);
+  function startupWorkspace(stored,physical,urlMode,shared,entryMode){
+    var explicit=['scene','compare','demos'].includes(urlMode)?urlMode:null;
+    var fallback=['scene','compare'].includes(physical)?physical:'scene';
+    // New explicit links win. A deliberate tab choice in that same history
+    // entry survives refresh without rewriting the public URL.
+    if(shared||explicit)return WORKSPACE_MODES.includes(entryMode)?entryMode:(explicit||fallback);
+    return WORKSPACE_MODES.includes(stored)?stored:fallback;
+  }
   var SECTION_SUFFIXES=['camera.pose','camera.navigation','camera.animation','camera.savedViews',
     'camera.frameName','surface.geometry','atmosphere.profile','atmosphere.explanation',
     'atmosphere.visibility','atmosphere.shimmer','objects.group1','objects.group2',
@@ -47,7 +56,7 @@
     SECTION_KEYS.forEach(function(key){if(typeof source[key]==='boolean')sections[key]=source[key];});
     return Object.freeze({
       // null preserves the mode/model embedded in pre-workspace experiments.
-      mode:['scene','compare','animation','demos','calibration'].includes(data.mode)?data.mode:null,
+      mode:WORKSPACE_MODES.includes(data.mode)?data.mode:null,
       sceneTab:TABS.includes(data.sceneTab)?data.sceneTab:'Camera',
       compareTab:TABS.includes(data.compareTab)?data.compareTab:'Camera',
       compareModel:['A','B'].includes(data.compareModel)?data.compareModel:null,
@@ -157,5 +166,6 @@
     return true;
   }
   return Object.freeze({STORAGE_KEY:STORAGE_KEY,LEGACY_NAVIGATION_KEY:LEGACY_NAVIGATION_KEY,
+    WORKSPACE_MODES:WORKSPACE_MODES,startupWorkspace:startupWorkspace,
     defaults:function(){return normalize();},normalize:normalize,read:read,write:write,reset:reset});
 }));

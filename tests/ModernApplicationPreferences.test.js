@@ -225,3 +225,20 @@ test('Camera HUD appearance is local display state, validated and reset independ
   preferences.reset(db);
   assert.deepEqual(preferences.read(db).cameraHudAppearance,defaults);
 });
+
+test('all five workspaces share the same local preference roundtrip and startup precedence',()=>{
+  const db=storage();
+  for(const mode of preferences.WORKSPACE_MODES){
+    assert.equal(preferences.write(db,{workspace:{mode}}),true);
+    const saved=preferences.read(db).workspace.mode;
+    assert.equal(saved,mode);
+    assert.equal(preferences.startupWorkspace(saved,'scene',null,false,null),mode);
+    assert.equal(preferences.startupWorkspace(saved,'compare',null,true,null),'compare');
+    assert.equal(preferences.startupWorkspace(saved,'scene','compare',false,null),'compare');
+    assert.equal(preferences.startupWorkspace(saved,'compare',null,true,mode),mode);
+    assert.equal(preferences.startupWorkspace(saved,'scene','compare',false,mode),mode);
+  }
+  assert.equal(preferences.startupWorkspace('invalid','compare',null,false,null),'compare');
+  assert.equal(preferences.startupWorkspace('animation','scene','invalid',false,'compare'),'animation');
+  assert.equal(preferences.startupWorkspace(null,'invalid',null,false,null),'scene');
+});
