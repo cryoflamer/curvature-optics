@@ -699,6 +699,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         fit=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()""")
         self.assertTrue(fit['evaluation']['valid'])
         self.assertLessEqual(fit['evaluation']['rmsPx'],fit['initialRmsPx']+1e-8)
+        # Residuals are the worker's original-image pixel values, not canvas CSS pixels.
+        panel=workspace.locator('#ModernCalibrationResidualPanel')
+        expect(panel).to_be_visible()
+        residual=panel.locator('tbody tr')
+        expect(residual).to_have_count(1)
+        self.assertAlmostEqual(float(residual.locator('[data-residual="error"]').inner_text()),fit['evaluation']['rmsPx'],delta=.006)
+        self.assertAlmostEqual(float(residual.locator('[data-residual="initialError"]').inner_text()),fit['initialRmsPx'],delta=.006)
+        for axis,index in [('dx',0),('dy',1)]:
+            self.assertAlmostEqual(float(residual.locator('[data-residual="'+axis+'"]').inner_text()),fit['evaluation']['points'][0]['residual'][index],delta=.006)
+        select=workspace.locator('#ModernCalibrationResidualMode')
+        expect(select).to_have_value('best')
+        residual.get_by_role('button',name='Select correspondence 1').click()
+        expect(residual.get_by_role('button',name='Select correspondence 1')).to_have_attribute('aria-pressed','true')
+        with_overlay=photo.evaluate('(c)=>c.toDataURL()')
+        select.select_option('off')
+        self.assertNotEqual(photo.evaluate('(c)=>c.toDataURL()'),with_overlay)
+        select.select_option('initial')
+        self.assertNotEqual(photo.evaluate('(c)=>c.toDataURL()'),with_overlay)
+        select.select_option('best')
         self.assertEqual(self.page.evaluate("""() => {
             const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
             return JSON.stringify([s.model.Height,s.model.Pan,s.model.FocalLengthField]);
@@ -723,6 +742,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['fit']['result'],exported['fit']['result'])
         self.assertEqual(after['referenceImage'],exported['referenceImage'])
         self.assertEqual(after['fit']['freeParameters'],['Pan'])
+        expect(panel).to_be_visible()
+        expect(residual).to_have_count(1)
+        expect(residual.locator('[data-residual="error"]')).to_have_text(f"{fit['evaluation']['rmsPx']:.2f}")
+        # Invalidation must remove stale vectors and results.
+        workspace.locator('[data-fit-field="Roll"]').check()
+        expect(panel).to_be_hidden()
+        expect(select).to_be_disabled()
+        expect(residual).to_have_count(0)
 
     def test_all_workspace_tabs_restore_through_same_preference(self):
         self.open_modern()

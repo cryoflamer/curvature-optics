@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -199,6 +199,12 @@
       <section><h3>Original photograph</h3><p>Click to pair · drag marker to edit · drag empty area to pan · wheel to zoom.</p>
         <canvas id="ModernCalibrationPhoto" width="800" height="540" aria-label="Reference photo"></canvas>
         <div class="modern-calibration-toolbar">
+          <label>Residual overlay <select id="ModernCalibrationResidualMode" disabled>
+            <option value="best" selected>Best camera</option><option value="initial">Initial camera</option><option value="off">Off</option>
+          </select></label>
+          <span>+ Observed · ○ Predicted · dashed line = residual</span>
+        </div>
+        <div class="modern-calibration-toolbar">
           <label>Pixel X <input id="ModernCalibrationX" type="number" step="any"></label>
           <label>Pixel Y <input id="ModernCalibrationY" type="number" step="any"></label>
         </div>
@@ -228,9 +234,18 @@
       </section>
     </div>
     <p id="ModernCalibrationStatus" role="status"></p><p id="ModernCalibrationStorage" role="status"></p>
+    <section id="ModernCalibrationResidualPanel" hidden aria-label="Calibration residuals">
+      <h3>Calibration residuals · original image pixels</h3>
+      <p>Click a point number to highlight its corresponding markers on both views. Δ = predicted − observed. Largest best-camera error is bold.</p>
+      <p id="ModernCalibrationResidualNotice" role="status"></p>
+      <div style="overflow-x:auto">
+        <table><thead><tr><th>#</th><th>Observed (x,y)</th><th>Initial (x,y)</th><th>Initial error</th><th>Best (x,y)</th><th>ΔX</th><th>ΔY</th><th>Best error</th><th>Best status</th></tr></thead>
+          <tbody id="ModernCalibrationResidualRows"></tbody></table>
+      </div>
+    </section>
     <h3 id="ModernCalibrationCount">0 correspondences</h3>
     <table><thead><tr><th>#</th><th>Landmark</th><th>Original pixels</th><th>Weight</th><th>Actions</th></tr></thead><tbody id="ModernCalibrationPairs"></tbody></table>
-    <p>Draft automatically saved in this browser. Camera solving, overlay and saving follow in the next stages.</p>
+    <p>Draft automatically saved in this browser. Full-model overlay and accepting the fitted camera follow in the next stages.</p>
   </section>
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>

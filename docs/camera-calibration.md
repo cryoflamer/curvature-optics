@@ -1,3 +1,24 @@
+## 8C.4a — Photo residual visualization
+
+Photo Calibration displays observed crosses, predicted rings and dashed
+residual segments with the existing pair colors, in the original photo
+viewport (pan/zoom aware). A selector switches between Best camera, Initial
+camera and Off independently of the model preview. The table shows observed,
+initial and best pixel coordinates, initial and best Euclidean errors, signed
+best ΔX/ΔY (predicted minus observed), and best projection status. Click the
+point number to select its markers in both views, including the best-camera
+preview. The largest best-camera error is bold, not automatically rejected.
+Initial projections are recomputed once per fit from the captured scene with
+the same Canvas Direct projector at original dimensions; best projections
+come from the current stored/worker result. Missing projections are explicit,
+not zero. Draft restoration/import rebuilds diagnostics; stale results are
+cleared on changes, and the overlay choice persists in the local draft.
+No optimizer, weights, correspondence schema or experiment file format changed.
+Unit tests cover sign, order, missing projections, and viewport mapping;
+Chromium smoke covers live fit, overlay selection, import and invalidation.
+Previous 8C.3 CI succeeded; new CI pending. Next 8C.4b: explicit inclusion/
+held-out controls and validation residuals, not automatic outlier rejection.
+
 ## 8C.3 — Authored-vertex horizontal fit scaling
 
 The exported Soundly experiment reproduced the original RMS exactly:

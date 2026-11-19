@@ -150,6 +150,34 @@
     context.strokeText(label,p[0]+9,p[1]-8);context.fillStyle=color;context.fillText(label,p[0]+9,p[1]-8);
     context.restore();
   }
+  // Residuals are in original image pixels, never CSS/backing-store pixels.
+  // Match by landmark identity rather than trusting result-array order.
+  function residualRows(rows,initialPoints,bestPoints){
+    const initial=new Map((initialPoints||[]).map(p=>[p.id,p])),best=new Map((bestPoints||[]).map(p=>[p.id,p]));
+    function sample(p,observed){
+      if(!p)return {status:'unavailable',predicted:null,residual:null,error:null};
+      const q=p.predicted;
+      if(!['visible','out_of_frame'].includes(p.status)||!Array.isArray(q)||q.length!==2||!q.every(Number.isFinite))
+        return {status:p.status||'unavailable',predicted:null,residual:null,error:null};
+      const residual=q.map((v,i)=>v-observed[i]);
+      if(!residual.every(Number.isFinite))return {status:'unavailable',predicted:null,residual:null,error:null};
+      return {status:p.status,predicted:q.slice(),residual,error:Math.hypot(...residual)};
+    }
+    return rows.map((r,i)=>({id:r.landmark.id,number:i+1,observed:r.pixel.slice(),
+      initial:sample(initial.get(r.landmark.id),r.pixel),best:sample(best.get(r.landmark.id),r.pixel)}));
+  }
+  function drawResidual(context,view,observed,sample,color,active){
+    if(!sample.predicted)return;
+    const a=screenPoint(view,observed),b=screenPoint(view,sample.predicted);
+    if(![...a,...b].every(Number.isFinite))return;
+    context.save();context.globalAlpha=active?1:.85;
+    context.beginPath();context.moveTo(...a);context.lineTo(...b);
+    context.setLineDash([5,3]);context.strokeStyle='#fff';context.lineWidth=active?4:3;context.stroke();
+    context.strokeStyle=color;context.lineWidth=active?2.5:1.5;context.stroke();
+    context.setLineDash([]);context.beginPath();context.arc(b[0],b[1],active?8:6,0,Math.PI*2);
+    context.strokeStyle='#fff';context.lineWidth=4;context.stroke();
+    context.strokeStyle=color;context.lineWidth=2;context.stroke();context.restore();
+  }
   // Library IDs are local; a shipped demo can use the same ID for a
   // different original. Never merge these namespaces or import on selection.
   function photoChoices(libraryRows,projects,demos){
@@ -261,6 +289,9 @@
     const fitFields=CAMERA_FIELDS,fitLabels=["East (m)","North (m)","Height (m)","Pan (°)","Nick (°)","Roll (°)","Focal field (mm)"];
     const fitPanel=$('ModernCalibrationFitParameters'),runFit=$('ModernCalibrationRunFit'),stopFit=$('ModernCalibrationStopFit'),bestView=$('ModernCalibrationBestView'),fitStatus=$('ModernCalibrationFitStatus'),fitResult=$('ModernCalibrationFitResult');
     const exportButton=$('ModernCalibrationExportExperiment'),importButton=$('ModernCalibrationImportExperiment'),importFile=$('ModernCalibrationExperimentFile'),exchangeStatus=$('ModernCalibrationExchangeStatus');
+    const residualMode=$('ModernCalibrationResidualMode'),residualPanel=$('ModernCalibrationResidualPanel'),
+      residualList=$('ModernCalibrationResidualRows'),residualNotice=$('ModernCalibrationResidualNotice');
+    let initialPoints=null,initialProjectionError='',residualData=[];
     const fitRaster=doc.createElement('canvas');let fitWorker=null,fitBest=null,fitSignature=null,viewBest=false,paintedFit=null,lastFitPaint=0;
     // IndexedDB keeps original images out of the small localStorage quota.
     // A single atomic record binds the photograph to its fixed scene and pairs.
@@ -288,7 +319,7 @@
       const data=JSON.parse(JSON.stringify({version:1,scene:{model:scene.model,physics:scene.physics},
         record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),
         weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
-        fitBest,fitStatus:fitStatus.textContent,viewBest}));
+        fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
         const db=await database();
         await new Promise((resolve,reject)=>{
@@ -321,6 +352,7 @@
         editing=d.editing;pendingModel=d.pendingModel||null;activePair=d.activePair||null;weight.value=d.weight||'1';setPixel(d.pending||null);
         add.textContent=editing?'Update pair':'Add pair';
         refreshRows();photoDraw();meshDraw();
+        if(['best','initial','off'].includes(d.residualMode))residualMode.value=d.residualMode;
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
           try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model),d.fitStatus,!!d.viewBest);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
@@ -405,6 +437,9 @@
       ctx.clearRect(0,0,photo.width,photo.height);
       if(!image||!view)return;
       ctx.drawImage(image,view.x,view.y,record.original.width*view.scale,record.original.height*view.scale);
+      if(residualMode.value!=='off'&&fitBest&&!photoGhost){
+        for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===activePair);
+      }
       rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),String(i+1),COLORS[i%COLORS.length],r.landmark.id===activePair));
       if(pending)marker(ctx,screenPoint(view,pending),'+','#009ab3');
     }
@@ -440,6 +475,7 @@
       $('ModernCalibrationInlineCount').textContent=rows.length+' correspondences';
       $('ModernCalibrationUndo').disabled=!undoStack.length;
       $('ModernCalibrationDeleteSelected').disabled=!activePair;
+      refreshResidualTable();
     }
     function updateHint(){
       const text=editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
@@ -867,6 +903,7 @@
       }
       bestView.textContent=viewBest?'Return to initial camera':'Show best camera';
       $('ModernCalibrationFitNotice').hidden=!viewBest;
+      residualMode.disabled=!fitBest;
     }
     function exportExperiment(){
       if(!scene||!record)throw Error('Load a photograph first');
@@ -930,15 +967,61 @@
     function terminateFit(){
       if(fitWorker){fitWorker.terminate();fitWorker=null;}
     }
+    function initialProjection(){
+      // Recompute initial positions with the same physical projection and
+      // original raster as the worker. No extra optimization is performed.
+      if(initialPoints!==null)return initialPoints;
+      initialPoints=[];initialProjectionError='';
+      try{
+        const width=record.original.width,height=record.original.height,
+          m={...scene.model,deviceRatio:width/height,viewcenterHorizon:3},
+          camera=env.CurvatureCameraPhysicalPose.photoCamera(m,width,height),
+          session=env.CurvatureCameraLandmarkProjection.create(m,camera,width,height,{...scene.physics,method:'canvas-direct'});
+        initialPoints=rows.map(r=>{
+          const q=session[r.kind](r.landmark);
+          return {id:r.landmark.id,status:q.status,predicted:q.pixel};
+        });
+      }catch(error){initialProjectionError=String(error.message||error);}
+      return initialPoints;
+    }
+    function refreshResidualTable(){
+      residualPanel.hidden=!fitBest;
+      residualData=fitBest?residualRows(rows,initialProjection(),fitBest.evaluation.points):[];
+      residualList.replaceChildren();
+      residualNotice.textContent=initialProjectionError?'Initial projection unavailable: '+initialProjectionError:'';
+      const n=v=>Number.isFinite(v)?v.toFixed(2):'—',xy=p=>p?p.map(n).join(', '):'—';
+      const max=residualData.reduce((v,r)=>Math.max(v,r.best.error??0),0);
+      for(const r of residualData){
+        const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.id===activePair);
+        tr.dataset.landmarkId=r.id;
+        const cell=doc.createElement('td'),button=doc.createElement('button');
+        button.type='button';button.textContent=String(r.number);button.title=r.id;
+        button.style.color=COLORS[(r.number-1)%COLORS.length];button.style.fontWeight='bold';
+        button.setAttribute('aria-label','Select correspondence '+r.number);
+        button.setAttribute('aria-pressed',String(r.id===activePair));
+        button.onclick=()=>selectPair(r.id);cell.append(button);tr.append(cell);
+        for(const [key,value] of [['observed',xy(r.observed)],['initial',xy(r.initial.predicted)],['initialError',n(r.initial.error)],
+          ['predicted',xy(r.best.predicted)],['dx',n(r.best.residual?.[0])],['dy',n(r.best.residual?.[1])],['error',n(r.best.error)],
+          ['status',r.best.status]]){
+          const td=doc.createElement('td');td.dataset.residual=key;td.textContent=value;
+          if(key==='error'&&max>0&&r.best.error===max){td.style.fontWeight='bold';td.title='Largest best-camera residual';}
+          tr.append(td);
+        }
+        residualList.append(tr);
+      }
+    }
+    residualMode.onchange=()=>{photoDraw();persist();};
     function invalidateFit(message){
       terminateFit();fitBest=null;fitSignature=null;viewBest=false;paintedFit=null;
-      fitResult.textContent='';fitStatus.textContent=message;syncFitControls();
+      initialPoints=null;initialProjectionError='';
+      fitResult.textContent='';fitStatus.textContent=message;syncFitControls();refreshResidualTable();photoDraw();
     }
     function fitSummary(r){
       const n=v=>Number.isFinite(v)?v.toFixed(2):'—';
       fitResult.textContent='Original pixels: RMS '+n(r.initialRmsPx)+' → '+n(r.evaluation.rmsPx)+
         ' px · weighted RMS '+n(r.evaluation.weightedRmsPx)+' px · '+r.evaluations+' evaluations · '+
         fitFields.map((k,i)=>fitLabels[i]+': '+(Number.isFinite(r.pose[k])?Number(r.pose[k].toPrecision(7)):'—')).join(' · ');
+      refreshResidualTable();photoDraw();
     }
     function paintBest(){
       if(!fitBest||!record||!scene)return;
@@ -961,7 +1044,7 @@
         if(p.predicted&&p.predicted.every(Number.isFinite)){
           const xy=screenPoint(v,[p.predicted[0]*sx,p.predicted[1]*sy]);
           if(xy[0]>=0&&xy[0]<sceneCanvas.width&&xy[1]>=0&&xy[1]<sceneCanvas.height)
-            marker(mesh,xy,String(i+1),COLORS[i%COLORS.length]);
+            marker(mesh,xy,String(i+1),COLORS[i%COLORS.length],p.id===activePair);
         }
       });
     }
@@ -1026,5 +1109,5 @@
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,residualRows,drawResidual,mount});
 }));

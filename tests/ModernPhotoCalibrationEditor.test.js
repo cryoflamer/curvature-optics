@@ -116,3 +116,25 @@ test('experiment exchange preserves original pixels, locked fields and result id
  assert.throws(()=>check({...input,fit:{...input.fit,freeParameters:['Height','Height']}}),/free camera/);
  assert.throws(()=>check({...input,fit:{...input.fit,result:{evaluation:{valid:true}}}}),/stored fit/);
 });
+
+test('residual rows retain original pixels, signed differences and stable landmark identity',()=>{
+  const rows=[{landmark:{id:'a'},pixel:[100,200]},{landmark:{id:'b'},pixel:[9,12]}];
+  const initial=[{id:'b',status:'blocked',predicted:null},{id:'a',status:'out_of_frame',predicted:[-20,240]}];
+  const best=[{id:'b',status:'visible',predicted:[9,12]},{id:'a',status:'visible',predicted:[103,196]}];
+  const before=JSON.stringify([rows,initial,best]),r=editor.residualRows(rows,initial,best);
+  assert.deepEqual(r[0].best.residual,[3,-4]);assert.equal(r[0].best.error,5);
+  assert.deepEqual(r[0].initial.residual,[-120,40]);assert.equal(r[0].initial.status,'out_of_frame');
+  assert.equal(r[1].initial.error,null);assert.equal(r[1].initial.status,'blocked');
+  assert.equal(r[1].best.error,0);assert.equal(r[1].number,2);
+  assert.equal(editor.residualRows(rows,[],[])[0].best.status,'unavailable');
+  assert.equal(JSON.stringify([rows,initial,best]),before);
+});
+test('residual overlay uses the photo viewport transform for both endpoints',()=>{
+  const calls=[],ctx=new Proxy({}, {get:(_,k)=>(...a)=>calls.push([k,...a]),set:()=>true});
+  editor.drawResidual(ctx,{x:15,y:-4,scale:2},[10,20],{predicted:[13,16]},'#123456',true);
+  assert.deepEqual(calls.find(c=>c[0]==='moveTo'),['moveTo',35,36]);
+  assert.deepEqual(calls.find(c=>c[0]==='lineTo'),['lineTo',41,28]);
+  assert.deepEqual(calls.find(c=>c[0]==='arc').slice(0,4),['arc',41,28,8]);
+  assert.ok(calls.some(c=>c[0]==='setLineDash'&&c[1].length===2));
+  const n=calls.length;editor.drawResidual(ctx,{x:0,y:0,scale:1},[0,0],{predicted:null},'#000',false);assert.equal(calls.length,n);
+});
