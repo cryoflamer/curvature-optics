@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented and user-inspected; 8F.2b modeless window implemented (CI pending); 8F.2c rectangular magnifier implemented (CI pending); 8F.2d Free View and Reset View implemented; 8F.2e sensitivity refinement implemented and user-approved on Soundly; 8F.3a mathematical core implemented (CI passed); 8F.3b Free View picking implemented (CI pending); 8F.3c next. See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented and user-inspected; 8F.2b modeless window implemented (CI pending); 8F.2c rectangular magnifier implemented (CI pending); 8F.2d Free View and Reset View implemented; 8F.2e sensitivity refinement implemented and user-approved on Soundly; 8F.3a mathematical core implemented (CI passed); 8F.3b Free View picking implemented; 8F.3c local adjustment implemented (CI pending); 8F.3d next. See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -192,7 +192,7 @@ candidates. Reconcile the geometric depth order with displayed painter
 order, including invalid filled primitives and wireframe. Cache topology
 per region, profile pointer queries and bound work; no silent selection
 of an occluded feature. Stage candidate separately from correspondences.
-#### 8F.3c — Marker, snapping and precise adjustment
+#### 8F.3c — Marker, snapping and precise adjustment (implemented)
 Persistent local marker across navigation, metric coordinates, midpoint
 and endpoint/boundary snaps, precise adjustment, explicit confirm/cancel.
 Keep original indices and weights; no internal triangulation edge as

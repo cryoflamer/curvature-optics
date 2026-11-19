@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;orbit-sensitivity=1&amp;indexed-picking=1&amp;free-picking=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;orbit-sensitivity=1&amp;indexed-picking=1&amp;free-picking=1&amp;point-adjustment=1"></script>
 <script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1"></script>
 </head>
 <body>
@@ -260,6 +260,15 @@
       <div data-viewer-pick-controls style="display:none">
         <div class="modern-calibration-toolbar"><label>Pick <select data-viewer-pick-mode><option value="navigate">Navigate</option><option value="vertex">Vertex</option><option value="edge">Edge</option><option value="surface">Surface</option></select></label><label>Candidate <select data-viewer-pick-candidates disabled aria-label="Point candidate"></select></label><button type="button" data-viewer-pick-clear>Clear point</button></div>
         <p data-viewer-pick-status role="status"></p>
+        <div data-viewer-point-details style="display:none">
+          <p data-viewer-point-coords></p>
+          <div class="modern-calibration-toolbar" data-viewer-point-parameters>
+            <label>t / w₀ <input type="number" min="0" max="1" step="0.001" data-viewer-point-weight style="width:90px"></label>
+            <label>w₁ <input type="number" min="0" max="1" step="0.001" data-viewer-point-weight style="width:90px"></label>
+            <button type="button" data-viewer-point-apply>Apply weights</button>
+          </div>
+          <div class="modern-calibration-toolbar"><button type="button" data-viewer-point-snap="vertex">Snap vertex</button><button type="button" data-viewer-point-snap="midpoint">Edge midpoint</button><button type="button" data-viewer-point-snap="boundary">Nearest boundary</button><button type="button" data-viewer-point-confirm>Confirm point</button><button type="button" data-viewer-point-cancel>Cancel edit</button></div>
+        </div>
       </div>
       <div data-viewer-frame><canvas width="800" height="520" tabindex="0" aria-label="Isolated authored object"></canvas></div>
       <p data-viewer-status role="status"></p>

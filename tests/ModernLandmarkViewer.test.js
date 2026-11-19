@@ -270,3 +270,29 @@ test('frame picker supports coplanar ambiguity, wireframe and bounded screen wor
   const crowded={...f,entries:Array.from({length:2501},()=>f.entries[0])};
   assert.ok(viewer.framePick(crowded,[50,50],'surface').blocked);
 });
+
+test('point adjustment preserves original indices, rejects invalid weights and snaps authored boundaries',()=>{
+  const item=pickItem([[0,0,0],[4,0,0],[4,4,0],[0,4,0]],3,0),mesh=viewer.preparePick([item]),c=pickCamera();
+  const h=viewer.pickRegion(mesh,c,[60,40],'surface').candidates[0],before=JSON.stringify(h);
+  const q=viewer.adjustPoint(mesh,h,[.2,.3,.5]);
+  assert.deepEqual(q.indices,h.indices);
+  assert.deepEqual(q.weights,[.2,.3,.5]);
+  const edge=viewer.adjustPoint(mesh,q,q.weights,'boundary');
+  assert.equal(edge.kind,'edge');assert.ok(mesh[0].edges.some(e=>JSON.stringify(e)===JSON.stringify(edge.indices)));
+  const mid=viewer.adjustPoint(mesh,edge,edge.weights,'midpoint');
+  assert.deepEqual(mid.weights,[.5,.5]);
+  const vertex=viewer.adjustPoint(mesh,mid,mid.weights,'vertex');
+  assert.equal(vertex.kind,'vertex');assert.deepEqual(vertex.point,item.points[vertex.indices[0]]);
+  let rejected=false;try{viewer.adjustPoint(mesh,h,[.7,.7,-.4]);}catch(e){rejected=true;}assert.ok(rejected);
+  assert.equal(JSON.stringify(h),before);
+  assert.deepEqual(viewer.worldPoint({origin:[10,20,30],x:[0,1,0],y:[-1,0,0],z:[0,0,1]},[2,3,4]),[7,22,34]);
+});
+test('fixed point visibility distinguishes hidden, outside and wireframe points',()=>{
+  const rear=pickItem([[-2,-2,0],[2,-2,0],[2,2,0],[-2,2,0]],3,0);
+  const front=pickItem([[-2,-2,2],[2,-2,2],[2,2,2],[-2,2,2]],3,1);
+  const f=frameFixture([rear,front]),h={order:0,point:[0,0,0]};
+  assert.equal(viewer.markerVisibility(f,h,100,100,false),'occluded');
+  assert.equal(viewer.markerVisibility(f,h,100,100,true),'wireframe');
+  assert.equal(viewer.markerVisibility(f,{...h,point:[100,0,0]},100,100,false),'out of view');
+  assert.equal(viewer.markerVisibility(f,{order:1,point:[0,0,2]},100,100,false),'visible');
+});

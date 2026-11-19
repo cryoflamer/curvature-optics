@@ -1,3 +1,19 @@
+## 8F.3c — Local point adjustment and confirmation
+
+Free View draft and confirmed local point remain fixed through camera
+navigation, pick mode changes and optical Reset View / re-entry. New
+rectangle or viewer close clears both. Show local and authored-world XYZ
+(in metres, captured observer-height convention), original indices and
+weights. Edit edge t or surface w0,w1 (w2=1-w0-w1); reject invalid
+weights transactionally. Snap to a selected simplex vertex, authored edge
+midpoint or nearest original perimeter (not triangulation diagonals).
+Confirm locally, cancel draft without changing confirmed point, or clear
+both. Marker hidden when occluded, outside view or visibility unresolved;
+wireframe permits inspection. Optical view remains exact crop with no
+point overlay yet. No correspondence, optimizer or portable schema change.
+23 strict headless tests passed; browser coverage extended, CI pending.
+Next: 8F.3d optical inverse picking.
+
 ## 8F.3b — Free View point picking UI
 
 Free View now offers Navigate / Vertex / Edge / Surface, hover preview,

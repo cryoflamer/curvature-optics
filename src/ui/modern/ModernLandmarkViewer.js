@@ -457,6 +457,47 @@
     return {candidates:choices,reason:!choices.length&&blocked.length?'Painter and geometric depth disagree; rotate or use wireframe.':
       !choices.length&&kind==='surface'&&wireframe?'Surface picking requires filled view.':'',blocked:!choices.length&&!!blocked.length};
   }
+  // A local selection is a material point, independent of the current camera.
+  function adjustPoint(mesh,hit,weights, snap='none'){
+    const e=mesh[hit.order];
+    if(!e||e.item.index!==hit.index||e.item.bank!==hit.bank)throw Error('Point geometry changed');
+    let indices=hit.indices.slice(),kind=hit.kind,w=weights.slice();
+    if(w.length!==indices.length||!w.every(x=>Number.isFinite(x)&&x>=0&&x<=1)||Math.abs(w.reduce((a,b)=>a+b,0)-1)>1e-9)
+      throw Error('Weights must be nonnegative and sum to one');
+    const sum=w.reduce((a,b)=>a+b,0);w=w.map(x=>x/sum);
+    if(snap==='vertex'){
+      const i=w.indexOf(Math.max(...w));indices=[indices[i]];w=[1];kind='vertex';
+    }else if(snap==='midpoint'){
+      if(kind!=='edge')throw Error('Select an authored edge first');
+      w=[.5,.5];
+    }else if(snap==='boundary'){
+      if(kind!=='surface')throw Error('Select a surface first');
+      const point=indices.reduce((p,i,j)=>add(p,mul(e.item.points[i],w[j])),[0,0,0]);
+      let best=null;
+      for(const edge of e.edges){
+        const a=e.item.points[edge[0]],b=e.item.points[edge[1]],d=sub(b,a),t=clamp(dot(sub(point,a),d)/dot(d,d),0,1);
+        const distance=Math.hypot(...sub(point,lerp(a,b,t)));
+        if(!best||distance<best.distance)best={edge,t,distance};
+      }
+      if(!best)throw Error('No authored boundary');
+      indices=best.edge.slice();w=[1-best.t,best.t];kind='edge';
+    }else if(snap!=='none')throw Error('Unknown snap');
+    const point=indices.reduce((p,i,j)=>add(p,mul(e.item.points[i],w[j])),[0,0,0]);
+    return {...hit,kind,indices,weights:w,point};
+  }
+  function worldPoint(frame,p){return frame.origin.map((v,i)=>v+p[0]*frame.x[i]+p[1]*frame.y[i]+p[2]*frame.z[i]);}
+  function markerVisibility(frame,hit,width,height,wireframe){
+    const q=frame.camera.project(hit.point);
+    if(!q||q.pixel[0]<0||q.pixel[0]>=width||q.pixel[1]<0||q.pixel[1]>=height)return 'out of view';
+    if(wireframe)return 'wireframe';
+    const matches=frame.entries.filter(e=>inBounds(e.bounds,q.pixel)&&e.path.fill.length>=3&&containsFill(e.path.fill,q.pixel));
+    if(matches.length>2500||matches.reduce((n,e)=>n+e.entry.triangles.length,0)>30000)return 'visibility unresolved';
+    const front=surfaceHits(matches.map(e=>e.entry),frame.camera,q.pixel)[0];
+    if(front&&front.depth<q.depth-depthTolerance(q.depth))return 'occluded';
+    const current=frame.byOrder.get(hit.order);
+    if(matches.some(e=>!e.entry.triangles.length||(!current||e.rank>current.rank)&&!surfaceHits([e.entry],frame.camera,q.pixel).some(h=>Math.abs(h.depth-q.depth)<=depthTolerance(q.depth))))return 'visibility unresolved';
+    return 'visible';
+  }
   function drawPickMarker(canvas,hit,camera,color){
     if(!hit)return;
     const p=camera.project(hit.point);if(!p)return;
@@ -496,14 +537,50 @@
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
     const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
       pickChoices=dialog.querySelector('[data-viewer-pick-candidates]'),pickStatus=dialog.querySelector('[data-viewer-pick-status]');
-    let mesh=null,paths=null,pickCache=null,hover=null,staged=null,choices=[],hoverFrame=null,queued=null;
+    let mesh=null,paths=null,pickCache=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null;
+    const details=dialog.querySelector('[data-viewer-point-details]'),coords=dialog.querySelector('[data-viewer-point-coords]'),parameters=dialog.querySelector('[data-viewer-point-parameters]'),paramInputs=[...dialog.querySelectorAll('[data-viewer-point-weight]')],confirmButton=dialog.querySelector('[data-viewer-point-confirm]'),cancelButton=dialog.querySelector('[data-viewer-point-cancel]');
+    const snaps=[...dialog.querySelectorAll('[data-viewer-point-snap]')];
     function cancelHover(){if(hoverFrame!==null)env.cancelAnimationFrame(hoverFrame);hoverFrame=null;queued=null;hover=null;}
     function clearPick(){cancelHover();staged=null;choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;pickStatus.textContent='';}
-    function clearGeometryPick(){clearPick();mesh=null;paths=null;pickCache=null;pickMode.value='navigate';}
+    function clearGeometryPick(){confirmed=null;clearPick();mesh=null;paths=null;pickCache=null;pickMode.value='navigate';syncPoint();}
     function pickActive(){return !!crop&&free&&pickMode.value!=='navigate';}
     function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
     function updatePickStatus(message=''){pickStatus.textContent=message||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
-    function markers(){if(paths&&pickActive()){drawPickMarker(canvas,staged,paths.camera,'#b83d18');drawPickMarker(canvas,hover,paths.camera,'#008ab1');}}
+    function syncPoint(){
+      const h=staged||confirmed,editable=!!staged;
+      details.style.display=h?'':'none';confirmButton.disabled=!editable;cancelButton.disabled=!editable;
+      parameters.style.display=editable&&h.kind!=='vertex'?'':'none';
+      for(const [i,n] of paramInputs.entries()){
+        n.closest('label').style.display=editable&&h.kind==='surface'&&i===1||editable&&h.kind!=='vertex'&&i===0?'':'none';
+        n.value=h?.kind==='edge'?String(h.weights[1]):String(h?.weights[i]??0);
+      }
+      for(const n of snaps)n.disabled=!editable||(n.dataset.viewerPointSnap==='midpoint'&&h.kind!=='edge')||(n.dataset.viewerPointSnap==='boundary'&&h.kind!=='surface');
+      if(!h||!geometry?.frame){coords.textContent='';return;}
+      const fmt=p=>p.map(x=>x.toFixed(6)).join(', ');
+      const vis=pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):'not projected';
+      coords.textContent=(editable?'Draft':'Confirmed locally')+' · '+describe(h)+' · '+vis+' · local XYZ (m): '+fmt(h.point)+' · world XYZ (m): '+fmt(worldPoint(geometry.frame,h.point))+' · weights: '+fmt(h.weights);
+    }
+    function markers(){
+      if(paths&&crop&&free){
+        for(const [h,color] of [[confirmed,'#25834b'],[staged,'#b83d18']]){
+          if(h&&pickCache){const vis=markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe);if(vis==='visible'||vis==='wireframe')drawPickMarker(canvas,h,paths.camera,color);}
+        }
+        if(pickActive())drawPickMarker(canvas,hover,paths.camera,'#008ab1');
+      }
+    }
+    function changePoint(weights,snap){
+      if(!staged)return;
+      try{staged=adjustPoint(mesh,staged,weights,snap);choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;updatePickStatus();syncPoint();redrawMarkers();}
+      catch(error){pickStatus.textContent=error.message;}
+    }
+    dialog.querySelector('[data-viewer-point-apply]').onclick=()=>{
+      if(!staged)return;
+      const val=n=>n.value.trim()===''?NaN:Number(n.value),a=val(paramInputs[0]),b=val(paramInputs[1]);
+      changePoint(staged.kind==='edge'?[1-a,a]:[a,b,1-a-b],'none');
+    };
+    for(const n of snaps)n.onclick=()=>changePoint(staged.weights,n.dataset.viewerPointSnap);
+    confirmButton.onclick=()=>{if(staged){confirmed=staged;clearPick();syncPoint();updatePickStatus('Point confirmed locally (not a correspondence).');redrawMarkers();}};
+    cancelButton.onclick=()=>{clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     function redrawMarkers(){if(!paths||!free)return;drawRegion(canvas,geometry,state,paths);markers();}
     function query(css){
       if(!pickActive()||!pickCache)return {candidates:[],reason:''};
@@ -519,11 +596,11 @@
     function stageAt(css){
       cancelHover();const result=query(css);choices=result.candidates;staged=choices[0]||null;
       pickChoices.replaceChildren();for(const [i,h] of choices.entries()){const option=dialog.ownerDocument.createElement('option');option.value=String(i);option.textContent=describe(h);pickChoices.append(option);}
-      pickChoices.disabled=choices.length<2;updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
+      pickChoices.disabled=choices.length<2;syncPoint();updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
     }
-    pickMode.onchange=()=>{clearPick();syncMode();render();};
-    pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;updatePickStatus();redrawMarkers();};
-    dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{clearPick();updatePickStatus();redrawMarkers();};
+    pickMode.onchange=()=>{cancelHover();syncMode();render();};
+    pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;syncPoint();updatePickStatus();redrawMarkers();};
+    dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{confirmed=null;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
     let sensitivity=DEFAULT_SENSITIVITY;
     try{const saved=env.localStorage.getItem(SENSITIVITY_KEY);if(saved!==null)sensitivity=orbitSensitivity(JSON.parse(saved));}catch(e){/* Optional UI preference. */}
@@ -563,7 +640,7 @@
         catch(error){status.textContent='Magnifier unavailable: '+error.message;}
         return;
       }
-      if(crop&&free){cancelHover();paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
+      if(crop&&free){cancelHover();paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();syncPoint();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
@@ -604,7 +681,7 @@
     windowPointer(titleBar,'move');windowPointer(grip,'resize');
     new env.ResizeObserver(()=>{if(dialog.open)render();}).observe(frame);
     env.addEventListener('resize',()=>{if(dialog.open){stopDrags();applyRect(rect);saveRect();render();}});
-    function resetScene(){stopDrags();clearPick();paths=null;pickCache=null;free=false;state=reset();syncMode();render();}
+    function resetScene(){stopDrags();cancelHover();paths=null;pickCache=null;free=false;state=reset();syncMode();render();}
     function enterFree(){
       if(!crop||free)return !!geometry;
       if(!crop.build)return false;
@@ -616,7 +693,7 @@
     dialog.querySelector('[data-viewer-reset]').onclick=()=>{if(crop){state={...reset(),projection:'perspective',spans:true};}else state=initialView();sync();};
     dialog.querySelectorAll('[data-viewer-view]').forEach(n=>n.onclick=()=>{state=standardView(state,n.dataset.viewerView);render();});
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
-    wire.onchange=()=>{clearPick();state={...state,wireframe:wire.checked};render();};
+    wire.onchange=()=>{cancelHover();state={...state,wireframe:wire.checked};render();};
     spans.onchange=()=>{state={...state,spans:spans.checked,pan:[0,0],zoom:1};render();};
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
     canvas.addEventListener('pointerdown',e=>{
@@ -643,7 +720,7 @@
     canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag&&(!crop||enterFree())){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
-    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
+    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(staged||hover){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
     dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
     function show(){if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
@@ -654,8 +731,8 @@
       stopDrags();clearGeometryPick();geometry=null;free=false;crop={region:{...region},paint,build,reason};heading.textContent='3D Scene Magnifier';
       show();syncMode();render();
     },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
-      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
+      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));
