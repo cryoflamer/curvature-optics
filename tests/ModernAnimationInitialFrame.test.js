@@ -18,7 +18,7 @@ function harness(){
   const end=app.indexOf('  function syncStudioCameraHud(',begin);
   assert.ok(begin>0&&end>begin);
   const queue=new Map(),elements=new Map(),paints=[],navigation=[];
-  let id=0,position=0,fail=false,modeOpen=true,width=640,visible=true,pending=false;
+  let id=0,position=0,fail=false,modeOpen=true,width=640,visible=true,pending=false,playing=false;
   let observerCallback=null;
   const node=name=>{
     if(!elements.has(name))elements.set(name,{hidden:name!=='ModernAnimationStudioMessage',textContent:'',
@@ -32,7 +32,7 @@ function harness(){
     studioPreviewNavigation:{start(){pending=true;},cancel(){pending=false;},
       finish(target){if(!pending)return false;pending=false;navigation.push(target);return true;},
       isPending(){return pending;}},
-    studioPlayback:{status(){return {positionMs:position,playing:false};}},
+    studioPlayback:{status(){return {positionMs:position,playing};}},
     studioPrepared:{mode:'physical'},
     newUiEl:node,
     document:{get hidden(){return !visible;}},
@@ -57,7 +57,7 @@ function harness(){
     resized:()=>observerCallback(),
     setPosition(ms){position=ms;},setWidth(value){width=value;},
     setVisible(value){visible=value;},setOpen(value){modeOpen=value;},
-    setFail(value){fail=value;}};
+    setFail(value){fail=value;},setPlaying(value){playing=value;}};
 }
 
 test('a restored prepared project paints its exact paused position after two layout frames',()=>{
@@ -304,4 +304,17 @@ test('Soundly explicit jump requests and captures an exact paused thumbnail thro
   context.captureStudioKeyframeThumbnail(context.studioPlayback.sample(),20950,graphs);
   assert.equal(captures,2);assert.equal(refreshes,2);
   assert.equal(context.studioDraft,draft);
+});
+
+
+test('resize compares against the actual last painted width, including live paints and pause',()=>{
+  const h=harness();h.ctx.observeStudioPreviewSize();
+  h.resized();h.flush();assert.deepEqual(h.paints,[0]);
+  h.setPlaying(true);h.setWidth(400);h.resized();assert.equal(h.queued(),0);
+  h.ctx.studioPreviewLifecycle.markPainted({A:400,B:400});
+  h.setWidth(640);h.resized();assert.equal(h.queued(),0);
+  h.setPlaying(false);h.ctx.studioPreviewLifecycle.checkSize();h.flush();
+  assert.deepEqual(h.paints,[0,0],'return to old observed width still requires repaint');
+  h.ctx.studioPreviewLifecycle.markPainted({A:640,B:640});h.resized();h.flush();
+  assert.deepEqual(h.paints,[0,0],'no redundant paint after matching paired render');
 });

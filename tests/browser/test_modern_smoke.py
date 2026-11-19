@@ -257,6 +257,21 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 2)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def assert_preview_fills_panels(self):
+        # CSS pixels, not the DPR-scaled backing dimensions.
+        self.page.wait_for_function("""() => ['A', 'B'].every(side => {
+            const host = document.getElementById('ModernAnimationCanvas' + side);
+            const graph = window.CurvatureModernAnimationGraphs?.[side];
+            const width = host.getBoundingClientRect().width;
+            if (width < 2) return true;
+            const canvas = graph?.Canvas;
+            const rect = canvas?.getBoundingClientRect();
+            return rect && rect.width > 2 && Math.abs(width - rect.width - 2*graph.BorderWidth) <= 2
+                && Math.abs(rect.height/rect.width - 0.6667) < 0.01
+                && Math.abs(canvas.height/canvas.width - 0.6667) < 0.01
+                && document.getElementById('ModernAnimationFrameLoading' + side).hidden;
+        })""", timeout=30000)
+
     def test_soundly_reference_presentation_layout(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
@@ -281,14 +296,26 @@ class ModernBrowserSmoke(unittest.TestCase):
         ref_panel = self.page.locator('#ModernAnimationReferencePanel')
         layout = self.page.locator('#ModernAnimationReferenceLayout')
         expect(ref_panel.locator('img')).to_be_visible(timeout=30000)
+        self.assert_preview_fills_panels()
         layout.select_option('below')
         expect(self.page.locator('#ModernAnimationPlaybackPanels')).to_have_class(re.compile('has-reference-below'))
+        self.assert_preview_fills_panels()
         layout.select_option('hidden')
         expect(ref_panel).to_be_hidden()
+        self.assert_preview_fills_panels()
         layout.select_option('side')
         expect(ref_panel.locator('img')).to_be_visible()
+        self.assert_preview_fills_panels()
         self.page.locator('#ModernAnimationPresent').click()
         expect(ref_panel.locator('img')).to_be_visible()
+        self.assert_preview_fills_panels()
+        chapter = self.page.locator('#ModernAnimationNarrativeNavigation')
+        chapter.select_option('6')
+        expect(ref_panel).to_be_hidden()
+        self.assert_preview_fills_panels()
+        chapter.select_option('0')
+        expect(ref_panel.locator('img')).to_be_visible()
+        self.assert_preview_fills_panels()
         ref_panel.get_by_text('View original & details').click()
         expect(self.page.locator('#ModernAnimationPlaybackStage dialog img')).to_be_visible()
         self.page.locator('#ModernAnimationPlaybackStage dialog').get_by_text('Close photograph').click()
@@ -297,6 +324,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         splitter.focus()
         self.page.keyboard.press('ArrowRight')
         expect(splitter).to_have_attribute('aria-valuenow', '35')
+        self.assert_preview_fills_panels()
         self.page.locator('#ModernAnimationPlaybackSeek').evaluate("el => {el.value=100;el.dispatchEvent(new Event('input',{bubbles:true}));}")
         expect(ref_panel.locator('img')).to_be_hidden()
         editor.locator('.modern-studio-keyframe').first.click()
@@ -408,10 +436,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         settings.click()
         expect(settings).to_have_attribute('aria-expanded', 'true')
         expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
+        self.assert_preview_fills_panels()
         settings.click()
         expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_hidden()
         toggle.click()
         expect(toggle).to_have_attribute('aria-expanded', 'true')
+        self.assert_preview_fills_panels()
         expect(cards).to_have_count(9)
         for name in ('Capture all keyframes', 'Regenerate all thumbnails', 'Export with thumbnails', 'Export without thumbnails'):
             author_action = story.get_by_text(name, exact=True)
@@ -437,9 +467,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             return result;
         }"""))
         self.page.set_viewport_size({'width': 1200, 'height': 800})
+        self.assert_preview_fills_panels()
         expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
         self.page.keyboard.press('Escape')
         expect(stage).not_to_have_class(re.compile('is-presenting'))
+        self.assert_preview_fills_panels()
         expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
         self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')

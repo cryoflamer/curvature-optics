@@ -50,29 +50,37 @@
         if(generation===token)next();
       });
     }
+    // The last observed width can be stale after a synchronous jump or a live
+    // frame. Record the geometry actually used by a completed paired paint.
+    function markPainted(widths){
+      ['A','B'].forEach(function(side){
+        var width=widths&&Number.isFinite(widths[side])?widths[side]:options.width(side);
+        if(width!==null)observedWidths[side]=Math.round(width);
+      });
+    }
+    function checkSize(){
+      if(!options.ready()||!options.open()||options.playing())return;
+      var changed=false;
+      ['A','B'].forEach(function(side){
+        var width=options.width(side);
+        if(width!==null)width=Math.round(width);
+        if(width!==null&&width>1&&observedWidths[side]!==width){
+          observedWidths[side]=width;changed=true;
+        }
+      });
+      if(changed)schedule('resized');
+    }
     function observe(){
-      function resized(){
-        if(!options.ready()||!options.open()||options.playing())return;
-        var changed=false;
-        ['A','B'].forEach(function(side){
-          var width=options.width(side);
-          if(width!==null)width=Math.round(width);
-          if(width!==null&&width>1&&observedWidths[side]!==width){
-            observedWidths[side]=width;changed=true;
-          }
-        });
-        if(changed)schedule('resized');
-      }
       if(typeof options.resizeObserver==='function'){
-        var observer=new options.resizeObserver(resized);
+        var observer=new options.resizeObserver(checkSize);
         ['A','B'].forEach(function(side){
           var host=options.host(side);
           if(host)observer.observe(host);
         });
-      }else if(typeof options.listenResize==='function')options.listenResize(resized);
+      }else if(typeof options.listenResize==='function')options.listenResize(checkSize);
     }
     return Object.freeze({cancel:cancel,schedule:schedule,observe:observe,
-      hasFrame:function(){return frame!==null;}});
+      markPainted:markPainted,checkSize:checkSize,hasFrame:function(){return frame!==null;}});
   }
   return Object.freeze({create:create});
 }));

@@ -2474,6 +2474,10 @@
     studioPlaybackRenderedAt=null; // Failed or partial frames must not be captured.
     var a,b;
     try{
+      // Layout is part of a frame: set the reference columns and narrative
+      // reservation before UpdateCanvasSize() measures either graph.
+      syncStudioReferences(renderedAt);
+      syncStudioPresentation(true);
       a=studioPreviewRenderer.render(sampled,'A',graphs.A,renderOptions);
       b=isCompare?studioPreviewRenderer.render(sampled,'B',graphs.B,renderOptions):null;
       // Never display mixed approximate/Accurate optics in Compare when either
@@ -2561,6 +2565,12 @@
     // This timestamp always corresponds to the pixels just drawn. The
     // playback clock may advance during synchronous Accurate rendering.
     studioPlaybackRenderedAt=renderedAt;
+    if(studioPreviewLifecycle){
+      // GraphX3DX measures its border box in CSS pixels, independently of DPR.
+      // Use the actual rendered width, not a potentially changed host width.
+      function graphWidth(graph){return graph.CanvasWidth+2*graph.BorderWidth;}
+      studioPreviewLifecycle.markPainted({A:graphWidth(graphs.A),B:isCompare?graphWidth(graphs.B):0});
+    }
     syncStudioReferences();
     studioPlaybackNextDue=studioPlaybackControlsApi.nextPreviewDue(
       studioPlaybackFps,studioPlaybackLastPaint,studioPlaybackNextDue,now,force);
@@ -3168,13 +3178,14 @@
   // Benchmarks use an independent RAF sequence: traditional profiles freeze
   // the sample, while pipeline and moving-width profiles advance it. Neither
   // changes the authored project, History or export settings.
-  function syncStudioReferences(){
+  function syncStudioReferences(layoutPosition){
     if(!studioReferences)return;
     var project=studioPrepared&&studioPlayback?studioPrepared:null;
     if(studioPresentationProject!==project){
       studioPresentationProject=project;studioPresentationTimes=project?studioProjects.timeline(project):null;
     }
-    studioReferences.sync(project,studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
+    if(Number.isFinite(layoutPosition))studioReferences.prepare(project,studioPresentationTimes,layoutPosition);
+    else studioReferences.sync(project,studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
   }
   function bindStudioReferences(){
     var api=root.CurvatureModernAnimationPresentation;
@@ -3190,19 +3201,26 @@
         return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
       }});
   }
-  function syncStudioPresentation(){
+  function syncStudioPresentation(layoutOnly){
     if(!studioPresentation||!studioPresentation.isActive()||!studioPrepared||!studioPlayback)return;
     if(studioPresentationProject!==studioPrepared){
       studioPresentationProject=studioPrepared;studioPresentationTimes=studioProjects.timeline(studioPrepared);
+    }
+    var narrative=newUiEl('ModernAnimationPresentationNarrative');
+    var visibility=newUiEl('ModernAnimationNarrativeVisible');
+    var visibilityControl=newUiEl('ModernAnimationNarrativeVisibilityControl');
+    var hasNarrative=studioPresentationTimes.some(function(t){return !!(t.narrativeTitle||t.description);});
+    if(visibilityControl)visibilityControl.hidden=!hasNarrative;
+    if(layoutOnly===true){
+      // Reserve space without clearing the last painted text, chapter or scroll.
+      if(narrative)narrative.hidden=!hasNarrative||!!(visibility&&!visibility.checked);
+      return;
     }
     var title=newUiEl('ModernAnimationPresentationTitle'),frame=newUiEl('ModernAnimationPresentationFrame');
     if(title)title.textContent=studioDraft.name;
     if(frame)frame.textContent=root.CurvatureModernAnimationPresentation.frameLabel(
       studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt)||'Rendering frame…';
-    var narrative=newUiEl('ModernAnimationPresentationNarrative');
-    var navigation=newUiEl('ModernAnimationNarrativeNavigation'),visibility=newUiEl('ModernAnimationNarrativeVisible');
-    var visibilityControl=newUiEl('ModernAnimationNarrativeVisibilityControl');
-    if(visibilityControl)visibilityControl.hidden=!studioPresentationTimes.some(function(t){return !!(t.narrativeTitle||t.description);});
+    var navigation=newUiEl('ModernAnimationNarrativeNavigation');
     if(navigation)root.CurvatureModernAnimationPresentation.syncNavigation(document,navigation,studioPresentationTimes,studioPlaybackRenderedAt===null?NaN:studioPlaybackRenderedAt);
     if(narrative)root.CurvatureModernAnimationPresentation.syncNarrative(narrative,
       newUiEl('ModernAnimationPresentationNarrativeLabel'),newUiEl('ModernAnimationPresentationNarrativeText'),
@@ -3325,7 +3343,10 @@
       controls.play();
     });});
     var pause=newUiEl('ModernAnimationPlaybackPause');
-    if(pause)pause.addEventListener('click',function(){safely(function(){controls.pause();});});
+    if(pause)pause.addEventListener('click',function(){safely(function(){
+      controls.pause();
+      if(studioPreviewLifecycle)studioPreviewLifecycle.checkSize();
+    });});
     var stop=newUiEl('ModernAnimationPlaybackStop');
     if(stop)stop.addEventListener('click',function(){safely(function(){if(studioKeyframeThumbnails)studioKeyframeThumbnails.cancel();controls.stop();});});
     var seek=newUiEl('ModernAnimationPlaybackSeek');

@@ -17,9 +17,9 @@ function rendererHarness(target='60',options={}){
       classList:{toggle(){}}});
     return nodes.get(id);
   }
-  const graph=()=>({Canvas:{width:900,height:600}});
+  const graph=()=>({Canvas:{width:900,height:600},CanvasWidth:898,BorderWidth:1});
   const graphs={A:graph(),B:graph()};
-  const fakeRenderer={render(sample,side,graph,opts){paints.push(time);samples.push({sample,side});time+=renderCost;
+  const fakeRenderer={render(sample,side,graph,opts){paints.push(time);samples.push({sample,side,width:graph.Canvas.width});time+=renderCost;
     return options.render?options.render(side,opts):
       {quality:'canvas-direct',result:{drawn:128},overlays:{}};}};
   const meter=controls.createPreviewFpsMeter();
@@ -28,7 +28,7 @@ function rendererHarness(target='60',options={}){
       sample:()=>({display:{mode:options.compare?'compare':'scene'},scene:{atmosphere:'vacuum'}})},
     studioPrepared:{mode:'camera',id:'fps_test'},animationWorkspaceOpen:true,
     studioPlaybackFps:target,studioPlaybackLastPaint:-Infinity,studioPlaybackNextDue:-Infinity,
-    studioPlaybackRenderedAt:null,
+    studioPlaybackRenderedAt:null,studioPreviewLifecycle:{markPainted(widths){if(options.markPainted)options.markPainted(widths);}},
     studioPlaybackFpsMeter:meter,studioPlaybackControlsApi:controls,
     studioPlaybackQuality:'canvas-direct',studioPlaybackDetail:'full',
     studioPreviewApi:{create:()=>fakeRenderer},studioPreviewRenderer:null,
@@ -36,7 +36,7 @@ function rendererHarness(target='60',options={}){
     studioPlaybackApi:{describeSample:()=>''},
     root:{CurvatureModernAnimationGraphs:graphs},
     profileNow:()=>time,newUiEl:node,attachStudioPreviewGraphs:()=>true,
-    syncStudioReferences(){},syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); },
+    syncStudioReferences(position){if(options.layout)options.layout(position,graphs);},syncStudioPresentation(){},syncStudioCameraHud(){},studioFrameLoading(value){loading.push(value); },
     captureStudioKeyframeThumbnail(sample,time,graphs){if(options.capture)options.capture(sample,time,graphs);}
   });
   const start=app.indexOf('  function renderStudioPlaybackSample(force){');
@@ -158,4 +158,23 @@ test('paired playback uses one owned sample and masks partial frames on a B fail
   assert.equal(captures,1);
   assert.equal(h.loading.at(-1),false);
   assert.strictEqual(h.samples[2].sample,h.samples[3].sample);
+});
+
+
+test('reference columns match the requested frame before both physical paints and captures',()=>{
+  let width=600,order=[],marks=[];const h=rendererHarness('auto',{compare:true,
+    layout(position,graphs){
+      if(Number.isFinite(position)){
+        width=position<100?600:900;
+        for(const graph of Object.values(graphs)){graph.Canvas.width=width;graph.CanvasWidth=width-2;}
+        order.push('layout '+width);
+      }else order.push('publish');
+    },render(side){order.push(side+' '+width);return {quality:'canvas-direct',result:{},overlays:{}};},
+    markPainted(widths){marks.push([widths.A,widths.B]);order.push('painted');},
+    capture(sample,time,graphs){order.push('capture '+graphs.A.Canvas.width);}
+  });
+  h.frame(1000,true);h.frame(1200,true);h.frame(1000,true);
+  assert.deepEqual(h.samples.map(s=>s.width),[600,600,900,900,600,600]);
+  assert.deepEqual(marks,[[600,600],[900,900],[600,600]]);
+  assert.deepEqual(order,[600,900,600].flatMap(w=>['layout '+w,'A '+w,'B '+w,'painted','publish','capture '+w]));
 });

@@ -105,7 +105,7 @@ function referenceHarness(){
   const p={},times=[{arrivalMs:0,departureMs:100,referenceImageIds:['a','b']},{arrivalMs:300,departureMs:500,referenceImageIds:['c']},{arrivalMs:800,departureMs:900}];
   const sync=t=>controller.sync(p,times,t),flush=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
   const record=id=>({record:{title:id,author:'Observer',original:{dataUrl:'data:image/png;base64,'+id}}});
-  return {nodes,pending,sync,flush,record,controller};
+  return {nodes,pending,sync,flush,record,controller,p,times};
 }
 test('viewer ignores stale async loads, keeps original bytes, supports ordering and avoids per-tick reads',async()=>{
   const h=referenceHarness(),n=h.nodes;h.sync(0);await h.flush();assert.equal(h.pending[0].id,'a');
@@ -151,4 +151,50 @@ test('Chapter list follows painted timeline, title-only frames and visibility wi
   api.syncNarrative(panel,label,body,times,100,false);assert.equal(panel.hidden,true);
   api.syncNarrative(panel,label,body,times,100,true);assert.equal(panel.hidden,false);
   assert.equal(label.textContent,'1 / 2 · <b>First</b>');
+});
+
+
+test('reference layout is prepared for the requested frame before publishing its photograph',async()=>{
+  const h=referenceHarness(),n=h.nodes;
+  h.controller.prepare(h.p,h.times,0);
+  assert.equal(n.panels.classList.contains('has-reference-side'),true);
+  await h.flush();assert.equal(h.pending.length,0,'layout must not publish an unpainted photograph');
+  h.sync(0);await h.flush();h.pending[0].resolve(h.record('a'));await h.flush();
+  assert.equal(n.image.hidden,false);
+  h.controller.prepare(h.p,h.times,800);
+  assert.equal(n.panel.hidden,true,'columns expand before drawing the no-photo frame');
+  h.sync(800);assert.equal(n.image.hidden,true);assert.equal(n.panel.hidden,true);
+  h.controller.prepare(h.p,h.times,0);assert.equal(n.panel.hidden,false);
+  h.sync(NaN);await h.flush();assert.equal(n.image.hidden,true);assert.equal(h.pending.length,1);
+  assert.equal(n.panel.hidden,false,'a failed paint clears content without changing geometry again');
+  h.controller.prepare(h.p,h.times,800);h.sync(NaN);
+  assert.equal(n.panel.hidden,true,'a failed no-photo frame does not reserve a new column');
+});
+
+
+test('preparing narrative layout preserves the published chapter and caption scroll',()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
+  const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const start=source.indexOf('  function syncStudioPresentation(layoutOnly){');
+  const end=source.indexOf('  function bindStudioPresentation(){',start);
+  assert.ok(start>=0&&end>start);
+  const times=[{name:'Frame A',description:'Long explanation',arrivalMs:0,departureMs:300}];
+  const nodes={ModernAnimationPresentationNarrative:{hidden:true},ModernAnimationNarrativeVisible:{checked:true},
+    ModernAnimationNarrativeVisibilityControl:{hidden:true},ModernAnimationPresentationFrame:{textContent:'Old chapter'},
+    ModernAnimationPresentationNarrativeLabel:{textContent:'Old caption'},
+    ModernAnimationPresentationNarrativeText:{textContent:'Old text',scrollTop:42},
+    ModernAnimationNarrativeNavigation:{value:'0'}};
+  const project={};const context=vm.createContext({studioPresentation:{isActive:()=>true},studioPrepared:project,
+    studioPlayback:{},studioPresentationProject:project,studioPresentationTimes:times,studioPlaybackRenderedAt:null,
+    newUiEl:id=>nodes[id]});
+  vm.runInContext(source.slice(start,end)+'\nthis.prepare=syncStudioPresentation;',context);
+  context.prepare(true);
+  assert.equal(nodes.ModernAnimationPresentationNarrative.hidden,false);
+  assert.equal(nodes.ModernAnimationPresentationFrame.textContent,'Old chapter');
+  assert.equal(nodes.ModernAnimationNarrativeNavigation.value,'0');
+  assert.equal(nodes.ModernAnimationPresentationNarrativeLabel.textContent,'Old caption');
+  assert.equal(nodes.ModernAnimationPresentationNarrativeText.textContent,'Old text');
+  assert.equal(nodes.ModernAnimationPresentationNarrativeText.scrollTop,42);
+  nodes.ModernAnimationNarrativeVisible.checked=false;context.prepare(true);
+  assert.equal(nodes.ModernAnimationPresentationNarrative.hidden,true);
 });

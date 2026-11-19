@@ -94,7 +94,7 @@
     var panel=options.panel,panels=options.panels,control=options.control,splitter=options.splitter;
     var select=options.select,image=options.image,status=options.status,title=options.title,view=options.view;
     var prev=options.prev,next=options.next,meta=options.meta;
-    var project=null,index=-2,ids=[],choice=0,generation=0,available=false,reserve=false;
+    var project=null,layoutProject=null,index=-2,ids=[],choice=0,generation=0,available=false,reserve=false;
     var size={side:33,below:32},lastLayout=null,lastMode=select.value;
     function layout(){
       var mode=select.value,visible=available&&reserve&&mode!=='hidden';
@@ -126,15 +126,24 @@
       }).catch(function(error){if(token===generation)status.textContent='Cannot load photograph: '+(error.message||error);});
     }
     image.addEventListener('error',function(){if(!image.hidden){image.hidden=true;status.textContent='Cannot decode local photograph';}});
-    function sync(p,times,position){
-      var changed=project!==p;project=p;
+    // Commit geometry before either physical renderer measures its Canvas.
+    // This does not publish photographs for a frame that has not painted yet.
+    function prepare(p,times,position){
+      var changed=layoutProject!==p;layoutProject=p;
       if(changed)available=!!(times&&times.some(function(t){return (t.referenceImageIds||[]).length;}));
-      var frame=referencesAt(times,position);reserve=frame.reserve;
-      if(!Number.isFinite(position)&&available)reserve=true;
+      if(Number.isFinite(position))reserve=referencesAt(times,position).reserve;
+      else if(changed)reserve=available;
+      // A failed/pending frame clears its photograph, not its reserved geometry.
+      if(!available)reserve=false;
+      layout();
+    }
+    function sync(p,times,position){
+      prepare(p,times,position);
+      var changed=project!==p;project=p;
+      var frame=referencesAt(times,position);
       if(changed||index!==frame.index||ids.length!==frame.ids.length||ids.some(function(id,i){return id!==frame.ids[i];})){
         index=frame.index;ids=frame.ids;choice=0;paint();
       }
-      layout();
     }
     select.addEventListener('change',function(){var wasHidden=lastMode==='hidden';lastMode=select.value;layout();
       if(wasHidden||lastMode==='hidden')paint();});
@@ -154,7 +163,7 @@
       var delta=mode==='side'?{ArrowLeft:-2,ArrowRight:2}:{ArrowUp:2,ArrowDown:-2};
       if(delta[event.key]){resize(size[mode]+delta[event.key]);event.preventDefault();}
     });
-    return Object.freeze({sync:sync});
+    return Object.freeze({prepare:prepare,sync:sync});
   }
   function create(options){
     var doc=options.document,stage=options.stage,bar=options.bar,active=false;

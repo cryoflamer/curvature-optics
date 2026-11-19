@@ -1,3 +1,17 @@
+## Modern Demo Catalog — Presentation Resize Fix (7D.1.2)
+
+Prepare the reference panel geometry for the requested sample before either
+physical graph measures and paints; commit photo content only after a successful
+paired paint. Failed/pending frames clear photographs without reverting the
+geometry of the attempted frame. Record the actual CSS-pixel widths of the
+completed physical graphs, not the previous ResizeObserver notification; check
+for a missed resize when the user pauses. No stretch of existing pixels, camera
+parameter/physics changes, project schema or export layout changes.
+
+**Resume:** validate photo/no-photo chapter jumps, layout toggles, splitter,
+settings/Storyboard, viewport and fullscreen in Opera/CI; then 7D.2 Presentation
+Export and remaining roadmap below.
+
 ## Modern Demo Catalog — Presentation UI Cleanup (7D.1.1)
 
 Presentation hides all Storyboard author actions (single/batch capture,

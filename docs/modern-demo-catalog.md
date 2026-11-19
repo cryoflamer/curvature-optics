@@ -1,6 +1,6 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **7D.1.1 (Presentation UI Cleanup)**, 2026-11-19.
+Status: **7D.1.2 (Presentation Resize Fix)**, 2026-11-19.
 The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
 thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
 are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
@@ -195,6 +195,7 @@ record the split, and do not mark complete on implementation alone.
 | 7C.5 — Reference Export & Import | Implemented; acceptance pending | Version 2 envelope for linked assets, ID collision remap, original and metadata retention in both Storyboard options, read-only catalog resolution and copy. Existing unlinked v1 unchanged; safe deletion deferred. |
 | 7D.1 — Narrative UI | Implemented; acceptance pending | Optional presentation title (120 characters), independent of the technical frame name; chapter selector jumps to exact arrival, pauses playback, and selects the storyboard frame. Optional explanation visibility is session-local; the title and explanation are synchronized to the painted clock. Reference and narrative panels share the presentation sizing budget. Older projects remain readable. |
 | 7D.1.1 — Presentation UI Cleanup | Implemented; acceptance pending | Viewer-only controls; collapsed View settings and Storyboard, hidden author actions and success notices, Retry only for a failed physical frame. Studio controls remain available. |
+| 7D.1.2 — Presentation Resize Fix | Implemented; acceptance pending | Commit reference layout before physical rendering and publish observations only after a successful frame. Compare resize against rendered CSS widths, including pause after live playback. |
 | 7D.2 — Presentation Export | Planned | Include optional narrative and real photographs in PNG/video exports, retaining accurate optics and explicit provenance. No final Soundly photo matching yet. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
 | 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
