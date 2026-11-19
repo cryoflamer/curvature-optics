@@ -1,3 +1,19 @@
+## Modern Demo Catalog — Local physical camera fit (8A.3 baseline)
+
+Issue #6: added `src/calibration/CameraPhysicalFit.js` with explicit weighted
+per-landmark residuals, fixed/free fields, bounds, scaled finite differences,
+log focal, damped augmented QR, decreasing valid trial acceptance and
+termination diagnostics. Invalid observations invalidate the objective rather
+than being dropped. Out-of-frame finite projections remain scored.
+12 new tests; 46/46 with previous seed and physical pose suites. ~22 km
+Globe Standard synthetic Accurate observations: DLT seed Accurate RMS 5.983
+px, Canvas Direct fit own-objective RMS 0.002348 px, Accurate refinement
+1.657e-11 px. These are noiseless self-consistency tests under a known
+atmosphere, not real-photo accuracy or uniqueness. 28 dependency/test blobs
+matched remote hashes; no full repo or browser regression. Next: orchestration
+of multiple seeds, same-objective comparison and qualification/uncertainty.
+No changes to production optics or UI.
+
 ## Modern Demo Catalog — Physical camera pose bridge (8A.2.3)
 
 Issue #6: added `src/calibration/CameraPhysicalPose.js` to convert Cartesian

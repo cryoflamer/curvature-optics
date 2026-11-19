@@ -166,6 +166,57 @@ dependencies were checked against the current remote tree by blob SHA.
 No full repo or browser raster regression was run. Next 8A.3: physical
 residuals, constraints and bounded nonlinear optimization, using these seeds.
 
+## Local physical least-squares fit (8A.3 baseline)
+
+`src/calibration/CameraPhysicalFit.js` exposes `evaluate(model, pose,
+observations, options)` and `fit(model, initialPose, observations, options)`.
+The pose contains all seven physical camera fields. The centered raster
+dimensions are required. Observations are `{kind:'metric'|'vertex', landmark,
+pixel:[u,v], weight}`, with unique landmark IDs and positive scalar weights
+(default 1). Metric is the default kind. These are calibration observations;
+held-out points must be supplied separately to evaluate. A fixed model and
+atmosphere (Vacuum, Standard, Temperature lapse) are used per call, with
+explicit Accurate or Canvas Direct projection. No automatic fallback.
+An out-of-frame point with finite coordinates remains in the objective;
+blocked, unresolved or behind-camera observations invalidate the entire
+evaluation, never disappear to reduce residuals. Report each observed and
+predicted pixel, residual, weight, status and reason. The objective is
+half the sum of weighted squared 2D pixel residuals; RMS is per point,
+and weighted RMS divides by the sum of weights.
+
+All seven fields are free by default. Optional freeParameters chooses the
+subset; remaining initial values are held exactly fixed. Bounds are physical
+parameter intervals intersected with the existing camera domain; an
+infeasible initial pose is rejected, not silently clamped. Optional scales
+apply in metres/degrees and dimensionless logarithmic focal length.
+The local algorithm uses scaled central or one-sided numerical differences
+where valid, damped augmented QR with Givens rotations, projected bounds,
+active-gradient filtering and a capped step. Only strictly decreasing,
+valid trials are accepted. Report termination (converged projected gradient,
+stalled, iteration_limit, fixed, underdetermined, invalid_initial), best
+accepted pose, evaluation counts and residuals. The result always declares
+complete:false. This is not an exhaustive global search or a proof of
+identifiability. Angle seam handling, robust loss, rank/conditioning,
+uncertainty, multiseed orchestration and browser async cancellation remain
+follow-ups. The function is synchronous and does not mutate the input pose.
+
+12 new Node tests passed, 46/46 with the previous physical-pose and seed
+suites. In four seven-parameter synthetic tests (Globe/Flat, Accurate Standard
+and Canvas Direct Temperature lapse), ~94.47 px initial RMS fell below 1.8e-11
+px. A separate ~22 km Globe Standard scene generated using Accurate
+projections yielded a perspective DLT seed at 5.983 px RMS when evaluated
+with Accurate, Canvas Direct refinement at 0.002348 px RMS in its own
+approximate objective, and Accurate refinement at 1.657e-11 px RMS.
+Parameter errors were below 0.1 in their respective physical units in the
+latter fixture. These are noiseless self-consistency experiments, not a
+measurement of real-photo accuracy. Also tested fixed parameters, active
+bounds, weights, invalid points, out-of-frame residuals, deterministic noise,
+iteration limits and actual authored bridge vertices. Dependency/test blob
+hashes checked against the remote tree; no full repo or browser regression.
+The next atomic step is multiseed orchestration and comparative objective
+evaluation before the wider 8A.4 qualification. No UI or production optics
+changes.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified
