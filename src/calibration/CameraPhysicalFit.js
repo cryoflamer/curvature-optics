@@ -74,14 +74,11 @@
     for(let j=n-1;j>=0;j--){let v=b[j];for(let k=j+1;k<n;k++)v-=A[j][k]*step[k];step[j]=v/A[j][j];}
     return step.every(Number.isFinite)?step:null;
   }
-  function fit(model,initial,input,options){
+  function prepare(model,initial,input,options){
     options=options||{};const opts=controls(options),obs=observations(input),base=poseOf(initial,opts);
     const free=options.freeParameters??fields.slice(),bounds=options.bounds??{},scales=options.scales??{};
     if(!Array.isArray(free)||new Set(free).size!==free.length||free.some(k=>!fields.includes(k)))throw RangeError('Invalid free parameters');
     if(!bounds||typeof bounds!=='object'||Array.isArray(bounds)||!scales||typeof scales!=='object'||Array.isArray(scales)||[...Object.keys(bounds),...Object.keys(scales)].some(k=>!fields.includes(k)))throw RangeError('Invalid bounds or scales');
-    const maxIterations=number(options.maxIterations??80,0,500,'iteration limit'),epsilon=number(options.differenceStep??1e-4,1e-8,.01,'difference step');
-    if(!Number.isInteger(maxIterations))throw RangeError('Invalid iteration limit');
-    const gradientTolerance=number(options.gradientTolerance??1e-8,0,Infinity,'gradient tolerance'),stepTolerance=number(options.stepTolerance??1e-9,0,Infinity,'step tolerance');
     const distances=obs.filter(o=>o.kind==='metric').map(o=>Math.hypot(o.landmark.east-base.CameraEast,o.landmark.north-base.CameraNorth)).sort((a,b)=>a-b);
     const range=distances.length?distances[Math.floor(distances.length/2)]:Math.hypot(base.CameraEast,base.CameraNorth);
     const defaults={CameraEast:Math.max(1,range*.1),CameraNorth:Math.max(1,range*.1),Height:Math.max(1,Math.min(1000,base.Height*.2)),Pan:1,Nick:1,Roll:1,FocalLengthField:.1};
@@ -95,8 +92,33 @@
       const decode=v=>clamp(v===0?base[k]:k===focal?base[k]*Math.exp(v*scale):base[k]+v*scale,lo,hi);
       const left=encode(lo),right=encode(hi);
       if(!Number.isFinite(left)||!Number.isFinite(right))throw RangeError('Unrepresentable scaled bounds for '+k);
-      return {k,lo:left,hi:right,decode};
+      return {k,lo:left,hi:right,decode,scale};
     }).filter(s=>free.includes(s.k));
+    return {opts,obs,base,specs};
+  }
+  // Use the same bounded, weighted Jacobian in fitting and diagnostics.
+  function jacobian(specs,x,current,at,epsilon){
+    const columns=[],schemes=[];
+    for(let j=0;j<x.length;j++){
+      const s=specs[j],a=x.slice(),b=x.slice();a[j]=Math.max(s.lo,x[j]-epsilon);b[j]=Math.min(s.hi,x[j]+epsilon);
+      const left=a[j]===x[j]?current:at(a),right=b[j]===x[j]?current:at(b);
+      if(left.valid&&right.valid&&b[j]>a[j]){
+        columns.push(right.residuals.map((v,i)=>(v-left.residuals[i])/(b[j]-a[j])));
+        schemes.push(a[j]===x[j]?'forward':b[j]===x[j]?'backward':Math.abs((x[j]-a[j])-(b[j]-x[j]))>epsilon*1e-8?'asymmetric':'central');
+      }else if(right.valid&&b[j]>x[j]){
+        columns.push(right.residuals.map((v,i)=>(v-current.residuals[i])/(b[j]-x[j])));schemes.push('forward');
+      }else if(left.valid&&a[j]<x[j]){
+        columns.push(current.residuals.map((v,i)=>(v-left.residuals[i])/(x[j]-a[j])));schemes.push('backward');
+      }else return {reason:'Physical Jacobian unavailable at '+s.k};
+    }
+    if(columns.some(c=>!c.every(Number.isFinite)))return {reason:'Nonfinite physical Jacobian'};
+    return {columns,schemes};
+  }
+  function fit(model,initial,input,options){
+    options=options||{};const {opts,obs,base,specs}=prepare(model,initial,input,options);
+    const maxIterations=number(options.maxIterations??80,0,500,'iteration limit'),epsilon=number(options.differenceStep??1e-4,1e-8,.01,'difference step');
+    if(!Number.isInteger(maxIterations))throw RangeError('Invalid iteration limit');
+    const gradientTolerance=number(options.gradientTolerance??1e-8,0,Infinity,'gradient tolerance'),stepTolerance=number(options.stepTolerance??1e-9,0,Infinity,'step tolerance');
     const objective=evaluator(model,obs,opts),decode=x=>({...base,...Object.fromEntries(specs.map((s,i)=>[s.k,s.decode(x[i])]))});
     let evaluations=0,iterations=0,acceptedSteps=0,lambda=1e-3,x=specs.map(()=>0);
     const at=x=>{evaluations++;return objective(decode(x));};
@@ -107,16 +129,9 @@
     if(!specs.length)return finish('fixed','No free parameters');
     if(2*obs.length<specs.length)return finish('underdetermined','Fewer scalar observations than free parameters');
     for(;iterations<maxIterations;iterations++){
-      const columns=[];
-      for(let j=0;j<x.length;j++){
-        const s=specs[j],a=x.slice(),b=x.slice();a[j]=Math.max(s.lo,x[j]-epsilon);b[j]=Math.min(s.hi,x[j]+epsilon);
-        const left=a[j]===x[j]?current:at(a),right=b[j]===x[j]?current:at(b);
-        if(left.valid&&right.valid&&b[j]>a[j])columns.push(right.residuals.map((v,i)=>(v-left.residuals[i])/(b[j]-a[j])));
-        else if(right.valid&&b[j]>x[j])columns.push(right.residuals.map((v,i)=>(v-current.residuals[i])/(b[j]-x[j])));
-        else if(left.valid&&a[j]<x[j])columns.push(current.residuals.map((v,i)=>(v-left.residuals[i])/(x[j]-a[j])));
-        else return finish('stalled','Physical Jacobian unavailable at '+s.k);
-      }
-      if(columns.some(c=>!c.every(Number.isFinite)))return finish('stalled','Nonfinite physical Jacobian');
+      const derivative=jacobian(specs,x,current,at,epsilon);
+      if(derivative.reason)return finish('stalled',derivative.reason);
+      const {columns}=derivative;
       const g=columns.map(c=>dot(c,current.residuals)),active=g.map((v,i)=>(x[i]<=specs[i].lo&&v>0)||(x[i]>=specs[i].hi&&v<0));
       const movable=active.map((v,i)=>v?-1:i).filter(i=>i>=0);
       if(movable.every(i=>Math.abs(g[i])<=gradientTolerance))return finish('converged','Projected gradient tolerance');
@@ -135,5 +150,61 @@
     }
     return finish('iteration_limit','Iteration limit reached');
   }
-  return Object.freeze({evaluate,fit,fields:Object.freeze(fields.slice())});
+  // One-sided Jacobi SVD of J itself, rather than J^T J, to retain
+  // weak modes. Internal normalization also limits overflow in dot products.
+  function singularModes(columns){
+    const n=columns.length,scale=Math.max(...columns.map(norm));
+    if(!Number.isFinite(scale))return null;
+    const c=columns.map(col=>col.map(v=>scale?v/scale:0));
+    const v=Array.from({length:n},(_,j)=>Array.from({length:n},(_,i)=>i===j?1:0));
+    let converged=false;
+    for(let sweep=0;sweep<100;sweep++){
+      let changed=false;
+      for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+        const a=dot(c[i],c[i]),b=dot(c[j],c[j]),g=dot(c[i],c[j]);
+        if(Math.min(a,b)<1e-30||Math.abs(g)<=1e-13*Math.sqrt(a*b))continue;
+        const tau=(b-a)/(2*g),t=(tau<0?-1:1)/(Math.abs(tau)+Math.hypot(1,tau)),cs=1/Math.hypot(1,t),sn=cs*t;
+        for(const matrix of [c,v]){const x=matrix[i],y=matrix[j];matrix[i]=x.map((q,k)=>cs*q-sn*y[k]);matrix[j]=x.map((q,k)=>sn*q+cs*y[k]);}
+        changed=true;
+      }
+      if(!changed){converged=true;break;}
+    }
+    if(!converged)return null;
+    return c.map((col,i)=>({singularValue:norm(col)*scale,direction:v[i]})).sort((a,b)=>b.singularValue-a.singularValue);
+  }
+  // Local, scale-dependent observability only. No covariance or global
+  // uniqueness claim. Compare two finite-difference resolutions before
+  // interpreting a small singular value as a constrained mode.
+  function diagnose(model,pose,input,options){
+    options=options||{};const {opts,obs,base,specs}=prepare(model,pose,input,options);
+    const epsilon=number(options.differenceStep??1e-4,1e-8,.01,'difference step');
+    const relativeTolerance=number(options.rankTolerance??1e-8,1e-14,.1,'rank tolerance');
+    const objective=evaluator(model,obs,opts),x=specs.map(()=>0);
+    let evaluations=0;
+    const at=x=>{evaluations++;return objective({...base,...Object.fromEntries(specs.map((s,i)=>[s.k,s.decode(x[i])]))});};
+    const current=at(x),parameters=specs.map(s=>({field:s.k,scale:s.scale,unit:s.k===focal?'log focal ratio':s.k==='Pan'||s.k==='Nick'||s.k==='Roll'?'degrees':'metres',
+      atLowerBound:s.lo===0,atUpperBound:s.hi===0}));
+    const report=(status,reason,extra={})=>({status,reason,method:opts.method,atmosphere:opts.atmosphere,parameters,observationCount:obs.length,scalarCount:2*obs.length,
+      rmsPx:current.rmsPx,weightedRmsPx:current.weightedRmsPx,evaluations,rank:null,conditionNumber:null,modes:[],complete:false,...extra});
+    if(!current.valid)return report('invalid_pose',current.reason);
+    if(!specs.length)return report('fixed','No free parameters',{rank:0});
+    const coarse=jacobian(specs,x,current,at,epsilon),fine=jacobian(specs,x,current,at,epsilon/2);
+    if(coarse.reason||fine.reason)return report('unavailable',coarse.reason||fine.reason);
+    const sv=singularModes(fine.columns);
+    const derivativeDifference=norm(fine.columns.flatMap((col,j)=>col.map((v,i)=>v-coarse.columns[j][i])));
+    if(!sv||!Number.isFinite(derivativeDifference)||sv.some(s=>!Number.isFinite(s.singularValue)))return report('unavailable','Nonfinite or unconverged SVD');
+    // A heuristic numerical floor, NOT a rigorous bound on derivative error.
+    const threshold=Math.max(relativeTolerance*sv[0].singularValue,2*derivativeDifference);
+    const weightSum=obs.reduce((s,o)=>s+o.weight,0);
+    const modes=sv.map((s,i)=>({singularValue:s.singularValue,resolved:i<2*obs.length&&s.singularValue>threshold,
+      weightedRmsPxPerUnit:s.singularValue/Math.sqrt(weightSum),
+      scaledDirection:Object.fromEntries(specs.map((p,j)=>[p.k,s.direction[j]])),
+      parameterTangent:Object.fromEntries(specs.map((p,j)=>[p.k,s.direction[j]*p.scale*(p.k===focal?base[focal]:1)]))}));
+    const rank=modes.filter(m=>m.resolved).length;
+    return report(rank===specs.length?'resolved':'unresolved',rank===specs.length?null:'One or more modes below numerical resolution',{
+      rank,conditionNumber:rank===specs.length?sv[0].singularValue/sv[sv.length-1].singularValue:null,
+      modes,threshold,relativeTolerance,derivativeDifference,differenceStep:epsilon/2,
+      derivativeSchemes:specs.map((s,i)=>({field:s.k,coarse:coarse.schemes[i],fine:fine.schemes[i]}))});
+  }
+  return Object.freeze({evaluate,fit,diagnose,fields:Object.freeze(fields.slice())});
 }));

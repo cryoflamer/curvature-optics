@@ -283,6 +283,54 @@ strong refraction, difficult visibility, unknown lens/crop or incorrectly
 identified geometry may prevent successful recovery. No production optics
 or UI changes.
 
+## Local conditioning and sensitivity (8A.4.1)
+
+CameraPhysicalFit.diagnose(model, pose, observations, options) reuses the
+fit's parameter scales, bounds, locks and weighted residual Jacobian.
+One-sided Jacobi SVD is applied directly to J, not J^T J. Report the
+scaled right singular vectors, singular values, local physical parameter
+tangents (focal tangent obtained from the log-focal scale), weighted
+pixel RMS per scaled unit, finite-difference schemes and boundary flags.
+The numerical resolution threshold is max(relativeTolerance*sigmaMax,
+2*Frobenius norm of J(h/2)-J(h)); relativeTolerance defaults to 1e-8.
+This heuristic is not a certified derivative error bound. Condition
+number is reported only when all free directions are numerically resolved.
+A rank deficit means unresolved at the indicated scale and threshold,
+not necessarily a mathematically exact null space. At bounds the modes
+are linear sensitivity directions, not certified feasible displacements.
+Invalid poses or unavailable derivatives give explicit status, not rank.
+No covariance, statistical interval, global identifiability or automated
+selection of a unique solution is claimed. The diagnostics are opt-in;
+the multiseed ranking is unchanged.
+
+Seven additional tests in the existing local fit suite: spatial rank 7/7
+on Globe/Flat (scaled condition ~545), frontal plane rank 6/7 with the
+expected focal/distance null direction, collinear rank 5/7, insufficient
+observations, fixed/bounded fields, invalid projections, and weighted mode
+sensitivity checks. A distant Standard Globe synthetic sensitivity fixture
+(~22 km, 40 m height, 12 fitting and 3 held-out observations) has rank 7/7,
+condition ~7275, weakest weighted RMS ~0.123 px per scaled unit. The local
+fit deliberately starts at the true pose to isolate sensitivity. Noiseless
+matching atmosphere recovers exactly; deterministic sinusoidal +/-1 and
++/-3 px per-coordinate perturbations give fit RMS 0.953/2.859 px, spatial
+position errors 588.43/1821.67 m, heights 34.07/21.42 m, held-out RMS
+0.151/0.452 px. The 3 px case terminates stalled, not converged.
+Fitting the noiseless Standard observations under Vacuum gives 0.00725 px
+fit RMS and 0.01012 px held-out RMS yet height 49.61 m (+9.61 m).
+These are individual synthetic local sensitivity experiments, not
+population estimates or global recall measurements. Further 8A.4 work:
+multiple noise realizations, model/atmosphere hypotheses, outliers, candidate
+recall and renderer-derived independent observations.
+
+65/65 tests passed in five calibration suites (7 new tests). All 32 parent
+source/test blobs in their literal dependency graph matched the remote
+tree. New source/test hashes match tested files. No new JS modules or literal
+require edges; the current isolation fixture remains valid. Full current-tree
+regression and browser tests are not locally verified because the checkout
+is stale outside calibration and direct GitHub networking is unavailable.
+Run CI on the published commit before accepting. No production renderer or
+UI changes.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified

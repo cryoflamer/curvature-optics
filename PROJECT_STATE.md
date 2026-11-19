@@ -1,3 +1,20 @@
+## Modern Demo Catalog — Local camera conditioning (8A.4.1)
+
+Issue #6: added opt-in CameraPhysicalFit.diagnose using shared weighted
+scaled finite-difference Jacobian, direct one-sided Jacobi SVD, numerical
+resolution floor from two step sizes, singular modes/physical tangents and
+boundary/derivative diagnostics. Spatial rank 7/7, frontal plane 6/7,
+collinear 5/7. ~22 km synthetic Standard Globe: condition ~7275;
+deterministic +/-1 and +/-3 px observation perturbations shift pose by
+588.43 and 1821.67 m (latter stalled); held-out RMS 0.151 and 0.452 px.
+Wrong Vacuum hypothesis fits noiseless Standard data to 0.00725 px but
+height shifts +9.61 m. Local tests start at truth, not global search.
+7 new tests; 65/65 five suites; 32 parent dependency/test blob hashes
+verified. Existing files only, unchanged static require edges/fixture.
+Full current-tree CI pending; local checkout stale outside calibration and
+network unavailable. Next 8A.4 broader sensitivity/recall and independent
+renderer qualification. No covariance or uniqueness claim, no UI changes.
+
 ## CI repair after multi-seed calibration
 
 GitHub CI logs for bf87738 reported seven Node failures and one Chromium
