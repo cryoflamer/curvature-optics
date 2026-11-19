@@ -1,3 +1,23 @@
+## Modern Demo Catalog — Equal-budget camera hypothesis comparison (8A.4.3)
+
+Issue #6: two new research tests in CameraCalibration.test.js; Standard truth
+Globe and Flat, each fit blind under Globe/Flat x Standard/Vacuum with equal
+7-free-field bounds/search budget, zero and one paired Gaussian sigma=1 px
+draw. 12 training + 3 nearby held-out + 4 wider-depth validation points
+(approximately 11–36 km); shared true-camera score is diagnostic only.
+16 searches, 3 valid candidates each; 7 best fits converged, 9 stalled.
+Noiseless wrong Standard geometry ~0.027 px fit RMS in either direction
+(vs 14.993 px shared camera), but ~4.42 px wider-depth validation; height
+40 m truth -> 1.95 m Flat fit or 77.99 m Globe fit. With noise correct
+geometry/atmosphere need not rank best; wider-depth validation also
+degrades, Flat fits to Globe truth hit 0.001 m height floor. Synthetic
+self-consistency only, no general discrimination claim. Full table in
+docs/camera-calibration.md. Two new tests passed (32.6 s); parent full CI
+green, 28 parent source/test hashes and new test hash checked. New full
+CI pending; architecture fixture unchanged; no production or UI changes.
+Remaining 8A.4 qualification: outliers/repeated features, independent
+renderer/near-horizon tests and convergence review, then 8B editor.
+
 ## Modern Demo Catalog — Paired Gaussian calibration sensitivity (8A.4.2)
 
 Issue #6: two research tests in CameraCalibration.test.js, two synthetic

@@ -121,3 +121,44 @@ for(const distant of [false,true])test('paired Gaussian noise sensitivity and bl
  }
  assert.equal(JSON.stringify(clean),before);
 });
+
+// Fixed authored surface arcs/altitudes and original raster coordinates for
+// every hypothesis. The observation generator is not an independent oracle.
+for(const truthGeometry of [1,2])test('cross-hypothesis calibration: '+(truthGeometry===1?'Globe':'Flat')+' Standard truth',t=>{
+ const m={...base,showModel:truthGeometry,CameraEast:-1500,CameraNorth:-6000,Height:40,
+  Pan:Math.atan2(1500,22000)*180/Math.PI,Nick:-.06,Roll:2,FocalLengthField:200};
+ const landmarks=Array.from({length:15},(_,i)=>({id:'cross'+i,east:140*Math.sin(i*2.2),north:16000+1600*Math.cos(i*1.7),height:45+20*Math.sin(i*1.1)}));
+ // Extrapolation along the central azimuth, deliberately outside the fitted
+ // depth interval; these points never enter initialization or optimization.
+ const extra=[11000,14000,30000,36000].map((distance,i)=>({id:'extra'+i,east:m.CameraEast+distance*1500/22000+30*Math.sin(i),north:m.CameraNorth+distance,height:50+5*i}));
+ const options={...opts,maxCandidates:3,maxIterations:60,
+  bounds:{CameraEast:[-100000,100000],CameraNorth:[-100000,100000],Height:[.001,1000],FocalLengthField:[4,1000]}};
+ const clean=observe(m,landmarks,{...options,atmosphere:'standard'}),held=clean.slice(12),farHeld=observe(m,extra,{...options,atmosphere:'standard'});
+ const scene={...m,CameraEast:0,CameraNorth:0,Height:1,Pan:0,Nick:0,Roll:0,FocalLengthField:21};
+ const normal=gaussian(0x8a43),draws=clean.slice(0,12).map(()=>[normal(),normal()]);
+ for(const sigma of [0,1]){
+  const train=clean.slice(0,12).map((o,i)=>({...o,pixel:o.pixel.map((v,j)=>v+sigma*draws[i][j])}));
+  const before=JSON.stringify([train,held,farHeld]),rows=[];
+  for(const showModel of [1,2])for(const atmosphere of ['standard','vacuum']){
+   const hypothesis={...scene,showModel},settings={...options,atmosphere};
+   const r=calibrate(hypothesis,train,{...settings,validation:held});
+   const c=r.candidates[0];
+   const shared=physical.evaluate(hypothesis,m,train,settings);
+   const samePose=physical.evaluate(hypothesis,m,farHeld,settings);
+   if(c)verify(r,hypothesis,train,settings);
+   const extrapolation=c?physical.evaluate(hypothesis,c.pose,farHeld,settings):null;
+   const row={truthGeometry,showModel,atmosphere,sigma,status:r.status,termination:c?.termination??null,
+    selected:r.diagnostics.selected,validCandidates:r.candidates.length,sharedPoseRmsPx:shared.rmsPx,
+    sharedPoseExtrapRmsPx:samePose.rmsPx,fitRmsPx:c?.evaluation.rmsPx??null,heldRmsPx:c?.validation.rmsPx??null,
+    extrapRmsPx:extrapolation?.rmsPx??null,extrapStatuses:extrapolation?.points.map(p=>p.status)??[],
+    height:c?.pose.Height??null,positionErrorM:c?Math.hypot(c.pose.CameraEast-m.CameraEast,c.pose.CameraNorth-m.CameraNorth,c.pose.Height-m.Height):null,
+    focal:c?.pose.FocalLengthField??null};
+   rows.push(row);t.diagnostic(JSON.stringify(row));
+   assert.equal(r.complete,false);
+   if(c){assert.equal(c.evaluation.points.length,train.length);assert.equal(c.validation.points.length,held.length);assert.equal(extrapolation.points.length,farHeld.length);}
+  }
+  const correct=rows.find(r=>r.showModel===truthGeometry&&r.atmosphere==='standard');
+  assert.ok(correct.validCandidates>0);assert.ok(correct.fitRmsPx<(sigma===0?1e-5:3));
+  assert.equal(rows.length,4);assert.equal(JSON.stringify([train,held,farHeld]),before);
+ }
+});

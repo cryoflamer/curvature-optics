@@ -393,6 +393,82 @@ and Flat, atmosphere mismatch with equal constraints and held-out
 landmark design; outliers and independent renderer evidence remain
 qualification items. No UI or production changes.
 
+## Equal-budget cross-hypothesis experiments (8A.4.3)
+
+Two synthetic Standard atmosphere observation sets use the same authored
+surface-arc coordinates/altitudes, raster (1920x1080) and true camera
+(East -1500 m, North -6000 m, height 40 m, focal field 200, Pan towards
+scene, Nick -0.06 deg, Roll 2 deg), one generated with Globe and one
+with Flat. Twelve landmarks center around 22 km, three separate nearby
+depth landmarks are held out, and four further validation landmarks
+lie at authored north offsets of 11, 14, 30 and 36 km from the true
+camera (approximately those ranges). The latter deliberately extend
+outside the fitted depth interval. All validation pixels are clean.
+Each truth geometry is fitted under all four Globe/Flat x Standard/Vacuum
+hypotheses, at zero noise and the same single seeded Gaussian draw
+(sigma 1 px per coordinate, seed 0x8a43). No true pose enters seed
+generation; seven fields free. Equal bounds, 17 focal samples, at most
+3 selected seeds and 60 local iterations as in 8A.4.2; no cross-hypothesis
+reuse of fitted poses. Final objective Accurate for every hypothesis.
+The shared true-pose score is a separate diagnostic, not an initializer
+or input to ranking. Both held-out groups remain outside the objective.
+These tests use the physical projector itself as the observation
+generator, not an independent physical or raster oracle.
+
+Results (RMS in original raster px; height m; approximate rounded
+values from Node 22.16). All 16 searches returned 3 valid candidates;
+all validation points projected visibly. Of the selected best fits,
+7 had converged termination, 9 stalled; the finite search is not an
+exhaustive minimum certificate. Near/extrapolation sets must remain
+separate and invalid projections must not be removed.
+
+| Truth | Sigma | Hypothesis | Fit RMS | Near held RMS | Extrapolation RMS | Fitted height |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| Globe | 0 | Globe Standard | 1.65e-11 | 1.18e-11 | 8.00e-11 | 40.00 |
+| Globe | 0 | Globe Vacuum | 0.007249 | 0.010116 | 1.120199 | 49.61 |
+| Globe | 0 | Flat Standard | 0.026696 | 0.038884 | 4.423615 | 1.95 |
+| Globe | 0 | Flat Vacuum | 0.019987 | 0.029115 | 3.305642 | 11.59 |
+| Flat | 0 | Globe Standard | 0.026711 | 0.038937 | 4.429983 | 77.99 |
+| Flat | 0 | Globe Vacuum | 0.033633 | 0.048836 | 5.548145 | 87.55 |
+| Flat | 0 | Flat Standard | 1.68e-11 | 1.16e-11 | 6.94e-11 | 40.00 |
+| Flat | 0 | Flat Vacuum | 0.007219 | 0.010077 | 1.116162 | 49.59 |
+| Globe | 1 | Globe Standard | 1.276974 | 1.005132 | 10.781591 | 8.11 |
+| Globe | 1 | Globe Vacuum | 1.276311 | 1.004366 | 10.110046 | 16.62 |
+| Globe | 1 | Flat Standard | 1.344065 | 0.802411 | 10.742086 | 0.001 |
+| Globe | 1 | Flat Vacuum | 1.309766 | 0.852704 | 10.629331 | 0.001 |
+| Flat | 1 | Globe Standard | 1.272738 | 0.997950 | 8.735939 | 43.67 |
+| Flat | 1 | Globe Vacuum | 1.272227 | 0.997568 | 8.593064 | 52.12 |
+| Flat | 1 | Flat Standard | 1.276601 | 1.005360 | 10.653347 | 10.18 |
+| Flat | 1 | Flat Vacuum | 1.275949 | 1.004603 | 10.004267 | 18.67 |
+
+Without noise, the shared true camera under the wrong Standard geometry
+gives 14.993 px fit RMS in either direction. Independent calibration
+reduces that to ~0.027 px by changing height by about +/-38 m and other
+camera fields; the wider distance validation increases the discrepancy
+to ~4.42 px. Even a wrong atmospheric hypothesis within the correct
+geometry can closely fit a narrow distance interval. With the single
+noisy draw, the correct hypothesis need not attain the smallest training
+or held-out residual: pose errors exceed 1.3 km for both correct models,
+and both Flat fits to Globe truth hit the minimum allowed height of
+0.001 m. Extrapolation then also becomes unreliable (roughly 8.6–10.8 px
+across hypotheses); broader depth sensitivity does not guarantee
+discrimination. Independent constraints, broad depth coverage and
+uncertainty analysis matter. This is a qualitative synthetic demonstration,
+not a statistical model selection test, physical model verification or a
+claim about actual photographs. Logs retain per-fit status, counts,
+separate validation scores, height, position/focal errors and shared-pose
+scores. No production solver change.
+
+Two new tests in the existing CameraCalibration suite passed in 32.6 s
+using a test-name filter. The parent full CI passed all three jobs
+(run 44560663686). All 27 loaded production dependencies and the original
+test blob were checked against the parent tree; new tested blob matched.
+No new module or literal require edge; architecture inventory unchanged.
+Full new CI pending; local checkout stale outside calibration. Before
+claiming 8A.4 complete, remaining qualification includes outlier/repeated
+feature sensitivity, wider independent renderer-derived and near-horizon
+tests, and convergence review. Then 8B editor; no UI change here.
+
 ## Goal and scientific method
 
 Given a reference photograph, reliable scene geometry and identified
