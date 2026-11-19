@@ -1,3 +1,22 @@
+## 8F.4b — Physical material anchor resolution and legacy parity
+
+8F.4a CI run 44636614904 passed. Added CameraMaterialAnchorResolver:
+lazy immutable Globe bank snapshot at Height=0, stable owner/primitive
+lookup, explicit legacy vertex upgrade preserving ID, bank SHA-256
+signature and topology-checked interpolation in physical ENU metres.
+The signature binds ordered bank layout plus owner/primitive/vertex
+structure and micrometre-quantized coordinates of a fixed neutral
+authoring reference (zero curvature, fixed reference radius 6371000 m);
+this is an encoding convention only, not a calibration hypothesis.
+Physical and neutral ordered topology must agree; reject truncated or
+ambiguous banks, stale signature, out-of-range indices, nonauthored
+edges/triangles. Shared indexed topology adapter moved from viewer to
+CurvatureEarClip; existing 2D triangulation behavior unchanged. No
+editor, fit, projection or portable schema integration yet.
+Seven focused resolver tests passed in a headless JS assertion harness,
+including four standard SHA-256 vectors. Full Node/browser CI pending.
+Next: 8F.4c Globe optical projection.
+
 ## 8F.4a — Canonical material anchor representation
 
 Added the dependency-free CameraMaterialAnchor module and focused structural

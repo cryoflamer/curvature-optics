@@ -471,6 +471,7 @@
       "src/calibration/CameraCalibrationWorker.js",
       "src/calibration/CameraFocalSweep.js",
       "src/calibration/CameraMaterialAnchor.js",
+      "src/calibration/CameraMaterialAnchorResolver.js",
       "src/calibration/CameraPerspectiveSeed.js",
       "src/calibration/CameraPhysicalFit.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
@@ -484,7 +485,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 216,
+  "sourceJsCount": 217,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1346,9 +1347,19 @@
     },
     "src/calibration/CameraMaterialAnchor.js": {
       "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/calibration/CameraMaterialAnchorResolver.js"
+      ],
       "commonJsTestCallers": [
         "tests/CameraMaterialAnchor.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraMaterialAnchorResolver.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CameraMaterialAnchorResolver.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1716,6 +1727,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/calibration/CameraMaterialAnchorResolver.js",
         "src/diagnostics/CurvatureVisibilityOracle.js",
         "src/diagnostics/CurvatureVisibilityVerification.js",
         "src/diagnostics/CurvatureWorldTopologyAudit.js",
@@ -1724,6 +1736,7 @@
         "src/ui/modern/ModernLandmarkViewer.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraMaterialAnchorResolver.test.js",
         "tests/CurvatureEarClip.test.js",
         "tests/CurvatureModeSemantics.test.js",
         "tests/CurvatureRenderingFixes.test.js",
@@ -1739,6 +1752,7 @@
       "commonJsSourceCallers": [
         "src/calibration/CameraCalibration.js",
         "src/calibration/CameraLandmarkProjection.js",
+        "src/calibration/CameraMaterialAnchorResolver.js",
         "src/camera/ModernTargetDirection.js",
         "src/optics/OpticalTowerSilhouette.js",
         "src/renderers/CurvatureCanvasDirectPreview.js",
@@ -1748,6 +1762,7 @@
       "commonJsTestCallers": [
         "tests/CameraCalibration.test.js",
         "tests/CameraLandmarkProjection.test.js",
+        "tests/CameraMaterialAnchorResolver.test.js",
         "tests/CurvatureBedford.test.js",
         "tests/CurvatureControlledGeometryParity.test.js",
         "tests/CurvatureFlatSurfaceGuides.test.js",

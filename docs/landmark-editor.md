@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module implemented; next 8F.4b. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver implemented; next 8F.4c. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -346,6 +346,39 @@ metadata and suppresses new owners for truncated sequences. Worker loads
 the existing projection/fit modules. These callers are deliberately
 unchanged in this commit.
 
+
+#### 8F.4b — Physical resolver (implemented)
+
+`CameraMaterialAnchorResolver.create(model)` snapshots the ten layout
+fields and Globe radius, sets Height=0, lazily generates banks via the
+shared physical authoring engine, and returns camera-independent ENU XYZ
+in metres (reference surface origin). `resolve(anchor)` returns validated
+anchor, bank/global primitive index and physical point; `upgradeLegacy`
+uses the actual legacy bank index, retaining the original observation ID;
+`resolveLandmark` handles both representations. `fromPick` checks the
+transient index against the resolved identity before discarding it.
+No viewer XYZ or pixel participates in resolution.
+
+Signature encoding v1: SHA-256 of ASCII JSON array
+["bank-v1", bank, ordered [layoutField,value] pairs, ordered
+[identity, quantized vertices] pairs]. Identity is owner, local ordinal,
+type, effective mode and original vertex count; quantized vertices are
+rounded integer micrometres generated at Height=0, curvature=0 and fixed
+reference radius 6371000 m (encoding only, not Flat calibration). Exact
+layout fields are bound; no camera, actual Earth radius, atmosphere or
+other-bank settings are bound. Submicrometre neutral-coordinate changes
+may share a signature by design. Actual physical geometry is independently
+generated and its ordered structural identities must agree with the
+neutral bank; truncated, ambiguous and malformed banks fail explicitly.
+Digest is synchronous pure JS; no async Web Crypto in a numerical path.
+
+Shared EarClip indexed surface and authored edge adapter retains original
+indices, rejects nonplanar/degenerate/wire-only surfaces, and uses the
+same tolerances as Magnifier. Compare sorted tuples, not triangle winding.
+World point uses origin-relative weighted interpolation. The physical
+resolver is authoritative; when wiring viewer/optical variants, a
+numerically different triangulation must not silently remap an anchor.
+Actual optical projection and fit integration remain later stages.
 
 | Commit | Scope and acceptance gate |
 | --- | --- |

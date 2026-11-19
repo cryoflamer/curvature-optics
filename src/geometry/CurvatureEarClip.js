@@ -51,5 +51,52 @@ function triangulate(input){
  if(indices.length!==3)return {triangles:[],removed,reason:'iteration-limit'};
  triangles.push(indices.map(i=>points[i]));return {triangles,removed,reason:null};
 }
-return {triangulate,inspect};
+const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
+const sub=(a,b)=>a.map((v,i)=>v-b[i]);
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const mul=(a,t)=>a.map(v=>v*t);
+const finite3=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
+const unit=a=>{const n=Math.hypot(...a);if(!(n>0))throw Error('Degenerate object frame');return a.map(v=>v/n);};
+  function authoredEdges(item){
+    const pts=item.points,edges=[];
+    if(Array.isArray(pts)&&pts.every(finite3))for(let i=0;i<(item.type==='polygon'?pts.length:pts.length-1);i++){
+      const j=(i+1)%pts.length;
+      if(Math.hypot(...sub(pts[i],pts[j]))>1e-10)edges.push([i,j]);
+    }
+    return edges;
+  }
+  function indexedTriangles(item){
+    const pts=item.points,fail=reason=>({triangles:[],reason});
+    if(item.type!=='polygon'||!((item.mode??1)&2))return fail('not-filled');
+    if(!Array.isArray(pts)||pts.length<3||!pts.every(finite3))return fail('invalid-coordinate');
+    const origin=pts[0],relative=pts.map(p=>sub(p,origin));
+    let longest=relative[0],scale=0;
+    for(const p of relative){const n=Math.hypot(...p);if(n>scale){scale=n;longest=p;}}
+    if(!(scale>0))return fail('zero-area');
+    const axis=unit(longest),scaled=relative.map(p=>mul(p,1/scale));
+    let normal=null,area=0;
+    for(const p of scaled){const n=cross(axis,p),a=Math.hypot(...n);if(a>area){normal=n;area=a;}}
+    if(!(area>1e-9))return fail('zero-area');
+    normal=unit(normal);
+    // Relative tolerance plus a small absolute allowance for physical
+    // placement arithmetic (metres). Reject nonplanar filled primitives.
+    if(relative.some(p=>Math.abs(dot(p,normal))>Math.max(1e-7,scale*1e-9)))return fail('nonplanar');
+    const y=cross(normal,axis);
+    let points=scaled.map((p,i)=>[dot(p,axis),dot(p,y),i]);
+    // Remove only duplicate consecutive points (including closure), retaining
+    // the first authored index. Backtracking collinear edges are not simple.
+    const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+    points=points.filter((p,i)=>i===0||dist(p,points[i-1])>1e-9);
+    if(points.length>1&&dist(points[0],points.at(-1))<=1e-9)points.pop();
+    if(points.length<3)return fail('zero-area');
+    for(let i=0;i<points.length;i++){
+      const a=points[(i+points.length-1)%points.length],b=points[i],c=points[(i+1)%points.length];
+      const u=sub(b.slice(0,2),a.slice(0,2)),w=sub(c.slice(0,2),b.slice(0,2));
+      if(Math.abs(u[0]*w[1]-u[1]*w[0])<=1e-9&&dot(u,w)<-1e-12)return fail('backtracking-edge');
+    }
+    const result=triangulate(points);
+    if(result.reason)return fail(result.reason);
+    return {triangles:result.triangles.map(t=>t.map(p=>p[2])),reason:null};
+  }
+return {triangulate,inspect,indexedTriangles,authoredEdges};
 });
