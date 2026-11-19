@@ -1,7 +1,7 @@
 # Reference images and observation sources
 
-Status: 7C.1 foundation implemented; Library, links, presentation and transport
-are subsequent steps. See [demo roadmap](modern-demo-catalog.md) for order and
+Status: 7C.2 foundation and local Library implemented; links, presentation and
+portable transport are subsequent steps. See [demo roadmap](modern-demo-catalog.md) for order and
 [camera calibration](camera-calibration.md) for the deferred research project.
 
 ## Purpose and boundaries
@@ -89,14 +89,48 @@ measurement):
 }
 ```
 
+## Local Library (7C.2)
+
+Open **Reference Image Library** below Animation Library in Animation Studio.
+Import a local file, select a saved observation, edit its details and click
+**Save details**. Camera facts have individual statuses, values, numeric
+uncertainties and notes. Not recorded is distinct from explicit Unknown. No
+EXIF facts are automatically inferred; the original file retains embedded
+metadata. Use **Download original** to retain an external copy, **Refresh** to
+reload the current list, or **Delete observation** after confirmation. There
+are no links in this stage: before 7C.3 enables links it must protect all uses
+from deletion (or disable deletion). The panel is outside the presentation
+stage. No storage is accessed merely by loading Modern with the panel closed.
+
+`ModernReferenceImageLibrary` uses its own IndexedDB database, version 1,
+`observations` store keyed by stable ID. Explicit metadata updates retain the
+original and thumbnail byte-for-byte. A monotonic revision protects stale
+updates/deletes across tabs. Transactions only report success on completion;
+no eviction or LocalStorage fallback. Initial aggregate cap: 100 observations
+and 64 Mi UTF-16 code units of serialized records (not an estimate of actual
+browser disk usage); individual limits are unchanged. Lists expose thumbnails
+and dimensions, not originals; a bounded `getAll` is used internally for atomic
+quota checks and listing. Browser quota, decode and transaction errors surface
+in the panel. Browser storage remains local and may be cleared/evicted by the
+browser; external backups are essential. Project exports do not include these
+assets yet.
+
+`ModernReferenceImageImport` inspects raster header dimensions before decoding,
+uses the browser image decoder and verifies decoded display dimensions against
+encoded dimensions (including a possible EXIF rotation swap). It preserves the
+encoded bytes, creates a separate JPEG preview up to 512 pixels on the long
+side, and does not crop. The header check bounds declared dimensions, not all
+possible decoder allocations or malformed/animated file behaviour; browser
+image decode is not a forensic integrity check. Metadata dimensions describe
+the browser's oriented display, not necessarily the encoded axes. No EXIF
+parsing or automatic calibration is performed. A browser refusing to decode a
+file rejects ingestion; use supported local image files and document any
+external conversion.
+
 ## Remaining delivery steps
 
-- 7C.2: an independent durable Reference Image Library, upload and safe decode,
-  non-destructive original retention, thumbnail generation, metadata editor,
-  storage quota/error handling, reload, shared stable identity and deletion
-  policy. Never treat an observation as a disposable thumbnail. Preserve
-  existing storage and old projects; avoid silently orphaning references.
-- 7C.3: optional ordered references by ID on a keyframe, sharing one asset
+- 7C.2: implemented as above; browser acceptance pending.
+- 7C.3 (next): optional ordered references by ID on a keyframe, sharing one asset
   across uses; preserve through editing, copies, Undo/Redo and recovery;
   define stable ownership/access and handle missing IDs explicitly. Keep
   metadata out of active physics/compatibility and exact-state cache keys.

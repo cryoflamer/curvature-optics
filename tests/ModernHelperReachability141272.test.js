@@ -25,7 +25,7 @@ const required = [
   'ModernExperimentHistory.js', 'ModernExperimentHistoryUI.js', 'ModernExperimentHistoryFilters.js',
   'ModernExperimentThumbnail.js', 'ModernExperimentLibrary.js',
   'ModernExperimentState.js', 'ModernGpuCapabilities.js', 'ModernLocationCatalog.js',
-  'ModernPerformanceReport.js', 'ModernRenderProfiler.js',
+  'ModernPerformanceReport.js', 'ModernReferenceImageImport.js', 'ModernReferenceImageLibraryUI.js', 'ModernRenderProfiler.js',
   'ModernRoute.js', 'ModernSceneState.js', 'ModernSemanticNaming.js', 'ModernSessionAutosave.js', 'ModernStatusMessage.js', 'ModernTargetIndicator.js',
   'ModernThumbnailPreview.js', 'ModernSnapshotPresentation.js'
 ];

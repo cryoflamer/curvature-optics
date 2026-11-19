@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 115,
-      "uniqueScripts": 113,
+      "scriptTags": 118,
+      "uniqueScripts": 116,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -200,6 +200,9 @@
         "src/animation/ModernAnimationProject.js",
         "src/animation/ModernAnimationAtmosphereVariant.js",
         "src/animation/ModernReferenceImage.js",
+        "src/animation/ModernReferenceImageLibrary.js",
+        "src/ui/modern/ModernReferenceImageImport.js",
+        "src/ui/modern/ModernReferenceImageLibraryUI.js",
         "src/animation/ModernAnimationSequences.js",
         "src/animation/ModernAnimationProjectWizard.js",
         "src/animation/ModernAnimationStudioEditing.js",
@@ -389,6 +392,7 @@
       "src/animation/ModernDemoCatalog.js",
       "src/animation/ModernDemoCatalogData.js",
       "src/animation/ModernReferenceImage.js",
+      "src/animation/ModernReferenceImageLibrary.js",
       "src/camera/ModernCameraInterpolator.js",
       "src/camera/ModernCameraSequence.js",
       "src/camera/ModernCameraTelemetry.js",
@@ -429,6 +433,8 @@
       "src/ui/modern/ModernGpuCapabilities.js",
       "src/ui/modern/ModernLocationCatalog.js",
       "src/ui/modern/ModernPerformanceReport.js",
+      "src/ui/modern/ModernReferenceImageImport.js",
+      "src/ui/modern/ModernReferenceImageLibraryUI.js",
       "src/ui/modern/ModernRenderProfiler.js",
       "src/ui/modern/ModernSceneState.js",
       "src/ui/modern/ModernSemanticNaming.js",
@@ -462,7 +468,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 202,
+  "sourceJsCount": 205,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1074,9 +1080,22 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernReferenceImageLibrary.js",
+        "src/ui/modern/ModernReferenceImageImport.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernReferenceImage.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernReferenceImageLibrary.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -3203,6 +3222,26 @@
         "tests/ModernIndependentCompare.test.js",
         "tests/ModernPerformanceDiagnostics1401.test.js",
         "tests/OpticalColdWarm1403.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernReferenceImageImport.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernReferenceImageLibrary.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernReferenceImageLibraryUI.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
     },

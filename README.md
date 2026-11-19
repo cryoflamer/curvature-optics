@@ -54,12 +54,15 @@ start (Accurate RK4). Save and Library backups retain authored physics. Fixed
 Vacuum/Standard single-project filenames include the corresponding suffix.
 Atmosphere export was accepted in Opera. The independent [reference image
 foundation](docs/reference-images.md) now validates original/thumbnail bytes
-and provenance without coupling observations to simulation physics. Next: 7C.2
-Reference Image Library, then links, presentation, portable transport and
+and provenance without coupling observations to simulation physics. The local
+Reference Image Library now imports, stores and edits photographs independently.
+Open its collapsed panel in Animation Studio; keep external original backups.
+Next: 7C.3 keyframe links, then presentation, portable transport and
 generic demo completion. [Camera calibration](docs/camera-calibration.md) is
 a planned separate research and development stage after infrastructure; final
 Causeway observation frames and other demo migration follow it. See the
-[updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume.
+[updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume. Deferred improvements are tracked in the
+[living technical debt backlog](docs/technical-debt.md).
 Original Legacy Demos remain available.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

@@ -152,6 +152,32 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result, {'ids': ['soundly'], 'frames': 9,
                                   'duration': 59100, 'frozen': True, 'display': 'compare'})
 
+    def test_reference_image_library_roundtrip(self):
+        import base64
+        payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        self.open_modern()
+        self.open_animation()
+        panel = self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        panel.locator('input[type=file]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        panel.get_by_label('Title', exact=True).fill('Causeway test')
+        panel.get_by_label('Author', exact=True).fill('Observer')
+        panel.get_by_text('Save details', exact=True).click()
+        expect(panel.get_by_role('status')).to_contain_text('metadata saved')
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        panel.get_by_label('Saved observations').select_option(label='Causeway test (1 × 1)')
+        expect(panel.get_by_label('Author', exact=True)).to_have_value('Observer')
+        self.assertEqual(panel.get_by_text('Download original').get_attribute('href'),
+                         'data:image/png;base64,' + base64.b64encode(payload).decode())
+        self.page.once('dialog', lambda d: d.accept())
+        panel.get_by_text('Delete observation', exact=True).click()
+        expect(panel.get_by_role('status')).to_contain_text('Observation deleted')
+
     def test_shipped_demo_catalog_http(self):
         self.open_modern()
         self.assert_shipped_demo_catalog()

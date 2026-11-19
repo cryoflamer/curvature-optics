@@ -1,3 +1,25 @@
+## Modern Demo Catalog — Reference Image Library (7C.2)
+
+7C.2 adds a collapsed independent Reference Image Library in Animation Studio.
+Local PNG/JPEG/WebP ingestion checks encoded dimensions before browser decode,
+checks decoded dimensions (allowing an orientation swap), generates a small
+thumbnail and preserves original bytes. The separate IndexedDB observation
+store supports explicit metadata edits, reload, original download and confirmed
+deletion, with revision checks and bounded aggregate storage. No observation
+links or portable transport yet; no changes to physics or authored demos.
+Browser storage is not a backup. See `docs/reference-images.md` for limits and
+metadata semantics. `docs/technical-debt.md` is the living deferred backlog;
+TD-001 HUD control grouping and TD-002 vertical reference-line geometry/projected
+curvature are recorded but not implemented.
+
+**Resume:** read this section, `docs/modern-demo-catalog.md`,
+`docs/reference-images.md`, `docs/camera-calibration.md`, and
+`docs/technical-debt.md`. Next: **7C.3 — Keyframe References**. Define stable
+links and deletion protection BEFORE references can be made; preserve links
+through editing, copies, Undo/Redo and recovery. Then 7C.4 presentation, 7C.5
+portable transport, 7D/7E generic demo completion, 8A–8E camera calibration,
+9A–9C actual photo calibration, Soundly bridge finalization and other demos.
+
 ## Modern Demo Catalog — Reference Image Foundation & Roadmap (7C.1)
 
 7B.3 was accepted by the user in Opera. The roadmap has been revised: finish
@@ -18,8 +40,8 @@ physics or authored Soundly assets. No photographs were added.
 **Resume in a new chat:** read this section, `docs/modern-demo-catalog.md`
 (current staged acceptance table), `docs/reference-images.md` (record and
 future Library/link/transport contracts), and `docs/camera-calibration.md`
-(methodology and deferred research). The next compatch is **7C.2 — Reference
-Image Library**, not the calibration optimizer. Preserve the original bytes
+(methodology and deferred research). At 7C.1 the next compatch was **7C.2 — Reference
+Image Library**, not the calibration optimizer; see the current section above. Preserve the original bytes
 separately from disposable simulation captures; link by stable IDs later.
 Soundly is the two-road Causeway bridge, not the transmission-line experiment.
 Its present Legacy-derived camera frames are explanatory rather than calibrated

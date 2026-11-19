@@ -1375,3 +1375,18 @@ button{cursor:pointer}
 #ModernAnimationAtmosphereControl{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
 #ModernAnimationAtmosphereControl[hidden]{display:none!important}
 #ModernAnimationAtmosphereNote{max-width:340px;color:#587087}
+
+/* Independent observation library: deliberately collapsed by default. */
+.modern-reference-library{margin:10px 0;padding:10px 14px;border:1px solid #c6d8e9;border-radius:8px;background:#f7fbff;color:#183550}
+.modern-reference-library>summary{font-weight:600;cursor:pointer}
+.modern-reference-body{display:grid;gap:8px;margin-top:10px}
+.modern-reference-body p{margin:4px 0;overflow-wrap:anywhere}
+.modern-reference-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:10px}
+.modern-reference-body label{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:.9em}
+.modern-reference-body input,.modern-reference-body select,.modern-reference-body textarea{box-sizing:border-box;max-width:100%;min-width:0;padding:5px;border:1px solid #b4c7d9;border-radius:4px}
+.modern-reference-body button{padding:6px 12px;border:1px solid #9cbddd;border-radius:6px;background:#e7f2fd;color:#255e91;cursor:pointer}
+.modern-reference-editor:not([hidden]){display:grid;gap:10px}
+.modern-reference-fields,.modern-reference-fact{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px}
+.modern-reference-preview img{display:block;width:auto;max-width:100%;max-height:220px;object-fit:contain}
+.modern-reference-fact{border:1px solid #c6d8e9;margin:6px 0;padding:8px}
+.modern-reference-editor[hidden]{display:none}
