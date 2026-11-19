@@ -27,18 +27,25 @@ function inside(r,b){assert.ok(r.x>=b.x&&r.y>=b.y&&r.x+r.width<=b.x+b.width+1e-8
 function overlap(a,b){return a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height;}
 
 test('fixed output geometry fits all presets, views and layout modes without overlap',()=>{
-  for(const width of [1280,1920,2560,3840])for(const compare of [true,false])for(const referenceLayout of ['side','below','hidden'])for(const showNarrative of [true,false])for(const layoutMode of ['fixed','dynamic']){
-    const p=compose.plan(project(compare),{width,referenceLayout,showNarrative,layoutMode});
+  for(const width of [1280,1920,2560,3840])for(const compare of [true,false])for(const referenceLayout of ['side','below','hidden'])for(const showNarrative of [true,false])for(const layoutMode of ['fixed','dynamic'])for(const cameraHud of [true,false]){
+    const p=compose.plan(project(compare),{width,referenceLayout,showNarrative,layoutMode,cameraHud,cameraHudAppearance:{size:125,opacity:90,position:'bottom-right'}});
     const f=compose.frameAt(p,0),g=compose.frameAt(p,p.times[1].arrivalMs),h=compose.frameAt(p,p.durationMs);
     for(const frame of [f,g,h]){
       assert.equal(frame.width/frame.height,16/9);assert.equal(frame.viewSize.width/frame.viewSize.height,16/9);
       assert.ok(frame.viewSize.width>=320&&frame.viewSize.width<=1920&&frame.viewSize.height>=180&&frame.viewSize.height<=1080);
       const bounds={x:0,y:0,width:frame.width,height:frame.height};
       const boxes=frame.sides.map(s=>frame.panels[s].panel);
-      if(frame.photo){boxes.push(frame.photo);inside(frame.photoBox,frame.photo);inside(frame.photoText,frame.photo);assert.ok(!overlap(frame.photoBox,frame.photoText));}
+      if(frame.photo){boxes.push(frame.photo);inside(frame.photoBox,frame.photo);inside(frame.photoText,frame.photo);assert.ok(!overlap(frame.photoBox,frame.photoText));assert.ok(frame.photoText.height>=4*Math.ceil(Math.round(12*frame.scale)*1.22));}
       if(frame.narrative)boxes.push(frame.narrative);
       boxes.forEach((b,i)=>{inside(b,bounds);boxes.slice(i+1).forEach(c=>assert.ok(!overlap(b,c)));});
-      frame.sides.forEach(s=>inside(frame.panels[s].viewport,frame.panels[s].panel));
+      frame.sides.forEach(s=>{
+        const v=frame.panels[s].viewport;inside(v,frame.panels[s].panel);
+        for(const meta of [frame.sceneCaption,frame.cameraHud].filter(Boolean)){
+          inside(meta,bounds);assert.ok(!overlap(v,meta));
+          if(frame.photo)assert.ok(!overlap(frame.photo,meta));
+          if(frame.narrative)assert.ok(!overlap(frame.narrative,meta));
+        }
+      });
     }
     if(layoutMode==='fixed'){assert.deepEqual(f.panels,g.panels);assert.deepEqual(g.panels,h.panels);}
     if(referenceLayout==='hidden'){assert.equal(f.photo,null);assert.equal(f.referenceId,null);}
@@ -103,4 +110,29 @@ test('unlinked demos have no empty photo panel; standalone browser-compatible mo
   const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'src/animation/ModernAnimationPresentationCompositor.js'),'utf8');
   const context={CurvatureModernAnimationProject:require('../src/animation/ModernAnimationProject'),CurvatureModernAnimationPresentation:require('../src/animation/ModernAnimationPresentation'),CurvatureModernReferenceImage:require('../src/animation/ModernReferenceImage')};
   vm.runInNewContext(source,context);assert.equal(context.CurvatureModernAnimationPresentationCompositor.plan(p).width,1920);
+});
+
+function cameraSources(frame){
+  const a=sources(frame);
+  for(const side of frame.sides)Object.assign(a[side].cameraModel,{Height:8,CameraEast:-44.5,CameraNorth:496,
+    Pan:.5,Nick:0,Roll:0,camViewAngle:1.2*Math.PI/180,deviceRatio:16/9,viewcenterHorizon:3,rEarth:6371000,rFEarth:10000000});
+  return a;
+}
+test('external HUD uses actual camera values, shares exact equal telemetry, and separates differing pitch',()=>{
+  const raw=project(),f=compose.frameAt(compose.plan(raw,{width:1920,cameraHud:true}),0),a=cameraSources(f),out=target(f);
+  assert.deepEqual(f.viewSize,{width:624,height:351});
+  const texts=out=>out.calls.filter(c=>c[0]==='text');
+  assert.deepEqual(compose.paint(out,f,a,observation()).warnings,[]);
+  let labels=texts(out).map(c=>c[1]);
+  assert.ok(labels.includes('Camera · A / B'));assert.equal(labels.filter(t=>t==='Height 8.00 m').length,1);
+  assert.equal(labels.filter(t=>t===f.sceneTitle).length,1);
+  assert.ok(labels.includes('Pitch 0.0°'));assert.ok(labels.includes('FOV 1.2°'));
+  for(const c of texts(out).filter(c=>c[1]==='Height 8.00 m'))assert.ok(c[3]>=f.cameraHud.y);
+  a.B.cameraModel.Nick=0.125;
+  const different=target(f);compose.paint(different,f,a,observation());labels=texts(different).map(c=>c[1]);
+  assert.ok(labels.includes('Camera · A')&&labels.includes('Camera · B'));
+  assert.equal(labels.filter(t=>t==='Height 8.00 m').length,2);
+  assert.ok(labels.includes('Pitch 0.13°'));
+  const disabled=compose.frameAt(compose.plan(raw),0),noHud=target(disabled);
+  compose.paint(noHud,disabled,sources(disabled),observation());assert.ok(!texts(noHud).some(c=>c[1].startsWith('Camera ·')));
 });

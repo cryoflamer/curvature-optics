@@ -1323,7 +1323,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/animation/ModernAnimationCanvasHud.js"
+        "src/animation/ModernAnimationCanvasHud.js",
+        "src/animation/ModernAnimationPresentationCompositor.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationCanvasHud.test.js",
@@ -2874,6 +2875,7 @@
       "commonJsSourceCallers": [
         "src/animation/ModernAnimationCanvasHud.js",
         "src/animation/ModernAnimationDraftAutosave.js",
+        "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernAnimationProject.js"
       ],
       "commonJsTestCallers": [

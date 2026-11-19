@@ -30,7 +30,7 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1';
+    var rendererUrl=settings.rendererUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&short-endpoint=1&png-project-fields=1&projection-fix=1&presentation-hud=1';
     var encoderUrl=settings.encoderUrl||'src/animation/ModernAnimationVideoEncoderWorker.js?studio-hud-fix=1&target-indicator=1&spline-core=1&spline-parity=1&short-endpoint=1&png-project-fields=1';
     var active=null;
     function cancel(){

@@ -49,8 +49,8 @@
   }
   function plan(project,options){
     options=options||{};
-    var owned=projects.validate(project),presentation=options.presentation===undefined?null:
-      compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height}));
+    var owned=projects.validate(project),appearance=resolveHudAppearance(owned,options),presentation=options.presentation===undefined?null:
+      compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,cameraHud:options.cameraHud===true,cameraHudAppearance:appearance}));
     var settings=exportSettings(presentation?{fps:options.fps,width:960,height:540}:options);
     var durationMs=projects.totalMs(owned);
     var intervals=options.previewTimeMs===undefined?sequenceCount(durationMs,settings.fps,options.streaming===true)-1:0;
@@ -75,7 +75,6 @@
     }else for(var i=0;i<=intervals;i++)times.push(i===intervals?durationMs:Math.min(durationMs,1000*i/fps));
     // Endpoint is explicit. For 5 seconds at 25 fps this is 126 PNGs,
     // representing [0, 40, ..., 4960, 5000] milliseconds.
-    var appearance=resolveHudAppearance(owned,options);
     return Object.freeze({project:owned,fps:fps,width:width,height:height,
       durationMs:durationMs,streaming:options.streaming===true,cameraHud:!!(options&&options.cameraHud===true),
       cameraHudAppearance:appearance,
@@ -213,8 +212,8 @@
     var time=p.timesMs[index],frame=compositor.frameAt(p.presentation,time),images={},renderStats={};
     for(var side of frame.sides){
       if(cancel&&cancel.cancelled)return null;
-      var image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time});
-      prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,p.cameraHud,p.cameraHudAppearance,p.targetIndicator,p.targetSelection);
+      var image=await render(frame.sample,side,{width:frame.viewSize.width,height:frame.viewSize.height,index:index,timeMs:time,showCaptions:false});
+      prepareCanvas(image,frame.viewSize.width,frame.viewSize.height,false,p.cameraHudAppearance,p.targetIndicator,p.targetSelection);
       images[side]=Object.assign({},image,{timeMs:time});
       if(image.metrics){var m=image.metrics,t=m.timings||{};renderStats[side]={opticsMs:Number.isFinite(t.opticsMs)?t.opticsMs:null,
         unresolved:Number.isFinite(m.unresolved)?m.unresolved:null,fillUnresolved:Number.isFinite(m.fillUnresolved)?m.fillUnresolved:null,
@@ -293,7 +292,7 @@
       frameCount:frames.length,frames:frames};
     if(p.presentation){
       manifest.presentation={referenceLayout:p.presentation.referenceLayout,layoutMode:p.presentation.layoutMode,
-        showNarrative:p.presentation.showNarrative,modelSides:p.sides.slice(),preview:p.previewTimeMs!==undefined,
+        showNarrative:p.presentation.showNarrative,cameraHudPlacement:p.cameraHud?'external':'none',modelSides:p.sides.slice(),preview:p.previewTimeMs!==undefined,
         referenceImages:p.referenceImages.map(function(r){var meta=Object.assign({},r);delete meta.thumbnail;
           meta.original={width:r.original.width,height:r.original.height};return meta;})};
     }

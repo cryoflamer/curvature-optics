@@ -160,6 +160,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/ui/modern/ModernExperimentState.js',
             'src/ui/modern/ModernExperimentFingerprint.js',
             'src/ui/modern/ModernCameraHud.js',
+            'src/geometry/CurvatureSurfaceGeometry.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
             'src/camera/ModernCameraInterpolator.js',
             'src/animation/ModernAnimationCompatibility.js',
             'src/animation/ModernAnimationContract.js',
@@ -187,21 +190,26 @@ class ModernBrowserSmoke(unittest.TestCase):
             const photo = api.observation({version:1,id:'photo',title:'Synthetic test raster',
                 original:{dataUrl,width:300,height:400}}, image);
             const results = [];
-            for (const referenceLayout of ['side', 'below', 'hidden']) {
-                const plan = api.plan(project, {width:1280,referenceLayout,layoutMode:'fixed'});
+            for (const cameraHud of [false,true]) for (const referenceLayout of ['side', 'below', 'hidden']) {
+                const plan = api.plan(project, {width:1280,referenceLayout,layoutMode:'fixed',cameraHud,cameraHudAppearance:{size:125,position:'top-left',opacity:90}});
                 for (const time of [0, plan.times[1].arrivalMs]) {
                     const f = api.frameAt(plan,time), views = {};
                     for (const side of f.sides) {
                         const canvas = new OffscreenCanvas(f.viewSize.width,f.viewSize.height), c=canvas.getContext('2d');
                         c.fillStyle = side==='A'?'#ff0000':'#0000ff'; c.fillRect(0,0,canvas.width,canvas.height);
-                        views[side]={canvas,quality:'accurate',timeMs:time,cameraModel:{showModel:f.expected[side].showModel}};
+                        views[side]={canvas,quality:'accurate',timeMs:time,cameraModel:{showModel:f.expected[side].showModel,Height:8,CameraEast:-45,CameraNorth:496,Pan:0.5,Nick:side==='A'?0:0.1,Roll:0,camViewAngle:0.1,deviceRatio:16/9,viewcenterHorizon:3,rEarth:6371000,rFEarth:10000000}};
                     }
                     const out=new OffscreenCanvas(f.width,f.height), painted=api.paint(out,f,views,f.referenceId?photo:null);
                     const pixel=(x,y)=>Array.from(out.getContext('2d').getImageData(Math.floor(x),Math.floor(y),1,1).data);
                     for (const side of f.sides) {
                         const v=f.panels[side].viewport;
                         results.push({kind:side,pixel:pixel(v.x+v.width/2,v.y+v.height/2)});
+                        if(cameraHud){
+                            const data=out.getContext('2d').getImageData(v.x,v.y,v.width,v.height).data;
+                            for(let j=0;j<data.length;j+=4){if(data[j]!== (side==='A'?255:0)||data[j+1]!==0||data[j+2]!== (side==='B'?255:0)||data[j+3]!==255)throw Error('Metadata covered a physical pixel');}
+                        }
                     }
+                    if(cameraHud){const h=f.cameraHud;results.push({kind:'hud',pixel:pixel(h.x+1,h.y+1)});}
                     if(f.referenceId){const r=api.contain(f.photoBox,300,400);
                         results.push({kind:'photo top',pixel:pixel(r.x+r.width/2,r.y+r.height/8)});
                         results.push({kind:'photo bottom',pixel:pixel(r.x+r.width/2,r.y+r.height*.75)});
@@ -215,8 +223,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""", project)
         colors = {'A': [255, 0, 0, 255], 'B': [0, 0, 255, 255],
                   'photo top': [255, 0, 255, 255], 'photo bottom': [0, 255, 0, 255],
-                  'blank': [255, 255, 255, 255]}
-        self.assertEqual(len(result), 18)
+                  'blank': [255, 255, 255, 255], 'hud': [232, 239, 245, 255]}
+        self.assertEqual(len(result), 42)
         for item in result:
             self.assertEqual(item['pixel'], colors[item['kind']], item)
 
@@ -373,7 +381,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                         presentation:{referenceLayout:'side'},referenceImages:[original]});}catch(e){limit=e.message;}
                     if(!limit?.includes('1479 requested; maximum 751'))throw Error('Unexpected sequence limit: '+limit);
                     const done=await controller.start({project,width:1280,height:720,fps:25,workerCount:1,
-                        presentation:{referenceLayout:'side',layoutMode:'fixed'},referenceImages:[original],previewTimeMs});
+                        presentation:{referenceLayout:'side',layoutMode:'fixed'},referenceImages:[original],previewTimeMs,cameraHud:true});
+                    if(done.manifest.presentation.cameraHudPlacement!=='external'||done.manifest.frames[0].warnings.some(w=>w.startsWith('camera')))throw Error('Presentation HUD: '+JSON.stringify(done.manifest.frames[0].warnings));
                     const image=await createImageBitmap(done.previewBlob),canvas=new OffscreenCanvas(image.width,image.height),ctx=canvas.getContext('2d');
                     ctx.drawImage(image,0,0);
                     const pixels=ctx.getImageData(0,0,image.width,image.height).data;
@@ -391,7 +400,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const chunks=[],sink={closed:false,aborted:false,async write(part){chunks.push(part.slice());},
                     async close(){this.closed=true;},async abort(){this.aborted=true;}};
                 const stream=await controller.start({project:short,width:1280,height:720,fps:5,workerCount:2,
-                    presentation:{referenceLayout:'side'},referenceImages:[original],sink});
+                    presentation:{referenceLayout:'side'},referenceImages:[original],sink,cameraHud:true});
                 const zip=new Blob(chunks,{type:'application/zip'}),data=await new Promise(resolve=>{
                     const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(zip);
                 });
@@ -426,6 +435,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                                                 'frames/frame_00001_presentation.png', 'manifest.json'])
             manifest = json.loads(archive.read('manifest.json'))
             self.assertEqual(manifest, stream['manifest'])
+            self.assertEqual(manifest['presentation']['cameraHudPlacement'], 'external')
             self.assertEqual([f['timeMs'] for f in manifest['frames']], [0, 200])
             self.assertEqual(manifest['frames'][0]['referenceId'], 'photo')
             self.assertEqual(manifest['frames'][1]['referenceId'], None)

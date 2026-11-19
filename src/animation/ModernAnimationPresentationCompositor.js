@@ -3,15 +3,17 @@
  * pixels are copied 1:1. Observation decoding belongs to the caller. */
 (function(root,factory){
   var projects=root.CurvatureModernAnimationProject,presentation=root.CurvatureModernAnimationPresentation,
-    references=root.CurvatureModernReferenceImage;
+    references=root.CurvatureModernReferenceImage,telemetry=root.CurvatureModernCameraTelemetry,
+    hud=root.CurvatureModernCameraHud;
   if(typeof module==='object'&&module.exports){
     projects=require('./ModernAnimationProject');presentation=require('./ModernAnimationPresentation');
-    references=require('./ModernReferenceImage');
+    references=require('./ModernReferenceImage');telemetry=require('../camera/ModernCameraTelemetry');
+    hud=require('../ui/modern/ModernCameraHud');
   }
-  var api=factory(projects,presentation,references);
+  var api=factory(projects,presentation,references,telemetry,hud);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationPresentationCompositor=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,presentation,references){
+}(typeof globalThis!=='undefined'?globalThis:this,function(projects,presentation,references,telemetry,hud){
   'use strict';
   function rect(x,y,width,height){return Object.freeze({x:x,y:y,width:width,height:height});}
   function choice(value,allowed,fallback){
@@ -30,6 +32,9 @@
       referenceLayout:choice(options.referenceLayout,['side','below','hidden'],'side'),
       layoutMode:choice(options.layoutMode,['fixed','dynamic'],'fixed'),
       showNarrative:choice(options.showNarrative,[true,false],true),
+      cameraHud:choice(options.cameraHud,[true,false],false),
+      cameraHudSize:options.cameraHud===true?(options.cameraHudAppearance===undefined?100:hud.validateAppearance(options.cameraHudAppearance).size):100,
+      hasSceneCaption:!!((p.baseExperiment.scene.title&&p.baseExperiment.scene.title!==p.name)||p.baseExperiment.scene.description),
       hasReferences:times.some(function(t){return !!t.referenceImageIds.length;}),
       hasNarrative:times.some(function(t){return !!(t.description||t.narrativeTitle);})});
   }
@@ -48,7 +53,14 @@
     var reserve=p.referenceLayout!=='hidden'&&p.hasReferences&&(p.layoutMode==='fixed'||r.reserve);
     var s=p.width/1280,px=function(n){return Math.round(n*s);};
     var pad=px(14),gap=px(10),label=px(26),header=px(66),footer=px(30),
-      narrativeHeight=p.showNarrative&&p.hasNarrative?px(112):0;
+      narrativeHeight=p.showNarrative&&p.hasNarrative?px(112):0,
+      sceneHeight=p.hasSceneCaption?px(64):0,
+      hudFont=px(14*p.cameraHudSize/100),
+      // Below uses the wide model columns for a compact first row, retaining
+      // enough room for the original and all four provenance fields at HD.
+      hudCompact=reserve&&p.referenceLayout==='below',
+      hudHeight=p.cameraHud?px(12)+(hudCompact?4:5)*Math.ceil(hudFont*1.22)+px(6):0,
+      metadataHeight=sceneHeight+hudHeight;
     var body=rect(pad,header,p.width-2*pad,p.height-header-footer-narrativeHeight-gap),
       models=body,photo=null,photoBox=null,photoText=null;
     if(reserve&&p.referenceLayout==='side'){
@@ -58,7 +70,9 @@
       photoText=rect(photo.x+gap,photo.y+photo.height-px(88),photo.width-2*gap,px(82));
       photoBox=rect(photo.x+gap,photo.y+label,photo.width-2*gap,photo.height-label-px(88)-gap);
     }else if(reserve){
-      var h=Math.floor((body.height-gap)*0.38);
+      // Preserve the reference allocation unless the metadata and minimum
+      // physical raster cannot coexist. Never cover a physical pixel with text.
+      var h=Math.min(Math.floor((body.height-gap)*0.38),body.height-gap-label-metadataHeight-180);
       photo=rect(body.x,body.y+body.height-h,body.width,h);
       models=rect(body.x,body.y,body.width,body.height-h-gap);
       var bw=Math.floor((photo.width-gap)*0.55);
@@ -67,13 +81,18 @@
     }
     var paneWidth=Math.floor((models.width-gap*(p.sides.length-1))/p.sides.length),
       // Exact 16:9 integer backing pixels, within existing physical export limits.
-      units=Math.floor(Math.min(paneWidth/16,(models.height-label)/9,120)),
+      units=Math.floor(Math.min(paneWidth/16,(models.height-label-metadataHeight)/9,120)),
       vw=units*16,vh=units*9;
     if(vw<320||vh<180)throw RangeError('Presentation leaves insufficient physical viewport space');
+    var spare=models.height-label-vh;
+    var oldOffset=Math.floor(spare/2),offset=Math.max(sceneHeight,Math.min(oldOffset,spare-hudHeight));
+    var modelWidth=paneWidth*p.sides.length+gap*(p.sides.length-1),
+      sceneCaption=sceneHeight?rect(models.x,models.y+label,modelWidth,sceneHeight):null,
+      cameraHud=hudHeight?rect(models.x,models.y+label+offset+vh,modelWidth,hudHeight):null;
     var panels={};p.sides.forEach(function(side,j){
       var panel=rect(models.x+j*(paneWidth+gap),models.y,paneWidth,models.height);
       panels[side]=Object.freeze({panel:panel,viewport:rect(panel.x+Math.floor((paneWidth-vw)/2),
-        panel.y+label+Math.floor((panel.height-label-vh)/2),vw,vh)});
+        panel.y+label+offset,vw,vh)});
     });
     var t=p.times[i],caption=p.showNarrative?presentation.narrativeAt(p.times,timeMs):null,
       sample=projects.sampleAt(p.project,timeMs),expected={};
@@ -84,6 +103,8 @@
     });
     return Object.freeze({width:p.width,height:p.height,title:p.project.name,timeMs:timeMs,durationMs:p.durationMs,
       chapter:(i+1)+' / '+p.times.length+' · '+(t.narrativeTitle||t.name),
+      sceneTitle:sample.scene.title,sceneDescription:sample.scene.description,
+      sceneCaption:sceneCaption,cameraHud:cameraHud,hudFont:hudFont,hudCompact:hudCompact,
       sample:sample,expected:Object.freeze(expected),sides:p.sides,viewSize:Object.freeze({width:vw,height:vh}),panels:Object.freeze(panels),
       referenceId:reserve&&r.ids.length?r.ids[0]:null,referenceCount:reserve?r.ids.length:0,
       photo:photo,photoBox:photoBox,photoText:photoText,caption:caption?Object.freeze(caption):null,
@@ -128,6 +149,18 @@
     }
     lines.forEach(function(t,i){ctx.fillText(t,box.x,box.y+i*lineHeight);});
   }
+  var fields=[['Height','heightMeters','height'],['Origin','distanceFromOriginMeters','distance'],
+    ['East','eastMeters','east'],['North','northMeters','north'],['Heading','headingDegrees','heading'],
+    ['Pitch','pitchDegrees','pitch'],['Roll','rollDegrees','roll'],['FOV','fovDegrees','fov']];
+  function cameraData(frame,sources){
+    if(!frame.cameraHud)return [];
+    var samples=sources.map(function(v){return telemetry.measure(v.cameraModel);});
+    var shared=samples.length===2&&fields.every(function(f){return samples[0][f[1]]===samples[1][f[1]];});
+    return (shared?[samples[0]]:samples).map(function(sample,i){
+      return {label:shared?'Camera · A / B':frame.sides.length===2?'Camera · '+frame.sides[i]:'Camera',
+        values:telemetry.format(sample)};
+    });
+  }
   function clock(ms){return (ms/1000).toFixed(2)+' s';}
   function paint(target,frame,images,photo){
     if(!target||target.width!==frame.width||target.height!==frame.height||typeof target.getContext!=='function')
@@ -140,6 +173,7 @@
         (photo.image.naturalHeight===undefined?photo.image.height:photo.image.naturalHeight)!==photo.height)
         throw RangeError('Missing or mismatched presentation original: '+frame.referenceId);
     }else if(photo)throw RangeError('Unexpected presentation original outside its reference interval');
+    var cameras=cameraData(frame,sources);
     var ctx=target.getContext('2d');if(!ctx)throw Error('Canvas 2D presentation unavailable');
     var s=frame.scale,pad=frame.pad,fs=function(n){return Math.round(n*s);},warnings=[];
     function block(text,b,size,weight,key){textBlock(ctx,text,b,fs(size),weight,'#192e43',warnings,key);}
@@ -157,6 +191,29 @@
           rect(b.panel.x+fs(6),b.panel.y+fs(3),b.panel.width-fs(12),frame.labelHeight-fs(3)),16,'600','model');
         ctx.imageSmoothingEnabled=false;ctx.drawImage(v.canvas,b.viewport.x,b.viewport.y);
       });
+      if(frame.sceneCaption){
+        var caption=frame.sceneCaption,hasTitle=frame.sceneTitle&&frame.sceneTitle!==frame.title;
+        fill(caption,'#ffffff');
+        if(hasTitle)block(frame.sceneTitle,rect(caption.x+fs(6),caption.y+fs(4),caption.width-fs(12),fs(22)),16,'600','scene title');
+        if(frame.sceneDescription){var dy=hasTitle?fs(27):fs(4);
+          block(frame.sceneDescription,rect(caption.x+fs(6),caption.y+dy,caption.width-fs(12),caption.height-dy),14,'400','scene description');}
+      }
+      if(frame.cameraHud){
+        var area=frame.cameraHud;
+        cameras.forEach(function(camera,i){
+          var box=cameras.length===1?area:rect(frame.panels[frame.sides[i]].panel.x,area.y,frame.panels[frame.sides[i]].panel.width,area.height);
+          fill(box,'#e8eff5');
+          var font=frame.hudFont,step=Math.ceil(font*1.22),inset=fs(6),col=Math.floor((box.width-3*inset)/2);
+          function hudText(t,x,y,w,weight,key){textBlock(ctx,t,rect(x,y,w,step),font,weight,'#192e43',warnings,key);}
+          var firstCol=Math.floor((box.width-4*inset)/3);
+          hudText(camera.label,box.x+inset,box.y+inset,frame.hudCompact?firstCol:box.width-2*inset,'600','camera heading');
+          fields.forEach(function(f,j){
+            var first=frame.hudCompact&&j<2,x=first?box.x+inset+(j+1)*(firstCol+inset):box.x+inset+(j%2)*(col+inset),
+              y=box.y+inset+(frame.hudCompact?Math.floor(j/2):1+Math.floor(j/2))*step;
+            hudText(f[0]+' '+camera.values[f[2]],x,y,first?firstCol:col,'400','camera '+f[2]);
+          });
+        });
+      }
       if(frame.photo){
         fill(frame.photo,'#ffffff');fill(rect(frame.photo.x,frame.photo.y,frame.photo.width,frame.labelHeight),'#dce8f2');
         block('Reference · real observation'+(frame.referenceCount>1?' · 1 / '+frame.referenceCount:''),rect(frame.photo.x+fs(6),frame.photo.y+fs(3),frame.photo.width-fs(12),frame.labelHeight-fs(3)),16,'600','reference label');

@@ -15,7 +15,7 @@ test('presentation preview samples exact timestamp, uses both physical views and
  const p=png.plan(project,opts),f=compositor.frameAt(p.presentation,0);assert.deepEqual(p.timesMs,[0]);assert.deepEqual(png.outputSides(p),['presentation']);assert.equal(p.sides.length,2);
  const output=canvas(1280,720),seen=[];const photo={width:1,height:1};
  const frame=await png.renderTimestamp(p,0,async(sample,side,d)=>{seen.push({sample,side,d});return {canvas:canvas(d.width,d.height),quality:'accurate',cameraModel:{showModel:f.expected[side].showModel},metrics:{opticalQuality:'accurate'}};},null,{canvas:()=>output,observation:async r=>compositor.observation(r,photo)});
- assert.equal(seen.length,2);assert.deepEqual(seen[0].sample,f.sample);assert.equal(seen[0].d.width,f.viewSize.width);assert.equal(output.calls.length,3);assert.equal(output.calls[2][0],photo);
+ assert.equal(seen.length,2);assert.deepEqual(seen[0].sample,f.sample);assert.equal(seen[0].d.width,f.viewSize.width);assert.equal(seen[0].d.showCaptions,false);assert.equal(output.calls.length,3);assert.equal(output.calls[2][0],photo);
  assert.equal(frame.row.referenceId,'observe');assert.equal(frame.entries[0].name,'frames/frame_00000_presentation.png');
  const result=png.assemble(p,[frame]);assert.equal(result.previewBlob.type,'image/png');assert.equal(result.manifest.endpointIncluded,false);assert.equal(result.manifest.presentation.referenceImages[0].cameraMetadata.cameraHeightM.uncertainty,1);assert.equal(result.manifest.presentation.referenceImages[0].original.dataUrl,undefined);assert.equal(result.manifest.project.keyframes[0].description,'Actual observation');
  assert.throws(()=>png.assemble(p,[{...frame,row:{...frame.row,referenceId:null}}]),/metadata/);
@@ -26,4 +26,17 @@ test('asset identity is exact; hidden layout needs no originals and sequence cap
  const p=png.plan(project,{presentation:{referenceLayout:'hidden'},width:3840,height:2160,fps:5});assert.equal(p.width,3840);assert.equal(p.timesMs.at(-1),p.durationMs);assert.deepEqual(p.referenceImages,[]);
  assert.throws(()=>png.plan(project,{presentation:{referenceLayout:'hidden'},width:1280,height:720,referenceImages:[record],fps:5}),/linked IDs/);
  assert.throws(()=>png.plan(project,{width:960,height:540,previewTimeMs:0}),/Preview requires/);
+});
+
+test('presentation HUD is composed externally, not burned into physical canvases',async()=>{
+ const {project,record}=fixture(),p=png.plan(project,{presentation:{},referenceImages:[record],width:1920,height:1080,previewTimeMs:0,cameraHud:true});
+ const f=compositor.frameAt(p.presentation,0),out=canvas(p.width,p.height),photo={width:1,height:1},seen=[];
+ const frame=await png.renderTimestamp(p,0,async(sample,side,d)=>{
+   const c=canvas(d.width,d.height);seen.push({c,d});
+   // Physical Canvas lacks strokeText; an accidental legacy HUD burn-in would throw.
+   return {canvas:c,quality:'accurate',cameraModel:{showModel:f.expected[side].showModel,Height:8,CameraEast:0,CameraNorth:0,
+     Pan:0,Nick:0,Roll:0,camViewAngle:0.1,deviceRatio:16/9,viewcenterHorizon:3,rEarth:6371000,rFEarth:10000000}};
+ },null,{canvas:()=>out,observation:async r=>compositor.observation(r,photo)});
+ assert.ok(seen.every(x=>x.d.showCaptions===false));assert.equal(out.calls.length,3);
+ assert.equal(png.assemble(p,[frame]).manifest.presentation.cameraHudPlacement,'external');
 });

@@ -1,3 +1,41 @@
+## Modern Demo Catalog — External Presentation Metadata (7D.2.2.3A)
+
+The user accepted the corrected Soundly Full presentation PNG at 28.20 s.
+Full presentation now requests caption-free physical rasters, preserving the
+camera frame, grid, target indicator and physical horizon/eye-level guides.
+The offline compositor paints the experiment title and scene description once
+outside the rasters, separately from the project title and chapter narrative.
+When Include camera HUD in PNGs is enabled, the compositor measures each actual
+rendered camera model through ModernCameraTelemetry. A/B share one telemetry
+block only when all eight displayed physical values are equal; otherwise the
+blocks are individually labelled. HUD font size scales with output resolution
+(21 px at 1920×1080 and default size), not the model raster. Size remains
+configurable; opacity and corner position are simulation-overlay settings and
+do not affect the fixed-contrast external panel. The manifest records
+cameraHudPlacement; existing simulation-only PNG/video HUD paths are unchanged.
+
+The Side/Fixed Soundly example retains 624×351 per model at Full HD and uses
+existing whitespace for metadata. Other layouts retain the old raster size
+when there is enough room, otherwise reserve space before raster sizing (minimum
+320×180, exact 16:9; no stretching or changes to authored FOV). Below may also
+reallocate part of the reference row to preserve minimum raster dimensions;
+its compact HUD heading shares a row with Height and Origin, retaining room
+for photo provenance. No new layout option or project schema change. Fixed
+geometry is stable across reference and narrative transitions; Dynamic may resize.
+Page, renderer and archive Worker cache keys were refreshed together.
+
+Tests cover HD–4K, Scene/Compare, all reference layouts and fixed/dynamic modes,
+metadata/raster non-overlap, identical and distinct cameras, HUD off, caption
+suppression, and pixel-exact composition in Chromium with HUD on/off. Real
+Chromium render/archive workers also export the edited Soundly copy and a short
+streamed sequence with the new HUD. Full presentation video is not yet wired.
+
+**Resume:** inspect the user’s 28.20 s Full presentation PNG with camera HUD on,
+then 7D.2.2.3B (layout optimization and horizontal/vertical comparison),
+7D.2.2.3C (physical guide label legibility and multi-resolution acceptance),
+7D.2.3 Presentation Video, 7E, 8A–8E and 9A–9C. Native direct disk export in
+Opera still needs acceptance. Do not change physics, RK4 or authored FOV.
+
 ## Modern Demo Catalog — Presentation Export Projection Fix (7D.2.2.2.1)
 
 Full presentation export initially creates each Worker graph at 320×180 and
