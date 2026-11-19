@@ -28,7 +28,7 @@ importScripts(
   '../scene/CurvatureIndependentComposition.js',
   '../geometry/CurvatureEarClip.js',
   '../renderers/CurvatureFrameRenderer.js',
-  '../renderers/CurvatureScreenSpaceGuides.js',
+  '../renderers/CurvatureScreenSpaceGuides.js?projection-fix=1',
   '../scene/CurvatureFullSceneDecorations.js',
   '../optics/OpticalRayTracer.js',
   '../optics/OpticalRayHorizon.js',
@@ -50,7 +50,7 @@ importScripts(
   'ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1',
   '../app/CurvaturePhysicalCurvature.js',
   '../renderers/CurvatureAtmosphericVisibility.js',
-  '../app/CurvatureMainCanvasRenderer.js',
+  '../app/CurvatureMainCanvasRenderer.js?projection-fix=1',
   '../ui/modern/ModernSceneState.js',
   '../ui/modern/ModernCompareState.js',
   '../ui/modern/ModernExperimentState.js',
@@ -59,7 +59,7 @@ importScripts(
   'ModernAnimationCompatibility.js',
   'ModernAnimationContract.js',
   'ModernAnimationProject.js?project-fields=reference-narrative-1',
-  'ModernAnimationPreview.js',
+  'ModernAnimationPreview.js?projection-fix=1',
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
   'ModernAnimationPresentationCompositor.js',
@@ -89,7 +89,15 @@ function createGraph(canvas){
   graph.CanvasWidth=canvas.width;
   graph.CanvasHeight=canvas.height;
   graph.AutoScalePix=true; // Same as the Animation preview graph.
-  graph.UpdateCanvasSize=function(){}; // Fixed backing dimensions for the export.
+  graph.UpdateCanvasSize=function(){
+    // OffscreenCanvas has no DOM container. Presentation viewports may change
+    // between timestamps, so keep the graph's pixel transforms in sync.
+    this.CanvasWidth=this.Canvas.width;
+    this.CanvasHeight=this.Canvas.height;
+    this.UpdateCanvasTrans();
+    this.UpdateGraphClipOuterRange();
+  };
+  graph.UpdateCanvasSize();
   // The independent painter clips its own world-frame primitives. Legacy
   // GraphX3DX SetClipping draws via a DOM text handler and is not used here.
   graph.SetClipping=function(){};

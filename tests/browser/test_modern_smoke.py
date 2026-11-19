@@ -220,6 +220,96 @@ class ModernBrowserSmoke(unittest.TestCase):
         for item in result:
             self.assertEqual(item['pixel'], colors[item['kind']], item)
 
+    def test_animation_worker_projection_pixels_after_resize(self):
+        # Exercise the real Worker graph, optical painter and encoded pixels.
+        # Use a simple vacuum scene to isolate projection from refraction.
+        self.page.set_content('<!doctype html><html><body></body></html>')
+        modules = {'ModernExperimentState.js', 'ModernExperimentFingerprint.js',
+                   'ModernCameraHud.js', 'ModernCameraInterpolator.js', 'ModernCameraTelemetry.js',
+                   'ModernCameraSequence.js', 'ModernSemanticNaming.js', 'ModernExperimentThumbnail.js',
+                   'ModernAnimationCompatibility.js', 'ModernAnimationContract.js', 'ModernAnimationProject.js',
+                   'ModernAnimationAtmosphereVariant.js', 'ModernReferenceImage.js', 'ModernReferenceImageLibrary.js',
+                   'ModernAnimationSequences.js', 'ModernAnimationStudio.js', 'ModernAnimationLibrary.js',
+                   'ModernDemoCatalogData.js', 'ModernDemoCatalog.js'}
+        html = (ROOT / 'CurvatureModern.html').read_text(encoding='utf-8')
+        for src in re.findall(r'<script src="([^"?]+)(?:\?[^"\n]*)?"', html):
+            if Path(src).name in modules:
+                self.page.add_script_tag(content=(ROOT / src).read_text(encoding='utf-8'))
+                modules.remove(Path(src).name)
+        self.assertEqual(modules, set())
+        path = ROOT / 'src/animation/ModernAnimationFrameWorker.js'
+        source = path.read_text(encoding='utf-8')
+        block = re.search(r'importScripts\((.*?)\);', source, re.S)
+        dependencies = [(path.parent / item.split('?')[0]).resolve().read_text(encoding='utf-8')
+                        for item in re.findall(r"'([^']+)'", block.group(1))]
+        result = self.page.evaluate(r"""async spec => {
+            const project=CurvatureModernDemoCatalog.load().find(d=>d.id==='soundly').project;
+            const urls=[];
+            function blobUrl(text){const url=URL.createObjectURL(new Blob([text],{type:'text/javascript'}));urls.push(url);return url;}
+            const source=spec.source.replace(/importScripts\([\s\S]*?\);/,
+                'importScripts('+spec.dependencies.map(blobUrl).map(JSON.stringify).join(',')+');');
+            const probe=`self.onmessage=async ({data:project})=>{try{
+                const session=setup({project,width:1280,height:720,fps:25,previewTimeMs:28200,
+                    presentation:{referenceLayout:'hidden'}});
+                const sample=JSON.parse(JSON.stringify(CurvatureModernAnimationProject.sampleAt(project,28200)));
+                sample.display.horizon=true;sample.display.eyeLevel=true;
+                sample.scene.camera.Roll=0;sample.scene.camera.Nick=0;
+                sample.scene.camera.viewcenterHorizon=3;
+                sample.scene.atmosphere='vacuum';
+                sample.compare.A.surface='globe';sample.compare.A.atmosphere='vacuum';
+                sample.compare.B.surface='globe';sample.compare.B.atmosphere='vacuum';
+                // Reduce the object count only in this projection test.
+                sample.scene.objects.NObjects=[1,0];sample.scene.showGrid=false;
+                const rows=[];
+                for(const mode of ['compare','scene']){
+                    sample.display.mode=mode;
+                    sample.scene.surface.showModel=1;
+                    for(const [width,height] of [[416,234],[960,540],[640,360]]){
+                        for(const side of mode==='compare'?['A','B']:['A']){
+                            const frame=session.render(sample,side,{width,height});
+                            const camera=frame.metrics.projectionCamera,model=frame.cameraModel;
+                            const p=CurvatureRayHorizon.diagnose({geometry:'globe',radius:model.rEarth,
+                                observerHeight:model.Height,atmosphere:'vacuum'});
+                            if(p.status!=='resolved')throw Error('Expected resolved vacuum horizon');
+                            const pan=model.Pan*Math.PI/180,angle=p.angleDegrees*Math.PI/180;
+                            const forward=[Math.sin(pan)*Math.cos(angle),Math.cos(pan)*Math.cos(angle),Math.sin(angle)];
+                            const nearPoint=forward.map(v=>v*1000),farPoint=forward.map(v=>v*2000);
+                            const reference=CurvaturePerspectivePreview.project({primitives:[{type:'line',points:[nearPoint,farPoint]}]},camera,width,height);
+                            const segment=reference.segments[0];
+                            if(!segment)throw Error('Reference outside viewport');
+                            const y=segment.points?segment.points[0][1]:segment.a[1];
+                            const image=await createImageBitmap(await frame.canvas.convertToBlob());
+                            const decoded=new OffscreenCanvas(width,height),ctx=decoded.getContext('2d');
+                            ctx.drawImage(image,0,0);image.close();
+                            const pixels=ctx.getImageData(0,0,width,height).data;
+                            let best={count:0,y:-1};
+                            for(let row=0;row<height;row++){
+                                let count=0;
+                                for(let x=40;x<width-10;x++){
+                                    const i=(row*width+x)*4;
+                                    if(pixels[i]>150&&pixels[i+1]>50&&pixels[i+1]<180&&pixels[i+2]<90)count++;
+                                }
+                                if(count>best.count)best={count,y:row};
+                            }
+                            rows.push({mode,side,width,height,y,painted:best.y,count:best.count,
+                                center:camera.pixelTransform.offsetX,scale:camera.pixelTransform.scaleY});
+                        }
+                    }
+                }
+                self.postMessage({rows});
+            }catch(e){self.postMessage({error:String(e.stack||e)});}};`;
+            const worker=new Worker(blobUrl(source+probe));
+            try{return await new Promise((resolve,reject)=>{
+                worker.onmessage=e=>e.data.error?reject(Error(e.data.error)):resolve(e.data.rows);
+                worker.onerror=e=>reject(Error(e.message));worker.postMessage(project);
+            });}finally{worker.terminate();urls.forEach(u=>URL.revokeObjectURL(u));}
+        }""", {"source": source, "dependencies": dependencies})
+        self.assertEqual(len(result), 9)
+        for row in result:
+            self.assertAlmostEqual(row['center'], row['width']/2, delta=1, msg=str(row))
+            self.assertGreater(row['count'], row['width']*0.15, row)
+            self.assertAlmostEqual(row['painted'], row['y'], delta=2, msg=str(row))
+
     def test_presentation_png_workers_with_original(self):
         # Production controller, Studio save/reopen and both real worker sources.
         # Blob URLs substitute only script transport, not the initialization or

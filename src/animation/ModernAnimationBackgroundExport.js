@@ -27,7 +27,7 @@
   function create(settings){
     settings=settings||{};
     var WorkerCtor=settings.WorkerCtor;
-    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1';
+    var workerUrl=settings.workerUrl||'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1&projection-fix=1';
     var archiveUrl=settings.archiveUrl||'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1';
     var active=null;
     function isBusy(){return !!active;}

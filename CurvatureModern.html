@@ -32,7 +32,7 @@
 <script src="src/geometry/CurvatureEarClip.js"></script>
 <script src="src/renderers/CurvatureWebGLGeometryRenderer.js?v=140.2"></script>
 <script src="src/renderers/CurvatureFrameRenderer.js?v=140.2"></script>
-<script src="src/renderers/CurvatureScreenSpaceGuides.js?v=grid-42"></script>
+<script src="src/renderers/CurvatureScreenSpaceGuides.js?v=grid-42&amp;projection-fix=1"></script>
 <script src="src/scene/CurvatureFullSceneDecorations.js?v=metric-grid-40-adaptive-41-ui-captions-48"></script>
 <script src="src/optics/OpticalRayTracer.js?v=140.12.99"></script>
 <script src="src/optics/OpticalRayHorizon.js"></script>
@@ -51,7 +51,7 @@
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/renderers/CurvatureAtmosphericVisibility.js?v=140.12.91"></script>
 <script src="src/renderers/CurvatureCanvasDirectPreview.js"></script>
-<script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;tensas-44=1&amp;soundly-45=1-captions-48"></script>
+<script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;tensas-44=1&amp;soundly-45=1-captions-48&amp;projection-fix=1"></script>
 <script src="src/ui/modern/ModernLocationCatalog.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1"></script>
 <script src="src/ui/modern/ModernSceneState.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1&amp;semantic-captions=49"></script>
 <script src="src/ui/modern/ModernCameraInteraction.js?v=camera-navigation"></script>
@@ -107,18 +107,18 @@
 <script src="src/animation/ModernDemoCatalog.js?storyboard-export=1&amp;atmosphere-export=1&amp;reference-transport=1"></script>
 <script src="src/animation/ModernAnimationLibraryFilters.js"></script>
 <script src="src/animation/ModernAnimationLibraryActions.js?atmosphere-export=1&amp;reference-transport=1"></script>
-<script src="src/animation/ModernAnimationPreview.js?scene-detail=1"></script>
+<script src="src/animation/ModernAnimationPreview.js?scene-detail=1&amp;projection-fix=1"></script>
 <script src="src/animation/ModernAnimationPreviewLifecycle.js?atmosphere-switcher=1&amp;presentation-resize=1"></script>
 <script src="src/animation/ModernAnimationStoryboardExport.js"></script>
 <script src="src/animation/ModernAnimationQualityAudit.js"></script>
 <script src="src/animation/ModernAnimationCanvasHud.js?studio-hud-fix=1&contrast=1"></script>
 <script src="src/animation/ModernAnimationPresentationCompositor.js"></script>
 <script src="src/animation/ModernAnimationFrameExport.js?studio-hud-fix=1&amp;target-indicator=1&amp;spline-parity=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1"></script>
-<script src="src/animation/ModernAnimationBackgroundExport.js?studio-hud-fix=1&amp;target-indicator=1&amp;spline-parity=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1"></script>
+<script src="src/animation/ModernAnimationBackgroundExport.js?studio-hud-fix=1&amp;target-indicator=1&amp;spline-parity=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1&amp;projection-fix=1"></script>
 <script src="src/animation/ModernAnimationCompareComposition.js"></script>
 <script src="src/animation/ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&amp;target-indicator=1&amp;short-endpoint=1"></script>
 <script src="src/animation/ModernAnimationVideoCapabilities.js"></script>
-<script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1&amp;target-indicator=1&amp;spline-parity=1&amp;short-endpoint=1&amp;png-project-fields=1"></script>
+<script src="src/animation/ModernAnimationBackgroundVideoExport.js?studio-hud-fix=1&amp;target-indicator=1&amp;spline-parity=1&amp;short-endpoint=1&amp;png-project-fields=1&amp;projection-fix=1"></script>
 <script src="src/ui/modern/ModernStatusMessage.js?status-messages=2"></script>
 <script src="src/ui/modern/ModernAnimationProjectWizardUI.js"></script>
 <script src="src/ui/modern/ModernAnimationStudioUI.js?status-messages=2&amp;compatible-sequences=1&amp;thumbnail-preview=1&amp;preview-navigation=1&amp;library-card-state=2&amp;stash-restore=1&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;studio-undo-focus=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;png-project-fields=1"></script>
@@ -996,7 +996,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1-captions-47-geometry-summary-50-semantic-49-scene-detail-51&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1-captions-47-geometry-summary-50-semantic-49-scene-detail-51&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1&amp;projection-fix=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" class="modern-status-message" role="status" aria-live="polite">Preparing physical scene…</span></div>

@@ -5,21 +5,21 @@
  */
 (function(root,factory){
   var experiment=root.CurvatureModernExperimentState;
-  var horizon=root.CurvatureRayHorizon,physicalCamera=root.CurvaturePhysicalCamera;
+  var horizon=root.CurvatureRayHorizon,screenGuides=root.CurvatureScreenSpaceGuides;
   var fastField=root.CurvatureOpticalFastRayField,previewLod=root.CurvatureOpticalPreviewLod;
   var effectiveRadius=root.CurvatureOpticalEffectiveRadiusPreview;
   if(typeof module==='object'&&module.exports){
     experiment=require('../ui/modern/ModernExperimentState');
     horizon=require('../optics/OpticalRayHorizon');
-    physicalCamera=require('../app/CurvaturePhysicalCamera');
+    screenGuides=require('../renderers/CurvatureScreenSpaceGuides');
     fastField=require('../optics/OpticalFastRayField');
     previewLod=require('../optics/OpticalPreviewLod');
     effectiveRadius=require('../optics/OpticalEffectiveRadiusPreview');
   }
-  var api=factory(experiment,horizon,physicalCamera,fastField,previewLod,effectiveRadius);
+  var api=factory(experiment,horizon,screenGuides,fastField,previewLod,effectiveRadius);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationPreview=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,physicalCamera,fastField,previewLod,effectiveRadius){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,horizon,screenGuides,fastField,previewLod,effectiveRadius){
   'use strict';
   var OBJECTS=['ObjType','NObjects','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos',
     'ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'];
@@ -34,20 +34,20 @@
     if(choice==='accurate'||(choice==='auto'&&animationMode==='physical'))return 'accurate';
     return fastEligible(spec)?'fast':'accurate';
   }
-  // Same observer-fixed angular projection as the live Modern eye-level guide.
-  // The diagnostic itself comes from the same forward RK4 horizon tracer.
-  function angleY(graph,model,degrees){
-    var canvas=graph.Canvas,aspect=model.deviceRatio,fov=model.camViewAngle;
-    if(!canvas||!(canvas.width>0&&canvas.height>0&&aspect>0&&fov>0))return null;
-    var halfTan=Math.tan(fov/2)/Math.sqrt(1+aspect*aspect);
-    var tilt=model.Nick*Math.PI/180;
-    var aim=model.viewcenterHorizon===3?0:physicalCamera.create(model).aimDip;
-    var relative=degrees*Math.PI/180-(tilt-aim);
-    var y=canvas.height/2-canvas.height*Math.tan(relative)/(2*halfTan);
+  // Project the observer-fixed direction through the exact camera and backing
+  // pixel transform used by the physical painter, not a second FOV formula.
+  function angleY(graph,model,camera,degrees){
+    var canvas=graph.Canvas;
+    if(!camera||!canvas||!(canvas.width>0&&canvas.height>0))return null;
+    var pan=model.Pan*Math.PI/180,angle=degrees*Math.PI/180;
+    var direction=[Math.sin(pan)*Math.cos(angle),Math.cos(pan)*Math.cos(angle),Math.sin(angle)];
+    var point=camera.pos.map(function(v,i){return v+1000*direction[i];});
+    var pixel=screenGuides.projector(camera,canvas.width,canvas.height)(point).pixel;
+    var y=pixel&&pixel[1];
     return Number.isFinite(y)&&y>=0&&y<=canvas.height?y:null;
   }
-  function line(graph,model,degrees,color,label,dashed){
-    var y=angleY(graph,model,degrees);
+  function line(graph,model,camera,degrees,color,label,dashed){
+    var y=angleY(graph,model,camera,degrees);
     if(y===null)return false;
     var canvas=graph.Canvas,ctx=canvas.getContext('2d');
     ctx.save();
@@ -159,14 +159,14 @@
         previewLod:{stride:quality==='fast'||quality==='effective-radius'?detailStride:1},
         cacheSession:sessions[side]||undefined}};
     }
-    function guides(config,side,graph){
+    function guides(config,side,graph,camera){
       var display=config.display,canvas=graph.Canvas;
       // Synthetic graph harnesses do not have a Canvas 2D context.
       if(!canvas||typeof canvas.getContext!=='function'||!canvas.getContext('2d'))
         return {eyeLevel:'unavailable',horizon:'unavailable'};
       var eye='disabled',traced='disabled';
       if(display.eyeLevel){
-        eye=line(graph,config.model,0,{stroke:'#159447',text:'#117b3b'},'Eye level · 0°',false)?
+        eye=line(graph,config.model,camera,0,{stroke:'#159447',text:'#117b3b'},'Eye level · 0°',false)?
           'drawn':'outside view';
       }
       if(display.horizon){
@@ -185,7 +185,7 @@
           var result=horizons[side].result;
           if(result.status!=='resolved')traced=result.status+' (no certified finite tangent)';
           else if(config.model.Roll!==0)traced='omitted for camera roll';
-          else traced=line(graph,config.model,result.angleDegrees,
+          else traced=line(graph,config.model,camera,result.angleDegrees,
             {stroke:'#d48313',text:'#ad640a'},
             'Traced horizon · '+result.angleDegrees.toFixed(4)+'°',true)?
             'drawn · '+result.angleDegrees.toFixed(4)+'°':'outside view';
@@ -196,6 +196,7 @@
     function render(data,side,graph,options){
       if(!graph||!graph.Canvas)throw TypeError('Independent preview Canvas required');
       var config=build(data,side,options);
+      config.options.captureProjection=true;
       if(typeof graph.UpdateCanvasSize==='function')graph.UpdateCanvasSize();
       var key=fastKey(config),reason=null,result;
       if(config.quality==='canvas-direct'){
@@ -230,7 +231,7 @@
         reason=directRejected?'Canvas Direct unavailable: '+error.message:error.message;
         result=renderer.renderPhysical(graph,config.model,config.options);
       }
-      var overlays=guides(config,side,graph);
+      var overlays=guides(config,side,graph,result.projectionCamera);
       return {quality:config.quality,requestedQuality:config.requestedQuality,
         fallback:reason,fallbackCount:fallbackCount,
         overlays:overlays,result:result,cameraModel:config.model};

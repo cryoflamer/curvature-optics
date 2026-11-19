@@ -334,6 +334,8 @@ test('frame Worker actually composes and transfers one synchronized Compare Vide
   }
   class Graph{
     InitInternals(){}
+    UpdateCanvasTrans(){}
+    UpdateGraphClipOuterRange(){}
     SaveAttrs(){}
     SaveDefaultAttrs(){}
   }

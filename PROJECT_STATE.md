@@ -1,3 +1,31 @@
+## Modern Demo Catalog — Presentation Export Projection Fix (7D.2.2.2.1)
+
+Full presentation export initially creates each Worker graph at 320×180 and
+then resizes its OffscreenCanvas to the compositor's per-frame viewport. The
+previous no-op UpdateCanvasSize left GraphX3DX's logical dimensions and window
+transform stale. The physical painter consequently projected into the old
+viewport while the diagnostic angular guides used the new Canvas dimensions.
+Worker graphs now synchronize logical dimensions, Canvas transform and clipping
+ranges before rendering every frame, including subsequent dynamic resizes.
+Animation eye-level and traced-horizon guide rows now use the physical painter's
+captured camera and backing-pixel projection instead of a separate FOV formula.
+The traced-horizon diagnostic remains the existing independent RK4 result;
+rolled-camera suppression and existing diagnostic-line semantics are unchanged.
+HUD and Target indicator already use the output Canvas dimensions and require
+no resize correction. Worker and page cache keys were refreshed together.
+
+Regression coverage includes an exact captured-offset/scale/zoom guide test and
+real Chromium Worker rendering, PNG encoding/decoding and horizon pixel rows
+for 416×234, 960×540 and 640×360 (Scene and both Compare sides, same Worker).
+Disabling Worker resize synchronization reproduces the old viewport-center
+error. No physics, RK4, atmospheric profile, compositor layout, project schema
+or streaming/archive protocol changes.
+
+**Resume:** verify the corrected Full presentation PNG on the edited Soundly
+copy at 28.20 s in Opera; verify native direct-disk sequence export. Then
+7D.2.2.3 Presentation Export Layout Refinement, 7D.2.3 Presentation Video,
+7E, 8A–8E and 9A–9C.
+
 ## Modern Demo Catalog — Streaming PNG Export (7D.2.2.2)
 
 The user verified single-frame Full presentation export at 28.20 s on an

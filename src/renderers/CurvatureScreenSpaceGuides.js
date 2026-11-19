@@ -162,5 +162,5 @@
         thinnedRings:thinnedRings,
         maxSampledPixelDeviation:maxSampledError}};
   }
-  return {simplify:simplify};
+  return {simplify:simplify,projector:projector};
 }));

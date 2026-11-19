@@ -153,6 +153,7 @@
         directStats:{fillCalls:direct.fillCalls,strokeCalls:direct.strokeCalls,
           horizonMasks:direct.horizonMasks,geometryReused:direct.geometryReused,
           metricGrid:direct.metricGrid,captionCount:decoration?decoration.captionCount:0},
+        projectionCamera:options.captureProjection?camera:null,
         decorationCamera:options.deferDecorations?camera:null,
         decorationPhysicalGuides:options.deferDecorations?[]:null,
         warning:'Experimental Canvas Direct: straight rays and local effective radius;'+
@@ -219,6 +220,7 @@
     var paintOnlyMs=painted.timings.totalMs-painted.timings.snapshotMs;
     return {geometryBackend:painted.mode==='gpu-painter'?'WebGL2':'Canvas 2D',
       geometryFallback:painted.gpuFallback||null,
+      projectionCamera:options.captureProjection?camera:null,
       decorationCamera:options.deferDecorations?camera:null,
       decorationPhysicalGuides:options.deferDecorations?opticalFrame.composition.scene.primitives:null,
       interactiveGuidePreview:drawSource.preview,previewGuidePrimitives:drawSource.drawnGuides,

@@ -310,7 +310,7 @@ test('Independent animation overlays draw eye-level and certified traced horizon
     moveTo(){},lineTo(){},stroke(){drawn.push('stroke');},fillText(text){drawn.push(text);}};
   const graph={Canvas:{width:900,height:600,getContext(){return ctx;}}};
   const view=preview.create({Model:FakeModel,renderer:{renderPhysical:(g,m,o)=>{
-    calls.push(o.opticalQuality);return {};}},horizon:{diagnose(args){
+    calls.push(o.opticalQuality);return {projectionCamera:{pos:[0,0,0],center:[0,1000,0],up:[0,0,1],sceneSize:100,screenSize:1,objectZExtend:0,zoom:1}};}},horizon:{diagnose(args){
     calls.push(args);return {status:'resolved',angleDegrees:-.12};
   }}});
   const a=view.render(e,'A',graph,{animationMode:'physical'});
@@ -328,6 +328,31 @@ test('Independent animation overlays draw eye-level and certified traced horizon
   assert.equal(fast.overlays.horizon,'disabled in Fast Preview');
   assert.ok(!drawn.some(s=>s.startsWith('Traced horizon')),'no false horizon in Fast');
   assert.deepEqual(e,before,'rendering never changes saved experiment');
+});
+
+test('Animation guide rows use the actual captured camera offset, scale and zoom',()=>{
+  const e=snapshot();e.display.eyeLevel=true;
+  const rows=[];
+  class FakeModel {Update(){this.camViewAngle=.25;this.rFEarth=6371000;}}
+  const ctx={save(){},restore(){},setTransform(){},setLineDash(){},beginPath(){},
+    moveTo(x,y){rows.push(y);},lineTo(){},stroke(){},fillText(){}};
+  const graph={Canvas:{width:900,height:600,getContext:()=>ctx}};
+  const view=preview.create({Model:FakeModel,renderer:{renderPhysical(g,m,options){
+    assert.equal(options.captureProjection,true);
+    const {width,height}=g.Canvas;
+    return {projectionCamera:{pos:[0,0,0],center:[0,1000,0],up:[0,0,1],
+      sceneSize:1000,screenSize:1,objectZExtend:0,zoom:1.3,
+      pixelTransform:{width,height,scaleX:350,scaleY:-350,offsetX:width/2,offsetY:height/3}}};
+  }},horizon:{diagnose:()=>({status:'resolved',angleDegrees:-.12})}});
+  for(const [width,height] of [[900,600],[416,234],[960,540]]){
+    graph.Canvas.width=width;graph.Canvas.height=height;rows.length=0;
+    const report=view.render(e,'A',graph,{quality:'accurate'});
+    assert.equal(report.overlays.eyeLevel,'drawn');
+    assert.match(report.overlays.horizon,/drawn/);
+    assert.equal(rows.length,2);
+    assert.ok(Math.abs(rows[0]-height/3)<1e-9);
+    assert.ok(Math.abs(rows[1]-(height/3+350*1.3*Math.tan(.12*Math.PI/180)))<1e-9);
+  }
 });
 
 test('Unresolved or outside-view traced horizon is diagnosed without a fabricated stripe',()=>{
