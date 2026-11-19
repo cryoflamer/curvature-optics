@@ -1378,7 +1378,8 @@
         "tests/CameraCalibration.test.js",
         "tests/CameraLandmarkProjection.test.js",
         "tests/CameraPhysicalFit.test.js",
-        "tests/CameraPhysicalPose.test.js"
+        "tests/CameraPhysicalPose.test.js",
+        "tests/ModernCanvasDirectPreview.test.js"
       ],
       "commonJsToolCallers": []
     },

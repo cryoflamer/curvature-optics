@@ -809,8 +809,10 @@
         const basis=t.frame(m.CameraEast||0,m.CameraNorth||0,m.Height,m.showModel===1?1/m.rEarth:0);
         return api.regionGeometry(banks,{owner:owner.owner,primaryIndices:owner.primaryIndices,pixel:seed.pixel,region},source,basis);
       }:null;
-      viewer.openCrop(region,canvas=>cropRenderer.paintCrop(canvas,source.camera,source.model,source.options,source.width,source.height,region),
-        build,build?'':'No visible geometry in this rectangle; Free View unavailable.');
+      viewer.openCrop(region,(canvas,capture=false)=>cropRenderer.paintCrop(canvas,source.camera,source.model,
+        {...source.options,canvasDirectOptions:{...source.options.canvasDirectOptions,capturePicking:capture&&source.model.showModel===1}},
+        source.width,source.height,region),
+        build,build?'':'No visible geometry in this rectangle; Free View unavailable.',source.model.showModel===1);
     }
     pickMode.onchange=()=>{
       cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();

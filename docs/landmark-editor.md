@@ -218,9 +218,12 @@ including the tangent mask, from Canvas Direct. Use physical topology and
 perspective-correct weights; verify Flat continuous embedding within 0.1 source
 pixel. Reject unresolved chord disagreement. Per-primitive inverse only.
 #### 8F.3d.2 — Optical picking UI and visibility
-Resolve candidates with actual painter order, masks and strokes; validate
-nonlinear Flat refinement and round trips; expose optical markers and reuse
-local editing and session persistence without changing fit or correspondences.
+Real-photo landmark authoring uses Globe only (user scope decision). Resolve
+candidates with actual painter order, horizon masks and strokes, not a depth
+oracle. Expose optical markers and reuse local editing and session persistence.
+Flat nonlinear refinement and optical authoring UI are out of scope; existing
+Flat forward/model comparison and inverse diagnostic core remain unchanged.
+No fit or correspondence changes.
 
 ### 8F.4 — Stable anchors and physical projection
 Proposed logical types: Vertex (primitive + vertex), Edge (stable endpoints +

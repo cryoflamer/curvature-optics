@@ -574,6 +574,71 @@
     const distinct=kind==='surface'?candidates.filter((h,i)=>!candidates.slice(0,i).some(q=>Math.hypot(...sub(q.point,h.point))<=1e-7)):candidates;
     return {candidates:distinct,reason:failed?'optical round trip unresolved':'',unresolved:failed,visibility:'primitive-only'};
   }
+  // Globe calibration only. Actual Canvas Direct painter coverage, not a
+  // physical depth oracle. Guides are annotations; the horizon disk is a mask.
+  function opticalFrame(mesh,capture){
+    if(capture?.geometry!=='globe')return null;
+    const items=new Map(mesh.map(e=>[e.item.bank+':'+e.item.index,e]));
+    const entries=capture.paths.filter(p=>(p.alpha??1)>0).map((path,rank)=>{
+      const e=items.get(path.bank+':'+path.index);
+      return {path,rank,bounds:pathBounds(path),entry:e&&opticalEntry(e.item,path,e.order)?e:null};
+    });
+    return {capture,camera:opticalCamera(capture),entries,byOrder:new Map(entries.filter(e=>e.entry).map(e=>[e.entry.order,e]))};
+  }
+  function opticalCoverage(path,p){
+    if(path.fill.length>=3&&containsFill(path.fill,p))return true;
+    const r=(path.strokeWidth||0)/2+1e-6;
+    return path.edges.some(([a,b])=>{
+      const d=sub(b,a),q=sub(p,a),den=dot(d,d),t=den?dot(q,d)/den:-1;
+      return t>=-1e-9&&t<=1+1e-9&&Math.hypot(...sub(q,mul(d,t)))<=r;
+    });
+  }
+  function opticalNearby(frame,p,r=0){
+    return frame.entries.filter(e=>inBounds(e.bounds,p,r+(e.path.strokeWidth||0)/2+1e-6));
+  }
+  function opticalWork(entries){
+    return entries.reduce((n,e)=>n+1+e.path.fill.length+2*e.path.edges.length+(e.path.points?.length||0)+(e.entry?.triangles.length||0),0);
+  }
+  function opticalVisibility(current,p,nearby){
+    if(!opticalCoverage(current.path,p))return 'not painted';
+    for(let i=nearby.length-1;i>=0;i--){
+      const e=nearby[i];
+      if(e.rank<=current.rank)break;
+      if(!opticalCoverage(e.path,p))continue;
+      if((e.path.alpha??1)<1)return 'visibility unresolved';
+      return e.path.role==='occlusion'?'horizon masked':'occluded';
+    }
+    return 'visible';
+  }
+  function opticalMarker(frame,hit){
+    const current=frame?.byOrder.get(hit.order);
+    if(!current)return {visibility:'not painted'};
+    const q=hit.indices.reduce((p,i,j)=>add(p,mul(current.path.points[i],hit.weights[j])),[0,0,0]);
+    const projected=frame.camera.project(q);
+    if(!projected)return {visibility:'out of view'};
+    const p=projected.pixel,{width,height}=frame.capture;
+    if(p[0]<0||p[0]>=width||p[1]<0||p[1]>=height)return {visibility:'out of view'};
+    const nearby=opticalNearby(frame,p);
+    if(nearby.length>2500||opticalWork(nearby)>30000)return {visibility:'visibility unresolved'};
+    return {pixel:p,visibility:opticalVisibility(current,p,nearby)};
+  }
+  function opticalFramePick(frame,pixel,kind,{radius=8}={}){
+    if(!frame)return {candidates:[],reason:'Optical picking is available for Globe only.'};
+    const nearby=opticalNearby(frame,pixel,radius),work=opticalWork(nearby);
+    if(nearby.length>2500||work>30000||kind!=='surface'&&work*work>4000000)
+      return {candidates:[],reason:'Too much overlapping optical geometry; select a smaller region.',blocked:true};
+    const visible=[];let blocked=false;
+    for(const e of nearby){
+      if(!e.entry){if(opticalCoverage(e.path,pixel))blocked=true;continue;}
+      const result=opticalPrimitivePick(frame.capture,e.path,e.entry.item,pixel,kind,{radius,order:e.entry.order});
+      for(const h of result.candidates){
+        if(opticalVisibility(e,h.pixel,nearby)==='visible')visible.push(h);else blocked=true;
+      }
+    }
+    visible.sort((a,b)=>a.distance-b.distance||frame.byOrder.get(b.order).rank-frame.byOrder.get(a.order).rank);
+    return {candidates:kind==='surface'?visible:visible.filter(h=>h.distance<=visible[0].distance+1.5),
+      reason:!visible.length&&blocked?'Point hidden by painter, horizon mask or unresolved coverage.':'',blocked:!visible.length&&blocked};
+  }
   // Window geometry is a UI preference, never experiment or camera state.
   const WINDOW_KEY='curvature-landmark-viewer-window-v1';
   function windowRect(request,width,height){
@@ -628,14 +693,15 @@
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
     const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
       pickChoices=dialog.querySelector('[data-viewer-pick-candidates]'),pickStatus=dialog.querySelector('[data-viewer-pick-status]');
-    let mesh=null,paths=null,pickCache=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null,restoringSession=false;
+    let mesh=null,paths=null,pickCache=null,opticalCache=null,opticalTransform=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null,restoringSession=false;
     function sessionChanged(){if(!restoringSession)onSessionChange();}
     const details=dialog.querySelector('[data-viewer-point-details]'),coords=dialog.querySelector('[data-viewer-point-coords]'),parameters=dialog.querySelector('[data-viewer-point-parameters]'),paramInputs=[...dialog.querySelectorAll('[data-viewer-point-weight]')],confirmButton=dialog.querySelector('[data-viewer-point-confirm]'),cancelButton=dialog.querySelector('[data-viewer-point-cancel]');
     const snaps=[...dialog.querySelectorAll('[data-viewer-point-snap]')];
     function cancelHover(){if(hoverFrame!==null)env.cancelAnimationFrame(hoverFrame);hoverFrame=null;queued=null;hover=null;}
     function clearPick(){cancelHover();staged=null;choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;pickStatus.textContent='';}
-    function clearGeometryPick(){confirmed=null;clearPick();mesh=null;paths=null;pickCache=null;pickMode.value='navigate';syncPoint();}
-    function pickActive(){return !!crop&&free&&pickMode.value!=='navigate';}
+    function clearGeometryPick(){confirmed=null;clearPick();mesh=null;paths=null;pickCache=null;opticalCache=null;opticalTransform=null;pickMode.value='navigate';syncPoint();}
+    function pickAvailable(){return !!crop&&(free||!!opticalCache);}
+    function pickActive(){return pickAvailable()&&pickMode.value!=='navigate';}
     function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
     function updatePickStatus(message=''){pickStatus.textContent=message||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
     function syncPoint(){
@@ -649,8 +715,25 @@
       for(const n of snaps)n.disabled=!editable||(n.dataset.viewerPointSnap==='midpoint'&&h.kind!=='edge')||(n.dataset.viewerPointSnap==='boundary'&&h.kind!=='surface');
       if(!h||!geometry?.frame){coords.textContent='';return;}
       const fmt=p=>p.map(x=>x.toFixed(6)).join(', ');
-      const vis=pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):'not projected';
+      const vis=free&&pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):opticalCache?opticalScreen(h).visibility:'not projected';
       coords.textContent=(editable?'Draft':'Confirmed locally')+' · '+describe(h)+' · '+vis+' · local XYZ (m): '+fmt(h.point)+' · world XYZ (m): '+fmt(worldPoint(geometry.frame,h.point))+' · weights: '+fmt(h.weights);
+    }
+    function opticalScreen(hit){
+      const q=opticalMarker(opticalCache,hit),t=opticalTransform;
+      if(!q.pixel||!t)return q;
+      const p=[q.pixel[0]*t.scale+t.offsetX,q.pixel[1]*t.scale+t.offsetY];
+      if(p[0]<t.x||p[0]>=t.x+t.width||p[1]<t.y||p[1]>=t.y+t.height)return {visibility:'out of crop'};
+      return {pixel:p,visibility:q.visibility};
+    }
+    function opticalMarkers(){
+      const t=opticalTransform;if(!opticalCache||!t)return;
+      const ctx=canvas.getContext('2d');ctx.save();ctx.beginPath();ctx.rect(t.x,t.y,t.width,t.height);ctx.clip();
+      try{
+        for(const [h,color] of [[confirmed,'#25834b'],[staged,'#b83d18'],[pickActive()?hover:null,'#008ab1']]){
+          if(!h)continue;const q=opticalScreen(h);
+          if(q.visibility==='visible')drawPickMarker(canvas,h,{project:()=>q},color);
+        }
+      }finally{ctx.restore();}
     }
     function markers(){
       if(paths&&crop&&free){
@@ -673,11 +756,16 @@
     for(const n of snaps)n.onclick=()=>changePoint(staged.weights,n.dataset.viewerPointSnap);
     confirmButton.onclick=()=>{if(staged){confirmed=staged;clearPick();syncPoint();updatePickStatus('Point confirmed locally (not a correspondence).');redrawMarkers();}};
     cancelButton.onclick=()=>{clearPick();syncPoint();updatePickStatus();redrawMarkers();};
-    function redrawMarkers(){if(!paths||!free)return;drawRegion(canvas,geometry,state,paths);markers();}
+    function redrawMarkers(){if(crop&&!free){try{crop.paint(canvas,false);opticalMarkers();}catch(error){status.textContent='Magnifier unavailable: '+error.message;}return;}if(!paths)return;drawRegion(canvas,geometry,state,paths);markers();}
     function query(css){
-      if(!pickActive()||!pickCache)return {candidates:[],reason:''};
+      if(!pickActive())return {candidates:[],reason:''};
       const r=canvas.getBoundingClientRect(),sx=canvas.width/Math.max(1,r.width),sy=canvas.height/Math.max(1,r.height);
-      return framePick(pickCache,[(css[0]-r.left)*sx,(css[1]-r.top)*sy],pickMode.value,{radius:8*Math.max(sx,sy),wireframe:state.wireframe});
+      const p=[(css[0]-r.left)*sx,(css[1]-r.top)*sy],radius=8*Math.max(sx,sy);
+      if(free)return pickCache?framePick(pickCache,p,pickMode.value,{radius,wireframe:state.wireframe}):{candidates:[],reason:''};
+      const t=opticalTransform;
+      if(!t||p[0]<t.x||p[0]>=t.x+t.width||p[1]<t.y||p[1]>=t.y+t.height)return {candidates:[],reason:''};
+      const result=opticalFramePick(opticalCache,[(p[0]-t.offsetX)/t.scale,(p[1]-t.offsetY)/t.scale],pickMode.value,{radius:radius/t.scale});
+      return {...result,candidates:result.candidates.filter(h=>opticalScreen(h).visibility==='visible')};
     }
     function queueHover(css){
       queued=css;if(hoverFrame!==null)return;
@@ -708,7 +796,7 @@
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
       spans.closest('label').style.display=crop?'none':'';
       freeButton.disabled=!crop||free||!crop.build;freeButton.title=crop?.reason||'';
-      pickControls.style.display=crop&&free?'':'none';
+      pickControls.style.display=pickAvailable()?'':'none';
       canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build?'default':'';
     }
     const viewport=()=>[env.innerWidth,env.innerHeight];
@@ -728,11 +816,17 @@
       if((!geometry&&!crop)||!dialog.open)return;
       resizeRaster();
       if(crop&&!free){
-        try{const result=crop.paint(canvas);status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · '+(crop.reason||'drag to orbit or choose Free View');}
-        catch(error){status.textContent='Magnifier unavailable: '+error.message;}
-        return;
+        cancelHover();opticalCache=null;opticalTransform=null;pickCache=null;
+        try{
+          if(crop.optical&&crop.build&&!mesh){geometry=crop.build();mesh=preparePick(geometry.items);}
+          const result=crop.paint(canvas,!!(crop.optical&&mesh));
+          opticalTransform=result.transform;opticalCache=mesh&&result.stats?.picking?opticalFrame(mesh,result.stats.picking):null;
+          status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · '+(crop.reason||(opticalCache?'Globe optical picking · drag to orbit or choose Free View':'drag to orbit or choose Free View'));
+          opticalMarkers();
+        }catch(error){status.textContent='Magnifier unavailable: '+error.message;opticalCache=null;}
+        syncMode();syncPoint();updatePickStatus();return;
       }
-      if(crop&&free){cancelHover();paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();syncPoint();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
+      if(crop&&free){cancelHover();opticalCache=null;opticalTransform=null;paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();syncPoint();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
@@ -820,8 +914,8 @@
     return {open(next,title){
       stopDrags();clearGeometryPick();crop=null;free=false;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
       show();syncMode();sync();
-    },openCrop(region,paint,build=null,reason=''){
-      stopDrags();clearGeometryPick();geometry=null;free=false;crop={region:{...region},paint,build,reason};heading.textContent='3D Scene Magnifier';
+    },openCrop(region,paint,build=null,reason='',optical=false){
+      stopDrags();clearGeometryPick();geometry=null;free=false;crop={region:{...region},paint,build,reason,optical};heading.textContent='3D Scene Magnifier';
       show();syncMode();render();sessionChanged();
     },sessionSnapshot(){
       if(!dialog.open||!crop)return null;
@@ -843,8 +937,8 @@
       }finally{restoringSession=false;}
       sessionChanged();
     },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
-      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
+      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

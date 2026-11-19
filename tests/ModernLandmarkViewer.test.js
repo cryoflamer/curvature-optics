@@ -366,3 +366,33 @@ test('nonlinear Flat chord disagreement is explicitly unresolved',()=>{
   const good=viewer.opticalPrimitivePick(f.capture,f.path,item,f.c.screen([1,1,20]),'surface');
   assert.equal(good.candidates.length,1);assert.ok(good.candidates[0].roundTripError<1e-10);
 });
+
+test('Globe optical frame uses actual painter order, horizon mask and material weights',()=>{
+  const item=pickItem([[0,0,0],[4,0,0],[0,6,0]],3,0);
+  const other={...item,index:1,owner:{kind:'object',bank:0,index:1}};
+  const {capture,path,c}=opticalFixture(item,[[0,0,10],[8,0,20],[0,9,15]]);
+  const front=opticalFixture(other,[[0,0,5],[4,0,10],[0,4.5,7.5]]).path;
+  const pixel=c.screen([2.4,4.5,15.5]),mesh=viewer.preparePick([item,other]);
+  const make=paths=>viewer.opticalFrame(mesh,{...capture,paths});
+  let f=make([path]);
+  const h=viewer.opticalFramePick(f,pixel,'surface').candidates[0];
+  assert.ok(Math.hypot(...h.point.map((x,i)=>x-[1.2,3,0][i]))<1e-9);
+  assert.equal(viewer.opticalMarker(f,h).visibility,'visible');
+  assert.equal(viewer.opticalFramePick(make([path,front]),pixel,'surface').candidates[0].index,1);
+  assert.equal(viewer.opticalFramePick(make([front,path]),pixel,'surface').candidates[0].index,0);
+  assert.equal(viewer.opticalMarker(make([path,front]),h).visibility,'occluded');
+  const mask={role:'occlusion',alpha:1,fill:path.fill,edges:[],strokeWidth:0};
+  assert.equal(viewer.opticalFramePick(make([path,mask]),pixel,'surface').candidates.length,0);
+  assert.equal(viewer.opticalMarker(make([path,mask]),h).visibility,'horizon masked');
+  assert.equal(viewer.opticalFramePick(make([mask,path]),pixel,'surface').candidates.length,1);
+  const stroke={...front,fill:[],edges:[[[pixel[0]-5,pixel[1]],[pixel[0]+5,pixel[1]]]],strokeWidth:2};
+  assert.equal(viewer.opticalMarker(make([path,stroke]),h).visibility,'occluded');
+  assert.equal(viewer.opticalMarker(make([path,{...stroke,alpha:.5}]),h).visibility,'visibility unresolved');
+  assert.equal(viewer.opticalMarker(make([path,{...stroke,alpha:0}]),h).visibility,'visible');
+  assert.equal(viewer.opticalFrame(mesh,{...capture,geometry:'flat',paths:[path]}),null);
+  const edge=viewer.opticalFramePick(f,c.screen([2,0,12.5]),'edge',{radius:1}).candidates[0];
+  assert.ok(Math.abs(edge.weights[1]-.25)<1e-9);
+  assert.deepEqual(viewer.opticalFramePick(f,c.screen(path.points[1]),'vertex',{radius:1}).candidates[0].indices,[1]);
+  const adjusted=viewer.adjustPoint(mesh,h,[.2,.3,.5]);
+  assert.equal(viewer.opticalMarker(f,adjusted).visibility,'visible');
+});

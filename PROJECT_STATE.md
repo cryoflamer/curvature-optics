@@ -1,3 +1,19 @@
+## 8F.3d.2 — Globe optical picking UI and visibility
+
+Real-photo landmark authoring is Globe-only by user decision. Reuse
+captured Canvas Direct paths and perspective-correct physical material
+weights, respecting the actual painter order, opaque horizon mask and
+stroke coverage. Translucent later coverage is unresolved; guides are
+annotations, not occluders. Scene View and Free View share local points,
+adjustment, confirmation and session persistence. Scene markers are
+reprojected into the source crop, clipped to its bounds. Flat optical UI
+and nonlinear refinement are not pursued; existing Flat diagnostic core,
+forward comparison, fit and portable schemas are unchanged. Geometry
+still requires a visible owner seed. Architecture fixture updated for
+the reviewed CameraPhysicalPose test dependency. New focused optical
+coverage regression added; full Node/browser CI pending. Next: manual
+Globe verification and 8F.4 stable anchors.
+
 ## 8F.3d.1 — Optical picking audit and inverse core
 
 Canvas Direct is not Free View. Globe authors at an effective radius;
