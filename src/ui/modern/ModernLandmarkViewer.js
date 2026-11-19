@@ -119,7 +119,9 @@
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
     const env=dialog.ownerDocument.defaultView,frame=dialog.querySelector('[data-viewer-frame]'),titleBar=dialog.querySelector('[data-viewer-titlebar]'),grip=dialog.querySelector('[data-viewer-resize]');
-    let geometry=null,state=reset(),drag=null,windowDrag=null,rect=null;
+    let geometry=null,crop=null,state=reset(),drag=null,windowDrag=null,rect=null;
+    const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
+    function syncMode(){for(const el of freeControls)el.style.display=crop?'none':'';canvas.style.cursor=crop?'default':'';}
     const viewport=()=>[env.innerWidth,env.innerHeight];
     function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
     function saveRect(){if(rect)try{env.localStorage.setItem(WINDOW_KEY,JSON.stringify(rect));}catch(e){/* Optional UI preference. */}}
@@ -134,8 +136,13 @@
       }
     }
     function render(){
-      if(!geometry||!dialog.open)return;
+      if((!geometry&&!crop)||!dialog.open)return;
       resizeRaster();
+      if(crop){
+        try{const result=crop.paint(canvas);status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · drag a new rectangle to change region';}
+        catch(error){status.textContent='Magnifier unavailable: '+error.message;}
+        return;
+      }
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
@@ -148,7 +155,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();saveRect();geometry=null;if(dialog.open)dialog.close();}
+    function close(){stopDrags();saveRect();geometry=null;crop=null;if(dialog.open)dialog.close();}
     dialog.querySelector('[data-viewer-close]').onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -194,17 +201,21 @@
     const end=e=>{if(drag?.id===e.pointerId)drag=null;};
     for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
-    canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
+    canvas.addEventListener('wheel',e=>{e.preventDefault();if(!crop&&!drag){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
     dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
-    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();saveRect();geometry=null;}});
+    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();saveRect();geometry=null;crop=null;}});
+    function show(){if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
     return {open(next,title){
-      stopDrags();geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
-      if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}
-      sync();
-    },close,isOpen:()=>dialog.open,snapshot:()=>dialog.open?JSON.parse(JSON.stringify(state)):null,
+      stopDrags();crop=null;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
+      show();syncMode();sync();
+    },openCrop(region,paint){
+      stopDrags();geometry=null;crop={region:{...region},paint};heading.textContent='3D Scene Magnifier';
+      show();syncMode();render();
+    },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
+      snapshot:()=>dialog.open?crop?{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
   return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,pan,zoom,camera,draw,windowRect,changeWindowRect,rasterSize,mount});

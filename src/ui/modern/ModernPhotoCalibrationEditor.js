@@ -18,6 +18,17 @@
     const scale=Math.max(min,Math.min(max,view.scale*factor)),f=scale/view.scale;
     return {scale,x:x-(x-view.x)*f,y:y-(y-view.y)*f};
   }
+  // Backing-store rectangle -> original projection pixels. No owner hit needed.
+  function magnifierRegion(view,a,b,rasterWidth,rasterHeight,canvasWidth,canvasHeight,minDrag=4){
+    if(!view||!(view.scale>0)||![view.x,view.y,...a,...b,rasterWidth,rasterHeight,canvasWidth,canvasHeight].every(Number.isFinite))return null;
+    const lo=[Math.max(0,view.x,Math.min(a[0],b[0])),Math.max(0,view.y,Math.min(a[1],b[1]))];
+    const hi=[Math.min(canvasWidth,view.x+rasterWidth*view.scale,Math.max(a[0],b[0])),
+      Math.min(canvasHeight,view.y+rasterHeight*view.scale,Math.max(a[1],b[1]))];
+    if(hi[0]-lo[0]<minDrag||hi[1]-lo[1]<minDrag)return null;
+    const x=Math.max(0,(lo[0]-view.x)/view.scale),y=Math.max(0,(lo[1]-view.y)/view.scale);
+    const width=Math.min(rasterWidth-x,(hi[0]-lo[0])/view.scale),height=Math.min(rasterHeight-y,(hi[1]-lo[1])/view.scale);
+    return width>0&&height>0?{x,y,width,height}:null;
+  }
   function pair(landmark,pixel,width,height,weight=1,included=true){
     if(!landmark||typeof landmark.id!=='string'||!landmark.id||
       !Array.isArray(pixel)||pixel.length!==2||!pixel.every(Number.isFinite)||
@@ -339,7 +350,9 @@
       objectSelectionStatus=$('ModernCalibrationObjectSelection'),clearObject=$('ModernCalibrationClearObject');
     let packages=new Map(),selectedObjectKey=null;
     const viewerButton=$('ModernCalibrationOpenViewer'),viewer=env.CurvatureModernLandmarkViewer.mount($('ModernCalibrationViewer'));
-    const objectMode=()=>pickMode.value==='object';
+    const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
+    let cropSource=null,regionDrag=null;
+    const cropRenderer=env.CurvatureCanvasDirectPreview.create();
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
@@ -555,7 +568,7 @@
       refreshResidualTable();
     }
     function updateHint(){
-      const text=objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
+      const text=magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
         pending?'Photo point selected. Click a model vertex.':
         pendingModel?'Model vertex selected. Click a photo point.':
         activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
@@ -638,6 +651,7 @@
       clearHover();clearAmbiguity();
     }
     function renderModel(){
+      if(viewer.isCrop())viewer.close();cropSource=null;regionDrag=null;
       invalidateFit('Add correspondences or run calibration from the captured camera.');
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
       visibleSpans=new Map();ownerSpans=new Map();highlightKey=null;ownership=null;exactOwnership=null;hoverObject=null;visibleByObject=new Map();
@@ -651,7 +665,9 @@
           deviceRatio:size.width/size.height};
         const camera=env.CurvatureCameraPhysicalPose.photoCamera(m,size.width,size.height);
         m.camViewAngle=camera.fieldOfViewRadians;
-        const stats=renderer.paint(modelRaster,camera,m,{...scene.physics,canvasDirectOptions:{thinOutlines:true}});
+        const paintOptions={...scene.physics,canvasDirectOptions:{thinOutlines:true}};
+        const stats=renderer.paint(modelRaster,camera,m,paintOptions);
+        cropSource=jsonCopy({camera,model:m,options:paintOptions,width:size.width,height:size.height});
         // Same painter order and terrain mask, once per preview, not per hover.
         try{
           identityRaster.width=highlightRaster.width=size.width;
@@ -750,14 +766,21 @@
     }
     viewerButton.onclick=openViewer;
     // The floating window is fixed-position but owned by this workspace.
-    new env.MutationObserver(()=>{if(workspace.hidden)viewer.close();}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+    new env.MutationObserver(()=>{if(workspace.hidden){cancelRegion();viewer.close();}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+    function cancelRegion(){const d=regionDrag;regionDrag=null;if(d&&sceneCanvas.hasPointerCapture(d.id))sceneCanvas.releasePointerCapture(d.id);}
+    function openRegion(region){
+      if(!cropSource||!region)return;
+      const source=cropSource;
+      viewer.openCrop(region,canvas=>cropRenderer.paintCrop(canvas,source.camera,source.model,source.options,source.width,source.height,region));
+    }
     pickMode.onchange=()=>{
-      cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();
+      cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();
       refreshObjectSelection();updateHint();meshDraw();
     };
     objectPicker.onchange=()=>selectObject(objectPicker.value?Number(objectPicker.value):null);
     clearObject.onclick=()=>{clearHover();selectObject(null);};
     function highlightedObject(){
+      if(magnifierMode())return null;
       if(objectMode())return hoverObject??selectedObjectKey;
       if(hoverObject!==null||modelGhost)return hoverObject;
       const landmark=pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
@@ -801,6 +824,11 @@
       });
       const item=byLandmark.get(pendingModel?.id||(editing?selected()?.id:null));
       if(item)marker(mesh,screenPoint(modelView,item.pixel),'+','#009ab3');
+      if(regionDrag){
+        const a=regionDrag.start,b=regionDrag.last,x=Math.min(a[0],b[0]),y=Math.min(a[1],b[1]),w=Math.abs(a[0]-b[0]),h=Math.abs(a[1]-b[1]);
+        mesh.save();mesh.fillStyle='rgba(0,150,200,.13)';mesh.strokeStyle='#009ac5';mesh.lineWidth=2;mesh.setLineDash([5,3]);
+        mesh.fillRect(x,y,w,h);mesh.strokeRect(x,y,w,h);mesh.restore();
+      }
       if(hover.length){
         const p=screenPoint(modelView,hover[hoverIndex]?.pixel||hover[0].pixel);
         mesh.strokeStyle='#00a6c5';mesh.lineWidth=2;mesh.beginPath();mesh.arc(p[0],p[1],9,0,Math.PI*2);mesh.stroke();
@@ -902,7 +930,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      viewer.close();scene=next;selectedObjectKey=null;pickMode.value='vertex';
+      cancelRegion();viewer.close();scene=next;selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);
@@ -993,6 +1021,7 @@
     }
     function processModelPointer(p){
       if(!modelView||viewBest)return;
+      if(magnifierMode()&&!modelDrag)return;
       if(!modelDrag){hoverAt(p);return;}
       if(Math.hypot(p[0]-modelDrag.start[0],p[1]-modelDrag.start[1])>4)modelDrag.moved=true;
       if(modelDrag.moved){
@@ -1016,11 +1045,18 @@
     }
     sceneCanvas.addEventListener('pointerdown',e=>{
       if(!modelView||viewBest||e.button!==0)return;
+      if(magnifierMode()){
+        if(regionDrag||!cropSource)return;
+        e.preventDefault();cancelModelFrame();clearHover();const p=canvasPoint(sceneCanvas,e);
+        regionDrag={id:e.pointerId,start:p,last:p};sceneCanvas.setPointerCapture(e.pointerId);meshDraw();return;
+      }
       cancelModelFrame();const p=canvasPoint(sceneCanvas,e),hit=objectMode()?null:modelMarker(p);
       modelDrag={id:e.pointerId,start:p,last:p,moved:false,marker:hit?.id||null};
       sceneCanvas.setPointerCapture(e.pointerId);
     });
     sceneCanvas.addEventListener('pointermove',e=>{
+      if(regionDrag){if(regionDrag.id===e.pointerId){regionDrag.last=canvasPoint(sceneCanvas,e);meshDraw();}return;}
+      if(magnifierMode())return;
       if(modelDrag&&modelDrag.id!==e.pointerId)return;
       const p=canvasPoint(sceneCanvas,e);
       // Preserve drag intent even if several events arrive between frames.
@@ -1028,6 +1064,14 @@
       queueModelPointer(p);
     });
     sceneCanvas.addEventListener('pointerup',e=>{
+      if(regionDrag){
+        if(regionDrag.id!==e.pointerId)return;
+        const p=canvasPoint(sceneCanvas,e),d=regionDrag;cancelRegion();meshDraw();
+        const ratio=sceneCanvas.width/Math.max(1,sceneCanvas.getBoundingClientRect().width);
+        const region=magnifierRegion(modelView,d.start,p,modelRaster.width,modelRaster.height,sceneCanvas.width,sceneCanvas.height,4*ratio);
+        if(region)openRegion(region);else pickStatus.textContent='Drag a larger rectangle inside the model image.';
+        return;
+      }
       if(!modelDrag||modelDrag.id!==e.pointerId)return;
       const p=canvasPoint(sceneCanvas,e);cancelModelFrame();processModelPointer(p);
       const action=modelDrag;modelDrag=null;modelGhost=null;
@@ -1040,10 +1084,11 @@
       }else if(!action.moved)pickAt(p);
       meshDraw();
     });
-    sceneCanvas.addEventListener('pointercancel',()=>{cancelModelFrame();modelDrag=null;modelGhost=null;clearHover();});
+    sceneCanvas.addEventListener('lostpointercapture',e=>{if(regionDrag?.id===e.pointerId){regionDrag=null;meshDraw();}});
+    sceneCanvas.addEventListener('pointercancel',()=>{cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;clearHover();});
     sceneCanvas.addEventListener('pointerleave',()=>{if(!modelDrag){cancelModelFrame();clearHover();}});
     sceneCanvas.addEventListener('wheel',e=>{
-      if(!modelView)return;e.preventDefault();if(modelDrag||viewBest)return;cancelModelFrame();
+      if(!modelView)return;e.preventDefault();if(modelDrag||regionDrag||viewBest)return;cancelModelFrame();
       const p=canvasPoint(sceneCanvas,e),base=fit(modelRaster.width,modelRaster.height,sceneCanvas.width,sceneCanvas.height).scale;
       modelView=zoomAt(modelView,...p,Math.exp(-e.deltaY*.0015),base/4,Math.max(16,base*32));
       clearHover();clearAmbiguity();
@@ -1272,6 +1317,7 @@
     $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(activePair);
     doc.addEventListener('keydown',e=>{
       if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
+      if(magnifierMode()&&e.key==='Escape'){e.preventDefault();cancelRegion();meshDraw();return;}
       if(objectMode()){
         if(e.key==='Escape'&&!viewBest){e.preventDefault();clearHover();selectObject(null);}
         return;
@@ -1296,5 +1342,5 @@
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

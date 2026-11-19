@@ -121,6 +121,18 @@
     var r=n&255,g=(n>>>8)&255,b=1+((r*31+g*17)%254);
     return 'rgb('+r+','+g+','+b+')';
   }
+  // Crop in source projection pixels, retaining the original optical camera,
+  // source viewport clipping, painter order, labels and stroke policy.
+  function cropTransform(region,sourceWidth,sourceHeight,width,height){
+    if(!region||![sourceWidth,sourceHeight,width,height].every(v=>Number.isInteger(v)&&v>0)||
+       ![region.x,region.y,region.width,region.height].every(Number.isFinite)||
+       !(region.width>0&&region.height>0)||region.x<0||region.y<0||
+       region.x+region.width>sourceWidth+1e-8||region.y+region.height>sourceHeight+1e-8)
+      throw RangeError('Invalid magnifier region');
+    var scale=Math.min(width/region.width,height/region.height);
+    var w=region.width*scale,h=region.height*scale,x=(width-w)/2,y=(height-h)/2;
+    return {scale:scale,x:x,y:y,width:w,height:h,offsetX:x-region.x*scale,offsetY:y-region.y*scale};
+  }
   function create(){
     var cachedKey=null,cached=null;
     function objects(model,params){
@@ -464,8 +476,25 @@
         limitations:['Legacy-style whole-object horizon masking, not physical visibility',
           'No mutual depth test; painter ordering is approximate']};
     }
-    return Object.freeze({paint:paint,clearCache:function(){cachedKey=null;cached=null;}});
+    function paintCrop(canvas,camera,model,options,sourceWidth,sourceHeight,region){
+      var t=cropTransform(region,sourceWidth,sourceHeight,canvas.width,canvas.height);
+      var ctx=canvas.getContext('2d');
+      // Replay vector paths into the destination directly. The logical
+      // canvas supplies original projection dimensions; the native CTM
+      // supplies the crop/zoom. No source bitmap or oversized intermediate.
+      ctx.save();
+      try{
+        ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#e8eef4';ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.beginPath();ctx.rect(t.x,t.y,t.width,t.height);ctx.clip();
+        ctx.setTransform(t.scale,0,0,t.scale,t.offsetX,t.offsetY);
+        var stats=paint({width:sourceWidth,height:sourceHeight,getContext:function(){return ctx;}},camera,model,options);
+        return {transform:t,stats:stats};
+      }finally{ctx.restore();}
+    }
+    return Object.freeze({paint:paint,paintCrop:paintCrop,clearCache:function(){cachedKey=null;cached=null;}});
   }
-  return Object.freeze({create:create,objectIdentityColor:objectIdentityColor,identityColor:identityColor,geometricModel:geometricModel,
+  return Object.freeze({create:create,cropTransform:cropTransform,objectIdentityColor:objectIdentityColor,identityColor:identityColor,geometricModel:geometricModel,
     flatRefractionPoint:flatRefractionPoint});
 }));

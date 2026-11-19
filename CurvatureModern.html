@@ -50,7 +50,7 @@
 <script src="src/app/CurvaturePhysicalCamera.js"></script>
 <script src="src/app/CurvaturePhysicalCurvature.js"></script>
 <script src="src/renderers/CurvatureAtmosphericVisibility.js?v=140.12.91"></script>
-<script src="src/renderers/CurvatureCanvasDirectPreview.js?object-highlight=1&amp;owner-pass=1"></script>
+<script src="src/renderers/CurvatureCanvasDirectPreview.js?object-highlight=1&amp;owner-pass=1&amp;scene-magnifier=1"></script>
 <script src="src/app/CurvatureMainCanvasRenderer.js?v=metric-grid-40&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;tensas-44=1&amp;soundly-45=1-captions-48&amp;projection-fix=1&amp;guide-labels=1"></script>
 <script src="src/ui/modern/ModernLocationCatalog.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1"></script>
 <script src="src/ui/modern/ModernSceneState.js?bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1&amp;semantic-captions=49"></script>
@@ -126,8 +126,8 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -215,7 +215,7 @@
         <div class="modern-calibration-toolbar">
           <button type="button" id="ModernCalibrationFitModel">Fit model</button>
           <label><input type="checkbox" id="ModernCalibrationShowLandmarks"> Show landmarks</label>
-          <label>Pick <select id="ModernCalibrationPickMode"><option value="vertex">Vertex</option><option value="object">Object / span</option></select></label>
+          <label>Pick <select id="ModernCalibrationPickMode"><option value="vertex">Vertex</option><option value="object">Object / span</option><option value="magnifier">Magnifier</option></select></label>
         </div>
         <div id="ModernCalibrationObjectControls" hidden>
           <div class="modern-calibration-toolbar"><label>Select object / span <select id="ModernCalibrationObjectPicker"></select></label>
@@ -243,13 +243,13 @@
     </div>
     <dialog id="ModernCalibrationViewer" class="modern-reference-dialog modern-landmark-viewer" aria-labelledby="ModernCalibrationViewerTitle">
       <header data-viewer-titlebar tabindex="0" aria-label="Move inspector with arrow keys"><h2 id="ModernCalibrationViewerTitle">Object viewer</h2><button type="button" data-viewer-close autofocus>Close</button></header>
-      <div class="modern-calibration-toolbar">
+      <div class="modern-calibration-toolbar" data-viewer-free-controls>
         <button type="button" data-viewer-view="front">Front</button><button type="button" data-viewer-view="back">Back</button>
         <button type="button" data-viewer-view="left">Left</button><button type="button" data-viewer-view="right">Right</button>
         <button type="button" data-viewer-view="top">Top</button><button type="button" data-viewer-view="bottom">Bottom</button>
         <button type="button" data-viewer-reset>Reset</button>
       </div>
-      <div class="modern-calibration-toolbar">
+      <div class="modern-calibration-toolbar" data-viewer-free-controls>
         <label>Projection <select data-viewer-projection><option value="orthographic">Orthographic</option><option value="perspective">Perspective</option></select></label>
         <label><input type="checkbox" data-viewer-wire> Wireframe</label>
         <label><input type="checkbox" data-viewer-spans> Adjacent context</label>
@@ -257,7 +257,7 @@
       </div>
       <div data-viewer-frame><canvas width="800" height="520" tabindex="0" aria-label="Isolated authored object"></canvas></div>
       <p data-viewer-status role="status"></p>
-      <footer><p>Drag title to move · drag corner to resize · canvas drag to orbit · Shift/right-drag to pan · wheel to zoom.</p><button type="button" data-viewer-resize aria-label="Resize inspector (arrow keys)" title="Drag to resize">◢</button></footer>
+      <footer><p>Drag title to move · drag corner to resize. <span data-viewer-free-controls>Canvas drag to orbit · Shift/right-drag to pan · wheel to zoom.</span></p><button type="button" data-viewer-resize aria-label="Resize inspector (arrow keys)" title="Drag to resize">◢</button></footer>
     </dialog>
     <p id="ModernCalibrationStatus" role="status"></p><p id="ModernCalibrationStorage" role="status"></p>
     <section id="ModernCalibrationResidualPanel" hidden aria-label="Calibration residuals">

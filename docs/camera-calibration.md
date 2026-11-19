@@ -1,3 +1,22 @@
+## 8F.2c — Rectangular Scene Magnifier
+
+Photo Calibration Pick: Magnifier accepts a drag rectangle including empty
+space or multiple owners. The selection is normalized/clipped in original
+projection raster coordinates through the current main canvas pan/zoom.
+The modeless window replays fresh Canvas Direct vector paths with a uniform
+crop transform and letterboxing. Source camera, projection dimensions,
+Earth model, atmosphere, painter order, horizon mask, guide label placement
+and stroke widths in source coordinates are unchanged. The renderer uses
+the original logical viewport with a native Canvas transform and crop clip;
+no bitmap stretching or large intermediate image. The captured render inputs
+are independent of the experiment and recomputed after window resize.
+No owner selection or geometry isolation required. Existing object/vertex
+modes retained. Free View controls hidden for a crop until 8F.2d; no new
+point picking yet. Canvas Direct remains an approximate optical painter,
+not a depth-certified renderer. Antialiasing can differ at higher scale.
+Headless crop/rectangle math checks passed; vector replay and browser
+regressions added (full CI pending). Next: 8F.2d independent orbit/reset.
+
 ## 8F.2b — Modeless movable inspector
 
 The current object/span inspector now opens as a nonmodal fixed-position

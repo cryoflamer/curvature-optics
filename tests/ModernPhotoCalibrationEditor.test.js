@@ -210,3 +210,11 @@ test('object package selection is independent of nearby correspondence vertices'
   assert.equal(hit.candidates.length,0);
   assert.deepEqual(packages.get(hit.key).owner,owner);
 });
+
+test('magnifier maps reverse drags through a panned and zoomed viewport, clipping to visible raster',()=>{
+  const view={x:-50,y:40,scale:2};
+  assert.deepEqual(editor.magnifierRegion(view,[250,180],[50,80],400,300,500,400),{x:50,y:20,width:100,height:50});
+  assert.deepEqual(editor.magnifierRegion(view,[-20,0],[520,450],400,300,500,400),{x:25,y:0,width:250,height:180});
+  assert.equal(editor.magnifierRegion(view,[10,10],[100,20],400,300,500,400),null);
+  assert.equal(editor.magnifierRegion(view,[40,90],[41,180],400,300,500,400),null);
+});

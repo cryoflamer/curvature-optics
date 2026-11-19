@@ -588,3 +588,30 @@ test('separate owner identity pass paints Soundly road sides without changing pa
   assert.ok(colors.has('#000000'),'same terrain mask');
   assert.equal(JSON.stringify(m),before);
 });
+
+test('magnifier replays the same authored vector paths, labels and mask through a uniform crop transform',()=>{
+  for(const showModel of [1,2])for(const atmosphere of ['vacuum','standard']){
+    const m=soundly();m.showModel=showModel;m.Roll=4;m.showGrid=1;m.Update();
+    const a=graph(true),b=graph(true),source=a.g.Canvas,dest=b.g.Canvas,ctx=dest.getContext('2d');
+    dest.width=1100;dest.height=420;
+    const transforms=[],clips=[];ctx.setTransform=(...args)=>transforms.push(args);ctx.rect=(...args)=>clips.push(args);
+    const camera={pos:[0,0,0],center:[0,100,0],up:[Math.sin(.07),0,Math.cos(.07)],sceneSize:1.5,screenSize:1,zoom:1,objectZExtend:0,near:.001};
+    const options={atmosphere,canvasDirectOptions:{thinOutlines:true}},before=JSON.stringify({m,camera});
+    const engine=direct.create(),plain=engine.paint(source,camera,m,options);
+    const result=engine.paintCrop(dest,camera,m,options,800,500,{x:120,y:70,width:200,height:120});
+    assert.deepEqual(a.stats().paintedPaths,b.stats().paintedPaths);
+    assert.deepEqual(a.stats().strokedPaths,b.stats().strokedPaths);
+    assert.deepEqual(a.stats().events,b.stats().events);
+    assert.equal(plain.horizonMasks,result.stats.horizonMasks);
+    assert.equal(plain.metricGrid.labels,result.stats.metricGrid.labels);
+    assert.deepEqual(transforms,[[1,0,0,1,0,0],[3.5,0,0,3.5,-220,-245]]);
+    assert.deepEqual(clips,[[200,0,700,420]]);
+    assert.equal(JSON.stringify({m,camera}),before);
+  }
+});
+test('magnifier crop bounds and aspect ratio are validated',()=>{
+  const t=direct.cropTransform({x:120,y:70,width:200,height:120},800,500,1100,420);
+  assert.deepEqual(t,{scale:3.5,x:200,y:0,width:700,height:420,offsetX:-220,offsetY:-245});
+  assert.throws(()=>direct.cropTransform({x:-1,y:0,width:1,height:1},800,500,100,100),/region/);
+  assert.throws(()=>direct.cropTransform({x:799,y:0,width:2,height:1},800,500,100,100),/region/);
+});
