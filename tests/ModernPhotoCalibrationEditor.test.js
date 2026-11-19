@@ -111,7 +111,7 @@ test('experiment exchange preserves original pixels, locked fields and result id
  fit:{method:'canvas-direct',maxIterations:80,freeParameters:['Pan'],result:null}};
  const check=x=>editor.validateExperiment(x,r=>r);
  const out=check(input);assert.deepEqual(out.observations,input.observations);assert.deepEqual(out.fit.freeParameters,['Pan']);
- assert.throws(()=>check({...input,version:2}),/format/);
+ assert.throws(()=>check({...input,version:3}),/format/);
  assert.throws(()=>check({...input,observations:[observation,observation]}),/Duplicate/);
  assert.throws(()=>check({...input,fit:{...input.fit,freeParameters:['Height','Height']}}),/free camera/);
  assert.throws(()=>check({...input,fit:{...input.fit,result:{evaluation:{valid:true}}}}),/stored fit/);
@@ -137,4 +137,36 @@ test('residual overlay uses the photo viewport transform for both endpoints',()=
   assert.deepEqual(calls.find(c=>c[0]==='arc').slice(0,4),['arc',41,28,8]);
   assert.ok(calls.some(c=>c[0]==='setLineDash'&&c[1].length===2));
   const n=calls.length;editor.drawResidual(ctx,{x:0,y:0,scale:1},[0,0],{predicted:null},'#000',false);assert.equal(calls.length,n);
+});
+
+test('Fit and Validation roles are explicit, independent of weights, and preserve order',()=>{
+  const l={id:'a',bank:0,objectType:3,primitive:2,vertex:3};
+  const a=editor.pair(l,[12,34],100,80,2);
+  const b=editor.pair({...l,id:'b'},[13,34],100,80,10,false);
+  assert.equal(a.included,true);assert.equal(b.included,false);
+  assert.deepEqual(editor.fitRows([b,a]),[a]);
+  assert.throws(()=>editor.pair(l,[12,34],100,80,1,'false'),/Invalid/);
+  const p=[{id:'a',status:'visible',predicted:[15,38]},{id:'b',status:'visible',predicted:[13,46]}];
+  const stats=editor.residualStatistics(editor.residualRows([b,a],[],p));
+  assert.deepEqual(stats.fit,{count:1,available:1,rms:5});
+  assert.deepEqual(stats.validation,{count:1,available:1,rms:12});
+  assert.ok(Math.abs(stats.all.rms-Math.sqrt(169/2))<1e-12);
+  const missing=editor.residualStatistics(editor.residualRows([b,a],[],p.slice(0,1)));
+  assert.equal(missing.fit.rms,5);assert.equal(missing.validation.rms,null);
+  assert.equal(missing.all.rms,null);assert.equal(missing.all.available,1);
+});
+test('v1 migrates to Fit; v2 preserves held-out points and validates results against Fit only',()=>{
+  const model={showModel:1,rEarth:6371000,rFEarth:10007543,CameraEast:0,CameraNorth:0,Height:10,Pan:1,Nick:0,Roll:0,FocalLengthField:50};
+  for(const k of ['NObjects','ObjType','ObjDist','ObjDeltaDist','ObjSideType','ObjSidePos','ObjSideVar','ObjSizeType','ObjSize','ObjSizeVar'])model[k]=[1,0];
+  const l={id:'a',bank:0,objectType:1,primitive:0,vertex:0};
+  const a=editor.pair(l,[11,22],100,80,2),b=editor.pair({...l,id:'b'},[33,44],100,80,3,false);
+  const legacy={...a};delete legacy.included;
+  const input={format:'curvature-photo-calibration',version:1,scene:{model,physics:{atmosphere:'vacuum'}},referenceImage:{original:{width:100,height:80}},observations:[legacy],fit:{method:'canvas-direct',maxIterations:80,freeParameters:['Pan'],result:null}};
+  const check=x=>editor.validateExperiment(x,r=>r);
+  assert.equal(check(input).version,2);assert.equal(check(input).observations[0].included,true);
+  const result={pose:{...model},initialRmsPx:5,evaluations:1,acceptedSteps:0,evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:25,points:[{id:'a',weight:2,observed:[11,22],predicted:[14,26]}]}};
+  const v2={...input,version:2,observations:[b,a],fit:{...input.fit,result}};
+  assert.deepEqual(check(v2).observations,[b,a]);assert.deepEqual(check(v2).fit.result,result);
+  assert.throws(()=>check({...v2,version:1}),/version 2/);
+  assert.throws(()=>check({...v2,observations:[{...b,included:true},a]}),/stored fit/);
 });

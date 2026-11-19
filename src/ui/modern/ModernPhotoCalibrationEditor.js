@@ -18,20 +18,30 @@
     const scale=Math.max(min,Math.min(max,view.scale*factor)),f=scale/view.scale;
     return {scale,x:x-(x-view.x)*f,y:y-(y-view.y)*f};
   }
-  function pair(landmark,pixel,width,height,weight=1){
+  function pair(landmark,pixel,width,height,weight=1,included=true){
     if(!landmark||typeof landmark.id!=='string'||!landmark.id||
       !Array.isArray(pixel)||pixel.length!==2||!pixel.every(Number.isFinite)||
       pixel[0]<0||pixel[0]>=width||pixel[1]<0||pixel[1]>=height||
-      !Number.isFinite(weight)||weight<=0)throw RangeError('Invalid correspondence');
+      !Number.isFinite(weight)||weight<=0||typeof included!=='boolean')throw RangeError('Invalid correspondence');
     if(![0,1].includes(landmark.bank)||![landmark.objectType,landmark.primitive,landmark.vertex].every(Number.isInteger)||
        landmark.primitive<0||landmark.vertex<0)throw RangeError('Invalid authored vertex');
-    return {kind:'vertex',landmark:{...landmark},pixel:pixel.slice(),weight};
+    return {kind:'vertex',landmark:{...landmark},pixel:pixel.slice(),weight,included};
   }
   function upsert(rows,value,replaceId=null){
     if(rows.some(r=>r.landmark.id===value.landmark.id&&r.landmark.id!==replaceId))
       throw Error('This model vertex is already paired; edit its existing row');
     if(replaceId!==null&&!rows.some(r=>r.landmark.id===replaceId))throw Error('Correspondence no longer exists');
     return replaceId===null?[...rows,value]:rows.map(r=>r.landmark.id===replaceId?value:r);
+  }
+  const fitRows=rows=>rows.filter(r=>r.included!==false);
+  const pairLabel=(r,i)=>String(i+1)+(r.included===false?'V':'');
+  function residualStatistics(rows){
+    function summary(group){
+      const available=group.filter(r=>Number.isFinite(r.best.error));
+      return {count:group.length,available:available.length,
+        rms:group.length&&available.length===group.length?Math.hypot(...available.map(r=>r.best.error))/Math.sqrt(group.length):null};
+    }
+    return {fit:summary(rows.filter(r=>r.included!==false)),validation:summary(rows.filter(r=>r.included===false)),all:summary(rows)};
   }
   // The raster and the pan/zoom viewport are independent of the physical pose.
   function previewSize(width,height,max=1200){
@@ -163,7 +173,7 @@
       if(!residual.every(Number.isFinite))return {status:'unavailable',predicted:null,residual:null,error:null};
       return {status:p.status,predicted:q.slice(),residual,error:Math.hypot(...residual)};
     }
-    return rows.map((r,i)=>({id:r.landmark.id,number:i+1,observed:r.pixel.slice(),
+    return rows.map((r,i)=>({id:r.landmark.id,number:i+1,included:r.included!==false,observed:r.pixel.slice(),
       initial:sample(initial.get(r.landmark.id),r.pixel),best:sample(best.get(r.landmark.id),r.pixel)}));
   }
   function drawResidual(context,view,observed,sample,color,active){
@@ -206,7 +216,7 @@
     }
     return choices;
   }
-  const CAMERA_FIELDS=Object.freeze(["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"]), EXPERIMENT_FORMAT='curvature-photo-calibration', EXPERIMENT_VERSION=1;
+  const CAMERA_FIELDS=Object.freeze(["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"]), EXPERIMENT_FORMAT='curvature-photo-calibration', EXPERIMENT_VERSION=2;
   const jsonCopy=value=>JSON.parse(JSON.stringify(value));
   function validatedFreeFields(free){
     if(!Array.isArray(free)||new Set(free).size!==free.length||free.some(k=>!CAMERA_FIELDS.includes(k)))
@@ -215,6 +225,7 @@
   }
   function validateFitResult(result,rows,free,model){
     if(result===null||result===undefined)return null;
+    rows=fitRows(rows);
     const r=jsonCopy(result),v=r?.evaluation;
     if(!v?.valid||!r.pose||CAMERA_FIELDS.some(k=>!Number.isFinite(r.pose[k]))||
       CAMERA_FIELDS.some(k=>!free.includes(k)&&r.pose[k]!==model[k])||
@@ -231,7 +242,7 @@
     return r;
   }
   function validateExperiment(input,validateReference){
-    if(!input||input.format!==EXPERIMENT_FORMAT||input.version!==EXPERIMENT_VERSION)
+    if(!input||input.format!==EXPERIMENT_FORMAT||![1,EXPERIMENT_VERSION].includes(input.version))
       throw Error('Unsupported calibration experiment format/version');
     const m=input.scene?.model,physics=input.scene?.physics;
     if(!m||![1,2].includes(m.showModel)||!Number.isFinite(m.rEarth)||m.rEarth<=0||
@@ -246,7 +257,8 @@
     if(!Array.isArray(input.observations)||input.observations.length>10000)throw Error('Invalid observations');
     const observations=input.observations.map(r=>{
       if(r.kind!=='vertex')throw Error('Expected authored vertex observation');
-      return pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight);
+      if(input.version===1&&r.included===false)throw Error('Validation roles require experiment version 2');
+      return pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included);
     });
     if(new Set(observations.map(r=>r.landmark.id)).size!==observations.length)throw Error('Duplicate landmark ID');
     const freeParameters=validatedFreeFields(input.fit?.freeParameters);
@@ -291,7 +303,7 @@
     const exportButton=$('ModernCalibrationExportExperiment'),importButton=$('ModernCalibrationImportExperiment'),importFile=$('ModernCalibrationExperimentFile'),exchangeStatus=$('ModernCalibrationExchangeStatus');
     const residualMode=$('ModernCalibrationResidualMode'),residualPanel=$('ModernCalibrationResidualPanel'),
       residualList=$('ModernCalibrationResidualRows'),residualNotice=$('ModernCalibrationResidualNotice');
-    let initialPoints=null,initialProjectionError='',residualData=[];
+    let initialPoints=null,initialProjectionError='',residualData=[],diagnosticResult=null,diagnosticBestPoints=[];
     const fitRaster=doc.createElement('canvas');let fitWorker=null,fitBest=null,fitSignature=null,viewBest=false,paintedFit=null,lastFitPaint=0;
     // IndexedDB keeps original images out of the small localStorage quota.
     // A single atomic record binds the photograph to its fixed scene and pairs.
@@ -340,7 +352,7 @@
         if(d.record){
           const decoded=new env.Image();decoded.src=d.record.original.dataUrl;await decoded.decode();
           if(decoded.naturalWidth!==d.record.original.width||decoded.naturalHeight!==d.record.original.height)throw Error('Stored image dimensions mismatch');
-          rows=d.rows.map(r=>pair(r.landmark,r.pixel,d.record.original.width,d.record.original.height,r.weight));
+          rows=d.rows.map(r=>pair(r.landmark,r.pixel,d.record.original.width,d.record.original.height,r.weight,r.included));
           record=d.record;image=decoded;activeSource=d.activeSource;
         }
         showScene(next);
@@ -440,7 +452,7 @@
       if(residualMode.value!=='off'&&fitBest&&!photoGhost){
         for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===activePair);
       }
-      rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),String(i+1),COLORS[i%COLORS.length],r.landmark.id===activePair));
+      rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===activePair));
       if(pending)marker(ctx,screenPoint(view,pending),'+','#009ab3');
     }
     function fitPhoto(){
@@ -452,6 +464,19 @@
       photoDraw();add.disabled=!pending||!selected();
       updateHint();
     }
+    function setIncluded(id,included){
+      const row=rows.find(r=>r.landmark.id===id);
+      if(!row||row.included===included)return;
+      rememberUndo();rows=rows.map(r=>r===row?{...r,included}:r);
+      refreshRows();photoDraw();meshDraw();persist();
+    }
+    function inclusionControl(row,i){
+      const label=doc.createElement('label'),check=doc.createElement('input');
+      check.type='checkbox';check.checked=row.included!==false;
+      check.setAttribute('aria-label','Use correspondence '+(i+1)+' for fit');
+      check.onchange=()=>setIncluded(row.landmark.id,check.checked);
+      label.append(check,check.checked?' Fit':' Validation');return label;
+    }
     function refreshRows(){
       if(fitSignature!==null&&fitSignature!==JSON.stringify(rows))invalidateFit('Correspondences changed. Run calibration again.');
       syncFitControls();
@@ -461,6 +486,7 @@
         for(const [column,t] of [String(i+1),landmarkLabel(r.landmark),r.pixel.map(x=>x.toFixed(2)).join(', '),String(r.weight)].entries()){
           const td=doc.createElement('td');td.textContent=t;if(column===0){td.style.color=COLORS[i%COLORS.length];td.style.fontWeight='bold';}if(column===1)td.title=r.landmark.id;tr.append(td);
         }
+        const role=doc.createElement('td');role.append(inclusionControl(r,i));tr.append(role);
         const actions=doc.createElement('td');
         const edit=doc.createElement('button');edit.type='button';edit.textContent='Edit';
         edit.onclick=()=>{
@@ -505,7 +531,7 @@
     function replacePair(id,landmark,pixel){
       const old=rows.find(r=>r.landmark.id===id);if(!old)return;
       try{
-        const next=upsert(rows,pair(landmark,pixel,record.original.width,record.original.height,old.weight),id);
+        const next=upsert(rows,pair(landmark,pixel,record.original.width,record.original.height,old.weight,old.included),id);
         rememberUndo();rows=next;activePair=landmark.id;resetPending();refreshRows();photoDraw();meshDraw();
         message('Correspondence updated.');persist();
       }catch(e){message(e.message);}
@@ -656,7 +682,7 @@
         const ghost=modelGhost?.id===r.landmark.id?modelGhost:null;
         const item=byLandmark.get(r.landmark.id);
         const pixel=ghost?ghost.pixel:item?screenPoint(modelView,item.pixel):null;
-        if(pixel)marker(mesh,pixel,String(i+1),COLORS[i%COLORS.length],!!ghost||r.landmark.id===activePair);
+        if(pixel)marker(mesh,pixel,pairLabel(r,i),COLORS[i%COLORS.length],!!ghost||r.landmark.id===activePair);
       });
       const item=byLandmark.get(pendingModel?.id||(editing?selected()?.id:null));
       if(item)marker(mesh,screenPoint(modelView,item.pixel),'+','#009ab3');
@@ -704,7 +730,7 @@
       try{
         const landmark=pendingModel||selected();
         if(!record||!pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
-        const next=upsert(rows,pair(landmark,pending,record.original.width,record.original.height,Number(weight.value)),editing);
+        const next=upsert(rows,pair(landmark,pending,record.original.width,record.original.height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
         rememberUndo();rows=next;activePair=null;
         resetPending();refreshRows();photoDraw();meshDraw();message('Correspondence saved.');persist();
       }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;}
@@ -892,10 +918,11 @@
     function freeFields(){return Array.from(fitPanel.querySelectorAll('[data-fit-field]')).filter(n=>n.checked).map(n=>n.dataset.fitField);}
     function applyFreeFields(free){for(const n of fitPanel.querySelectorAll('[data-fit-field]'))n.checked=free.includes(n.dataset.fitField);syncFitControls();}
     function syncFitControls(){
-      const free=freeFields();
+      const free=freeFields(),count=fitRows(rows).length;
+      $('ModernCalibrationRoleCount').textContent=count+' Fit · '+(rows.length-count)+' Validation'+(count===0||2*count<free.length?' · insufficient Fit points for selected free parameters':'');
       exportButton.disabled=!record||!scene;
       importButton.disabled=restoring;
-      runFit.disabled=!!fitWorker||!record||!scene||!rows.length||!free.length||2*rows.length<free.length;
+      runFit.disabled=!!fitWorker||!record||!scene||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
       for(const field of fitFields){
         const v=scene?.model[field];
@@ -984,12 +1011,32 @@
       }catch(error){initialProjectionError=String(error.message||error);}
       return initialPoints;
     }
+    function bestProjection(result){
+      if(diagnosticResult===result)return diagnosticBestPoints;
+      const points=result.evaluation.points.slice(),held=rows.filter(r=>r.included===false);
+      if(held.length){
+        try{
+          const width=record.original.width,height=record.original.height,
+            m={...scene.model,...result.pose,deviceRatio:width/height,viewcenterHorizon:3},
+            camera=env.CurvatureCameraPhysicalPose.photoCamera(m,width,height),
+            session=env.CurvatureCameraLandmarkProjection.create(m,camera,width,height,{...scene.physics,method:'canvas-direct'});
+          for(const r of held){
+            try{const q=session[r.kind](r.landmark);points.push({id:r.landmark.id,status:q.status,predicted:q.pixel});}
+            catch(error){points.push({id:r.landmark.id,status:'unavailable',predicted:null});}
+          }
+        }catch(error){for(const r of held)points.push({id:r.landmark.id,status:'unavailable',predicted:null});}
+      }
+      diagnosticResult=result;diagnosticBestPoints=points;return points;
+    }
     function refreshResidualTable(){
       residualPanel.hidden=!fitBest;
-      residualData=fitBest?residualRows(rows,initialProjection(),fitBest.evaluation.points):[];
+      residualData=fitBest?residualRows(rows,initialProjection(),bestProjection(fitBest)):[];
       residualList.replaceChildren();
       residualNotice.textContent=initialProjectionError?'Initial projection unavailable: '+initialProjectionError:'';
       const n=v=>Number.isFinite(v)?v.toFixed(2):'—',xy=p=>p?p.map(n).join(', '):'—';
+      const stats=residualStatistics(residualData);
+      $('ModernCalibrationResidualStats').textContent=fitBest?Object.entries(stats).map(([key,s])=>
+        ({fit:'Fit',validation:'Validation',all:'All points'}[key])+' RMS '+n(s.rms)+' px ('+s.available+'/'+s.count+' projected)').join(' · '):'';
       const max=residualData.reduce((v,r)=>Math.max(v,r.best.error??0),0);
       for(const r of residualData){
         const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.id===activePair);
@@ -1000,6 +1047,7 @@
         button.setAttribute('aria-label','Select correspondence '+r.number);
         button.setAttribute('aria-pressed',String(r.id===activePair));
         button.onclick=()=>selectPair(r.id);cell.append(button);tr.append(cell);
+        const role=doc.createElement('td');role.append(inclusionControl(rows[r.number-1],r.number-1));tr.append(role);
         for(const [key,value] of [['observed',xy(r.observed)],['initial',xy(r.initial.predicted)],['initialError',n(r.initial.error)],
           ['predicted',xy(r.best.predicted)],['dx',n(r.best.residual?.[0])],['dy',n(r.best.residual?.[1])],['error',n(r.best.error)],
           ['status',r.best.status]]){
@@ -1013,12 +1061,12 @@
     residualMode.onchange=()=>{photoDraw();persist();};
     function invalidateFit(message){
       terminateFit();fitBest=null;fitSignature=null;viewBest=false;paintedFit=null;
-      initialPoints=null;initialProjectionError='';
+      initialPoints=null;initialProjectionError='';diagnosticResult=null;diagnosticBestPoints=[];
       fitResult.textContent='';fitStatus.textContent=message;syncFitControls();refreshResidualTable();photoDraw();
     }
     function fitSummary(r){
       const n=v=>Number.isFinite(v)?v.toFixed(2):'—';
-      fitResult.textContent='Original pixels: RMS '+n(r.initialRmsPx)+' → '+n(r.evaluation.rmsPx)+
+      fitResult.textContent='Original pixels: Fit RMS '+n(r.initialRmsPx)+' → '+n(r.evaluation.rmsPx)+
         ' px · weighted RMS '+n(r.evaluation.weightedRmsPx)+' px · '+r.evaluations+' evaluations · '+
         fitFields.map((k,i)=>fitLabels[i]+': '+(Number.isFinite(r.pose[k])?Number(r.pose[k].toPrecision(7)):'—')).join(' · ');
       refreshResidualTable();photoDraw();
@@ -1040,11 +1088,13 @@
       const v=fit(fitRaster.width,fitRaster.height,sceneCanvas.width,sceneCanvas.height);
       mesh.drawImage(fitRaster,v.x,v.y,fitRaster.width*v.scale,fitRaster.height*v.scale);
       const sx=fitRaster.width/record.original.width,sy=fitRaster.height/record.original.height;
-      paintedFit.evaluation.points.forEach((p,i)=>{
+      const byId=new Map(bestProjection(paintedFit).map(p=>[p.id,p]));
+      rows.forEach((r,i)=>{
+        const p=byId.get(r.landmark.id);if(!p||!['visible','out_of_frame'].includes(p.status))return;
         if(p.predicted&&p.predicted.every(Number.isFinite)){
           const xy=screenPoint(v,[p.predicted[0]*sx,p.predicted[1]*sy]);
           if(xy[0]>=0&&xy[0]<sceneCanvas.width&&xy[1]>=0&&xy[1]<sceneCanvas.height)
-            marker(mesh,xy,String(i+1),COLORS[i%COLORS.length],p.id===activePair);
+            marker(mesh,xy,pairLabel(r,i),COLORS[i%COLORS.length],p.id===activePair);
         }
       });
     }
@@ -1058,7 +1108,7 @@
       if(runFit.disabled)return;
       invalidateFit('Starting Canvas Direct fit…');meshDraw();
       const free=freeFields(),model=JSON.parse(JSON.stringify(scene.model));
-      const input=JSON.parse(JSON.stringify(rows)),physics=JSON.parse(JSON.stringify(scene.physics));
+      const input=JSON.parse(JSON.stringify(fitRows(rows))),physics=JSON.parse(JSON.stringify(scene.physics));
       fitSignature=JSON.stringify(rows);
       try{
         const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1&vertex-scale=1');fitWorker=worker;
@@ -1106,8 +1156,8 @@
     mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
-      observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
+      observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,residualRows,drawResidual,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

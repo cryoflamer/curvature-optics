@@ -1,3 +1,23 @@
+## 8C.4b — Explicit Fit and Validation correspondences
+
+Each correspondence has a persistent Fit checkbox (default on); turning it
+off keeps the point as a held-out Validation observation. V-suffixed markers
+preserve original point numbers in both views. The worker receives only Fit
+rows, including their existing positive weights; authored range scaling,
+least-squares solver and physical models are unchanged. The necessary
+scalar-observation count uses Fit rows only, not a uniqueness test. Best
+and initial residuals remain in original photo pixels; held-out projections
+are computed separately, never used in the objective. The table shows Fit,
+Validation and All points unweighted RMS, with explicit projected/total
+counts. A missing projection makes its group RMS unavailable, not zero.
+Role changes invalidate stale results, cancel running fits and support Undo.
+Drafts preserve roles; portable experiment version 2 stores them and imports
+version 1 as all-Fit. Stored solver results are checked against Fit rows only;
+validation diagnostics are reconstructed from the stored pose on import.
+Added pure role/statistics/migration tests and extended Chromium smoke for
+role toggling and Undo. Previous 8C.4a CI passed (44590712939); new CI pending.
+Next: 8C.5 robust loss, after real-photo held-out experiments.
+
 ## 8C.4a — Photo residual visualization
 
 Photo Calibration displays observed crosses, predicted rings and dashed

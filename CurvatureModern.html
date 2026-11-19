@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -238,13 +238,16 @@
       <h3>Calibration residuals · original image pixels</h3>
       <p>Click a point number to highlight its corresponding markers on both views. Δ = predicted − observed. Largest best-camera error is bold.</p>
       <p id="ModernCalibrationResidualNotice" role="status"></p>
+      <p id="ModernCalibrationResidualStats" role="status"></p>
       <div style="overflow-x:auto">
-        <table><thead><tr><th>#</th><th>Observed (x,y)</th><th>Initial (x,y)</th><th>Initial error</th><th>Best (x,y)</th><th>ΔX</th><th>ΔY</th><th>Best error</th><th>Best status</th></tr></thead>
+        <table><thead><tr><th>#</th><th>Role</th><th>Observed (x,y)</th><th>Initial (x,y)</th><th>Initial error</th><th>Best (x,y)</th><th>ΔX</th><th>ΔY</th><th>Best error</th><th>Best status</th></tr></thead>
           <tbody id="ModernCalibrationResidualRows"></tbody></table>
       </div>
     </section>
     <h3 id="ModernCalibrationCount">0 correspondences</h3>
-    <table><thead><tr><th>#</th><th>Landmark</th><th>Original pixels</th><th>Weight</th><th>Actions</th></tr></thead><tbody id="ModernCalibrationPairs"></tbody></table>
+    <p id="ModernCalibrationRoleCount" role="status"></p>
+    <p>Uncheck Fit to hold a point out for validation (V markers). Changing roles requires a new fit. Validation points never enter the objective; unavailable projections make the corresponding RMS unavailable.</p>
+    <table><thead><tr><th>#</th><th>Landmark</th><th>Original pixels</th><th>Weight</th><th>Role</th><th>Actions</th></tr></thead><tbody id="ModernCalibrationPairs"></tbody></table>
     <p>Draft automatically saved in this browser. Full-model overlay and accepting the fitted camera follow in the next stages.</p>
   </section>
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>

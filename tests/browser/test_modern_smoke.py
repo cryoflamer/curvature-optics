@@ -750,6 +750,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel).to_be_hidden()
         expect(select).to_be_disabled()
         expect(residual).to_have_count(0)
+        # Holding out the only point disables fitting; role survives export and Undo.
+        role=workspace.locator('#ModernCalibrationPairs').get_by_role('checkbox',name='Use correspondence 1 for fit')
+        role.uncheck()
+        expect(workspace.locator('#ModernCalibrationRunFit')).to_be_disabled()
+        expect(workspace.locator('#ModernCalibrationRoleCount')).to_contain_text('0 Fit · 1 Validation')
+        held=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+        self.assertEqual(held['version'],2)
+        self.assertFalse(held['observations'][0]['included'])
+        self.assertIsNone(held['fit']['result'])
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(role).to_be_checked()
+        expect(workspace.locator('#ModernCalibrationRunFit')).to_be_enabled()
 
     def test_all_workspace_tabs_restore_through_same_preference(self):
         self.open_modern()
