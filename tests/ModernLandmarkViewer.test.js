@@ -148,3 +148,16 @@ test('free region painter clips near-plane crossing primitives and keeps every o
   const stats=viewer.drawRegion({width:100,height:100,getContext:()=>ctx},geometry,{...viewer.reset(),projection:'perspective'});
   assert.equal(stats.count,1);assert.equal(stats.visible,1);assert.equal(fill,1);assert.equal(stroke,1);
 });
+
+test('orbit sensitivity defaults to quarter speed and depends only on CSS motion',()=>{
+  const s=viewer.reset(),a=viewer.orbit(s,100,50),b=viewer.orbit(s,100,50,100);
+  assert.ok(Math.abs(a.yaw-.2)<1e-12);assert.ok(Math.abs(a.pitch-.1)<1e-12);
+  assert.ok(Math.abs(b.yaw-.8)<1e-12);assert.ok(Math.abs(b.pitch-.4)<1e-12);
+  assert.ok(Math.abs(viewer.orbit(s,100,50,5).yaw-.04)<1e-12);
+  assert.deepEqual(viewer.orbit(s,100,50),viewer.orbit(s,100,50,25));
+  assert.equal(viewer.orbitSensitivity(null),25);assert.equal(viewer.orbitSensitivity(NaN),25);
+  assert.equal(viewer.orbitSensitivity(-1),5);assert.equal(viewer.orbitSensitivity(200),100);
+  assert.equal(viewer.orbitSensitivity(27),25);
+  assert.equal(viewer.orbit(s,0,100000).pitch,Math.PI/2);
+  assert.deepEqual(s,viewer.reset());
+});

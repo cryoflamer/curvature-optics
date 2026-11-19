@@ -1,3 +1,16 @@
+## 8F.2e — Orbit sensitivity refinement
+
+User verification of Free View on Soundly found mouse orbit too fast.
+Use CSS-pixel deltas independently of raster resolution and device pixel
+ratio. Default sensitivity 25% of the former 0.008 rad/pixel coefficient
+(0.002 rad/CSS pixel); range 5–100%, step 5%, explicit reset to default.
+Persist the preference separately in localStorage; camera reset does not
+change it. Pan remains in backing-store coordinates and zoom unchanged.
+Twelve headless viewer tests passed; browser angle/persistence assertions
+added. Previous CI Node and architecture jobs passed; Chromium failed
+on workspace restore timeout and a photo marker drag assertion, neither
+resolved by the sensitivity change. Next: user verification before 8F.3.
+
 ## 8F.2d — Free View and exact optical Reset View
 
 The rectangular magnifier now has Free View, direct drag-to-orbit, wheel

@@ -39,7 +39,9 @@
     if(!angles[name])return state;
     return {...state,yaw:angles[name][0],pitch:angles[name][1],pan:[0,0],zoom:1};
   }
-  function orbit(state,dx,dy){return {...state,yaw:((state.yaw+dx*.008+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI,pitch:clamp(state.pitch+dy*.008,-Math.PI/2,Math.PI/2)};}
+  const DEFAULT_SENSITIVITY=25,SENSITIVITY_KEY='curvature-landmark-viewer-orbit-sensitivity-v1';
+  function orbitSensitivity(value){return typeof value==='number'&&Number.isFinite(value)?Math.round(clamp(value,5,100)/5)*5:DEFAULT_SENSITIVITY;}
+  function orbit(state,dx,dy,sensitivity=DEFAULT_SENSITIVITY){const k=.008*orbitSensitivity(sensitivity)/100;return {...state,yaw:((state.yaw+dx*k+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI,pitch:clamp(state.pitch+dy*k,-Math.PI/2,Math.PI/2)};}
   function pan(state,dx,dy){return {...state,pan:[state.pan[0]+dx,state.pan[1]+dy]};}
   function zoom(state,factor){return {...state,zoom:clamp(state.zoom*factor,.1,100)};}
   function camera(state,b,width,height){
@@ -276,6 +278,16 @@
     let geometry=null,crop=null,free=false,state=reset(),drag=null,windowDrag=null,rect=null;
     const sceneControls=dialog.querySelector('[data-viewer-scene-controls]'),freeButton=dialog.querySelector('[data-viewer-free]');
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
+    const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
+    let sensitivity=DEFAULT_SENSITIVITY;
+    try{const saved=env.localStorage.getItem(SENSITIVITY_KEY);if(saved!==null)sensitivity=orbitSensitivity(JSON.parse(saved));}catch(e){/* Optional UI preference. */}
+    function setSensitivity(value){
+      sensitivity=orbitSensitivity(value);sensitivityInput.value=String(sensitivity);sensitivityValue.textContent=sensitivity+'%';
+      try{env.localStorage.setItem(SENSITIVITY_KEY,JSON.stringify(sensitivity));}catch(e){/* Optional UI preference. */}
+    }
+    setSensitivity(sensitivity);
+    sensitivityInput.oninput=()=>setSensitivity(Number(sensitivityInput.value));
+    dialog.querySelector('[data-viewer-sensitivity-reset]').onclick=()=>setSensitivity(DEFAULT_SENSITIVITY);
     function syncMode(){
       sceneControls.style.display=crop?'':'none';
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
@@ -360,17 +372,18 @@
     wire.onchange=()=>{state={...state,wireframe:wire.checked};render();};
     spans.onchange=()=>{state={...state,spans:spans.checked,pan:[0,0],zoom:1};render();};
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
-    function point(e){const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];}
     canvas.addEventListener('pointerdown',e=>{
       if((!geometry&&!crop?.build)||drag||windowDrag||![0,1,2].includes(e.button))return;
-      e.preventDefault();canvas.focus({preventScroll:true});drag={id:e.pointerId,last:point(e),css:[e.clientX,e.clientY],pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();canvas.focus({preventScroll:true});drag={id:e.pointerId,css:[e.clientX,e.clientY],pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove',e=>{
       if(!drag||drag.id!==e.pointerId)return;
       const css=[e.clientX,e.clientY],delta=sub(css,drag.css);
-      if(crop&&!free){if(Math.hypot(...delta)<3)return;if(!enterFree())return;drag.last=point(e);}
-      const p=point(e),d=crop?delta.map(v=>v*canvas.width/Math.max(1,canvas.clientWidth)):sub(p,drag.last);
-      state=drag.pan?pan(state,...d):orbit(state,...d);drag.last=p;drag.css=css;render();
+      if(crop&&!free){if(Math.hypot(...delta)<3)return;if(!enterFree())return;}
+      // Orbit uses CSS pixels only. Pan still maps into backing-store pixels.
+      const r=canvas.getBoundingClientRect();
+      state=drag.pan?pan(state,delta[0]*canvas.width/Math.max(1,r.width),delta[1]*canvas.height/Math.max(1,r.height)):orbit(state,...delta,sensitivity);
+      drag.css=css;render();
     });
     const end=e=>{if(drag?.id===e.pointerId)drag=null;};
     for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
@@ -392,5 +405,5 @@
       snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError}:{mode:'scene',region:{...crop.region}}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented and user-inspected; 8F.2b modeless window implemented (CI pending); 8F.2c rectangular magnifier implemented (CI pending); 8F.2d Free View and Reset View implemented (CI and cross-scene user verification pending before 8F.3). See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented and user-inspected; 8F.2b modeless window implemented (CI pending); 8F.2c rectangular magnifier implemented (CI pending); 8F.2d Free View and Reset View implemented; 8F.2e sensitivity refinement implemented (CI and user verification pending before 8F.3). See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -158,6 +158,11 @@ Test multi-object regions, near/far overlap, pivot and frame stability,
 scene reset after orbit/zoom/pan/resize, non-Soundly scene types, and no
 mutation of experiment state. Require user verification on Soundly and
 at least one other scene type before 8F.3.
+
+### 8F.2e — Orbit sensitivity (implemented)
+User testing on Soundly requested slower rotation. Use CSS-pixel deltas,
+default 25% of previous coefficient, adjustable 5–100% with UI persistence
+and a separate sensitivity reset. Verify angle scaling and camera isolation.
 
 ### 8F.3 — Local picking
 Pick any eligible owner in the magnified region, independent of the initial

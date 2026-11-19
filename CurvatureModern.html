@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;orbit-sensitivity=1"></script>
 <script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1"></script>
 </head>
 <body>
@@ -256,6 +256,7 @@
         <label><input type="checkbox" data-viewer-spans> Adjacent context</label>
         <button type="button" data-viewer-zoom="1.25" aria-label="Zoom in">+</button><button type="button" data-viewer-zoom="0.8" aria-label="Zoom out">−</button>
       </div>
+      <div class="modern-calibration-toolbar" data-viewer-free-controls><label>Orbit sensitivity <input type="range" min="5" max="100" step="5" value="25" data-viewer-sensitivity> <output data-viewer-sensitivity-value>25%</output></label><button type="button" data-viewer-sensitivity-reset>Reset sensitivity</button></div>
       <div data-viewer-frame><canvas width="800" height="520" tabindex="0" aria-label="Isolated authored object"></canvas></div>
       <p data-viewer-status role="status"></p>
       <footer><p>Drag title to move · drag corner to resize. <span data-viewer-free-controls>Canvas drag to orbit · Shift/right-drag to pan · wheel to zoom.</span></p><button type="button" data-viewer-resize aria-label="Resize inspector (arrow keys)" title="Drag to resize">◢</button></footer>
