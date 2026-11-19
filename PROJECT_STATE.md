@@ -1,3 +1,18 @@
+## Modern Demo Catalog — Export preferences (#4)
+
+PNG and video preferences are independently stored in browser-local versioned keys.
+Only known controls and supported option values are restored; unavailable storage,
+invalid JSON and disabled options retain safe defaults. Jobs, progress, generated
+files and filesystem handles are not persisted. Dependent UI updates use existing
+initialization and change handlers.
+
+Opera acceptance for #3 / 7D.2.3A: Soundly Causeway, Full HD, Fixed/Auto, four
+workers, VP9: Accurate RK4 296 frames at 5 FPS in 238.1 s; Canvas Direct 1773
+frames at 30 FPS in 71.7 s (24.72 output frames/s, ~19.9x normalized throughput).
+Canvas Direct optics averaged 5.55 ms/view vs 1214.52 ms/view for Accurate.
+The runs differ in FPS and bitrate (2 vs 12 Mbps), so this is not a controlled
+codec benchmark. Encoder/handoff optimization is deferred; no physics changes.
+
 ## Modern Demo Catalog — Selectable Export Renderer (7D.2.3A)
 
 Issue #3 follow-up: PNG and video exports (Simulation only and Full presentation)

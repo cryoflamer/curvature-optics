@@ -2708,6 +2708,29 @@
   function studioExportProject(id){
     return studioPrepared&&(studioPlayback&&studioPlayback.project||studioPrepared)||studioApi.build(studioDraft,id);
   }
+  // Browser-local export preferences, independent of project and job state.
+  function bindStudioExportPreferences(kind){
+    var prefix='ModernAnimation'+kind+'Export',key='curvature.animation.export.'+kind.toLowerCase()+'.v1';
+    var fields=['Renderer','Mode','Fps','Size','PresentationSize','Layout','Stability','Narrative','Workers','CameraHud','Target'].concat(
+      kind==='Frame'?['Destination']:['Format','Quality','CompareLayout']);
+    var storage,saved={};
+    try{storage=root.localStorage;if(storage)saved=JSON.parse(storage.getItem(key)||'{}')||{};}catch(error){}
+    function valid(node,value){
+      return node.type==='checkbox'?typeof value==='boolean':typeof value==='string'&&
+        Array.from(node.options||[]).some(function(option){return option.value===value&&!option.disabled;});
+    }
+    function persist(){
+      var values={};fields.forEach(function(field){var node=newUiEl(prefix+field);if(!node)return;
+        var value=node.type==='checkbox'?node.checked:node.value;if(valid(node,value))values[field]=value;});
+      try{if(storage)storage.setItem(key,JSON.stringify(values));}catch(error){}
+    }
+    fields.forEach(function(field){var node=newUiEl(prefix+field);if(!node)return;
+      var value=saved[field];if(valid(node,value)){
+        if(node.type==='checkbox')node.checked=value;else node.value=value;
+      }
+      node.addEventListener('change',persist);
+    });
+  }
   function exportRendererLabel(method){return method==='canvas-direct'?'Canvas Direct (approximate)':'Accurate RK4';}
   function studioVideoExportSelection(){
     var project=studioExportProject('studio_video_export');
@@ -2866,6 +2889,7 @@
     var start=newUiEl('ModernAnimationVideoExportStart');
     var cancel=newUiEl('ModernAnimationVideoExportCancel');
     if(!start||!cancel)return;
+    bindStudioExportPreferences('Video');
     var progress=newUiEl('ModernAnimationVideoExportProgress');
     var profilePanel=newUiEl('ModernAnimationVideoProfileSummary');
     var profileDownload=newUiEl('ModernAnimationVideoProfileDownload');
@@ -3031,6 +3055,7 @@
       previewArchive=null;previewFilename=null;if(panel)panel.hidden=true;}
     var destination=newUiEl('ModernAnimationFrameExportDestination');
     if(destination&&typeof root.showSaveFilePicker!=='function'){destination.value='memory';if(destination.options&&destination.options[0])destination.options[0].disabled=true;}
+    bindStudioExportPreferences('Frame');
     var savePreview=newUiEl('ModernAnimationFrameExportPreviewSave');
     if(savePreview)savePreview.addEventListener('click',function(){
       if(!previewArchive)return;
