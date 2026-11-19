@@ -644,12 +644,19 @@ class ModernBrowserSmoke(unittest.TestCase):
             const e=CurvatureModernPhotoCalibrationEditor.mount(document),p=e.preview();
             const c=document.getElementById('ModernCalibrationMesh'),r=c.getBoundingClientRect();
             const a=CurvatureModernPhotoCalibrationEditor;
-            const candidates=p.points.map(item=>({item,xy:a.screenPoint(p.view,item.pixel)}))
+            const candidates=p.points.filter(item=>item.painterVisible).map(item=>({item,xy:a.screenPoint(p.view,item.pixel)}))
               .filter(q=>q.xy[0]>12&&q.xy[0]<c.width-12&&q.xy[1]>12&&q.xy[1]<c.height-12);
-            const q=candidates[0];
-            if(!q)throw Error('No candidate in visible model viewport');
-            const hits=a.snapCandidates(p.points,p.view,...q.xy,10*c.width/r.width,2*c.width/r.width);
-            return {x:q.xy[0]*r.width/c.width,y:q.xy[1]*r.height/c.height,ids:hits.map(h=>h.landmark.id)};
+            // Use rounded CSS pointer coordinates, matching actual input.
+            for(const q of candidates){
+              const x=Math.round(q.xy[0]*r.width/c.width),y=Math.round(q.xy[1]*r.height/c.height);
+              const pick=e.inspectPick(x*c.width/r.width,y*c.height/r.height);
+              if(pick.ids.length){
+                if(!pick.ids.every(id=>p.points.find(v=>v.landmark.id===id).objectKey===pick.key))
+                  throw Error('Cross-object pick');
+                return {x,y,ids:pick.ids};
+              }
+            }
+            throw Error('No painter-visible candidate in model viewport');
         }""")
         model.hover(position={'x':hit['x'],'y':hit['y']})
         expect(workspace.locator('#ModernCalibrationPickStatus')).to_contain_text('Bank')

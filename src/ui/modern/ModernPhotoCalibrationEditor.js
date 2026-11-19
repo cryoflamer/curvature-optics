@@ -99,6 +99,39 @@
     }
     return result;
   }
+  // Reuse the decoded identity spans for constant-time interior ownership.
+  function ownershipRaster(spans,width,height){
+    const ids=new Uint16Array(width*height);
+    for(const [key,runs] of spans)for(const [x,y,length] of runs)
+      ids.fill(key,y*width+x,y*width+x+length);
+    return {ids,width,height};
+  }
+  function ownerAt(raster,x,y,radius=0){
+    if(!raster||!Number.isFinite(x)||!Number.isFinite(y))return null;
+    const {ids,width,height}=raster,ix=Math.floor(x),iy=Math.floor(y);
+    if(ix<0||iy<0||ix>=width||iy>=height)return null;
+    const exact=ids[iy*width+ix];
+    if(exact)return exact;
+    let key=null,best=Infinity,tied=false;
+    for(let j=Math.max(0,Math.floor(y-radius));j<=Math.min(height-1,Math.floor(y+radius));j++){
+      for(let i=Math.max(0,Math.floor(x-radius));i<=Math.min(width-1,Math.floor(x+radius));i++){
+        const id=ids[j*width+i];if(!id)continue;
+        const dist=Math.hypot(i+.5-x,j+.5-y);
+        if(dist>radius)continue;
+        if(dist<best-1e-9){key=id;best=dist;tied=false;}
+        else if(Math.abs(dist-best)<1e-9&&id!==key)tied=true;
+      }
+    }
+    return tied?null:key;
+  }
+  function visiblePick(raster,points,view,x,y,radius=10,tie=2){
+    // An occupied pixel always wins over a closer projected hidden vertex.
+    // A tiny background tolerance covers silhouette/antialias gaps only.
+    const key=ownerAt(raster,(x-view.x)/view.scale,(y-view.y)/view.scale,
+      Math.min(3,radius*.4/view.scale));
+    return {key,candidates:key===null?[]:snapCandidates(points.filter(p=>p.objectKey===key&&p.painterVisible),
+      view,x,y,radius,tie)};
+  }
   function nearestMarker(markers,p,radius){
     let best=null,distance=radius;
     for(const m of markers){const d=Math.hypot(m.pixel[0]-p[0],m.pixel[1]-p[1]);
@@ -165,7 +198,7 @@
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
     const identityRaster=doc.createElement('canvas'),highlightRaster=doc.createElement('canvas');
-    let visibleSpans=new Map(),highlightKey=null;
+    let visibleSpans=new Map(),highlightKey=null,ownership=null,hoverObject=null,visibleByObject=new Map();
     const sourcePicker=$('ModernCalibrationSource'),sourceStatus=$('ModernCalibrationSourceStatus'),
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
@@ -424,12 +457,12 @@
     function fitModel(){
       if(!previewValid)return;
       modelView=fit(modelRaster.width,modelRaster.height,sceneCanvas.width,sceneCanvas.height);
-      hover=[];clearAmbiguity();meshDraw();
+      clearHover();clearAmbiguity();
     }
     function renderModel(){
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
-      visibleSpans=new Map();highlightKey=null;
-      hover=[];clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
+      visibleSpans=new Map();highlightKey=null;ownership=null;hoverObject=null;visibleByObject=new Map();
+      hover=[];hoverIndex=0;$('ModernCalibrationHoverTip').hidden=true;clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
       try{
         const size=previewSize(record?.original.width||sceneCanvas.width,record?.original.height||sceneCanvas.height);
         modelRaster.width=size.width;modelRaster.height=size.height;
@@ -447,6 +480,12 @@
           renderer.paint(identityRaster,camera,m,{...scene.physics,
             canvasDirectOptions:{thinOutlines:true,objectIdentityPass:true}});
           visibleSpans=identitySpans(identityRaster.getContext('2d').getImageData(0,0,size.width,size.height).data,size.width,size.height);
+          const validKeys=new Set();
+          for(let bank=0;bank<2;bank++)for(const p of scene.banks[bank]){
+            const i=p.metadata?.placedObjectIndex;if(Number.isInteger(i))validKeys.add(i*2+bank+1);
+          }
+          for(const key of visibleSpans.keys())if(!validKeys.has(key))visibleSpans.delete(key);
+          ownership=ownershipRaster(visibleSpans,size.width,size.height);
         }catch(error){visibleSpans=new Map();console.warn('Calibration object highlight unavailable:',error);}
         const projection=env.CurvatureCameraLandmarkProjection.create(m,camera,size.width,size.height,
           {...scene.physics,method:'canvas-direct'});
@@ -457,22 +496,29 @@
               const landmark={id:'b'+b+':p'+index+':v'+j,bank:b,objectType:m.ObjType[b],primitive:index,vertex:j};
               const result=projection.vertex(landmark);
               if(result.status!=='visible'||!result.pixel)continue;
-              const item={landmark,pixel:result.pixel,worldKey:world.map(x=>Math.round(x*1e6)).join(',')};
+              const key=objectKey(landmark,scene.banks);
+              const painterVisible=key!==null&&ownerAt(ownership,...result.pixel,2.5)===key;
+              const item={landmark,pixel:result.pixel,worldKey:world.map(x=>Math.round(x*1e6)).join(','),objectKey:key,painterVisible};
               projected.push(item);byLandmark.set(landmark.id,item);
+              if(painterVisible){
+                if(!visibleByObject.has(key))visibleByObject.set(key,[]);
+                visibleByObject.get(key).push(item);
+              }
             }
           }
         }
-        index=spatialIndex(projected);previewValid=true;fitModel();
+        index=spatialIndex(projected.filter(p=>p.painterVisible));previewValid=true;fitModel();
         modelStatus.textContent='Canvas Direct · '+stats.sourceObjects+' objects · '+projected.length+
-          ' in-frame terrain-eligible vertices · mutual occlusion not tested';
+          ' terrain-eligible vertices · '+projected.filter(p=>p.painterVisible).length+' painter-visible pick candidates'+
+          (ownership?' · approximate painter visibility':' · identity unavailable; use manual menu');
       }catch(e){
         projected=[];byLandmark.clear();modelView=null;meshDraw();
         modelStatus.textContent='Model preview unavailable: '+e.message+'; the landmark menu remains available.';
       }
     }
     function highlightedObject(){
-      const landmark=modelGhost?hover[hoverIndex]?.landmark:
-        hover[hoverIndex]?.landmark||pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
+      if(hoverObject!==null||modelGhost)return hoverObject;
+      const landmark=pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
       return landmark&&scene?objectKey(landmark,scene.banks):null;
     }
     function drawObjectHighlight(){
@@ -492,11 +538,14 @@
       if(!modelView||!previewValid)return;
       mesh.drawImage(modelRaster,modelView.x,modelView.y,modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
       drawObjectHighlight();
-      if(showLandmarks.checked){
-        mesh.fillStyle='#0086a4';mesh.globalAlpha=.6;
-        for(const item of projected){
+      // By default reveal only the eligible vertices of the hovered object.
+      // The explicit checkbox still shows all painter-visible candidates.
+      const dots=showLandmarks.checked?projected.filter(p=>p.painterVisible):visibleByObject.get(highlightedObject())||[];
+      if(dots.length){
+        mesh.fillStyle='#006f92';mesh.globalAlpha=.85;
+        for(const item of dots){
           const p=screenPoint(modelView,item.pixel);
-          if(p[0]>=0&&p[0]<sceneCanvas.width&&p[1]>=0&&p[1]<sceneCanvas.height)mesh.fillRect(p[0]-1,p[1]-1,2,2);
+          if(p[0]>=0&&p[0]<sceneCanvas.width&&p[1]>=0&&p[1]<sceneCanvas.height)mesh.fillRect(p[0]-2,p[1]-2,4,4);
         }
         mesh.globalAlpha=1;
       }
@@ -517,34 +566,36 @@
         }
       }
     }
-    function hits(p){
-      if(!modelView)return [];
-      // The canvas may be CSS-scaled. Keep the mouse tolerance in CSS pixels.
+    function inspectPick(p){
+      if(!modelView)return {key:null,candidates:[]};
       const ratio=sceneCanvas.width/Math.max(1,sceneCanvas.getBoundingClientRect().width);
-      return snapCandidates(index.query(modelView,p[0],p[1],10*ratio),modelView,p[0],p[1],10*ratio,2*ratio);
+      return visiblePick(ownership,index.query(modelView,p[0],p[1],10*ratio),modelView,p[0],p[1],10*ratio,2*ratio);
     }
+    function objectLabel(key){return 'Bank '+((key-1)%2+1)+' · Object '+(Math.floor((key-1)/2)+1)+' (far-to-near)';}
     function clearAmbiguity(){
       ambiguous=[];pickConflict.hidden=true;pickOptions.replaceChildren();
     }
     function hoverAt(p,draw=true){
       const previous=hover[hoverIndex]?.landmark.id;
-      hover=hits(p);hoverIndex=Math.max(0,hover.findIndex(q=>q.landmark.id===previous));
+      const result=inspectPick(p);hoverObject=result.key;hover=result.candidates;
+      hoverIndex=Math.max(0,hover.findIndex(q=>q.landmark.id===previous));
       const item=hover[hoverIndex];
       const tip=$('ModernCalibrationHoverTip');
-      tip.hidden=!item;
-      if(item){
-        tip.textContent=(hover.length>1?'Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · ':'')+
-          landmarkLabel(item.landmark)+' · '+(modelGhost?'Release to snap':'Click highlighted vertex');
+      tip.hidden=hoverObject===null;
+      if(hoverObject!==null){
+        tip.textContent=item?(hover.length>1?'Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · ':'')+
+          landmarkLabel(item.landmark)+' · '+(modelGhost?'Release to snap':'Click highlighted vertex'):
+          objectLabel(hoverObject)+' · Move to a marked vertex';
         const r=sceneCanvas.getBoundingClientRect();
         tip.style.left=Math.min(Math.max(0,p[0]*r.width/sceneCanvas.width+12),Math.max(0,r.width-230))+'px';
         tip.style.top=Math.min(Math.max(0,p[1]*r.height/sceneCanvas.height+16),Math.max(0,r.height-42))+'px';
       }
       pickStatus.textContent=item?landmarkLabel(item.landmark)+(hover.length>1?' · '+(hoverIndex+1)+'/'+hover.length:''):
-        $('ModernCalibrationActionHint').textContent;
+        hoverObject!==null?objectLabel(hoverObject)+' · Move to a marked vertex':$('ModernCalibrationActionHint').textContent;
       if(draw)meshDraw();
     }
     function clearHover(){
-      hover=[];hoverIndex=0;$('ModernCalibrationHoverTip').hidden=true;meshDraw();
+      hover=[];hoverIndex=0;hoverObject=null;$('ModernCalibrationHoverTip').hidden=true;meshDraw();
     }
     function savePair(){
       try{
@@ -571,7 +622,7 @@
     function pickAt(p){
       hoverAt(p);
       const item=hover[hoverIndex];
-      if(!item){pickStatus.textContent='No eligible vertex here. Zoom in or use the landmark menu.';return;}
+      if(!item){pickStatus.textContent=hoverObject!==null?'Move to a visible vertex of '+objectLabel(hoverObject):'No visible object here. Zoom in or use the landmark menu.';return;}
       chooseModel(item);
     }
     // Legacy manual candidate controls remain as fallback for old hosts.
@@ -754,11 +805,11 @@
       }
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
-    mounted={enter,restore:restoreDraft,preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,nearestMarker,pair,upsert,photoChoices,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,mount});
 }));

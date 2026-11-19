@@ -1,3 +1,17 @@
+## 8B.6 — Object-first picking
+
+The visible painter identity under the pointer now determines the highlighted
+logical object even away from a vertex. A bounded edge tolerance handles
+blank/antialiased pixels; occupied pixels take precedence. Snap candidates
+are restricted to that object's vertices with local painter-identity support.
+The chosen object's eligible vertices are shown automatically. No global
+vertex fallback is used when ownership is absent; manual landmark entry is
+still available. Existing pairs are not rewritten. The raster is at preview
+resolution and uses approximate painter visibility, not exact mutual or
+self-depth; very thin edges may be unavailable. Added overlap and ownership
+regressions and updated browser picking test. CI/manual Soundly validation
+pending.
+
 ## 8B.6 — Logical object highlighting
 
 Hover, Tab candidate cycling, pending model selection and selected pairs tint

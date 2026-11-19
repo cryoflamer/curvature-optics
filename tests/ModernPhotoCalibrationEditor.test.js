@@ -86,3 +86,18 @@ test('identity mask groups visible pixels by logical object and bank, not primit
   assert.deepEqual(spans.get(10),[[0,1,1]]);
   assert.equal(spans.size,2);
 });
+
+test('visible object takes priority over overlapping or closer hidden landmarks',()=>{
+ const raster=editor.ownershipRaster(new Map([[1,[[0,2,8]]],[2,[[8,2,8]]]]),16,5);
+ const view={x:0,y:0,scale:1};
+ const pt=(id,key,x,visible=true)=>({landmark:{id},objectKey:key,painterVisible:visible,pixel:[x,2.5],worldKey:id});
+ const points=[pt('hidden-near',2,5),pt('right',1,7),pt('self-hidden',1,5,false),pt('other',2,9)];
+ const hit=editor.visiblePick(raster,points,view,5,2.5);
+ assert.equal(hit.key,1);
+ assert.deepEqual(hit.candidates.map(p=>p.landmark.id),['right']);
+ assert.equal(editor.visiblePick(raster,points,view,9,2.5).key,2);
+ assert.equal(editor.visiblePick(raster,[],view,5,2.5).key,1,'object interior does not require nearby vertices');
+ assert.equal(editor.ownerAt(raster,5,1.5,2),1,'small edge gap recovers ownership');
+ assert.equal(editor.ownerAt(raster,5,-1,3),null);
+ assert.deepEqual(editor.visiblePick(null,points,view,5,2.5).candidates,[],'no unsafe global fallback');
+});
