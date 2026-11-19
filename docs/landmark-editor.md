@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.2 implemented; 8F.2 user-tested; 8F.2a implemented and user-inspected; 8F.2b modeless window implemented (CI pending); 8F.2c rectangular magnifier implemented (CI pending); 8F.2d Free View and Reset View implemented; 8F.2e sensitivity refinement implemented and user-approved on Soundly; 8F.3a mathematical core implemented (CI passed); 8F.3b Free View picking implemented; 8F.3c local adjustment implemented (CI pending); 8F.3d next. See [architecture audit](landmark-editor-audit.md) for the selected contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; next 8F.4a. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -225,35 +225,95 @@ Flat nonlinear refinement and optical authoring UI are out of scope; existing
 Flat forward/model comparison and inverse diagnostic core remain unchanged.
 No fit or correspondence changes.
 
+### 8F.4.0 — Approved material-anchor and correspondence architecture
+
+The Globe optical picking baseline (`d10fefb8`) passed CI run
+[44634760850](https://github.com/cryoflamer/curvature-optics/actions/runs/44634760850)
+and was reported working by the user. The following plan is approved;
+implementation beyond local picking has not yet started.
+
+#### Invariants
+
+- One canonical correspondence collection owned by Photo Calibration; the
+  table, Photograph, Main Model, Scene View and Free View are synchronized
+  representations, not independent stores.
+- A pair has a stable ID, original-photo pixel, material anchor, weight and
+  Fit/Validation role. Editing either side preserves the other side and
+  all unrelated fields. Viewer navigation and local draft edits do not
+  change observations or invalidate a fit.
+- Anchors are camera-independent: stable authored owner/primitive identity,
+  original vertex indices, topology guard and material weights. Never use
+  raster coordinates, effective-radius XYZ, local viewer order or transient
+  camera-space positions as persistent identity.
+- Vertex, Edge and Surface are first-class material anchors. Edge uses
+  original endpoints and a bounded parameter; Surface uses an authored
+  triangle and normalized nonnegative barycentric weights. Exact serialized
+  schema is to be chosen in 8F.4a after auditing existing contracts.
+- Real-photo anchor authoring and calibration target Globe and supported
+  Globe optics. Do not extend Flat optical inverse authoring. Preserve
+  existing Flat comparison/forward functionality and legacy readable data.
+- Preserve the existing fast vertex workflow, camera-only objective,
+  estimator, original-pixel residual convention and Undo semantics.
+
+#### Interaction contract
+
+**New pair:** choose a photo point then a material point in Magnifier, or
+reverse that order. Navigate/orbit and local Confirm point remain inspection
+actions. Explicit Use in calibration submits a confirmed anchor to the same
+pending-pair mechanism as the existing vertex workflow. If both sides are
+available, create exactly one pair; otherwise stage the missing-side state.
+Keep Magnifier open. Never create a pair merely by clicking or confirming
+a local candidate. Existing vertex shortcuts and manual controls remain.
+
+**Existing pair:** render existing observations in both magnifier views,
+with stable pair numbering/colors and active selection. Selecting an
+existing marker or pair row synchronizes all representations. Enter an
+explicit edit transaction for its model anchor, initialized from the
+committed anchor. Support adjustment, snapping or complete re-picking,
+including a change of anchor kind. Apply atomically replaces only the
+model anchor, preserving pair ID, photo pixel, weight and role. Cancel
+discards tentative changes and retains the committed observation and fit.
+A committed change participates in Undo, cancels active fit and invalidates
+stale results. Do not confuse selecting a pair with beginning an edit.
+Reuse the existing photo-side editing workflow.
+
+Visibility: use actual optical painter coverage in Scene View and existing
+geometric/painter reconciliation in Free View; suppress hidden or unresolved
+markers and distinguish out-of-crop points. Never silently remap an invalid
+anchor. Keep selected pair identity even when its marker is hidden; provide
+explicit status. Existing candidate ambiguity controls remain available.
+
 ### 8F.4 — Stable anchors and physical projection
-Proposed logical types: Vertex (primitive + vertex), Edge (stable endpoints +
-t in [0,1]), Surface (stable triangle vertex identities + barycentric weights
-nonnegative and summing to one). Include stable bank/placed-object identity
-and topology validation; exact schema is an 8F.0 decision. Resolve anchor
-coordinates from authored geometry, not projected pixels. Interpolate within
-the same geometric primitive as the selected mesh, then use the existing
-physical placement/projection contract; verify consistency rather than
-assuming interpolation commutes with every world transform.
-Support Globe/Flat and existing supported calibration optics. Handle blocked,
-out-of-frame, indeterminate and invalid anchors explicitly. Extend fit and
-diagnostic horizontal range scaling to the new anchors. Keep the camera-only
-objective and existing numerical methods unchanged.
+
+| Commit | Scope and acceptance gate |
+| --- | --- |
+| 8F.4a | Audit current vertex IDs, observation/draft/portable and worker contracts; define one canonical material-anchor representation and strict validation with legacy vertex adapters. Test valid and malformed kinds, weights, indices and identity; no new UI or schema rollout yet. |
+| 8F.4b | Resolve anchors against shared authored physical topology; verify identity/topology and reject unresolved geometry. Test independent XYZ for vertices, edges and surfaces, placement including bridge spans, invalid topology, old vertex parity, and independence from viewer/camera. |
+| 8F.4c | Project anchors with supported Globe optics and explicit projection status. Verify physical/effective geometry correspondence and material interpolation rather than assuming transforms commute. Test independent projection and round trips across camera changes, visibility and invalid/out-of-frame cases; preserve vertex numerical parity. |
+| 8F.4d | Integrate resolver/projector with worker fit, original-pixel residuals, horizontal range scaling, Fit/Validation, draft and versioned portable exchange. Test synthetic known poses, old imports, round trips, stale/invalid results, roles and topology rejection. No new authoring UI until these contracts work end-to-end. |
 
 ### 8F.5 — Calibration integration
-Create and edit correspondences with the 3D Scene Magnifier; update model/photo
-markers, residuals and Fit/Validation groups. Preserve IDs, photo pixels,
-weights and roles when editing an anchor. Cancel active fit and invalidate
-stale results on committed changes; support existing Undo semantics and
-transactional cancel. Viewer-only navigation must not invalidate a fit.
-Preserve existing vertex workflow and integrate new kinds into the worker.
 
-### 8F.6 — Persistence and compatibility
-Version the portable experiment and draft schemas as needed; preserve v1/v2
-imports, legacy vertex IDs and Fit/Validation roles. Round-trip anchors,
-validate topology after geometry changes, and report unresolved anchors
-rather than silently remapping them. Include worker/result validation and
-tests for import/export, restoration and invalid inputs. No reference image
-bytes in repository test fixtures without explicit rights and approval.
+| Commit | Scope and acceptance gate |
+| --- | --- |
+| 8F.5a | Display committed correspondences in both magnifier views using the shared anchor resolver; stable numbering/colors, visibility and crop handling; no editing yet. Test existing vertex and new material marker placement. |
+| 8F.5b | Synchronize active pair selection across table, photo, model and both magnifier views; selection itself must not mutate observations or invalidate fit. Test hidden markers and ambiguous selections. |
+| 8F.5c | Add explicit Use in calibration for a locally confirmed anchor; reuse pending-pair flow in both click orders, keep Magnifier open, prevent duplicate commits, preserve fast vertex workflow. Test creation, cancellation, missing-side states and persistence. |
+| 8F.5d | Add transactional edit of existing model anchors, including type conversion and precise adjustment. Apply retains original photo pixel, ID, role and weight; Cancel retains old fit and observation; Undo restores committed changes. Test active-fit cancellation and stale-result invalidation only on committed edits. |
+| 8F.5e | End-to-end browser qualification: both creation orders, old/new anchor editing, Apply/Cancel/Undo, cross-view synchronization, reload and exchange, fit/residuals, non-Soundly geometry, and legacy vertex workflow. Resolve UX regressions before real-photo research. |
+
+### 8F.6 — Persistence and compatibility qualification
+
+The schema and persistence implementation is moved forward into 8F.4d so
+newly authored pairs are usable immediately. Retain 8F.6 as the final
+compatibility audit: v1/v2 imports, legacy vertex IDs, Fit/Validation roles,
+worker/result validation, draft and portable round trips, explicit handling
+of incompatible topology and no silent remapping. No reference image bytes
+in repository fixtures without explicit rights and approval.
+
+Each commit is independently bounded, tested and documented, with CI and
+user-visible verification status recorded; split further if required rather
+than mixing unrelated changes. 8F.7 remains the real-photo research gate.
 
 ### 8F.7 — Qualification and real-photo research
 Test synthetic vertex/edge/surface anchors with known camera and independently

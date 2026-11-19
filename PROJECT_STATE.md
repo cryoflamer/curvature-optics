@@ -1,3 +1,23 @@
+## 8F.4.0 — Material anchor architecture and calibration integration plan
+
+User approved a unified correspondence editor and reported 8F.3d.2 working.
+CI run 44634760850 for d10fefb8 completed successfully. The canonical
+implementation plan is [docs/landmark-editor.md](docs/landmark-editor.md).
+One correspondence collection for the table, photo, main model and both
+magnifier views; camera-independent Vertex/Edge/Surface anchors; explicit
+Use in calibration in either click order; synchronized selection; transactional
+model-anchor editing with Apply/Cancel/Undo preserving photo pixel, ID,
+weight and role. Globe-only real-photo authoring; retain old vertex workflow
+and Flat forward comparison. Complete physical projection, solver integration
+and persistence before enabling new correspondence authoring.
+
+Commit sequence: 8F.4a canonical representation and validation; 8F.4b
+physical resolution and legacy parity; 8F.4c Globe projection; 8F.4d
+fit/residuals/worker/persistence; 8F.5a existing markers; 8F.5b synchronized
+selection; 8F.5c new pairs; 8F.5d transactional editing; 8F.5e browser
+qualification. Retain 8F.6 compatibility audit and 8F.7 real-photo research.
+Documentation only; no runtime or schema changes. Next: 8F.4a.
+
 ## 8F.3d.2 — Globe optical picking UI and visibility
 
 Real-photo landmark authoring is Globe-only by user decision. Reuse
