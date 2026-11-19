@@ -1,8 +1,14 @@
 # Camera calibration from reference observations — deferred research plan
 
-Status: design decision and research backlog, not an implemented optimizer.
-The next work is completing the demo infrastructure (7C–7E). Calibration
-(8A–8E) follows, then real Causeway calibration and final authoring (9A–9B).
+Status: headless calibration and research implemented through 8A.4.3;
+8A.4.4 qualification and 8B–8E authoring UI remain, followed by 9A–9B.
+
+## Confirmed primary scope
+
+The primary deliverable of 8A–8E is a reusable photo-to-camera authoring tool: given a reference photograph, known scene geometry and manually identified correspondences, recover a usable camera pose and focal length under a selected, fixed surface geometry and atmospheric profile, inspect visual alignment, and save the accepted camera as a normal experiment or Studio keyframe. Geometry and atmosphere are inputs, not estimation targets. Cross-hypothesis, noise and conditioning experiments qualify the camera solver and expose pose sensitivity; they are not a program to infer Earth's shape or reconstruct the atmosphere. After accepting a camera, normal demo controls can vary geometry and atmosphere without recalibrating it. Finish bounded checks of incorrect correspondences, renderer parity near the horizon and convergence diagnostics, then proceed to 8B; defer broader numerical research until practical photo authoring reveals a need.
+
+## Original sequencing rationale
+
 This avoids interrupting the existing Studio work and avoids manually fitting
 all existing Soundly frames before a reusable tool exists. Read
 [reference images](reference-images.md) and the [demo roadmap](modern-demo-catalog.md)

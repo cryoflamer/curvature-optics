@@ -8,6 +8,8 @@ is implemented; UI, storage and transport follow. Finish the generic demo
 mechanism before Camera Calibration, then use the new tool to author final
 Soundly observations. See [reference images](reference-images.md) and
 [camera calibration](camera-calibration.md) for the design and research plan.
+
+The primary deliverable of 8A–8E is a reusable photo-to-camera authoring tool: given a reference photograph, known scene geometry and manually identified correspondences, recover a usable camera pose and focal length under a selected, fixed surface geometry and atmospheric profile, inspect visual alignment, and save the accepted camera as a normal experiment or Studio keyframe. Geometry and atmosphere are inputs, not estimation targets. Cross-hypothesis, noise and conditioning experiments qualify the camera solver and expose pose sensitivity; they are not a program to infer Earth's shape or reconstruct the atmosphere. After accepting a camera, normal demo controls can vary geometry and atmosphere without recalibrating it. Finish bounded checks of incorrect correspondences, renderer parity near the horizon and convergence diagnostics, then proceed to 8B; defer broader numerical research until practical photo authoring reveals a need.
 This roadmap supersedes the delivery order at the end of
 [the location migration inventory](modern-location-migration.md), not its
 source evidence or Legacy preservation gates.
@@ -203,7 +205,7 @@ record the split, and do not mark complete on implementation alone.
 | 7D.2.2.3 — Presentation Export Layout Refinement | Planned | Refine viewport usage, captions and HUD after real PNG inspection. |
 | 7D.2.3 — Presentation Video | Planned | Reuse compositor for deterministic video time samples, fixed output dimensions, resource/cancellation budgets and provenance reporting. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
-| 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
+| 8A — Calibration Research | In progress; 8A.4.3 CI passed | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
 | 8B — Control Point Editor | Planned | Link image pixels to model landmarks, select calibration vs held-out validation points. |
 | 8C — Camera Optimization | Planned | Fixed/free parameters, bounded numerical optimization, residual and convergence diagnostics. |
 | 8D — Uncertainty & Validation | Planned | Sensitivity, degeneracy, uncertainty and independent validation of predictions. |

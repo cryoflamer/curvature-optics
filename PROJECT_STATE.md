@@ -1,3 +1,9 @@
+## Camera calibration — confirmed authoring scope and next step
+
+The primary deliverable of 8A–8E is a reusable photo-to-camera authoring tool: given a reference photograph, known scene geometry and manually identified correspondences, recover a usable camera pose and focal length under a selected, fixed surface geometry and atmospheric profile, inspect visual alignment, and save the accepted camera as a normal experiment or Studio keyframe. Geometry and atmosphere are inputs, not estimation targets. Cross-hypothesis, noise and conditioning experiments qualify the camera solver and expose pose sensitivity; they are not a program to infer Earth's shape or reconstruct the atmosphere. After accepting a camera, normal demo controls can vary geometry and atmosphere without recalibrating it. Finish bounded checks of incorrect correspondences, renderer parity near the horizon and convergence diagnostics, then proceed to 8B; defer broader numerical research until practical photo authoring reveals a need.
+
+8A.4.3 full CI passed (run 44565389806). No production changes in this scope clarification.
+
 ## Modern Demo Catalog — Equal-budget camera hypothesis comparison (8A.4.3)
 
 Issue #6: two new research tests in CameraCalibration.test.js; Standard truth
