@@ -1,3 +1,23 @@
+## 8B.2 — Existing reference originals in the photo editor
+
+Photo calibration now offers a read-only source picker covering local Reference
+Image Library records (including project/keyframe links from the saved Animation
+Library) and embedded original images in built-in demos such as Soundly.
+Project associations are shown as labels; multiple links to one local ID do
+not duplicate the choice. Built-in IDs have a separate catalog namespace.
+Selecting a photo decodes its original and checks dimensions, retains its ID,
+source and metadata, and does not import/copy assets or mutate projects.
+Local uploads remain supported. A photo replacement requires confirmation if
+pairs exist; reselecting the active original retains the draft. Sources are
+refreshed on opening or explicitly; storage failures do not hide other sources.
+The current Scene has no direct reference-image relationship: selecting a
+photo does not apply a project/keyframe's camera or scene. Direct Studio entry
+with matching scene and keyframe context remains future work.
+
+Added pure catalog and Chromium original-selection tests. Previous 8B CI:
+Chromium passed; Node/architecture failed only on the reviewed Modern helper
+inventory, now updated to include ModernPhotoCalibrationEditor.js. New CI pending.
+
 ## 8B — First photo correspondence editor
 
 Open a Modern Scene and choose **Photo calibration** in the header. The modal

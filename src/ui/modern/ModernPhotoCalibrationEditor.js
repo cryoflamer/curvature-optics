@@ -33,6 +33,34 @@
     if(replaceId!==null&&!rows.some(r=>r.landmark.id===replaceId))throw Error('Correspondence no longer exists');
     return replaceId===null?[...rows,value]:rows.map(r=>r.landmark.id===replaceId?value:r);
   }
+  // Library IDs are local; a shipped demo can use the same ID for a
+  // different original. Never merge these namespaces or import on selection.
+  function photoChoices(libraryRows,projects,demos){
+    const linked=new Map();
+    for(const entry of projects){
+      const project=entry.project;
+      for(const [i,frame] of project.keyframes.entries())
+        for(const id of frame.referenceImageIds||[]){
+          if(!linked.has(id))linked.set(id,[]);
+          linked.get(id).push(project.name+' / '+(frame.name||'Keyframe '+(i+1)));
+        }
+    }
+    const choices=libraryRows.map(row=>({
+      key:JSON.stringify(['library',row.id]),id:row.id,source:'library',
+      title:row.title,width:row.width,height:row.height,author:row.author||'',
+      links:[...new Set(linked.get(row.id)||[])]
+    }));
+    for(const demo of demos){
+      for(const record of demo.referenceImages||[]){
+        const links=demo.project.keyframes.flatMap((frame,i)=>
+          (frame.referenceImageIds||[]).includes(record.id)?[demo.project.name+' / '+(frame.name||'Keyframe '+(i+1))]:[]);
+        choices.push({key:JSON.stringify(['demo',demo.id,record.id]),source:'demo',demoId:demo.id,
+          id:record.id,title:record.title,width:record.original.width,height:record.original.height,
+          author:record.author||'',links:[...new Set(links)]});
+      }
+    }
+    return choices;
+  }
   function mount(doc){
     const $=id=>doc.getElementById(id),button=$('ModernPhotoCalibrationOpen'),dialog=$('ModernPhotoCalibration');
     if(!button||!dialog||button.dataset.bound)return;
@@ -44,6 +72,75 @@
     const ctx=photo.getContext('2d'),mesh=sceneCanvas.getContext('2d');
     let scene=null,record=null,image=null,view=null,rows=[],pending=null,editing=null,loadToken=0,
       groups=[],vertices=[],meshPoints=[],drag=null;
+    const sourcePicker=$('ModernCalibrationSource'),sourceStatus=$('ModernCalibrationSourceStatus'),
+      sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
+      photoInfo=$('ModernCalibrationPhotoInfo');
+    let choices=[],demoRecords=[],catalogToken=0,activeSource=null;
+    async function refreshSources(){
+      const token=++catalogToken;
+      sourceRefresh.disabled=true;sourceStatus.textContent='Loading available photographs…';
+      const [library,projects,demos]=await Promise.allSettled([
+        Promise.resolve().then(()=>env.CurvatureModernReferenceImageLibrary.list(env.indexedDB)),
+        Promise.resolve().then(()=>env.CurvatureModernAnimationLibrary.list(env.indexedDB)),
+        Promise.resolve().then(()=>env.CurvatureModernDemoCatalog.load())
+      ]);
+      if(token!==catalogToken)return;
+      const errors=[['Image library',library],['Project library',projects],['Built-in demos',demos]]
+        .filter(([,r])=>r.status==='rejected').map(([name,r])=>name+': '+(r.reason?.message||String(r.reason)));
+      demoRecords=demos.status==='fulfilled'?demos.value:[];
+      choices=photoChoices(library.status==='fulfilled'?library.value:[],
+        projects.status==='fulfilled'?projects.value:[],demoRecords);
+      const previous=sourcePicker.value;
+      populate(sourcePicker,[['','Choose an existing photograph…'],...choices.map(c=>[c.key,
+        (c.source==='demo'?'Built-in demo':c.links.length?'Saved project':'Reference library')+
+        ' · '+c.title+' ('+c.width+' × '+c.height+')'+(c.links.length?' — '+c.links.join('; '):'')])]);
+      if(choices.some(c=>c.key===previous))sourcePicker.value=previous;
+      sourceLoad.disabled=!sourcePicker.value;sourceRefresh.disabled=false;
+      sourceStatus.textContent=choices.length+' available photographs'+(errors.length?' · '+errors.join(' · '):'');
+    }
+    function photoDetails(next,source){
+      photoInfo.replaceChildren();
+      const label=doc.createElement('span');
+      label.textContent=(source?.source==='demo'?'Built-in demo · ':source?.source==='library'?'Reference library · ':'Local file · ')+
+        next.title+(next.author?' · '+next.author:'')+' · '+next.original.width+' × '+next.original.height+' px'+
+        (source?.links.length?' · '+source.links.join('; '):'');
+      photoInfo.append(label);
+      if(next.sourceUrl){
+        const a=doc.createElement('a');a.href=next.sourceUrl;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Source';
+        photoInfo.append(' · ',a);
+      }
+    }
+    function confirmReplacement(){return !rows.length||env.confirm('Replacing the photo discards all correspondences. Continue?');}
+    async function acceptPhoto(next,source,token){
+      const decoded=new env.Image();decoded.src=next.original.dataUrl;await decoded.decode();
+      if(token!==loadToken)return false;
+      if(decoded.naturalWidth!==next.original.width||decoded.naturalHeight!==next.original.height)
+        throw Error('Reference image decoded dimensions mismatch');
+      record=next;image=decoded;activeSource=source;rows=[];resetPending();refreshRows();fitPhoto();
+      photoDetails(next,source);
+      message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
+      return true;
+    }
+    sourcePicker.onchange=()=>{sourceLoad.disabled=!sourcePicker.value;};
+    sourceRefresh.onclick=refreshSources;
+    sourceLoad.onclick=async()=>{
+      const choice=choices.find(c=>c.key===sourcePicker.value);
+      if(!choice)return;
+      if(activeSource?.key===choice.key&&record){message('This photograph is already loaded.');return;}
+      if(!confirmReplacement())return;
+      const token=++loadToken;message('Loading original photograph…');
+      try{
+        let next;
+        if(choice.source==='library'){
+          const row=await env.CurvatureModernReferenceImageLibrary.get(env.indexedDB,choice.id);
+          next=row?.record;
+        }else{
+          next=demoRecords.find(d=>d.id===choice.demoId)?.referenceImages.find(r=>r.id===choice.id);
+        }
+        if(!next)throw Error('Original photograph no longer available; refresh the list.');
+        await acceptPhoto(next,choice,token);
+      }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
+    };
     function message(s){status.textContent=s;}
     function populate(select,options){
       select.replaceChildren(...options.map(([value,label])=>{
@@ -172,23 +269,21 @@
         }catch(e){scene=null;env.alert(e.message);return;}
       }
       dialog.showModal();
+      void refreshSources();
     };
     $('ModernCalibrationClose').onclick=()=>dialog.close();
     $('ModernCalibrationReset').onclick=()=>{
       if((rows.length||record)&&!env.confirm('Discard this photo and all correspondences?'))return;
-      loadToken++;scene=null;record=null;image=null;view=null;rows=[];file.value='';resetPending();refreshRows();
+      loadToken++;scene=null;record=null;image=null;view=null;activeSource=null;rows=[];file.value='';photoInfo.replaceChildren();sourcePicker.value='';resetPending();refreshRows();
       dialog.close();button.click();
     };
     file.onchange=async()=>{
       const f=file.files[0];if(!f)return;
-      if(rows.length&&!env.confirm('Replacing the photo discards all correspondences. Continue?')){file.value='';return;}
+      if(!confirmReplacement()){file.value='';return;}
       const token=++loadToken;message('Loading photograph…');
       try{
         const next=await env.CurvatureModernReferenceImageImport.ingest(f,'calibration-photo',env);
-        const decoded=new env.Image();decoded.src=next.original.dataUrl;await decoded.decode();
-        if(token!==loadToken)return;
-        record=next;image=decoded;rows=[];resetPending();refreshRows();fitPhoto();
-        message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
+        await acceptPhoto(next,null,token);
       }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
       finally{if(token===loadToken)file.value='';}
     };
@@ -236,8 +331,9 @@
     };
     $('ModernCalibrationCancelEdit').onclick=resetPending;
     return {snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+      referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
   }
-  return Object.freeze({fit,imagePoint,zoomAt,pair,upsert,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,pair,upsert,photoChoices,mount});
 }));

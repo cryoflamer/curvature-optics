@@ -156,6 +156,13 @@
       <button type="button" id="ModernCalibrationReset">New session</button>
       <button type="button" id="ModernCalibrationFit">Fit photo</button>
     </div>
+    <div class="modern-calibration-toolbar">
+      <label>Existing photo <select id="ModernCalibrationSource"><option value="">Choose an existing photograph…</option></select></label>
+      <button type="button" id="ModernCalibrationUsePhoto" disabled>Use original</button>
+      <button type="button" id="ModernCalibrationRefreshPhotos">Refresh photos</button>
+    </div>
+    <p id="ModernCalibrationSourceStatus" role="status"></p>
+    <p id="ModernCalibrationPhotoInfo"></p>
     <div class="modern-calibration-grid">
       <section><h3>Original photograph</h3><p>Click a point · drag to pan · wheel to zoom.</p>
         <canvas id="ModernCalibrationPhoto" width="800" height="540" aria-label="Reference photo"></canvas>

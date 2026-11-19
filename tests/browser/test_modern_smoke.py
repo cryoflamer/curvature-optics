@@ -584,6 +584,49 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
         dialog.locator('#ModernCalibrationClose').click()
 
+    def test_photo_calibration_existing_originals(self):
+        self.open_modern()
+        self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")
+        original = self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=100;c.height=80;
+            c.getContext('2d').fillRect(0,0,100,80);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Library photo.png',{type:'image/png'}),'calibration-existing',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            const demo=CurvatureModernDemoCatalog.load().find(d=>d.id==='soundly');
+            const photo=demo.referenceImages[0];
+            return {key:JSON.stringify(['demo',demo.id,photo.id]),
+                    title:photo.title,width:photo.original.width,height:photo.original.height};
+        }""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        dialog=self.page.locator('#ModernPhotoCalibration')
+        picker=dialog.locator('#ModernCalibrationSource')
+        local_key=json.dumps(['library','calibration-existing'],separators=(',',':'))
+        expect(picker.locator('option',has_text='Library photo.png')).to_have_count(1)
+        picker.select_option(value=local_key)
+        dialog.locator('#ModernCalibrationUsePhoto').click()
+        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text('100 × 80')
+        dialog.locator('#ModernCalibrationX').fill('25')
+        dialog.locator('#ModernCalibrationY').fill('35')
+        dialog.locator('#ModernCalibrationAdd').click()
+        dialog.locator('#ModernCalibrationUsePhoto').click()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        picker.select_option(value=original['key'])
+        self.page.once('dialog',lambda prompt: prompt.dismiss())
+        dialog.locator('#ModernCalibrationUsePhoto').click()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        self.page.once('dialog',lambda prompt: prompt.accept())
+        dialog.locator('#ModernCalibrationUsePhoto').click()
+        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text(original['title'])
+        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
+            f"{original['width']} × {original['height']}")
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(r=>r.id)"""),
+            ['calibration-existing'])
+        dialog.locator('#ModernCalibrationClose').click()
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
