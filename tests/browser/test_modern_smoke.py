@@ -678,6 +678,60 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationOpenViewer').click()
         viewer=workspace.locator('#ModernCalibrationViewer')
         expect(viewer).to_be_visible()
+        self.assertFalse(viewer.evaluate("(d)=>d.matches(':modal')"))
+        get_rect=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerWindow()")
+        start=get_rect()
+        title=viewer.locator('[data-viewer-titlebar]')
+        title.focus()
+        self.page.keyboard.press('ArrowLeft')
+        moved=get_rect()
+        self.assertEqual(moved['x'],start['x']-8)
+        grip=viewer.locator('[data-viewer-resize]')
+        grip.focus()
+        self.page.keyboard.press('ArrowLeft')
+        smaller=get_rect()
+        self.assertEqual(smaller['width'],moved['width']-8)
+        # Real drag of title and resize grip; stay inside viewport.
+        t=viewer.locator('h2').bounding_box()
+        self.page.mouse.move(t['x']+5,t['y']+5)
+        self.page.mouse.down()
+        self.page.mouse.move(t['x']-15,t['y']+15,steps=4)
+        self.page.mouse.up()
+        dragged=get_rect()
+        self.assertLess(dragged['x'],smaller['x'])
+        g=grip.bounding_box()
+        self.page.mouse.move(g['x']+g['width']/2,g['y']+g['height']/2)
+        self.page.mouse.down()
+        self.page.mouse.move(g['x']+g['width']/2-20,g['y']+g['height']/2-20,steps=4)
+        self.page.mouse.up()
+        final_rect=get_rect()
+        self.assertLess(final_rect['width'],dragged['width'])
+        self.assertLess(final_rect['height'],dragged['height'])
+        # Main workspace is interactive while the modeless window is open.
+        self.assertTrue(photo.evaluate("""(c)=>{const d=document.getElementById('ModernCalibrationViewer');
+          return !d.matches(':modal')&&!c.closest('[inert]');}"""))
+        # Use a real main-photo wheel interaction outside inspector bounds.
+        pr=photo.bounding_box()
+        target=self.page.evaluate("""(r)=>{
+          const d=document.getElementById('ModernCalibrationViewer').getBoundingClientRect();
+          for(const fx of [.1,.3,.5,.7,.9])for(const fy of [.2,.5,.8]){
+            const x=r.x+r.width*fx,y=r.y+r.height*fy;
+            if(x>=0&&y>=0&&x<innerWidth&&y<innerHeight&&!(x>=d.left&&x<=d.right&&y>=d.top&&y<=d.bottom)
+              &&document.elementFromPoint(x,y)?.id==='ModernCalibrationPhoto')return [x,y];
+          }return null;
+        }""",pr)
+        if target is None:
+            photo.scroll_into_view_if_needed()
+            pr=photo.bounding_box()
+            target=self.page.evaluate("""(r)=>{const d=document.getElementById('ModernCalibrationViewer').getBoundingClientRect();
+              const x=r.x+r.width*.1;for(const f of [.2,.5,.8]){const y=r.y+r.height*f;
+              if(y>=0&&y<innerHeight&&x<d.left&&document.elementFromPoint(x,y)?.id==='ModernCalibrationPhoto')return [x,y];}return null;}""",pr)
+        self.assertIsNotNone(target)
+        photo_before=photo.evaluate('(c)=>c.toDataURL()')
+        self.page.mouse.move(*target)
+        self.page.mouse.wheel(0,-150)
+        self.page.wait_for_function("before=>document.getElementById('ModernCalibrationPhoto').toDataURL()!==before",arg=photo_before)
+        expect(viewer).to_be_visible()
         expect(viewer.locator('[data-viewer-status]')).to_contain_text('front')
         canvas=viewer.locator('canvas')
         original=canvas.evaluate('(c)=>c.toDataURL()')
@@ -697,6 +751,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertNotEqual(state['yaw'],0)
         self.assertEqual(state['projection'],'perspective')
         self.page.keyboard.press('Escape')
+        expect(viewer).to_be_hidden()
+        workspace.locator('#ModernCalibrationOpenViewer').click()
+        expect(viewer).to_be_visible()
+        self.assertEqual(get_rect(),final_rect)
+        viewer.locator('[data-viewer-close]').click()
         expect(viewer).to_be_hidden()
         self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()"),before_viewer)
         self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()"),selected)

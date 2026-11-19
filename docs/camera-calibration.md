@@ -1,3 +1,22 @@
+## 8F.2b — Modeless movable inspector
+
+The current object/span inspector now opens as a nonmodal fixed-position
+window; main photo/model controls remain available. Drag the title bar,
+resize using the corner grip, or use arrow keys on focused title/grip.
+Position and dimensions are clamped to viewport and stored in a dedicated
+localStorage UI preference, not the experiment JSON. Canvas redraws at
+actual resized dimensions with bounded device-pixel scaling; camera state
+is separate and pan scales with the backing store. Only inspector-focused
+Escape closes it; workspace shortcuts remain active elsewhere. Changing
+selected owner updates the open window; clearing selection, leaving the
+workspace, switching to best-camera preview or replacing the captured
+scene closes it. Pointer capture is released on cancellation/close.
+Existing object/span content is deliberately retained until 8F.2c.
+Seven headless geometry/viewer tests passed; browser move/resize, photo
+interaction and remembered-position regressions added; full CI pending.
+Previous 8F.2a CI 44614959167 passed. Next: 8F.2c rectangle and optical
+crop rerendering. No changes to anchors, fit algorithm or portable JSON.
+
 ## 8F.2 — Revised direction: 3D Scene Magnifier (planned)
 
 User verification after 8F.2a confirmed the need for recognizable scene

@@ -1497,8 +1497,16 @@ button{cursor:pointer}
 .modern-photo-calibration tr.is-selected{background:#e3f0fc}
 
 /* Isolated object inspector: independent of the scene canvas viewport. */
-.modern-landmark-viewer{width:min(820px,94vw);max-width:94vw;box-sizing:border-box}
-.modern-landmark-viewer header{justify-content:space-between;margin-bottom:6px}
-.modern-landmark-viewer h2{font-size:1.1rem;margin:0}
-.modern-landmark-viewer canvas{display:block;width:100%;height:auto;max-height:57dvh;object-fit:contain;touch-action:none;cursor:grab;margin:8px 0;border:1px solid #a9c3d9}
+.modern-landmark-viewer{position:fixed;inset:auto;margin:0;z-index:1000;box-sizing:border-box;max-width:none;max-height:none;padding:10px;box-shadow:0 6px 24px #162d4566;overflow:auto}
+.modern-landmark-viewer[open]{display:flex;flex-direction:column;gap:5px}
+.modern-landmark-viewer header{justify-content:space-between;flex-wrap:nowrap;gap:8px;cursor:move;touch-action:none;user-select:none}
+.modern-landmark-viewer h2{font-size:1.1rem;margin:0;overflow-wrap:anywhere}
+.modern-landmark-viewer .modern-calibration-toolbar{gap:5px}
+.modern-landmark-viewer .modern-calibration-toolbar label{margin:0}
+.modern-landmark-viewer [data-viewer-frame]{position:relative;flex:1 1 100px;min-height:80px;min-width:0;border:1px solid #a9c3d9;overflow:hidden}
+.modern-photo-calibration .modern-landmark-viewer canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab;margin:0;border:0;background:#eef4f8}
 .modern-landmark-viewer canvas:active{cursor:grabbing}
+.modern-landmark-viewer p{font-size:12px;margin:0}
+.modern-landmark-viewer footer{display:flex;align-items:flex-end;gap:6px}
+.modern-photo-calibration .modern-landmark-viewer [data-viewer-resize]{flex:0 0 28px;width:28px;height:28px;padding:0;line-height:1;cursor:nwse-resize;touch-action:none;user-select:none}
+.modern-landmark-viewer [data-viewer-titlebar]:focus-visible,.modern-landmark-viewer canvas:focus-visible{outline:2px solid #397bad;outline-offset:-2px}

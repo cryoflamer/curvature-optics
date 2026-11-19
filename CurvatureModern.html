@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2&amp;spline-easing=1&amp;preset-navigation=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;atmosphere-switcher=1&amp;reference-library=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;presentation-cleanup=1&amp;photo-workspace=1&amp;scene-picking=1&amp;isolated-viewer=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2&amp;spline-easing=1&amp;preset-navigation=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;atmosphere-switcher=1&amp;reference-library=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;presentation-cleanup=1&amp;photo-workspace=1&amp;scene-picking=1&amp;isolated-viewer=1&amp;modeless-viewer=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -126,8 +126,8 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -242,7 +242,7 @@
       </section>
     </div>
     <dialog id="ModernCalibrationViewer" class="modern-reference-dialog modern-landmark-viewer" aria-labelledby="ModernCalibrationViewerTitle">
-      <header><h2 id="ModernCalibrationViewerTitle">Object viewer</h2><button type="button" data-viewer-close autofocus>Close</button></header>
+      <header data-viewer-titlebar tabindex="0" aria-label="Move inspector with arrow keys"><h2 id="ModernCalibrationViewerTitle">Object viewer</h2><button type="button" data-viewer-close autofocus>Close</button></header>
       <div class="modern-calibration-toolbar">
         <button type="button" data-viewer-view="front">Front</button><button type="button" data-viewer-view="back">Back</button>
         <button type="button" data-viewer-view="left">Left</button><button type="button" data-viewer-view="right">Right</button>
@@ -255,9 +255,9 @@
         <label><input type="checkbox" data-viewer-spans> Adjacent context</label>
         <button type="button" data-viewer-zoom="1.25" aria-label="Zoom in">+</button><button type="button" data-viewer-zoom="0.8" aria-label="Zoom out">−</button>
       </div>
-      <canvas width="800" height="520" aria-label="Isolated authored object"></canvas>
+      <div data-viewer-frame><canvas width="800" height="520" tabindex="0" aria-label="Isolated authored object"></canvas></div>
       <p data-viewer-status role="status"></p>
-      <p>Drag to orbit · Shift-drag or right-drag to pan · wheel to zoom. Actual authored surfaces only; point picking follows in the next stage.</p>
+      <footer><p>Drag title to move · drag corner to resize · canvas drag to orbit · Shift/right-drag to pan · wheel to zoom.</p><button type="button" data-viewer-resize aria-label="Resize inspector (arrow keys)" title="Drag to resize">◢</button></footer>
     </dialog>
     <p id="ModernCalibrationStatus" role="status"></p><p id="ModernCalibrationStorage" role="status"></p>
     <section id="ModernCalibrationResidualPanel" hidden aria-label="Calibration residuals">

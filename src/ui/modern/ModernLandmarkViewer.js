@@ -92,19 +92,90 @@
       ctx.beginPath();ctx.moveTo(...o);ctx.lineTo(...end);ctx.stroke();ctx.fillText(['X','Y','Z'][i],end[0]+4,end[1]-3);});
     return {size:b.size,face:Math.abs(c.toward[2])<1e-3?'edge-on':c.toward[2]<0?'back':'front',count:items.length};
   }
+  // Window geometry is a UI preference, never experiment or camera state.
+  const WINDOW_KEY='curvature-landmark-viewer-window-v1';
+  function windowRect(request,width,height){
+    const W=Math.max(1,Math.floor(width)),H=Math.max(1,Math.floor(height));
+    const margin=Math.min(8,Math.floor(Math.min(W,H)/4));
+    const maxW=W-2*margin,maxH=H-2*margin;
+    const valid=request&&['x','y','width','height'].every(k=>Number.isFinite(request[k]));
+    const w=Math.round(clamp(valid?request.width:Math.min(720,W*.58),Math.min(340,maxW),maxW));
+    const h=Math.round(clamp(valid?request.height:Math.min(620,H*.72),Math.min(300,maxH),maxH));
+    return {x:Math.round(clamp(valid?request.x:W-w-margin-12,margin,W-w-margin)),
+      y:Math.round(clamp(valid?request.y:Math.min(72,H-h-margin),margin,H-h-margin)),width:w,height:h};
+  }
+  function changeWindowRect(rect,kind,dx,dy,width,height){
+    if(kind==='move')return windowRect({...rect,x:rect.x+dx,y:rect.y+dy},width,height);
+    // Resize from the lower right without moving the top-left corner.
+    const margin=Math.min(8,Math.floor(Math.min(width,height)/4));
+    return windowRect({...rect,width:clamp(rect.width+dx,Math.min(340,width-2*margin),width-rect.x-margin),
+      height:clamp(rect.height+dy,Math.min(300,height-2*margin),height-rect.y-margin)},width,height);
+  }
+  function rasterSize(width,height,dpr){
+    const scale=Math.min(Math.max(1,Number(dpr)||1),2,2048/Math.max(1,width,height));
+    return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
+  }
   function mount(dialog){
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
-    let geometry=null,state=reset(),drag=null;
+    const env=dialog.ownerDocument.defaultView,frame=dialog.querySelector('[data-viewer-frame]'),titleBar=dialog.querySelector('[data-viewer-titlebar]'),grip=dialog.querySelector('[data-viewer-resize]');
+    let geometry=null,state=reset(),drag=null,windowDrag=null,rect=null;
+    const viewport=()=>[env.innerWidth,env.innerHeight];
+    function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
+    function saveRect(){if(rect)try{env.localStorage.setItem(WINDOW_KEY,JSON.stringify(rect));}catch(e){/* Optional UI preference. */}}
+    function applyRect(next){rect=windowRect(next,...viewport());Object.assign(dialog.style,{left:rect.x+'px',top:rect.y+'px',width:rect.width+'px',height:rect.height+'px'});}
+    function resizeRaster(){
+      const r=frame.getBoundingClientRect();if(!(r.width>0&&r.height>0))return;
+      const next=rasterSize(frame.clientWidth,frame.clientHeight,env.devicePixelRatio);
+      if(canvas.width!==next.width||canvas.height!==next.height){
+        const ratio=Math.min(next.width,next.height)/Math.max(1,Math.min(canvas.width,canvas.height));
+        state={...state,pan:state.pan.map(v=>v*ratio)};
+        canvas.width=next.width;canvas.height=next.height;
+      }
+    }
     function render(){
-      if(!geometry)return;
+      if(!geometry||!dialog.open)return;
+      resizeRaster();
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
     }
     function initialView(){const s=reset();return geometry?.ownerKind==='span'?standardView(s,'top'):s;}
     function sync(){projection.value=state.projection;wire.checked=state.wireframe;spans.checked=state.spans;render();}
-    dialog.querySelector('[data-viewer-close]').onclick=()=>dialog.close();
+    function releaseCapture(element,id){if(id!==null&&element.hasPointerCapture(id))element.releasePointerCapture(id);}
+    function stopDrags(){
+      const a=drag,b=windowDrag;drag=null;windowDrag=null;
+      if(a)releaseCapture(canvas,a.id);
+      if(b)releaseCapture(b.element,b.id);
+    }
+    function close(){stopDrags();saveRect();geometry=null;if(dialog.open)dialog.close();}
+    dialog.querySelector('[data-viewer-close]').onclick=close;
+    function windowPointer(element,kind){
+      element.addEventListener('pointerdown',e=>{
+        if(!dialog.open||windowDrag||drag||e.button!==0||
+           (kind==='move'&&e.target.closest('button,input,select,a')))return;
+        e.preventDefault();
+        element.focus({preventScroll:true});
+        windowDrag={id:e.pointerId,element,kind,x:e.clientX,y:e.clientY,rect:{...rect}};
+        element.setPointerCapture(e.pointerId);
+      });
+      element.addEventListener('pointermove',e=>{
+        const d=windowDrag;if(!d||d.element!==element||d.id!==e.pointerId)return;
+        applyRect(changeWindowRect(d.rect,d.kind,e.clientX-d.x,e.clientY-d.y,...viewport()));
+        if(kind==='resize')render();
+      });
+      const finish=e=>{if(windowDrag?.id===e.pointerId&&windowDrag.element===element){windowDrag=null;saveRect();}};
+      for(const event of ['pointerup','pointercancel','lostpointercapture'])element.addEventListener(event,finish);
+      element.addEventListener('keydown',e=>{
+        if(e.target!==element||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
+        e.preventDefault();const d=e.shiftKey?32:8;
+        applyRect(changeWindowRect(rect,kind,e.key==='ArrowLeft'?-d:e.key==='ArrowRight'?d:0,e.key==='ArrowUp'?-d:e.key==='ArrowDown'?d:0,...viewport()));
+        saveRect();render();
+      });
+    }
+    windowPointer(titleBar,'move');windowPointer(grip,'resize');
+    new env.ResizeObserver(()=>{if(dialog.open)render();}).observe(frame);
+    env.addEventListener('resize',()=>{if(dialog.open){stopDrags();applyRect(rect);saveRect();render();}});
     dialog.querySelector('[data-viewer-reset]').onclick=()=>{state=initialView();sync();};
     dialog.querySelectorAll('[data-viewer-view]').forEach(n=>n.onclick=()=>{state=standardView(state,n.dataset.viewerView);render();});
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
@@ -113,8 +184,8 @@
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
     function point(e){const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];}
     canvas.addEventListener('pointerdown',e=>{
-      if(!geometry||drag||![0,1,2].includes(e.button))return;
-      e.preventDefault();drag={id:e.pointerId,last:point(e),pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
+      if(!geometry||drag||windowDrag||![0,1,2].includes(e.button))return;
+      e.preventDefault();canvas.focus({preventScroll:true});drag={id:e.pointerId,last:point(e),pan:e.button!==0||e.shiftKey};canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove',e=>{
       if(!drag||drag.id!==e.pointerId)return;const p=point(e),d=p.map((v,i)=>v-drag.last[i]);
@@ -124,13 +195,17 @@
     for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
-    // Keep workspace shortcuts and persistence hooks out of viewer navigation.
-    for(const event of ['keydown','click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
-    dialog.addEventListener('close',()=>{drag=null;geometry=null;});
+    // Modeless: scope shortcuts to focus inside the inspector, not the
+    // whole workspace. Escape outside still belongs to the workspace.
+    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();}e.stopPropagation();});
+    for(const event of ['click','change','input','pointerup','pointercancel','wheel'])dialog.addEventListener(event,e=>e.stopPropagation());
+    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();saveRect();geometry=null;}});
     return {open(next,title){
-      geometry=next;state=initialView();drag=null;heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
-      if(!dialog.open)dialog.showModal();sync();
-    },close(){if(dialog.open)dialog.close();},isOpen:()=>dialog.open,snapshot:()=>dialog.open?JSON.parse(JSON.stringify(state)):null};
+      stopDrags();geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
+      if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}
+      sync();
+    },close,isOpen:()=>dialog.open,snapshot:()=>dialog.open?JSON.parse(JSON.stringify(state)):null,
+      windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,pan,zoom,camera,draw,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,pan,zoom,camera,draw,windowRect,changeWindowRect,rasterSize,mount});
 }));

@@ -720,6 +720,7 @@
       objectPicker.disabled=viewBest||!packages.size;
       clearObject.disabled=viewBest||selectedObjectKey===null;
       viewerButton.disabled=viewBest||!pkg;
+      if(viewBest&&viewer.isOpen())viewer.close();
       objectPicker.value=pkg?String(pkg.key):'';
       objectSelectionStatus.textContent=pkg?
         packageLabel(pkg)+(pkg.rangeMetres===null?'':' · approx. horizontal range '+pkg.rangeMetres.toFixed(1)+' m')+
@@ -729,9 +730,12 @@
     function selectObject(key){
       if(viewBest)return false;
       if(key!==null&&!packages.has(key))return false;
-      selectedObjectKey=key;refreshObjectSelection();meshDraw();return true;
+      const changed=selectedObjectKey!==key;
+      selectedObjectKey=key;refreshObjectSelection();meshDraw();
+      if(viewer.isOpen()&&changed){if(key===null)viewer.close();else openViewer();}
+      return true;
     }
-    viewerButton.onclick=()=>{
+    function openViewer(){
       const pkg=packages.get(selectedObjectKey);if(!pkg||viewBest)return;
       try{
         const m=scene.model,b=pkg.owner.bank,globe=m.showModel===1,engine=env.CurvatureGeometryEngine;
@@ -742,8 +746,11 @@
           throw Error('Selected object no longer matches the authored sequence');
         const local=env.CurvatureModernLandmarkViewer.localGeometry(scene.banks[b],pkg,engine.towerPlacement(entry.params));
         viewer.open(local,packageLabel(pkg));
-      }catch(error){objectSelectionStatus.textContent='Cannot open object viewer: '+error.message;}
-    };
+      }catch(error){viewer.close();objectSelectionStatus.textContent='Cannot open object viewer: '+error.message;}
+    }
+    viewerButton.onclick=openViewer;
+    // The floating window is fixed-position but owned by this workspace.
+    new env.MutationObserver(()=>{if(workspace.hidden)viewer.close();}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
     pickMode.onchange=()=>{
       cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();
       refreshObjectSelection();updateHint();meshDraw();
@@ -1264,7 +1271,7 @@
     $('ModernCalibrationUndo').onclick=undo;
     $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(activePair);
     doc.addEventListener('keydown',e=>{
-      if(viewer.isOpen()||workspace.hidden||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
+      if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
       if(objectMode()){
         if(e.key==='Escape'&&!viewBest){e.preventDefault();clearHover();selectObject(null);}
         return;
@@ -1283,7 +1290,7 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};

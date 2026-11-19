@@ -83,3 +83,24 @@ test('exact ownership raster keeps a clicked road separate from its support and 
   for(const [x,p] of [support,...roads].entries())assert.deepEqual(owners.get(editor.ownerAt(raster,x+.5,.5)).owner,p.owner);
   assert.equal(editor.ownerAt(raster,3.5,.5),null);
 });
+
+test('window geometry restores and clamps independently of the viewer camera',()=>{
+  const camera=viewer.reset(),before=JSON.stringify(camera);
+  const a=viewer.windowRect({x:90,y:60,width:620,height:450},1200,800);
+  assert.deepEqual(a,{x:90,y:60,width:620,height:450});
+  assert.deepEqual(viewer.changeWindowRect(a,'move',100,70,1200,800),{x:190,y:130,width:620,height:450});
+  assert.deepEqual(viewer.changeWindowRect(a,'resize',120,80,1200,800),{x:90,y:60,width:740,height:530});
+  const resized=viewer.changeWindowRect(a,'resize',10000,10000,1200,800);
+  assert.equal(resized.x,a.x);assert.equal(resized.y,a.y);
+  assert.equal(resized.x+resized.width,1192);assert.equal(resized.y+resized.height,792);
+  const small=viewer.windowRect(a,280,240);
+  assert.deepEqual(small,{x:8,y:8,width:264,height:224});
+  const invalid=viewer.windowRect({x:NaN,y:12,width:100,height:100},1200,800);
+  assert.ok(invalid.width>=340&&invalid.height>=300);
+  assert.equal(JSON.stringify(camera),before);
+});
+test('resized raster matches window aspect and bounds backing store size',()=>{
+  assert.deepEqual(viewer.rasterSize(640,400,2),{width:1280,height:800});
+  assert.deepEqual(viewer.rasterSize(3000,1500,3),{width:2048,height:1024});
+  assert.deepEqual(viewer.rasterSize(500,250,1),{width:500,height:250});
+});
