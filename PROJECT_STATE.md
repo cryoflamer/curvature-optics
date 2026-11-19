@@ -14,6 +14,11 @@ pose, portable transport or PNG/video composition changes. Missing local
 IDs/errors are explicit; no remote auto-fetch. Overlay comparison is deferred
 until calibration. Safe deletion remains disabled.
 
+7C.4.1 corrects the two CI regression fixtures: the isolated Thin outlines
+playback harness now supplies reference binding/sync dependencies; the built-in
+Soundly browser export expects the authored `-vacuum` filename suffix and checks
+both exported atmospheres. Application behavior and the next stage are unchanged.
+
 **Resume:** read this section, `docs/modern-demo-catalog.md`,
 `docs/reference-images.md`, `docs/camera-calibration.md` and
 `docs/technical-debt.md`. Next: **7C.5 — Reference Export & Import**, including

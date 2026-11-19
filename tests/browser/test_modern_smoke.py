@@ -568,7 +568,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(demo.get_by_role('button', name='Rename')).to_have_count(0)
         with self.page.expect_download() as download:
             demo.get_by_text('Export demo', exact=True).click()
-        self.assertRegex(download.value.suggested_filename, r'^soundly-causeway-bridge-camera-study-\d{8}-\d{6}-\d{3}(?:-with-thumbnails)?\.json$')
+        self.assertRegex(download.value.suggested_filename, r'^soundly-causeway-bridge-camera-study-vacuum-\d{8}-\d{6}-\d{3}(?:-with-thumbnails)?\.json$')
+        exported = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))['animations'][0]
+        self.assertEqual(exported['project']['baseExperiment']['compare']['A']['atmosphere'], 'vacuum')
+        self.assertEqual(exported['project']['baseExperiment']['compare']['B']['atmosphere'], 'vacuum')
         studio.get_by_label('Project name').fill('Keep original work')
         self.page.wait_for_timeout(750)
         copy = demo.get_by_text('Create copy', exact=True)
